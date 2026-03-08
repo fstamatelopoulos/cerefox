@@ -2,7 +2,18 @@
 
 ## 1. System Overview
 
-Cerefox is a personal knowledge base that stores, indexes, and retrieves markdown content through hybrid search. It serves as a "second brain" accessible to any AI agent via MCP.
+Cerefox is a **cloud-native personal knowledge backend** — it stores, indexes, and serves a single user's knowledge to AI agents via MCP. It is *not* a note-taking app; it is the retrieval and access layer that sits behind whichever writing tool the user prefers.
+
+**Layer model:**
+```
+[Writing layer]   Obsidian, Bear, Notion, plain files, agent write-back
+                        ↓ (ingest: CLI, folder sync, upload, MCP write)
+[Cerefox layer]   Chunking → Embeddings → Supabase (Postgres + pgvector)
+                        ↓ (MCP tools: search, retrieve, write)
+[Agent layer]     Claude, Cursor, ChatGPT, custom agents — anywhere
+```
+
+The web UI covers management (browse, metadata, projects) and ingestion (upload, paste). It deliberately has no rich authoring features — that's the writing layer's responsibility.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -370,11 +381,59 @@ Supabase natively exposes Postgres RPCs as MCP tools. This means:
 - No custom MCP server needed for V1
 - Any agent that supports MCP can connect to Cerefox
 
-### 9.2 Custom MCP Server (Future)
+### 9.2 MCP Tool Inventory
+
+| Tool (RPC) | Direction | Description |
+|------------|-----------|-------------|
+| `cerefox_hybrid_search` | Read | Fused FTS + semantic search |
+| `cerefox_fts_search` | Read | Keyword/exact search |
+| `cerefox_semantic_search` | Read | Pure vector similarity |
+| `cerefox_reconstruct_doc` | Read | Reassemble full document from chunks |
+| `cerefox_save_note` | **Write** | Agent saves a note/insight into the knowledge base |
+
+### 9.3 Agent Write: `cerefox_save_note`
+
+Agents are first-class contributors to the knowledge base, not just consumers. The write tool lets an agent save a note, research summary, or insight directly — without the user needing to manually ingest it.
+
+**RPC signature (conceptual):**
+```sql
+CREATE OR REPLACE FUNCTION cerefox_save_note(
+  p_title TEXT,
+  p_content TEXT,                    -- Markdown content
+  p_agent_name TEXT,                 -- e.g. 'claude-3-7-sonnet'
+  p_project_name TEXT DEFAULT NULL,  -- optional project association
+  p_tags TEXT[] DEFAULT '{}',        -- optional tags
+  p_agent_session_id TEXT DEFAULT NULL,
+  p_confidence NUMERIC DEFAULT NULL  -- agent's self-assessed confidence (0–1)
+)
+RETURNS UUID  -- returns the new document_id
+```
+
+**How it works:**
+1. Agent calls `cerefox_save_note` with content and its identity
+2. Supabase RPC creates a document record with `source = 'agent'`, `created_by = 'ai-agent'`
+3. Content is chunked and embedded asynchronously (or synchronously in V1)
+4. Returns the document ID for the agent's reference
+
+**Agent metadata stored:**
+```json
+{
+  "source": "agent",
+  "created_by": "ai-agent",
+  "agent_name": "claude-3-7-sonnet",
+  "agent_session_id": "optional-session-id",
+  "tags": ["summary", "research"],
+  "confidence": 0.9
+}
+```
+
+This metadata makes it easy to later filter agent-contributed content (e.g., "only search human-authored notes") or audit what agents have added.
+
+### 9.4 Custom MCP Server (Future)
 
 For enhanced capabilities beyond what Supabase MCP provides:
 - Query embedding computation on the server side (agents don't need their own embedder)
-- Smarter small-to-big context assembly
+- Smarter small-to-big context assembly in a single tool call
 - Rate limiting, usage tracking
 - Multi-tool workflows (search + expand + format in one call)
 

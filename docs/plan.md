@@ -21,8 +21,9 @@
 | 1.8 | Write `scripts/db_status.py` — verify schema and report table stats | Not Started | |
 | 1.9 | Deploy schema to Supabase using db_deploy.py | Not Started | |
 | 1.10 | Write tests for config module and DB client (unit, mocked) | Not Started | |
+| 1.11 | Write `docs/guides/setup-supabase.md` and `docs/guides/configuration.md` | Not Started | |
 
-**Deliverable**: Schema running on Supabase, Python project builds and imports, deploy script documented.
+**Deliverable**: Schema running on Supabase, Python project builds and imports, deploy script and Supabase setup guide complete.
 
 ---
 
@@ -76,8 +77,10 @@
 | 4.5 | Write tests for search client: response assembly, size truncation, metadata | Not Started | |
 | 4.6 | Integration test: search with real ingested content | Not Started | `@pytest.mark.integration` |
 | 4.7 | Connect via Supabase MCP and verify agent access | Not Started | |
+| 4.8 | Implement `cerefox_save_note` RPC (agent write tool) | Not Started | |
+| 4.9 | Write `docs/guides/connect-agents.md` (Claude, Cursor, generic MCP client) | Not Started | |
 
-**Deliverable**: Agents can search Cerefox via MCP. CLI search works. Unit tests pass.
+**Deliverable**: Agents can search and write to Cerefox via MCP. CLI search works. Unit tests pass. Agent connection guide complete.
 
 ---
 
@@ -93,8 +96,10 @@
 | 5.4 | Document viewer page (reconstructed doc with chunk boundaries) | Not Started | |
 | 5.5 | Ingest page (upload MD files, paste content) | Not Started | |
 | 5.6 | Project management page (CRUD projects) | Not Started | |
+| 5.7 | Write `docs/guides/setup-local.md` (local Docker setup guide) | Not Started | |
+| 5.8 | Write `docs/guides/ops-scripts.md` (backup, restore, migrate) | Not Started | |
 
-**Deliverable**: Usable web UI for managing the knowledge base locally.
+**Deliverable**: Usable web UI for managing the knowledge base locally. Local setup guide complete.
 
 ---
 
@@ -126,12 +131,14 @@
 | 7.1 | Dockerfile for the web app | Not Started | |
 | 7.2 | docker-compose.yml for full local stack | Not Started | |
 | 7.3 | Cloud Run deployment config | Not Started | |
-| 7.4 | README.md (user-facing documentation) | Not Started | |
-| 7.5 | Setup guide (Supabase, local, Cloud Run) | Not Started | |
-| 7.6 | License, contributing guide | Not Started | |
-| 7.7 | First release (v0.1.0) | Not Started | |
+| 7.4 | README.md — project overview, quickstart, links to guides | Not Started | |
+| 7.5 | `docs/guides/quickstart.md` — zero to first document in < 15 min | Not Started | |
+| 7.6 | `docs/guides/setup-cloud-run.md` — GCP Cloud Run deployment | Not Started | |
+| 7.7 | `docs/guides/contributing.md` — adding embedders, converters, commands | Not Started | |
+| 7.8 | License file, code of conduct | Not Started | |
+| 7.9 | First release (v0.1.0) | Not Started | |
 
-**Deliverable**: Open source release with documentation.
+**Deliverable**: Open source release. All setup guides complete. Any new user can go from zero to running Cerefox in one sitting.
 
 ---
 

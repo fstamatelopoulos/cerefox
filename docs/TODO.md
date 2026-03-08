@@ -29,8 +29,13 @@
 - [ ] EPUB → Markdown converter
 - [ ] HTML → Markdown converter (for saved web pages)
 - [ ] Watch folder mode (auto-ingest new files dropped into a directory)
-- [ ] Obsidian vault integration (sync from Obsidian folder)
-- [ ] Notion export integration
+
+### Writing Layer Adapters (input sources)
+These are "input adapters" — Cerefox is the backend, these tools are the authoring front-end. The integration is always one-way: writing tool → Cerefox (not the reverse).
+- [ ] Obsidian vault adapter — Obsidian is the dominant markdown-first PKM tool and stores everything as plain `.md` files; Cerefox is complementary (not competing): Obsidian handles writing/organization, Cerefox handles cloud indexing and AI agent access. Implementation: `cerefox sync --source obsidian --vault ~/Documents/MyVault` does a one-shot ingest of all vault files; `cerefox watch --vault ~/Documents/MyVault` watches for changes and ingests incrementally. No Obsidian plugins needed — just plain folder access.
+- [ ] Notion export adapter (parse Notion HTML/MD export format)
+- [ ] Bear notes adapter (Bear uses `.md` files in iCloud; similar to Obsidian approach)
+- [ ] Logseq vault adapter (Logseq stores as `.md` files with some own syntax quirks)
 - [ ] Incremental re-ingestion (detect changes in a file, update only changed chunks)
 
 ### Retrieval
@@ -67,7 +72,7 @@
 - [ ] Custom MCP server (for server-side embedding, richer tools)
 - [ ] Agent-side embedding helper (provide embedding via API so agents don't need their own)
 - [ ] Usage analytics (which tools agents call most, common query patterns)
-- [ ] Tool for agents to add notes directly (agent → Cerefox ingestion)
+- [ ] Tool for agents to add notes directly (`cerefox_save_note` RPC) — now in plan Phase 4; track enhanced features here: agent-authored content filtering in search, agent contribution audit log, per-agent note quotas
 - [ ] Plugins for non-MCP agents (ChatGPT plugin, etc.)
 
 ---
@@ -116,3 +121,5 @@ Record important decisions here for future reference.
 | 2026-03-07 | Tests written alongside code (not deferred) | Prevents regression accumulation; easier to test small units |
 | 2026-03-07 | Numbered SQL migration files | Idempotent, trackable schema evolution |
 | 2026-03-07 | Backup as structured markdown + JSON | Human-readable, versionable, easy to inspect and restore |
+| 2026-03-07 | Cerefox is a knowledge backend, not a writing tool | Authoring is solved by Obsidian/Bear/Notion; Cerefox's value is cloud indexing + MCP agent access |
+| 2026-03-07 | Writing layer tools (Obsidian etc.) are input adapters, not competition | They handle capture/organization; Cerefox handles cloud retrieval — complementary, not competing |

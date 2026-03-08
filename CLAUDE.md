@@ -120,7 +120,11 @@ cerefox/
 
 ## Documentation as Source of Truth
 
-The project documentation is a first-class artifact — kept accurate and current at all times.
+Documentation is a **first-class deliverable**, not an afterthought. This is an open source project — the quality of our docs determines whether anyone else can use it. Every phase of implementation includes documentation work.
+
+### Internal Docs (developer/agent context)
+
+Kept accurate and current at all times:
 
 | File | Owner | Update When |
 |------|-------|-------------|
@@ -131,6 +135,23 @@ The project documentation is a first-class artifact — kept accurate and curren
 | `CLAUDE.md` | Conventions | Project conventions or structure changes |
 
 **Rule**: when implementing a feature, update the relevant docs in the same commit/session. Another developer or AI agent should be able to read these files at any point and have an accurate picture of what is built, what is planned, and why.
+
+### User-Facing Docs (setup guides, how-tos)
+
+These live in `docs/guides/` and are written for someone who has never seen the codebase:
+
+| Guide | Covers |
+|-------|--------|
+| `quickstart.md` | Zero to first ingested document in < 15 minutes |
+| `setup-supabase.md` | Full Supabase deployment (schema, MCP, config) |
+| `setup-local.md` | Full local Docker deployment |
+| `setup-cloud-run.md` | GCP Cloud Run deployment |
+| `connect-agents.md` | MCP setup for Claude, Cursor, and generic clients |
+| `configuration.md` | All `CEREFOX_` environment variables with defaults |
+| `ops-scripts.md` | All `scripts/` — deploy, migrate, backup, restore |
+| `contributing.md` | How to add embedders, converters, CLI commands |
+
+**Rule**: a setup guide must be written before (or alongside) the feature it documents — not after the fact.
 
 ## Quick Reference
 

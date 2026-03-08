@@ -8,12 +8,35 @@
 
 ## 1. Product Overview
 
-Cerefox is a **personal second brain** — a knowledge base where a single user stores thoughts, notes, ideas, plans, and knowledge across multiple life domains. It is designed to be:
+Cerefox is a **cloud-native personal knowledge backend** — it stores, indexes, and serves a single user's knowledge to any AI agent via MCP. It is designed to be:
 
 - **Owned**: all data lives in infrastructure the user controls (Supabase or self-hosted Postgres)
-- **Agent-accessible**: any AI agent (Claude, ChatGPT, Cursor, custom agents, OpenClaw) can search and retrieve from Cerefox via MCP
+- **Agent-accessible**: any AI agent (Claude, ChatGPT, Cursor, custom agents, OpenClaw) can search and retrieve from Cerefox via MCP, from anywhere
 - **Cheap**: operates on Supabase free tier or local Docker with zero ongoing cost
 - **Open source**: MIT license, designed for personal use but shareable
+
+### 1.0 What Cerefox Is — and Is Not
+
+**Cerefox is a knowledge indexing and retrieval backend.** It is the layer that makes your personal knowledge searchable by AI agents from anywhere, at any time. Think of it as a cloud API for your second brain.
+
+**Cerefox is not a note-taking app.** It has no rich editor, no backlinking UI, no graph view, and no mobile app for capture. Those problems are already solved by excellent tools (Obsidian, Bear, Notion, etc.). Cerefox is designed to work *alongside* them, not replace them.
+
+**The intended workflow:**
+```
+Write/organize in your preferred tool (e.g. Obsidian)
+         ↓
+Ingest into Cerefox (file upload, folder sync, CLI, or paste)
+         ↓
+Knowledge lives in Supabase — indexed, embedded, searchable
+         ↓
+Any AI agent, anywhere, searches via MCP
+```
+
+**Cerefox's unique position** in the ecosystem:
+- The only *open source*, *self-hosted*, *MCP-native* knowledge backend
+- Zero per-query cost (local embeddings, Supabase free tier)
+- Owner-controlled: no vendor reads your data, no subscription required
+- Agents are first-class citizens on both sides: they can read *and* write
 
 ### 1.1 Content Domains
 
@@ -87,12 +110,31 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 
 ### FR-5: MCP Integration
 
+Cerefox exposes both **read** (search/retrieve) and **write** (ingest) capabilities via MCP. This means AI agents are first-class citizens on both sides: they can query the knowledge base, and they can contribute to it.
+
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | FR-5.1 | Expose search functions as Supabase MCP tools | P0 |
 | FR-5.2 | Expose document reconstruction as MCP tool | P0 |
-| FR-5.3 | Agents can query without needing to compute embeddings | P2 |
-| FR-5.4 | Custom MCP server for enhanced capabilities | P2 |
+| FR-5.3 | Expose an ingest tool (`cerefox_save_note`) so agents can write content into the knowledge base | P1 |
+| FR-5.4 | Agent-authored content is tagged with standardized metadata distinguishing it from human-authored content | P1 |
+| FR-5.5 | Agents can query without needing to compute embeddings server-side | P2 |
+| FR-5.6 | Custom MCP server for enhanced capabilities (embedding on server, smarter context assembly) | P2 |
+
+#### Agent Write Metadata Convention
+
+When an agent calls `cerefox_save_note`, the following metadata fields are set automatically or by the agent:
+
+| Field | Set by | Example |
+|-------|--------|---------|
+| `source` | System | `"agent"` |
+| `agent_name` | Agent (required) | `"claude-3-7-sonnet"`, `"custom-research-bot"` |
+| `agent_session_id` | Agent (optional) | Session or task identifier |
+| `created_by` | System | `"ai-agent"` |
+| `tags` | Agent (optional) | `["summary", "research"]` |
+| `confidence` | Agent (optional) | `0.9` — agent's self-assessed confidence |
+
+This makes it easy to filter, audit, or exclude agent-authored content from searches, and to trace which agent contributed what.
 
 ### FR-6: Web Application
 
@@ -186,6 +228,20 @@ Scripts that a developer or operator can run to set up, update, and maintain the
 | NFR-5.2 | Minimal dependencies — prefer standard library when possible |
 | NFR-5.3 | Web UI has no JavaScript build step (Jinja2 + HTMX) |
 | NFR-5.4 | Docker Compose for full local deployment |
+
+### NFR-7: Documentation & Onboarding
+
+Cerefox is an open source project. Documentation is treated as a first-class deliverable, not an afterthought.
+
+| ID | Requirement |
+|----|-------------|
+| NFR-7.1 | Each deployment option (Supabase, local Docker, Cloud Run) has a step-by-step setup guide |
+| NFR-7.2 | A quickstart guide gets a new user from zero to first ingested document in under 15 minutes |
+| NFR-7.3 | Every script in `scripts/` has inline documentation and is covered in the ops guide |
+| NFR-7.4 | MCP connection setup is documented for at least: Claude, Cursor, and a generic MCP client |
+| NFR-7.5 | Configuration reference documents every `CEREFOX_` environment variable with defaults and examples |
+| NFR-7.6 | A contributing guide explains how to add new embedders, content converters, or CLI commands |
+| NFR-7.7 | Docs are updated in the same session/commit as the code they describe |
 
 ### NFR-6: Test Coverage
 
