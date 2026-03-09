@@ -176,6 +176,10 @@ $$;
 -- ── Semantic-Only Search ──────────────────────────────────────────────────────
 -- Pure vector similarity. Best for conceptual / paraphrase queries.
 
+-- Drop the old 4-parameter overload (without p_min_score) so PostgREST doesn't
+-- see two candidates and throw PGRST203.
+DROP FUNCTION IF EXISTS cerefox_semantic_search(VECTOR(768), INT, BOOLEAN, UUID);
+
 CREATE OR REPLACE FUNCTION cerefox_semantic_search(
     p_query_embedding VECTOR(768),
     p_match_count     INT     DEFAULT 10,
