@@ -52,16 +52,16 @@ gcloud run deploy $SERVICE_NAME \
   --platform managed \
   --allow-unauthenticated \
   --port 8000 \
-  --memory 2Gi \
+  --memory 512Mi \
   --cpu 1 \
   --set-env-vars \
     CEREFOX_SUPABASE_URL=https://YOUR-REF.supabase.co,\
     CEREFOX_SUPABASE_KEY=YOUR-SERVICE-ROLE-KEY,\
-    CEREFOX_EMBEDDER=mpnet,\
+    OPENAI_API_KEY=YOUR-OPENAI-KEY,\
     CEREFOX_MAX_RESPONSE_BYTES=65000
 ```
 
-**Memory**: The mpnet embedding model requires ~1.5 GB RAM. Use `--memory 2Gi` minimum.
+**Memory**: Cerefox uses cloud embeddings (OpenAI API) — no local model is loaded. `--memory 512Mi` is sufficient for the web server alone.
 
 **CPU**: `--cpu 1` is sufficient for personal use. Scale up for concurrent users.
 
@@ -118,17 +118,3 @@ Use Identity-Aware Proxy (IAP) in front of Cloud Run for Google SSO.
 
 In `src/cerefox/api/app.py`, add a middleware that checks `Authorization: Basic ...` headers. Use `CEREFOX_BASIC_AUTH_USER` / `CEREFOX_BASIC_AUTH_PASSWORD` env vars.
 
----
-
-## Persistent storage for embeddings
-
-The mpnet model downloads to `/root/.cache/huggingface` inside the container. On Cloud Run, this is ephemeral — the model re-downloads on cold starts (~30 seconds).
-
-To avoid cold start delays, use a **Filestore** or **Cloud Storage FUSE** mount, or pre-bake the model into the Docker image:
-
-```dockerfile
-# Add to Dockerfile before CMD
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-mpnet-base-v2')"
-```
-
-This increases image size by ~420 MB but eliminates model download delays.

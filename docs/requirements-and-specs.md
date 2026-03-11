@@ -12,7 +12,7 @@ Cerefox is a **cloud-native personal knowledge backend** — it stores, indexes,
 
 - **Owned**: all data lives in infrastructure the user controls (Supabase or self-hosted Postgres)
 - **Agent-accessible**: any AI agent (Claude, ChatGPT, Cursor, custom agents, OpenClaw) can search and retrieve from Cerefox via MCP, from anywhere
-- **Cheap**: operates on Supabase free tier or local Docker with zero ongoing cost
+- **Cheap**: operates on Supabase free tier with near-zero ongoing cost (OpenAI embedding API ~$0.10–0.30/month)
 - **Open source**: MIT license, designed for personal use but shareable
 
 ### 1.0 What Cerefox Is — and Is Not
@@ -34,7 +34,7 @@ Any AI agent, anywhere, searches via MCP
 
 **Cerefox's unique position** in the ecosystem:
 - The only *open source*, *self-hosted*, *MCP-native* knowledge backend
-- Zero per-query cost (local embeddings, Supabase free tier)
+- Near-zero per-query cost (Supabase free tier + OpenAI embedding API)
 - Owner-controlled: no vendor reads your data, no subscription required
 - Agents are first-class citizens on both sides: they can read *and* write
 
@@ -85,14 +85,14 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FR-3.1 | Compute primary embeddings using a local model (no API cost) | P0 |
+| FR-3.1 | Compute primary embeddings via cloud API (OpenAI) | P0 |
 | FR-3.2 | Support pluggable embedder interface | P0 |
-| FR-3.3 | Default embedder: all-mpnet-base-v2 (768-dim) | P0 |
-| FR-3.4 | Support Ollama-hosted models as alternative embedders | P0 |
+| FR-3.3 | Default embedder: OpenAI text-embedding-3-small (768-dim) | P0 |
+| FR-3.4 | Support Fireworks AI as alternative cloud embedder | P0 |
 | FR-3.5 | Support optional "upgrade" embedding field per chunk | P1 |
 | FR-3.6 | Track which embedder produced each embedding | P0 |
 | FR-3.7 | Standardize on 768-dim vectors | P0 |
-| FR-3.8 | Support Vertex AI / OpenAI embedders (future, parameterized) | P2 |
+| FR-3.8 | Support Vertex AI embedder (future, parameterized) | P2 |
 
 ### FR-4: Search & Retrieval
 
@@ -190,9 +190,9 @@ Scripts that a developer or operator can run to set up, update, and maintain the
 
 | ID | Requirement |
 |----|-------------|
-| NFR-1.1 | Operate at zero cost on Supabase free tier + local embeddings |
-| NFR-1.2 | No mandatory paid API calls for core functionality |
-| NFR-1.3 | Paid embedders/services are optional upgrades, never required |
+| NFR-1.1 | Operate at near-zero cost: Supabase free tier + OpenAI embedding API (~$0.10–0.30/month) |
+| NFR-1.2 | Embedding cost is the only ongoing API cost for core functionality |
+| NFR-1.3 | Alternative cloud embedders (Fireworks AI) are supported as drop-in replacements |
 
 ### NFR-2: Performance
 
@@ -268,9 +268,9 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 
 ### 4.2 Embeddings
 
-- **Default**: `sentence-transformers/all-mpnet-base-v2` (768-dim, local)
-- **Alternatives**: Ollama models (nomic-embed-text, mxbai-embed-large)
-- **Future**: Vertex AI, OpenAI (parameterized, opt-in)
+- **Default**: OpenAI `text-embedding-3-small` (768-dim, cloud API)
+- **Alternative**: Fireworks AI (same OpenAI-compatible API, different base URL + model)
+- **Future**: Vertex AI (parameterized, opt-in)
 - **Normalization**: all embeddings are L2-normalized before storage
 - **Distance metric**: cosine similarity (via `<=>` operator)
 
@@ -299,7 +299,7 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 | Frontend interactivity | HTMX |
 | CLI | Click |
 | Database client | supabase-py |
-| Embeddings | sentence-transformers, ollama-python |
+| Embeddings | httpx, openai (cloud API) |
 | Testing | pytest |
 | Linting | ruff |
 | Containerization | Docker |
@@ -315,9 +315,8 @@ All parameters use `CEREFOX_` prefix and can be set via environment variables or
 |-----------|---------|-------------|
 | `CEREFOX_SUPABASE_URL` | — | Supabase project URL |
 | `CEREFOX_SUPABASE_KEY` | — | Supabase service role key |
-| `CEREFOX_EMBEDDER` | `mpnet` | Default embedder: `mpnet`, `ollama`, `vertex` |
-| `CEREFOX_OLLAMA_URL` | `http://localhost:11434` | Ollama server URL |
-| `CEREFOX_OLLAMA_MODEL` | `nomic-embed-text` | Ollama model for embeddings |
+| `OPENAI_API_KEY` | — | OpenAI API key for embeddings |
+| `CEREFOX_EMBEDDER` | `openai` | Default embedder: `openai`, `fireworks` |
 | `CEREFOX_MAX_RESPONSE_BYTES` | `65000` | Max response size for MCP/search |
 | `CEREFOX_MAX_CHUNK_CHARS` | `4000` | Max characters per chunk |
 | `CEREFOX_MIN_CHUNK_CHARS` | `100` | Min characters per chunk |

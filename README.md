@@ -19,7 +19,7 @@ Cerefox is a self-hosted knowledge base for individuals who want to:
 - **Search semantically** — hybrid full-text + vector search finds relevant notes even with fuzzy queries
 - **Connect AI agents** — Claude, Cursor, and any MCP-compatible agent can read and write your knowledge base
 - **Ingest anything** — markdown files, PDFs, DOCX, or paste directly from the CLI or web UI
-- **Keep it cheap** — runs free on Supabase + local embeddings (no OpenAI API key required)
+- **Keep it cheap** — Supabase free tier + OpenAI embedding API (~$0.10–0.30/month)
 
 ---
 
@@ -29,8 +29,8 @@ Cerefox is a self-hosted knowledge base for individuals who want to:
 |---------|---------|
 | **Hybrid search** | Combines full-text (BM25) + semantic (vector) search with a configurable alpha weight |
 | **Heading-aware chunking** | H1 > H2 > H3 hierarchy; each heading section is a chunk with breadcrumb context |
-| **Local embeddings** | `all-mpnet-base-v2` (768-dim) runs on CPU — no cloud embedding API |
-| **MCP integration** | Supabase MCP exposes all search RPCs as tools for Claude Desktop, Cursor, etc. |
+| **Cloud embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API — or swap to Fireworks AI |
+| **Built-in MCP server** | `cerefox mcp` stdio server works with Claude Desktop, ChatGPT Desktop, Cursor, Claude Code |
 | **Web UI** | FastAPI + Jinja2 + HTMX dashboard for browsing, searching, and ingesting |
 | **Multi-format ingest** | `.md`, `.txt`, `.pdf` (pypdf), `.docx` (python-docx) |
 | **Batch ingest** | `cerefox ingest-dir` recurses directories |
@@ -47,12 +47,8 @@ Cerefox is a self-hosted knowledge base for individuals who want to:
 ```bash
 git clone https://github.com/yourname/cerefox.git
 cd cerefox
-uv sync --extra mpnet
+uv sync
 ```
-
-> `--extra mpnet` installs `sentence-transformers` for local embeddings. The model (~420 MB) is downloaded automatically on first use.
->
-> **Intel Mac (x86_64) + Python 3.13?** No torch wheel exists for this combination — use Ollama instead (see below).
 
 ### 2. Set up Supabase (free)
 
@@ -68,13 +64,14 @@ uv sync --extra mpnet
 cp .env.example .env
 ```
 
-Open `.env` and fill in three values:
+Open `.env` and fill in these values:
 
-| Variable | Where to find it in Supabase |
+| Variable | Where to find it |
 |---|---|
-| `CEREFOX_SUPABASE_URL` | Settings → API → Project URL |
-| `CEREFOX_SUPABASE_KEY` | Settings → API → Secret keys → `default` |
-| `CEREFOX_DATABASE_URL` | Settings → Database → Connection string → **Session pooler** (port 5432) |
+| `CEREFOX_SUPABASE_URL` | Supabase → Settings → API → Project URL |
+| `CEREFOX_SUPABASE_KEY` | Supabase → Settings → API → Secret keys → `default` |
+| `CEREFOX_DATABASE_URL` | Supabase → Settings → Database → Connection string → **Session pooler** (port 5432) |
+| `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 
 **`CEREFOX_DATABASE_URL` notes:**
 - Use the **Session pooler** string (port 5432), not the Direct connection or Transaction pooler.
@@ -87,24 +84,6 @@ Open `.env` and fill in three values:
 ```bash
 uv run python scripts/db_deploy.py
 ```
-
-### Alternative: Ollama embeddings (Intel Mac, or if you prefer not to install PyTorch)
-
-[Install Ollama](https://ollama.ai), then:
-
-```bash
-ollama pull nomic-embed-text   # 768-dim, compatible with the schema
-```
-
-Set in `.env`:
-```
-CEREFOX_EMBEDDER=ollama
-CEREFOX_OLLAMA_MODEL=nomic-embed-text
-```
-
-Then `uv sync` (no `--extra mpnet` needed — torch is not required).
-
----
 
 ### 5. Ingest a document and open the web UI
 
@@ -137,20 +116,20 @@ Search RPCs (MCP tools): `cerefox_hybrid_search`, `cerefox_fts_search`,
 
 ## Connecting AI agents
 
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (same format for ChatGPT Desktop and Cursor):
+
 ```json
 {
   "mcpServers": {
-    "supabase": {
-      "command": "npx",
-      "args": ["-y", "@supabase/mcp-server-supabase@latest",
-               "--supabase-url", "https://YOUR-REF.supabase.co",
-               "--supabase-key", "YOUR-SERVICE-ROLE-KEY"]
+    "cerefox": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
     }
   }
 }
 ```
 
-Guide: `docs/guides/connect-agents.md`
+For cloud ChatGPT, use the Supabase Edge Functions as GPT Actions. Full guide: `docs/guides/connect-agents.md`
 
 ---
 

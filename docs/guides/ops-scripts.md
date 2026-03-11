@@ -140,7 +140,7 @@ Backups are JSON files with the following structure:
           "title": "Section",
           "content": "...",
           "char_count": 120,
-          "embedder_primary": "mpnet"
+          "embedder_primary": "text-embedding-3-small"
         }
       ]
     }

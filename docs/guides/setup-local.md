@@ -1,6 +1,6 @@
 # Local Setup Guide
 
-Run Cerefox entirely on your own machine using Docker for Postgres+pgvector and local embeddings. No cloud account required.
+Run the Cerefox web server and database on your own machine using Docker for Postgres+pgvector. Embeddings use the OpenAI API — an `OPENAI_API_KEY` is required even for local setups.
 
 ---
 
@@ -8,7 +8,7 @@ Run Cerefox entirely on your own machine using Docker for Postgres+pgvector and 
 
 - Docker and Docker Compose
 - Python 3.11+ with `uv` (`pip install uv`)
-- ~2 GB disk space (for the mpnet embedding model, downloaded on first use)
+- An OpenAI API key (for embeddings — [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
 
 ---
 
@@ -17,7 +17,7 @@ Run Cerefox entirely on your own machine using Docker for Postgres+pgvector and 
 ```bash
 git clone https://github.com/yourname/cerefox.git
 cd cerefox
-uv sync --all-extras   # installs all Python deps including sentence-transformers
+uv sync
 ```
 
 ---
@@ -59,8 +59,8 @@ CEREFOX_DATABASE_URL=postgresql://cerefox:cerefox@localhost:5432/cerefox
 CEREFOX_SUPABASE_URL=
 CEREFOX_SUPABASE_KEY=
 
-# Embedding model (default: mpnet, downloads ~420 MB on first use)
-CEREFOX_EMBEDDER=mpnet
+# OpenAI API key for embeddings (text-embedding-3-small, ~$0.10-0.30/month)
+OPENAI_API_KEY=sk-...
 ```
 
 ---
@@ -101,7 +101,7 @@ cerefox ingest my-notes.md --project "personal"
 echo "# Quick Note\n\nThis is a quick note." | cerefox ingest --paste --title "Quick Note"
 ```
 
-The first ingest will download the mpnet model (~420 MB). Subsequent ingests are instant.
+Each ingest calls the OpenAI embedding API once per batch of chunks (fast, typically under a second).
 
 ---
 
@@ -173,12 +173,6 @@ This applies incremental migrations without losing data. Always back up first (s
 
 **pgvector extension not found**
 Make sure you're using the `pgvector/pgvector:pg16` Docker image (included in `docker-compose.yml`). Raw Postgres images do not include pgvector.
-
-**Embedding model download fails**
-The mpnet model downloads from Hugging Face on first use. If you're offline, pre-download with:
-```bash
-python -c "from cerefox.embeddings.mpnet import MpnetEmbedder; MpnetEmbedder()"
-```
 
 **"Supabase is not configured" error**
 The CLI and web UI show this error if `CEREFOX_SUPABASE_URL` / `CEREFOX_SUPABASE_KEY` are empty. For local Docker setups, the app uses the direct Postgres URL (`CEREFOX_DATABASE_URL`) for schema deployment but the Supabase client for queries. Set up a local Supabase instance or use the hosted free tier (see `setup-supabase.md`).

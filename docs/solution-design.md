@@ -46,8 +46,8 @@ The web UI covers management (browse, metadata, projects) and ingestion (upload,
 │                                                                  │
 │  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌─────────────┐ │
 │  │   CLI    │   │  Web UI  │   │Converters│   │  Embedders  │  │
-│  │(click)   │   │(FastAPI) │   │PDF→MD    │   │mpnet/ollama │  │
-│  │          │   │          │   │DOCX→MD   │   │vertex/openai│  │
+│  │(click)   │   │(FastAPI) │   │PDF→MD    │   │openai/      │  │
+│  │          │   │          │   │DOCX→MD   │   │fireworks    │  │
 │  └────┬─────┘   └────┬─────┘   └────┬─────┘   └──────┬──────┘ │
 │       └───────────────┴──────────────┴────────────────┘         │
 │                           │                                      │
@@ -127,8 +127,8 @@ CREATE TABLE cerefox_chunks (
   char_count INT NOT NULL,
 
   -- Embeddings (768 dims)
-  embedding_primary VECTOR(768) NOT NULL,     -- default: all-mpnet-base-v2
-  embedding_upgrade VECTOR(768),              -- optional: Ollama/Vertex/OpenAI
+  embedding_primary VECTOR(768) NOT NULL,     -- default: text-embedding-3-small (OpenAI)
+  embedding_upgrade VECTOR(768),              -- optional: Fireworks/Vertex
 
   -- Full Text Search
   fts tsvector GENERATED ALWAYS AS (
@@ -137,7 +137,7 @@ CREATE TABLE cerefox_chunks (
   ) STORED,
 
   -- Embedder tracking
-  embedder_primary TEXT NOT NULL DEFAULT 'all-mpnet-base-v2',
+  embedder_primary TEXT NOT NULL DEFAULT 'text-embedding-3-small',
   embedder_upgrade TEXT,
 
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -234,16 +234,13 @@ class Embedder(Protocol):
 
 | Embedder | Dimensions | Cost | Speed | Quality | Use Case |
 |----------|-----------|------|-------|---------|----------|
-| all-mpnet-base-v2 | 768 | Free (local) | Fast | Good | Default primary |
-| nomic-embed-text (Ollama) | 768 | Free (local) | Medium | Good | Alternative primary |
-| mxbai-embed-large (Ollama) | 1024→768* | Free (local) | Slower | Better | Upgrade embedder |
+| OpenAI text-embedding-3-small | 768 | ~$0.10–0.30/month | Fast | Good | Default primary |
+| Fireworks AI (nomic-embed-text) | 768 | API cost | Fast | Good | Alternative primary |
 | Vertex text-embedding-005 | 768 | API cost | Fast | Best | Future upgrade |
-
-*Models with different dimensions will use Matryoshka truncation or PCA projection to 768 dims.
 
 ### 4.3 Dual Embedding Strategy
 
-- `embedding_primary`: always computed, uses the configured default embedder (local, free)
+- `embedding_primary`: always computed, uses the configured cloud embedder (OpenAI by default)
 - `embedding_upgrade`: optionally computed for "high importance" documents or as a second pass
 - Search RPCs accept a flag to choose which embedding to use
 - This allows A/B comparison and gradual migration between embedders
@@ -471,9 +468,9 @@ tracked in `docs/TODO.md`.
 ```
 Local machine
 ├── Python app (CLI + web UI)
-├── Ollama (embedding models)
 └── Supabase (cloud, free tier)
     └── PostgreSQL + pgvector
+        (embeddings via OpenAI API)
 ```
 
 ### 10.2 Full Local
@@ -481,8 +478,8 @@ Local machine
 ```
 Local machine (Docker Compose)
 ├── Python app container
-├── Ollama container
 └── PostgreSQL + pgvector container
+    (embeddings via OpenAI API)
 ```
 
 ### 10.3 Cloud (GCP)

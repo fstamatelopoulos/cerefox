@@ -36,7 +36,7 @@ class MyEmbedder:
 
 **Add a config option** in `src/cerefox/config.py`:
 ```python
-embedder: Literal["mpnet", "ollama", "mymodel"] = "mpnet"
+embedder: Literal["openai", "fireworks", "mymodel"] = "openai"
 ```
 
 **Wire it up** in `src/cerefox/cli.py` in `_get_embedder()` and in `src/cerefox/api/routes.py` in `_cached_embedder()`.
@@ -146,7 +146,7 @@ All RPCs should be `SECURITY DEFINER` so they work with the anon/service key wit
 - **Line length**: 100 characters
 - **Type hints**: required on all public functions
 - **Tests**: every new module in `src/cerefox/` gets tests in `tests/`
-- **Imports**: lazy-import heavy deps (sentence-transformers, pypdf, docx) inside functions
+- **Imports**: lazy-import heavy deps (pypdf, docx) inside functions
 
 ---
 
