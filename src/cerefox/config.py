@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Cloud-based embedders only. Local models (mpnet, Ollama) are no longer
     # supported — they create installation complexity and fail on some platforms.
     #
-    # "openai"    — OpenAI text-embedding-3-small (default, $0.02/1M tokens)
+    # "openai"    — OpenAI text-embedding-3-small (default, low per-token cost)
     # "fireworks" — Fireworks AI nomic-embed-text-v1.5 (OpenAI-compatible API)
     embedder: Literal["openai", "fireworks"] = "openai"
 
@@ -62,8 +62,7 @@ class Settings(BaseSettings):
     # Results below this threshold are dropped. FTS results are not affected.
     #
     # OpenAI text-embedding-3-small cosine scores: noise floor ~0.20, genuine
-    # matches typically 0.45+. 0.50 is a reasonable default (wider than mpnet's
-    # 0.65 because OpenAI's similarity distribution differs).
+    # matches typically 0.45+. 0.50 is a reasonable default.
     min_search_score: float = 0.50
 
     # ── Metadata ──────────────────────────────────────────────────────────────

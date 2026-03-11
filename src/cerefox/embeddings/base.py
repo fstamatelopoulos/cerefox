@@ -16,7 +16,7 @@ class Embedder(Protocol):
 
     Implementations must produce L2-normalised vectors of a consistent
     dimensionality (``dimensions``).  All built-in embedders target 768
-    dimensions to match ``sentence-transformers/all-mpnet-base-v2``.
+    dimensions to match the database schema (``VECTOR(768)``).
     """
 
     @property
