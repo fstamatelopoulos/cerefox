@@ -44,7 +44,18 @@ These are "input adapters" — Cerefox is the backend, these tools are the autho
 - [ ] Incremental re-ingestion (detect changes in a file, update only changed chunks)
 
 ### Retrieval
-- [ ] Small-to-big V2: `cerefox_expand_context` RPC with automatic sibling assembly
+- [ ] **True small-to-big retrieval** — for documents above a configurable size threshold,
+  return the matched chunks with N adjacent siblings (before + after) rather than the full
+  document. This keeps context tight around the relevant passage and avoids diluting the
+  agent's context window with unrelated sections of large documents.
+  - Configurable: `CEREFOX_SMALL_TO_BIG_THRESHOLD` (doc size in chars, default e.g. 8 000)
+    and `CEREFOX_CONTEXT_WINDOW` (number of sibling chunks on each side, default 1)
+  - Below the threshold → current behaviour: return full reconstructed document
+  - Above the threshold → return matched chunk(s) + N preceding + N following chunks,
+    assembled in order with heading breadcrumbs preserved
+  - Implement as a new RPC (`cerefox_expand_context`) callable from both the MCP server
+    and the Edge Function search path
+  - Edge Function: add `expand_context: boolean` request param (default false for back-compat)
 - [ ] Retrieval chain: search → expand → summarize (multi-step RPC)
 - [ ] Citation/source tracking in retrieved content
 - [ ] Relevance feedback loop (mark results as relevant/irrelevant to improve ranking)

@@ -209,3 +209,5 @@ __marimo__/
 # macos
 .DS_Store
 
+# Supabase
+supabase/.temp/
