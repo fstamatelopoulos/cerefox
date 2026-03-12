@@ -10,10 +10,9 @@ client; you can also run both in parallel.
 | Client | Path | Search capability |
 |--------|------|-------------------|
 | Claude Desktop (local) | Path A — `cerefox mcp` | Hybrid (FTS + semantic), document-level |
-| ChatGPT Desktop (local) | Path A — `cerefox mcp` | Hybrid (FTS + semantic), document-level |
 | Cursor (local) | Path A — `cerefox mcp` | Hybrid (FTS + semantic), document-level |
 | Claude Code (CLI / Desktop Code tab) | Path A — `cerefox mcp` | Hybrid (FTS + semantic), document-level |
-| Cloud ChatGPT (chatgpt.com) | Path B — GPT Actions → Edge Functions | Hybrid (FTS + semantic), document-level |
+| ChatGPT (chatgpt.com or desktop app) | Path B — Custom GPT → Edge Functions | Hybrid (FTS + semantic), document-level |
 | Cloud Claude (claude.ai web) | Remote Supabase MCP | FTS keyword only (no semantic) |
 | curl / scripts | Path B — Edge Functions directly | Hybrid (FTS + semantic), document-level |
 | Custom Python agents | Python SDK directly | Hybrid (FTS + semantic), document-level |
@@ -61,7 +60,7 @@ no HTTP calls, no GET-only limitations.
 
 - Embeddings are computed locally using your `.env` key (no extra credentials)
 - Works offline except for the OpenAI embedding API call per query
-- One setup, all compatible local clients (Claude Desktop, ChatGPT Desktop, Cursor, Claude Code)
+- One setup, all compatible local clients (Claude Desktop, Cursor, Claude Code)
 
 > **Why not `mcp-server-fetch`?** The generic fetch MCP only supports GET requests and cannot
 > make authenticated POST calls to the Edge Functions. The built-in `cerefox mcp` server is
@@ -132,39 +131,13 @@ Replace `/path/to/cerefox` with the absolute path to your Cerefox checkout
 
 ### ChatGPT Desktop
 
-ChatGPT Desktop (macOS / Windows) supports MCP servers using the same JSON format as Claude Desktop.
-
-**Setup via GUI (recommended):**
-1. Open ChatGPT → **Settings** → **Advanced** → **MCP Servers** → **Edit config**
-2. This opens the config JSON file in your default editor.
-
-**Config file location (if editing directly):**
-- macOS: `~/Library/Application Support/com.openai.chat/mcp_servers.json`
-- Windows: `%APPDATA%\OpenAI\ChatGPT\mcp_servers.json`
-
-Add (or merge into) the file:
-
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
-    }
-  }
-}
-```
-
-Replace `/path/to/cerefox` with your absolute Cerefox path.
-
-**Important:**
-- Quit and relaunch ChatGPT Desktop after saving.
-- ChatGPT Desktop requires a **ChatGPT Plus** subscription to use MCP tools.
-- On a clean macOS machine, install `uv` first:
-  ```bash
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
-  Then restart your terminal so `uv` is on your PATH before launching ChatGPT Desktop.
+> **ChatGPT Desktop does not support local stdio MCP servers.**
+> OpenAI's MCP implementation for ChatGPT only supports remote servers via SSE or
+> streaming HTTP — not local subprocess (stdio) servers like `cerefox mcp`.
+> The "dev mode" MCP connector visible in the app also requires a public URL.
+>
+> **Use Path B (Custom GPT + Edge Functions) for all ChatGPT access** — both the web
+> app and the desktop app. The Custom GPT approach is fully validated and works well.
 
 ---
 
