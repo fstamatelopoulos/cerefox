@@ -74,6 +74,10 @@ class TestHash:
         """3+ consecutive newlines are collapsed to 2 before hashing."""
         assert _hash("# A\n\nBody A\n\n\n\n# B\n\nBody B") == _hash("# A\n\nBody A\n\n# B\n\nBody B")
 
+    def test_crlf_same_hash_as_lf(self) -> None:
+        """CRLF line endings (browser form submission) hash identically to LF."""
+        assert _hash("# Doc\r\n\r\nBody.") == _hash("# Doc\n\nBody.")
+
 
 class TestNormalize:
     def test_strips_trailing_newline(self) -> None:
@@ -91,6 +95,17 @@ class TestNormalize:
     def test_preserves_double_newlines(self) -> None:
         assert _normalize("a\n\nb") == "a\n\nb"
 
+    def test_crlf_converted_to_lf(self) -> None:
+        """Browser form submissions use CRLF; normalise to LF before hashing."""
+        assert _normalize("line1\r\nline2\r\nline3") == "line1\nline2\nline3"
+
+    def test_bare_cr_converted_to_lf(self) -> None:
+        assert _normalize("line1\rline2") == "line1\nline2"
+
+    def test_crlf_excess_blank_lines_collapsed(self) -> None:
+        """CRLF blank lines should also be collapsed after conversion."""
+        assert _normalize("a\r\n\r\n\r\nb") == "a\n\nb"
+
 
 # ── Happy path ────────────────────────────────────────────────────────────────
 
@@ -103,6 +118,10 @@ class TestIngestText:
         assert result.document_id == "doc-001"
         assert result.title == "My Note"
         assert not result.skipped
+
+    def test_new_doc_action_is_created(self, pipeline, mock_client) -> None:
+        result = pipeline.ingest_text("# T\n\nB.", title="T")
+        assert result.action == "created"
 
     def test_insert_document_called_with_hash(self, pipeline, mock_client) -> None:
         text = "# Doc\n\nBody."
@@ -248,7 +267,8 @@ class TestDeduplication:
         mock_client.get_document_by_hash.return_value = existing
         mock_client.get_document_project_ids.return_value = ["proj-abc"]
         result = pipeline.ingest_text("# Already Here\n\nSome text.", title="Already Here")
-        assert result.skipped is True
+        assert result.action == "skipped"
+        assert result.skipped is True  # back-compat property
         assert result.document_id == "doc-existing"
         assert result.project_ids == ["proj-abc"]
 
@@ -391,10 +411,29 @@ class TestUpdateDocument:
 
         assert result.document_id == "doc-001"
         assert result.title == "New Title"
-        assert not result.skipped
+        assert result.action == "updated"
+        assert result.reindexed is True
+        assert not result.skipped  # back-compat property
         mock_client.delete_chunks_for_document.assert_called_once_with("doc-001")
         mock_client.update_document.assert_called_once()
         mock_client.insert_chunks.assert_called_once()
+
+    def test_unchanged_content_action_is_updated_not_reindexed(
+        self, pipeline, mock_client, existing_doc
+    ) -> None:
+        """Title-only edit: action='updated', reindexed=False."""
+        text = "Same content."
+        existing_doc["content_hash"] = _hash(text)
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = []
+
+        result = pipeline.update_document("doc-001", text, "New Title")
+
+        assert result.action == "updated"
+        assert result.reindexed is False
+        mock_client.delete_chunks_for_document.assert_not_called()
+        mock_client.insert_chunks.assert_not_called()
 
     def test_raises_when_document_not_found(self, pipeline, mock_client) -> None:
         mock_client.get_document_by_id.return_value = None
@@ -716,6 +755,19 @@ class TestUpdateExisting:
 
         mock_client.insert_document.assert_called_once()
         assert result.document_id == "doc-new"
+
+    def test_no_match_fallthrough_action_is_created(
+        self, pipeline, mock_client
+    ) -> None:
+        """update_existing=True with no match falls through to create — action must be 'created',
+        not 'updated', so callers know a new document was created rather than an existing one found."""
+        mock_client.find_document_by_source_path.return_value = None
+        mock_client.find_document_by_title.return_value = None
+        mock_client.insert_document.return_value = {"id": "doc-new", "title": "T"}
+
+        result = pipeline.ingest_text("# T\n\nB.", title="T", update_existing=True)
+
+        assert result.action == "created"
 
     def test_update_existing_false_skips_lookup(self, pipeline, mock_client) -> None:
         """When update_existing is False (default), no lookup should happen."""

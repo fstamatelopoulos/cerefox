@@ -56,8 +56,7 @@ def mock_pipeline() -> MagicMock:
         title="My Note",
         chunk_count=1,
         total_chars=42,
-        skipped=False,
-        reindexed=False,
+        action="created",
         project_ids=[],
     )
     return pipeline
@@ -208,6 +207,17 @@ class TestHandleIngest:
         assert "My Note" in result[0].text
 
     @pytest.mark.asyncio
+    async def test_created_message_for_new_doc(
+        self, mock_client, mock_pipeline
+    ) -> None:
+        result = await _handle_ingest(
+            mock_client,
+            mock_pipeline,
+            {"title": "My Note", "content": "# My Note\n\nBody."},
+        )
+        assert "Created" in result[0].text
+
+    @pytest.mark.asyncio
     async def test_skipped_message_when_already_exists(
         self, mock_client, mock_pipeline
     ) -> None:
@@ -216,8 +226,7 @@ class TestHandleIngest:
             title="My Note",
             chunk_count=1,
             total_chars=42,
-            skipped=True,
-            reindexed=False,
+            action="skipped",
             project_ids=[],
         )
         result = await _handle_ingest(
@@ -228,7 +237,7 @@ class TestHandleIngest:
         assert "Skipped" in result[0].text
 
     @pytest.mark.asyncio
-    async def test_updated_message_when_reindexed(
+    async def test_updated_reindexed_message(
         self, mock_client, mock_pipeline
     ) -> None:
         mock_pipeline.ingest_text.return_value = IngestResult(
@@ -236,7 +245,7 @@ class TestHandleIngest:
             title="My Note",
             chunk_count=2,
             total_chars=200,
-            skipped=False,
+            action="updated",
             reindexed=True,
             project_ids=[],
         )
@@ -246,6 +255,28 @@ class TestHandleIngest:
             {"title": "My Note", "content": "# My Note\n\nNew body.", "update_if_exists": True},
         )
         assert "Updated" in result[0].text
+        assert "re-indexed" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_updated_metadata_only_message(
+        self, mock_client, mock_pipeline
+    ) -> None:
+        mock_pipeline.ingest_text.return_value = IngestResult(
+            document_id="doc-001",
+            title="My Note",
+            chunk_count=1,
+            total_chars=42,
+            action="updated",
+            reindexed=False,
+            project_ids=[],
+        )
+        result = await _handle_ingest(
+            mock_client,
+            mock_pipeline,
+            {"title": "My Note", "content": "# My Note\n\nBody.", "update_if_exists": True},
+        )
+        assert "Updated" in result[0].text
+        assert "metadata" in result[0].text
 
     @pytest.mark.asyncio
     async def test_passes_source_to_pipeline(self, mock_client, mock_pipeline) -> None:

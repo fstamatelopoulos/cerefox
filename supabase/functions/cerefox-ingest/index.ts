@@ -233,11 +233,13 @@ async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> 
 
 // ── Content normalisation + hash (SHA-256 hex) ────────────────────────────
 // Must stay in sync with pipeline.py::_normalize / _hash.
-// Strips leading/trailing whitespace and collapses 3+ consecutive newlines to
-// two, matching the normalisation that chunk reconstruction implicitly applies.
+// Converts CRLF (and bare CR) to LF, strips leading/trailing whitespace, and
+// collapses 3+ consecutive newlines to two.  The CRLF step is required because
+// browsers submit textarea content with CRLF per the HTML spec, so a document
+// first ingested via CLI/MCP (LF) must hash identically after a web edit.
 
 function normalizeContent(text: string): string {
-  return text.trim().replace(/\n{3,}/g, "\n\n");
+  return text.trim().replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n{3,}/g, "\n\n");
 }
 
 async function sha256hex(text: string): Promise<string> {

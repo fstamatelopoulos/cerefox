@@ -230,20 +230,29 @@ async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[ty
         update_existing=bool(arguments.get("update_if_exists", False)),
     )
 
-    if result.skipped:
-        msg = f"Skipped (already ingested): {result.title}"
-    elif result.reindexed:
+    if result.action == "skipped":
+        msg = f"Skipped — identical content already in Cerefox: {result.title}"
+    elif result.action == "updated" and result.reindexed:
         msg = (
-            f"Updated: {result.title}\n"
+            f"Updated (re-indexed): {result.title}\n"
             f"Document ID: {result.document_id}\n"
             f"Chunks: {result.chunk_count}\n"
             f"Total chars: {result.total_chars:,}"
         )
         if result.project_ids:
             msg += f"\nProject IDs: {', '.join(result.project_ids)}"
-    else:
+    elif result.action == "updated":
         msg = (
-            f"Ingested: {result.title}\n"
+            f"Updated (metadata/title only — no re-index needed): {result.title}\n"
+            f"Document ID: {result.document_id}\n"
+            f"Chunks: {result.chunk_count}\n"
+            f"Total chars: {result.total_chars:,}"
+        )
+        if result.project_ids:
+            msg += f"\nProject IDs: {', '.join(result.project_ids)}"
+    else:  # action == "created"
+        msg = (
+            f"Created: {result.title}\n"
             f"Document ID: {result.document_id}\n"
             f"Chunks: {result.chunk_count}\n"
             f"Total chars: {result.total_chars:,}"

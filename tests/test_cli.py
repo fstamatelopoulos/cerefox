@@ -31,7 +31,7 @@ def _make_pipeline_mock(result: IngestResult | None = None) -> MagicMock:
         title="Test Note",
         chunk_count=3,
         total_chars=500,
-        skipped=False,
+        action="created",
     )
     mock.ingest_text.return_value = default_result
     mock.ingest_file.return_value = default_result
@@ -77,7 +77,7 @@ class TestIngestPaste:
         assert "Ingested" in result.output
 
     def test_paste_shows_skipped_message(self, runner) -> None:
-        skipped = IngestResult("old-id", "Old", 2, 100, skipped=True)
+        skipped = IngestResult("old-id", "Old", 2, 100, action="skipped")
         pipeline_mock = _make_pipeline_mock(result=skipped)
         with (
             patch("cerefox.cli.Settings"),
@@ -232,7 +232,7 @@ class TestIngestUpdate:
         updated_result = IngestResult(
             document_id="doc-abc", title="Note",
             chunk_count=1, total_chars=100,
-            skipped=False, reindexed=True,
+            action="updated", reindexed=True,
         )
         pipeline_mock = _make_pipeline_mock(updated_result)
         with (
@@ -253,7 +253,7 @@ class TestIngestUpdate:
         updated_result = IngestResult(
             document_id="doc-abc", title="Note",
             chunk_count=1, total_chars=100,
-            skipped=False, reindexed=True,
+            action="updated", reindexed=True,
         )
         pipeline_mock = _make_pipeline_mock(updated_result)
         with (

@@ -26,7 +26,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from cerefox.chunking.markdown import chunk_markdown
 
@@ -40,15 +40,31 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class IngestResult:
-    """Summary returned by every ingest_* call."""
+    """Summary returned by every ingest_* call.
+
+    ``action`` is the canonical outcome:
+    - ``"created"``  — new document written to the knowledge base.
+    - ``"updated"``  — existing document updated; check ``reindexed`` to
+                       distinguish a full re-embed from a metadata-only save.
+    - ``"skipped"``  — identical content already present; nothing written.
+
+    ``reindexed`` is only meaningful when ``action == "updated"`` and
+    indicates that chunks were deleted and re-embedded because the content
+    changed.
+    """
 
     document_id: str
     title: str
     chunk_count: int
     total_chars: int
-    skipped: bool       # True when the document was already present (hash match)
+    action: Literal["created", "updated", "skipped"]
     reindexed: bool = False  # True when chunks were re-embedded (content changed on update)
     project_ids: list[str] = field(default_factory=list)
+
+    @property
+    def skipped(self) -> bool:
+        """Back-compat shim — prefer checking ``action`` directly."""
+        return self.action == "skipped"
 
 
 class IngestionPipeline:
@@ -155,7 +171,7 @@ class IngestionPipeline:
                 title=existing.get("title", title),
                 chunk_count=existing.get("chunk_count", 0),
                 total_chars=existing.get("total_chars", 0),
-                skipped=True,
+                action="skipped",
                 project_ids=existing_project_ids,
             )
 
@@ -214,7 +230,7 @@ class IngestionPipeline:
             title=title,
             chunk_count=len(chunks),
             total_chars=total_chars,
-            skipped=False,
+            action="created",
             project_ids=resolved_ids,
         )
 
@@ -304,7 +320,7 @@ class IngestionPipeline:
                 title=title,
                 chunk_count=chunk_count,
                 total_chars=total_chars,
-                skipped=False,
+                action="updated",
                 reindexed=False,
                 project_ids=final_project_ids,
             )
@@ -369,7 +385,7 @@ class IngestionPipeline:
             title=title,
             chunk_count=len(chunks),
             total_chars=total_chars,
-            skipped=False,
+            action="updated",
             reindexed=True,
             project_ids=final_project_ids,
         )
@@ -474,12 +490,13 @@ class IngestionPipeline:
 def _normalize(text: str) -> str:
     """Normalise content before hashing.
 
-    Strips leading/trailing whitespace and collapses 3+ consecutive newlines to
-    two.  This matches the normalisation that chunk reconstruction implicitly
-    applies (chunks joined with '\\n\\n'), so that hashes computed at ingest
-    time (Python or TypeScript) are stable across round-trips through the edit
-    form and the Edge Function.
+    Converts CRLF (and bare CR) line endings to LF, strips leading/trailing
+    whitespace, and collapses 3+ consecutive newlines to two.  This ensures
+    that hashes are stable across round-trips through the web edit form
+    (browsers submit textarea content with CRLF per the HTML spec) and the
+    TypeScript Edge Function.
     """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     return re.sub(r"\n{3,}", "\n\n", text.strip())
 
 

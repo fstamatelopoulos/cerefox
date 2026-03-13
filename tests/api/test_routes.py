@@ -500,7 +500,7 @@ class TestIngestPage:
             title="My Note",
             chunk_count=1,
             total_chars=100,
-            skipped=False,
+            action="created",
         )
         with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
             MockPipeline.return_value.ingest_text.return_value = mock_result
@@ -520,7 +520,7 @@ class TestIngestPage:
             title="My Note",
             chunk_count=1,
             total_chars=100,
-            skipped=True,
+            action="skipped",
         )
         with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
             MockPipeline.return_value.ingest_text.return_value = mock_result
@@ -558,7 +558,7 @@ class TestIngestPage:
             title="uploaded.md",
             chunk_count=2,
             total_chars=200,
-            skipped=False,
+            action="created",
         )
         with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
             MockPipeline.return_value.ingest_text.return_value = mock_result
@@ -773,7 +773,7 @@ class TestDocumentUpdateContent:
         with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
             MockPipeline.return_value.update_document.return_value = IngestResult(
                 document_id="doc-uuid-1", title="Test Document",
-                chunk_count=1, total_chars=100, skipped=False, reindexed=True,
+                chunk_count=1, total_chars=100, action="updated", reindexed=True,
             )
             resp = self._post_file(test_client, "doc-uuid-1")
         assert resp.status_code == 200
@@ -785,7 +785,7 @@ class TestDocumentUpdateContent:
         with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
             MockPipeline.return_value.update_document.return_value = IngestResult(
                 document_id="doc-uuid-1", title="Test Document",
-                chunk_count=1, total_chars=100, skipped=False, reindexed=True,
+                chunk_count=1, total_chars=100, action="updated", reindexed=True,
             )
             resp = self._post_file(test_client, "doc-uuid-1")
         assert "re-indexed" in resp.text or "replaced" in resp.text.lower()
@@ -799,7 +799,7 @@ class TestDocumentUpdateContent:
         with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
             MockPipeline.return_value.update_document.return_value = IngestResult(
                 document_id="doc-uuid-1", title="Test Document",
-                chunk_count=1, total_chars=100, skipped=False, reindexed=False,
+                chunk_count=1, total_chars=100, action="updated", reindexed=False,
             )
             resp = self._post_file(test_client, "doc-uuid-1")
         assert resp.status_code == 200
@@ -841,7 +841,7 @@ class TestDocumentUpdateContent:
         with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
             MockPipeline.return_value.update_document.return_value = IngestResult(
                 document_id="doc-uuid-1", title="My Real Title",
-                chunk_count=1, total_chars=100, skipped=False, reindexed=True,
+                chunk_count=1, total_chars=100, action="updated", reindexed=True,
             )
             self._post_file(test_client, "doc-uuid-1")
         call_kwargs = MockPipeline.return_value.update_document.call_args[1]
