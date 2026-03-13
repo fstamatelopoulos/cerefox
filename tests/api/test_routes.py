@@ -396,6 +396,35 @@ class TestDocumentChunksHide:
         assert "Show 0 chunk(s)" in resp.text
 
 
+class TestDocumentDownload:
+    """GET /document/{id}/download — returns markdown file."""
+
+    def test_returns_200(self, test_client, mock_client):
+        resp = test_client.get("/document/doc-uuid-1/download")
+        assert resp.status_code == 200
+
+    def test_content_type_is_markdown(self, test_client, mock_client):
+        resp = test_client.get("/document/doc-uuid-1/download")
+        assert "text/markdown" in resp.headers["content-type"]
+
+    def test_content_disposition_is_attachment(self, test_client, mock_client):
+        resp = test_client.get("/document/doc-uuid-1/download")
+        assert resp.headers["content-disposition"].startswith("attachment")
+
+    def test_filename_uses_doc_title(self, test_client, mock_client):
+        resp = test_client.get("/document/doc-uuid-1/download")
+        assert "Test Document.md" in resp.headers["content-disposition"]
+
+    def test_body_contains_full_content(self, test_client, mock_client):
+        resp = test_client.get("/document/doc-uuid-1/download")
+        assert "# Test Document" in resp.text
+
+    def test_returns_404_for_missing_document(self, test_client, mock_client):
+        mock_client.reconstruct_doc.return_value = None
+        resp = test_client.get("/document/missing-id/download")
+        assert resp.status_code == 404
+
+
 class TestDocumentContent:
     """Lazy-loaded /document/{id}/content partial endpoint."""
 

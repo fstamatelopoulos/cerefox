@@ -50,6 +50,7 @@
 
 <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1.5rem;">
   {{ action_button("Edit", href="/document/" ~ doc.document_id ~ "/edit", variant="edit") }}
+  {{ action_button("Download .md", href="/document/" ~ doc.document_id ~ "/download", variant="secondary") }}
   <button type="button" class="outline secondary btn-inline"
           onclick="var s=document.getElementById('upload-section');var open=s.style.display!=='none';s.style.display=open?'none':'block';this.textContent=open?'Upload new File':'✕ Cancel upload';">
     Upload new File

@@ -8,6 +8,7 @@ Routes:
     GET  /document/{document_id}/chunks-hide      Returns the collapsed Show button (HTMX, ?n=)
     GET  /document/{document_id}/content          Lazy-loaded full content partial (HTMX)
     GET  /document/{document_id}/content-hide     Returns the collapsed Show button (HTMX, ?chars=)
+    GET  /document/{document_id}/download         Download document as .md file
     GET  /document/{document_id}/edit             Edit form
     POST /document/{document_id}/edit             Handle edit submission
     POST /document/{document_id}/delete           Delete document
@@ -35,7 +36,7 @@ from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from cerefox.config import Settings
@@ -444,6 +445,27 @@ async def document_update_content(
 
 
 # ── Document edit ─────────────────────────────────────────────────────────────
+
+
+@router.get("/document/{document_id}/download")
+def document_download(
+    document_id: str,
+    client: CerefoxClient = Depends(get_client),
+) -> Response:
+    """Return the document's reconstructed markdown content as a file download."""
+    doc = client.reconstruct_doc(document_id)
+    if doc is None:
+        return Response(status_code=404, content="Document not found")
+    title = doc.get("doc_title") or "document"
+    content = doc.get("full_content") or ""
+    # Sanitise title for use as a filename: replace path separators and trim.
+    safe_name = title.replace("/", "-").replace("\\", "-").strip() or "document"
+    filename = f"{safe_name}.md"
+    return Response(
+        content=content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/document/{document_id}/edit", response_class=HTMLResponse)
