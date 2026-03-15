@@ -142,23 +142,11 @@ All RPCs should be `SECURITY DEFINER` so they work with the anon/service key wit
 
 ## Git workflow
 
-### Branch model
+### For contributors
 
-- **`main`** is always deployable. All work lands here.
-- **Feature branches** (`feat/remote-mcp`, `fix/search-empty-content`) for non-trivial changes — anything that touches multiple files or takes more than one session.
-- **Direct commits to `main`** are fine for: typo fixes, single-file doc updates, small config tweaks, and hotfixes.
-
-### When to use a branch + PR
-
-Use a feature branch and PR when:
-1. The change spans multiple files or multiple logical steps
-2. The change could break something and you want a clean rollback point
-3. You want a summary artifact (PR description explains *why*)
-
-Skip the branch (commit directly to `main`) when:
-1. Single-file doc fix or typo
-2. Small config change (`.gitignore`, version bump)
-3. Hotfix for a bug you just introduced
+1. **Fork** the repository and create a feature branch from `main`
+2. Make your changes with clear, focused commits
+3. Open a PR against `main`
 
 ### Commit messages
 
@@ -166,14 +154,11 @@ Skip the branch (commit directly to `main`) when:
 <verb> <what changed>
 
 <optional body: why, context, trade-offs>
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 ```
 
 - **Imperative mood**: "Add", "Fix", "Update", "Remove"
 - **First line under 72 characters**
 - **Body explains why**, not what — the diff shows what changed
-- **Co-authored-by trailer** on every commit where Claude contributed
 - **One logical change per commit**
 
 ### PR conventions
@@ -181,11 +166,6 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 - Title: short, imperative, under 70 chars
 - Body: Summary (bullet points) + Test plan (checklist)
 - Merge style: **Squash and merge** by default
-
-### Release tagging
-
-- Tag releases on `main`: `v0.1.0`, `v0.2.0`
-- Annotated tags: `git tag -a v0.1.0 -m "First public release"`
 
 ---
 

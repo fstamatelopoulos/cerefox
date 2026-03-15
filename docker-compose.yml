@@ -47,9 +47,9 @@ services:
       # Direct Postgres URL — used by db_deploy.py.
       CEREFOX_DATABASE_URL: postgresql://cerefox:cerefox@postgres:5432/cerefox
 
-      # Embedding model (mpnet downloads ~420 MB on first use).
-      CEREFOX_EMBEDDER: ${CEREFOX_EMBEDDER:-mpnet}
-      CEREFOX_OLLAMA_URL: ${CEREFOX_OLLAMA_URL:-http://host.docker.internal:11434}
+      # Embedding model (cloud API, requires OPENAI_API_KEY).
+      CEREFOX_EMBEDDER: ${CEREFOX_EMBEDDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 
       # Chunking and retrieval settings.
       CEREFOX_MAX_CHUNK_CHARS: ${CEREFOX_MAX_CHUNK_CHARS:-4000}
@@ -59,12 +59,9 @@ services:
       CEREFOX_BACKUP_DIR: /data/backups
     volumes:
       - cerefox_data:/data
-      # Cache the embedding model between restarts.
-      - model_cache:/root/.cache/huggingface
     ports:
       - "8000:8000"
 
 volumes:
   postgres_data:
   cerefox_data:
-  model_cache:

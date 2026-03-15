@@ -7,8 +7,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  * Accepts a plain-text query, embeds it server-side using the OpenAI API,
  * then calls the appropriate Cerefox search RPC and returns the results.
  *
- * Agents call this via the Supabase MCP "invoke edge function" tool — no
- * SQL required, no local embedding model needed.
+ * Called by the cerefox-mcp Edge Function (MCP Streamable HTTP), GPT Actions
+ * (direct HTTP POST), or any HTTP client. No SQL required, no local embedder.
  *
  * Request body (JSON):
  *   query        string   required  Natural-language search query

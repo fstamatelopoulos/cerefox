@@ -291,7 +291,7 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 - **Strategy**: heading-based (H1 > H2 > H3 > paragraph fallback)
 - **Max chunk size**: 4000 characters (configurable)
 - **Min chunk size**: 100 characters (merge upward if smaller)
-- **Paragraph overlap**: 200 characters (when paragraph splitting is needed)
+- **Paragraph overlap**: none (greedy section accumulation, no overlapping content between chunks)
 
 ### 4.4 API & MCP
 

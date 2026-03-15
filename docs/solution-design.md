@@ -96,20 +96,23 @@ One row per ingested document (markdown file, pasted note, etc.).
 CREATE TABLE cerefox_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
-  source TEXT NOT NULL DEFAULT 'manual',     -- 'file', 'web', 'paste', 'api'
+  source TEXT NOT NULL DEFAULT 'manual',     -- 'file', 'paste', 'agent', 'url', 'manual'
   source_path TEXT,                           -- original file path or URL
   content_hash TEXT NOT NULL,                 -- SHA-256 of raw content for dedup
-  project_id UUID REFERENCES cerefox_projects(id) ON DELETE SET NULL,
-  metadata JSONB DEFAULT '{}'::jsonb,
-  -- Example metadata:
-  -- {"tags": ["AI", "agents"], "category": "research",
-  --  "importance": "high", "author": "fotis"}
-  chunk_count INT DEFAULT 0,
-  total_chars INT DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  chunk_count INT NOT NULL DEFAULT 0,
+  total_chars INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   UNIQUE(content_hash)
+);
+
+-- Many-to-many: one document can belong to zero or more projects.
+CREATE TABLE cerefox_document_projects (
+  document_id UUID NOT NULL REFERENCES cerefox_documents(id) ON DELETE CASCADE,
+  project_id  UUID NOT NULL REFERENCES cerefox_projects(id)  ON DELETE CASCADE,
+  PRIMARY KEY (document_id, project_id)
 );
 ```
 
@@ -128,9 +131,9 @@ CREATE TABLE cerefox_chunks (
   content TEXT NOT NULL,
   char_count INT NOT NULL,
 
-  -- Embeddings (768 dims)
-  embedding_primary VECTOR(768) NOT NULL,     -- default: text-embedding-3-small (OpenAI)
-  embedding_upgrade VECTOR(768),              -- optional: Fireworks/Vertex
+  -- Embeddings (768 dims, cloud-only: OpenAI text-embedding-3-small default)
+  embedding_primary VECTOR(768) NOT NULL,
+  embedding_upgrade VECTOR(768),              -- optional: alternative embedder
 
   -- Full Text Search
   fts tsvector GENERATED ALWAYS AS (
@@ -166,20 +169,20 @@ CREATE INDEX idx_cerefox_chunks_emb_upgrade
 
 -- Metadata and lookups
 CREATE INDEX idx_cerefox_docs_metadata ON cerefox_documents USING GIN(metadata);
-CREATE INDEX idx_cerefox_docs_project ON cerefox_documents(project_id);
 CREATE INDEX idx_cerefox_chunks_doc ON cerefox_chunks(document_id, chunk_index);
 ```
 
 ### 2.3 Entity Relationships
 
 ```
-cerefox_projects (1) ──< (many) cerefox_documents (1) ──< (many) cerefox_chunks
+cerefox_projects (many) >──< (many) cerefox_documents (1) ──< (many) cerefox_chunks
+                          via cerefox_document_projects
 ```
 
-- A project has many documents
+- A project has many documents; a document can belong to many projects (many-to-many via junction table)
 - A document has many chunks (ordered by chunk_index)
-- Deleting a document cascades to its chunks
-- Deleting a project nullifies project_id on its documents (SET NULL)
+- Deleting a document cascades to its chunks and junction table rows
+- Deleting a project cascades to junction table rows (documents are not deleted)
 
 ## 3. Chunking Strategy
 
@@ -422,8 +425,9 @@ trip to Supabase) and is preferable if Python + uv are already installed.
 
 ### 9.2 Built-in MCP Server (`cerefox mcp`)
 
-`src/cerefox/mcp_server.py` is a proper MCP server using the MCP Python SDK. It is the
-primary integration path for local desktop clients.
+`src/cerefox/mcp_server.py` is a proper MCP server using the MCP Python SDK. It is a
+**legacy fallback** for environments where the remote `cerefox-mcp` Edge Function is not
+available. The remote path is recommended for all clients that support Streamable HTTP.
 
 **Why not raw Supabase MCP + fetch?**
 The `mcp-server-fetch` package is a web reader (GET-only) — it cannot make authenticated
@@ -459,7 +463,8 @@ via HTTP POST with an anon key. They are the backend for:
 - curl / scripted access
 - Any HTTP client that can send a POST with custom headers
 
-They are **not** the primary path for local desktop agents (use `cerefox mcp` instead).
+For desktop AI clients, the recommended path is the remote `cerefox-mcp` Edge Function
+(Path 2). The local `cerefox mcp` server (Path 1) is a legacy fallback for offline use.
 
 ### 9.4 Postgres RPCs (for direct SQL access)
 

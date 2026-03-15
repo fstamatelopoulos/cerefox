@@ -92,6 +92,9 @@ These are "input adapters" — Cerefox is the backend, these tools are the autho
   service container, deploys schema, runs integration tests. Enables automated regression testing.
 - [ ] **Local dev workflow guide** — `docs/guides/setup-local-dev.md` covering `supabase start`,
   `supabase functions serve`, local secrets, and how to switch between local and cloud backends.
+- [ ] **Validate Docker/local deployment** — `Dockerfile` and `docker-compose.yml` have never been
+  tested end-to-end. Verify the local stack (Postgres+pgvector + web UI) works with the current
+  cloud-only embedder config. Low priority — focus is on Supabase production environment.
 
 ### Backup & Sync
 - [ ] Scheduled automatic backups

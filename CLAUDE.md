@@ -105,10 +105,47 @@ cerefox/
 - Integration tests that need Supabase are marked `@pytest.mark.integration` and skipped by default
 - Test at least: happy path, edge cases (empty input, max size, malformed input), error conditions
 
-### Git
-- Main branch: `main`
-- Commit messages: imperative mood, concise (e.g., "Add markdown chunking engine")
-- No force pushes to main
+### Git (Lightweight GitHub Flow)
+
+**Branch model:**
+- **`main`** is always deployable. All work lands here.
+- **Feature branches** (`feat/metadata-overhaul`, `fix/search-empty-content`) for non-trivial changes — anything that touches multiple files or takes more than one session.
+- **Direct commits to `main`** are fine for: typo fixes, single-file doc updates, small config tweaks, and hotfixes.
+- No `develop` branch, no `release/*` branches.
+- No force pushes to main.
+
+**When to use a branch + PR:**
+1. The change spans multiple files or multiple logical steps
+2. The change could break something and you want a clean rollback point
+3. You want a summary artifact (PR description explains *why*)
+
+**When to commit directly to `main`:**
+1. Single-file doc fix or typo
+2. Small config change (`.gitignore`, version bump)
+3. Hotfix for a bug you just introduced
+
+**Commit messages:**
+```
+<verb> <what changed>
+
+<optional body: why, context, trade-offs>
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+- Imperative mood: "Add", "Fix", "Update", "Remove"
+- First line under 72 characters
+- Body explains *why*, not what — the diff shows what changed
+- Co-authored-by trailer on every commit where Claude contributed
+- One logical change per commit
+
+**PR conventions:**
+- Title: short, imperative, under 70 chars
+- Body: Summary (bullet points) + Test plan (checklist)
+- Merge style: **Squash and merge** by default
+
+**Release tagging:**
+- Tag on `main`: `v0.1.0`, `v0.2.0`
+- Annotated tags: `git tag -a v0.1.0 -m "First public release"`
 
 ## Key Design Decisions
 

@@ -77,12 +77,14 @@ CREATE TABLE IF NOT EXISTS cerefox_chunks (
     content         TEXT        NOT NULL,
     char_count      INT         NOT NULL,
 
-    -- Primary embedding: always computed, local model (default: all-mpnet-base-v2)
+    -- Primary embedding: always computed, cloud API (default: OpenAI text-embedding-3-small)
     embedding_primary  VECTOR(768) NOT NULL,
-    -- Upgrade embedding: optional, higher-quality model (Ollama, Vertex, etc.)
+    -- Upgrade embedding: optional, alternative model (Fireworks, Vertex, etc.)
     embedding_upgrade  VECTOR(768),
 
     -- Track which model produced each embedding
+    -- Note: DDL default is 'all-mpnet-base-v2' for historical reasons; new chunks
+    -- use the embedder name from config (e.g. 'text-embedding-3-small').
     embedder_primary   TEXT        NOT NULL DEFAULT 'all-mpnet-base-v2',
     embedder_upgrade   TEXT,
 
