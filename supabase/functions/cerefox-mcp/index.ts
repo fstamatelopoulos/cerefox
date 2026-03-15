@@ -12,7 +12,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  * cerefox-search and cerefox-ingest Edge Functions; this function handles
  * the MCP JSON-RPC 2.0 layer only and delegates tool calls via internal fetch().
  *
- * Authentication: Supabase API gateway validates the JWT (anon key) automatically.
+ * Authentication: Deployed with standard JWT verification (default).
+ * Internal calls to cerefox-search/cerefox-ingest forward the caller's
+ * Authorization header (validated by the gateway before reaching this code).
  *
  * Supported clients:
  *   Claude Code  — claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <anon-key>"
@@ -22,7 +24,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
 };
 
@@ -308,11 +310,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
   }
 
-  // GET not supported (stateless — no SSE stream needed)
+  // GET — health check for MCP clients that probe before connecting.
+  // Some clients (e.g., Perplexity) send a GET before POSTing the MCP handshake.
   if (req.method === "GET") {
-    return new Response("Method Not Allowed", {
-      status: 405,
-      headers: CORS_HEADERS,
+    return jsonResponse({
+      name: SERVER_NAME,
+      version: SERVER_VERSION,
+      protocol: "mcp",
+      protocolVersion: MCP_VERSION,
+      status: "ok",
     });
   }
 
@@ -322,12 +328,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
       headers: CORS_HEADERS,
     });
   }
-
-  // Auth is handled by Supabase's API gateway (JWT validation).
-  // The anon key is a valid JWT — the gateway validates it and passes the
-  // request through, same as cerefox-search and cerefox-ingest.
-  // We forward the caller's Authorization header to internal Edge Function calls.
-  const callerAuth = req.headers.get("Authorization") ?? "";
 
   // ── Parse JSON-RPC body ───────────────────────────────────────────────────
   let body: unknown;
@@ -368,12 +368,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     case "tools/list":
       return handleToolsList(id);
 
-    case "tools/call":
+    case "tools/call": {
+      const callerAuth = req.headers.get("Authorization") ?? "";
       return await handleToolsCall(
         id,
         params as { name?: string; arguments?: Record<string, unknown> } | undefined,
         callerAuth,
       );
+    }
 
     default:
       return errorResponse(id ?? null, -32601, `Method not found: ${method}`);

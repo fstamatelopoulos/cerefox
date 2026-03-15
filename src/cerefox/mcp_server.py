@@ -1,9 +1,20 @@
-"""Cerefox MCP server — exposes cerefox_search and cerefox_ingest as named MCP tools.
+"""Cerefox MCP server (local stdio) — legacy fallback.
 
-Run via:
+The **recommended** MCP path is the remote ``cerefox-mcp`` Supabase Edge Function
+(Streamable HTTP). It requires no Python install, no local repo clone, and works
+from Claude Code, Cursor, Claude Desktop (via supergateway), and other remote-
+capable MCP clients.
+
+This local stdio server is kept as a **legacy fallback** for environments where
+a remote connection is not available or practical. It exposes the same
+``cerefox_search`` and ``cerefox_ingest`` tools as the remote Edge Function.
+
+Run via::
+
     cerefox mcp
 
-Claude Desktop config (~/.../claude_desktop_config.json):
+Claude Desktop config (~/.../claude_desktop_config.json)::
+
     {
       "mcpServers": {
         "cerefox": {

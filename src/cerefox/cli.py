@@ -561,7 +561,7 @@ def reindex(batch: int, reindex_all: bool) -> None:
 
 @cli.command("mcp")
 def mcp_server() -> None:
-    """Start the Cerefox MCP server (stdio transport).
+    """Start the Cerefox MCP server (stdio transport, legacy fallback).
 
     Add to Claude Desktop's claude_desktop_config.json:
 

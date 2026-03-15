@@ -85,6 +85,13 @@ These are "input adapters" — Cerefox is the backend, these tools are the autho
 - [ ] Usage statistics (docs stored, searches performed, storage used)
 - [ ] Database migration tool (for schema evolution)
 - [ ] CI/CD pipeline (GitHub Actions: lint, test, build)
+- [ ] **Local integration test suite** — `@pytest.mark.integration_local` tests that run against
+  Supabase local stack (`supabase start`); covers schema deploy, ingest, search, Edge Functions
+  end-to-end. Depends on Iteration 11 local dev setup (11.19).
+- [ ] **CI with Supabase local stack** — GitHub Actions workflow that runs `supabase start` in a
+  service container, deploys schema, runs integration tests. Enables automated regression testing.
+- [ ] **Local dev workflow guide** — `docs/guides/setup-local-dev.md` covering `supabase start`,
+  `supabase functions serve`, local secrets, and how to switch between local and cloud backends.
 
 ### Backup & Sync
 - [ ] Scheduled automatic backups
@@ -125,7 +132,10 @@ These are "input adapters" — Cerefox is the backend, these tools are the autho
 - [ ] **OpenClaw** integration — OpenClaw (open-source AI agent) MCP config; same Path A
   approach as Cursor/Claude Code; track once the tool matures.
 - [ ] Usage analytics (which tools agents call most, common query patterns)
-- [ ] Perplexity — does not support MCP; no integration possible at this time.
+- [ ] Perplexity — custom connector MCP support exists (Streamable HTTP + SSE + API Key/OAuth
+  auth). Web-based connector fails to reach Supabase Edge Functions — likely due to GoTrue
+  OAuth discovery conflict (same root cause as `mcp-remote`). Scheduled for Iteration 11:
+  investigate Supabase OAuth 2.1 (11.17) + test web & desktop connectivity (11.18).
 
 ---
 

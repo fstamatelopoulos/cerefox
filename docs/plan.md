@@ -272,9 +272,123 @@ single `--transport http` command. Claude Desktop connects via `supergateway` pr
 
 ---
 
+## Iteration 11: Metadata Overhaul — Dynamic Tags & Settings Cleanup
+
+**Goal**: Replace the rigid `cerefox_metadata_keys` registry with a dynamic, data-driven
+approach. Make metadata editing flexible (arbitrary key-value pairs), provide agents with
+a discovery tool, and remove the Settings page cruft.
+
+### Why
+
+- The `cerefox_metadata_keys` table is a manually maintained registry that isn't enforced
+  at the database level — documents can have any JSONB metadata regardless.
+- The edit form only shows keys from the registry, hiding any metadata that was added
+  outside it (e.g., via CLI, MCP, or direct API).
+- `metadata_strict` mode adds complexity without clear value for a single-user system.
+- Agents need a way to discover existing metadata keys (for consistency), but deriving
+  them from actual data is more accurate and maintenance-free than a separate table.
+
+### What changes
+
+**Remove:**
+- `cerefox_metadata_keys` table and its 3 RPCs (`list`, `upsert`, `delete`)
+- Settings page metadata key CRUD (entire `/settings` page — it only has metadata keys)
+- `metadata_strict` config setting and `_validate_metadata()` pipeline logic
+- CLI `cerefox metadata-keys` command group (list, add, delete)
+- Registry-driven metadata fields in ingest/edit forms
+
+**Add:**
+- `cerefox_list_metadata_keys` SQL RPC — derives keys from actual `doc_metadata` JSONB
+  across all documents. Returns each distinct key with `doc_count` (how many documents
+  use it) and `example_values` (sample values for context). This gives agents and the UI
+  a live view of the metadata vocabulary without a separate table.
+- `list_metadata_keys` MCP tool — exposes the RPC so agents can discover available
+  metadata keys before ingesting or searching. Encourages agents to add metadata by
+  showing them what keys already exist and how they're used.
+- Dynamic metadata editor in the document edit form — shows all existing key-value pairs
+  from the document's `doc_metadata` with editable keys and values, plus an "add row"
+  button for new pairs. No registry dependency.
+- Dynamic metadata fields in the ingest form — free-form key-value pair inputs (add/remove
+  rows). Optionally pre-populated with autocomplete suggestions from the RPC.
+- HTMX autocomplete for metadata keys — when typing a key name in ingest/edit forms,
+  suggest existing keys from `cerefox_list_metadata_keys` to reduce drift.
+
+### New RPC design
+
+```sql
+-- Returns all distinct metadata keys currently in use across documents
+CREATE OR REPLACE FUNCTION cerefox_list_metadata_keys()
+RETURNS TABLE (
+  key           TEXT,
+  doc_count     BIGINT,
+  example_values TEXT[]    -- up to 5 sample values for context
+)
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT
+    k.key,
+    COUNT(DISTINCT d.id)                                    AS doc_count,
+    (ARRAY_AGG(DISTINCT d.doc_metadata ->> k.key) FILTER
+      (WHERE d.doc_metadata ->> k.key IS NOT NULL))[1:5]   AS example_values
+  FROM cerefox_documents d,
+       LATERAL jsonb_object_keys(d.doc_metadata) AS k(key)
+  WHERE d.doc_metadata IS NOT NULL
+    AND d.doc_metadata != '{}'::jsonb
+  GROUP BY k.key
+  ORDER BY doc_count DESC, k.key;
+$$;
+```
+
+### MCP tool design
+
+```
+Tool: list_metadata_keys
+Description: List all metadata keys currently in use across documents.
+             Returns each key with a count of documents using it and example values.
+             Use this before ingesting to discover the existing metadata vocabulary
+             and maintain consistency.
+Parameters: (none)
+Returns: Text table of keys, counts, and examples.
+```
+
+Exposed in both the local MCP server (`mcp_server.py`) and the remote Edge Function
+(`cerefox-mcp/index.ts`).
+
+### Tasks
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 11.1 | Write `cerefox_list_metadata_keys` SQL RPC (data-driven) | Pending | Replace registry RPCs; returns key, doc_count, example_values |
+| 11.2 | Drop `cerefox_metadata_keys` table + old RPCs from schema.sql | Pending | Remove table, trigger, `list`/`upsert`/`delete` RPCs |
+| 11.3 | Write migration script for live DB (drop table, replace RPCs) | Pending | `scripts/db_migrate.py` or standalone migration SQL |
+| 11.4 | Update `client.py` — replace 3 registry methods with 1 dynamic method | Pending | `list_metadata_keys()` → calls new RPC, returns `[{key, doc_count, example_values}]` |
+| 11.5 | Remove `metadata_strict` from `config.py` | Pending | Also remove `_validate_metadata()` from pipeline.py |
+| 11.6 | Replace CLI `metadata-keys` group with `cerefox list-metadata-keys` | Pending | Remove old CRUD subcommands; add single data-driven list command |
+| 11.7 | Remove Settings page — routes + template | Pending | `/settings` route, `settings.html` template, nav link |
+| 11.8 | Redesign edit form metadata section — dynamic key-value editor | Pending | JS add/remove rows; editable keys + values; pre-fill from doc_metadata |
+| 11.9 | Redesign ingest form metadata section — free-form key-value inputs | Pending | Same dynamic row pattern; no registry dependency |
+| 11.10 | Add HTMX autocomplete for metadata key names | Pending | Endpoint returns known keys; `<datalist>` or lightweight dropdown |
+| 11.11 | Add `list_metadata_keys` tool to local MCP server (legacy) | Pending | `mcp_server.py` — calls `client.list_metadata_keys()` |
+| 11.12 | Write `cerefox-metadata` Edge Function (standalone) | Pending | Calls RPC directly; usable from GPT Actions and other HTTP clients |
+| 11.13 | Add `list_metadata_keys` tool to `cerefox-mcp` Edge Function | Pending | Delegates to `cerefox-metadata` Edge Function (same pattern as search/ingest) |
+| 11.14 | Update `_extract_ingest_form()` to handle dynamic key-value pairs | Pending | Replace `meta__<key>` pattern with paired `meta_key[]`/`meta_value[]` arrays |
+| 11.15 | Update tests — remove registry tests, add dynamic key tests | Pending | client, pipeline, CLI, routes |
+| 11.16 | Update docs — solution-design.md, configuration.md, CLAUDE.md | Pending | Remove metadata_strict references, document new RPC; label local MCP as legacy fallback |
+| 11.17 | Investigate Supabase OAuth 2.1 for MCP authentication | Pending | Enable GoTrue OAuth server for spec-compliant MCP client auth; would unblock Perplexity web and any future client that does OAuth discovery |
+| 11.18 | Test Perplexity connectivity — web (OAuth) + desktop (local stdio) | Pending | Web: depends on 11.17 (OAuth); Desktop: install Perplexity Helper App, connect to `cerefox mcp` via stdio; document results in connect-agents.md |
+| 11.19 | Set up Supabase local dev environment (`supabase start`) | Pending | Full local stack (Postgres+pgvector, Edge Functions runtime, GoTrue); configure `supabase/config.toml`; verify schema deploys and Edge Functions serve locally |
+| 11.20 | Test Edge Functions locally (`supabase functions serve`) | Pending | Verify cerefox-search, cerefox-ingest, cerefox-mcp work against local Postgres; use for cerefox-metadata development (11.12) |
+
+**Deliverable**: Metadata is fully open-ended JSONB. Agents can discover existing keys via
+MCP tool. Web UI allows editing any key-value pair. No manual registry to maintain. Settings
+page removed (or repurposed if other settings are added later). Perplexity connectivity
+investigated and documented. Local Supabase dev environment operational for Edge Function
+development and testing.
+
+---
+
 ## Current Focus
 
-**Iteration 10 complete and validated.** Remote MCP (`cerefox-mcp`) confirmed working with
-Claude Desktop (via supergateway) and Claude Code (native HTTP). `mcp-remote` does not work
-with Supabase. All docs updated to reflect remote MCP as recommended default, local stdio
-as legacy fallback.
+**Iteration 11 planned.** Metadata overhaul — deprecate `cerefox_metadata_keys` registry in
+favour of data-driven key discovery. Also includes Supabase OAuth 2.1 investigation,
+Perplexity connectivity testing, and local Supabase dev environment setup. Git & PR strategy
+approved (see `docs/guides/contributing.md`). Starting Iteration 11 with feature branches.
