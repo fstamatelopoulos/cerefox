@@ -194,16 +194,18 @@ async function handleToolCall(
     }
 
     // Format as markdown — same style as the local stdio MCP server.
+    // cerefox_search_docs RPC returns: doc_title, best_score, full_content
+    // (not "content" / "score" — those are chunk-level field names).
     const rows = result.results as Array<{
       doc_title?: string;
-      content?: string;
-      score?: number;
+      full_content?: string;
+      best_score?: number;
     }>;
 
     const parts: string[] = rows.map((row) => {
       const title = row.doc_title ?? "Untitled";
-      const score = row.score != null ? ` (score: ${row.score.toFixed(3)})` : "";
-      return `## ${title}${score}\n\n${row.content ?? ""}`;
+      const score = row.best_score != null ? ` (score: ${row.best_score.toFixed(3)})` : "";
+      return `## ${title}${score}\n\n${row.full_content ?? ""}`;
     });
 
     let output = parts.join("\n\n---\n\n");
