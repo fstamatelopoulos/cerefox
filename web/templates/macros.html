@@ -19,8 +19,9 @@
            Omit (None) → normal inline width, same height as other form controls.
   submit   True (default) → type="submit" on <button>; False → type="button".
            Ignored when href is set (links are always navigation).
-  confirm  If set, adds onclick="return confirm('…')" to require user confirmation.
-           Single quotes in the message are escaped automatically.
+  confirm  If set, replaces the button with a two-step inline confirmation:
+           clicking the button reveals "Yes / Cancel" in place, avoiding
+           browser confirm() dialogs which can be suppressed or blocked.
 #}
 {% macro action_button(label, href=None, variant="primary", size=None, submit=True, confirm=None) -%}
 {%- set _cls_map = {
@@ -33,8 +34,22 @@
 {%- set _sz   = "btn-sm" if size == "sm" else "btn-inline" -%}
 {%- set _cls  = [_base, _sz] | reject("equalto", "") | join(" ") -%}
 {%- if href -%}
-<a href="{{ href }}" role="button" class="{{ _cls }}"{% if confirm %} onclick="return confirm('{{ confirm | replace("'", "\\'") }}')"{% endif %}>{{ label }}</a>
+<a href="{{ href }}" role="button" class="{{ _cls }}">{{ label }}</a>
+{%- elif confirm -%}
+<span class="inline-confirm" style="display:inline-flex;gap:.4rem;align-items:center;">
+  <button type="button" class="{{ _cls }}"
+          onclick="var g=this.parentElement;g.querySelector('.confirm-actions').hidden=false;this.hidden=true;">
+    {{ label }}
+  </button>
+  <span class="confirm-actions" hidden style="display:inline-flex;gap:.4rem;align-items:center;">
+    <button type="submit" class="{{ _cls }}">Confirm</button>
+    <button type="button" class="outline secondary {{ _sz }}"
+            onclick="var g=this.closest('.inline-confirm');g.querySelector('.confirm-actions').hidden=true;g.querySelector('button:first-child').hidden=false;">
+      ✕
+    </button>
+  </span>
+</span>
 {%- else -%}
-<button type="{{ 'submit' if submit else 'button' }}" class="{{ _cls }}"{% if confirm %} onclick="return confirm('{{ confirm | replace("'", "\\'") }}')"{% endif %}>{{ label }}</button>
+<button type="{{ 'submit' if submit else 'button' }}" class="{{ _cls }}">{{ label }}</button>
 {%- endif -%}
 {%- endmacro %}

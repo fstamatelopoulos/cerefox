@@ -115,7 +115,7 @@ class TestSearch:
 
 
 class TestProjects:
-    def test_project_crud(self, page: Page):
+    def test_project_crud(self, page: Page, e2e_client: CerefoxClient):
         """Create → verify → delete a project via the web UI."""
         project_name = _unique_title("Test Project")
 
@@ -132,13 +132,19 @@ class TestProjects:
         # Verify it appears
         expect(page.locator(f"text={project_name}")).to_be_visible()
 
-        # Delete it — find the table row containing our project name
+        # Delete it — two-step inline confirm (no window.confirm dialog)
         row = page.get_by_role("row", name=re.compile(re.escape(project_name)))
-        page.on("dialog", lambda dialog: dialog.accept())
-        row.locator("button", has_text="Delete").click()
+        row.get_by_role("button", name=re.compile(r"^Delete$")).click()
+        row.get_by_role("button", name="Confirm").click()
         page.wait_for_timeout(1000)
-        # Verify it's gone
+        # Verify it's gone from UI
         expect(page.locator(f"text={project_name}")).not_to_be_visible()
+
+        # Clean up via REST API — safety net in case UI delete silently failed
+        for proj in e2e_client.list_projects():
+            if proj.get("name") == project_name:
+                e2e_client.delete_project(proj["id"])
+                break
 
 
 # ── Document detail ────────────────────────────────────────────────────────
