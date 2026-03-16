@@ -343,7 +343,7 @@ Add (or merge into) the file:
       "args": [
         "-y", "supergateway",
         "--streamableHttp", "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
-        "--header", "Authorization: Bearer <your-anon-key>"
+        "--oauth2Bearer", "<your-anon-key>"
       ]
     }
   }
