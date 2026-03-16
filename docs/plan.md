@@ -374,21 +374,68 @@ Exposed in both the local MCP server (`mcp_server.py`) and the remote Edge Funct
 | 11.15 | Update tests — remove registry tests, add dynamic key tests | Done | 408 tests passing; new tests for MCP tool + form metadata |
 | 11.16 | Update docs — plan.md, solution-design.md | Done | Mark tasks done; update architecture docs |
 | 11.17 | Investigate Supabase OAuth 2.1 for MCP authentication | Researched — Deferred | GoTrue owns `/.well-known` on `*.supabase.co`; Supabase BYO MCP auth "coming soon" (no timeline); no current client requires OAuth. See `docs/design-oauth-mcp-auth.md`. Revisit when Supabase ships BYO MCP auth or a must-have client requires OAuth. |
-| 11.18 | Investigate Perplexity integration paths | Pending | Perplexity moving away from MCP (March 2026); research API, sonar, and other integration options |
-| 11.19 | Set up Supabase local dev environment (`supabase start`) | Pending | Full local stack (Postgres+pgvector, Edge Functions runtime, GoTrue); configure `supabase/config.toml`; verify schema deploys and Edge Functions serve locally |
-| 11.20 | Test Edge Functions locally (`supabase functions serve`) | Pending | Verify cerefox-search, cerefox-ingest, cerefox-mcp work against local Postgres |
+| 11.18 | Investigate Perplexity integration paths | Deferred — Local MCP to test | Web connector tested and failed (GoTrue conflict). Decision: test Desktop + Helper App + local `cerefox mcp` (bypasses Supabase entirely). Sonar/Agent API are programmatic alternatives but not a priority. |
+| 11.19 | Investigate Gemini integration | Pending | Research Google Gemini MCP support, integration paths (native MCP, API-based), and feasibility |
 
 **Deliverable**: Metadata is fully open-ended JSONB. Agents can discover existing keys via
 MCP tool. Web UI allows editing any key-value pair. No manual registry to maintain. Settings
-page removed (or repurposed if other settings are added later). Perplexity connectivity
-investigated and documented. Local Supabase dev environment operational for Edge Function
-development and testing.
+page removed (or repurposed if other settings are added later). Agent integration research
+(OAuth, Perplexity, Gemini) documented.
+
+---
+
+## Iteration 12: True Small-to-Big Retrieval
+
+For large documents, instead of returning the full document, return only the matched chunks
+plus N adjacent sibling chunks on each side — assembled in order, deduped, with heading
+breadcrumbs preserved. Below a configurable size threshold the current full-document
+behaviour is retained.
+
+**New config parameters**:
+- `CEREFOX_SMALL_TO_BIG_THRESHOLD` — document size in chars above which chunk-level
+  retrieval kicks in (default: 8000)
+- `CEREFOX_CONTEXT_WINDOW` — number of sibling chunks to include on each side of each
+  matched chunk (default: 1)
+
+**Assembly rule**: matched chunks + N preceding + N following, sorted by chunk position,
+duplicates removed. Example: matched = c1, c3; N=1 → c0, c1, c2, c3, c4 (not c0, c1, c2,
+c2, c3, c4).
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 12.1 | Add `CEREFOX_SMALL_TO_BIG_THRESHOLD` and `CEREFOX_CONTEXT_WINDOW` config params | Pending | Add to `config.py` with defaults 8000 and 1 |
+| 12.2 | Implement `cerefox_expand_context` RPC | Pending | Takes chunk IDs + window size, returns ordered sibling chunks with dedup; callable from Python and Edge Functions |
+| 12.3 | Update `search.py` — apply small-to-big logic post-search | Pending | If doc size > threshold, call expand_context instead of full-doc reconstruction; assemble deduped result |
+| 12.4 | Update `cerefox-search` Edge Function | Pending | Add `expand_context` boolean param (default false for back-compat); apply same threshold logic server-side |
+| 12.5 | Update `cerefox-mcp` Edge Function | Pending | Pass through expand_context param to cerefox-search |
+| 12.6 | Write tests — threshold boundary, dedup, ordering, N=0/1/2 | Pending | Unit tests for RPC logic + integration tests for full search path |
+| 12.7 | Update docs — solution-design.md, plan.md | Pending | Document new retrieval mode and parameters |
+
+**Deliverable**: Large documents return focused context (matched chunks + neighbors) instead
+of the full document. Small documents unchanged. Both local MCP and remote Edge Function
+paths use the same logic.
+
+---
+
+## Iteration 13: Local Supabase Dev Environment
+
+Set up a full local Supabase stack for offline development and Edge Function testing.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 13.1 | Set up Supabase local dev environment (`supabase start`) | Pending | Full local stack (Postgres+pgvector, Edge Functions runtime, GoTrue); configure `supabase/config.toml`; verify schema deploys and Edge Functions serve locally |
+| 13.2 | Test Edge Functions locally (`supabase functions serve`) | Pending | Verify cerefox-search, cerefox-ingest, cerefox-mcp work against local Postgres |
+
+**Deliverable**: Local Supabase dev environment operational for Edge Function development
+and testing without requiring the remote Supabase instance.
 
 ---
 
 ## Current Focus
 
 **Iteration 11 in progress.** Metadata overhaul (11.1–11.16) **complete**. OAuth investigation
-(11.17) **researched and deferred** — no current client requires it; Supabase BYO MCP auth not
-yet available. Remaining: Perplexity integration research (11.18), local Supabase dev
-environment (11.19–11.20).
+(11.17) **researched and deferred**. Perplexity (11.18) **deferred — Desktop + Helper App
+local MCP path to test**. Remaining: Gemini integration research (11.19).
+
+**Iteration 12 planned**: True small-to-big retrieval — chunk-level results with N neighbor
+chunks for large documents, deduped and assembled in order.
