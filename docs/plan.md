@@ -357,26 +357,26 @@ Exposed in both the local MCP server (`mcp_server.py`) and the remote Edge Funct
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 11.1 | Write `cerefox_list_metadata_keys` SQL RPC (data-driven) | Pending | Replace registry RPCs; returns key, doc_count, example_values |
-| 11.2 | Drop `cerefox_metadata_keys` table + old RPCs from schema.sql | Pending | Remove table, trigger, `list`/`upsert`/`delete` RPCs |
-| 11.3 | Write migration script for live DB (drop table, replace RPCs) | Pending | `scripts/db_migrate.py` or standalone migration SQL |
-| 11.4 | Update `client.py` — replace 3 registry methods with 1 dynamic method | Pending | `list_metadata_keys()` → calls new RPC, returns `[{key, doc_count, example_values}]` |
-| 11.5 | Remove `metadata_strict` from `config.py` | Pending | Also remove `_validate_metadata()` from pipeline.py |
-| 11.6 | Replace CLI `metadata-keys` group with `cerefox list-metadata-keys` | Pending | Remove old CRUD subcommands; add single data-driven list command |
-| 11.7 | Remove Settings page — routes + template | Pending | `/settings` route, `settings.html` template, nav link |
-| 11.8 | Redesign edit form metadata section — dynamic key-value editor | Pending | JS add/remove rows; editable keys + values; pre-fill from doc_metadata |
-| 11.9 | Redesign ingest form metadata section — free-form key-value inputs | Pending | Same dynamic row pattern; no registry dependency |
-| 11.10 | Add HTMX autocomplete for metadata key names | Pending | Endpoint returns known keys; `<datalist>` or lightweight dropdown |
-| 11.11 | Add `list_metadata_keys` tool to local MCP server (legacy) | Pending | `mcp_server.py` — calls `client.list_metadata_keys()` |
-| 11.12 | Write `cerefox-metadata` Edge Function (standalone) | Pending | Calls RPC directly; usable from GPT Actions and other HTTP clients |
-| 11.13 | Add `list_metadata_keys` tool to `cerefox-mcp` Edge Function | Pending | Delegates to `cerefox-metadata` Edge Function (same pattern as search/ingest) |
-| 11.14 | Update `_extract_ingest_form()` to handle dynamic key-value pairs | Pending | Replace `meta__<key>` pattern with paired `meta_key[]`/`meta_value[]` arrays |
-| 11.15 | Update tests — remove registry tests, add dynamic key tests | Pending | client, pipeline, CLI, routes |
-| 11.16 | Update docs — solution-design.md, configuration.md, CLAUDE.md | Pending | Remove metadata_strict references, document new RPC; label local MCP as legacy fallback |
+| 11.1 | Write `cerefox_list_metadata_keys` SQL RPC (data-driven) | Done | Replace registry RPCs; returns key, doc_count, example_values |
+| 11.2 | Drop `cerefox_metadata_keys` table + old RPCs from schema.sql | Done | Remove table, trigger, `list`/`upsert`/`delete` RPCs |
+| 11.3 | Write migration script for live DB (drop table, replace RPCs) | Done | `db/migrations/0002_metadata_keys_to_dynamic.sql` — idempotent |
+| 11.4 | Update `client.py` — replace 3 registry methods with 1 dynamic method | Done | `list_metadata_keys()` → calls new RPC, returns `[{key, doc_count, example_values}]` |
+| 11.5 | Remove `metadata_strict` from `config.py` + `_validate_metadata()` | Done | Also removed from pipeline.py; tests updated |
+| 11.6 | Replace CLI `metadata-keys` group with `cerefox list-metadata-keys` | Done | Single data-driven list command showing keys, doc counts, example values |
+| 11.7 | Remove Settings page — routes + template | Done | `/settings` route, `settings.html` template, nav link all removed |
+| 11.8 | Redesign edit form metadata section — dynamic key-value editor | Done | JS add/remove rows; editable keys + values; pre-fill from doc_metadata |
+| 11.9 | Redesign ingest form metadata section — free-form key-value inputs | Done | Same dynamic row pattern; no registry dependency |
+| 11.10 | Add autocomplete for metadata key names | Done | `<datalist>` with key suggestions from `cerefox_list_metadata_keys` RPC |
+| 11.11 | Add `list_metadata_keys` tool to local MCP server (legacy) | Done | `mcp_server.py` — calls `client.list_metadata_keys()`, returns JSON |
+| 11.12 | Write `cerefox-metadata` Edge Function (standalone) | Done | Calls `cerefox_list_metadata_keys` RPC; usable from GPT Actions and HTTP clients |
+| 11.13 | Add `list_metadata_keys` tool to `cerefox-mcp` Edge Function | Done | Delegates to `cerefox-metadata` Edge Function (same pattern as search/ingest) |
+| 11.14 | Update `_extract_ingest_form()` for dynamic key-value pairs | Done | Paired `meta_key[]`/`meta_value[]` arrays replace `meta__<key>` pattern |
+| 11.15 | Update tests — remove registry tests, add dynamic key tests | Done | 408 tests passing; new tests for MCP tool + form metadata |
+| 11.16 | Update docs — plan.md, solution-design.md | Done | Mark tasks done; update architecture docs |
 | 11.17 | Investigate Supabase OAuth 2.1 for MCP authentication | Pending | Enable GoTrue OAuth server for spec-compliant MCP client auth; would unblock Perplexity web and any future client that does OAuth discovery |
 | 11.18 | Test Perplexity connectivity — web (OAuth) + desktop (local stdio) | Pending | Web: depends on 11.17 (OAuth); Desktop: install Perplexity Helper App, connect to `cerefox mcp` via stdio; document results in connect-agents.md |
 | 11.19 | Set up Supabase local dev environment (`supabase start`) | Pending | Full local stack (Postgres+pgvector, Edge Functions runtime, GoTrue); configure `supabase/config.toml`; verify schema deploys and Edge Functions serve locally |
-| 11.20 | Test Edge Functions locally (`supabase functions serve`) | Pending | Verify cerefox-search, cerefox-ingest, cerefox-mcp work against local Postgres; use for cerefox-metadata development (11.12) |
+| 11.20 | Test Edge Functions locally (`supabase functions serve`) | Pending | Verify cerefox-search, cerefox-ingest, cerefox-mcp work against local Postgres |
 
 **Deliverable**: Metadata is fully open-ended JSONB. Agents can discover existing keys via
 MCP tool. Web UI allows editing any key-value pair. No manual registry to maintain. Settings
@@ -388,7 +388,7 @@ development and testing.
 
 ## Current Focus
 
-**Iteration 11 planned.** Metadata overhaul — deprecate `cerefox_metadata_keys` registry in
-favour of data-driven key discovery. Also includes Supabase OAuth 2.1 investigation,
-Perplexity connectivity testing, and local Supabase dev environment setup. Git & PR strategy
-approved (see `docs/guides/contributing.md`). Starting Iteration 11 with feature branches.
+**Iteration 11 in progress.** Metadata overhaul (11.1–11.16) **complete** — registry table
+dropped, dynamic key discovery via RPC, dynamic key-value editors in web UI, MCP tool in both
+local and remote servers. Remaining: Supabase OAuth 2.1 investigation (11.17), Perplexity
+connectivity testing (11.18), and local Supabase dev environment (11.19–11.20).

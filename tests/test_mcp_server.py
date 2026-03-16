@@ -7,13 +7,19 @@ _handle_ingest, call_tool) and the tool-list level (list_tools).
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import mcp.types as types
 from cerefox.ingestion.pipeline import IngestResult
-from cerefox.mcp_server import _handle_ingest, _handle_search, call_tool, list_tools
+from cerefox.mcp_server import (
+    _handle_ingest,
+    _handle_list_metadata_keys,
+    _handle_search,
+    call_tool,
+    list_tools,
+)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -67,15 +73,15 @@ def mock_pipeline() -> MagicMock:
 
 class TestListTools:
     @pytest.mark.asyncio
-    async def test_returns_two_tools(self) -> None:
+    async def test_returns_three_tools(self) -> None:
         tools = await list_tools()
-        assert len(tools) == 2
+        assert len(tools) == 3
 
     @pytest.mark.asyncio
     async def test_tool_names(self) -> None:
         tools = await list_tools()
         names = {t.name for t in tools}
-        assert names == {"cerefox_search", "cerefox_ingest"}
+        assert names == {"cerefox_search", "cerefox_ingest", "cerefox_list_metadata_keys"}
 
     @pytest.mark.asyncio
     async def test_search_tool_has_required_query_param(self) -> None:
@@ -344,3 +350,40 @@ class TestCallTool:
                 "cerefox_ingest", {"title": "T", "content": "C"}
             )
         assert isinstance(result[0], types.TextContent)
+
+    @pytest.mark.asyncio
+    async def test_dispatches_to_list_metadata_keys(
+        self, mock_client, mock_embedder, mock_settings, mock_pipeline
+    ) -> None:
+        mock_client.list_metadata_keys.return_value = [
+            {"key": "tags", "doc_count": 3, "example_values": ["a", "b"]},
+        ]
+        deps = {
+            "client": mock_client,
+            "embedder": mock_embedder,
+            "settings": mock_settings,
+            "pipeline": mock_pipeline,
+        }
+        with patch("cerefox.mcp_server._get_deps", return_value=deps):
+            result = await call_tool("cerefox_list_metadata_keys", {})
+        assert isinstance(result[0], types.TextContent)
+        assert "tags" in result[0].text
+
+
+class TestHandleListMetadataKeys:
+    @pytest.mark.asyncio
+    async def test_returns_json_when_keys_exist(self, mock_client) -> None:
+        mock_client.list_metadata_keys.return_value = [
+            {"key": "author", "doc_count": 5, "example_values": ["Alice"]},
+            {"key": "tags", "doc_count": 2, "example_values": ["fiction"]},
+        ]
+        result = await _handle_list_metadata_keys(mock_client)
+        assert len(result) == 1
+        assert "author" in result[0].text
+        assert "tags" in result[0].text
+
+    @pytest.mark.asyncio
+    async def test_returns_no_keys_message(self, mock_client) -> None:
+        mock_client.list_metadata_keys.return_value = []
+        result = await _handle_list_metadata_keys(mock_client)
+        assert "No metadata keys" in result[0].text

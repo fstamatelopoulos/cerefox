@@ -40,20 +40,33 @@
   </label>
   {% endif %}
 
-  {% if meta_keys %}
   <fieldset>
-    <legend style="font-size:0.9rem;">Metadata</legend>
-    {% for mk in meta_keys %}
-    <label style="margin-bottom:0.5rem;">
-      {{ mk.label or mk.key }}
-      {% if mk.description %}<small style="display:block;color:var(--pico-muted-color);">{{ mk.description }}</small>{% endif %}
-      <input type="text" name="meta__{{ mk.key }}"
-             value="{{ doc.doc_metadata.get(mk.key, '') if doc.doc_metadata else '' }}"
-             placeholder="{{ mk.key }}">
-    </label>
-    {% endfor %}
+    <legend style="font-size:0.9rem;">Metadata <small style="color:var(--pico-muted-color);">(key-value pairs)</small></legend>
+    <div id="meta-rows">
+      {% set meta = doc.doc_metadata or {} %}
+      {% for k, v in meta.items() %}
+      <div class="meta-row" style="display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center;">
+        <input type="text" name="meta_key[]" value="{{ k }}" placeholder="key"
+               list="meta-key-suggestions" style="flex:1;">
+        <input type="text" name="meta_value[]" value="{{ v }}" placeholder="value" style="flex:2;">
+        <button type="button" onclick="this.parentElement.remove()" class="outline secondary"
+                style="padding:0.25rem 0.5rem;margin:0;width:auto;">✕</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" onclick="addMetaRow()" class="outline" style="padding:0.25rem 0.75rem;margin:0;width:auto;">
+      + Add field
+    </button>
+    {% if known_meta_keys %}
+    <datalist id="meta-key-suggestions">
+      {% for mk in known_meta_keys %}
+      <option value="{{ mk.key }}">{{ mk.key }} ({{ mk.doc_count }} docs)</option>
+      {% endfor %}
+    </datalist>
+    {% else %}
+    <datalist id="meta-key-suggestions"></datalist>
+    {% endif %}
   </fieldset>
-  {% endif %}
 
   <label>
     Content (Markdown) <span style="color:var(--pico-del-color);">*</span>
@@ -66,6 +79,21 @@
     {{ action_button("Cancel", href="/document/" ~ doc.document_id, variant="secondary") }}
   </div>
 </form>
+
+<script>
+function addMetaRow() {
+  const row = document.createElement('div');
+  row.className = 'meta-row';
+  row.style.cssText = 'display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center;';
+  row.innerHTML =
+    '<input type="text" name="meta_key[]" placeholder="key" list="meta-key-suggestions" style="flex:1;">' +
+    '<input type="text" name="meta_value[]" placeholder="value" style="flex:2;">' +
+    '<button type="button" onclick="this.parentElement.remove()" class="outline secondary" ' +
+    'style="padding:0.25rem 0.5rem;margin:0;width:auto;">✕</button>';
+  document.getElementById('meta-rows').appendChild(row);
+  row.querySelector('input').focus();
+}
+</script>
 
 {% else %}
 <div class="empty-state">

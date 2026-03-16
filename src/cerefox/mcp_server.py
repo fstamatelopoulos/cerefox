@@ -7,7 +7,8 @@ capable MCP clients.
 
 This local stdio server is kept as a **legacy fallback** for environments where
 a remote connection is not available or practical. It exposes the same
-``cerefox_search`` and ``cerefox_ingest`` tools as the remote Edge Function.
+``cerefox_search``, ``cerefox_ingest``, and ``cerefox_list_metadata_keys``
+tools as the remote Edge Function.
 
 Run via::
 
@@ -153,6 +154,19 @@ async def list_tools() -> list[types.Tool]:
                 },
             },
         ),
+        types.Tool(
+            name="cerefox_list_metadata_keys",
+            description=(
+                "List all metadata keys currently in use across documents in the "
+                "Cerefox knowledge base. Returns each key with its document count "
+                "and up to 5 example values. Useful for discovering what metadata "
+                "fields exist before searching or ingesting."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
     ]
 
 
@@ -171,6 +185,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return await _handle_search(client, embedder, settings, arguments)
     elif name == "cerefox_ingest":
         return await _handle_ingest(client, pipeline, arguments)
+    elif name == "cerefox_list_metadata_keys":
+        return await _handle_list_metadata_keys(client)
     else:
         raise ValueError(f"Unknown tool: {name}")
 
@@ -272,6 +288,13 @@ async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[ty
             msg += f"\nProject IDs: {', '.join(result.project_ids)}"
 
     return [types.TextContent(type="text", text=msg)]
+
+
+async def _handle_list_metadata_keys(client: Any) -> list[types.TextContent]:
+    keys = client.list_metadata_keys()
+    if not keys:
+        return [types.TextContent(type="text", text="No metadata keys found across documents.")]
+    return [types.TextContent(type="text", text=json.dumps(keys, indent=2))]
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

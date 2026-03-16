@@ -784,23 +784,17 @@ Returns: `id`, `title`, `created_at`
 
 ### Metadata RPCs
 
-#### `cerefox_upsert_metadata_key`
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `p_key` | TEXT | Key name (snake_case) |
-| `p_label` | TEXT | Human-readable label (optional) |
-| `p_description` | TEXT | Description (optional) |
-
-#### `cerefox_delete_metadata_key`
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `p_key` | TEXT | Key to remove |
-
 #### `cerefox_list_metadata_keys`
 
-No parameters. Returns: `key`, `label`, `description`, `created_at`, `updated_at`.
+No parameters. Returns all distinct metadata keys currently in use across documents.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `key` | TEXT | Metadata key name |
+| `doc_count` | BIGINT | Number of documents using this key |
+| `example_values` | TEXT[] | Up to 5 sample values |
+
+This RPC derives keys from actual `doc_metadata` JSONB — no separate registry table.
 
 ---
 

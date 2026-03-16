@@ -118,8 +118,6 @@ class IngestionPipeline:
             project_ids: List of project UUIDs to assign (M2M).  Takes
                 precedence over ``project_id`` and ``project_name``.
             metadata: Arbitrary key/value pairs stored as JSONB on the document.
-                When ``settings.metadata_strict`` is True, only keys registered
-                in ``cerefox_metadata_keys`` are accepted (if any are registered).
             update_existing: When True, look up an existing document by
                 ``source_path`` (for file ingestion) or by ``title`` (for
                 paste/agent content).  If found, update it in-place instead of
@@ -156,8 +154,7 @@ class IngestionPipeline:
         # Resolve project_ids from the various caller styles.
         resolved_ids = self._resolve_project_ids(project_ids, project_id, project_name)
 
-        # Validate metadata against the key registry.
-        validated_meta = self._validate_metadata(metadata or {})
+        validated_meta = metadata or {}
 
         content_hash = _hash(text)
 
@@ -287,9 +284,7 @@ class IngestionPipeline:
                     "Edit that document or change the content before saving."
                 )
 
-        # ── Validate metadata ──────────────────────────────────────────────
-        if metadata is not None:
-            metadata = self._validate_metadata(metadata)
+        # metadata is passed through as-is (open-ended JSONB)
 
         # ── Resolve project associations ───────────────────────────────────
         new_project_ids: list[str] | None = None
@@ -446,42 +441,6 @@ class IngestionPipeline:
             project = self._client.get_or_create_project(project_name)
             return [project["id"]]
         return []
-
-    def _validate_metadata(self, metadata: dict) -> dict:
-        """Validate metadata keys against the registry.
-
-        Behaviour when ``settings.metadata_strict`` is True:
-          - If no keys are registered → pass everything through (registry not set up).
-          - If keys are registered and unknown keys are present → raise ValueError.
-
-        Behaviour when ``settings.metadata_strict`` is False:
-          - Unknown keys are logged and stripped; known keys are passed through.
-        """
-        if not metadata:
-            return metadata
-
-        try:
-            registered = {k["key"] for k in self._client.list_metadata_keys()}
-        except Exception as exc:
-            log.warning("Could not fetch metadata key registry: %s — skipping validation", exc)
-            return metadata
-
-        # Empty registry → not configured → pass everything through.
-        if not registered:
-            return metadata
-
-        unknown = set(metadata) - registered
-        if not unknown:
-            return metadata
-
-        if self._settings.metadata_strict:
-            raise ValueError(
-                f"Unknown metadata key(s): {sorted(unknown)}. "
-                "Register them first via /settings or `cerefox metadata-keys add`."
-            )
-
-        log.warning("Stripping unregistered metadata key(s): %s", sorted(unknown))
-        return {k: v for k, v in metadata.items() if k in registered}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

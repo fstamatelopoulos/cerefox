@@ -64,12 +64,6 @@ class Settings(BaseSettings):
     # matches typically 0.45+. 0.50 is a reasonable default.
     min_search_score: float = 0.50
 
-    # ── Metadata ──────────────────────────────────────────────────────────────
-    # When True, ingestion rejects metadata keys not registered in
-    # cerefox_metadata_keys.  Set to False to allow any key (log-and-ignore
-    # for unknown keys when False, raise ValueError when True).
-    metadata_strict: bool = True
-
     # ── Storage ───────────────────────────────────────────────────────────────
     backup_dir: str = "./backups"
 

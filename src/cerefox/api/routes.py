@@ -21,10 +21,6 @@ Routes:
     GET  /projects/{project_id}/edit              Edit project form
     POST /projects/{project_id}/edit              Handle project edit
     POST /projects/{project_id}/delete            Delete project
-    GET  /settings                                Metadata key registry
-    POST /settings/metadata-keys                  Add / update a metadata key
-    POST /settings/metadata-keys/{key}/delete     Remove a metadata key
-
 HTMX detection: routes check the HX-Request header. When present they return
 only the relevant HTML partial; otherwise they return the full page.
 """
@@ -120,13 +116,17 @@ def _render(
 
 
 async def _extract_ingest_form(request: Request) -> tuple[list[str], dict]:
-    """Parse multi-select project_ids and meta__* keys from a raw form submission."""
+    """Parse multi-select project_ids and paired meta_key[]/meta_value[] from a form."""
     form_data = await request.form()
     project_ids = [v for v in form_data.getlist("project_ids") if v]
+    meta_keys = form_data.getlist("meta_key[]")
+    meta_values = form_data.getlist("meta_value[]")
     metadata: dict = {}
-    for key, value in form_data.multi_items():
-        if key.startswith("meta__") and str(value).strip():
-            metadata[key[6:]] = str(value).strip()
+    for k, v in zip(meta_keys, meta_values):
+        k_str = str(k).strip()
+        v_str = str(v).strip()
+        if k_str and v_str:
+            metadata[k_str] = v_str
     return project_ids, metadata
 
 
@@ -488,21 +488,21 @@ def document_edit_form(
             ctx["doc"] = None
             ctx["projects"] = []
             ctx["doc_project_ids"] = []
-            ctx["meta_keys"] = []
+            ctx["known_meta_keys"] = []
         else:
             projects = client.list_projects()
             doc_project_ids = client.get_document_project_ids(document_id)
-            meta_keys = client.list_metadata_keys()
+            known_meta_keys = client.list_metadata_keys()
             ctx.update({
                 "doc": doc,
                 "projects": projects,
                 "doc_project_ids": doc_project_ids,
-                "meta_keys": meta_keys,
+                "known_meta_keys": known_meta_keys,
                 "error": None,
             })
     except Exception as exc:
-        ctx.update({"doc": None, "projects": [], "doc_project_ids": [], "meta_keys": [],
-                    "error": str(exc)})
+        ctx.update({"doc": None, "projects": [], "doc_project_ids": [],
+                    "known_meta_keys": [], "error": str(exc)})
     return _render(templates, request, "edit.html", ctx)
 
 
@@ -524,7 +524,7 @@ async def document_edit_submit(
             "doc": None,
             "projects": [],
             "doc_project_ids": [],
-            "meta_keys": [],
+            "known_meta_keys": [],
         }
         return _render(templates, request, "edit.html", ctx)
 
@@ -545,10 +545,11 @@ async def document_edit_submit(
         doc = client.reconstruct_doc(document_id)
         projects = client.list_projects()
         doc_project_ids = client.get_document_project_ids(document_id)
-        meta_keys = client.list_metadata_keys()
+        known_meta_keys = client.list_metadata_keys()
         ctx = {
             "active": "search", "doc": doc, "projects": projects,
-            "doc_project_ids": doc_project_ids, "meta_keys": meta_keys, "error": str(exc),
+            "doc_project_ids": doc_project_ids, "known_meta_keys": known_meta_keys,
+            "error": str(exc),
         }
         return _render(templates, request, "edit.html", ctx)
     except Exception as exc:
@@ -556,10 +557,11 @@ async def document_edit_submit(
         doc = client.reconstruct_doc(document_id)
         projects = client.list_projects()
         doc_project_ids = client.get_document_project_ids(document_id)
-        meta_keys = client.list_metadata_keys()
+        known_meta_keys = client.list_metadata_keys()
         ctx = {
             "active": "search", "doc": doc, "projects": projects,
-            "doc_project_ids": doc_project_ids, "meta_keys": meta_keys, "error": str(exc),
+            "doc_project_ids": doc_project_ids, "known_meta_keys": known_meta_keys,
+            "error": str(exc),
         }
         return _render(templates, request, "edit.html", ctx)
 
@@ -574,15 +576,15 @@ def ingest_form(
     templates: Jinja2Templates = Depends(get_templates),
 ):
     projects: list[dict] = []
-    meta_keys: list[dict] = []
+    known_meta_keys: list[dict] = []
     try:
         projects = client.list_projects()
-        meta_keys = client.list_metadata_keys()
+        known_meta_keys = client.list_metadata_keys()
     except Exception:
         pass
     return _render(
         templates, request, "ingest.html",
-        {"active": "ingest", "projects": projects, "meta_keys": meta_keys},
+        {"active": "ingest", "projects": projects, "known_meta_keys": known_meta_keys},
     )
 
 
@@ -647,15 +649,15 @@ async def ingest_submit(
     if result_ctx["success"]:
         return RedirectResponse("/ingest?msg=success", status_code=303)
     projects: list[dict] = []
-    meta_keys: list[dict] = []
+    known_meta_keys: list[dict] = []
     try:
         projects = client.list_projects()
-        meta_keys = client.list_metadata_keys()
+        known_meta_keys = client.list_metadata_keys()
     except Exception:
         pass
     return _render(
         templates, request, "ingest.html",
-        {"active": "ingest", "projects": projects, "meta_keys": meta_keys,
+        {"active": "ingest", "projects": projects, "known_meta_keys": known_meta_keys,
          "error": result_ctx["error"]},
     )
 
@@ -767,83 +769,3 @@ def delete_project(
         logger.error("delete_project %s failed: %s", project_id, exc)
     return RedirectResponse("/projects", status_code=303)
 
-
-# ── Settings (metadata key registry) ─────────────────────────────────────────
-
-
-@router.get("/settings", response_class=HTMLResponse)
-def settings_page(
-    request: Request,
-    client: CerefoxClient = Depends(get_client),
-    settings: Settings = Depends(get_settings),
-    templates: Jinja2Templates = Depends(get_templates),
-):
-    ctx: dict[str, Any] = {"active": "settings"}
-    try:
-        meta_keys = client.list_metadata_keys()
-        ctx.update({
-            "meta_keys": meta_keys,
-            "metadata_strict": settings.metadata_strict,
-            "error": None,
-        })
-    except Exception as exc:
-        ctx.update({"meta_keys": [], "metadata_strict": settings.metadata_strict,
-                    "error": str(exc)})
-    return _render(templates, request, "settings.html", ctx)
-
-
-@router.post("/settings/metadata-keys", response_class=HTMLResponse)
-def metadata_key_upsert(
-    request: Request,
-    key: str = Form(...),
-    label: str = Form(""),
-    description: str = Form(""),
-    client: CerefoxClient = Depends(get_client),
-    settings: Settings = Depends(get_settings),
-    templates: Jinja2Templates = Depends(get_templates),
-):
-    clean_key = key.strip().lower().replace(" ", "_")
-    try:
-        client.upsert_metadata_key(
-            key=clean_key,
-            label=label.strip() or None,
-            description=description.strip() or None,
-        )
-        return RedirectResponse("/settings", status_code=303)
-    except Exception as exc:
-        logger.error("upsert_metadata_key failed: %s", exc)
-        try:
-            meta_keys = client.list_metadata_keys()
-        except Exception:
-            meta_keys = []
-        return _render(templates, request, "settings.html", {
-            "active": "settings",
-            "meta_keys": meta_keys,
-            "metadata_strict": settings.metadata_strict,
-            "error": f"Could not save key '{clean_key}': {exc}",
-        })
-
-
-@router.post("/settings/metadata-keys/{key}/delete", response_class=HTMLResponse)
-def metadata_key_delete(
-    request: Request,
-    key: str,
-    client: CerefoxClient = Depends(get_client),
-    settings: Settings = Depends(get_settings),
-    templates: Jinja2Templates = Depends(get_templates),
-):
-    try:
-        client.delete_metadata_key(key)
-        return RedirectResponse("/settings", status_code=303)
-    except Exception as exc:
-        logger.error("delete_metadata_key %s failed: %s", key, exc)
-        try:
-            meta_keys = client.list_metadata_keys()
-        except Exception:
-            meta_keys = []
-        return _render(templates, request, "settings.html", {
-            "active": "settings",
-            "meta_keys": meta_keys,
-            "metadata_strict": settings.metadata_strict,
-            "error": f"Could not delete key '{key}': {exc}",
-        })

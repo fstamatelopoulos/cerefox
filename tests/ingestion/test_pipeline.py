@@ -5,7 +5,7 @@ All tests mock the DB client and embedder — no network calls, no Supabase.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -312,56 +312,20 @@ class TestIngestFile:
 # ── Metadata validation ────────────────────────────────────────────────────────
 
 
-class TestMetadataValidation:
-    def test_empty_registry_allows_any_key(self, pipeline, mock_client) -> None:
-        """If no keys registered, validation is a no-op regardless of strict mode."""
-        mock_client.list_metadata_keys.return_value = []
-        # metadata_strict is True in test_settings by default
-        result = pipeline.ingest_text(
-            "# T\n\nB.", title="T", metadata={"anything": "goes"}
-        )
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["metadata"] == {"anything": "goes"}
+class TestMetadataPassthrough:
+    """Metadata is open-ended JSONB — no validation, no registry check."""
 
-    def test_known_key_passes_strict_mode(self, pipeline, mock_client) -> None:
-        mock_client.list_metadata_keys.return_value = [
-            {"key": "author"}, {"key": "tags"}
-        ]
-        result = pipeline.ingest_text("# T\n\nB.", title="T", metadata={"author": "Alice"})
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["metadata"] == {"author": "Alice"}
-
-    def test_unknown_key_raises_in_strict_mode(self, pipeline, mock_client, settings) -> None:
-        settings.metadata_strict = True
-        mock_client.list_metadata_keys.return_value = [{"key": "author"}]
-        with pytest.raises(ValueError, match="Unknown metadata key"):
-            pipeline.ingest_text("# T\n\nB.", title="T", metadata={"bad_key": "value"})
-
-    def test_unknown_key_stripped_in_non_strict_mode(
-        self, pipeline, mock_client, settings
-    ) -> None:
-        settings.metadata_strict = False
-        mock_client.list_metadata_keys.return_value = [{"key": "author"}]
+    def test_any_metadata_passes_through(self, pipeline, mock_client) -> None:
         pipeline.ingest_text(
-            "# T\n\nB.", title="T", metadata={"author": "Bob", "unknown": "stripped"}
+            "# T\n\nB.", title="T", metadata={"anything": "goes", "custom": 42}
         )
         doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["metadata"] == {"author": "Bob"}
-        assert "unknown" not in doc_kwargs["metadata"]
+        assert doc_kwargs["metadata"] == {"anything": "goes", "custom": 42}
 
-    def test_no_metadata_skips_validation(self, pipeline, mock_client) -> None:
+    def test_no_metadata_defaults_to_empty(self, pipeline, mock_client) -> None:
         pipeline.ingest_text("# T\n\nB.", title="T")
-        # list_metadata_keys should NOT be called when no metadata provided
-        mock_client.list_metadata_keys.assert_not_called()
-
-    def test_registry_error_falls_through(self, pipeline, mock_client) -> None:
-        """If the registry call fails, validation is skipped (non-blocking)."""
-        mock_client.list_metadata_keys.side_effect = RuntimeError("DB down")
-        # Should not raise — metadata passes through
-        result = pipeline.ingest_text(
-            "# T\n\nB.", title="T", metadata={"any": "key"}
-        )
-        assert result.document_id == "doc-001"
+        doc_kwargs = mock_client.insert_document.call_args[0][0]
+        assert doc_kwargs["metadata"] == {}
 
 
 # ── ingest_text: project_id kwarg (legacy) ────────────────────────────────────
@@ -530,12 +494,11 @@ class TestUpdateDocument:
 
 
 class TestClientMetadataKeys:
-    """Unit tests for CerefoxClient metadata key methods."""
+    """Unit tests for CerefoxClient.list_metadata_keys (data-driven RPC)."""
 
     @pytest.fixture()
     def client_with_rpc(self) -> MagicMock:
         """Client mock where rpc() is the single point of control."""
-        from unittest.mock import patch
         from cerefox.db.client import CerefoxClient
         from cerefox.config import Settings
 
@@ -543,40 +506,26 @@ class TestClientMetadataKeys:
         with patch.dict("os.environ", {"CEREFOX_EMBEDDER": "openai", "OPENAI_API_KEY": "test-key"}, clear=False):
             client._settings = Settings(
                 supabase_url="http://fake", supabase_key="fake",
-                database_url="", metadata_strict=True,
+                database_url="",
             )
         client._client = None
-        # Patch rpc at the instance level
         client.rpc = MagicMock()
         return client
 
     def test_list_metadata_keys_calls_rpc(self, client_with_rpc) -> None:
-        from cerefox.db.client import CerefoxClient
-        client_with_rpc.rpc.return_value = [{"key": "author", "label": "Author"}]
+        client_with_rpc.rpc.return_value = [
+            {"key": "author", "doc_count": 5, "example_values": ["Alice", "Bob"]},
+        ]
         result = client_with_rpc.list_metadata_keys()
         client_with_rpc.rpc.assert_called_once_with("cerefox_list_metadata_keys", {})
-        assert result == [{"key": "author", "label": "Author"}]
+        assert result == [
+            {"key": "author", "doc_count": 5, "example_values": ["Alice", "Bob"]},
+        ]
 
-    def test_upsert_metadata_key_calls_rpc(self, client_with_rpc) -> None:
-        client_with_rpc.rpc.return_value = [{"key": "tags", "label": "Tags"}]
-        result = client_with_rpc.upsert_metadata_key("tags", label="Tags")
-        client_with_rpc.rpc.assert_called_once_with(
-            "cerefox_upsert_metadata_key",
-            {"p_key": "tags", "p_label": "Tags", "p_description": None},
-        )
-        assert result["key"] == "tags"
-
-    def test_upsert_raises_on_empty_response(self, client_with_rpc) -> None:
+    def test_list_metadata_keys_empty(self, client_with_rpc) -> None:
         client_with_rpc.rpc.return_value = []
-        with pytest.raises(RuntimeError, match="returned no data"):
-            client_with_rpc.upsert_metadata_key("somekey")
-
-    def test_delete_metadata_key_calls_rpc(self, client_with_rpc) -> None:
-        client_with_rpc.rpc.return_value = []
-        client_with_rpc.delete_metadata_key("author")
-        client_with_rpc.rpc.assert_called_once_with(
-            "cerefox_delete_metadata_key", {"p_key": "author"}
-        )
+        result = client_with_rpc.list_metadata_keys()
+        assert result == []
 
 
 # ── Client: M2M project assignment ────────────────────────────────────────────

@@ -4,13 +4,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  * cerefox-mcp — Supabase Edge Function
  *
  * MCP Streamable HTTP server (spec 2025-03-26). Exposes the same
- * cerefox_search and cerefox_ingest tools as the local stdio MCP server,
+ * cerefox_search, cerefox_ingest, and cerefox_list_metadata_keys tools,
  * but over HTTPS — no Python install, no local process, works from any
  * remote-capable MCP client.
  *
  * This is a thin protocol adapter. All business logic lives in the existing
- * cerefox-search and cerefox-ingest Edge Functions; this function handles
- * the MCP JSON-RPC 2.0 layer only and delegates tool calls via internal fetch().
+ * cerefox-search, cerefox-ingest, and cerefox-metadata Edge Functions; this
+ * function handles the MCP JSON-RPC 2.0 layer only and delegates tool calls
+ * via internal fetch().
  *
  * Authentication: Deployed with standard JWT verification (default).
  * Internal calls to cerefox-search/cerefox-ingest forward the caller's
@@ -91,6 +92,15 @@ const TOOLS = [
           description: "Arbitrary JSON metadata (optional)",
         },
       },
+    },
+  },
+  {
+    name: "cerefox_list_metadata_keys",
+    description:
+      "List all metadata keys currently in use across documents in the Cerefox knowledge base. Returns each key with its document count and up to 5 example values.",
+    inputSchema: {
+      type: "object",
+      properties: {},
     },
   },
 ];
@@ -268,6 +278,29 @@ async function handleToolCall(
     return `Document saved: "${result.title}" (id: ${result.document_id}), ${result.chunk_count} chunk(s), ${result.total_chars} chars${projectInfo}.`;
   }
 
+  if (name === "cerefox_list_metadata_keys") {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/cerefox-metadata`, {
+      method: "POST",
+      headers: internalHeaders,
+      body: "{}",
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      const errMsg = (data as { error?: string }).error ?? `HTTP ${resp.status}`;
+      throw new Error(`cerefox-metadata error: ${errMsg}`);
+    }
+
+    const keys = data as Array<{ key: string; doc_count: number; example_values: string[] }>;
+
+    if (keys.length === 0) {
+      return "No metadata keys found across documents.";
+    }
+
+    return JSON.stringify(keys, null, 2);
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -283,7 +316,8 @@ async function handleToolsCall(
     return errorResponse(id, -32602, "Invalid params: missing tool name");
   }
 
-  if (toolName !== "cerefox_search" && toolName !== "cerefox_ingest") {
+  const knownTools = ["cerefox_search", "cerefox_ingest", "cerefox_list_metadata_keys"];
+  if (!knownTools.includes(toolName)) {
     return errorResponse(id, -32602, `Unknown tool: ${toolName}`);
   }
 

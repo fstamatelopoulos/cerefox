@@ -20,18 +20,6 @@ CREATE TABLE IF NOT EXISTS cerefox_projects (
     CONSTRAINT cerefox_projects_name_unique UNIQUE (name)
 );
 
--- ── Metadata key registry ─────────────────────────────────────────────────────
--- User-defined metadata keys. When metadata_strict mode is enabled in the
--- Python layer, only keys registered here are accepted during ingestion.
-
-CREATE TABLE IF NOT EXISTS cerefox_metadata_keys (
-    key         TEXT        PRIMARY KEY,
-    label       TEXT,
-    description TEXT,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- ── Documents ─────────────────────────────────────────────────────────────────
 -- One row per ingested document (markdown file, paste, agent write-back, etc.)
 -- Project assignment lives in the cerefox_document_projects junction table.
@@ -166,9 +154,6 @@ CREATE OR REPLACE TRIGGER trig_cerefox_chunks_updated
     BEFORE UPDATE ON cerefox_chunks
     FOR EACH ROW EXECUTE FUNCTION cerefox_set_updated_at();
 
-CREATE OR REPLACE TRIGGER trig_cerefox_metadata_keys_updated
-    BEFORE UPDATE ON cerefox_metadata_keys
-    FOR EACH ROW EXECUTE FUNCTION cerefox_set_updated_at();
 
 -- ── Live-database migration ───────────────────────────────────────────────────
 -- When applying this schema to an existing database that still has the old

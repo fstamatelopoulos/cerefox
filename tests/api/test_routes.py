@@ -582,6 +582,28 @@ class TestIngestPage:
         assert resp.status_code == 200
         assert "Embed failed" in resp.text
 
+    def test_paste_ingest_passes_dynamic_metadata(self, test_client, mock_client):
+        from cerefox.ingestion.pipeline import IngestResult
+
+        mock_result = IngestResult(
+            document_id="new-uuid", title="T", chunk_count=1,
+            total_chars=10, action="created",
+        )
+        with patch("cerefox.api.routes.IngestionPipeline") as MockPipeline:
+            MockPipeline.return_value.ingest_text.return_value = mock_result
+            test_client.post(
+                "/ingest",
+                data={
+                    "mode": "paste", "title": "T", "content": "# T\n\nB.",
+                    "meta_key[]": ["author", "tags"],
+                    "meta_value[]": ["Alice", "fiction"],
+                },
+                headers={"HX-Request": "true"},
+            )
+            call_args = MockPipeline.return_value.ingest_text.call_args
+        assert call_args is not None, "ingest_text was never called"
+        assert call_args.kwargs["metadata"] == {"author": "Alice", "tags": "fiction"}
+
 
 # ── Projects page ─────────────────────────────────────────────────────────────
 
@@ -637,70 +659,9 @@ class TestProjectsPage:
         assert "DB error" in resp.text
 
 
-# ── Settings ──────────────────────────────────────────────────────────────────
 
-
-class TestSettingsPage:
-    def test_returns_200(self, test_client, mock_client):
-        mock_client.list_metadata_keys.return_value = []
-        resp = test_client.get("/settings")
-        assert resp.status_code == 200
-
-    def test_shows_registered_keys(self, test_client, mock_client):
-        mock_client.list_metadata_keys.return_value = [
-            {"key": "author", "label": "Author", "description": None,
-             "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}
-        ]
-        resp = test_client.get("/settings")
-        assert "author" in resp.text
-
-    def test_upsert_key_redirects_on_success(self, test_client, mock_client):
-        mock_client.upsert_metadata_key.return_value = {}
-        resp = test_client.post(
-            "/settings/metadata-keys",
-            data={"key": "author", "label": "Author", "description": ""},
-            follow_redirects=False,
-        )
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/settings"
-
-    def test_upsert_key_shows_error_on_failure(self, test_client, mock_client):
-        mock_client.upsert_metadata_key.side_effect = RuntimeError("ambiguous column")
-        mock_client.list_metadata_keys.return_value = []
-        resp = test_client.post(
-            "/settings/metadata-keys",
-            data={"key": "bad", "label": "", "description": ""},
-            follow_redirects=False,
-        )
-        # Must re-render the settings page (not redirect) so the error is visible.
-        assert resp.status_code == 200
-        assert "ambiguous column" in resp.text
-
-    def test_upsert_key_normalises_key_name(self, test_client, mock_client):
-        mock_client.upsert_metadata_key.return_value = {}
-        test_client.post(
-            "/settings/metadata-keys",
-            data={"key": "My Key", "label": "", "description": ""},
-        )
-        mock_client.upsert_metadata_key.assert_called_once_with(
-            key="my_key", label=None, description=None
-        )
-
-    def test_delete_key_redirects_on_success(self, test_client, mock_client):
-        resp = test_client.post(
-            "/settings/metadata-keys/author/delete", follow_redirects=False
-        )
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/settings"
-
-    def test_delete_key_shows_error_on_failure(self, test_client, mock_client):
-        mock_client.delete_metadata_key.side_effect = RuntimeError("constraint violation")
-        mock_client.list_metadata_keys.return_value = []
-        resp = test_client.post(
-            "/settings/metadata-keys/author/delete", follow_redirects=False
-        )
-        assert resp.status_code == 200
-        assert "constraint violation" in resp.text
+# TestSettingsPage removed — Settings page and metadata key registry are being
+# removed as part of the metadata-to-dynamic refactor (Iteration 11).
 
 
 # ── check-filename API ────────────────────────────────────────────────────────

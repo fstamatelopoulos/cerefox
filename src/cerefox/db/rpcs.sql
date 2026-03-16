@@ -543,55 +543,31 @@ AS $$
     ORDER BY c.document_id, c.chunk_index;
 $$;
 
--- ── Metadata key registry RPCs ────────────────────────────────────────────────
--- Simple CRUD for the cerefox_metadata_keys registry.
--- Used by the settings web UI and CLI.
+-- ── Metadata key discovery RPC ───────────────────────────────────────────────
+-- Derives metadata keys from actual document data (metadata JSONB column).
+-- No registry table needed — always accurate, zero maintenance.
+-- Used by CLI, MCP tools, web UI autocomplete.
 
-CREATE OR REPLACE FUNCTION cerefox_list_metadata_keys()
+DROP FUNCTION IF EXISTS cerefox_list_metadata_keys();
+CREATE FUNCTION cerefox_list_metadata_keys()
 RETURNS TABLE (
-    key         TEXT,
-    label       TEXT,
-    description TEXT,
-    created_at  TIMESTAMPTZ,
-    updated_at  TIMESTAMPTZ
+    key            TEXT,
+    doc_count      BIGINT,
+    example_values TEXT[]
 )
 LANGUAGE sql
 SECURITY DEFINER
 STABLE
 AS $$
-    SELECT key, label, description, created_at, updated_at
-    FROM cerefox_metadata_keys
-    ORDER BY key;
-$$;
-
--- DROP required: return type changes from RETURNS TABLE(...) to RETURNS SETOF,
--- which avoids the plpgsql ambiguity between the "key" output column variable
--- and the "key" column name in ON CONFLICT (key).
-DROP FUNCTION IF EXISTS cerefox_upsert_metadata_key(TEXT, TEXT, TEXT);
-CREATE FUNCTION cerefox_upsert_metadata_key(
-    p_key         TEXT,
-    p_label       TEXT    DEFAULT NULL,
-    p_description TEXT    DEFAULT NULL
-)
-RETURNS SETOF cerefox_metadata_keys
-LANGUAGE sql
-SECURITY DEFINER
-AS $$
-    INSERT INTO cerefox_metadata_keys (key, label, description)
-    VALUES (p_key, p_label, p_description)
-    ON CONFLICT (key) DO UPDATE
-        SET label       = EXCLUDED.label,
-            description = EXCLUDED.description,
-            updated_at  = NOW()
-    RETURNING *;
-$$;
-
-CREATE OR REPLACE FUNCTION cerefox_delete_metadata_key(
-    p_key TEXT
-)
-RETURNS VOID
-LANGUAGE sql
-SECURITY DEFINER
-AS $$
-    DELETE FROM cerefox_metadata_keys WHERE key = p_key;
+    SELECT
+        k.key,
+        COUNT(DISTINCT d.id)                                    AS doc_count,
+        (ARRAY_AGG(DISTINCT d.metadata ->> k.key) FILTER
+          (WHERE d.metadata ->> k.key IS NOT NULL))[1:5]   AS example_values
+    FROM cerefox_documents d,
+         LATERAL jsonb_object_keys(d.metadata) AS k(key)
+    WHERE d.metadata IS NOT NULL
+      AND d.metadata != '{}'::jsonb
+    GROUP BY k.key
+    ORDER BY doc_count DESC, k.key;
 $$;

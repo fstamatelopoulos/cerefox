@@ -510,27 +510,11 @@ class CerefoxClient:
     # ── Metadata keys ──────────────────────────────────────────────────────────
 
     def list_metadata_keys(self) -> list[dict[str, Any]]:
-        """Return all registered metadata keys ordered alphabetically."""
+        """Return metadata keys derived from actual doc_metadata across all documents.
+
+        Each row has: key (str), doc_count (int), example_values (list[str]).
+        """
         return self.rpc("cerefox_list_metadata_keys", {})
-
-    def upsert_metadata_key(
-        self,
-        key: str,
-        label: str | None = None,
-        description: str | None = None,
-    ) -> dict[str, Any]:
-        """Create or update a metadata key in the registry and return the row."""
-        rows = self.rpc(
-            "cerefox_upsert_metadata_key",
-            {"p_key": key, "p_label": label, "p_description": description},
-        )
-        if not rows:
-            raise RuntimeError("cerefox_upsert_metadata_key returned no data")
-        return rows[0]
-
-    def delete_metadata_key(self, key: str) -> None:
-        """Remove a metadata key from the registry."""
-        self.rpc("cerefox_delete_metadata_key", {"p_key": key})
 
     # ── Search (convenience wrappers around RPCs) ──────────────────────────────
 
