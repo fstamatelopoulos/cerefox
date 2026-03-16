@@ -373,8 +373,8 @@ Exposed in both the local MCP server (`mcp_server.py`) and the remote Edge Funct
 | 11.14 | Update `_extract_ingest_form()` for dynamic key-value pairs | Done | Paired `meta_key[]`/`meta_value[]` arrays replace `meta__<key>` pattern |
 | 11.15 | Update tests — remove registry tests, add dynamic key tests | Done | 408 tests passing; new tests for MCP tool + form metadata |
 | 11.16 | Update docs — plan.md, solution-design.md | Done | Mark tasks done; update architecture docs |
-| 11.17 | Investigate Supabase OAuth 2.1 for MCP authentication | Pending | Enable GoTrue OAuth server for spec-compliant MCP client auth; would unblock Perplexity web and any future client that does OAuth discovery |
-| 11.18 | Test Perplexity connectivity — web (OAuth) + desktop (local stdio) | Pending | Web: depends on 11.17 (OAuth); Desktop: install Perplexity Helper App, connect to `cerefox mcp` via stdio; document results in connect-agents.md |
+| 11.17 | Investigate Supabase OAuth 2.1 for MCP authentication | Researched — Deferred | GoTrue owns `/.well-known` on `*.supabase.co`; Supabase BYO MCP auth "coming soon" (no timeline); no current client requires OAuth. See `docs/design-oauth-mcp-auth.md`. Revisit when Supabase ships BYO MCP auth or a must-have client requires OAuth. |
+| 11.18 | Investigate Perplexity integration paths | Pending | Perplexity moving away from MCP (March 2026); research API, sonar, and other integration options |
 | 11.19 | Set up Supabase local dev environment (`supabase start`) | Pending | Full local stack (Postgres+pgvector, Edge Functions runtime, GoTrue); configure `supabase/config.toml`; verify schema deploys and Edge Functions serve locally |
 | 11.20 | Test Edge Functions locally (`supabase functions serve`) | Pending | Verify cerefox-search, cerefox-ingest, cerefox-mcp work against local Postgres |
 
@@ -388,7 +388,7 @@ development and testing.
 
 ## Current Focus
 
-**Iteration 11 in progress.** Metadata overhaul (11.1–11.16) **complete** — registry table
-dropped, dynamic key discovery via RPC, dynamic key-value editors in web UI, MCP tool in both
-local and remote servers. Remaining: Supabase OAuth 2.1 investigation (11.17), Perplexity
-connectivity testing (11.18), and local Supabase dev environment (11.19–11.20).
+**Iteration 11 in progress.** Metadata overhaul (11.1–11.16) **complete**. OAuth investigation
+(11.17) **researched and deferred** — no current client requires it; Supabase BYO MCP auth not
+yet available. Remaining: Perplexity integration research (11.18), local Supabase dev
+environment (11.19–11.20).
