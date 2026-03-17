@@ -103,9 +103,14 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 | FR-4.4 | Configurable semantic weight (alpha) for hybrid search | P0 |
 | FR-4.5 | Document reconstruction from chunks | P0 |
 | FR-4.6 | Response size limit (parameterized, default 65000 bytes) | P0 |
-| FR-4.7 | Small-to-big context expansion (return sibling chunks) | P1 |
+| FR-4.7 | Small-to-big context expansion (return sibling chunks) — see FR-4.10–4.14 | P1 |
 | FR-4.8 | Truncation metadata (indicate when results are cut off) | P1 |
 | FR-4.9 | Filter search by project/tags/metadata | P1 |
+| FR-4.10 | For documents above `CEREFOX_SMALL_TO_BIG_THRESHOLD` chars, search returns matched chunks + N neighbor chunks instead of the full document | P1 |
+| FR-4.11 | Neighbor window size is configurable via `CEREFOX_CONTEXT_WINDOW` (default: 1) | P1 |
+| FR-4.12 | Assembled chunks are sorted by chunk_index and deduplicated — overlapping neighbor windows produce each chunk only once | P1 |
+| FR-4.13 | Documents below the threshold retain current behavior: return full reconstructed document | P1 |
+| FR-4.14 | Full document retrieval API — retrieve the complete text of a specific document by ID, regardless of size, bypassing small-to-big logic. See FR-11 | P1 |
 
 ### FR-5: MCP Integration
 
@@ -166,7 +171,7 @@ As multiple agents write to the same knowledge base, trust requires clear attrib
 | FR-10.1 | Every document tagged with its author: `source` field distinguishes `human`, `agent`, `file`, `web` | P0 (done) |
 | FR-10.2 | Agent-authored documents include `agent_name` and optional `agent_session_id` in metadata | P1 |
 | FR-10.3 | `created_at` and `updated_at` timestamps on all documents | P0 (done) |
-| FR-10.4 | Version history — ability to see what changed and revert | P2 |
+| FR-10.4 | Implicit document versioning — see FR-11 for detailed spec | P1 |
 | FR-10.5 | Review status flag — lightweight indicator of whether a human has validated agent-written content | P2 |
 
 ### FR-8: Backup & Export
@@ -192,6 +197,84 @@ Scripts that a developer or operator can run to set up, update, and maintain the
 | FR-9.5 | `scripts/backup_restore.py` — re-ingest a backup directory into a fresh database | P0 |
 | FR-9.6 | All scripts accept `--dry-run` flag for safe verification before applying changes | P1 |
 | FR-9.7 | All scripts print a clear summary of what was done / what would be done | P0 |
+
+### FR-11: Document Versioning & Full Retrieval
+
+#### Motivation
+
+When a document is updated via `update_if_exists: true` (the standard agent workflow), the
+previous content is permanently overwritten. This creates a risk of data loss — an agent or
+user can accidentally replace a large, curated document with a shorter or incorrect version.
+This risk is amplified by AI agents that may compress, summarize, or truncate content during
+an update.
+
+Additionally, once small-to-big retrieval (FR-4.10) is implemented, search results for large
+documents will return only relevant chunks + neighbors, not the full document. A separate
+API primitive is needed to retrieve the complete document text when needed (e.g., for backup,
+export, manual review, or version comparison).
+
+#### FR-11.1: Implicit Versioning (Retention-Based)
+
+Every `update_if_exists` operation preserves the previous document content as a version.
+Versions are managed with a lazy retention policy:
+
+| Rule | Description |
+|------|-------------|
+| **Always-one-backup** | At least one previous version is always retained, regardless of age |
+| **Time-window retention** | All versions created within the last `CEREFOX_VERSION_RETENTION_HOURS` hours are retained (default: 48) |
+| **Lazy cleanup** | Expired versions (older than the retention window, beyond the always-one-backup) are deleted on the next update — no background batch job required |
+
+**Behavior examples:**
+- Document updated once per day: always has exactly 1 backup (the previous day's version)
+- Document updated 10 times in 2 hours: all 10 versions are retained until 48h pass, then
+  reduced to 1 backup on the next update
+- Document never updated: no versions (no storage cost)
+
+**Why this design:**
+- Economical: no storage cost for documents that are never updated
+- Safe: always has at least one recovery point
+- Scales naturally: high-frequency documents get more versions during the retention window
+- Simple: no batch jobs, no cron — cleanup runs lazily on update
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-11.1 | On `update_if_exists`, preserve the previous content as a version before overwriting | P1 |
+| FR-11.2 | Always retain at least one previous version per document | P1 |
+| FR-11.3 | Retain all versions created within `CEREFOX_VERSION_RETENTION_HOURS` (default: 48) | P1 |
+| FR-11.4 | On each update, lazily delete versions older than the retention window (except the most recent one) | P1 |
+| FR-11.5 | Versions store: full content, all metadata, timestamp, and the source/agent that performed the update | P1 |
+
+#### FR-11.2: Full Document Retrieval API
+
+A dedicated API endpoint and MCP tool for retrieving the complete text of a specific
+document, plus optionally a specific version. This is distinct from search (which may return
+chunks for large documents) and serves as the primitive for:
+
+- Backup and export of large documents
+- Viewing the full text of a document that search returns only chunks from
+- Retrieving a previous version for comparison or manual restore
+- Agents that need the complete document (e.g., for re-ingestion, translation, analysis)
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-11.6 | Retrieve full document text + metadata by document ID | P1 |
+| FR-11.7 | Optionally specify a version ID to retrieve a previous version | P1 |
+| FR-11.8 | List available versions for a document (ID, timestamp, size, source) | P1 |
+| FR-11.9 | Expose full document retrieval via REST API, MCP tool, and CLI | P1 |
+| FR-11.10 | Restoring a previous version is done outside Cerefox: retrieve old version → ingest as new version (no in-place restore API) | P1 |
+
+#### Database Impact
+
+Versioning requires a new table (e.g., `cerefox_document_versions`) linked to
+`cerefox_documents` with cascade delete. Each version row stores the full content snapshot,
+metadata snapshot, and a timestamp. Versions do NOT have chunks or embeddings — they are
+plain text snapshots for recovery purposes only.
+
+#### Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `CEREFOX_VERSION_RETENTION_HOURS` | `48` | Hours to retain all versions before lazy cleanup |
 
 ---
 
@@ -334,3 +417,6 @@ All parameters use `CEREFOX_` prefix and can be set via environment variables or
 | `CEREFOX_BACKUP_DIR` | `./backups` | Directory for file system backups |
 | `CEREFOX_VECTOR_DIMENSIONS` | `768` | Embedding vector dimensions |
 | `CEREFOX_LOG_LEVEL` | `INFO` | Logging level |
+| `CEREFOX_SMALL_TO_BIG_THRESHOLD` | `40000` | Doc size (chars) above which search returns chunks + neighbors instead of full document |
+| `CEREFOX_CONTEXT_WINDOW` | `1` | Number of neighbor chunks on each side of matched chunks in small-to-big retrieval |
+| `CEREFOX_VERSION_RETENTION_HOURS` | `48` | Hours to retain all document versions before lazy cleanup |

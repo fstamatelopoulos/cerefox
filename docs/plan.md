@@ -384,21 +384,26 @@ page removed (or repurposed if other settings are added later). Agent integratio
 
 ---
 
-## Iteration 12: True Small-to-Big Retrieval
+## Iteration 12: Small-to-Big Retrieval, Document Versioning & Full Retrieval
 
-For large documents, instead of returning the full document, return only the matched chunks
-plus N adjacent sibling chunks on each side — assembled in order, deduped, with heading
-breadcrumbs preserved. Below a configurable size threshold the current full-document
-behaviour is retained.
+Three related features that work together: (1) smart chunk-level retrieval for large
+documents, (2) implicit versioning to prevent data loss on updates, (3) a full document
+retrieval API for when you need the complete text.
 
-**New config parameters**:
-- `CEREFOX_SMALL_TO_BIG_THRESHOLD` — document size in chars above which chunk-level
-  retrieval kicks in (default: 40000)
-- `CEREFOX_CONTEXT_WINDOW` — number of sibling chunks to include on each side of each
-  matched chunk (default: 1)
+See `docs/requirements-and-specs.md` FR-4.10–4.14 and FR-11 for detailed specifications.
 
-**Assembly rule**: matched chunks + N preceding + N following, sorted by chunk position,
-duplicates removed. Example: matched = c1, c3; N=1 → c0, c1, c2, c3, c4 (not c0, c1, c2,
+### 12A: Small-to-Big Retrieval
+
+For large documents, search returns matched chunks + N neighbor chunks instead of the full
+document. Below a configurable threshold, current full-document behaviour is retained.
+
+**Config parameters**:
+- `CEREFOX_SMALL_TO_BIG_THRESHOLD` — doc size in chars above which chunk-level retrieval
+  kicks in (default: 40000)
+- `CEREFOX_CONTEXT_WINDOW` — neighbor chunks on each side of each match (default: 1)
+
+**Assembly rule**: matched chunks + N preceding + N following, sorted by chunk_index,
+deduplicated. Example: matched = c1, c3; N=1 → c0, c1, c2, c3, c4 (not c0, c1, c2,
 c2, c3, c4).
 
 | # | Task | Status | Notes |
@@ -406,14 +411,51 @@ c2, c3, c4).
 | 12.1 | Add `CEREFOX_SMALL_TO_BIG_THRESHOLD` and `CEREFOX_CONTEXT_WINDOW` config params | Pending | Add to `config.py` with defaults 40000 and 1 |
 | 12.2 | Implement `cerefox_expand_context` RPC | Pending | Takes chunk IDs + window size, returns ordered sibling chunks with dedup; callable from Python and Edge Functions |
 | 12.3 | Update `search.py` — apply small-to-big logic post-search | Pending | If doc size > threshold, call expand_context instead of full-doc reconstruction; assemble deduped result |
-| 12.4 | Update `cerefox-search` Edge Function | Pending | Add `expand_context` boolean param (default false for back-compat); apply same threshold logic server-side |
-| 12.5 | Update `cerefox-mcp` Edge Function | Pending | Pass through expand_context param to cerefox-search |
+| 12.4 | Update `cerefox-search` Edge Function | Pending | Apply threshold logic server-side |
+| 12.5 | Update `cerefox-mcp` Edge Function | Pending | Pass through to cerefox-search |
 | 12.6 | Write tests — threshold boundary, dedup, ordering, N=0/1/2 | Pending | Unit tests for RPC logic + integration tests for full search path |
-| 12.7 | Update docs — solution-design.md, plan.md | Pending | Document new retrieval mode and parameters |
 
-**Deliverable**: Large documents return focused context (matched chunks + neighbors) instead
-of the full document. Small documents unchanged. Both local MCP and remote Edge Function
-paths use the same logic.
+### 12B: Implicit Document Versioning
+
+Every `update_if_exists` preserves the previous content as a version. Lazy retention policy:
+always keep at least 1 previous version; keep all versions within `CEREFOX_VERSION_RETENTION_HOURS`
+(default: 48h); lazily delete expired versions on next update.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 12.7 | Design `cerefox_document_versions` table | Pending | Stores full content snapshot, metadata snapshot, timestamp, source. No chunks/embeddings. Cascade delete from parent document. |
+| 12.8 | Add `CEREFOX_VERSION_RETENTION_HOURS` config param | Pending | Default 48 hours |
+| 12.9 | Update ingestion pipeline — create version on update | Pending | Before overwriting, snapshot current content to versions table |
+| 12.10 | Implement lazy version cleanup | Pending | On each update: delete versions older than retention window, except always keep the most recent one |
+| 12.11 | Deploy schema migration | Pending | New table + RPC for version listing |
+| 12.12 | Write tests — version creation, retention, lazy cleanup | Pending | Test: single update keeps 1 version, rapid updates keep all within window, cleanup after window |
+
+### 12C: Full Document Retrieval API
+
+A dedicated API primitive that returns the complete text of a specific document by ID,
+optionally for a specific version. Serves as the complement to small-to-big search: search
+finds the relevant chunks, this API retrieves the full document when needed.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 12.13 | Implement `cerefox_get_document` RPC | Pending | Returns full content + metadata by document ID. Optionally accepts version_id for historical versions. |
+| 12.14 | Implement `cerefox_list_versions` RPC | Pending | Returns version list for a document: version_id, timestamp, size_chars, source |
+| 12.15 | Add REST API endpoint for full document retrieval | Pending | `GET /api/document/{id}?version={version_id}` |
+| 12.16 | Add MCP tool for full document retrieval | Pending | Expose via local MCP server and cerefox-mcp Edge Function |
+| 12.17 | Add CLI command `cerefox get-doc <id>` | Pending | Print full document text; `--version` flag for historical |
+| 12.18 | Write tests for full retrieval + version retrieval | Pending | Happy path, nonexistent ID, nonexistent version |
+
+### 12D: Documentation
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 12.19 | Update requirements-and-specs.md | Done | FR-4.10–4.14 and FR-11 added |
+| 12.20 | Update solution-design.md | Pending | Document versioning table design, retrieval flow changes |
+| 12.21 | Update plan.md and CLAUDE.md | Pending | Mark completion, update conventions |
+
+**Deliverable**: Large documents return focused context via search. All documents have
+implicit version history with lazy retention. Full document text (current or historical)
+is retrievable via dedicated API, MCP tool, and CLI.
 
 ---
 

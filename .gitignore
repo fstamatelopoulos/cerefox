@@ -214,3 +214,6 @@ supabase/.temp/
 
 #claude code
 .claude/
+
+# Local backups of Cerefox KB documents (private operational details)
+docs/research/decision-log-backup.md

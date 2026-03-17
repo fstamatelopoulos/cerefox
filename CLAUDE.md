@@ -200,7 +200,17 @@ The **"Cerefox Decision Log"** document is stored in the Cerefox knowledge base 
 - A platform behavior surprises us (MCP client compatibility, Supabase gotchas, etc.)
 - An experiment fails and we learn something worth remembering
 - A workaround is discovered for a third-party bug
-- This file will grow quickly, so this is a good example/use case for the envisioned context bundles concept. It is a living decision log that grows, gets split by time period, and spawns derivative documents (summaries, "top lessons" digests, quarterly retrospectives). Practical plan for when it outgrows a single document: (a) Split by quarter: Cerefox Decision Log — 2026 Q1, ...Q2, etc. Each is a standalone document in Cerefox, same project and metadata tags, (b) Rolling summary: a separate "Cerefox Decision Log — Current Summary" that's a compressed digest of all active decisions and top lessons. Agents load this instead of the full history, (c) The full log stays searchable: even split across documents, cerefox_search finds the right entry by content
+- **NEVER compress or summarize** existing entries when updating — always add new entries
+  and keep existing ones verbatim. Accidental compression causes data loss.
+- **Splitting policy**: when the document exceeds ~50,000 characters, create a new document
+  that continues the log (e.g., "Cerefox Decision Log — 2026 Q2"). Each part is a standalone
+  document in Cerefox with the same project and metadata tags. Do NOT try to split at an
+  exact boundary — finish the current entry, then start a new document for subsequent entries.
+- **Rolling summary** (future): a separate "Cerefox Decision Log — Current Summary" that's
+  a compressed digest of all active decisions and top lessons. Agents load this instead of
+  the full history.
+- The full log stays searchable even when split: `cerefox_search` finds entries by content
+  across all documents.
 
 ### User-Facing Docs (setup guides, how-tos)
 
