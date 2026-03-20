@@ -183,11 +183,15 @@ GPT Actions (Custom GPT) ──────▶  cerefox-search        (same Edge
 Python CLI / Web UI ───────────▶  cerefox.db.client     ──psycopg2 / REST──▶  same RPCs
 ```
 
-### Auth Pattern
+### Auth Pattern — Three Layers
 
-- **Callers** (agents, GPT Actions, web UI) use the **anon key** (JWT). The Supabase API gateway validates it before the request reaches any function.
-- **Edge Functions** call Postgres RPCs using `SUPABASE_SERVICE_ROLE_KEY` internally. Callers never see the service-role key.
-- `cerefox-mcp` forwards the caller's `Authorization` header to dedicated Edge Functions. Those functions ignore it and use `SUPABASE_SERVICE_ROLE_KEY` directly.
+Cerefox has three distinct access layers, each with its own credential:
+
+1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **anon key** (JWT). The Supabase gateway validates it; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key.
+2. **Python web app & CLI** — `CerefoxClient` authenticates with the **service-role key** via the Supabase REST API. This bypasses RLS and gives unrestricted read/write access. Never expose this key to clients.
+3. **Deployment scripts only** — `db_deploy.py` / `db_migrate.py` connect directly to Postgres via psycopg2 using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
+
+See `docs/guides/access-paths.md` for a full breakdown with credential sources and a summary table.
 
 ### Single Implementation Principle
 
@@ -291,6 +295,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `setup-supabase.md` | Full Supabase deployment (schema, MCP, config) |
 | `setup-local.md` | Full local Docker deployment |
 | `setup-cloud-run.md` | GCP Cloud Run deployment |
+| `access-paths.md` | All access layers, credentials, and integration paths |
 | `connect-agents.md` | MCP setup for Claude, Cursor, and generic clients |
 | `configuration.md` | All `CEREFOX_` environment variables with defaults |
 | `ops-scripts.md` | All `scripts/` — deploy, migrate, backup, restore |
