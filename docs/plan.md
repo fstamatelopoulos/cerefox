@@ -408,14 +408,14 @@ c2, c3, c4).
 
 **Status: Deferred to Iteration 13.** Versioning (12B) was prioritised and completed in full. Small-to-big retrieval will be the primary focus of the next iteration.
 
-**Implementation approach (revised)**: all threshold/expansion logic lives entirely in Postgres (single-implementation principle). `cerefox_expand_context` RPC does the windowed chunk retrieval; `cerefox_search_docs` is extended to call it when `total_chars > threshold`. Python and the `cerefox-search` Edge Function are thin pass-throughs that supply the config values as RPC params. `cerefox-mcp` requires no changes.
+**Implementation approach (revised)**: all threshold/expansion logic lives entirely in Postgres (single-implementation principle). `cerefox_expand_context` RPC does the windowed chunk retrieval; `cerefox_search_docs` is extended to call it when `total_chars > threshold`. Python supplies the user-configurable values; the Edge Function passes no threshold params at all — it relies on the RPC defaults (40000 / 1), keeping it a true thin wrapper. `cerefox-mcp` requires no changes.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 12.1 | Add `CEREFOX_SMALL_TO_BIG_THRESHOLD` and `CEREFOX_CONTEXT_WINDOW` to `config.py` and `.env.example` | Deferred | Defaults: 40000 chars and 1 neighbor |
-| 12.2 | Implement `cerefox_expand_context` RPC + extend `cerefox_search_docs` | Deferred | `cerefox_expand_context(p_document_id, p_chunk_ids UUID[], p_context_window INT)` returns ordered deduped sibling chunks. `cerefox_search_docs` gains `p_small_to_big_threshold INT DEFAULT 0` and `p_context_window INT DEFAULT 1`; internally branches on `total_chars > threshold`. Returns `is_partial BOOL`. |
-| 12.3 | Update `search.py` — pass threshold params to RPC | Deferred | Trivial: pass `settings.small_to_big_threshold` and `settings.context_window` to `cerefox_search_docs`. No post-processing logic in Python. |
-| 12.4 | Update `cerefox-search` Edge Function — pass threshold params to RPC | Deferred | Add `SMALL_TO_BIG_THRESHOLD` and `CONTEXT_WINDOW` as TypeScript constants (same pattern as `OPENAI_MODEL`); pass to RPC call. No retrieval logic in TypeScript. |
+| 12.1 | Add `CEREFOX_SMALL_TO_BIG_THRESHOLD` and `CEREFOX_CONTEXT_WINDOW` to `config.py` and `.env.example` | Done | Defaults: 40000 chars and 1 neighbor |
+| 12.2 | Implement `cerefox_expand_context` RPC + extend `cerefox_search_docs` | Done | `cerefox_expand_context` already existed; `cerefox_search_docs` gains `p_small_to_big_threshold INT DEFAULT 40000` and `p_context_window INT DEFAULT 1`; branches on `total_chars > threshold`; returns `is_partial BOOL`. RPC defaults are the single source of truth for the Edge Function path. |
+| 12.3 | Update `search.py` — pass threshold params to RPC | Done | Pass `settings.small_to_big_threshold` and `settings.context_window` from config; allows user to override or disable via `.env`. |
+| 12.4 | ~~Update `cerefox-search` Edge Function~~ | Removed | No change needed — Edge Function is a true thin wrapper; small-to-big is transparent to it. RPC defaults (40000 / 1) activate the feature automatically. |
 | 12.5 | ~~Update `cerefox-mcp` Edge Function~~ | Removed | cerefox-mcp delegates entirely to cerefox-search; no changes needed. |
 | 12.6 | Write tests — threshold boundary, dedup, ordering, N=0/1/2 | Deferred | Unit tests mocking `cerefox_search_docs` response + integration tests for full search path via Python client. |
 

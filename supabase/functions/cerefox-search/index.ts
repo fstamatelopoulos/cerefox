@@ -44,14 +44,6 @@ const EMBEDDING_DIMENSIONS = 768;
 // out of the box. Most LLMs struggle with more than ~80 KB of context anyway.
 const DEFAULT_MAX_BYTES = 65_000;
 
-// Small-to-big retrieval: documents larger than this threshold (in chars) return
-// matched chunks + CONTEXT_WINDOW neighbours instead of the full document.
-// Set to 0 to always return full document content.
-// Must match CEREFOX_SMALL_TO_BIG_THRESHOLD in config.py.
-const SMALL_TO_BIG_THRESHOLD = 40_000;
-// Neighbour chunks on each side of each matched chunk (N=1 → up to 3 chunks per hit).
-// Must match CEREFOX_CONTEXT_WINDOW in config.py.
-const CONTEXT_WINDOW = 1;
 
 interface SearchRequest {
   query: string;
@@ -239,7 +231,9 @@ Deno.serve(async (req: Request) => {
       p_min_score: min_score,
     };
   } else {
-    // "docs" — document-level hybrid search (recommended default)
+    // "docs" — document-level hybrid search (recommended default).
+    // Small-to-big threshold and context window use the RPC defaults (40000 / 1).
+    // Override them in Postgres (rpcs.sql) if you need a different server-wide value.
     rpcName = "cerefox_search_docs";
     rpcParams = {
       p_query_text: query,
@@ -248,8 +242,6 @@ Deno.serve(async (req: Request) => {
       p_alpha: alpha,
       p_project_id: projectId,
       p_min_score: min_score,
-      p_small_to_big_threshold: SMALL_TO_BIG_THRESHOLD,
-      p_context_window: CONTEXT_WINDOW,
     };
   }
 

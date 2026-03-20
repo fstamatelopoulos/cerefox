@@ -445,7 +445,7 @@ CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_alpha                  FLOAT DEFAULT 0.7,
     p_project_id             UUID  DEFAULT NULL,
     p_min_score              FLOAT DEFAULT 0.0,
-    p_small_to_big_threshold INT   DEFAULT 0,
+    p_small_to_big_threshold INT   DEFAULT 40000,
     p_context_window         INT   DEFAULT 1
 )
 RETURNS TABLE (
