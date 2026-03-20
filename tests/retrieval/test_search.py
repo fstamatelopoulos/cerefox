@@ -56,6 +56,7 @@ def _make_doc_row(
     full_content: str = "# My Document\n\nFull content here.",
     chunk_count: int = 3,
     total_chars: int = 300,
+    is_partial: bool = False,
 ) -> dict:
     return {
         "document_id": document_id,
@@ -68,6 +69,7 @@ def _make_doc_row(
         "full_content": full_content,
         "chunk_count": chunk_count,
         "total_chars": total_chars,
+        "is_partial": is_partial,
     }
 
 
@@ -256,6 +258,98 @@ class TestEstimateBytes:
         short = SearchResult.from_row(_make_row(content="hi"))
         long_ = SearchResult.from_row(_make_row(content="x" * 5000))
         assert _estimate_bytes(long_) > _estimate_bytes(short)
+
+
+# ── DocResult ─────────────────────────────────────────────────────────────────
+
+
+class TestDocResult:
+    def test_is_partial_defaults_to_false_when_missing(self) -> None:
+        row = _make_doc_row()
+        del row["is_partial"]
+        result = DocResult.from_row(row)
+        assert result.is_partial is False
+
+    def test_is_partial_false_for_full_doc(self) -> None:
+        result = DocResult.from_row(_make_doc_row(is_partial=False))
+        assert result.is_partial is False
+
+    def test_is_partial_true_for_large_doc(self) -> None:
+        result = DocResult.from_row(_make_doc_row(is_partial=True))
+        assert result.is_partial is True
+
+    def test_total_chars_preserved(self) -> None:
+        # total_chars should always reflect the full document size, even when partial.
+        result = DocResult.from_row(_make_doc_row(total_chars=99_000, is_partial=True))
+        assert result.total_chars == 99_000
+
+
+# ── search_docs ───────────────────────────────────────────────────────────────
+
+
+class TestSearchDocs:
+    def test_returns_doc_search_response(self, sc) -> None:
+        resp = sc.search_docs("test query")
+        assert isinstance(resp, DocSearchResponse)
+        assert len(resp.results) == 1
+        assert isinstance(resp.results[0], DocResult)
+
+    def test_passes_threshold_and_window_from_settings(
+        self, sc, mock_client, test_settings
+    ) -> None:
+        test_settings.small_to_big_threshold = 40_000
+        test_settings.context_window = 2
+        sc_custom = SearchClient(mock_client, sc._embedder, test_settings)
+        sc_custom.search_docs("q")
+        call_kwargs = mock_client.search_docs.call_args[1]
+        assert call_kwargs["small_to_big_threshold"] == 40_000
+        assert call_kwargs["context_window"] == 2
+
+    def test_threshold_zero_disables_small_to_big(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        test_settings.small_to_big_threshold = 0
+        sc_zero = SearchClient(mock_client, mock_embedder, test_settings)
+        sc_zero.search_docs("q")
+        call_kwargs = mock_client.search_docs.call_args[1]
+        assert call_kwargs["small_to_big_threshold"] == 0
+
+    def test_is_partial_false_propagates(self, sc, mock_client) -> None:
+        mock_client.search_docs.return_value = [_make_doc_row(is_partial=False)]
+        resp = sc.search_docs("q")
+        assert resp.results[0].is_partial is False
+
+    def test_is_partial_true_propagates(self, sc, mock_client) -> None:
+        # Large doc: RPC returns is_partial=True, partial content, full total_chars.
+        mock_client.search_docs.return_value = [
+            _make_doc_row(
+                full_content="# Section\n\nMatched chunk and its neighbours.",
+                chunk_count=3,
+                total_chars=99_000,
+                is_partial=True,
+            )
+        ]
+        resp = sc.search_docs("q")
+        result = resp.results[0]
+        assert result.is_partial is True
+        assert result.total_chars == 99_000  # full doc size preserved
+        assert result.chunk_count == 3       # window chunk count
+
+    def test_multiple_docs_mixed_partial(self, sc, mock_client) -> None:
+        mock_client.search_docs.return_value = [
+            _make_doc_row(document_id="doc-1", is_partial=False, total_chars=5_000),
+            _make_doc_row(document_id="doc-2", is_partial=True, total_chars=80_000),
+        ]
+        resp = sc.search_docs("q")
+        assert resp.results[0].is_partial is False
+        assert resp.results[1].is_partial is True
+
+    def test_empty_results(self, sc, mock_client) -> None:
+        mock_client.search_docs.return_value = []
+        resp = sc.search_docs("nothing")
+        assert resp.results == []
+        assert not resp.truncated
+        assert resp.total_found == 0
 
 
 # ── DocResult.from_row ────────────────────────────────────────────────────────

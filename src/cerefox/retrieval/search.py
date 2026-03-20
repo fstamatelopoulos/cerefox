@@ -79,7 +79,8 @@ class DocResult:
     full_content: str
     chunk_count: int
     total_chars: int
-    doc_updated_at: str = ""   # ISO-8601 string; empty when not returned by the RPC
+    doc_updated_at: str = ""    # ISO-8601 string; empty when not returned by the RPC
+    is_partial: bool = False    # True when small-to-big threshold was applied
 
     @classmethod
     def from_row(cls, row: dict) -> "DocResult":
@@ -95,6 +96,7 @@ class DocResult:
             chunk_count=int(row.get("chunk_count") or 0),
             total_chars=int(row.get("total_chars") or 0),
             doc_updated_at=row.get("doc_updated_at") or "",
+            is_partial=bool(row.get("is_partial") or False),
         )
 
 
@@ -243,6 +245,8 @@ class SearchClient:
             alpha=alpha,
             project_id=project_id,
             min_score=self._settings.min_search_score,
+            small_to_big_threshold=self._settings.small_to_big_threshold,
+            context_window=self._settings.context_window,
         )
         return self._build_doc_response(rows, query=query)
 

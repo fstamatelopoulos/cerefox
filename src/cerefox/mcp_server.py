@@ -273,6 +273,8 @@ async def _handle_search(
         alpha=0.7,
         project_id=project_id,
         min_score=settings.min_search_score,
+        small_to_big_threshold=settings.small_to_big_threshold,
+        context_window=settings.context_window,
     )
 
     if not rows:
@@ -284,7 +286,12 @@ async def _handle_search(
     max_bytes = settings.max_response_bytes
 
     for row in rows:
-        block = f"## {row['doc_title']} (score: {row['best_score']:.3f})\n\n{row['full_content']}"
+        partial_note = (
+            f" — partial ({row['chunk_count']} of {row['total_chars']:,} chars)"
+            if row.get("is_partial")
+            else ""
+        )
+        block = f"## {row['doc_title']} (score: {row['best_score']:.3f}{partial_note})\n\n{row['full_content']}"
         block_bytes = len(block.encode())
         if total_bytes + block_bytes > max_bytes:
             parts.append(f"## {row['doc_title']}\n[truncated — response size limit reached]")

@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     # matches typically 0.45+. 0.50 is a reasonable default.
     min_search_score: float = 0.50
 
+    # Small-to-big retrieval: for documents larger than this threshold (in chars),
+    # search returns matched chunks + N neighbours instead of the full document.
+    # Set to 0 to disable (always return full document content).
+    small_to_big_threshold: int = 40000
+    # Number of chunks to include on each side of each matched chunk.
+    # N=1 returns up to 3 contiguous chunks per match (prev, match, next).
+    context_window: int = 1
+
     # ── Versioning ────────────────────────────────────────────────────────────
     # How long to retain archived document versions. The most recent version is
     # always kept regardless of this setting (accidental-deletion protection).

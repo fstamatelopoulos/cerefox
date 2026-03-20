@@ -169,6 +169,8 @@ class TestSearchMethods:
                 "p_alpha": 0.6,
                 "p_project_id": None,
                 "p_min_score": 0.0,
+                "p_small_to_big_threshold": 0,
+                "p_context_window": 1,
             },
         )
 
