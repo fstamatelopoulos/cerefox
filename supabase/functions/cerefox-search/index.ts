@@ -17,15 +17,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  *   mode         string   optional  "hybrid" | "fts" | "docs" (default: "docs")
  *   alpha        number   optional  Semantic weight for hybrid search (default: 0.7)
  *   min_score    number   optional  Min cosine similarity (default: 0.5)
- *   max_bytes    number   optional  Response size budget in bytes (default: 65000).
+ *   max_bytes    number   optional  Response size budget in bytes (default: 200000).
  *                                   Results are dropped whole (never truncated mid-doc)
  *                                   until the budget is satisfied. The response includes
  *                                   a `truncated` flag when results were dropped.
- *                                   65000 matches the Supabase MCP protocol limit —
- *                                   keep this value if you also use the local MCP server
- *                                   so both paths behave identically. Only raise it if
- *                                   you exclusively use the Edge Function directly and
- *                                   your LLM client can handle larger payloads.
+ *                                   Small-to-big retrieval keeps individual results
+ *                                   compact, so this ceiling is rarely reached at the
+ *                                   default match_count=5.
  *
  * Response: { results: [...], query, mode, match_count, project_name?,
  *             truncated: boolean, response_bytes: number }
@@ -39,10 +37,11 @@ const OPENAI_EMBEDDING_URL = "https://api.openai.com/v1/embeddings";
 const OPENAI_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 768;
 
-// Default response size budget — matches the Supabase MCP protocol limit so
-// that both the local MCP path and the Edge Function path behave identically
-// out of the box. Most LLMs struggle with more than ~80 KB of context anyway.
-const DEFAULT_MAX_BYTES = 65_000;
+// Default response size budget — safety ceiling to prevent pathological results
+// (e.g. very high match_count × many small documents). Small-to-big retrieval
+// already bounds individual large-doc results to matched chunks + neighbours,
+// so this limit is rarely hit under normal usage.
+const DEFAULT_MAX_BYTES = 200_000;
 
 
 interface SearchRequest {

@@ -425,12 +425,13 @@ Returns: list of version rows — `id`, `version_number`, `total_chars`, `chunk_
 
 ### 5.4 Response Size Management
 
-Supabase MCP has a ~65K bytes limit on responses. This is parameterized:
+A configurable byte budget is applied after RPC results are returned, dropping whole documents (never truncating mid-content) until the budget is satisfied:
 
-- `MAX_RESPONSE_BYTES` config setting (default: 65000)
-- RPCs that return content check accumulated size
-- When limit is near, response includes a `truncated: true` flag and `remaining_chunks: N` count
-- Agent can make follow-up calls to retrieve remaining content
+- `MAX_RESPONSE_BYTES` config setting (default: 200 000)
+- Applied by the local MCP server and the `cerefox-search` Edge Function independently
+- Response includes `truncated: true` and `response_bytes` metadata when the limit is hit
+- Small-to-big retrieval already bounds large-doc results to matched chunks + neighbours, so the budget is rarely reached at default `match_count=5`
+- Original 65 KB default was driven by the Supabase MCP protocol limit; raised to 200 KB once that path was replaced by a dedicated `cerefox-mcp` Edge Function
 
 Note: `cerefox_get_document` is exempt from this limit when called directly (it is a single-document retrieval, not a multi-document search). The size limit applies to `cerefox_search` result assembly only.
 

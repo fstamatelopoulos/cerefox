@@ -635,7 +635,7 @@ If the same content was already ingested (SHA-256 hash match), returns `"skipped
 | `mode` | string | `"docs"` | `"docs"` = full document results (recommended) |
 | `alpha` | number | 0.7 | Semantic weight (0 = FTS only, 1 = semantic only) |
 | `min_score` | number | 0.5 | Minimum cosine similarity threshold |
-| `max_bytes` | number | 65000 | Response size budget in bytes. Results are dropped whole (never truncated mid-document) once the budget is reached. The response includes `truncated: true` and `response_bytes` when the limit was hit. See "Response size limit" below. |
+| `max_bytes` | number | 200000 | Response size budget in bytes. Results are dropped whole (never truncated mid-document) once the budget is reached. The response includes `truncated: true` and `response_bytes` when the limit was hit. See "Response size limit" below. |
 
 **Response envelope fields:**
 
@@ -669,16 +669,14 @@ If the same content was already ingested (SHA-256 hash match), returns `"skipped
 
 **Response size limit (`max_bytes`):**
 
-The default of 65 000 bytes matches the Supabase MCP protocol's hard limit, so both the local MCP path and the Edge Function path return an identical amount of content out of the box. This is intentional — if you run both paths in parallel (e.g. Claude Desktop via local MCP + ChatGPT via GPT Actions), agents always receive the same results regardless of which path they use.
+200 KB is a safety ceiling that prevents runaway responses under unusual settings (e.g. very high `match_count`). Under normal usage the small-to-big retrieval path already keeps individual large-document results compact (matched chunks + neighbours only), so this limit is rarely reached.
 
-Even on the Edge Function path, where no protocol ceiling exists, 65 KB is a sensible practical ceiling: returning more content than a model can meaningfully use wastes tokens and can degrade response quality. Most queries need only a handful of relevant documents.
-
-You can raise `max_bytes` on the Edge Function if you exclusively use that path and your LLM client has a large enough context window — for example for a Custom GPT ingesting large reference documents:
+You can override it per-request if needed:
 ```json
-{ "query": "deployment checklist", "max_bytes": 120000 }
+{ "query": "deployment checklist", "max_bytes": 400000 }
 ```
 
-Do **not** raise `CEREFOX_MAX_RESPONSE_BYTES` (the local MCP setting) above ~65 000 — the Supabase MCP protocol will silently truncate the JSON response, which can confuse the agent. See `docs/guides/configuration.md` → "Response size limit" for the full breakdown.
+See `docs/guides/configuration.md` → "Response size limit" for full details.
 
 ---
 
@@ -937,6 +935,6 @@ This RPC derives keys from actual `doc_metadata` JSONB — no separate registry 
 
 ## Response size
 
-Cerefox's default `max_response_bytes = 65000` matches the Supabase MCP limit. If you're
-using a different MCP client with a lower limit, reduce it via `CEREFOX_MAX_RESPONSE_BYTES`
-in your `.env`.
+Cerefox's default `max_response_bytes = 200000` is a safety ceiling; small-to-big retrieval
+keeps individual results compact so this limit is rarely reached in practice. If your MCP
+client has a lower context limit, reduce it via `CEREFOX_MAX_RESPONSE_BYTES` in your `.env`.

@@ -58,7 +58,7 @@ gcloud run deploy $SERVICE_NAME \
     CEREFOX_SUPABASE_URL=https://YOUR-REF.supabase.co,\
     CEREFOX_SUPABASE_KEY=YOUR-SERVICE-ROLE-KEY,\
     OPENAI_API_KEY=YOUR-OPENAI-KEY,\
-    CEREFOX_MAX_RESPONSE_BYTES=65000
+    CEREFOX_MAX_RESPONSE_BYTES=200000
 ```
 
 **Memory**: Cerefox uses cloud embeddings (OpenAI API) — no local model is loaded. `--memory 512Mi` is sufficient for the web server alone.

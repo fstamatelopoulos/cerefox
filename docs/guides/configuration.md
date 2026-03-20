@@ -81,7 +81,7 @@ The `cerefox-search` and `cerefox-ingest` Supabase Edge Functions handle embeddi
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CEREFOX_MAX_RESPONSE_BYTES` | `65000` | Maximum bytes in a single search response (local MCP path). See explanation below. |
+| `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Maximum bytes in a single search response (local MCP path). See explanation below. |
 | `CEREFOX_MIN_SEARCH_SCORE` | `0.50` | Minimum cosine similarity for hybrid and semantic search results (0.0–1.0). In **hybrid search**, chunks that matched the FTS keyword operator (`@@`) always pass through regardless of their vector score — the threshold only filters vector-only results. In **semantic search**, all results are filtered. The pure **FTS search** mode is unaffected. Increase for stricter precision; decrease for wider recall. |
 
 **Score threshold guidance (OpenAI text-embedding-3-small):**
@@ -99,28 +99,29 @@ Recommended values:
 - `0.70`–`0.80` — high precision; only very close semantic matches
 - `0.0` — disable filtering entirely (returns all RPC results, not recommended)
 
-### Response size limit — why 65 000 bytes?
+### Response size limit — why 200 000 bytes?
 
 Cerefox has two access paths, and each has its own size budget:
 
 | Path | Where the limit is configured |
 |------|-------------------------------|
 | Local MCP server (`cerefox mcp`) | `CEREFOX_MAX_RESPONSE_BYTES` in `.env` |
-| Edge Functions (`cerefox-search`) | `max_bytes` request parameter (default: 65 000) |
+| Edge Functions (`cerefox-search`) | `max_bytes` request parameter (default: 200 000) |
 
-**Why 65 000 as the default?**
+**Why 200 000 as the default?**
 
-65 KB is a sensible practical ceiling for personal knowledge base queries. Returning more content than a model can meaningfully process degrades response quality and wastes tokens. Most queries need only a handful of relevant documents, not the entire corpus. The same default is used on both access paths so behaviour is consistent whether you use Claude Desktop (local MCP) or a ChatGPT Custom GPT (Edge Function).
+200 KB is a safety ceiling that prevents pathological responses (e.g. very high `match_count` × many small documents) while never artificially cutting legitimate results at the default `match_count=5`. Small-to-big retrieval already bounds large-document results to matched chunks + neighbours, so individual results are naturally compact. The original 65 KB default was driven by the Supabase MCP protocol limit, which no longer applies.
+
+Worst-case budget at default settings: 5 results × ~40 KB each (small-doc full content just under the 40 000-char threshold) = ~200 KB. In practice results are much smaller because most docs are short and large docs return only a partial slice.
 
 **When to reduce it:**
-- You want tighter, more focused responses from your AI agent
 - Your MCP client or LLM has a small context window
+- You want tighter, more focused responses
 
 **When to increase it:**
-- You are ingesting large reference documents and need more context returned per query
-- Your LLM has a large context window and can use the extra content effectively
+- You are using very high `match_count` values and need all results returned
 - For the **local MCP server**, raise `CEREFOX_MAX_RESPONSE_BYTES` in your `.env`
-- For the **Edge Function**, pass `max_bytes` in the request body: `{ "query": "...", "max_bytes": 120000 }`
+- For the **Edge Function**, pass `max_bytes` in the request body: `{ "query": "...", "max_bytes": 400000 }`
 
 ### RPC-level retrieval parameters
 
