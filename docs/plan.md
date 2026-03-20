@@ -406,7 +406,7 @@ document. Below a configurable threshold, current full-document behaviour is ret
 deduplicated. Example: matched = c1, c3; N=1 → c0, c1, c2, c3, c4 (not c0, c1, c2,
 c2, c3, c4).
 
-**Status: Deferred to Iteration 13.** Versioning (12B) was prioritised and completed in full. Small-to-big retrieval will be the primary focus of the next iteration.
+**Status: Done.** All tasks implemented. SQL logic in `cerefox_search_docs` (threshold + context expand + dedup), `DocResult.is_partial` in Python, `partial_note` annotation in MCP server. Config via `rpcs.sql` DEFAULT values only (no `.env` params). Full test coverage: 9 Python unit tests + 4 e2e tests in `TestSmallToBigRetrieval`.
 
 **Implementation approach (final)**: all threshold/expansion logic lives entirely in Postgres (single-implementation principle). `cerefox_expand_context` RPC does the windowed chunk retrieval; `cerefox_search_docs` is extended to call it when `total_chars > threshold`. Both params are RPC DEFAULT values only — not in `.env` or `config.py` — following the same convention as `OPENAI_MODEL`/`EMBEDDING_DIMENSIONS` in the Edge Functions. All callers (Python, Edge Functions) get the feature automatically with no code changes beyond the RPC.
 
@@ -417,7 +417,7 @@ c2, c3, c4).
 | 12.3 | ~~Update `search.py` — pass threshold params to RPC~~ | Removed | No change needed — Python passes no threshold params; RPC defaults handle all paths uniformly. `DocResult.is_partial` field added to surface the flag to callers. |
 | 12.4 | ~~Update `cerefox-search` Edge Function~~ | Removed | True thin wrapper; feature is transparent. RPC defaults activate it automatically. |
 | 12.5 | ~~Update `cerefox-mcp` Edge Function~~ | Removed | Delegates entirely to `cerefox-search`; no changes needed. |
-| 12.6 | Write tests | Partial | **Done**: Python-layer unit tests — `DocResult.is_partial` field (4 tests), `TestSearchDocs` class covering is_partial propagation, total_chars preservation, mixed results, empty results (5 tests). **Pending**: e2e tests against live DB for SQL-level behaviour — threshold boundary, dedup correctness, chunk ordering, N=0/1/2 window sizes. These require a live Supabase instance; add to `tests/e2e/test_api_e2e.py` in a future session. |
+| 12.6 | Write tests | Done | Python-layer unit tests (9 tests across `TestDocResult` + `TestSearchDocs`). E2e tests in `tests/e2e/test_api_e2e.py` — `TestSmallToBigRetrieval` class (4 tests): small doc `is_partial=False`, large doc `is_partial=True` + `total_chars` integrity + `chunk_count` < full, `p_context_window` N=0 vs N=1 comparison, dedup check via heading-repeat detection with N=2 window. Calls live Supabase via `e2e_client.search_docs()` and `e2e_client.rpc()` for window-override variants. |
 
 ### 12B: Implicit Document Versioning
 

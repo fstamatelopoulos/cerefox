@@ -459,6 +459,233 @@ class TestEdgeFunctionSearch:
         )
 
 
+class TestSmallToBigRetrieval:
+    """Tests 12.6: Small-to-big retrieval via cerefox_search_docs RPC.
+
+    Verifies that search_docs:
+    - Returns is_partial=False and full content for docs below the threshold
+    - Returns is_partial=True and expanded-chunk content for large docs
+    - Respects p_context_window=0 (matched chunks only) vs N=1 (default, ±1 neighbour)
+    - Returns total_chars equal to the stored document total regardless of partial flag
+    - Returns fewer chunks than the full document when is_partial=True
+    """
+
+    _LARGE_DOC_THRESHOLD = 40_000  # Must match rpcs.sql DEFAULT for cerefox_search_docs
+
+    @staticmethod
+    def _make_large_content(target_chars: int = 44_000) -> str:
+        """Build a large Teliboria-themed markdown document exceeding *target_chars*."""
+        section_text = (
+            "The ancient towers of Teliboria rise above the canopy of the Verdant Reach, "
+            "each stone carved with the sigils of the First Architects who shaped the land "
+            "during the Age of Formation. Scholars from the Academy at Emberveil travel many "
+            "leagues to study these inscriptions, hoping to unlock the secrets of a civilisation "
+            "that mastered the manipulation of aetheric currents before the Great Severance. "
+            "The resonance crystals embedded in every archway still hum with residual energy, "
+            "and on quiet evenings the hum can be heard from the valley floor far below. "
+        )
+        lines: list[str] = ["# Large Teliboria Reference — Small-to-Big Test\n\n"]
+        section_num = 0
+        while sum(len(line) for line in lines) < target_chars:
+            section_num += 1
+            lines.append(f"## Region {section_num}: Chronicles of the Verdant Reach\n\n")
+            lines.append(section_text * 8)
+            lines.append("\n\n")
+        return "".join(lines)
+
+    def test_small_doc_is_not_partial(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        e2e_embedder,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """A document below the threshold returns is_partial=False and total_chars matches."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title = unique_title("S2B Small Doc")
+        result = e2e_pipeline.ingest_text(SAMPLE_CONTENT, title)
+        cleanup.track_document(result.document_id)
+
+        doc = e2e_client.get_document_by_id(result.document_id)
+        assert doc["total_chars"] < self._LARGE_DOC_THRESHOLD, (
+            f"SAMPLE_CONTENT is too large ({doc['total_chars']} chars) — "
+            "it should be well below the 40 000 char threshold"
+        )
+
+        time.sleep(1)
+
+        embedding = e2e_embedder.embed("Luminous Archipelago floating islands")
+        rows = e2e_client.search_docs(
+            "Luminous Archipelago floating islands", embedding, match_count=10
+        )
+        our_rows = [r for r in rows if r["document_id"] == result.document_id]
+        assert our_rows, (
+            f"Small doc {result.document_id} not found in search results. "
+            f"Returned IDs: {[r['document_id'] for r in rows]}"
+        )
+        row = our_rows[0]
+        assert row["is_partial"] is False
+        assert row["total_chars"] == doc["total_chars"]
+        # Full content should contain the document text
+        assert "Luminous Archipelago" in row.get("full_content", "")
+
+    def test_large_doc_is_partial(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        e2e_embedder,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """A document above the threshold returns is_partial=True and total_chars=full size."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title = unique_title("S2B Large Doc")
+        large_content = self._make_large_content(44_000)
+        result = e2e_pipeline.ingest_text(large_content, title)
+        cleanup.track_document(result.document_id)
+
+        doc = e2e_client.get_document_by_id(result.document_id)
+        assert doc["total_chars"] > self._LARGE_DOC_THRESHOLD, (
+            f"Document is only {doc['total_chars']} chars — "
+            "not large enough to trigger small-to-big path"
+        )
+
+        time.sleep(1)
+
+        embedding = e2e_embedder.embed("aetheric currents First Architects")
+        rows = e2e_client.search_docs(
+            "aetheric currents First Architects", embedding, match_count=5
+        )
+        our_rows = [r for r in rows if r["document_id"] == result.document_id]
+        assert our_rows, (
+            f"Large doc {result.document_id} not found in search results. "
+            f"Returned IDs: {[r['document_id'] for r in rows]}"
+        )
+        row = our_rows[0]
+
+        assert row["is_partial"] is True
+        # total_chars should equal the full document size (not just returned content)
+        assert row["total_chars"] == doc["total_chars"]
+        # Partial content should be smaller than the full document
+        assert len(row.get("full_content", "")) < row["total_chars"]
+        # chunk_count reflects only the returned (partial) chunks
+        assert row["chunk_count"] < result.chunk_count
+
+    def test_context_window_zero_returns_fewer_chunks_than_window_one(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        e2e_embedder,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """p_context_window=0 returns only matched chunks; N=1 returns matched + neighbours."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title = unique_title("S2B Window Compare")
+        large_content = self._make_large_content(44_000)
+        result = e2e_pipeline.ingest_text(large_content, title)
+        cleanup.track_document(result.document_id)
+
+        time.sleep(1)
+
+        query = "aetheric currents First Architects Teliboria towers"
+        embedding = e2e_embedder.embed(query)
+
+        rpc_params_base = {
+            "p_query_text": query,
+            "p_query_embedding": embedding,
+            "p_match_count": 3,
+            "p_alpha": 0.7,
+            "p_project_id": None,
+            "p_min_score": 0.0,
+        }
+
+        rows_n0 = e2e_client.rpc(
+            "cerefox_search_docs", {**rpc_params_base, "p_context_window": 0}
+        )
+        rows_n1 = e2e_client.rpc(
+            "cerefox_search_docs", {**rpc_params_base, "p_context_window": 1}
+        )
+
+        our_n0 = [r for r in rows_n0 if r["document_id"] == result.document_id]
+        our_n1 = [r for r in rows_n1 if r["document_id"] == result.document_id]
+
+        assert our_n0, "Large doc not found in N=0 results"
+        assert our_n1, "Large doc not found in N=1 results"
+
+        n0_row = our_n0[0]
+        n1_row = our_n1[0]
+
+        # Both should be partial (doc is large)
+        assert n0_row["is_partial"] is True
+        assert n1_row["is_partial"] is True
+
+        # N=1 should have at least as many chunks as N=0 (neighbours expand the window)
+        assert n1_row["chunk_count"] >= n0_row["chunk_count"]
+        # N=1 content should be at least as long as N=0 content
+        assert len(n1_row.get("full_content", "")) >= len(n0_row.get("full_content", ""))
+
+    def test_partial_result_has_no_duplicate_content(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        e2e_embedder,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """Overlapping context windows from multiple matched chunks produce no duplicate text."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title = unique_title("S2B Dedup Check")
+        # Build a large doc where the same phrase repeats in consecutive sections
+        # so multiple chunks will match and their context windows will overlap.
+        large_content = self._make_large_content(44_000)
+        result = e2e_pipeline.ingest_text(large_content, title)
+        cleanup.track_document(result.document_id)
+
+        time.sleep(1)
+
+        # Use a high match_count to maximise chance of overlapping windows
+        query = "aetheric currents resonance crystals"
+        embedding = e2e_embedder.embed(query)
+        rows = e2e_client.rpc(
+            "cerefox_search_docs",
+            {
+                "p_query_text": query,
+                "p_query_embedding": embedding,
+                "p_match_count": 5,
+                "p_alpha": 0.7,
+                "p_project_id": None,
+                "p_min_score": 0.0,
+                "p_context_window": 2,
+            },
+        )
+        our_rows = [r for r in rows if r["document_id"] == result.document_id]
+        assert our_rows, "Large doc not found in search results"
+
+        row = our_rows[0]
+        assert row["is_partial"] is True
+
+        full_content: str = row.get("full_content", "")
+        assert full_content
+
+        # Split on section headings to detect repeated sections in the stitched content.
+        # Each "## Region N:" heading should appear at most once.
+        import re
+        headings = re.findall(r"## Region \d+:", full_content)
+        assert len(headings) == len(set(headings)), (
+            f"Duplicate section headings found in partial content: {headings}"
+        )
+
+
 class TestEdgeFunctionMetadata:
     """Test 2.3: cerefox-metadata Edge Function."""
 
