@@ -102,7 +102,7 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 | FR-4.3 | Semantic-only search (conceptual similarity) | P0 |
 | FR-4.4 | Configurable semantic weight (alpha) for hybrid search | P0 |
 | FR-4.5 | Document reconstruction from chunks | P0 |
-| FR-4.6 | Response size limit (parameterized, default 65000 bytes) | P0 |
+| FR-4.6 | Response size limit (parameterized, default 200000 bytes) | P0 |
 | FR-4.7 | Small-to-big context expansion (return sibling chunks) — see FR-4.10–4.14 | P1 |
 | FR-4.8 | Truncation metadata (indicate when results are cut off) | P1 |
 | FR-4.9 | Filter search by project/tags/metadata | P1 |
@@ -379,7 +379,7 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 ### 4.4 API & MCP
 
 - **Supabase MCP endpoint**: `https://mcp.supabase.com/<project-ref>`
-- **Response size limit**: 65000 bytes (parameterized via `CEREFOX_MAX_RESPONSE_BYTES`)
+- **Response size limit**: 200000 bytes (parameterized via `CEREFOX_MAX_RESPONSE_BYTES`)
 - **RPC naming**: all prefixed with `cerefox_`
 
 ### 4.5 Tech Stack
@@ -411,7 +411,7 @@ All parameters use `CEREFOX_` prefix and can be set via environment variables or
 | `CEREFOX_SUPABASE_KEY` | — | Supabase service role key |
 | `OPENAI_API_KEY` | — | OpenAI API key for embeddings |
 | `CEREFOX_EMBEDDER` | `openai` | Default embedder: `openai`, `fireworks` |
-| `CEREFOX_MAX_RESPONSE_BYTES` | `65000` | Max response size for MCP/search |
+| `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Max response size for MCP/search |
 | `CEREFOX_MAX_CHUNK_CHARS` | `4000` | Max characters per chunk |
 | `CEREFOX_MIN_CHUNK_CHARS` | `100` | Min characters per chunk |
 | `CEREFOX_BACKUP_DIR` | `./backups` | Directory for file system backups |

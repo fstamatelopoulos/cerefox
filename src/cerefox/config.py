@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     min_chunk_chars: int = 100
 
     # ── Retrieval ─────────────────────────────────────────────────────────────
-    max_response_bytes: int = 65000
+    max_response_bytes: int = 200000
     # Minimum cosine similarity score for hybrid and semantic search results (0.0–1.0).
     # Results below this threshold are dropped. FTS results are not affected.
     #

@@ -406,16 +406,18 @@ document. Below a configurable threshold, current full-document behaviour is ret
 deduplicated. Example: matched = c1, c3; N=1 → c0, c1, c2, c3, c4 (not c0, c1, c2,
 c2, c3, c4).
 
-**Status: Deferred to Iteration 13.** Versioning (12B) was prioritised and completed in full. Small-to-big retrieval will be the primary focus of the next iteration.
+**Status: Done.** All tasks implemented. SQL logic in `cerefox_search_docs` (threshold + context expand + dedup), `DocResult.is_partial` in Python, `partial_note` annotation in MCP server. Config via `rpcs.sql` DEFAULT values only (no `.env` params). Full test coverage: 9 Python unit tests + 4 e2e tests in `TestSmallToBigRetrieval`.
+
+**Implementation approach (final)**: all threshold/expansion logic lives entirely in Postgres (single-implementation principle). `cerefox_expand_context` RPC does the windowed chunk retrieval; `cerefox_search_docs` is extended to call it when `total_chars > threshold`. Both params are RPC DEFAULT values only — not in `.env` or `config.py` — following the same convention as `OPENAI_MODEL`/`EMBEDDING_DIMENSIONS` in the Edge Functions. All callers (Python, Edge Functions) get the feature automatically with no code changes beyond the RPC.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 12.1 | Add `CEREFOX_SMALL_TO_BIG_THRESHOLD` and `CEREFOX_CONTEXT_WINDOW` config params | Deferred | Add to `config.py` with defaults 40000 and 1 |
-| 12.2 | Implement `cerefox_expand_context` RPC | Deferred | Takes chunk IDs + window size, returns ordered sibling chunks with dedup; callable from Python and Edge Functions |
-| 12.3 | Update `search.py` — apply small-to-big logic post-search | Deferred | If doc size > threshold, call expand_context instead of full-doc reconstruction; assemble deduped result |
-| 12.4 | Update `cerefox-search` Edge Function | Deferred | Apply threshold logic server-side |
-| 12.5 | Update `cerefox-mcp` Edge Function | Deferred | Pass through to cerefox-search |
-| 12.6 | Write tests — threshold boundary, dedup, ordering, N=0/1/2 | Deferred | Unit tests for RPC logic + integration tests for full search path |
+| 12.1 | ~~Add `CEREFOX_SMALL_TO_BIG_THRESHOLD` and `CEREFOX_CONTEXT_WINDOW` to `config.py` and `.env.example`~~ | Removed | Design revised: these are RPC-level tuning params, not `.env` config. Defaults live in `rpcs.sql`; change them there and redeploy. Documented in `configuration.md` § "RPC-level retrieval parameters". |
+| 12.2 | Implement `cerefox_expand_context` RPC + extend `cerefox_search_docs` | Done | `cerefox_expand_context` already existed; `cerefox_search_docs` gains `p_small_to_big_threshold INT DEFAULT 40000` and `p_context_window INT DEFAULT 1`; branches on `total_chars > threshold`; returns `is_partial BOOL`. |
+| 12.3 | ~~Update `search.py` — pass threshold params to RPC~~ | Removed | No change needed — Python passes no threshold params; RPC defaults handle all paths uniformly. `DocResult.is_partial` field added to surface the flag to callers. |
+| 12.4 | ~~Update `cerefox-search` Edge Function~~ | Removed | True thin wrapper; feature is transparent. RPC defaults activate it automatically. |
+| 12.5 | ~~Update `cerefox-mcp` Edge Function~~ | Removed | Delegates entirely to `cerefox-search`; no changes needed. |
+| 12.6 | Write tests | Done | Python-layer unit tests (9 tests across `TestDocResult` + `TestSearchDocs`). E2e tests in `tests/e2e/test_api_e2e.py` — `TestSmallToBigRetrieval` class (4 tests): small doc `is_partial=False`, large doc `is_partial=True` + `total_chars` integrity + `chunk_count` < full, `p_context_window` N=0 vs N=1 comparison, dedup check via heading-repeat detection with N=2 window. Calls live Supabase via `e2e_client.search_docs()` and `e2e_client.rpc()` for window-override variants. |
 
 ### 12B: Implicit Document Versioning
 

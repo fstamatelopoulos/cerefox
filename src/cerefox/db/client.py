@@ -687,7 +687,12 @@ class CerefoxClient:
         project_id: str | None = None,
         min_score: float = 0.0,
     ) -> list[dict[str, Any]]:
-        """Document-level hybrid search — deduplicates by document, returns full content."""
+        """Document-level hybrid search — deduplicates by document, returns content.
+
+        Small-to-big threshold and context window are configured in the RPC
+        (see rpcs.sql — cerefox_search_docs defaults). They are not exposed here
+        because they are system-level tuning params, not per-call options.
+        """
         return self.rpc(
             "cerefox_search_docs",
             {

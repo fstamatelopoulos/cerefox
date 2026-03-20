@@ -25,6 +25,9 @@ DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID)
 -- Drop 6-param search_docs that returned doc_project_id UUID (singular) or lacked doc_updated_at.
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT);
 
+-- Drop 8-param search_docs (pre is_partial) so return-type change can be applied cleanly.
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT);
+
 DROP FUNCTION IF EXISTS cerefox_fts_search(TEXT, INT, UUID);
 DROP FUNCTION IF EXISTS cerefox_reconstruct_doc(UUID);
 
@@ -414,32 +417,49 @@ $$;
 -- ── cerefox_search_docs ───────────────────────────────────────────────────────
 -- Document-level hybrid search: runs hybrid search internally, deduplicates
 -- results by document (keeping the best-scoring chunk per document), and
--- returns up to p_match_count *distinct documents* with their full content.
+-- returns up to p_match_count *distinct documents* with their content.
 --
--- Use this when you want complete notes rather than isolated snippets.
--- Best for AI agents querying a personal knowledge base where notes are
--- small-to-medium sized and full context is more valuable than precision.
+-- ── RPC-level configuration (not exposed via .env) ────────────────────────────
+-- Two params below are intentionally NOT surfaced in Python config or .env.
+-- They are system-level tuning knobs with the same role as OPENAI_MODEL and
+-- EMBEDDING_DIMENSIONS in the Edge Functions — change them here and redeploy
+-- rpcs.sql (python scripts/db_deploy.py) if you need different values.
+--
+--   p_small_to_big_threshold (default: 40000 chars)
+--     Documents larger than this return matched chunks + neighbours instead of
+--     the full document. Set to 0 to always return full document content.
+--     Changing the embedding model or chunk size may require retuning this.
+--
+--   p_context_window (default: 1)
+--     Neighbour chunks on each side of each matched chunk.
+--     N=1 → up to 3 contiguous chunks per hit (prev, match, next).
+--     N=0 → matched chunks only (no expansion).
+--     N=2 → up to 5 contiguous chunks per hit.
+-- ─────────────────────────────────────────────────────────────────────────────
 --
 -- Parameters:
---   p_query_text      : Query string (used for FTS)
---   p_query_embedding : 768-dim query embedding (used for vector search)
---   p_match_count     : Max documents to return (default: 5)
---   p_alpha           : Semantic weight 0.0–1.0 (default: 0.7)
---   p_project_id      : Optional project filter (M2M: document must be in project)
---   p_min_score       : Minimum cosine similarity for vector results (default 0.0 here;
---                       the Python layer applies CEREFOX_MIN_SEARCH_SCORE, default 0.65).
---                       If calling this RPC directly (e.g. from an agent), set this
---                       explicitly — 0.0 disables filtering and returns everything.
+--   p_query_text             : Query string (used for FTS)
+--   p_query_embedding        : 768-dim query embedding (used for vector search)
+--   p_match_count            : Max documents to return (default: 5)
+--   p_alpha                  : Semantic weight 0.0–1.0 (default: 0.7)
+--   p_project_id             : Optional project filter (M2M)
+--   p_min_score              : Minimum cosine similarity for vector results
+--   p_small_to_big_threshold : See above (default: 40000)
+--   p_context_window         : See above (default: 1)
 --
--- Returns one row per document with full reconstructed content.
+-- Returns one row per document. total_chars is always the full document size.
+-- chunk_count reflects how many chunks are in full_content (may be partial).
+-- is_partial = TRUE when the small-to-big path was taken for that document.
 
 CREATE OR REPLACE FUNCTION cerefox_search_docs(
-    p_query_text      TEXT,
-    p_query_embedding VECTOR(768),
-    p_match_count     INT   DEFAULT 5,
-    p_alpha           FLOAT DEFAULT 0.7,
-    p_project_id      UUID  DEFAULT NULL,
-    p_min_score       FLOAT DEFAULT 0.0
+    p_query_text             TEXT,
+    p_query_embedding        VECTOR(768),
+    p_match_count            INT   DEFAULT 5,
+    p_alpha                  FLOAT DEFAULT 0.7,
+    p_project_id             UUID  DEFAULT NULL,
+    p_min_score              FLOAT DEFAULT 0.0,
+    p_small_to_big_threshold INT   DEFAULT 40000,
+    p_context_window         INT   DEFAULT 1
 )
 RETURNS TABLE (
     document_id              UUID,
@@ -453,7 +473,8 @@ RETURNS TABLE (
     chunk_count              INT,
     total_chars              INT,
     doc_updated_at           TIMESTAMPTZ,
-    version_count            INT
+    version_count            INT,
+    is_partial               BOOL
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -463,8 +484,6 @@ AS $$
     WITH chunk_results AS (
         -- Run hybrid search with a 10x candidate pool so deduplication has
         -- enough candidates to fill p_match_count unique documents.
-        -- Personal knowledge bases have many chunks per document, so a 10x
-        -- multiplier reliably surfaces p_match_count distinct documents.
         SELECT * FROM cerefox_hybrid_search(
             p_query_text      := p_query_text,
             p_query_embedding := p_query_embedding,
@@ -477,7 +496,6 @@ AS $$
     ),
     best_per_doc AS (
         -- One row per document: keep the highest-scoring chunk as representative.
-        -- Join cerefox_documents to pick up updated_at.
         SELECT DISTINCT ON (cr.document_id)
             cr.document_id,
             cr.heading_path    AS best_chunk_heading_path,
@@ -493,23 +511,67 @@ AS $$
         ORDER BY cr.document_id, cr.score DESC
     ),
     top_docs AS (
-        -- Rank documents by their best chunk score, then take top N.
         SELECT *
         FROM best_per_doc
         ORDER BY best_score DESC
         LIMIT p_match_count
     ),
-    full_docs AS (
-        -- Reconstruct full content for each top document from its current chunks.
-        SELECT
-            c.document_id,
-            STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
-            COUNT(*)::INT                                          AS chunk_count,
-            SUM(c.char_count)::INT                                 AS total_chars
+    -- Compute actual total_chars per top document (needed for threshold check).
+    doc_sizes AS (
+        SELECT c.document_id, SUM(c.char_count)::INT AS total_chars
         FROM cerefox_chunks c
         WHERE c.document_id IN (SELECT document_id FROM top_docs)
           AND c.version_id IS NULL
         GROUP BY c.document_id
+    ),
+    -- Matched chunk IDs from documents that exceed the threshold.
+    large_doc_seeds AS (
+        SELECT cr.chunk_id
+        FROM chunk_results cr
+        JOIN doc_sizes ds ON cr.document_id = ds.document_id
+        WHERE p_small_to_big_threshold > 0
+          AND ds.total_chars > p_small_to_big_threshold
+          AND cr.document_id IN (SELECT document_id FROM top_docs)
+    ),
+    -- Expand context for all large-doc seeds in a single call.
+    -- cerefox_context_expand respects document boundaries and deduplicates.
+    -- When large_doc_seeds is empty (threshold=0 or all docs are small),
+    -- ARRAY_AGG returns NULL; COALESCE converts that to an empty array so the
+    -- function returns 0 rows safely.
+    expanded AS (
+        SELECT ec.chunk_id, ec.document_id, ec.chunk_index, ec.content
+        FROM cerefox_context_expand(
+            COALESCE((SELECT ARRAY_AGG(chunk_id) FROM large_doc_seeds), ARRAY[]::UUID[]),
+            p_context_window
+        ) ec
+    ),
+    -- Aggregate expanded chunks per large document (is_partial = TRUE).
+    large_doc_content AS (
+        SELECT
+            e.document_id,
+            STRING_AGG(e.content, E'\n\n' ORDER BY e.chunk_index) AS full_content,
+            COUNT(*)::INT AS chunk_count,
+            TRUE          AS is_partial
+        FROM expanded e
+        GROUP BY e.document_id
+    ),
+    -- Full content for small documents (is_partial = FALSE).
+    small_doc_content AS (
+        SELECT
+            c.document_id,
+            STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
+            COUNT(*)::INT AS chunk_count,
+            FALSE         AS is_partial
+        FROM cerefox_chunks c
+        WHERE c.document_id IN (SELECT document_id FROM top_docs)
+          AND c.document_id NOT IN (SELECT document_id FROM large_doc_content)
+          AND c.version_id IS NULL
+        GROUP BY c.document_id
+    ),
+    all_content AS (
+        SELECT document_id, full_content, chunk_count, is_partial FROM large_doc_content
+        UNION ALL
+        SELECT document_id, full_content, chunk_count, is_partial FROM small_doc_content
     )
     SELECT
         td.document_id,
@@ -519,13 +581,15 @@ AS $$
         td.doc_project_ids,
         td.best_score,
         td.best_chunk_heading_path,
-        fd.full_content,
-        fd.chunk_count,
-        fd.total_chars,
+        ac.full_content,
+        ac.chunk_count,
+        ds.total_chars,    -- always full document size, even for partial results
         td.doc_updated_at,
-        td.version_count
+        td.version_count,
+        ac.is_partial
     FROM top_docs td
-    JOIN full_docs fd ON fd.document_id = td.document_id
+    JOIN doc_sizes ds ON ds.document_id = td.document_id
+    JOIN all_content ac ON ac.document_id = td.document_id
     ORDER BY td.best_score DESC;
 $$;
 

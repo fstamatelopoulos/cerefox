@@ -367,6 +367,12 @@ cerefox_search(query) →
 
 **Why automatic (not a parameter)**: agents shouldn't need to know document sizes or manage retrieval strategy. The threshold is a system-level setting, not a per-query choice.
 
+**Implementation location — Postgres only (single-implementation principle)**: all threshold/expansion logic lives in two Postgres RPCs:
+- `cerefox_expand_context(p_document_id, p_chunk_ids UUID[], p_context_window INT)` — returns ordered, deduplicated sibling chunks for a set of matched chunk IDs.
+- `cerefox_search_docs` — extended with `p_small_to_big_threshold INT` and `p_context_window INT` params. Internally: if `total_chars > threshold`, calls `cerefox_expand_context`; otherwise reconstructs the full document (current behaviour). Returns `is_partial` flag so callers know which path was taken.
+
+Python (`search.py`) and the `cerefox-search` Edge Function are thin pass-throughs that supply the config values as RPC params — no retrieval logic lives outside Postgres. `cerefox-mcp` requires no changes as it already delegates entirely to `cerefox-search`.
+
 **`match_count` semantics**: the parameter controls the number of **distinct documents** returned, not raw chunks. For large documents, each document match expands into multiple chunks (up to `(CEREFOX_CONTEXT_WINDOW * 2 + 1)` chunks per matched chunk hit). The total chunk count returned can exceed `match_count`.
 
 **Context window default (1)**: each matched chunk gains one neighbor on each side — returning 3 contiguous chunks per hit at minimum. Configurable via `CEREFOX_CONTEXT_WINDOW`.
@@ -419,12 +425,13 @@ Returns: list of version rows — `id`, `version_number`, `total_chars`, `chunk_
 
 ### 5.4 Response Size Management
 
-Supabase MCP has a ~65K bytes limit on responses. This is parameterized:
+A configurable byte budget is applied after RPC results are returned, dropping whole documents (never truncating mid-content) until the budget is satisfied:
 
-- `MAX_RESPONSE_BYTES` config setting (default: 65000)
-- RPCs that return content check accumulated size
-- When limit is near, response includes a `truncated: true` flag and `remaining_chunks: N` count
-- Agent can make follow-up calls to retrieve remaining content
+- `MAX_RESPONSE_BYTES` config setting (default: 200 000)
+- Applied by the local MCP server and the `cerefox-search` Edge Function independently
+- Response includes `truncated: true` and `response_bytes` metadata when the limit is hit
+- Small-to-big retrieval already bounds large-doc results to matched chunks + neighbours, so the budget is rarely reached at default `match_count=5`
+- Original 65 KB default was driven by the Supabase MCP protocol limit; raised to 200 KB once that path was replaced by a dedicated `cerefox-mcp` Edge Function
 
 Note: `cerefox_get_document` is exempt from this limit when called directly (it is a single-document retrieval, not a multi-document search). The size limit applies to `cerefox_search` result assembly only.
 

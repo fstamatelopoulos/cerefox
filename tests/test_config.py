@@ -53,7 +53,7 @@ class TestDefaults:
     def test_default_max_response_bytes(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             s = Settings(_env_file=None)
-        assert s.max_response_bytes == 65000
+        assert s.max_response_bytes == 200000
 
     def test_default_supabase_url_empty(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
