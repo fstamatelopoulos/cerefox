@@ -435,7 +435,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 1.3.0
+  version: 1.3.1
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -463,7 +463,13 @@ paths:
                   default: docs
       responses:
         '200':
-          description: Search results
+          description: >
+            { results, query, mode, match_count, project_name, truncated, response_bytes }.
+            Each item in results (docs mode) contains: document_id, doc_title, full_content,
+            chunk_count, total_chars, best_score, is_partial.
+            is_partial is true when the document exceeded the small-to-big threshold — in that
+            case full_content contains matched chunks plus their neighbours rather than the
+            complete document, and total_chars still reflects the full document size.
   /cerefox-ingest:
     post:
       operationId: ingestNote
@@ -631,17 +637,35 @@ If the same content was already ingested (SHA-256 hash match), returns `"skipped
 | `min_score` | number | 0.5 | Minimum cosine similarity threshold |
 | `max_bytes` | number | 65000 | Response size budget in bytes. Results are dropped whole (never truncated mid-document) once the budget is reached. The response includes `truncated: true` and `response_bytes` when the limit was hit. See "Response size limit" below. |
 
-**Response fields:**
+**Response envelope fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `results` | array | Matched documents or chunks |
+| `results` | array | Matched documents or chunks (see per-row fields below) |
 | `query` | string | The original query |
 | `mode` | string | Search mode used |
 | `match_count` | number | `match_count` value used |
 | `project_name` | string\|null | Project filter applied (if any) |
 | `truncated` | boolean | `true` when results were dropped to stay within `max_bytes` |
 | `response_bytes` | number | Actual bytes in the returned `results` array |
+
+**Per-result row fields (`docs` mode — the recommended default):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `document_id` | string | UUID of the matched document |
+| `doc_title` | string | Document title |
+| `doc_source` | string | Origin: `"file"`, `"paste"`, `"agent"` |
+| `doc_metadata` | object | Arbitrary JSON metadata |
+| `best_score` | number | Highest chunk relevance score (0–1) |
+| `best_chunk_heading_path` | string[] | Heading breadcrumb of the best-scoring chunk |
+| `full_content` | string | Reconstructed document content (may be partial — see `is_partial`) |
+| `chunk_count` | integer | Number of chunks in `full_content` |
+| `total_chars` | integer | Full document size in characters (always the whole doc, even when `is_partial` is true) |
+| `is_partial` | boolean | `true` when `full_content` contains only matched chunks + neighbours instead of the complete document. Triggered when the document exceeds the small-to-big threshold (default 40 000 chars). Use `getDocument` to retrieve the full text. |
+| `doc_updated_at` | string | ISO 8601 timestamp of the last document update |
+| `version_count` | integer | Number of archived versions (0 if never updated) |
+| `doc_project_ids` | string[] | Project UUIDs the document belongs to |
 
 **Response size limit (`max_bytes`):**
 
@@ -726,6 +750,8 @@ Search the knowledge base. Returns complete documents ranked by hybrid (FTS + se
 | `query` | string | required | Natural-language search query |
 | `match_count` | integer | 5 | Maximum **documents** to return |
 | `project_name` | string | optional | Filter to a specific project |
+
+Each result includes `doc_title`, `best_score`, `full_content`, `chunk_count`, `total_chars`, and `is_partial`. When `is_partial` is true, the document exceeded the small-to-big threshold: `full_content` contains the best-matching chunks and their neighbours rather than the whole document. The heading for such results includes a `— partial (N of M chars)` annotation. Use `cerefox_get_document` to retrieve the full text when needed.
 
 ### `cerefox_ingest`
 
@@ -836,9 +862,17 @@ recommended RPC for agent use** — agents receive complete notes, not isolated 
 | `p_alpha` | FLOAT | 0.7 | Semantic weight |
 | `p_project_id` | UUID | null | Filter by project |
 | `p_min_score` | FLOAT | 0.0 | Minimum cosine similarity |
+| `p_small_to_big_threshold` | INT | 40000 | Documents larger than this return matched chunks + neighbours instead of the full document. Set to `0` to always return full content. Change the DEFAULT in `rpcs.sql` to apply server-wide. |
+| `p_context_window` | INT | 1 | Neighbour chunks on each side of each matched chunk. `1` → up to 3 contiguous chunks per hit. `0` → matched chunks only. |
 
-Returns: `document_id`, `doc_title`, `doc_source`, `doc_metadata`, `best_score`,
-`best_chunk_heading_path`, `full_content`, `chunk_count`, `total_chars`
+Returns: `document_id`, `doc_title`, `doc_source`, `doc_metadata`, `doc_project_ids`,
+`best_score`, `best_chunk_heading_path`, `full_content`, `chunk_count`, `total_chars`,
+`doc_updated_at`, `version_count`, `is_partial`.
+
+`is_partial` is `TRUE` when the document exceeded `p_small_to_big_threshold` — in that
+case `full_content` contains matched chunks + up to `p_context_window` neighbours on each
+side, deduplicated and sorted by `chunk_index`. `total_chars` always reflects the full
+document size regardless of whether the result is partial.
 
 ---
 
