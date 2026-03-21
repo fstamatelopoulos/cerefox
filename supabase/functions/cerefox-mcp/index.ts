@@ -61,6 +61,12 @@ const TOOLS = [
           type: "string",
           description: "Filter results to a specific project by name (optional)",
         },
+        metadata_filter: {
+          type: "object",
+          description:
+            "Optional JSONB containment filter. Only documents whose metadata contains ALL specified key-value pairs are returned. Example: {\"type\": \"decision\", \"status\": \"active\"}. Call cerefox_list_metadata_keys first to discover available keys and values. Omit to search all documents.",
+          additionalProperties: { type: "string" },
+        },
       },
     },
   },
@@ -219,6 +225,7 @@ async function handleToolCall(
         query: args.query,
         match_count: args.match_count ?? 5,
         project_name: args.project_name,
+        metadata_filter: args.metadata_filter ?? null,
       }),
     });
 

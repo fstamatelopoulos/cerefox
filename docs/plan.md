@@ -588,73 +588,73 @@ key-value pairs. Multiple pairs are ANDed. NULL filter = no restriction (backwar
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.1 | Add `p_metadata_filter JSONB DEFAULT NULL` to `cerefox_hybrid_search` | Pending | Add `AND (p_metadata_filter IS NULL OR d.doc_metadata @> p_metadata_filter)` to WHERE clause |
-| 13.2 | Add `p_metadata_filter` to `cerefox_fts_search` | Pending | Same pattern |
-| 13.3 | Add `p_metadata_filter` to `cerefox_semantic_search` | Pending | Same pattern |
-| 13.4 | Add `p_metadata_filter` to `cerefox_search_docs` | Pending | Primary path for `cerefox_search` tool; same pattern |
-| 13.5 | Deploy updated RPCs via `db_deploy.py` | Pending | No migration file needed — `db_deploy.py` re-creates RPCs from `rpcs.sql` |
+| 13.1 | Add `p_metadata_filter JSONB DEFAULT NULL` to `cerefox_hybrid_search` | Done | `@>` added to FTS and vector sub-queries |
+| 13.2 | Add `p_metadata_filter` to `cerefox_fts_search` | Done | Same pattern |
+| 13.3 | Add `p_metadata_filter` to `cerefox_semantic_search` | Done | Same pattern |
+| 13.4 | Add `p_metadata_filter` to `cerefox_search_docs` | Done | Passes filter to inner `cerefox_hybrid_search` call |
+| 13.5 | Deploy updated RPCs via `db_deploy.py` | Done | `python scripts/db_deploy.py` ✓ |
 
 #### Step 2 — Python: client.py and search.py
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.6 | Add `metadata_filter: dict \| None = None` to `search_docs()` in `client.py` | Pending | Serialise to JSON when calling RPC; pass as `p_metadata_filter` |
-| 13.7 | Propagate `metadata_filter` through `SearchClient.search_docs()` in `search.py` | Pending | Pass-through; no logic in Python |
+| 13.6 | Add `metadata_filter: dict \| None = None` to `search_docs()` in `client.py` | Done | All 4 client methods updated; param omitted when None |
+| 13.7 | Propagate `metadata_filter` through `SearchClient.search_docs()` in `search.py` | Done | All 4 SearchClient methods updated |
 
 #### Step 3 — cerefox-search Edge Function
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.8 | Accept optional `metadata_filter` (JSON object) in request body | Pending | Pass as `p_metadata_filter` to `cerefox_search_docs` RPC; null when absent |
-| 13.9 | Deploy updated `cerefox-search` | Pending | `npx supabase functions deploy cerefox-search` |
+| 13.8 | Accept optional `metadata_filter` (JSON object) in request body | Done | Validates type; passes via spread into RPC params; echoed in response |
+| 13.9 | Deploy updated `cerefox-search` | Done | `npx supabase functions deploy cerefox-search` ✓ |
 
 #### Step 4 — cerefox-mcp Edge Function
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.10 | Add optional `metadata_filter` parameter to `cerefox_search` tool schema | Pending | JSON object type; pass through to `cerefox-search` internal fetch body |
-| 13.11 | Deploy updated `cerefox-mcp` | Pending | `npx supabase functions deploy cerefox-mcp` |
+| 13.10 | Add optional `metadata_filter` parameter to `cerefox_search` tool schema | Done | `additionalProperties: {type: string}`; passed in fetch body |
+| 13.11 | Deploy updated `cerefox-mcp` | Done | `npx supabase functions deploy cerefox-mcp` ✓ |
 
 #### Step 5 — Local MCP server
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.12 | Add optional `metadata_filter` input to `cerefox_search` tool in `mcp_server.py` | Pending | JSON object; pass to `client.search_docs(metadata_filter=...)` |
+| 13.12 | Add optional `metadata_filter` input to `cerefox_search` tool in `mcp_server.py` | Done | Added to inputSchema; `_handle_search` reads and passes it |
 
 #### Step 6 — CLI
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.13 | Add `--filter / -f` option to `cerefox search` CLI command | Pending | Accepts JSON string; parsed with `json.loads()`; passed to `search_docs()` |
+| 13.13 | Add `--filter / -f` option to `cerefox search` CLI command | Done | JSON string; validated with `json.loads()`; all 3 modes get filter |
 
 #### Step 7 — Web UI
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.14 | Add Metadata Filter section to `browser.html` | Pending | Collapsible section; dynamic key-value rows; key autocomplete via `<datalist>` from `cerefox_list_metadata_keys`; ✕ button per row; "Add filter" JS button |
-| 13.15 | Update `/search` route in `routes.py` to collect and assemble `metadata_filter` | Pending | Collect `meta_filter_key[]` / `meta_filter_value[]` query params; assemble dict; pass to `search_docs()` |
-| 13.16 | Ensure HTMX search trigger includes metadata filter params | Pending | Filter state preserved on partial refresh; active filters visible without scrolling |
+| 13.14 | Add Metadata Filter section to `browser.html` | Done | `<details>` collapsible; `<datalist>` autocomplete; dynamic rows via plain JS; ✕ per row |
+| 13.15 | Update `/search` route in `routes.py` to collect and assemble `metadata_filter` | Done | Parallel `meta_filter_key[]` / `meta_filter_value[]` params; all 4 modes get filter |
+| 13.16 | Ensure HTMX search trigger includes metadata filter params | Done | Named inputs in-form; HTMX serialises them automatically; active pairs restored from context |
 
 #### Step 8 — GPT Actions schema
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.17 | Add `metadata_filter` field to `searchKnowledgeBase` in GPT Actions OpenAPI schema | Pending | Optional object field, additionalProperties: string; bump schema to v1.4.0; update `connect-agents.md` |
+| 13.17 | Add `metadata_filter` field to `searchKnowledgeBase` in GPT Actions OpenAPI schema | Done | Schema bumped to v1.4.0; `connect-agents.md` updated with new field and response description |
 
 #### Step 9 — Tests
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.18 | Unit tests: `metadata_filter` param propagation through `search_docs()` and `SearchClient` | Pending | Mock RPC call; assert `p_metadata_filter` is passed correctly; test None → no param; dict → serialised JSON |
-| 13.19 | E2e test: ingest two docs with differing metadata, search with filter, assert only matching doc returned | Pending | `tests/e2e/test_api_e2e.py`; uses live Supabase; `[E2E]`-prefixed test data; cleaned up automatically |
+| 13.18 | Unit tests: `metadata_filter` param propagation through `search_docs()` and `SearchClient` | Done | 25 new tests in `tests/retrieval/test_search.py` — 441 total pass |
+| 13.19 | E2e test: ingest two docs with differing metadata, search with filter, assert only matching doc returned | Done | 5 e2e tests in `TestMetadataFilteredSearch` (4.1–4.5) covering Python, hybrid, FTS, Edge Function, empty result |
 
 #### Step 10 — Documentation
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 13.20 | Update `docs/guides/connect-agents.md` — GPT Actions schema v1.4.0 + `metadata_filter` field docs | Pending | |
-| 13.21 | Update `docs/guides/configuration.md` — note that metadata filter uses the existing GIN index | Pending | |
-| 13.22 | Update `README.md` — mention metadata-filtered search in feature table | Pending | |
+| 13.20 | Update `docs/guides/connect-agents.md` — GPT Actions schema v1.4.0 + `metadata_filter` field docs | Done | Combined with 13.17 |
+| 13.21 | Update `docs/guides/configuration.md` — note that metadata filter uses the existing GIN index | Done | Added "Metadata filter" subsection under Retrieval |
+| 13.22 | Update `README.md` — mention metadata-filtered search in feature table | Done | Added row to feature table |
 
 ---
 

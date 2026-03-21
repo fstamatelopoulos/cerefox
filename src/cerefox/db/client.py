@@ -629,36 +629,38 @@ class CerefoxClient:
         use_upgrade: bool = False,
         project_id: str | None = None,
         min_score: float = 0.0,
+        metadata_filter: dict | None = None,
     ) -> list[dict[str, Any]]:
         """Hybrid FTS + semantic search."""
-        return self.rpc(
-            "cerefox_hybrid_search",
-            {
-                "p_query_text": query_text,
-                "p_query_embedding": query_embedding,
-                "p_match_count": match_count,
-                "p_alpha": alpha,
-                "p_use_upgrade": use_upgrade,
-                "p_project_id": project_id,
-                "p_min_score": min_score,
-            },
-        )
+        params: dict[str, Any] = {
+            "p_query_text": query_text,
+            "p_query_embedding": query_embedding,
+            "p_match_count": match_count,
+            "p_alpha": alpha,
+            "p_use_upgrade": use_upgrade,
+            "p_project_id": project_id,
+            "p_min_score": min_score,
+        }
+        if metadata_filter is not None:
+            params["p_metadata_filter"] = metadata_filter
+        return self.rpc("cerefox_hybrid_search", params)
 
     def fts_search(
         self,
         query_text: str,
         match_count: int = 10,
         project_id: str | None = None,
+        metadata_filter: dict | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text keyword search."""
-        return self.rpc(
-            "cerefox_fts_search",
-            {
-                "p_query_text": query_text,
-                "p_match_count": match_count,
-                "p_project_id": project_id,
-            },
-        )
+        params: dict[str, Any] = {
+            "p_query_text": query_text,
+            "p_match_count": match_count,
+            "p_project_id": project_id,
+        }
+        if metadata_filter is not None:
+            params["p_metadata_filter"] = metadata_filter
+        return self.rpc("cerefox_fts_search", params)
 
     def semantic_search(
         self,
@@ -666,17 +668,18 @@ class CerefoxClient:
         match_count: int = 10,
         use_upgrade: bool = False,
         project_id: str | None = None,
+        metadata_filter: dict | None = None,
     ) -> list[dict[str, Any]]:
         """Pure vector similarity search."""
-        return self.rpc(
-            "cerefox_semantic_search",
-            {
-                "p_query_embedding": query_embedding,
-                "p_match_count": match_count,
-                "p_use_upgrade": use_upgrade,
-                "p_project_id": project_id,
-            },
-        )
+        params: dict[str, Any] = {
+            "p_query_embedding": query_embedding,
+            "p_match_count": match_count,
+            "p_use_upgrade": use_upgrade,
+            "p_project_id": project_id,
+        }
+        if metadata_filter is not None:
+            params["p_metadata_filter"] = metadata_filter
+        return self.rpc("cerefox_semantic_search", params)
 
     def search_docs(
         self,
@@ -686,6 +689,7 @@ class CerefoxClient:
         alpha: float = 0.7,
         project_id: str | None = None,
         min_score: float = 0.0,
+        metadata_filter: dict | None = None,
     ) -> list[dict[str, Any]]:
         """Document-level hybrid search — deduplicates by document, returns content.
 
@@ -693,17 +697,17 @@ class CerefoxClient:
         (see rpcs.sql — cerefox_search_docs defaults). They are not exposed here
         because they are system-level tuning params, not per-call options.
         """
-        return self.rpc(
-            "cerefox_search_docs",
-            {
-                "p_query_text": query_text,
-                "p_query_embedding": query_embedding,
-                "p_match_count": match_count,
-                "p_alpha": alpha,
-                "p_project_id": project_id,
-                "p_min_score": min_score,
-            },
-        )
+        params: dict[str, Any] = {
+            "p_query_text": query_text,
+            "p_query_embedding": query_embedding,
+            "p_match_count": match_count,
+            "p_alpha": alpha,
+            "p_project_id": project_id,
+            "p_min_score": min_score,
+        }
+        if metadata_filter is not None:
+            params["p_metadata_filter"] = metadata_filter
+        return self.rpc("cerefox_search_docs", params)
 
     def reconstruct_doc(self, document_id: str) -> dict[str, Any] | None:
         """Reconstruct the full markdown content of a document from its chunks."""

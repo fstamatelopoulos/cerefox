@@ -711,3 +711,254 @@ class TestEdgeFunctionMetadata:
         assert isinstance(data, list), f"Expected list, got: {data}"
         key_names = [k["key"] for k in data]
         assert "e2e_tag" in key_names, f"Expected 'e2e_tag' in {key_names}"
+
+
+# ── 4. Metadata-filtered search ───────────────────────────────────────────────
+
+
+class TestMetadataFilteredSearch:
+    """Tests 4.1–4.5: metadata_filter JSONB containment across all access paths.
+
+    Two documents are ingested with distinct metadata. The filter is applied
+    to assert that only the matching document is returned.
+    """
+
+    def test_metadata_filter_python_search_docs(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """4.1: search_docs with metadata_filter returns only matching documents."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title_a = unique_title("MetaFilter Doc A")
+        title_b = unique_title("MetaFilter Doc B")
+
+        # Ingest two documents with DIFFERENT metadata
+        res_a = e2e_pipeline.ingest_text(
+            "# MetaFilter A\n\nThis is a decision document about architecture.",
+            title_a,
+            metadata={"e2e_type": "decision", "e2e_status": "active"},
+        )
+        res_b = e2e_pipeline.ingest_text(
+            "# MetaFilter B\n\nThis is a reference note for testing.",
+            title_b,
+            metadata={"e2e_type": "note", "e2e_status": "active"},
+        )
+        cleanup.track_document(res_a.document_id)
+        cleanup.track_document(res_b.document_id)
+
+        # Give Supabase a moment to index the new documents.
+        time.sleep(1)
+
+        from cerefox.config import Settings
+        from cerefox.embeddings.cloud import CloudEmbedder
+        from cerefox.retrieval.search import SearchClient
+
+        settings = Settings()
+        embedder = CloudEmbedder(
+            api_key=settings.get_embedder_api_key(),
+            base_url=settings.get_embedder_base_url(),
+            model=settings.get_embedder_model(),
+            dimensions=settings.get_embedder_dimensions(),
+        )
+        sc = SearchClient(e2e_client, embedder, settings)
+
+        # 4.1a: filter by type=decision → only doc A should appear
+        resp = sc.search_docs(
+            "MetaFilter document",
+            match_count=10,
+            metadata_filter={"e2e_type": "decision"},
+        )
+        doc_ids = [r.document_id for r in resp.results]
+        assert res_a.document_id in doc_ids, "Expected decision doc in filtered results"
+        assert res_b.document_id not in doc_ids, "Note doc should be filtered out"
+
+        # 4.1b: filter by type=note → only doc B should appear
+        resp_b = sc.search_docs(
+            "MetaFilter document",
+            match_count=10,
+            metadata_filter={"e2e_type": "note"},
+        )
+        doc_ids_b = [r.document_id for r in resp_b.results]
+        assert res_b.document_id in doc_ids_b, "Expected note doc in filtered results"
+        assert res_a.document_id not in doc_ids_b, "Decision doc should be filtered out"
+
+        # 4.1c: multi-key filter (AND) — both docs have e2e_status=active but different type
+        resp_c = sc.search_docs(
+            "MetaFilter document",
+            match_count=10,
+            metadata_filter={"e2e_type": "decision", "e2e_status": "active"},
+        )
+        doc_ids_c = [r.document_id for r in resp_c.results]
+        assert res_a.document_id in doc_ids_c
+        assert res_b.document_id not in doc_ids_c
+
+        # 4.1d: no filter → both documents may appear
+        resp_d = sc.search_docs("MetaFilter document", match_count=10)
+        doc_ids_d = [r.document_id for r in resp_d.results]
+        assert res_a.document_id in doc_ids_d or res_b.document_id in doc_ids_d, (
+            "At least one MetaFilter doc should appear without a filter"
+        )
+
+    def test_metadata_filter_hybrid_search(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """4.2: hybrid_search with metadata_filter returns only matching chunks."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title_a = unique_title("MetaFilter Hybrid A")
+        title_b = unique_title("MetaFilter Hybrid B")
+
+        res_a = e2e_pipeline.ingest_text(
+            "# Hybrid A\n\nDecision about the hybrid search filter.",
+            title_a,
+            metadata={"e2e_type": "decision"},
+        )
+        res_b = e2e_pipeline.ingest_text(
+            "# Hybrid B\n\nReference note for the hybrid search filter test.",
+            title_b,
+            metadata={"e2e_type": "note"},
+        )
+        cleanup.track_document(res_a.document_id)
+        cleanup.track_document(res_b.document_id)
+        time.sleep(1)
+
+        embedding = e2e_pipeline._embedder.embed("hybrid search filter")
+        rows = e2e_client.hybrid_search(
+            query_text="hybrid search filter",
+            query_embedding=embedding,
+            match_count=20,
+            metadata_filter={"e2e_type": "decision"},
+        )
+        doc_ids = [r["document_id"] for r in rows]
+        assert res_a.document_id in doc_ids, "Decision doc should be in filtered hybrid results"
+        assert res_b.document_id not in doc_ids, "Note doc should be excluded by filter"
+
+    def test_metadata_filter_fts_search(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """4.3: fts_search with metadata_filter returns only matching chunks."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title_a = unique_title("MetaFilter FTS A")
+        title_b = unique_title("MetaFilter FTS B")
+
+        res_a = e2e_pipeline.ingest_text(
+            "# FTS A\n\nDecision about ftsfiltertest keyword coverage.",
+            title_a,
+            metadata={"e2e_type": "decision"},
+        )
+        res_b = e2e_pipeline.ingest_text(
+            "# FTS B\n\nNote about ftsfiltertest keyword for control.",
+            title_b,
+            metadata={"e2e_type": "note"},
+        )
+        cleanup.track_document(res_a.document_id)
+        cleanup.track_document(res_b.document_id)
+        time.sleep(1)
+
+        rows = e2e_client.fts_search(
+            query_text="ftsfiltertest",
+            match_count=20,
+            metadata_filter={"e2e_type": "decision"},
+        )
+        doc_ids = [r["document_id"] for r in rows]
+        assert res_a.document_id in doc_ids, "Decision doc should appear in FTS filter results"
+        assert res_b.document_id not in doc_ids, "Note doc should be excluded by FTS filter"
+
+    def test_metadata_filter_edge_function(
+        self,
+        e2e_pipeline: IngestionPipeline | None,
+        e2e_edge,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """4.4: cerefox-search Edge Function passes metadata_filter to the RPC."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+        if e2e_edge is None:
+            pytest.skip("Edge Function client not configured (no CEREFOX_SUPABASE_ANON_KEY)")
+
+        title_a = unique_title("MetaFilter Edge A")
+        title_b = unique_title("MetaFilter Edge B")
+
+        res_a = e2e_pipeline.ingest_text(
+            "# Edge A\n\nDecision document for edge function filter test.",
+            title_a,
+            metadata={"e2e_type": "decision"},
+        )
+        res_b = e2e_pipeline.ingest_text(
+            "# Edge B\n\nNote document for edge function filter test.",
+            title_b,
+            metadata={"e2e_type": "note"},
+        )
+        cleanup.track_document(res_a.document_id)
+        cleanup.track_document(res_b.document_id)
+        time.sleep(2)  # Edge Function path has higher latency
+
+        data = e2e_edge.invoke("cerefox-search", {
+            "query": "edge function filter test",
+            "match_count": 10,
+            "mode": "docs",
+            "metadata_filter": {"e2e_type": "decision"},
+        })
+        results = data.get("results", [])
+        doc_ids = [r.get("document_id") for r in results]
+        assert res_a.document_id in doc_ids, "Decision doc should appear via Edge Function filter"
+        assert res_b.document_id not in doc_ids, "Note doc should be excluded by Edge Function filter"
+
+    def test_metadata_filter_no_match_returns_empty(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """4.5: filter with no matching documents returns empty results (not an error)."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured (no OPENAI_API_KEY)")
+
+        title = unique_title("MetaFilter Empty")
+        res = e2e_pipeline.ingest_text(
+            "# Empty Filter Test\n\nDocument for testing empty filter results.",
+            title,
+            metadata={"e2e_type": "note"},
+        )
+        cleanup.track_document(res.document_id)
+        time.sleep(1)
+
+        from cerefox.config import Settings
+        from cerefox.embeddings.cloud import CloudEmbedder
+        from cerefox.retrieval.search import SearchClient
+
+        settings = Settings()
+        embedder = CloudEmbedder(
+            api_key=settings.get_embedder_api_key(),
+            base_url=settings.get_embedder_base_url(),
+            model=settings.get_embedder_model(),
+            dimensions=settings.get_embedder_dimensions(),
+        )
+        sc = SearchClient(e2e_client, embedder, settings)
+
+        # Filter for a value that definitely doesn't exist
+        resp = sc.search_docs(
+            "empty filter result",
+            match_count=5,
+            metadata_filter={"e2e_type": "this-value-does-not-exist-e2e"},
+        )
+        assert resp.results == [], f"Expected empty results, got {resp.results}"
+        assert not resp.truncated

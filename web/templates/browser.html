@@ -4,7 +4,7 @@
 {% block content %}
 <h1>Knowledge Browser</h1>
 
-<form hx-get="/search" hx-target="#results" hx-push-url="true" hx-indicator="#search-spinner">
+<form id="search-form" hx-get="/search" hx-target="#results" hx-push-url="true" hx-indicator="#search-spinner">
   <div class="grid">
     <input type="text" name="q" value="{{ query }}" placeholder="Search your knowledge base…" autofocus>
     <select name="mode">
@@ -26,10 +26,59 @@
     </button>
   </div>
   <input type="hidden" name="count" value="{{ count }}">
+
+  {# ── Metadata filter ─────────────────────────────────────────────────────── #}
+  {# datalist provides key autocomplete from cerefox_list_metadata_keys        #}
+  {% if metadata_keys %}
+  <datalist id="meta-key-suggestions">
+    {% for key in metadata_keys %}<option value="{{ key }}">{% endfor %}
+  </datalist>
+  {% endif %}
+
+  <details {% if active_filter_pairs %}open{% endif %} style="margin-top:0.75rem;">
+    <summary style="cursor:pointer;user-select:none;">
+      Metadata filter
+      {% if active_filter_pairs %}
+        <small>({{ active_filter_pairs|length }} active)</small>
+      {% endif %}
+    </summary>
+    <div id="meta-filter-rows" style="margin-top:0.5rem;">
+      {% for pair in active_filter_pairs %}
+      <div class="meta-filter-row" style="display:flex;gap:0.5rem;margin-bottom:0.4rem;align-items:center;">
+        <input type="text" name="meta_filter_key[]" value="{{ pair.key }}"
+               placeholder="key" list="meta-key-suggestions"
+               style="flex:1;" autocomplete="off">
+        <input type="text" name="meta_filter_value[]" value="{{ pair.value }}"
+               placeholder="value" style="flex:1;">
+        <button type="button" class="meta-filter-remove" title="Remove filter"
+                onclick="this.closest('.meta-filter-row').remove()"
+                style="flex:none;">✕</button>
+      </div>
+      {% endfor %}
+      {# Always render at least one empty row when no active filters #}
+      {% if not active_filter_pairs %}
+      <div class="meta-filter-row" style="display:flex;gap:0.5rem;margin-bottom:0.4rem;align-items:center;">
+        <input type="text" name="meta_filter_key[]" value=""
+               placeholder="key" list="meta-key-suggestions"
+               style="flex:1;" autocomplete="off">
+        <input type="text" name="meta_filter_value[]" value=""
+               placeholder="value" style="flex:1;">
+        <button type="button" class="meta-filter-remove" title="Remove filter"
+                onclick="this.closest('.meta-filter-row').remove()"
+                style="flex:none;">✕</button>
+      </div>
+      {% endif %}
+    </div>
+    <button type="button" id="add-meta-filter"
+            style="margin-top:0.3rem;font-size:0.85rem;">+ Add filter</button>
+    <small style="display:block;margin-top:0.4rem;color:#888;">
+      All key-value pairs must match (JSONB containment). Values are case-sensitive.
+    </small>
+  </details>
 </form>
 
 <div id="results">
-  {% if query or project_id %}
+  {% if query or project_id or active_filter_pairs %}
     {% include "partials/search_results.html" %}
   {% else %}
   <div class="empty-state">
@@ -37,4 +86,27 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+// Dynamically add metadata filter rows (no build step — plain JS).
+document.getElementById("add-meta-filter").addEventListener("click", function () {
+  const container = document.getElementById("meta-filter-rows");
+  const row = document.createElement("div");
+  row.className = "meta-filter-row";
+  row.style.cssText = "display:flex;gap:0.5rem;margin-bottom:0.4rem;align-items:center;";
+  row.innerHTML = `
+    <input type="text" name="meta_filter_key[]" value=""
+           placeholder="key" list="meta-key-suggestions"
+           style="flex:1;" autocomplete="off">
+    <input type="text" name="meta_filter_value[]" value=""
+           placeholder="value" style="flex:1;">
+    <button type="button" class="meta-filter-remove" title="Remove filter"
+            onclick="this.closest('.meta-filter-row').remove()"
+            style="flex:none;">✕</button>
+  `;
+  container.appendChild(row);
+  // Focus the new key input.
+  row.querySelector("input").focus();
+});
+</script>
 {% endblock %}

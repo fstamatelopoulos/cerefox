@@ -111,6 +111,17 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "Optional: filter results to a specific project",
                     },
+                    "metadata_filter": {
+                        "type": "object",
+                        "description": (
+                            "Optional JSONB containment filter. Only documents whose metadata "
+                            "contains ALL specified key-value pairs are returned. "
+                            'Example: {"type": "decision", "status": "active"}. '
+                            "Call cerefox_list_metadata_keys first to discover available keys. "
+                            "Omit to search all documents."
+                        ),
+                        "additionalProperties": {"type": "string"},
+                    },
                 },
             },
         ),
@@ -245,6 +256,7 @@ async def _handle_search(
     query: str = arguments["query"]
     match_count: int = int(arguments.get("match_count", 5))
     project_name: str | None = arguments.get("project_name")
+    metadata_filter: dict | None = arguments.get("metadata_filter") or None
 
     # Resolve project name → ID if provided
     project_id: str | None = None
@@ -273,6 +285,7 @@ async def _handle_search(
         alpha=0.7,
         project_id=project_id,
         min_score=settings.min_search_score,
+        metadata_filter=metadata_filter,
     )
 
     if not rows:

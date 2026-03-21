@@ -435,7 +435,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 1.3.1
+  version: 1.4.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -461,10 +461,20 @@ paths:
                 mode:
                   type: string
                   default: docs
+                metadata_filter:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >
+                    Optional JSONB containment filter. Only documents whose metadata
+                    contains ALL specified key-value pairs are returned.
+                    Example: {"type": "decision", "status": "active"}.
+                    Call listMetadataKeys to discover available keys and their values.
+                    Omit or set to null to search all documents.
       responses:
         '200':
           description: >
-            { results, query, mode, match_count, project_name, truncated, response_bytes }.
+            { results, query, mode, match_count, project_name, metadata_filter, truncated, response_bytes }.
             Each item in results (docs mode) contains: document_id, doc_title, full_content,
             chunk_count, total_chars, best_score, is_partial.
             is_partial is true when the document exceeded the small-to-big threshold — in that

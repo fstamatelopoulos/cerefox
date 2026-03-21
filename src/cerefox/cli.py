@@ -318,6 +318,18 @@ def ingest_dir(
         "Overrides CEREFOX_MIN_SEARCH_SCORE. Not applied to FTS."
     ),
 )
+@click.option(
+    "--filter",
+    "-f",
+    "metadata_filter",
+    default=None,
+    help=(
+        "JSONB metadata containment filter as a JSON string. "
+        'Only documents whose metadata contains ALL specified key-value pairs are returned. '
+        'Example: \'{"type": "decision", "status": "active"}\'. '
+        "Run 'cerefox list-metadata-keys' to discover available keys."
+    ),
+)
 def search(
     query: str,
     mode: str,
@@ -325,9 +337,24 @@ def search(
     project: str | None,
     alpha: float,
     min_score: float | None,
+    metadata_filter: str | None,
 ) -> None:
     """Search the knowledge base."""
+    import json  # noqa: PLC0415
+
     from cerefox.retrieval.search import SearchClient  # noqa: PLC0415
+
+    # Parse --filter JSON string into a dict
+    parsed_filter: dict | None = None
+    if metadata_filter:
+        try:
+            parsed_filter = json.loads(metadata_filter)
+            if not isinstance(parsed_filter, dict):
+                click.echo("❌  --filter must be a JSON object, e.g. '{\"type\": \"note\"}'.", err=True)
+                return
+        except json.JSONDecodeError as exc:
+            click.echo(f"❌  --filter is not valid JSON: {exc}", err=True)
+            return
 
     settings = Settings()
     if min_score is not None:
@@ -337,11 +364,14 @@ def search(
     sc = SearchClient(client, embedder, settings)
 
     if mode == "hybrid":
-        resp = sc.hybrid(query, match_count=count, alpha=alpha, project_id=project)
+        resp = sc.hybrid(query, match_count=count, alpha=alpha, project_id=project,
+                         metadata_filter=parsed_filter)
     elif mode == "fts":
-        resp = sc.fts(query, match_count=count, project_id=project)
+        resp = sc.fts(query, match_count=count, project_id=project,
+                      metadata_filter=parsed_filter)
     else:
-        resp = sc.semantic(query, match_count=count, project_id=project)
+        resp = sc.semantic(query, match_count=count, project_id=project,
+                           metadata_filter=parsed_filter)
 
     if not resp.results:
         click.echo("No results found.")

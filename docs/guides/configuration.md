@@ -84,6 +84,23 @@ The `cerefox-search` and `cerefox-ingest` Supabase Edge Functions handle embeddi
 | `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Maximum bytes in a single search response (local MCP path). See explanation below. |
 | `CEREFOX_MIN_SEARCH_SCORE` | `0.50` | Minimum cosine similarity for hybrid and semantic search results (0.0–1.0). In **hybrid search**, chunks that matched the FTS keyword operator (`@@`) always pass through regardless of their vector score — the threshold only filters vector-only results. In **semantic search**, all results are filtered. The pure **FTS search** mode is unaffected. Increase for stricter precision; decrease for wider recall. |
 
+### Metadata filter
+
+The `metadata_filter` search parameter (available in all search modes, all access paths) performs **server-side JSONB containment filtering** before vector ranking. It is not a configuration variable — it is passed per request.
+
+- Filters are expressed as a JSON object: `{"type": "decision", "status": "active"}`
+- All key-value pairs must match (AND semantics via PostgreSQL `@>` operator)
+- Uses the existing GIN index on `cerefox_documents.metadata` — no additional schema changes needed
+- `NULL` filter = no restriction (backwards-compatible default)
+- Discover available keys via `cerefox_list_metadata_keys` MCP tool or `cerefox list-metadata-keys` CLI
+
+Access paths:
+- **MCP tool**: `metadata_filter` argument on `cerefox_search`
+- **CLI**: `cerefox search "query" --filter '{"type": "decision"}'`
+- **Web UI**: Metadata Filter section (collapsible) in the Knowledge Browser
+- **GPT Actions**: `metadata_filter` field in `searchKnowledgeBase` request body (schema v1.4.0)
+- **HTTP API**: `metadata_filter` JSON key in the `cerefox-search` Edge Function POST body
+
 **Score threshold guidance (OpenAI text-embedding-3-small):**
 
 | Score | Meaning |

@@ -40,6 +40,13 @@ DROP FUNCTION IF EXISTS cerefox_semantic_search(VECTOR(768), INT, BOOLEAN, UUID,
 DROP FUNCTION IF EXISTS cerefox_reconstruct_doc(UUID);
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT);
 
+-- Iteration 13: Drop pre-metadata-filter signatures so we can add p_metadata_filter JSONB.
+-- Backwards-compatible: the new parameter has DEFAULT NULL so existing callers are unaffected.
+DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOOLEAN, UUID, FLOAT);
+DROP FUNCTION IF EXISTS cerefox_fts_search(TEXT, INT, UUID);
+DROP FUNCTION IF EXISTS cerefox_semantic_search(VECTOR(768), INT, BOOLEAN, UUID, FLOAT);
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT);
+
 -- ── Shared return type note ────────────────────────────────────────────────────
 -- All chunk-level search RPCs return the same shape for consistency:
 --   chunk_id, document_id, chunk_index, title, content, heading_path,
@@ -65,7 +72,8 @@ CREATE OR REPLACE FUNCTION cerefox_hybrid_search(
     p_alpha           FLOAT   DEFAULT 0.7,
     p_use_upgrade     BOOLEAN DEFAULT FALSE,
     p_project_id      UUID    DEFAULT NULL,
-    p_min_score       FLOAT   DEFAULT 0.0
+    p_min_score       FLOAT   DEFAULT 0.0,
+    p_metadata_filter JSONB   DEFAULT NULL
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -104,6 +112,7 @@ BEGIN
                       SELECT 1 FROM cerefox_document_projects dp
                       WHERE dp.document_id = d.id AND dp.project_id = p_project_id
                   ))
+              AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
             ORDER BY fts_score DESC
             LIMIT candidate_count
         ),
@@ -123,6 +132,7 @@ BEGIN
                       SELECT 1 FROM cerefox_document_projects dp
                       WHERE dp.document_id = d.id AND dp.project_id = p_project_id
                   ))
+              AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
             ORDER BY
                 CASE
                     WHEN p_use_upgrade AND c.embedding_upgrade IS NOT NULL
@@ -179,9 +189,10 @@ $$;
 -- Pure keyword / exact-match search. Best for names, dates, tags.
 
 CREATE OR REPLACE FUNCTION cerefox_fts_search(
-    p_query_text  TEXT,
-    p_match_count INT  DEFAULT 10,
-    p_project_id  UUID DEFAULT NULL
+    p_query_text      TEXT,
+    p_match_count     INT  DEFAULT 10,
+    p_project_id      UUID DEFAULT NULL,
+    p_metadata_filter JSONB DEFAULT NULL
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -230,6 +241,7 @@ BEGIN
               SELECT 1 FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id AND dp.project_id = p_project_id
           ))
+      AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
     ORDER BY score DESC
     LIMIT p_match_count;
 END;
@@ -243,7 +255,8 @@ CREATE OR REPLACE FUNCTION cerefox_semantic_search(
     p_match_count     INT     DEFAULT 10,
     p_use_upgrade     BOOLEAN DEFAULT FALSE,
     p_project_id      UUID    DEFAULT NULL,
-    p_min_score       FLOAT   DEFAULT 0.0
+    p_min_score       FLOAT   DEFAULT 0.0,
+    p_metadata_filter JSONB   DEFAULT NULL
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -294,6 +307,7 @@ BEGIN
               SELECT 1 FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id AND dp.project_id = p_project_id
           ))
+      AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
       AND (p_use_upgrade = FALSE OR c.embedding_upgrade IS NOT NULL)
       -- Optional minimum cosine similarity threshold.
       -- Default 0.0 means no filtering (returns all top-N results).
@@ -459,7 +473,8 @@ CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_project_id             UUID  DEFAULT NULL,
     p_min_score              FLOAT DEFAULT 0.0,
     p_small_to_big_threshold INT   DEFAULT 40000,
-    p_context_window         INT   DEFAULT 1
+    p_context_window         INT   DEFAULT 1,
+    p_metadata_filter        JSONB DEFAULT NULL
 )
 RETURNS TABLE (
     document_id              UUID,
@@ -491,7 +506,8 @@ AS $$
             p_alpha           := p_alpha,
             p_use_upgrade     := FALSE,
             p_project_id      := p_project_id,
-            p_min_score       := p_min_score
+            p_min_score       := p_min_score,
+            p_metadata_filter := p_metadata_filter
         )
     ),
     best_per_doc AS (

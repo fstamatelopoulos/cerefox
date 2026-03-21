@@ -2,7 +2,7 @@
 
 Routes:
     GET  /                                        Dashboard — stats + recent docs
-    GET  /search                                  Knowledge browser (supports ?q=, ?mode=, ?project_id=, ?count=)
+    GET  /search                                  Knowledge browser (supports ?q=, ?mode=, ?project_id=, ?count=, ?meta_filter_key[]=, ?meta_filter_value[]=)
     GET  /document/{document_id}                  Document viewer
     GET  /document/{document_id}/chunks           Lazy-loaded chunk list partial (HTMX)
     GET  /document/{document_id}/chunks-hide      Returns the collapsed Show button (HTMX, ?n=)
@@ -201,8 +201,20 @@ def search_page(
     except Exception as exc:
         error = str(exc)
 
+    # ── Assemble metadata filter from repeated query params ──────────────────
+    # Params arrive as parallel arrays: meta_filter_key[]=foo&meta_filter_value[]=bar
+    # Empty keys or values are ignored. The assembled dict is passed to the RPC.
+    meta_filter_keys = request.query_params.getlist("meta_filter_key[]")
+    meta_filter_values = request.query_params.getlist("meta_filter_value[]")
+    metadata_filter: dict | None = {
+        k.strip(): v.strip()
+        for k, v in zip(meta_filter_keys, meta_filter_values)
+        if k.strip() and v.strip()
+    } or None
+
     if project_id and not q and not error:
         # Browse mode: project selected but no query → list all docs in project.
+        # Metadata filter is not applied in browse mode (no RPC search path).
         try:
             raw = client.list_documents(limit=100, project_id=project_id)
             browse_results = [
@@ -236,24 +248,39 @@ def search_page(
         try:
             sc = SearchClient(client, embedder, settings)
             if mode == "fts":
-                resp = sc.fts(q, match_count=count, project_id=pid)
+                resp = sc.fts(q, match_count=count, project_id=pid,
+                              metadata_filter=metadata_filter)
             elif mode == "semantic":
                 if embedder is None:
                     raise RuntimeError("Embedder not available — install sentence-transformers")
-                resp = sc.semantic(q, match_count=count, project_id=pid)
+                resp = sc.semantic(q, match_count=count, project_id=pid,
+                                   metadata_filter=metadata_filter)
             elif mode == "docs":
                 if embedder is None:
                     raise RuntimeError("Embedder not available — install sentence-transformers")
-                resp = sc.search_docs(q, match_count=min(count, 5), project_id=pid)
+                resp = sc.search_docs(q, match_count=min(count, 5), project_id=pid,
+                                      metadata_filter=metadata_filter)
             else:  # hybrid (default)
                 if embedder is None:
                     raise RuntimeError("Embedder not available — install sentence-transformers")
-                resp = sc.hybrid(q, match_count=count, project_id=pid)
+                resp = sc.hybrid(q, match_count=count, project_id=pid,
+                                 metadata_filter=metadata_filter)
             results = resp
         except Exception as exc:
             error = str(exc)
 
+    # Fetch metadata keys for autocomplete (best-effort — don't block on failure).
+    metadata_keys: list[str] = []
+    try:
+        metadata_keys = [row["key"] for row in client.list_metadata_keys()]
+    except Exception:
+        pass
+
     projects_map = {p["id"]: p["name"] for p in projects}
+    # Rebuild filter pairs for template rendering (to preserve state across refreshes).
+    active_filter_pairs = [
+        {"key": k, "value": v} for k, v in (metadata_filter or {}).items()
+    ]
     ctx = {
         "active": "search",
         "query": q,
@@ -264,6 +291,8 @@ def search_page(
         "results": results,
         "projects": projects,
         "projects_map": projects_map,
+        "metadata_keys": metadata_keys,
+        "active_filter_pairs": active_filter_pairs,
         "error": error,
     }
 

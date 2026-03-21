@@ -528,3 +528,163 @@ class TestMinScoreFiltering:
         sc.hybrid("q")
         call_kwargs = mock_client.hybrid_search.call_args[1]
         assert "min_score" in call_kwargs
+
+
+# ── Metadata filter propagation ───────────────────────────────────────────────
+
+
+class TestMetadataFilter:
+    """Verify that metadata_filter is propagated to the DB client for all modes."""
+
+    # ── hybrid ────────────────────────────────────────────────────────────────
+
+    def test_hybrid_passes_metadata_filter_to_client(self, sc, mock_client) -> None:
+        f = {"type": "decision", "status": "active"}
+        sc.hybrid("q", metadata_filter=f)
+        call_kwargs = mock_client.hybrid_search.call_args[1]
+        assert call_kwargs["metadata_filter"] == f
+
+    def test_hybrid_none_filter_passed_as_none(self, sc, mock_client) -> None:
+        sc.hybrid("q", metadata_filter=None)
+        call_kwargs = mock_client.hybrid_search.call_args[1]
+        assert call_kwargs["metadata_filter"] is None
+
+    def test_hybrid_omitted_filter_defaults_to_none(self, sc, mock_client) -> None:
+        sc.hybrid("q")
+        call_kwargs = mock_client.hybrid_search.call_args[1]
+        assert call_kwargs["metadata_filter"] is None
+
+    # ── fts ───────────────────────────────────────────────────────────────────
+
+    def test_fts_passes_metadata_filter_to_client(self, sc, mock_client) -> None:
+        f = {"type": "note"}
+        sc.fts("keyword", metadata_filter=f)
+        call_kwargs = mock_client.fts_search.call_args[1]
+        assert call_kwargs["metadata_filter"] == f
+
+    def test_fts_none_filter_passed_as_none(self, sc, mock_client) -> None:
+        sc.fts("keyword", metadata_filter=None)
+        call_kwargs = mock_client.fts_search.call_args[1]
+        assert call_kwargs["metadata_filter"] is None
+
+    def test_fts_omitted_filter_defaults_to_none(self, sc, mock_client) -> None:
+        sc.fts("keyword")
+        call_kwargs = mock_client.fts_search.call_args[1]
+        assert call_kwargs["metadata_filter"] is None
+
+    # ── semantic ──────────────────────────────────────────────────────────────
+
+    def test_semantic_passes_metadata_filter_to_client(self, sc, mock_client) -> None:
+        f = {"project": "cerefox"}
+        sc.semantic("q", metadata_filter=f)
+        call_kwargs = mock_client.semantic_search.call_args[1]
+        assert call_kwargs["metadata_filter"] == f
+
+    def test_semantic_none_filter_passed_as_none(self, sc, mock_client) -> None:
+        sc.semantic("q", metadata_filter=None)
+        call_kwargs = mock_client.semantic_search.call_args[1]
+        assert call_kwargs["metadata_filter"] is None
+
+    # ── search_docs ───────────────────────────────────────────────────────────
+
+    def test_search_docs_passes_metadata_filter_to_client(self, sc, mock_client) -> None:
+        f = {"status": "draft"}
+        sc.search_docs("q", metadata_filter=f)
+        call_kwargs = mock_client.search_docs.call_args[1]
+        assert call_kwargs["metadata_filter"] == f
+
+    def test_search_docs_none_filter_passed_as_none(self, sc, mock_client) -> None:
+        sc.search_docs("q", metadata_filter=None)
+        call_kwargs = mock_client.search_docs.call_args[1]
+        assert call_kwargs["metadata_filter"] is None
+
+    def test_search_docs_omitted_filter_defaults_to_none(self, sc, mock_client) -> None:
+        sc.search_docs("q")
+        call_kwargs = mock_client.search_docs.call_args[1]
+        assert call_kwargs["metadata_filter"] is None
+
+    # ── CerefoxClient RPC propagation ─────────────────────────────────────────
+    # These tests exercise client.py directly (no search.py layer).
+
+    def test_client_hybrid_search_includes_p_metadata_filter(self) -> None:
+        """CerefoxClient.hybrid_search passes p_metadata_filter when set."""
+        from cerefox.db.client import CerefoxClient
+
+        mock_settings = MagicMock()
+        mock_settings.is_supabase_configured.return_value = True
+        c = CerefoxClient(mock_settings)
+        c._client = MagicMock()
+        c._client.rpc.return_value.execute.return_value.data = []
+
+        f = {"type": "decision"}
+        c.hybrid_search(
+            query_text="q",
+            query_embedding=[0.1] * 768,
+            metadata_filter=f,
+        )
+        call_args = c._client.rpc.call_args
+        rpc_name, rpc_params = call_args[0]
+        assert rpc_name == "cerefox_hybrid_search"
+        assert rpc_params["p_metadata_filter"] == f
+
+    def test_client_hybrid_search_omits_p_metadata_filter_when_none(self) -> None:
+        """CerefoxClient.hybrid_search does NOT send p_metadata_filter when None."""
+        from cerefox.db.client import CerefoxClient
+
+        mock_settings = MagicMock()
+        mock_settings.is_supabase_configured.return_value = True
+        c = CerefoxClient(mock_settings)
+        c._client = MagicMock()
+        c._client.rpc.return_value.execute.return_value.data = []
+
+        c.hybrid_search(query_text="q", query_embedding=[0.1] * 768, metadata_filter=None)
+        call_args = c._client.rpc.call_args
+        _, rpc_params = call_args[0]
+        assert "p_metadata_filter" not in rpc_params
+
+    def test_client_fts_search_includes_p_metadata_filter(self) -> None:
+        """CerefoxClient.fts_search passes p_metadata_filter when set."""
+        from cerefox.db.client import CerefoxClient
+
+        mock_settings = MagicMock()
+        mock_settings.is_supabase_configured.return_value = True
+        c = CerefoxClient(mock_settings)
+        c._client = MagicMock()
+        c._client.rpc.return_value.execute.return_value.data = []
+
+        f = {"source": "agent"}
+        c.fts_search(query_text="keyword", metadata_filter=f)
+        call_args = c._client.rpc.call_args
+        _, rpc_params = call_args[0]
+        assert rpc_params["p_metadata_filter"] == f
+
+    def test_client_search_docs_includes_p_metadata_filter(self) -> None:
+        """CerefoxClient.search_docs passes p_metadata_filter when set."""
+        from cerefox.db.client import CerefoxClient
+
+        mock_settings = MagicMock()
+        mock_settings.is_supabase_configured.return_value = True
+        c = CerefoxClient(mock_settings)
+        c._client = MagicMock()
+        c._client.rpc.return_value.execute.return_value.data = []
+
+        f = {"type": "design-doc"}
+        c.search_docs(query_text="q", query_embedding=[0.1] * 768, metadata_filter=f)
+        call_args = c._client.rpc.call_args
+        _, rpc_params = call_args[0]
+        assert rpc_params["p_metadata_filter"] == f
+
+    def test_client_search_docs_omits_p_metadata_filter_when_none(self) -> None:
+        """CerefoxClient.search_docs does NOT send p_metadata_filter when None."""
+        from cerefox.db.client import CerefoxClient
+
+        mock_settings = MagicMock()
+        mock_settings.is_supabase_configured.return_value = True
+        c = CerefoxClient(mock_settings)
+        c._client = MagicMock()
+        c._client.rpc.return_value.execute.return_value.data = []
+
+        c.search_docs(query_text="q", query_embedding=[0.1] * 768, metadata_filter=None)
+        call_args = c._client.rpc.call_args
+        _, rpc_params = call_args[0]
+        assert "p_metadata_filter" not in rpc_params

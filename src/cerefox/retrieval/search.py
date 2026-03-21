@@ -153,6 +153,7 @@ class SearchClient:
         alpha: float = 0.7,
         project_id: str | None = None,
         use_upgrade: bool = False,
+        metadata_filter: dict | None = None,
     ) -> SearchResponse:
         """Hybrid FTS + semantic search (recommended default).
 
@@ -162,6 +163,9 @@ class SearchClient:
             alpha: Weight of semantic score vs FTS score (0 = pure FTS, 1 = pure semantic).
             project_id: Limit search to a specific project UUID.
             use_upgrade: Use the upgrade embedding column if available.
+            metadata_filter: Optional JSONB containment filter. Only documents whose
+                metadata contains all specified key-value pairs are returned.
+                Example: {"type": "decision", "status": "active"}
         """
         embedding = self._embedder.embed(query)
         rows = self._client.hybrid_search(
@@ -172,6 +176,7 @@ class SearchClient:
             use_upgrade=use_upgrade,
             project_id=project_id,
             min_score=self._settings.min_search_score,
+            metadata_filter=metadata_filter,
         )
         return self._build_response(rows, query=query, mode="hybrid")
 
@@ -180,6 +185,7 @@ class SearchClient:
         query: str,
         match_count: int = 10,
         project_id: str | None = None,
+        metadata_filter: dict | None = None,
     ) -> SearchResponse:
         """Pure full-text keyword search.
 
@@ -188,11 +194,15 @@ class SearchClient:
         be meaningfully compared against the same threshold.  The @@ operator
         already acts as a hard gate — results that match a keyword query are
         always relevant enough to return.
+
+        Args:
+            metadata_filter: Optional JSONB containment filter applied server-side.
         """
         rows = self._client.fts_search(
             query_text=query,
             match_count=match_count,
             project_id=project_id,
+            metadata_filter=metadata_filter,
         )
         return self._build_response(rows, query=query, mode="fts")
 
@@ -202,14 +212,20 @@ class SearchClient:
         match_count: int = 10,
         project_id: str | None = None,
         use_upgrade: bool = False,
+        metadata_filter: dict | None = None,
     ) -> SearchResponse:
-        """Pure semantic (vector) search."""
+        """Pure semantic (vector) search.
+
+        Args:
+            metadata_filter: Optional JSONB containment filter applied server-side.
+        """
         embedding = self._embedder.embed(query)
         rows = self._client.semantic_search(
             query_embedding=embedding,
             match_count=match_count,
             use_upgrade=use_upgrade,
             project_id=project_id,
+            metadata_filter=metadata_filter,
         )
         # FTS has a natural hard gate (the @@ operator); semantic always returns N
         # results regardless of relevance, so we apply the threshold in Python.
@@ -224,6 +240,7 @@ class SearchClient:
         match_count: int = 5,
         alpha: float = 0.7,
         project_id: str | None = None,
+        metadata_filter: dict | None = None,
     ) -> DocSearchResponse:
         """Document-level hybrid search.
 
@@ -236,6 +253,9 @@ class SearchClient:
                 result contains full content so responses are larger than chunk search).
             alpha: Weight of semantic vs FTS score (0 = pure FTS, 1 = pure semantic).
             project_id: Limit search to a specific project UUID.
+            metadata_filter: Optional JSONB containment filter. Only documents whose
+                metadata contains all specified key-value pairs are returned.
+                Example: {"type": "decision", "status": "active"}
         """
         embedding = self._embedder.embed(query)
         rows = self._client.search_docs(
@@ -245,6 +265,7 @@ class SearchClient:
             alpha=alpha,
             project_id=project_id,
             min_score=self._settings.min_search_score,
+            metadata_filter=metadata_filter,
         )
         return self._build_doc_response(rows, query=query)
 
