@@ -344,7 +344,7 @@ The `cerefox_search` MCP tool (exposed via Edge Function) wraps `cerefox_hybrid_
 
 The `cerefox_search` tool automatically adjusts how results are assembled based on document size. Agents always call the same tool; the threshold logic is internal.
 
-**Decision point**: `total_chars` on the matched document vs `CEREFOX_SMALL_TO_BIG_THRESHOLD` (default: 40000 chars).
+**Decision point**: `total_chars` on the matched document vs `p_small_to_big_threshold` (default: 20000 chars).
 
 ```
 cerefox_search(query) →
@@ -352,10 +352,10 @@ cerefox_search(query) →
   2. Group matches by document
   3. For each matched document:
      │
-     ├─ total_chars ≤ SMALL_TO_BIG_THRESHOLD
+     ├─ total_chars ≤ p_small_to_big_threshold (20 000)
      │    └─ Return full document content (current behavior, unchanged)
      │
-     └─ total_chars > SMALL_TO_BIG_THRESHOLD
+     └─ total_chars > p_small_to_big_threshold (20 000)
           └─ For each matched chunk in this document:
                - Include the chunk itself
                - Include CEREFOX_CONTEXT_WINDOW chunks before and after (by chunk_index)
@@ -425,15 +425,36 @@ Returns: list of version rows — `id`, `version_number`, `total_chars`, `chunk_
 
 ### 5.4 Response Size Management
 
-A configurable byte budget is applied after RPC results are returned, dropping whole documents (never truncating mid-content) until the budget is satisfied:
+Cerefox uses **opt-in, per-call** size limits. Limits apply only on the MCP and Edge
+Function paths where an AI agent's context window matters. The web UI and CLI are always
+unlimited.
 
-- `MAX_RESPONSE_BYTES` config setting (default: 200 000)
-- Applied by the local MCP server and the `cerefox-search` Edge Function independently
-- Response includes `truncated: true` and `response_bytes` metadata when the limit is hit
-- Small-to-big retrieval already bounds large-doc results to matched chunks + neighbours, so the budget is rarely reached at default `match_count=5`
-- Original 65 KB default was driven by the Supabase MCP protocol limit; raised to 200 KB once that path was replaced by a dedicated `cerefox-mcp` Edge Function
+**Limit semantics**: results are dropped whole (never truncated mid-content) until the
+running total fits within the budget. The response includes `truncated: true` and
+`response_bytes` metadata when results are dropped.
 
-Note: `cerefox_get_document` is exempt from this limit when called directly (it is a single-document retrieval, not a multi-document search). The size limit applies to `cerefox_search` result assembly only.
+**Server ceiling model**: agents can request a smaller `max_bytes` budget, but never
+a larger one — the server enforces `effective_max = min(agent_max, SERVER_MAX)`.
+
+| Path | Default | Ceiling |
+|------|---------|---------|
+| Web UI / CLI | No limit | No limit |
+| Local MCP server (`cerefox mcp`) | `CEREFOX_MAX_RESPONSE_BYTES` (200 000) | Same |
+| Remote MCP (`cerefox-mcp` Edge Function) | 200 000 | 200 000 (TypeScript constant) |
+| `cerefox-search` Edge Function (direct) | 200 000 | 200 000 (TypeScript constant) |
+
+**Why 200 KB?** At the default `match_count=5` and small-to-big threshold of 20 000 chars,
+worst case is 5 × 20 KB ≈ 100 KB — comfortably under 200 KB. The limit protects against
+high `match_count` + large documents without ever cutting legitimate results at defaults.
+The original 65 KB default was driven by the Supabase MCP protocol limit, which no longer
+applies (Cerefox now uses a dedicated `cerefox-mcp` Edge Function).
+
+**Agent `max_bytes` parameter**: both the local MCP `cerefox_search` tool and the
+`cerefox-search` Edge Function accept an optional `max_bytes` parameter. Agents use this
+to request a smaller budget when their context window is limited.
+
+Note: `cerefox_get_document` is exempt from this limit (single-document retrieval, not
+multi-document search assembly). See `docs/guides/response-limits.md` for the full guide.
 
 ### 5.5 Metadata-Filtered Search
 

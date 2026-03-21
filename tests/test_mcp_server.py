@@ -181,16 +181,34 @@ class TestHandleSearch:
     async def test_respects_max_response_bytes(
         self, mock_client, mock_embedder, mock_settings
     ) -> None:
-        """Results that exceed max_bytes are truncated, not dropped silently."""
-        mock_settings.max_response_bytes = 10  # tiny limit
+        """First result is included; second is dropped once limit is reached."""
+        # Set a limit that allows the first (short) result but not the second (large) one.
+        mock_settings.max_response_bytes = 200
+        mock_client.search_docs.return_value = [
+            {"doc_title": "Short Doc", "best_score": 0.9, "full_content": "brief"},
+            {"doc_title": "Big Doc", "best_score": 0.8, "full_content": "x" * 500},
+        ]
+        result = await _handle_search(
+            mock_client, mock_embedder, mock_settings, {"query": "test"}
+        )
+        assert "Short Doc" in result[0].text
+        assert "Big Doc" not in result[0].text
+        assert "truncated" in result[0].text.lower()
+
+    @pytest.mark.asyncio
+    async def test_all_results_dropped_when_first_exceeds_limit(
+        self, mock_client, mock_embedder, mock_settings
+    ) -> None:
+        """When even the first result is too large, a truncation note is returned."""
+        mock_settings.max_response_bytes = 10  # tiny limit — nothing fits
         mock_client.search_docs.return_value = [
             {"doc_title": "Big Doc", "best_score": 0.9, "full_content": "x" * 500}
         ]
         result = await _handle_search(
             mock_client, mock_embedder, mock_settings, {"query": "test"}
         )
-        assert "Big Doc" in result[0].text
         assert "truncated" in result[0].text.lower()
+        assert "Big Doc" not in result[0].text
 
 
 # ── _handle_ingest ────────────────────────────────────────────────────────────

@@ -700,12 +700,45 @@ and testing without requiring the remote Supabase instance.
 
 ---
 
+---
+
+## Iteration 13C: Response Size Limits Redesign
+
+**Goal**: Fix a regression where web UI search was being truncated by the MCP response limit,
+and redesign limits to be opt-in per call rather than always applied.
+
+**Root cause**: `SearchClient._build_doc_response()` always applied `settings.max_response_bytes`
+regardless of caller, truncating the web UI just like the MCP path.
+
+**Design**: `max_bytes: int | None = None` — `None` = no truncation (web UI / CLI); `int` = opt-in
+limit (MCP path). Server ceiling enforced via `min(agent_request, SERVER_MAX)`.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 13C.1 | Add `max_bytes: int | None = None` to all 4 `SearchClient` methods and both `_build_*` helpers in `search.py` | Done | `None` = no truncation; callers choose their constraint |
+| 13C.2 | Pass `max_bytes=None` in all web UI routes (`routes.py`) | Done | Web UI never truncates |
+| 13C.3 | Pass `max_bytes=None` in all CLI search commands (`cli.py`) | Done | CLI never truncates |
+| 13C.4 | `cerefox-search` Edge Function: add ceiling enforcement `Math.min(requested ?? MAX_BYTES, MAX_BYTES)` | Done | Agent can request less, never more |
+| 13C.5 | Add optional `max_bytes` to `cerefox-mcp` Edge Function tool schema + pass-through | Done | Agents can control budget via MCP tool parameter |
+| 13C.6 | Rewrite `_handle_search` in `mcp_server.py`: read/cap agent `max_bytes`, enforce ceiling, emit truncation message | Done | Local MCP mirrors Edge Function ceiling behaviour |
+| 13C.7 | Lower `p_small_to_big_threshold` default from 40 000 → 20 000 chars in `rpcs.sql` | Done | 5 docs × 20 KB ≈ 100 KB, comfortably under 200 KB ceiling |
+| 13C.8 | Update unit tests in `tests/retrieval/test_search.py` — split truncation tests, add `TestMaxBytesParameter` class | Done | 8 new tests covering all modes and edge cases |
+| 13C.9 | Create `docs/guides/response-limits.md` | Done | Full guide: per-path behaviour, server ceiling, agent parameter |
+| 13C.10 | Update `docs/solution-design.md` §5.2 and §5.4 | Done | Threshold 40K → 20K; opt-in limit model documented |
+| 13C.11 | Update `docs/guides/configuration.md` — response limits section and threshold default | Done | Threshold 40K → 20K; new opt-in model table |
+| 13C.12 | Update `CLAUDE.md` — fix 65 KB reference → 200 KB + opt-in model note | Done | |
+
+**Deliverable**: Web UI and CLI always return all results. MCP and Edge Function paths
+respect a configurable budget with server-ceiling enforcement. Full guide in
+`docs/guides/response-limits.md`.
+
+---
+
 ## Current Focus
 
-**Iteration 12 complete.** Small-to-big retrieval, document versioning (chunks-anchored),
-full retrieval API (get_document, list_versions), 6 Edge Functions deployed, DB security
-(RLS + search_path pinning), migration tooling, and backup fixes all done.
+**Iteration 13A complete.** Metadata-filtered search across all access paths (RPCs, Python,
+Edge Functions, MCP, CLI, Web UI, GPT Actions). 13C complete — response size limits redesigned
+to be opt-in per call.
 
-**Iteration 13 next**: Metadata-filtered search (13A) across all access paths, plus
-knowledge architecture research (13B) — edges/graph model, context bundles, agent provenance.
-Create feature branch `feat/metadata-filter` before starting implementation.
+**Next**: Iteration 13B knowledge architecture research (edges/graph model, context bundles,
+agent provenance), and SQL redeploy for the small-to-big threshold change (13C.7).

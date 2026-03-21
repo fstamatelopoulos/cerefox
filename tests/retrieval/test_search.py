@@ -195,17 +195,24 @@ class TestResponseSizeManagement:
         resp = sc.hybrid("q")
         assert not resp.truncated
 
-    def test_truncation_when_over_limit(self, mock_client, mock_embedder, test_settings) -> None:
-        # Build 10 rows each with 10 KB content → total exceeds default 65 KB.
+    def test_no_truncation_with_max_bytes_none(self, mock_client, mock_embedder, test_settings) -> None:
+        """max_bytes=None disables truncation entirely (web UI / CLI path)."""
         big_content = "x" * 10_000
         rows = [_make_row(chunk_id=f"c{i}", content=big_content) for i in range(10)]
         mock_client.hybrid_search.return_value = rows
-
-        # Use a tight limit.
-        test_settings.max_response_bytes = 15_000
         sc = SearchClient(mock_client, mock_embedder, test_settings)
-        resp = sc.hybrid("q")
+        resp = sc.hybrid("q", max_bytes=None)
+        assert not resp.truncated
+        assert resp.total_found == 10
+        assert len(resp.results) == 10
 
+    def test_truncation_when_over_explicit_limit(self, mock_client, mock_embedder, test_settings) -> None:
+        """Passing an explicit max_bytes truncates when the limit is hit."""
+        big_content = "x" * 10_000
+        rows = [_make_row(chunk_id=f"c{i}", content=big_content) for i in range(10)]
+        mock_client.hybrid_search.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.hybrid("q", max_bytes=15_000)
         assert resp.truncated
         assert resp.total_found == 10
         assert len(resp.results) < 10
@@ -412,16 +419,31 @@ class TestSearchDocs:
         assert resp.total_found == 0
         assert not resp.truncated
 
-    def test_truncation_when_over_limit(self, mock_client, mock_embedder, test_settings) -> None:
+    def test_truncation_when_explicit_max_bytes_exceeded(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        """Passing max_bytes triggers truncation when the limit is hit."""
         big_content = "x" * 20_000
         rows = [_make_doc_row(document_id=f"doc-{i}", full_content=big_content) for i in range(5)]
         mock_client.search_docs.return_value = rows
-        test_settings.max_response_bytes = 25_000
         sc = SearchClient(mock_client, mock_embedder, test_settings)
-        resp = sc.search_docs("q")
+        resp = sc.search_docs("q", max_bytes=25_000)
         assert resp.truncated
         assert resp.total_found == 5
         assert len(resp.results) < 5
+
+    def test_no_truncation_with_max_bytes_none(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        """max_bytes=None returns all results regardless of content size (web UI path)."""
+        big_content = "x" * 20_000
+        rows = [_make_doc_row(document_id=f"doc-{i}", full_content=big_content) for i in range(5)]
+        mock_client.search_docs.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.search_docs("q", max_bytes=None)
+        assert not resp.truncated
+        assert resp.total_found == 5
+        assert len(resp.results) == 5
 
     def test_default_match_count_is_five(self, sc, mock_client) -> None:
         sc.search_docs("q")
@@ -688,3 +710,107 @@ class TestMetadataFilter:
         call_args = c._client.rpc.call_args
         _, rpc_params = call_args[0]
         assert "p_metadata_filter" not in rpc_params
+
+
+# ── max_bytes parameter ────────────────────────────────────────────────────────
+
+
+class TestMaxBytesParameter:
+    """Verify max_bytes behaviour across all search modes.
+
+    Design:
+    - max_bytes=None (default) → no truncation; all results returned (web UI / CLI path)
+    - max_bytes=<int>          → results dropped whole until budget satisfied (MCP path)
+    - The parameter is threaded through SearchClient methods and passed to _build_*
+    - settings.max_response_bytes is no longer read by SearchClient; callers decide
+    """
+
+    def test_search_docs_no_truncation_when_max_bytes_none(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        big_content = "x" * 50_000
+        rows = [_make_doc_row(document_id=f"d{i}", full_content=big_content) for i in range(5)]
+        mock_client.search_docs.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.search_docs("q", max_bytes=None)
+        assert not resp.truncated
+        assert len(resp.results) == 5
+        assert resp.metadata["max_bytes"] is None
+
+    def test_search_docs_truncates_when_max_bytes_exceeded(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        big_content = "x" * 50_000
+        rows = [_make_doc_row(document_id=f"d{i}", full_content=big_content) for i in range(5)]
+        mock_client.search_docs.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.search_docs("q", max_bytes=60_000)
+        assert resp.truncated
+        assert resp.total_found == 5
+        assert len(resp.results) < 5
+        assert resp.metadata["max_bytes"] == 60_000
+
+    def test_hybrid_no_truncation_when_max_bytes_none(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        big_content = "x" * 10_000
+        rows = [_make_row(chunk_id=f"c{i}", content=big_content) for i in range(10)]
+        mock_client.hybrid_search.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.hybrid("q", max_bytes=None)
+        assert not resp.truncated
+        assert len(resp.results) == 10
+
+    def test_fts_no_truncation_when_max_bytes_none(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        big_content = "x" * 10_000
+        rows = [_make_row(chunk_id=f"c{i}", content=big_content) for i in range(10)]
+        mock_client.fts_search.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.fts("q", max_bytes=None)
+        assert not resp.truncated
+        assert len(resp.results) == 10
+
+    def test_semantic_no_truncation_when_max_bytes_none(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        big_content = "x" * 10_000
+        rows = [_make_row(chunk_id=f"c{i}", content=big_content) for i in range(10)]
+        mock_client.semantic_search.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.semantic("q", max_bytes=None)
+        assert not resp.truncated
+        assert len(resp.results) == 10
+
+    def test_max_bytes_zero_drops_all_results(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        """max_bytes=0 is an extreme case — all results are dropped."""
+        mock_client.hybrid_search.return_value = [_make_row()]
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.hybrid("q", max_bytes=0)
+        assert resp.truncated
+        assert len(resp.results) == 0
+        assert resp.total_found == 1
+
+    def test_max_bytes_large_enough_returns_all(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        """Passing a very large max_bytes is equivalent to no limit in practice."""
+        rows = [_make_row(chunk_id=f"c{i}") for i in range(5)]
+        mock_client.fts_search.return_value = rows
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp = sc.fts("q", max_bytes=10_000_000)
+        assert not resp.truncated
+        assert len(resp.results) == 5
+
+    def test_metadata_records_max_bytes_value(
+        self, mock_client, mock_embedder, test_settings
+    ) -> None:
+        """Response metadata['max_bytes'] reflects the value passed by the caller."""
+        sc = SearchClient(mock_client, mock_embedder, test_settings)
+        resp_none = sc.hybrid("q", max_bytes=None)
+        resp_int = sc.hybrid("q", max_bytes=50_000)
+        assert resp_none.metadata["max_bytes"] is None
+        assert resp_int.metadata["max_bytes"] == 50_000

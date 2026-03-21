@@ -363,15 +363,16 @@ def search(
     embedder = _get_embedder(settings)
     sc = SearchClient(client, embedder, settings)
 
+    # CLI: no max_bytes limit — unbounded results for power users.
     if mode == "hybrid":
         resp = sc.hybrid(query, match_count=count, alpha=alpha, project_id=project,
-                         metadata_filter=parsed_filter)
+                         metadata_filter=parsed_filter, max_bytes=None)
     elif mode == "fts":
         resp = sc.fts(query, match_count=count, project_id=project,
-                      metadata_filter=parsed_filter)
+                      metadata_filter=parsed_filter, max_bytes=None)
     else:
         resp = sc.semantic(query, match_count=count, project_id=project,
-                           metadata_filter=parsed_filter)
+                           metadata_filter=parsed_filter, max_bytes=None)
 
     if not resp.results:
         click.echo("No results found.")

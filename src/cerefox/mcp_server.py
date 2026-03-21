@@ -122,6 +122,17 @@ async def list_tools() -> list[types.Tool]:
                         ),
                         "additionalProperties": {"type": "string"},
                     },
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": (
+                            "Optional response size budget in bytes. Results are dropped whole "
+                            "until the budget is satisfied; a truncated note is appended when "
+                            "results are dropped. Defaults to the server maximum configured via "
+                            "CEREFOX_MAX_RESPONSE_BYTES (default 200000). Pass a smaller value "
+                            "if your context window is limited. Values above the server maximum "
+                            "are silently capped."
+                        ),
+                    },
                 },
             },
         ),
@@ -258,6 +269,13 @@ async def _handle_search(
     project_name: str | None = arguments.get("project_name")
     metadata_filter: dict | None = arguments.get("metadata_filter") or None
 
+    # Agent-requested limit capped at the server maximum (CEREFOX_MAX_RESPONSE_BYTES).
+    # Agents may pass a smaller value to fit their context budget; they cannot exceed
+    # the server ceiling. When not provided, the server maximum is used.
+    server_max: int = settings.max_response_bytes
+    requested: int | None = arguments.get("max_bytes")
+    max_bytes: int = min(int(requested), server_max) if requested is not None else server_max
+
     # Resolve project name → ID if provided
     project_id: str | None = None
     if project_name:
@@ -291,10 +309,10 @@ async def _handle_search(
     if not rows:
         return [types.TextContent(type="text", text="No results found.")]
 
-    # Format results: full document content with title/score header
+    # Format results: full document content with title/score header, capped at max_bytes.
     parts: list[str] = []
     total_bytes = 0
-    max_bytes = settings.max_response_bytes
+    truncated = False
 
     for row in rows:
         partial_note = (
@@ -305,12 +323,16 @@ async def _handle_search(
         block = f"## {row['doc_title']} (score: {row['best_score']:.3f}{partial_note})\n\n{row['full_content']}"
         block_bytes = len(block.encode())
         if total_bytes + block_bytes > max_bytes:
-            parts.append(f"## {row['doc_title']}\n[truncated — response size limit reached]")
+            truncated = True
             break
         parts.append(block)
         total_bytes += block_bytes
 
-    return [types.TextContent(type="text", text="\n\n---\n\n".join(parts))]
+    text = "\n\n---\n\n".join(parts)
+    if truncated:
+        text += f"\n\n[Results truncated at {total_bytes:,} bytes — response size limit reached. Use a more specific query, reduce match_count, or pass a larger max_bytes if your context allows.]"
+
+    return [types.TextContent(type="text", text=text)]
 
 
 async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[types.TextContent]:

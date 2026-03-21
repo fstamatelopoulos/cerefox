@@ -247,24 +247,26 @@ def search_page(
         pid = project_id or None
         try:
             sc = SearchClient(client, embedder, settings)
+            # Web UI: no max_bytes limit — the browser can handle large responses.
+            # Truncation limits belong on the MCP/LLM path, not in the web UI.
             if mode == "fts":
                 resp = sc.fts(q, match_count=count, project_id=pid,
-                              metadata_filter=metadata_filter)
+                              metadata_filter=metadata_filter, max_bytes=None)
             elif mode == "semantic":
                 if embedder is None:
                     raise RuntimeError("Embedder not available — install sentence-transformers")
                 resp = sc.semantic(q, match_count=count, project_id=pid,
-                                   metadata_filter=metadata_filter)
+                                   metadata_filter=metadata_filter, max_bytes=None)
             elif mode == "docs":
                 if embedder is None:
                     raise RuntimeError("Embedder not available — install sentence-transformers")
                 resp = sc.search_docs(q, match_count=min(count, 5), project_id=pid,
-                                      metadata_filter=metadata_filter)
+                                      metadata_filter=metadata_filter, max_bytes=None)
             else:  # hybrid (default)
                 if embedder is None:
                     raise RuntimeError("Embedder not available — install sentence-transformers")
                 resp = sc.hybrid(q, match_count=count, project_id=pid,
-                                 metadata_filter=metadata_filter)
+                                 metadata_filter=metadata_filter, max_bytes=None)
             results = resp
         except Exception as exc:
             error = str(exc)

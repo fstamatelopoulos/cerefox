@@ -439,10 +439,12 @@ $$;
 -- EMBEDDING_DIMENSIONS in the Edge Functions — change them here and redeploy
 -- rpcs.sql (python scripts/db_deploy.py) if you need different values.
 --
---   p_small_to_big_threshold (default: 40000 chars)
+--   p_small_to_big_threshold (default: 20000 chars)
 --     Documents larger than this return matched chunks + neighbours instead of
 --     the full document. Set to 0 to always return full document content.
---     Changing the embedding model or chunk size may require retuning this.
+--     Rationale: at the default match_count=5 and 200 KB response ceiling,
+--     5 × 20 000 chars ≈ 100 KB — comfortably under the limit even before
+--     accounting for small-to-big compression of large docs.
 --
 --   p_context_window (default: 1)
 --     Neighbour chunks on each side of each matched chunk.
@@ -458,7 +460,7 @@ $$;
 --   p_alpha                  : Semantic weight 0.0–1.0 (default: 0.7)
 --   p_project_id             : Optional project filter (M2M)
 --   p_min_score              : Minimum cosine similarity for vector results
---   p_small_to_big_threshold : See above (default: 40000)
+--   p_small_to_big_threshold : See above (default: 20000)
 --   p_context_window         : See above (default: 1)
 --
 -- Returns one row per document. total_chars is always the full document size.
@@ -472,7 +474,7 @@ CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_alpha                  FLOAT DEFAULT 0.7,
     p_project_id             UUID  DEFAULT NULL,
     p_min_score              FLOAT DEFAULT 0.0,
-    p_small_to_big_threshold INT   DEFAULT 40000,
+    p_small_to_big_threshold INT   DEFAULT 20000,
     p_context_window         INT   DEFAULT 1,
     p_metadata_filter        JSONB DEFAULT NULL
 )

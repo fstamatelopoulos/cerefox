@@ -21,13 +21,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  *                                      metadata contains ALL specified key-value pairs
  *                                      are returned. Example: {"type":"decision"}.
  *                                      Use cerefox-metadata to discover available keys.
- *   max_bytes       number   optional  Response size budget in bytes (default: 200000).
- *                                      Results are dropped whole (never truncated mid-doc)
- *                                      until the budget is satisfied. The response includes
- *                                      a `truncated` flag when results were dropped.
- *                                      Small-to-big retrieval keeps individual results
- *                                      compact, so this ceiling is rarely reached at the
- *                                      default match_count=5.
+ *   max_bytes       number   optional  Response size budget in bytes (default: 200000,
+ *                                      hard ceiling: 200000). Agents may pass a smaller
+ *                                      value to fit their context window; values above
+ *                                      the server ceiling are silently capped. Results
+ *                                      are dropped whole (never truncated mid-doc) until
+ *                                      the budget is satisfied. The response includes a
+ *                                      `truncated` flag when results were dropped.
  *
  * Response: { results: [...], query, mode, match_count, project_name?,
  *             truncated: boolean, response_bytes: number }
@@ -41,11 +41,13 @@ const OPENAI_EMBEDDING_URL = "https://api.openai.com/v1/embeddings";
 const OPENAI_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 768;
 
-// Default response size budget — safety ceiling to prevent pathological results
-// (e.g. very high match_count × many small documents). Small-to-big retrieval
-// already bounds individual large-doc results to matched chunks + neighbours,
-// so this limit is rarely hit under normal usage.
-const DEFAULT_MAX_BYTES = 200_000;
+// Response size ceiling — server-enforced hard limit.
+// Agents may pass a smaller max_bytes to fit their context budget, but cannot
+// exceed this value. Acts as both the default (when max_bytes is omitted) and
+// the hard ceiling (when the caller requests more). Small-to-big retrieval
+// bounds individual large-doc results to matched chunks + neighbours, so this
+// ceiling is rarely reached under normal usage at the default match_count=5.
+const MAX_BYTES = 200_000;
 
 
 interface SearchRequest {
@@ -166,8 +168,11 @@ Deno.serve(async (req: Request) => {
     alpha = 0.7,
     min_score = 0.5,
     metadata_filter = null,
-    max_bytes = DEFAULT_MAX_BYTES,
+    max_bytes: requested_max_bytes,
   } = body;
+
+  // Enforce ceiling: agents may request less but never more than MAX_BYTES.
+  const max_bytes = Math.min(requested_max_bytes ?? MAX_BYTES, MAX_BYTES);
 
   // Validate metadata_filter: must be a plain object (or null/absent).
   // Reject arrays, strings, and other non-object types to prevent RPC errors.
@@ -259,7 +264,7 @@ Deno.serve(async (req: Request) => {
     };
   } else {
     // "docs" — document-level hybrid search (recommended default).
-    // Small-to-big threshold and context window use the RPC defaults (40000 / 1).
+    // Small-to-big threshold and context window use the RPC defaults (20000 / 1).
     // Override them in Postgres (rpcs.sql) if you need a different server-wide value.
     rpcName = "cerefox_search_docs";
     rpcParams = {

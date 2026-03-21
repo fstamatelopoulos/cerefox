@@ -309,4 +309,4 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 - **Docs**: `docs/plan.md` for current status, `docs/TODO.md` for backlog
 - **Schema**: `src/cerefox/db/schema.sql`
 - **Config**: `.env` file or environment variables (see `src/cerefox/config.py`)
-- **Max response size**: defaults to 65000 bytes (practical ceiling; configurable via `CEREFOX_MAX_RESPONSE_BYTES`)
+- **Max response size**: defaults to 200000 bytes (MCP/Edge Function paths only; web UI and CLI are unlimited; configurable via `CEREFOX_MAX_RESPONSE_BYTES`)
