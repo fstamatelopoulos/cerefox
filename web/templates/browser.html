@@ -8,10 +8,10 @@
   <div class="grid">
     <input type="text" name="q" value="{{ query }}" placeholder="Search your knowledge base…" autofocus>
     <select name="mode">
+      <option value="docs" {% if mode == 'docs' %}selected{% endif %}>Documents (full)</option>
       <option value="hybrid" {% if mode == 'hybrid' %}selected{% endif %}>Hybrid chunks</option>
       <option value="fts" {% if mode == 'fts' %}selected{% endif %}>Keyword chunks</option>
       <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>Semantic chunks</option>
-      <option value="docs" {% if mode == 'docs' %}selected{% endif %}>Documents (full)</option>
     </select>
     {% if projects %}
     <select name="project_id">

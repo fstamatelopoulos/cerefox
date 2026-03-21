@@ -184,7 +184,7 @@ def dashboard(
 def search_page(
     request: Request,
     q: str = "",
-    mode: str = "hybrid",
+    mode: str = "docs",
     project_id: str = "",
     count: int = 10,
     client: CerefoxClient = Depends(get_client),
