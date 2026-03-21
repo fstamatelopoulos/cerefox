@@ -174,6 +174,43 @@ The backup directory (`./backup-data/` by default) is gitignored. Back up the ba
 
 ---
 
+## sync_docs.py — Sync project documentation into Cerefox
+
+This optional script, ingests `README.md` and every Markdown file under `docs/` into your Cerefox knowledge
+base, updating existing documents in-place. Run this any time after editing documentation
+so that AI agents always have access to the current state of the project. This is only helpful if, like me, you keep the 
+Cerefox docs into your deployed Cerefox knowledge base.
+
+```bash
+uv run python scripts/sync_docs.py [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--project NAME` | Project to assign documents to (default: `cerefox`) |
+| `--dry-run` | List files that would be synced without ingesting anything |
+
+**Requires**: `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, and an embedding API key
+(`OPENAI_API_KEY` or `CEREFOX_FIREWORKS_API_KEY`). The target project must already exist
+(create it with `uv run cerefox create-project cerefox` if needed).
+
+**What gets synced**: `README.md` + all `.md` files under `docs/`, except `docs/research/`
+(exploratory notes, not authoritative documentation). Files are matched to existing
+documents by their relative path (`source_path`), so re-running the script updates content
+in-place rather than creating duplicates.
+
+Example output:
+```
+Syncing 22 file(s) → project "cerefox"
+  =  README.md  (Cerefox)                            [unchanged]
+  ↑  docs/plan.md  (Cerefox Implementation Plan)     [re-embedded]
+  =  docs/guides/quickstart.md  (Quickstart)         [unchanged]
+  ...
+Done. 0 new · 1 updated · 21 unchanged · 0 errors
+```
+
+---
+
 ## Recommended backup schedule
 
 For a personal knowledge base, a simple daily cron is sufficient:

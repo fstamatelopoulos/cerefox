@@ -153,6 +153,7 @@ For full setup details (remote MCP, Cursor, cloud clients, GPT Actions), see `do
 - Ingest a PDF: `cerefox ingest document.pdf` (requires `uv pip install pypdf`)
 - Re-embed existing content: `cerefox reindex`
 - Create a backup: `python scripts/backup_create.py`
+- Sync Cerefox docs into your knowledge base: `python scripts/sync_docs.py`
 - See all commands: `cerefox --help`
 
 **More guides:**

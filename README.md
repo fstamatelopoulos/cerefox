@@ -115,6 +115,23 @@ uv run cerefox ingest my-notes.md --title "My notes"
 uv run cerefox web                # → http://localhost:8000
 ```
 
+**Optional**: ingest the Cerefox docs themselves so AI agents can look up project details:
+
+```bash
+# Create a "cerefox" project first, then sync README + all docs/ into it.
+uv run cerefox create-project cerefox
+uv run python scripts/sync_docs.py
+```
+
+Re-run `sync_docs.py` any time after updating documentation to keep the knowledge base current.
+
+**Try with sample data**: the `test-data/` directory contains six diverse markdown documents
+you can ingest to experiment with search before adding your own content:
+
+```bash
+uv run cerefox ingest-dir test-data/ --recursive
+```
+
 ---
 
 ## Architecture
@@ -203,7 +220,7 @@ Full setup for all options: `docs/guides/connect-agents.md`
 | `docs/guides/response-limits.md` | Response size limits — per-path behaviour and tuning |
 | `docs/guides/access-paths.md` | All access layers, credentials, and integration paths |
 | `docs/guides/setup-local.md` | Local Docker setup |
-| `docs/guides/ops-scripts.md` | Backup, restore, migrate |
+| `docs/guides/ops-scripts.md` | Backup, restore, migrate, sync docs |
 | `docs/guides/setup-cloud-run.md` | Google Cloud Run deployment |
 | `docs/guides/operational-cost.md` | Cost breakdown for all deployment options |
 | `docs/guides/contributing.md` | Adding embedders, converters, commands |
