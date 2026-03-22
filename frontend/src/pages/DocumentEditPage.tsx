@@ -231,6 +231,7 @@ export function DocumentEditPage() {
                   content={content}
                   defaultView="rendered"
                   maxHeight={500}
+                  showToggle={false}
                 />
               </div>
             )}

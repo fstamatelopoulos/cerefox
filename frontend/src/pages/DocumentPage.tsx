@@ -185,55 +185,61 @@ export function DocumentPage() {
       )}
 
       {doc.versions.length > 0 && (
-        <>
-          <Text size="sm" fw={500} mb="xs">
-            Version History
-          </Text>
-          <Table mb="md" striped>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Version</Table.Th>
-                <Table.Th>Date</Table.Th>
-                <Table.Th>Size</Table.Th>
-                <Table.Th>Chunks</Table.Th>
-                <Table.Th></Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {doc.versions.map((v) => (
-                <Table.Tr key={v.version_id}>
-                  <Table.Td>
-                    <Badge variant="outline" size="sm">
-                      v{v.version_number}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{formatDateTime(v.created_at)}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">
-                      {v.total_chars.toLocaleString()} chars
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{v.chunk_count}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Button
-                      variant="subtle"
-                      size="compact-xs"
-                      leftSection={<IconDownload size={12} />}
-                      component="a"
-                      href={getDownloadUrl(id!, v.version_id)}
-                    >
-                      Download
-                    </Button>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </>
+        <Accordion variant="contained" mb="md">
+          <Accordion.Item value="versions">
+            <Accordion.Control>
+              <Text size="sm" fw={500}>
+                Version History ({doc.versions.length} retained)
+              </Text>
+            </Accordion.Control>
+            <Accordion.Panel>
+              <Table striped>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Version</Table.Th>
+                    <Table.Th>Date</Table.Th>
+                    <Table.Th>Size</Table.Th>
+                    <Table.Th>Chunks</Table.Th>
+                    <Table.Th></Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {doc.versions.map((v) => (
+                    <Table.Tr key={v.version_id}>
+                      <Table.Td>
+                        <Badge variant="outline" size="sm">
+                          v{v.version_number}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm">{formatDateTime(v.created_at)}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm">
+                          {v.total_chars.toLocaleString()} chars
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm">{v.chunk_count}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Button
+                          variant="subtle"
+                          size="compact-xs"
+                          leftSection={<IconDownload size={12} />}
+                          component="a"
+                          href={getDownloadUrl(id!, v.version_id)}
+                        >
+                          Download
+                        </Button>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Accordion.Panel>
+          </Accordion.Item>
+        </Accordion>
       )}
 
       <Divider my="sm" />
