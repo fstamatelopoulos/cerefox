@@ -37,7 +37,7 @@ export function SearchPage() {
   return (
     <Container size="lg">
       <Title order={2} mb="md">
-        Knowledge Browser
+        Search Knowledge Base
       </Title>
 
       <SearchControls

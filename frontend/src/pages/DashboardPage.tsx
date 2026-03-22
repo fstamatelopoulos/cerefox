@@ -1,26 +1,30 @@
 import {
   Anchor,
   Badge,
+  Button,
   Card,
   Container,
-  Grid,
   Group,
   SimpleGrid,
   Skeleton,
   Stack,
   Table,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
-import { IconDatabase, IconFolder, IconSearch } from "@tabler/icons-react";
+import { IconDatabase, IconFolder, IconList, IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchDashboard } from "../api/dashboard";
 import { useProjects } from "../hooks/useProjects";
+import { formatDate } from "../utils/dates";
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const [quickSearch, setQuickSearch] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: fetchDashboard,
@@ -30,6 +34,14 @@ export function DashboardPage() {
   const projectMap = new Map(
     projects?.map((p) => [p.id, p.name]) ?? [],
   );
+
+  const handleQuickSearch = () => {
+    if (quickSearch.trim()) {
+      navigate(`/search?q=${encodeURIComponent(quickSearch.trim())}&mode=docs`);
+    } else {
+      navigate("/search");
+    }
+  };
 
   return (
     <Container size="lg">
@@ -64,18 +76,27 @@ export function DashboardPage() {
             </div>
           </Group>
         </Card>
-        <Card
-          shadow="xs"
-          padding="lg"
-          radius="md"
-          withBorder
-          style={{ cursor: "pointer" }}
-          onClick={() => navigate("/search")}
-        >
-          <Group>
-            <IconSearch size={28} color="var(--mantine-color-violet-6)" />
-            <Text fw={600}>Search Knowledge Base</Text>
-          </Group>
+        <Card shadow="xs" padding="lg" radius="md" withBorder>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleQuickSearch();
+            }}
+          >
+            <Group gap="xs">
+              <TextInput
+                placeholder="Quick search..."
+                value={quickSearch}
+                onChange={(e) => setQuickSearch(e.currentTarget.value)}
+                leftSection={<IconSearch size={16} />}
+                style={{ flex: 1 }}
+                size="sm"
+              />
+              <Button type="submit" size="sm" variant="light">
+                Go
+              </Button>
+            </Group>
+          </form>
         </Card>
       </SimpleGrid>
 
@@ -129,9 +150,7 @@ export function DashboardPage() {
                 </Table.Td>
                 <Table.Td>
                   <Text size="sm" c="dimmed">
-                    {doc.updated_at
-                      ? new Date(doc.updated_at).toLocaleDateString()
-                      : ""}
+                    {formatDate(doc.updated_at)}
                   </Text>
                 </Table.Td>
               </Table.Tr>
@@ -145,25 +164,51 @@ export function DashboardPage() {
           <Title order={4} mt="xl" mb="sm">
             Projects
           </Title>
-          <Grid>
-            {data.projects.map((p) => (
-              <Grid.Col key={p.id} span={{ base: 12, sm: 6, md: 4 }}>
-                <Card shadow="xs" padding="md" radius="md" withBorder>
-                  <Text fw={600} size="sm">
-                    {p.name}
-                  </Text>
-                  {p.description && (
-                    <Text size="xs" c="dimmed" lineClamp={2}>
-                      {p.description}
-                    </Text>
-                  )}
-                  <Text size="xs" c="dimmed" mt="xs">
-                    {data.project_doc_counts[p.id] ?? 0} documents
-                  </Text>
-                </Card>
-              </Grid.Col>
-            ))}
-          </Grid>
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Name</Table.Th>
+                <Table.Th>Description</Table.Th>
+                <Table.Th>Documents</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {data.projects.map((p) => {
+                const docCount = data.project_doc_counts[p.id] ?? 0;
+                return (
+                  <Table.Tr key={p.id}>
+                    <Table.Td>
+                      <Text fw={600} size="sm">
+                        {p.name}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed" lineClamp={1}>
+                        {p.description || ""}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs">
+                        <Text size="sm">{docCount}</Text>
+                        {docCount > 0 && (
+                          <Button
+                            variant="subtle"
+                            size="compact-xs"
+                            leftSection={<IconList size={12} />}
+                            onClick={() =>
+                              navigate(`/search?project_id=${p.id}&mode=docs`)
+                            }
+                          >
+                            List
+                          </Button>
+                        )}
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
         </>
       )}
     </Container>
