@@ -309,13 +309,14 @@ class IngestionPipeline:
         elif project_id is not None:
             new_project_ids = [project_id]
 
-        existing_chunk_count = existing.get("chunk_count") or 0
-        if content_unchanged and existing_chunk_count > 0:
+        # Check actual chunks in DB, not the stored chunk_count on the document
+        # record. If a previous ingestion failed mid-way (e.g. embedding API error),
+        # the document record may have chunk_count > 0 but zero actual chunks.
+        actual_chunks = self._client.list_chunks_for_document(document_id)
+        has_chunks = len(actual_chunks) > 0
+        if content_unchanged and has_chunks:
             # Content didn't change and chunks exist — skip chunking, embedding,
             # and chunk swap.  Only update title, metadata, and project associations.
-            # Note: if chunk_count is 0, a previous ingestion likely failed mid-way
-            # (e.g. embedding API error) so we must re-embed even though the hash
-            # matches.
             update_data: dict = {"title": title}
             if metadata is not None:
                 update_data["metadata"] = metadata
