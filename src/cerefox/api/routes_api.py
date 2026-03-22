@@ -252,6 +252,31 @@ def api_list_projects(
     ]
 
 
+@api_router.get("/projects/{project_id}/documents")
+def api_project_documents(
+    project_id: str,
+    client: CerefoxClient = Depends(get_client),
+) -> list[DashboardDocResponse]:
+    """List all documents assigned to a project."""
+    docs = client.list_documents(project_id=project_id)
+    projects = client.list_projects()
+    doc_projects_map = client.get_projects_for_documents(
+        [d["id"] for d in docs], projects
+    )
+    return [
+        DashboardDocResponse(
+            id=d["id"],
+            title=d.get("title") or "",
+            source=d.get("source"),
+            chunk_count=d.get("chunk_count") or 0,
+            total_chars=d.get("total_chars") or 0,
+            updated_at=d.get("updated_at"),
+            project_ids=[p["id"] for p in doc_projects_map.get(d["id"], [])],
+        )
+        for d in docs
+    ]
+
+
 # ── Metadata ─────────────────────────────────────────────────────────────────
 
 

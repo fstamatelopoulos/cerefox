@@ -32,7 +32,7 @@ export function SearchPage() {
     [setSearchParams],
   );
 
-  const hasQuery = !!state.q || !!state.projectId;
+  const hasQuery = !!state.q;
 
   return (
     <Container size="lg">

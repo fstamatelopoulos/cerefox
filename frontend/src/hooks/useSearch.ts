@@ -45,7 +45,7 @@ export function useSearchState(): SearchState {
 }
 
 export function useSearchQuery(state: SearchState) {
-  const hasQuery = !!state.q || !!state.projectId;
+  const hasQuery = !!state.q;
 
   const params: SearchParams = {
     q: state.q || undefined,

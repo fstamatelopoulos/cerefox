@@ -193,7 +193,7 @@ export function DashboardPage() {
                             size="compact-xs"
                             leftSection={<IconList size={12} />}
                             onClick={() =>
-                              navigate(`/search?project_id=${p.id}&mode=docs`)
+                              navigate(`/projects/${p.id}/documents`)
                             }
                           >
                             List
