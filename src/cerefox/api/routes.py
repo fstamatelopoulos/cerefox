@@ -33,13 +33,13 @@ import logging
 import os
 import re
 import unicodedata
-from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from cerefox.api.deps import get_client, get_embedder, get_settings
 from cerefox.config import Settings
 from cerefox.db.client import CerefoxClient
 from cerefox.embeddings.base import Embedder
@@ -55,11 +55,10 @@ def _title_to_filename(title: str, max_len: int = 80) -> str:
 
     HTTP headers must be latin-1; document titles may contain arbitrary Unicode.
     Strategy:
-      1. Replace common Unicode punctuation with ASCII equivalents (em/en dash → '-').
+      1. Replace common Unicode punctuation with ASCII equivalents (em/en dash -> '-').
       2. Decompose accented characters via NFKD normalisation, then drop non-ASCII.
       3. Strip characters that are invalid in filenames on major OSes.
     """
-    # Map common Unicode punctuation to readable ASCII equivalents.
     _UNICODE_MAP = str.maketrans({
         "\u2014": "-",   # em dash
         "\u2013": "-",   # en dash
@@ -71,61 +70,9 @@ def _title_to_filename(title: str, max_len: int = 80) -> str:
         "\u00b7": "-",   # middle dot
     })
     name = title.translate(_UNICODE_MAP)
-    # Decompose accented chars (é → e + combining accent) then drop non-ASCII.
     name = unicodedata.normalize("NFKD", name).encode("ascii", errors="ignore").decode("ascii")
-    # Strip characters invalid in filenames across Windows/macOS/Linux.
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(". ")
     return (name or "document")[:max_len]
-
-
-# ── Dependency helpers ────────────────────────────────────────────────────────
-
-
-@lru_cache
-def _cached_settings() -> Settings:
-    return Settings()
-
-
-@lru_cache
-def _cached_client() -> CerefoxClient:
-    return CerefoxClient(_cached_settings())
-
-
-@lru_cache
-def _cached_embedder() -> Embedder | None:
-    """Return the configured CloudEmbedder, or None if API key is missing."""
-    settings = _cached_settings()
-    try:
-        from cerefox.embeddings.cloud import CloudEmbedder
-
-        api_key = settings.get_embedder_api_key()
-        if not api_key:
-            logger.warning(
-                "Embedding API key not set (CEREFOX_OPENAI_API_KEY or "
-                "CEREFOX_FIREWORKS_API_KEY). Semantic search will be unavailable."
-            )
-            return None
-        return CloudEmbedder(
-            api_key=api_key,
-            base_url=settings.get_embedder_base_url(),
-            model=settings.get_embedder_model(),
-            dimensions=settings.get_embedder_dimensions(),
-        )
-    except Exception as exc:
-        logger.warning("Embedder unavailable: %s", exc)
-        return None
-
-
-def get_settings() -> Settings:
-    return _cached_settings()
-
-
-def get_client() -> CerefoxClient:
-    return _cached_client()
-
-
-def get_embedder() -> Embedder | None:
-    return _cached_embedder()
 
 
 def get_templates(request: Request) -> Jinja2Templates:
