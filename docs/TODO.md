@@ -30,6 +30,7 @@
 - [ ] EPUB → Markdown converter
 - [ ] HTML → Markdown converter (for saved web pages)
 - [ ] Watch folder mode (auto-ingest new files dropped into a directory)
+- [ ] **Refactor `sync_docs.py` to use the Edge Function path** — currently uses the local `IngestionPipeline` (Python chunker + direct embedding API call), which is a separate implementation from the `cerefox-ingest` Edge Function (TypeScript chunker). This violates the single implementation principle and risks drift between the two code paths. Switch to calling the `cerefox-ingest` Edge Function via HTTP (anon key auth) so all ingestion flows through the same RPC.
 
 ### Writing Layer Adapters (input sources)
 These are "input adapters" — Cerefox is the backend, these tools are the authoring front-end. The integration is always one-way: writing tool → Cerefox (not the reverse).

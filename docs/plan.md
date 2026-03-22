@@ -735,42 +735,52 @@ browsing, temporal queries).
 
 **Phased approach**: each phase is self-contained and deployable.
 
-### 14A: React App Skeleton + Search Page
+### 14A: React App Skeleton + Search Page ✓
 
 Set up the React project, build pipeline, development workflow, and migrate the first
 (and most important) page: Search.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 14A.1 | Initialize React + TypeScript project (Vite or Next.js static export) | Pending | Under `web/` or `frontend/`; configure TypeScript, ESLint, Prettier |
-| 14A.2 | Set up build pipeline: `npm run build` outputs to a static directory; FastAPI serves it | Pending | Production: `StaticFiles` mount; Dev: Vite proxy to `localhost:8000/api` |
-| 14A.3 | Convert existing FastAPI routes to JSON API endpoints (add `/api/` prefix) | Pending | Keep Jinja2 routes temporarily for pages not yet migrated; both coexist during transition |
-| 14A.4 | Choose and set up UI component library | Pending | Evaluate: shadcn/ui, Mantine, or Chakra UI; must support responsive + dark mode |
-| 14A.5 | Implement app shell: navigation, layout, responsive sidebar/header | Pending | Route structure mirroring current pages: dashboard, search, browse, document detail |
-| 14A.6 | Migrate Search page to React | Pending | All 4 search modes (docs, hybrid, FTS, semantic); mode selector; collapsible results with Full/Excerpt badges; metadata display; project and metadata filter controls |
-| 14A.7 | Update development docs and `CLAUDE.md` with new frontend workflow | Pending | `npm install`, `npm run dev`, build commands, project structure |
-| 14A.8 | Tests: verify search page works end-to-end against the JSON API | Pending | Playwright or Vitest + React Testing Library |
+| 14A.1 | Initialize React + TypeScript project with Vite | Done | `frontend/` directory; Vite + SWC; TypeScript strict mode |
+| 14A.2 | Set up build pipeline: `npm run build` outputs to `frontend/dist/`; FastAPI serves it | Done | `StaticFiles` mount at `/app/assets`; catch-all at `/app/{path}` serves `index.html`; Vite proxy for dev |
+| 14A.3 | Create JSON API endpoints under `/api/v1/` | Done | `routes_api.py` with 18 endpoints; coexists with Jinja2 routes during transition |
+| 14A.4 | Set up Mantine UI component library + TanStack Query | Done | Mantine v7 + `@tabler/icons-react`; TanStack Query for data fetching + caching |
+| 14A.5 | Implement app shell: AppShell layout, navigation, React Router with `/app` basename | Done | Header nav: Dashboard, Search, Ingest, Projects |
+| 14A.6 | Migrate Search page to React | Done | All 4 modes (docs, hybrid, FTS, semantic); collapsible accordion results with Full/Excerpt badges; project + metadata filters; URL-driven state |
+| 14A.7 | Update development docs and `CLAUDE.md` with new frontend workflow | Done | Frontend section added to CLAUDE.md |
+| 14A.8 | Verify search page works end-to-end against the JSON API | Done | Manual testing; 455 Python tests pass |
 
-**Deliverable**: Working React app with search page at feature parity with the current
-Jinja2 search. Both old and new UIs coexist during migration.
+**Deliverable**: Working React app with search page at feature parity. Both old (Jinja2) and
+new (React) UIs coexist during migration.
 
-### 14B: Migrate Remaining Pages
+### 14B: Migrate Remaining Pages ✓
 
-Migrate all remaining pages from Jinja2 to React, one by one. Remove Jinja2 templates
-and dependencies once all pages are migrated.
+Migrated all remaining pages from Jinja2 to React with UX improvements.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 14B.1 | Migrate Dashboard page (project tiles, document count, recent activity) | Pending | |
-| 14B.2 | Migrate Document Detail page (content view, metadata, chunks, versions, download) | Pending | Key page for future review/governance workflows |
-| 14B.3 | Migrate Document Ingest page (file upload, paste, metadata editor) | Pending | Dynamic metadata key/value editor with autocomplete |
-| 14B.4 | Migrate Browse/Project view | Pending | |
-| 14B.5 | Remove Jinja2 templates, `jinja2` and `python-multipart` dependencies | Pending | Clean break once all pages are migrated |
-| 14B.6 | Update Playwright e2e tests for new SPA | Pending | |
-| 14B.7 | Update all documentation referencing the web UI | Pending | |
+| 14B.1 | Migrate Dashboard page | Done | Stat cards (inline layout), recent docs table, projects table with "List" button, quick search input |
+| 14B.2 | Migrate Document Detail page | Done | Markdown viewer (Rendered/Raw toggle), collapsible version history with timestamps, metadata accordion, chunks accordion, edit/download/delete actions, two-step delete confirmation |
+| 14B.3 | Migrate Document Edit page | Done | Edit/Preview toggle for content (live Markdown preview), multi-select projects, dynamic metadata key/value editor |
+| 14B.4 | Migrate Document Ingest page | Done | Two-tab layout (Paste Content / Upload File), filename existence check, update-existing toggle, project + metadata assignment |
+| 14B.5 | Migrate Projects page | Done | List with create form, edit modal, delete with inline confirmation |
+| 14B.6 | Add dedicated Project Documents page | Done | `/projects/:id/documents` - clean table view, replaces broken browse-by-project-only search |
+| 14B.7 | Remove Jinja2 SSR app, add root redirect to /app/ | Done | Removed routes.py, test_routes.py (83 tests), jinja2 dependency. Root shows redirect page. |
+| 14B.8 | Fix Vite base path for production SPA serving | Done | Set `base: '/app/'` in vite.config.ts so asset paths resolve correctly under FastAPI |
+| 14B.9 | Rewrite Playwright e2e tests for React SPA | Done | All UI tests updated for /app/ paths, Mantine selectors, React SPA structure |
+| 14B.10 | Update all documentation referencing the web UI | Pending | |
 
-**Deliverable**: Fully migrated SPA. Jinja2 templates removed. All pages responsive and
-visually polished.
+**Deliverable**: Fully migrated SPA. Jinja2 SSR removed. Root redirects to /app/.
+Templates kept on disk for reference.
+
+**Bug fixes during 14A/14B**:
+- Fixed `CerefoxClient` initialization in `deps.py`
+- Fixed `update_project` API call signature (dict, not positional args)
+- Fixed broken documents from failed embedding (check actual chunk count, not stored field)
+- Fixed search result links using React Router navigation (basename issue)
+- Fixed Vite base path for production SPA serving (assets 404)
+- Fixed Pydantic forward reference for project documents endpoint
 
 ### 14C: UI Polish and New Interaction Patterns
 
@@ -784,6 +794,8 @@ With the SPA foundation in place, add interaction patterns that the governance f
 | 14C.3 | Bulk operations UI (multi-select, bulk tag, bulk move to project) | Pending | |
 | 14C.4 | Dark mode support | Pending | |
 | 14C.5 | Toast notifications and optimistic updates | Pending | Improve perceived responsiveness |
+| 14C.6 | Delete Jinja2 template files from web/templates/ | Pending | routes.py and jinja2 dep already removed in 14B.7; templates kept on disk for reference |
+| 14C.8 | Update all docs referencing the web UI | Pending | Moved from 14B |
 
 **Deliverable**: A polished, modern UI ready for the governance features in Iteration 15.
 
@@ -822,12 +834,17 @@ the web UI with full audit trail and lightweight review workflow.
 
 ## Current Focus
 
-**Iterations 13A, 13C, and 13D complete.** Metadata-filtered search across all access paths.
-Response size limits redesigned to be opt-in per call. Documents (full) search UI redesigned
-with collapsible content and Full/Excerpt badges; set as default search mode.
+**Iteration 14A and 14B complete.** Full React + TypeScript SPA with all pages migrated:
+Dashboard, Search, Document Detail, Document Edit, Ingest, Projects, and Project Documents.
+Mantine UI, TanStack Query, React Router. 18 JSON API endpoints under `/api/v1/`.
 
-**Vision document** updated and refined (`docs/research/vision.md`). Iteration 13B research
-partially superseded by vision doc.
+Key UX improvements over the Jinja2 version: Markdown rendering with Rendered/Raw toggle,
+collapsible version history with timestamps, Edit/Preview content toggle, two-tab ingest
+(paste + file upload), dedicated project documents page, quick search from dashboard,
+two-step delete confirmations.
 
-**Next**: Iteration 14 -- web application refactor (React + TypeScript SPA). Starting with
-14A: project skeleton, build pipeline, and search page migration.
+**Jinja2 SSR app removed.** Root (`/`) shows redirect page pointing to `/app/`. Old routes
+and templates deleted. `jinja2` dependency removed. Playwright e2e tests rewritten for SPA.
+
+**Next**: Iteration 14C (UI polish: diff view, dark mode, template cleanup) or Iteration 15
+(audit log, attribution, review status) depending on priority.

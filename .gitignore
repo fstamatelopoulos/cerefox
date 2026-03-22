@@ -221,3 +221,7 @@ docs/research/decision-log-backup.md
 # Backup data directory (local snapshots, not for version control)
 backup-data/
 backups/
+
+# Frontend (React SPA)
+frontend/node_modules/
+frontend/dist/

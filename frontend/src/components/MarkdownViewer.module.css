@@ -1,0 +1,102 @@
+.markdown {
+  padding: 0 0.5rem;
+  line-height: 1.65;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+}
+
+.markdown h1 {
+  font-size: 1.6rem;
+  border-bottom: 1px solid var(--mantine-color-gray-3);
+  padding-bottom: 0.3em;
+}
+.markdown h2 {
+  font-size: 1.3rem;
+}
+.markdown h3 {
+  font-size: 1.1rem;
+}
+
+.markdown p {
+  margin: 0.6em 0;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.8em;
+  margin: 0.5em 0;
+}
+
+.markdown li {
+  margin: 0.2em 0;
+}
+
+.markdown code {
+  background: var(--mantine-color-gray-1);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+  font-size: 0.88em;
+}
+
+.markdown pre {
+  background: var(--mantine-color-gray-1);
+  padding: 0.8em 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--mantine-color-blue-3);
+  padding-left: 1em;
+  margin: 0.6em 0;
+  color: var(--mantine-color-dimmed);
+}
+
+.markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--mantine-color-gray-3);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+
+.markdown th {
+  background: var(--mantine-color-gray-1);
+  font-weight: 600;
+}
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--mantine-color-gray-3);
+  margin: 1.2em 0;
+}
+
+.markdown a {
+  color: var(--mantine-color-blue-6);
+  text-decoration: none;
+}
+
+.markdown a:hover {
+  text-decoration: underline;
+}
+
+.markdown img {
+  max-width: 100%;
+}

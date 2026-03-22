@@ -416,6 +416,7 @@ class TestUpdateDocument:
         mock_client.get_document_by_id.return_value = existing_doc
         mock_client.update_document.return_value = existing_doc
         mock_client.get_document_project_ids.return_value = []
+        mock_client.list_chunks_for_document.return_value = [{"id": "c1"}]
 
         result = pipeline.update_document("doc-001", text, "New Title")
 
