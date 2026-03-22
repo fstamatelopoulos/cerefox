@@ -13,11 +13,14 @@ import {
   Text,
   ActionIcon,
   Select,
+  SegmentedControl,
 } from "@mantine/core";
 import { IconCheck, IconFileUpload, IconPlus, IconTextSize, IconX } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+import { MarkdownViewer } from "../components/MarkdownViewer";
 
 import { ingestPaste, checkFilename } from "../api/documents";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
@@ -35,6 +38,7 @@ export function IngestPage() {
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [updateExisting, setUpdateExisting] = useState(false);
   const [metaPairs, setMetaPairs] = useState<{ key: string; value: string }[]>([]);
+  const [contentView, setContentView] = useState<string>("edit");
 
   // File mode state
   const [file, setFile] = useState<File | null>(null);
@@ -274,16 +278,50 @@ export function IngestPage() {
 
               {renderMetaFields(metaPairs, setMetaPairs)}
 
-              <Textarea
-                label="Content"
-                value={content}
-                onChange={(e) => setContent(e.currentTarget.value)}
-                minRows={10}
-                autosize
-                required
-                placeholder="Paste your Markdown content here..."
-                styles={{ input: { fontFamily: "monospace", fontSize: 13 } }}
-              />
+              <div>
+                <Group justify="space-between" mb="xs">
+                  <Text size="sm" fw={500}>
+                    Content
+                  </Text>
+                  <SegmentedControl
+                    size="xs"
+                    value={contentView}
+                    onChange={setContentView}
+                    data={[
+                      { label: "Edit", value: "edit" },
+                      { label: "Preview", value: "preview" },
+                    ]}
+                    w={160}
+                  />
+                </Group>
+                {contentView === "edit" ? (
+                  <Textarea
+                    value={content}
+                    onChange={(e) => setContent(e.currentTarget.value)}
+                    minRows={10}
+                    autosize
+                    required
+                    placeholder="Paste your Markdown content here..."
+                    styles={{ input: { fontFamily: "monospace", fontSize: 13 } }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      border: "1px solid var(--mantine-color-gray-3)",
+                      borderRadius: 8,
+                      padding: 12,
+                      minHeight: 200,
+                    }}
+                  >
+                    <MarkdownViewer
+                      content={content}
+                      defaultView="rendered"
+                      maxHeight={400}
+                      showToggle={false}
+                    />
+                  </div>
+                )}
+              </div>
 
               <Group>
                 <Button type="submit" loading={pasteMutation.isPending}>
