@@ -7,6 +7,42 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [v0.1.7] — 2026-03-22
+
+Major web application refactor: Jinja2 + HTMX server-rendered frontend replaced with a React + TypeScript single-page application.
+
+### Added
+- **React + TypeScript SPA** at `/app/` — Mantine UI, TanStack Query, React Router, Vite build pipeline
+- **18 JSON API endpoints** under `/api/v1/` — dashboard, search, documents CRUD, ingest (paste + file), projects CRUD, metadata keys, filename check
+- **Markdown viewer** with Rendered/Raw toggle on document detail, edit preview, and ingest preview
+- **Dark mode** — follows OS preference with manual toggle in header
+- **Toast notifications** for save, delete, and project CRUD operations
+- **Dedicated project documents page** (`/app/projects/:id/documents`) — clean table listing
+- **Quick search** from dashboard — input field navigates to Search with query pre-filled
+- **Root redirect page** at `/` for users with old bookmarks — auto-redirects to `/app/`
+- `docs/specs/ui-redesign-spa-python-api.md` — detailed design document for the migration
+- `docs/guides/agent-coordination.md` — multi-agent coordination patterns via Cerefox
+- `docs/research/vision.md` — comprehensive vision document for Cerefox
+
+### Changed
+- **Web UI architecture**: server-rendered Jinja2 + HTMX replaced with client-side React SPA
+- **Search page** renamed from "Knowledge Browser" to "Search Knowledge Base"; requires a query (project-only browse moved to dedicated page)
+- **Version history** now a collapsible table with date+time and explicit download buttons (was clickable badge row)
+- **Document detail** shows Created/Updated with time, not just date
+- **Dashboard** stat cards use compact horizontal layout; projects shown as table with doc counts and "List" button
+
+### Fixed
+- **Broken documents from failed embedding** — ingestion now checks actual chunk count in DB, not stored field on document record; re-embeds if chunks are missing
+- **Download filename** for paste-ingested docs and Unicode titles (em dash, accents)
+
+### Removed
+- Jinja2 server-side rendering routes (`routes.py`, 850 lines)
+- 83 unit tests for removed Jinja2 routes (`test_routes.py`)
+- `jinja2` Python dependency
+- All 15 Jinja2 template files (`web/templates/`)
+
+---
+
 ## [v0.1.6] — 2026-03-21
 
 Metadata-filtered search, response size redesign, UI improvements, and tooling.
@@ -152,6 +188,7 @@ First complete release. All core features working end-to-end.
 
 Initial project scaffolding, documentation structure, and phased implementation of core modules (database client, chunking, embeddings, ingestion, retrieval, CLI, web UI, backup). Not tagged.
 
+[v0.1.7]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.6...v0.1.7
 [v0.1.6]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.5...v0.1.6
 [v0.1.5]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.4...v0.1.5
 [v0.1.4]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.3...v0.1.4

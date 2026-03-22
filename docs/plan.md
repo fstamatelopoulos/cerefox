@@ -782,69 +782,78 @@ Templates kept on disk for reference.
 - Fixed Vite base path for production SPA serving (assets 404)
 - Fixed Pydantic forward reference for project documents endpoint
 
-### 14C: UI Polish and New Interaction Patterns
-
-With the SPA foundation in place, add interaction patterns that the governance features
-(Iteration 15) will need.
+### 14C: UI Polish ✓
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 14C.1 | Version history viewer with diff view (side-by-side or inline) | Pending | Needed for review status workflow; show what changed between versions |
-| 14C.2 | Inline document editing (Markdown editor component) | Pending | For correcting agent-written content without download/re-upload cycle |
-| 14C.3 | Bulk operations UI (multi-select, bulk tag, bulk move to project) | Pending | |
-| 14C.4 | Dark mode support | Pending | |
-| 14C.5 | Toast notifications and optimistic updates | Pending | Improve perceived responsiveness |
-| 14C.6 | Delete Jinja2 template files from web/templates/ | Pending | routes.py and jinja2 dep already removed in 14B.7; templates kept on disk for reference |
-| 14C.8 | Update all docs referencing the web UI | Pending | Moved from 14B |
+| 14C.1 | Version history diff view | Deferred | Moved to Iteration 15 (needs review status context) |
+| 14C.2 | Inline document editing | Deferred | Moved to Iteration 15 |
+| 14C.3 | Bulk operations UI | Deferred | Moved to TODO backlog (premature at current scale) |
+| 14C.4 | Dark mode support | Done | `defaultColorScheme="auto"` (follows OS); sun/moon toggle in header |
+| 14C.5 | Toast notifications | Done | Mantine Notifications; success/error toasts for save, delete, CRUD |
+| 14C.6 | Delete Jinja2 template files | Done | All 15 templates removed from web/templates/ |
+| 14C.7 | Update all docs referencing the web UI | Done | CLAUDE.md, README, solution-design, requirements, contributing, e2e-use-cases |
 
-**Deliverable**: A polished, modern UI ready for the governance features in Iteration 15.
+**Deliverable**: Polished SPA with dark mode and toast notifications. Jinja2 templates
+fully removed. All documentation aligned with React SPA architecture.
 
 ---
 
-## Iteration 15: Audit Log, Attribution, and Review Status
+## Iteration 15: Audit Log, Attribution, Review Status, and Version Governance
 
 **Goal**: Implement the trust and governance primitives described in the
 [Vision document](../research/vision.md): immutable audit log, author attribution,
-review status workflow, and temporal queries. Built on top of the React SPA from
-Iteration 14.
+review status workflow, version archival, and temporal queries. Includes the UI
+components deferred from 14C (diff view, inline editing) that are needed for the
+governance workflows.
 
-**Scope** (high-level, detailed tasks during planning):
+**Phased approach**: 15A (schema + backend), 15B (UI + queries).
 
-- **Audit log**: immutable, append-only table recording all write operations. Structured
-  fields: who, when, what (operation type), size delta, description, version reference.
-  Auto-generated descriptions for system-driven actions. Searchable via temporal and
-  author queries, excluded from default search results.
-- **Attribution**: `created_by` / `updated_by` fields on `cerefox_documents` (schema-level,
-  not JSONB). Human vs. agent identity (name/model).
-- **Review status**: schema-level `review_status` field on documents. Human-written docs
-  start as `approved`; agent-revised docs marked `pending-review`. Content remains
-  searchable in both states. Web UI: review, approve, promote previous version, archive
-  individual versions.
-- **Version retention policy**: two modes (time-limited with archival exceptions, or fully
-  immutable). Audit entries persist regardless of version cleanup.
-- **Temporal queries**: "what changed since timestamp X", "what did agent Y write" --
-  supports multi-agent coordination catch-up and audit workflows.
-- **Web UI**: audit log browser (filterable by author, date, operation type), review
-  status indicators on document cards, inline approve/reject actions, version promotion UI.
+### 15A: Schema, Audit Log, and Backend Logic
 
-**Deliverable**: Full trust and governance layer. Agents write freely, human monitors via
-the web UI with full audit trail and lightweight review workflow.
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 15A.1 | Create `cerefox_audit_log` table (immutable, append-only) | Pending | Columns: id, document_id (nullable FK), operation (enum: create, update-content, update-metadata, delete, status-change), author, size_before, size_after, description (auto or manual), version_id (FK to chunks, nullable), created_at. No UPDATE/DELETE policies. |
+| 15A.2 | Add `review_status` column to `cerefox_documents` | Pending | Schema-level field (not JSONB). Values: `approved`, `pending-review`. Default: `approved`. Content searchable in both states. |
+| 15A.3 | Add `created_by` and `updated_by` columns to `cerefox_documents` | Pending | String fields for human name or agent identity (name/model). Passed through from callers. |
+| 15A.4 | Add `archived` flag to `cerefox_chunks` for version protection | Pending | Boolean on chunk rows with non-null `version_id`. When `archived=true`, the version is protected from retention cleanup. Default: `false`. |
+| 15A.5 | Add version retention configuration | Pending | `CEREFOX_VERSION_RETENTION_DAYS` setting (default: 30). Value `-1` = immutable (no cleanup). Cleanup skips chunks where `archived=true`. |
+| 15A.6 | Write audit log insertion logic in Python | Pending | `CerefoxClient.create_audit_entry(...)`. Called from `IngestionPipeline` (ingest, update, delete) and API routes (status-change). Auto-generated descriptions for system actions (approval, archival, retention cleanup). |
+| 15A.7 | Wire audit log into ingestion pipeline | Pending | `ingest_text` -> audit entry (create). `update_document` -> audit entry (update-content or update-metadata). `delete_document` -> audit entry (delete). |
+| 15A.8 | Wire attribution into ingestion pipeline | Pending | `created_by` / `updated_by` passed through from callers (API routes, MCP server, CLI). |
+| 15A.9 | Add `review_status` auto-transition logic | Pending | Human edits (via web UI) -> `approved`. Agent edits (via MCP/Edge Function) -> `pending-review`. Manual override via API. |
+| 15A.10 | Add version archival API | Pending | `POST /api/v1/documents/{id}/versions/{version_id}/archive` and `/unarchive`. Sets `archived=true/false` on chunk rows for that version. Creates audit entry. |
+| 15A.11 | Add version promotion API | Pending | `POST /api/v1/documents/{id}/versions/{version_id}/promote`. Replaces current content with archived version content. Creates new version of current state before overwriting. Creates audit entry. |
+| 15A.12 | Deploy schema changes | Pending | `db_migrate.py` or `db_deploy.py` for new table + column additions. |
+| 15A.13 | Write unit tests for audit log, review status, version archival | Pending | |
+
+### 15B: UI and Temporal Queries
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 15B.1 | Add audit log API endpoints | Pending | `GET /api/v1/audit-log` with filters: document_id, author, operation, date range. `GET /api/v1/audit-log/recent` for "what changed since X" temporal queries. Excluded from default search. |
+| 15B.2 | Build Audit Log browser page | Pending | `/app/audit-log`: filterable table (author, operation type, date range). Each entry links to the document and version (if applicable). |
+| 15B.3 | Add review status indicators to document cards | Pending | Badge on Dashboard recent docs, Search results, Project Documents: "Approved" (green) or "Pending Review" (yellow). |
+| 15B.4 | Add review actions to Document Detail page | Pending | Approve button (sets `review_status=approved`, creates audit entry). Status badge in document header. |
+| 15B.5 | Add version archival UI to Document Detail page | Pending | In version history table: "Archive" / "Unarchive" toggle per version. Archived versions show a lock icon and are protected from cleanup. |
+| 15B.6 | Add version promotion UI to Document Detail page | Pending | "Promote" button per archived version: restores that version's content as current (with confirmation). |
+| 15B.7 | Version diff view (side-by-side or inline) | Pending | Compare any two versions (or current vs archived). Moved from 14C.1. Needed for informed review decisions. |
+| 15B.8 | Inline document editing on detail page | Pending | Edit content directly on the document detail page without navigating to /edit. Moved from 14C.2. Useful for quick corrections during review. |
+| 15B.9 | Update MCP server and Edge Functions for attribution | Pending | Pass `author` field through cerefox-ingest and cerefox-mcp. Agent identity from caller metadata. |
+| 15B.10 | Update Playwright e2e tests for governance features | Pending | Test review status toggle, version archival, audit log page. |
+| 15B.11 | Update documentation | Pending | Vision doc cross-references, solution-design, CLAUDE.md, configuration guide. |
+
+**Deliverable**: Full trust and governance layer. Agents write freely; human monitors via
+the web UI with full audit trail, review status indicators, version archival, and
+lightweight review workflow. Temporal queries support multi-agent coordination catch-up.
 
 ---
 
 ## Current Focus
 
-**Iteration 14A and 14B complete.** Full React + TypeScript SPA with all pages migrated:
-Dashboard, Search, Document Detail, Document Edit, Ingest, Projects, and Project Documents.
-Mantine UI, TanStack Query, React Router. 18 JSON API endpoints under `/api/v1/`.
+**Iteration 14 complete.** Full React + TypeScript SPA with all pages, dark mode, toast
+notifications, and all documentation updated. Jinja2 SSR fully removed. 368 unit tests,
+7 UI e2e tests, API e2e tests all pass.
 
-Key UX improvements over the Jinja2 version: Markdown rendering with Rendered/Raw toggle,
-collapsible version history with timestamps, Edit/Preview content toggle, two-tab ingest
-(paste + file upload), dedicated project documents page, quick search from dashboard,
-two-step delete confirmations.
-
-**Jinja2 SSR app removed.** Root (`/`) shows redirect page pointing to `/app/`. Old routes
-and templates deleted. `jinja2` dependency removed. Playwright e2e tests rewritten for SPA.
-
-**Next**: Iteration 14C (UI polish: diff view, dark mode, template cleanup) or Iteration 15
-(audit log, attribution, review status) depending on priority.
+**Next**: Iteration 15 -- audit log, attribution, review status, and version governance.
+Starting with 15A (schema + backend logic).
