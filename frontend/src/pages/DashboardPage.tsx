@@ -50,40 +50,37 @@ export function DashboardPage() {
       </Title>
 
       <SimpleGrid cols={{ base: 1, sm: 3 }} mb="xl">
-        <Card shadow="xs" padding="lg" radius="md" withBorder>
-          <Group>
-            <IconDatabase size={28} color="var(--mantine-color-blue-6)" />
-            <div>
-              <Text size="xl" fw={700}>
-                {isLoading ? <Skeleton width={40} height={28} /> : data?.doc_count ?? 0}
-              </Text>
-              <Text size="sm" c="dimmed">
-                Documents
-              </Text>
-            </div>
+        <Card shadow="xs" padding="md" radius="md" withBorder>
+          <Group align="center">
+            <IconDatabase size={24} color="var(--mantine-color-blue-6)" />
+            <Text size="xl" fw={700}>
+              {isLoading ? <Skeleton width={30} height={24} /> : data?.doc_count ?? 0}
+            </Text>
+            <Text size="sm" c="dimmed">
+              Documents
+            </Text>
           </Group>
         </Card>
-        <Card shadow="xs" padding="lg" radius="md" withBorder>
-          <Group>
-            <IconFolder size={28} color="var(--mantine-color-green-6)" />
-            <div>
-              <Text size="xl" fw={700}>
-                {isLoading ? <Skeleton width={40} height={28} /> : data?.project_count ?? 0}
-              </Text>
-              <Text size="sm" c="dimmed">
-                Projects
-              </Text>
-            </div>
+        <Card shadow="xs" padding="md" radius="md" withBorder>
+          <Group align="center">
+            <IconFolder size={24} color="var(--mantine-color-green-6)" />
+            <Text size="xl" fw={700}>
+              {isLoading ? <Skeleton width={30} height={24} /> : data?.project_count ?? 0}
+            </Text>
+            <Text size="sm" c="dimmed">
+              Projects
+            </Text>
           </Group>
         </Card>
-        <Card shadow="xs" padding="lg" radius="md" withBorder>
+        <Card shadow="xs" padding="md" radius="md" withBorder>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleQuickSearch();
             }}
+            style={{ display: "flex", alignItems: "center", height: "100%" }}
           >
-            <Group gap="xs">
+            <Group gap="xs" w="100%" align="center">
               <TextInput
                 placeholder="Quick search..."
                 value={quickSearch}

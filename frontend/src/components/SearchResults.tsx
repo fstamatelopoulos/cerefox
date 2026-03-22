@@ -137,7 +137,7 @@ function DocResults({ results }: { results: DocSearchResult[] }) {
               )}
               {r.best_chunk_heading_path.length > 0 && (
                 <Text size="xs" c="dimmed" fs="italic">
-                  {r.best_chunk_heading_path.join(" > ")}
+                  Best match: {r.best_chunk_heading_path.join(" > ")}
                 </Text>
               )}
             </Group>
