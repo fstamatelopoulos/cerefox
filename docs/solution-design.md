@@ -73,7 +73,8 @@ The original spec used a single `cerefox_notes` table. The current design uses:
 
 - **`cerefox_documents`** — document-level metadata (no content column — content lives in chunks)
 - **`cerefox_chunks`** — search corpus and version store. Current chunks have `version_id IS NULL`; archived chunks have `version_id` pointing to their version row. All embeddings and FTS live here.
-- **`cerefox_document_versions`** — lightweight version metadata rows. No content TEXT — content for any version is reconstructed from its archived chunks. Created only when content actually changes.
+- **`cerefox_document_versions`** — lightweight version metadata rows. No content TEXT -- content for any version is reconstructed from its archived chunks. Created only when content actually changes. Includes `archived` boolean for protecting specific versions from retention cleanup.
+- **`cerefox_audit_log`** — immutable, append-only log of all write operations. Records author, author_type ('user' or 'agent'), operation type, size delta, and description. FK references to documents and versions (SET NULL on delete). Used for accountability and temporal queries.
 
 Key design properties:
 - **Document lifecycle**: delete/update a whole document cleanly (cascade deletes its chunks and versions)
@@ -83,7 +84,8 @@ Key design properties:
 - **Small-to-big retrieval**: find a current chunk, then pull its current siblings by chunk_index
 - **Document-level metadata**: tags, project, source — live on the document, not duplicated per chunk
 - **Deduplication**: content hash on documents prevents re-ingesting the same file
-- **Versioning is additive**: the search path (documents → current chunks) is unchanged; archived chunks are invisible to search
+- **Versioning is additive**: the search path (documents -> current chunks) is unchanged; archived chunks are invisible to search
+- **Governance**: `review_status` on documents (`approved` / `pending_review`) with auto-transition based on author_type. Audit log provides full accountability trail.
 
 ### 2.2 Schema
 

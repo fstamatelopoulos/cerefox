@@ -102,16 +102,29 @@ Tests target the React SPA at `/app/`.
 | `TestSearch` | `test_search_returns_results` | Search query returns "results found" text | Done |
 | `TestProjects` | `test_project_crud` | Create project via UI form, verify it appears, cleanup | Done |
 | `TestDocumentView` | `test_document_page_loads` | Navigate from dashboard to document detail, verify Edit/Download buttons | Done |
+| `TestDocumentView` | `test_review_status_toggle_visible` | Document detail shows review status (Approved badge) | Done |
+| `TestAuditLog` | `test_audit_log_page_loads` | Audit log page renders with heading | Done |
 
-### 7. MCP Server (future)
+### 7. Governance Features (future e2e)
 
 | # | Use Case | Status |
 |---|----------|--------|
-| 7.1 | MCP `cerefox_search` tool — end-to-end via stdio transport | TODO |
-| 7.2 | MCP `cerefox_ingest` tool — end-to-end via stdio transport | TODO |
-| 7.3 | MCP `cerefox_list_metadata_keys` tool — end-to-end via stdio transport | TODO |
-| 7.4 | MCP `cerefox_get_document` tool — end-to-end via stdio transport | TODO |
-| 7.5 | MCP `cerefox_list_versions` tool — end-to-end via stdio transport | TODO |
+| 7.1 | Review status auto-transition: ingest via MCP sets `pending_review`, edit via web UI sets `approved` | TODO |
+| 7.2 | Version archival: archive a version, verify it persists after cleanup | TODO |
+| 7.3 | Audit log entries created for document operations (create, update, delete, status change) | TODO |
+| 7.4 | Review status filter on search returns only matching documents | TODO |
+| 7.5 | Version diff view displays correct added/removed lines | TODO |
+
+### 8. MCP Server (future)
+
+| # | Use Case | Status |
+|---|----------|--------|
+| 8.1 | MCP `cerefox_search` tool -- end-to-end via stdio transport | TODO |
+| 8.2 | MCP `cerefox_ingest` tool -- end-to-end via stdio transport | TODO |
+| 8.3 | MCP `cerefox_list_metadata_keys` tool -- end-to-end via stdio transport | TODO |
+| 8.4 | MCP `cerefox_get_document` tool -- end-to-end via stdio transport | TODO |
+| 8.5 | MCP `cerefox_list_versions` tool -- end-to-end via stdio transport | TODO |
+| 8.6 | MCP `cerefox_get_audit_log` tool -- end-to-end via stdio transport | TODO |
 
 ---
 

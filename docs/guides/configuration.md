@@ -167,13 +167,14 @@ Cerefox automatically archives previous document content whenever a document is 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CEREFOX_VERSION_RETENTION_HOURS` | `48` | How many hours to keep archived document versions. Versions older than this are lazily deleted the next time the same document is updated. Always keeps at least the most recent version regardless of age. |
+| `CEREFOX_VERSION_CLEANUP_ENABLED` | `true` | When `true`, old versions are lazily deleted during updates (respecting `VERSION_RETENTION_HOURS`). Versions marked as `archived` are always protected. When `false`, all versions are retained indefinitely (immutable mode). |
 
 **How versioning works:**
 
 When a document's content changes during ingestion, Cerefox calls the `cerefox_snapshot_version` database function before writing new chunks. This function:
 1. Creates a version record in `cerefox_document_versions`
 2. Moves all current chunks to that version (by setting their `version_id`)
-3. Deletes stale versions older than `CEREFOX_VERSION_RETENTION_HOURS`
+3. If `CEREFOX_VERSION_CLEANUP_ENABLED` is `true`, deletes stale versions older than `CEREFOX_VERSION_RETENTION_HOURS` (skipping archived versions)
 
 Metadata-only updates (same content, different title or project) do **not** create a new version.
 

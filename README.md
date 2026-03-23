@@ -47,6 +47,9 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 | **Deduplication** | SHA-256 content hash; re-ingesting the same file is a no-op |
 | **Backup and restore** | JSON snapshots, optional git commit |
 | **Small-to-big retrieval** | `cerefox_context_expand` RPC returns chunk neighbours for richer context |
+| **Audit log** | Immutable, append-only log of all write operations (create, update, delete, status change). Author attribution with `author_type` ('user' or 'agent'). Browsable via web UI, queryable via MCP tool and Edge Function |
+| **Review status** | Schema-level `review_status` on documents (`approved` / `pending_review`). Auto-transitions based on author_type. Filterable on search |
+| **Version governance** | Version archival (protect specific versions from cleanup), configurable retention (`CEREFOX_VERSION_CLEANUP_ENABLED`), version diff viewer |
 
 ---
 

@@ -98,14 +98,14 @@ Once configured, every Path A client has these tools:
 | Tool | Description |
 |------|-------------|
 | `cerefox_search` | Hybrid (FTS + semantic) document-level search |
-| `cerefox_ingest` | Save a note or document to the knowledge base |
+| `cerefox_ingest` | Save a note or document to the knowledge base. Accepts optional `author` parameter for attribution. |
 | `cerefox_list_metadata_keys` | List all metadata keys in use across documents |
 | `cerefox_get_document` | Retrieve the full content of a document (current or archived version) |
 | `cerefox_list_versions` | List all archived versions of a document |
+| `cerefox_get_audit_log` | Query audit log entries with filters (document, author, operation, time range) |
 
-> The versioning tools (`cerefox_get_document`, `cerefox_list_versions`) are available on
-> all paths — Path A (local and remote MCP) and Path B (GPT Actions via
-> `cerefox-get-document` and `cerefox-list-versions` Edge Functions).
+> All tools are available on both Path A (local and remote MCP) and Path B (GPT Actions
+> via dedicated Edge Functions).
 
 ### Path A system prompt
 
