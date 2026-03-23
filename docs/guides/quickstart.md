@@ -105,7 +105,7 @@ From the CLI:
 uv run cerefox search "my first note"
 ```
 
-Or use the web UI at [http://localhost:8000/search](http://localhost:8000/search).
+Or use the web UI at [http://localhost:8000/app/](http://localhost:8000/app/).
 
 ---
 

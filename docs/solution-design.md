@@ -563,8 +563,8 @@ passed to `search_docs()`.
 
 #### Web UI: metadata filter in the Knowledge Browser
 
-The browser page (`/search` route + `browser.html`) gains a **Metadata Filter** section
-below the existing Project filter. It is collapsible (hidden by default, expanded when any
+The search page (`/app/search`) includes a **Metadata Filter** section
+below the Project filter. It is collapsible (hidden by default, expanded when any
 filter is active) to keep the UI uncluttered for simple queries.
 
 **Filter UI design:**
@@ -598,16 +598,16 @@ Implementation notes:
   arrays and assembles `{"key": "value", ...}`. Empty keys or values are ignored.
 - If all rows are empty/removed, `metadata_filter` is `None` — no filter applied.
 - The assembled filter is passed to `client.search_docs(metadata_filter=...)`.
-- Active filter state is preserved across HTMX partial refreshes (values survive in the form).
+- Active filter state is managed as React component state and included in search API calls.
 
-**HTMX interaction**: the metadata filter section participates in the same HTMX search
-trigger as the rest of the form — filter changes trigger a search automatically (or on
-explicit submit, consistent with the existing UX).
+**Frontend interaction**: the metadata filter section is part of the `SearchControls`
+component in the React SPA. Filter changes update local state; the search is triggered
+on form submit. Filters are passed as query parameters to `GET /api/v1/search`.
 
-**Route changes** (`routes.py`):
+**API route** (`routes_api.py`):
 
 ```python
-# In GET /search:
+# In GET /api/v1/search:
 meta_filter_keys   = request.query_params.getlist("meta_filter_key")
 meta_filter_values = request.query_params.getlist("meta_filter_value")
 metadata_filter = {

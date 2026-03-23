@@ -295,7 +295,7 @@ The user can review documents through the web UI at any time:
 
 This is a lightweight, optional workflow. The knowledge base functions perfectly without the user ever reviewing anything. But as agent-written content grows, the review status provides a clear signal of what has been human-validated and what has not.
 
-**UI implications**: the version promotion, status management, and diff-view features described above will likely require refactoring the current web UI to a richer frontend technology (e.g., a single-page application backed by the existing Python API). This is expected and welcome. The current Jinja2 + HTMX stack was the right choice for the initial implementation, but the governance workflows ahead will benefit from a more interactive, component-driven UI. The UI refactor should be planned alongside the review status feature.
+**UI foundation**: the React + TypeScript SPA (Iteration 14) provides the interactive, component-driven frontend needed for these governance workflows. Version promotion, status management, and diff views will be built as React components on top of the existing SPA architecture and JSON API.
 
 ## Write Governance (research needed)
 
