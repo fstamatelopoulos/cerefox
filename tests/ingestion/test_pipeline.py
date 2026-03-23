@@ -404,7 +404,8 @@ class TestUpdateDocument:
             "doc-001", source="manual", retention_hours=48, cleanup_enabled=True
         )
         mock_client.delete_chunks_for_document.assert_not_called()
-        mock_client.update_document.assert_called_once()
+        # update_document is called twice: once for content, once for review_status
+        assert mock_client.update_document.call_count == 2
         mock_client.insert_chunks.assert_called_once()
 
     def test_unchanged_content_action_is_updated_not_reindexed(

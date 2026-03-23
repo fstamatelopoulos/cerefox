@@ -103,6 +103,7 @@ class IngestionPipeline:
         metadata: dict | None = None,
         update_existing: bool = False,
         author: str = "unknown",
+        author_type: str = "user",
     ) -> IngestResult:
         """Ingest a raw markdown string.
 
@@ -151,6 +152,7 @@ class IngestionPipeline:
                     project_ids=resolved_ids if resolved_ids else None,
                     metadata=metadata,
                     author=author,
+                    author_type=author_type,
                 )
             log.info("update_existing: no existing doc found — creating new document")
 
@@ -238,6 +240,7 @@ class IngestionPipeline:
             self._client.create_audit_entry(
                 operation="create",
                 author=author,
+                author_type=author_type,
                 document_id=document_id,
                 size_after=total_chars,
                 description=f"Created document '{title}' ({len(chunks)} chunks, {total_chars} chars)",
@@ -264,6 +267,7 @@ class IngestionPipeline:
         project_ids: list[str] | None = None,
         metadata: dict | None = None,
         author: str = "unknown",
+        author_type: str = "user",
     ) -> IngestResult:
         """Re-ingest an existing document in place, preserving its ID.
 
@@ -351,6 +355,7 @@ class IngestionPipeline:
                 self._client.create_audit_entry(
                     operation="update-metadata",
                     author=author,
+                    author_type=author_type,
                     document_id=document_id,
                     size_before=total_chars,
                     size_after=total_chars,
@@ -440,12 +445,23 @@ class IngestionPipeline:
             self._client.insert_chunks(chunk_rows)
             log.info("Re-stored %d chunks for document %s", len(chunks), document_id)
 
+        # ── Review status auto-transition ─────────────────────────────────
+        # Agent content changes set review_status to pending_review.
+        # Human content changes set review_status to approved.
+        # This is purely informational -- documents are always searchable.
+        new_status = "pending_review" if author_type == "agent" else "approved"
+        try:
+            self._client.update_document(document_id, {"review_status": new_status})
+        except Exception as exc:
+            log.warning("Failed to update review_status for %s: %s", document_id, exc)
+
         # ── Audit log entry ───────────────────────────────────────────────
         old_chars = existing.get("total_chars") or 0
         try:
             self._client.create_audit_entry(
                 operation="update-content",
                 author=author,
+                author_type=author_type,
                 document_id=document_id,
                 version_id=version_info.get("version_id"),
                 size_before=old_chars,

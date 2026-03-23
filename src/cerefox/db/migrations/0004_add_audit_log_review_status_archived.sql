@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
     version_id      UUID        REFERENCES cerefox_document_versions(id) ON DELETE SET NULL,
     operation       TEXT        NOT NULL,
     author          TEXT        NOT NULL DEFAULT 'unknown',
+    author_type     TEXT        NOT NULL DEFAULT 'user',
     size_before     INT,
     size_after      INT,
     description     TEXT        NOT NULL DEFAULT '',
@@ -23,7 +24,8 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
     CONSTRAINT cerefox_audit_log_operation_check CHECK (
         operation IN ('create', 'update-content', 'update-metadata', 'delete',
                       'status-change', 'archive', 'unarchive')
-    )
+    ),
+    CONSTRAINT cerefox_audit_log_author_type_check CHECK (author_type IN ('user', 'agent'))
 );
 
 -- ── 2. Review status on documents ───────────────────────────────────────────

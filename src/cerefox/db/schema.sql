@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
     --                   'status-change', 'archive', 'unarchive'
     author          TEXT        NOT NULL DEFAULT 'unknown',
     -- author: human username, agent name/model, or 'system' for automated actions
+    author_type     TEXT        NOT NULL DEFAULT 'user',
+    -- author_type: 'user' (human via web UI/CLI) or 'agent' (AI via MCP/Edge Function)
     size_before     INT,
     size_after      INT,
     description     TEXT        NOT NULL DEFAULT '',
@@ -102,7 +104,8 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
     CONSTRAINT cerefox_audit_log_operation_check CHECK (
         operation IN ('create', 'update-content', 'update-metadata', 'delete',
                       'status-change', 'archive', 'unarchive')
-    )
+    ),
+    CONSTRAINT cerefox_audit_log_author_type_check CHECK (author_type IN ('user', 'agent'))
 );
 
 -- ── Document ↔ Project junction ───────────────────────────────────────────────

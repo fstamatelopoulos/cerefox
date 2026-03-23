@@ -765,6 +765,7 @@ class CerefoxClient:
         self,
         operation: str,
         author: str = "unknown",
+        author_type: str = "user",
         document_id: str | None = None,
         version_id: str | None = None,
         size_before: int | None = None,
@@ -777,15 +778,20 @@ class CerefoxClient:
             operation: One of 'create', 'update-content', 'update-metadata',
                        'delete', 'status-change', 'archive', 'unarchive'.
             author: Human username, agent name/model, or 'system'.
+            author_type: 'user' (human via web UI/CLI) or 'agent' (AI via MCP/Edge Function).
+                         Used for review_status auto-transition decisions.
             document_id: UUID of the affected document (nullable).
             version_id: UUID of the version created by this operation (nullable).
             size_before: Document total_chars before the operation.
             size_after: Document total_chars after the operation.
             description: Free-text explaining what changed and why.
         """
+        if author_type not in ("user", "agent"):
+            author_type = "user"
         data: dict[str, Any] = {
             "operation": operation,
             "author": author,
+            "author_type": author_type,
             "description": description,
         }
         if document_id is not None:
