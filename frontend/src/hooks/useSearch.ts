@@ -30,6 +30,7 @@ export interface SearchState {
   mode: SearchMode;
   projectId: string;
   count: number;
+  reviewStatus: string;
   metadataFilter: Record<string, string>;
 }
 
@@ -40,6 +41,7 @@ export function useSearchState(): SearchState {
     mode: (params.get("mode") as SearchMode) || "docs",
     projectId: params.get("project_id") || "",
     count: Number(params.get("count")) || 10,
+    reviewStatus: params.get("review_status") || "",
     metadataFilter: parseMfParam(params.get("mf") || ""),
   };
 }
@@ -52,6 +54,7 @@ export function useSearchQuery(state: SearchState) {
     mode: state.mode,
     project_id: state.projectId || undefined,
     count: state.count,
+    review_status: state.reviewStatus || undefined,
     metadata_filter:
       Object.keys(state.metadataFilter).length > 0
         ? state.metadataFilter

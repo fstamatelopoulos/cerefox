@@ -31,17 +31,25 @@ interface MetadataFilterPair {
   value: string;
 }
 
+const REVIEW_OPTIONS = [
+  { value: "", label: "All statuses" },
+  { value: "approved", label: "Approved" },
+  { value: "pending_review", label: "Pending Review" },
+];
+
 interface SearchControlsProps {
   query: string;
   mode: SearchMode;
   projectId: string;
   count: number;
+  reviewStatus: string;
   metadataFilter: Record<string, string>;
   onSearch: (params: {
     q: string;
     mode: SearchMode;
     projectId: string;
     count: number;
+    reviewStatus: string;
     metadataFilter: Record<string, string>;
   }) => void;
 }
@@ -51,6 +59,7 @@ export function SearchControls({
   mode,
   projectId,
   count,
+  reviewStatus,
   metadataFilter,
   onSearch,
 }: SearchControlsProps) {
@@ -58,6 +67,7 @@ export function SearchControls({
   const [localMode, setLocalMode] = useState<SearchMode>(mode);
   const [localProjectId, setLocalProjectId] = useState(projectId);
   const [localCount, setLocalCount] = useState(String(count));
+  const [localReviewStatus, setLocalReviewStatus] = useState(reviewStatus);
   const [filterPairs, setFilterPairs] = useState<MetadataFilterPair[]>(() => {
     const pairs = Object.entries(metadataFilter).map(([key, value]) => ({
       key,
@@ -87,9 +97,10 @@ export function SearchControls({
       mode: localMode,
       projectId: localProjectId,
       count: Number(localCount),
+      reviewStatus: localReviewStatus,
       metadataFilter: mf,
     });
-  }, [localQuery, localMode, localProjectId, localCount, filterPairs, onSearch]);
+  }, [localQuery, localMode, localProjectId, localCount, localReviewStatus, filterPairs, onSearch]);
 
   const addFilterPair = () => {
     setFilterPairs((prev) => [...prev, { key: "", value: "" }]);
@@ -172,6 +183,17 @@ export function SearchControls({
         >
           Metadata filters {filterPairs.length > 0 && `(${filterPairs.length})`}
         </Button>
+        {localMode === "docs" && (
+          <Select
+            data={REVIEW_OPTIONS}
+            value={localReviewStatus}
+            onChange={(v) => setLocalReviewStatus(v || "")}
+            w={160}
+            size="xs"
+            placeholder="All statuses"
+            clearable
+          />
+        )}
       </Group>
 
       <Collapse in={filtersOpen}>

@@ -114,6 +114,7 @@ def api_search(
     project_id: str = "",
     count: int = Query(default=10, ge=1, le=50),
     metadata_filter: str = "",
+    review_status: str = "",
     client: CerefoxClient = Depends(get_client),
     embedder: Embedder | None = Depends(get_embedder),
     settings: Settings = Depends(get_settings),
@@ -222,11 +223,24 @@ def api_search(
                 "doc_metadata": r.doc_metadata,
             })
 
+    # Post-filter by review_status (docs mode only -- chunk modes don't have it)
+    if review_status and review_status in ("approved", "pending_review") and mode == "docs":
+        doc_ids = [r["document_id"] for r in result_dicts]
+        if doc_ids:
+            status_map = {}
+            for did in doc_ids:
+                doc_record = client.get_document_by_id(did)
+                if doc_record:
+                    status_map[did] = doc_record.get("review_status", "approved")
+            result_dicts = [
+                r for r in result_dicts if status_map.get(r["document_id"]) == review_status
+            ]
+
     return SearchResponse(
         results=result_dicts,
         query=q,
         mode=mode,
-        total_found=resp.total_found,
+        total_found=len(result_dicts),
         response_bytes=resp.response_bytes,
         truncated=resp.truncated,
     )

@@ -143,3 +143,23 @@ class TestDocumentView:
         # Should show document detail with action buttons
         expect(page.get_by_role("button", name="Edit")).to_be_visible()
         expect(page.get_by_role("link", name="Download")).to_be_visible()
+
+    def test_review_status_toggle_visible(self, page: Page):
+        """Document detail should show review status toggle."""
+        page.goto(BASE_URL)
+        page.wait_for_timeout(2000)
+        doc_links = page.locator("a[href*='/document/']")
+        if doc_links.count() == 0:
+            pytest.skip("No documents in the database to test")
+        doc_links.first.click()
+        page.wait_for_timeout(2000)
+        expect(page.get_by_text("Approved")).to_be_visible()
+
+
+# ── Audit Log ─────────────────────────────────────────────────────────────
+
+
+class TestAuditLog:
+    def test_audit_log_page_loads(self, page: Page):
+        page.goto(f"{BASE_URL}/audit-log")
+        expect(page.get_by_role("heading", name="Audit Log")).to_be_visible()

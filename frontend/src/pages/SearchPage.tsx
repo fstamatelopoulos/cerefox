@@ -18,6 +18,7 @@ export function SearchPage() {
       mode: SearchMode;
       projectId: string;
       count: number;
+      reviewStatus: string;
       metadataFilter: Record<string, string>;
     }) => {
       const sp = new URLSearchParams();
@@ -25,6 +26,7 @@ export function SearchPage() {
       if (params.mode !== "docs") sp.set("mode", params.mode);
       if (params.projectId) sp.set("project_id", params.projectId);
       if (params.count !== 10) sp.set("count", String(params.count));
+      if (params.reviewStatus) sp.set("review_status", params.reviewStatus);
       const mf = serializeMfParam(params.metadataFilter);
       if (mf) sp.set("mf", mf);
       setSearchParams(sp);
@@ -45,6 +47,7 @@ export function SearchPage() {
         mode={state.mode}
         projectId={state.projectId}
         count={state.count}
+        reviewStatus={state.reviewStatus}
         metadataFilter={state.metadataFilter}
         onSearch={handleSearch}
       />

@@ -6,6 +6,7 @@ export interface SearchParams {
   mode?: SearchMode;
   project_id?: string;
   count?: number;
+  review_status?: string;
   metadata_filter?: Record<string, string>;
 }
 
@@ -20,6 +21,7 @@ export async function fetchSearch(params: SearchParams): Promise<SearchResponse>
     mode: params.mode,
     project_id: params.project_id,
     count: params.count !== undefined ? params.count : undefined,
+    review_status: params.review_status,
     metadata_filter: metadataFilter,
   });
 
