@@ -74,3 +74,19 @@ Most upgrades require no special steps beyond the standard checklist above. Note
 ### Upgrading to v0.1.1+ (from v0.1.0)
 
 **Cloud-only embeddings**: Local embedders (mpnet, Ollama) were removed. If you were using a local embedder, switch to OpenAI or Fireworks AI and run `uv run cerefox reindex` to re-embed all chunks.
+
+## AI Agent Integration After Upgrade
+
+After deploying new Edge Functions (step 6), AI agent integrations may need reconfiguration.
+
+### MCP clients (Claude Code, Cursor, Claude Desktop)
+
+If you are using the **remote MCP server** (Streamable HTTP via `cerefox-mcp` Edge Function), MCP clients will pick up new tools automatically on the next connection. No reconfiguration needed.
+
+If you are still using the **local MCP server** (`cerefox mcp` via stdio), consider switching to the remote MCP server. The remote path is now the recommended default -- it supports all tools, runs server-side embedding, and works across machines. See `docs/guides/connect-agents.md` for setup instructions.
+
+### ChatGPT Custom GPT (GPT Actions)
+
+If you use GPT Actions pointing at the Cerefox Edge Functions, you may need to update the OpenAPI schema in the ChatGPT Custom GPT editor when new tools or parameters are added.
+
+**Known issue**: the ChatGPT editor clears the Bearer token (anon key) every time the OpenAPI schema is saved. After editing the schema, you must re-enter the anon key in the Authentication settings. This is a ChatGPT platform limitation with no workaround.
