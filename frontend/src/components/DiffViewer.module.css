@@ -25,14 +25,3 @@
 .context {
   display: inline;
 }
-
-.splitContainer {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.splitPane {
-  min-width: 0;
-  overflow: hidden;
-}
