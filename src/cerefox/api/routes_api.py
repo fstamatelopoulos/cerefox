@@ -284,6 +284,7 @@ class DashboardDocResponse(BaseModel):
     source: str | None = None
     chunk_count: int = 0
     total_chars: int = 0
+    review_status: str = "approved"
     updated_at: str | None = None
     project_ids: list[str] = []
 
@@ -319,6 +320,7 @@ def api_dashboard(
             source=d.get("source"),
             chunk_count=d.get("chunk_count") or 0,
             total_chars=d.get("total_chars") or 0,
+            review_status=d.get("review_status", "approved"),
             updated_at=d.get("updated_at"),
             project_ids=pid_list,
         ))
@@ -358,6 +360,7 @@ def api_project_documents(
             source=d.get("source"),
             chunk_count=d.get("chunk_count") or 0,
             total_chars=d.get("total_chars") or 0,
+            review_status=d.get("review_status", "approved"),
             updated_at=d.get("updated_at"),
             project_ids=[p["id"] for p in doc_projects_map.get(d["id"], [])],
         )

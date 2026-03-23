@@ -137,6 +137,13 @@ export function DashboardPage() {
                         {projectMap.get(pid) || pid.slice(0, 8)}
                       </Badge>
                     ))}
+                    <Badge
+                      variant="light"
+                      size="xs"
+                      color={doc.review_status === "approved" ? "green" : "yellow"}
+                    >
+                      {doc.review_status === "approved" ? "Approved" : "Pending"}
+                    </Badge>
                   </Group>
                 </Table.Td>
                 <Table.Td>

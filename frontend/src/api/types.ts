@@ -124,6 +124,7 @@ export interface DashboardDoc {
   source: string | null;
   chunk_count: number;
   total_chars: number;
+  review_status: string;
   updated_at: string | null;
   project_ids: string[];
 }

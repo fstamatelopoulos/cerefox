@@ -117,13 +117,6 @@ export function DocumentPage() {
                 {projectMap.get(pid) || pid.slice(0, 8)}
               </Badge>
             ))}
-            <Badge
-              variant="light"
-              size="sm"
-              color={doc.review_status === "approved" ? "green" : "yellow"}
-            >
-              {doc.review_status === "approved" ? "Approved" : "Pending Review"}
-            </Badge>
             <Text size="sm" c="dimmed">
               {doc.chunk_count} chunks | {doc.total_chars.toLocaleString()} chars
             </Text>
@@ -143,6 +136,7 @@ export function DocumentPage() {
               size="xs"
               value={doc.review_status}
               onChange={(v) => reviewMutation.mutate(v)}
+              color={doc.review_status === "approved" ? "green" : "yellow"}
               data={[
                 { label: "Approved", value: "approved" },
                 { label: "Pending Review", value: "pending_review" },

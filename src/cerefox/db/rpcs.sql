@@ -832,6 +832,7 @@ RETURNS TABLE (
     source         TEXT,
     chunk_count    INT,
     total_chars    INT,
+    archived       BOOLEAN,
     created_at     TIMESTAMPTZ
 )
 LANGUAGE sql
@@ -839,7 +840,7 @@ SECURITY DEFINER
 STABLE
 SET search_path = public, pg_catalog
 AS $$
-    SELECT id, version_number, source, chunk_count, total_chars, created_at
+    SELECT id, version_number, source, chunk_count, total_chars, archived, created_at
     FROM cerefox_document_versions
     WHERE document_id = p_document_id
     ORDER BY created_at DESC;
