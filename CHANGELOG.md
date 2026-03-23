@@ -7,7 +7,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
-## [v0.1.7] — 2026-03-22
+## [v0.1.8] -- 2026-03-23
+
+Trust and governance layer: audit log, review status, version archival, and version diff viewer.
+
+### Added
+- **Immutable audit log** (`cerefox_audit_log` table) recording all write operations with author attribution (`author_type`: user or agent), size delta, description, and version references
+- **`cerefox_create_audit_entry`** and **`cerefox_list_audit_entries`** RPCs (single implementation principle)
+- **`cerefox-get-audit-log`** Edge Function + **`cerefox_get_audit_log`** MCP tool (7 Edge Functions, 7 MCP tools total)
+- **Review status** (`approved` / `pending_review`) on documents with auto-transition: agent writes set `pending_review`, human writes set `approved`
+- **Review status filter** on search page (docs mode: All / Approved / Pending Review)
+- **Review status indicators** (green/yellow badges) on dashboard, search results, project documents, and document detail
+- **Version archival**: `archived` flag protects individual versions from retention cleanup. Clickable toggle in version history with tooltips and unarchive confirmation
+- **Version diff viewer** (unified mode) comparing any archived version against current content
+- **`CEREFOX_VERSION_CLEANUP_ENABLED`** config setting (default: true). Set to false for immutable version retention
+- **Author pass-through** on MCP ingest: agents can set their name via optional `author` parameter
+- **Audit log browser page** (`/app/audit-log`) with operation and author filters, document titles (SQL join), color-coded badges
+- `docs/guides/upgrading.md` -- idempotent migration checklist for upgrading between versions
+- Database migration `0004_add_audit_log_review_status_archived.sql`
+
+### Changed
+- `cerefox_snapshot_version` RPC respects `archived` flag (skips archived versions) and `p_cleanup_enabled` parameter
+- `cerefox_list_document_versions` RPC returns `archived` boolean
+- `cerefox-ingest` Edge Function accepts `author` and `author_type`, creates audit entries via RPC
+- `cerefox-mcp` Edge Function passes author (agent-provided or default "mcp-agent") and `author_type="agent"`
+- `list_documents()` query updated to include `review_status`
+- Diff viewer simplified to unified mode only (side-by-side removed due to alignment issues)
+
+### Fixed
+- Dashboard showing all documents as "Pending" when `review_status` was missing from SELECT column list
+
+---
+
+## [v0.1.7] -- 2026-03-22
 
 Major web application refactor: Jinja2 + HTMX server-rendered frontend replaced with a React + TypeScript single-page application.
 
@@ -188,6 +220,7 @@ First complete release. All core features working end-to-end.
 
 Initial project scaffolding, documentation structure, and phased implementation of core modules (database client, chunking, embeddings, ingestion, retrieval, CLI, web UI, backup). Not tagged.
 
+[v0.1.8]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.7...v0.1.8
 [v0.1.7]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.6...v0.1.7
 [v0.1.6]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.5...v0.1.6
 [v0.1.5]: https://github.com/fstamatelopoulos/cerefox/compare/v0.1.4...v0.1.5
