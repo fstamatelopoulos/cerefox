@@ -229,6 +229,7 @@ Full setup for all options: `docs/guides/connect-agents.md`
 | `docs/guides/ops-scripts.md` | Backup, restore, migrate, sync docs |
 | `docs/guides/setup-cloud-run.md` | Google Cloud Run deployment |
 | `docs/guides/operational-cost.md` | Cost breakdown for all deployment options |
+| `docs/guides/upgrading.md` | Standard upgrade checklist, version-specific notes |
 | `docs/guides/contributing.md` | Adding embedders, converters, commands |
 
 ---
