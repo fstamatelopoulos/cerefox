@@ -235,7 +235,7 @@ Full setup for all options: `docs/guides/connect-agents.md`
 | `docs/guides/setup-cloud-run.md` | Google Cloud Run deployment |
 | `docs/guides/operational-cost.md` | Cost breakdown for all deployment options |
 | `docs/guides/upgrading.md` | Standard upgrade checklist, version-specific notes |
-| `docs/guides/contributing.md` | Adding embedders, converters, commands |
+| `CONTRIBUTING.md` | How to contribute to Cerefox |
 
 ---
 

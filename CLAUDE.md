@@ -310,7 +310,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `configuration.md` | All `CEREFOX_` environment variables with defaults |
 | `ops-scripts.md` | All `scripts/` — deploy, migrate, backup, restore |
 | `operational-cost.md` | Embedding and hosting cost estimates |
-| `contributing.md` | How to add embedders, converters, CLI commands |
+| `CONTRIBUTING.md` (repo root) | How to contribute to Cerefox |
 
 **Rule**: a setup guide must be written before (or alongside) the feature it documents — not after the fact.
 
