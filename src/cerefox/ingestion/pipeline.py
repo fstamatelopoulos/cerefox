@@ -195,6 +195,8 @@ class IngestionPipeline:
             slug = re.sub(r"[\s_-]+", "-", slug).strip("-") or "document"
             source_path = f"{slug}.md"
 
+        # Agent-created documents start as pending_review; human-created as approved.
+        review_status = "pending_review" if author_type == "agent" else "approved"
         doc_row = self._client.insert_document(
             {
                 "title": title,
@@ -204,6 +206,7 @@ class IngestionPipeline:
                 "metadata": validated_meta,
                 "chunk_count": len(chunks),
                 "total_chars": total_chars,
+                "review_status": review_status,
             }
         )
         document_id: str = doc_row["id"]
