@@ -88,6 +88,11 @@ If you are still using the **local MCP server** (`cerefox mcp` via stdio), consi
 
 ### ChatGPT Custom GPT (GPT Actions)
 
-If you use GPT Actions pointing at the Cerefox Edge Functions, you may need to update the OpenAPI schema in the ChatGPT Custom GPT editor when new tools or parameters are added.
+If you use GPT Actions pointing at the Cerefox Edge Functions, **check the OpenAPI schema version** in `docs/guides/connect-agents.md` after every upgrade. If the version has changed (e.g., from 1.4.0 to 1.5.0), you need to update the schema in the ChatGPT Custom GPT editor:
 
-**Known issue**: the ChatGPT editor clears the Bearer token (anon key) every time the OpenAPI schema is saved. After editing the schema, you must re-enter the anon key in the Authentication settings. This is a ChatGPT platform limitation with no workaround.
+1. Open the Custom GPT editor and go to **Actions**
+2. Replace the OpenAPI schema with the latest version from `docs/guides/connect-agents.md`
+3. Save the schema
+4. **Re-enter the API key**: go to **Authentication** settings and re-enter your Supabase anon key as the Bearer token
+
+**Known issue**: the ChatGPT editor clears the Bearer token (anon key) every time the OpenAPI schema is saved. This happens even if you only change whitespace. There is no workaround -- you must re-enter the key after every schema save.
