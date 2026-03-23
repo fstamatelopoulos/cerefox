@@ -186,7 +186,7 @@ class IngestionPipeline:
         )
         total_chars = sum(c.char_count for c in chunks)
 
-        # ── Create document record ─────────────────────────────────────────
+        # ── Derive source_path ─────────────────────────────────────────────
         # Derive a source_path from the title when none was provided (e.g. paste ingestion),
         # so every document always has a meaningful filename for downloads.
         if not source_path:
@@ -195,35 +195,14 @@ class IngestionPipeline:
             slug = re.sub(r"[\s_-]+", "-", slug).strip("-") or "document"
             source_path = f"{slug}.md"
 
-        # Agent-created documents start as pending_review; human-created as approved.
-        review_status = "pending_review" if author_type == "agent" else "approved"
-        doc_row = self._client.insert_document(
-            {
-                "title": title,
-                "source": source,
-                "source_path": source_path,
-                "content_hash": content_hash,
-                "metadata": validated_meta,
-                "chunk_count": len(chunks),
-                "total_chars": total_chars,
-                "review_status": review_status,
-            }
-        )
-        document_id: str = doc_row["id"]
-        log.info("Created document %s (%d chunks)", document_id, len(chunks))
-
-        # ── Assign projects (M2M) ──────────────────────────────────────────
-        if resolved_ids:
-            self._client.assign_document_projects(document_id, resolved_ids)
-
-        # ── Embed + store chunks ───────────────────────────────────────────
+        # ── Embed chunks ──────────────────────────────────────────────────
+        chunk_rows: list[dict[str, Any]] = []
         if chunks:
             texts = [c.content for c in chunks]
             embeddings = self._embedder.embed_batch(texts)
 
             chunk_rows = [
                 {
-                    "document_id": document_id,
                     "chunk_index": c.chunk_index,
                     "heading_path": c.heading_path,
                     "heading_level": c.heading_level,
@@ -235,21 +214,27 @@ class IngestionPipeline:
                 }
                 for i, c in enumerate(chunks)
             ]
-            self._client.insert_chunks(chunk_rows)
-            log.info("Stored %d chunks for document %s", len(chunks), document_id)
 
-        # ── Audit log entry ───────────────────────────────────────────────
-        try:
-            self._client.create_audit_entry(
-                operation="create",
-                author=author,
-                author_type=author_type,
-                document_id=document_id,
-                size_after=total_chars,
-                description=f"Created document '{title}' ({len(chunks)} chunks, {total_chars} chars)",
-            )
-        except Exception as exc:
-            log.warning("Failed to create audit entry for document %s: %s", document_id, exc)
+        # ── Ingest via RPC (atomic: insert doc + chunks + audit entry) ────
+        review_status = "pending_review" if author_type == "agent" else "approved"
+        result = self._client.ingest_document_rpc(
+            document_id=None,
+            title=title,
+            source=source,
+            source_path=source_path,
+            content_hash=content_hash,
+            metadata=validated_meta,
+            review_status=review_status,
+            chunks=chunk_rows,
+            author=author,
+            author_type=author_type,
+        )
+        document_id: str = result["document_id"]
+        log.info("Created document %s (%d chunks) via RPC", document_id, len(chunks))
+
+        # ── Assign projects (M2M) ──────────────────────────────────────────
+        if resolved_ids:
+            self._client.assign_document_projects(document_id, resolved_ids)
 
         return IngestResult(
             document_id=document_id,
@@ -386,41 +371,45 @@ class IngestionPipeline:
         )
         total_chars = sum(c.char_count for c in chunks)
 
-        # Embed before touching the DB — if embedding fails we haven't broken anything.
+        # Embed before touching the DB -- if embedding fails we haven't broken anything.
         texts = [c.content for c in chunks]
         embeddings = self._embedder.embed_batch(texts) if chunks else []
 
-        # ── Archive current chunks as a version ────────────────────────────
-        # cerefox_snapshot_version atomically:
-        #   1. Creates a version row in cerefox_document_versions.
-        #   2. Sets version_id on all current chunks (marks them archived).
-        #   3. Runs lazy retention cleanup.
-        version_info = self._client.snapshot_version(
-            document_id,
+        chunk_rows = [
+            {
+                "chunk_index": c.chunk_index,
+                "heading_path": c.heading_path,
+                "heading_level": c.heading_level,
+                "title": c.title,
+                "content": c.content,
+                "char_count": c.char_count,
+                "embedding_primary": embeddings[i],
+                "embedder_primary": self._embedder.model_name,
+            }
+            for i, c in enumerate(chunks)
+        ] if chunks else []
+
+        # ── Ingest via RPC (atomic: snapshot + update doc + insert chunks + audit) ──
+        review_status = "pending_review" if author_type == "agent" else "approved"
+        result = self._client.ingest_document_rpc(
+            document_id=document_id,
+            title=title,
             source=source,
+            source_path=existing.get("source_path"),
+            content_hash=new_hash,
+            metadata=metadata if metadata is not None else existing.get("metadata", {}),
+            review_status=review_status,
+            chunks=chunk_rows,
+            author=author,
+            author_type=author_type,
+            source_label=source,
             retention_hours=s.version_retention_hours,
             cleanup_enabled=s.version_cleanup_enabled,
         )
         log.info(
-            "Archived %d chunks for document %s as version %d (id=%s)",
-            version_info.get("chunk_count", 0),
-            document_id,
-            version_info.get("version_number", 0),
-            version_info.get("version_id", ""),
+            "Updated document %s (%d chunks) via RPC, version_id=%s",
+            document_id, len(chunks), result.get("version_id"),
         )
-
-        # ── Update document record ─────────────────────────────────────────
-        update_data = {
-            "title": title,
-            "content_hash": new_hash,
-            "chunk_count": len(chunks),
-            "total_chars": total_chars,
-        }
-        if metadata is not None:
-            update_data["metadata"] = metadata
-
-        self._client.update_document(document_id, update_data)
-        log.info("Updated document %s (%d chunks)", document_id, len(chunks))
 
         # ── Update project associations if provided ────────────────────────
         if new_project_ids is not None:
@@ -428,54 +417,6 @@ class IngestionPipeline:
             final_project_ids = new_project_ids
         else:
             final_project_ids = self._client.get_document_project_ids(document_id)
-
-        # ── Insert new chunks ──────────────────────────────────────────────
-        if chunks:
-            chunk_rows = [
-                {
-                    "document_id": document_id,
-                    "chunk_index": c.chunk_index,
-                    "heading_path": c.heading_path,
-                    "heading_level": c.heading_level,
-                    "title": c.title,
-                    "content": c.content,
-                    "char_count": c.char_count,
-                    "embedding_primary": embeddings[i],
-                    "embedder_primary": self._embedder.model_name,
-                }
-                for i, c in enumerate(chunks)
-            ]
-            self._client.insert_chunks(chunk_rows)
-            log.info("Re-stored %d chunks for document %s", len(chunks), document_id)
-
-        # ── Review status auto-transition ─────────────────────────────────
-        # Agent content changes set review_status to pending_review.
-        # Human content changes set review_status to approved.
-        # This is purely informational -- documents are always searchable.
-        new_status = "pending_review" if author_type == "agent" else "approved"
-        try:
-            self._client.update_document(document_id, {"review_status": new_status})
-        except Exception as exc:
-            log.warning("Failed to update review_status for %s: %s", document_id, exc)
-
-        # ── Audit log entry ───────────────────────────────────────────────
-        old_chars = existing.get("total_chars") or 0
-        try:
-            self._client.create_audit_entry(
-                operation="update-content",
-                author=author,
-                author_type=author_type,
-                document_id=document_id,
-                version_id=version_info.get("version_id"),
-                size_before=old_chars,
-                size_after=total_chars,
-                description=(
-                    f"Updated content for '{title}' "
-                    f"({old_chars} -> {total_chars} chars, {len(chunks)} chunks)"
-                ),
-            )
-        except Exception as exc:
-            log.warning("Failed to create audit entry for document %s: %s", document_id, exc)
 
         return IngestResult(
             document_id=document_id,

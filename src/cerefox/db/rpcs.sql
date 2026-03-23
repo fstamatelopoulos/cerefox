@@ -846,6 +846,153 @@ AS $$
     ORDER BY created_at DESC;
 $$;
 
+-- ── cerefox_ingest_document ──────────────────────────────────────────────────
+-- Single RPC for ingesting a document (create or update). Handles:
+--   - Create: insert document row, insert chunks, set review_status, create audit entry
+--   - Update: snapshot old version, delete old chunks, update document row,
+--             insert new chunks, set review_status, create audit entry
+--
+-- Both the Python pipeline and the Edge Function call this after chunking and
+-- embedding. This is the single implementation of the ingestion write path.
+--
+-- Parameters:
+--   p_document_id     : NULL for create, UUID for update
+--   p_title, p_source, p_source_path, p_content_hash, p_metadata : document fields
+--   p_review_status   : 'approved' or 'pending_review' (based on author_type)
+--   p_chunks          : JSONB array of chunk objects, each with:
+--                        chunk_index, heading_path, heading_level, title,
+--                        content, char_count, embedding (float[]), embedder (text)
+--   p_author, p_author_type : for audit entry
+--   p_source_label    : version source label for snapshot ('file','paste','agent','manual')
+--   p_retention_hours : for version cleanup (default 48)
+--   p_cleanup_enabled : whether version cleanup runs (default true)
+--
+-- Returns: document_id, chunk_count, total_chars, operation ('create' or 'update-content'),
+--          version_id (UUID of snapshot, null on create)
+
+DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN);
+CREATE FUNCTION cerefox_ingest_document(
+    p_document_id       UUID        DEFAULT NULL,
+    p_title             TEXT        DEFAULT 'Untitled',
+    p_source            TEXT        DEFAULT 'agent',
+    p_source_path       TEXT        DEFAULT NULL,
+    p_content_hash      TEXT        DEFAULT '',
+    p_metadata          JSONB       DEFAULT '{}',
+    p_review_status     TEXT        DEFAULT 'approved',
+    p_chunks            JSONB       DEFAULT '[]',
+    p_author            TEXT        DEFAULT 'unknown',
+    p_author_type       TEXT        DEFAULT 'user',
+    p_source_label      TEXT        DEFAULT 'manual',
+    p_retention_hours   INT         DEFAULT 48,
+    p_cleanup_enabled   BOOLEAN     DEFAULT TRUE
+)
+RETURNS TABLE (
+    document_id     UUID,
+    chunk_count     INT,
+    total_chars     INT,
+    operation       TEXT,
+    version_id      UUID
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_doc_id        UUID;
+    v_chunk_count   INT;
+    v_total_chars   INT;
+    v_operation     TEXT;
+    v_version_id    UUID    := NULL;
+    v_old_chars     INT     := 0;
+    v_chunk         JSONB;
+    v_snap          RECORD;
+    v_status        TEXT;
+BEGIN
+    -- Validate review_status
+    v_status := CASE WHEN p_review_status IN ('approved', 'pending_review')
+                     THEN p_review_status ELSE 'approved' END;
+
+    -- Count chunks and total chars from the input
+    v_chunk_count := jsonb_array_length(p_chunks);
+    v_total_chars := 0;
+    FOR v_chunk IN SELECT * FROM jsonb_array_elements(p_chunks) LOOP
+        v_total_chars := v_total_chars + COALESCE((v_chunk->>'char_count')::INT, 0);
+    END LOOP;
+
+    IF p_document_id IS NOT NULL THEN
+        -- ── UPDATE PATH ──────────────────────────────────────────────
+        v_doc_id := p_document_id;
+        v_operation := 'update-content';
+
+        -- Get old size for audit
+        SELECT COALESCE(d.total_chars, 0) INTO v_old_chars
+        FROM cerefox_documents d WHERE d.id = v_doc_id;
+
+        -- Snapshot old version (archives current chunks, runs retention cleanup)
+        SELECT sv.version_id INTO v_version_id
+        FROM cerefox_snapshot_version(v_doc_id, p_source_label, p_retention_hours, p_cleanup_enabled) sv;
+
+        -- Update document record
+        UPDATE cerefox_documents SET
+            title = p_title,
+            source = p_source,
+            source_path = COALESCE(p_source_path, source_path),
+            content_hash = p_content_hash,
+            metadata = p_metadata,
+            chunk_count = v_chunk_count,
+            total_chars = v_total_chars,
+            review_status = v_status,
+            updated_at = NOW()
+        WHERE id = v_doc_id;
+
+    ELSE
+        -- ── CREATE PATH ──────────────────────────────────────────────
+        v_operation := 'create';
+
+        INSERT INTO cerefox_documents (
+            title, source, source_path, content_hash, metadata,
+            chunk_count, total_chars, review_status
+        ) VALUES (
+            p_title, p_source, p_source_path, p_content_hash, p_metadata,
+            v_chunk_count, v_total_chars, v_status
+        )
+        RETURNING id INTO v_doc_id;
+    END IF;
+
+    -- ── Insert chunks ────────────────────────────────────────────────
+    INSERT INTO cerefox_chunks (
+        document_id, chunk_index, heading_path, heading_level,
+        title, content, char_count, embedding_primary, embedder_primary
+    )
+    SELECT
+        v_doc_id,
+        (c->>'chunk_index')::INT,
+        ARRAY(SELECT jsonb_array_elements_text(c->'heading_path')),
+        (c->>'heading_level')::INT,
+        c->>'title',
+        c->>'content',
+        (c->>'char_count')::INT,
+        (SELECT array_agg(e::FLOAT)::VECTOR(768) FROM jsonb_array_elements_text(c->'embedding') AS e),
+        c->>'embedder'
+    FROM jsonb_array_elements(p_chunks) AS c;
+
+    -- ── Audit entry ──────────────────────────────────────────────────
+    PERFORM cerefox_create_audit_entry(
+        p_document_id := v_doc_id,
+        p_version_id := v_version_id,
+        p_operation := v_operation,
+        p_author := p_author,
+        p_author_type := p_author_type,
+        p_size_before := CASE WHEN v_operation = 'create' THEN NULL ELSE v_old_chars END,
+        p_size_after := v_total_chars,
+        p_description := v_operation || ': ' || p_title || ' (' || v_chunk_count || ' chunks, ' || v_total_chars || ' chars)'
+    );
+
+    RETURN QUERY SELECT v_doc_id, v_chunk_count, v_total_chars, v_operation, v_version_id;
+END;
+$$;
+
+
 -- ── cerefox_create_audit_entry ────────────────────────────────────────────────
 -- Inserts an immutable audit log entry. Called by all access paths (Python
 -- pipeline, Edge Functions, MCP) to maintain the single implementation principle.

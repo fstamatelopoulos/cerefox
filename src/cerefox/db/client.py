@@ -349,6 +349,68 @@ class CerefoxClient:
             logger.error("insert_chunks failed: %s", exc)
             raise RuntimeError(f"insert_chunks failed: {exc}") from exc
 
+    def ingest_document_rpc(
+        self,
+        *,
+        document_id: str | None = None,
+        title: str = "Untitled",
+        source: str = "agent",
+        source_path: str | None = None,
+        content_hash: str = "",
+        metadata: dict | None = None,
+        review_status: str = "approved",
+        chunks: list[dict[str, Any]] | None = None,
+        author: str = "unknown",
+        author_type: str = "user",
+        source_label: str = "manual",
+        retention_hours: int = 48,
+        cleanup_enabled: bool = True,
+    ) -> dict[str, Any]:
+        """Ingest a document via the cerefox_ingest_document RPC.
+
+        Handles both create (document_id=None) and update (document_id=UUID).
+        Chunks must include embedding as a list of floats.
+
+        Returns dict with: document_id, chunk_count, total_chars, operation, version_id.
+        """
+        import json as _json  # noqa: PLC0415
+
+        # Convert chunk embeddings to plain lists for JSONB serialization
+        chunk_data = []
+        for c in (chunks or []):
+            entry = {
+                "chunk_index": c.get("chunk_index", 0),
+                "heading_path": c.get("heading_path", []),
+                "heading_level": c.get("heading_level"),
+                "title": c.get("title", ""),
+                "content": c.get("content", ""),
+                "char_count": c.get("char_count", 0),
+                "embedding": list(c["embedding_primary"]),
+                "embedder": c.get("embedder_primary", "text-embedding-3-small"),
+            }
+            chunk_data.append(entry)
+
+        params = {
+            "p_document_id": document_id,
+            "p_title": title,
+            "p_source": source,
+            "p_source_path": source_path,
+            "p_content_hash": content_hash,
+            "p_metadata": _json.dumps(metadata or {}),
+            "p_review_status": review_status,
+            "p_chunks": _json.dumps(chunk_data),
+            "p_author": author,
+            "p_author_type": author_type,
+            "p_source_label": source_label,
+            "p_retention_hours": retention_hours,
+            "p_cleanup_enabled": cleanup_enabled,
+        }
+
+        rows = self.rpc("cerefox_ingest_document", params)
+        if not rows:
+            raise RuntimeError("cerefox_ingest_document returned no data")
+        return rows[0]
+
     def list_chunks_for_document(self, document_id: str) -> list[dict[str, Any]]:
         """Return current chunks for a document (version_id IS NULL), ordered by chunk_index."""
         try:

@@ -25,13 +25,29 @@ def settings(test_settings: Settings) -> Settings:
 def mock_client() -> MagicMock:
     client = MagicMock()
     client.get_document_by_hash.return_value = None        # not found by default
+    # Legacy direct methods (still used for some operations)
     client.insert_document.return_value = {"id": "doc-001", "title": "T"}
     client.insert_chunks.return_value = []
+    # RPC-based ingestion (create and update paths)
+    client.ingest_document_rpc.return_value = {
+        "document_id": "doc-001",
+        "chunk_count": 1,
+        "total_chars": 100,
+        "operation": "create",
+        "version_id": None,
+    }
     client.get_or_create_project.return_value = {"id": "proj-001", "name": "work"}
     client.get_document_project_ids.return_value = []
     client.assign_document_projects.return_value = None
     # By default no metadata keys registered (validation passthrough)
     client.list_metadata_keys.return_value = []
+    # Snapshot version (used by update path via RPC now, but mock for direct calls)
+    client.snapshot_version.return_value = {
+        "version_id": "ver-001",
+        "version_number": 1,
+        "chunk_count": 1,
+        "total_chars": 100,
+    }
     return client
 
 
@@ -112,7 +128,6 @@ class TestNormalize:
 
 class TestIngestText:
     def test_returns_ingest_result(self, pipeline, mock_client) -> None:
-        mock_client.insert_document.return_value = {"id": "doc-001", "title": "My Note"}
         result = pipeline.ingest_text("# My Note\n\nContent.", title="My Note")
         assert isinstance(result, IngestResult)
         assert result.document_id == "doc-001"
@@ -123,53 +138,54 @@ class TestIngestText:
         result = pipeline.ingest_text("# T\n\nB.", title="T")
         assert result.action == "created"
 
-    def test_insert_document_called_with_hash(self, pipeline, mock_client) -> None:
+    def test_rpc_called_with_hash(self, pipeline, mock_client) -> None:
         text = "# Doc\n\nBody."
         pipeline.ingest_text(text, title="Doc")
-        call_kwargs = mock_client.insert_document.call_args[0][0]
-        assert call_kwargs["content_hash"] == _hash(text)
-        assert call_kwargs["title"] == "Doc"
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["content_hash"] == _hash(text)
+        assert rpc_kwargs["title"] == "Doc"
 
-    def test_insert_document_called_with_source(self, pipeline, mock_client) -> None:
+    def test_rpc_called_with_source(self, pipeline, mock_client) -> None:
         pipeline.ingest_text("# T\n\nB.", title="T", source="file")
-        call_kwargs = mock_client.insert_document.call_args[0][0]
-        assert call_kwargs["source"] == "file"
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["source"] == "file"
 
-    def test_insert_document_has_no_project_id_column(self, pipeline, mock_client) -> None:
-        """project_id no longer lives on the document row — it goes through junction table."""
+    def test_rpc_called_with_null_document_id_for_create(self, pipeline, mock_client) -> None:
+        """Create path passes document_id=None to the RPC."""
         pipeline.ingest_text("# T\n\nB.", title="T")
-        call_kwargs = mock_client.insert_document.call_args[0][0]
-        assert "project_id" not in call_kwargs
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["document_id"] is None
 
-    def test_chunks_are_embedded_and_stored(self, pipeline, mock_client, mock_embedder) -> None:
+    def test_chunks_are_embedded_and_passed_to_rpc(self, pipeline, mock_client, mock_embedder) -> None:
         text = "# Section\n\nSome content."
         pipeline.ingest_text(text, title="Section")
         mock_embedder.embed_batch.assert_called_once()
-        mock_client.insert_chunks.assert_called_once()
-        chunk_rows = mock_client.insert_chunks.call_args[0][0]
-        assert len(chunk_rows) >= 1
-        assert chunk_rows[0]["document_id"] == "doc-001"
-        assert chunk_rows[0]["embedder_primary"] == "test-embedder"
+        mock_client.ingest_document_rpc.assert_called_once()
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        chunks = rpc_kwargs["chunks"]
+        assert len(chunks) >= 1
+        assert chunks[0]["embedder_primary"] == "test-embedder"
 
-    def test_chunk_row_has_required_fields(self, pipeline, mock_client, mock_embedder) -> None:
+    def test_chunk_data_has_required_fields(self, pipeline, mock_client, mock_embedder) -> None:
         text = "# Title\n\nContent body."
         mock_embedder.embed_batch.return_value = [[0.1] * 768]
         pipeline.ingest_text(text, title="Title")
-        chunk_row = mock_client.insert_chunks.call_args[0][0][0]
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        chunk = rpc_kwargs["chunks"][0]
         required = {
-            "document_id", "chunk_index", "heading_path", "heading_level",
+            "chunk_index", "heading_path", "heading_level",
             "title", "content", "char_count", "embedding_primary", "embedder_primary",
         }
-        assert required.issubset(chunk_row.keys())
+        assert required.issubset(chunk.keys())
 
     def test_result_chunk_count_matches_actual(self, pipeline, mock_client, mock_embedder) -> None:
-        # Doc with 3 H2 sections — each section (~3 000 chars) is large enough
-        # that no two fit together within max_chunk_chars (4 000), so greedy
-        # accumulation produces exactly 3 chunks (one per H2 section).
-        body = "word " * 600  # ~3 000 chars per section; 3000+2+3000=6002 > 4000
+        body = "word " * 600
         text = f"## A\n\n{body}\n\n## B\n\n{body}\n\n## C\n\n{body}"
         mock_embedder.embed_batch.return_value = [[0.0] * 768] * 3
-        mock_client.insert_document.return_value = {"id": "doc-001", "title": "Doc"}
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-001", "chunk_count": 3, "total_chars": 9000,
+            "operation": "create", "version_id": None,
+        }
         result = pipeline.ingest_text(text, title="Doc")
         assert result.chunk_count == 3
 
@@ -187,36 +203,40 @@ class TestIngestText:
         result = pipeline.ingest_text("# T\n\nB.", title="T", project_name="work")
         assert result.project_ids == ["proj-001"]
 
-    def test_metadata_passed_to_document(self, pipeline, mock_client) -> None:
+    def test_metadata_passed_to_rpc(self, pipeline, mock_client) -> None:
         meta = {"tags": "idea"}
         pipeline.ingest_text("# T\n\nB.", title="T", metadata=meta)
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["metadata"] == meta
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["metadata"] == meta
 
-    def test_empty_text_still_calls_insert(self, pipeline, mock_client, mock_embedder) -> None:
-        """Edge case: a document with no parseable chunks should still insert a document row."""
+    def test_empty_text_still_calls_rpc(self, pipeline, mock_client, mock_embedder) -> None:
+        """Edge case: a document with no parseable chunks should still call the RPC."""
         mock_embedder.embed_batch.return_value = []
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-001", "chunk_count": 0, "total_chars": 0,
+            "operation": "create", "version_id": None,
+        }
         result = pipeline.ingest_text("", title="Empty")
-        mock_client.insert_document.assert_called_once()
+        mock_client.ingest_document_rpc.assert_called_once()
         assert result.chunk_count == 0
 
     def test_paste_without_source_path_derives_slug(self, pipeline, mock_client) -> None:
-        """Paste ingestion with no source_path should store a slugified filename derived from title."""
+        """Paste ingestion with no source_path should pass a slugified filename to the RPC."""
         pipeline.ingest_text("# My Research Notes\n\nContent.", title="My Research Notes")
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["source_path"] == "my-research-notes.md"
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["source_path"] == "my-research-notes.md"
 
     def test_paste_slug_strips_special_chars(self, pipeline, mock_client) -> None:
         """Special characters are removed from the slug; spaces become hyphens."""
         pipeline.ingest_text("# Hello, World! 2026\n\nContent.", title="Hello, World! 2026")
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["source_path"] == "hello-world-2026.md"
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["source_path"] == "hello-world-2026.md"
 
     def test_explicit_source_path_is_not_overridden(self, pipeline, mock_client) -> None:
         """When source_path is provided explicitly, it must not be replaced with a slug."""
         pipeline.ingest_text("# T\n\nB.", title="T", source_path="custom/path.md")
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["source_path"] == "custom/path.md"
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["source_path"] == "custom/path.md"
 
 
 # ── M2M project_ids ───────────────────────────────────────────────────────────
@@ -290,19 +310,18 @@ class TestDeduplication:
         assert result.document_id == "doc-existing"
         assert result.project_ids == ["proj-abc"]
 
-    def test_skipped_result_does_not_insert(self, pipeline, mock_client) -> None:
+    def test_skipped_result_does_not_call_rpc(self, pipeline, mock_client) -> None:
         mock_client.get_document_by_hash.return_value = {
             "id": "old-id", "title": "Old", "chunk_count": 1, "total_chars": 10,
         }
         pipeline.ingest_text("Duplicate content.", title="Old")
-        mock_client.insert_document.assert_not_called()
-        mock_client.insert_chunks.assert_not_called()
+        mock_client.ingest_document_rpc.assert_not_called()
 
     def test_different_content_not_deduplicated(self, pipeline, mock_client) -> None:
         mock_client.get_document_by_hash.return_value = None
         result = pipeline.ingest_text("# New Content\n\nUnique.", title="New")
         assert not result.skipped
-        mock_client.insert_document.assert_called_once()
+        mock_client.ingest_document_rpc.assert_called_once()
 
 
 # ── ingest_file ───────────────────────────────────────────────────────────────
@@ -314,17 +333,17 @@ class TestIngestFile:
         md_file.write_text("# File Note\n\nContent from file.", encoding="utf-8")
         result = pipeline.ingest_file(str(md_file))
         assert result.title == "note"  # stem of filename
-        mock_client.insert_document.assert_called_once()
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["source"] == "file"
-        assert "note.md" in doc_kwargs["source_path"]
+        mock_client.ingest_document_rpc.assert_called_once()
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["source"] == "file"
+        assert "note.md" in rpc_kwargs["source_path"]
 
     def test_custom_title_overrides_stem(self, pipeline, mock_client, tmp_path) -> None:
         md_file = tmp_path / "untitled.md"
         md_file.write_text("# Hello\n\nWorld.", encoding="utf-8")
         pipeline.ingest_file(str(md_file), title="My Custom Title")
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["title"] == "My Custom Title"
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["title"] == "My Custom Title"
 
 
 # ── Metadata validation ────────────────────────────────────────────────────────
@@ -337,13 +356,13 @@ class TestMetadataPassthrough:
         pipeline.ingest_text(
             "# T\n\nB.", title="T", metadata={"anything": "goes", "custom": 42}
         )
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["metadata"] == {"anything": "goes", "custom": 42}
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["metadata"] == {"anything": "goes", "custom": 42}
 
     def test_no_metadata_defaults_to_empty(self, pipeline, mock_client) -> None:
         pipeline.ingest_text("# T\n\nB.", title="T")
-        doc_kwargs = mock_client.insert_document.call_args[0][0]
-        assert doc_kwargs["metadata"] == {}
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["metadata"] == {}
 
 
 # ── ingest_text: project_id kwarg (legacy) ────────────────────────────────────
@@ -385,10 +404,10 @@ class TestUpdateDocument:
     ) -> None:
         mock_client.get_document_by_id.return_value = existing_doc
         mock_client.get_document_by_hash.return_value = None  # no collision
-        mock_client.update_document.return_value = {**existing_doc, "title": "New Title"}
         mock_client.get_document_project_ids.return_value = []
-        mock_client.snapshot_version.return_value = {
-            "version_id": "ver-001", "version_number": 1, "chunk_count": 2, "total_chars": 100
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-001", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "ver-001",
         }
         mock_embedder.embed_batch.return_value = [[0.1] * 768]
 
@@ -398,15 +417,12 @@ class TestUpdateDocument:
         assert result.title == "New Title"
         assert result.action == "updated"
         assert result.reindexed is True
-        assert not result.skipped  # back-compat property
-        # snapshot_version archives current chunks; delete_chunks_for_document is NOT called
-        mock_client.snapshot_version.assert_called_once_with(
-            "doc-001", source="manual", retention_hours=48, cleanup_enabled=True
-        )
-        mock_client.delete_chunks_for_document.assert_not_called()
-        # update_document is called twice: once for content, once for review_status
-        assert mock_client.update_document.call_count == 2
-        mock_client.insert_chunks.assert_called_once()
+        assert not result.skipped
+        # Update path calls ingest_document_rpc with document_id set
+        mock_client.ingest_document_rpc.assert_called_once()
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["document_id"] == "doc-001"
+        assert rpc_kwargs["title"] == "New Title"
 
     def test_unchanged_content_action_is_updated_not_reindexed(
         self, pipeline, mock_client, existing_doc
@@ -513,8 +529,7 @@ class TestUpdateDocument:
             pipeline.update_document("doc-001", "# T\n\nBody.", "T")
 
         # DB should NOT have been touched (embed happens before any DB write)
-        mock_client.snapshot_version.assert_not_called()
-        mock_client.update_document.assert_not_called()
+        mock_client.ingest_document_rpc.assert_not_called()
 
 
 # ── Client: metadata key methods ──────────────────────────────────────────────
@@ -669,7 +684,7 @@ class TestUpdateExisting:
 
         assert result.document_id == "doc-existing"
         mock_client.find_document_by_source_path.assert_called_once_with("my-note.md")
-        mock_client.insert_document.assert_not_called()
+        mock_client.ingest_document_rpc.assert_called_once()
 
     def test_title_fallback_when_source_path_unset(
         self, pipeline, mock_client, mock_embedder, existing_doc
@@ -690,7 +705,7 @@ class TestUpdateExisting:
 
         assert result.document_id == "doc-existing"
         mock_client.find_document_by_title.assert_called_once_with("My Note")
-        mock_client.insert_document.assert_not_called()
+        mock_client.ingest_document_rpc.assert_called_once()
 
     def test_title_fallback_when_source_path_misses(
         self, pipeline, mock_client, mock_embedder, existing_doc
@@ -720,7 +735,6 @@ class TestUpdateExisting:
     ) -> None:
         mock_client.find_document_by_source_path.return_value = None
         mock_client.find_document_by_title.return_value = None
-        mock_client.insert_document.return_value = {"id": "doc-new", "title": "Fresh"}
 
         result = pipeline.ingest_text(
             "# Fresh\n\nContent.",
@@ -729,8 +743,11 @@ class TestUpdateExisting:
             update_existing=True,
         )
 
-        mock_client.insert_document.assert_called_once()
-        assert result.document_id == "doc-new"
+        # Falls through to create path (ingest_document_rpc with document_id=None)
+        mock_client.ingest_document_rpc.assert_called_once()
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["document_id"] is None
+        assert result.document_id == "doc-001"
 
     def test_no_match_fallthrough_action_is_created(
         self, pipeline, mock_client
@@ -739,7 +756,6 @@ class TestUpdateExisting:
         not 'updated', so callers know a new document was created rather than an existing one found."""
         mock_client.find_document_by_source_path.return_value = None
         mock_client.find_document_by_title.return_value = None
-        mock_client.insert_document.return_value = {"id": "doc-new", "title": "T"}
 
         result = pipeline.ingest_text("# T\n\nB.", title="T", update_existing=True)
 
@@ -766,4 +782,4 @@ class TestUpdateExisting:
         result = pipeline.ingest_file(str(md_file), update_existing=True)
 
         assert result.document_id == "doc-existing"
-        mock_client.insert_document.assert_not_called()
+        mock_client.ingest_document_rpc.assert_called_once()

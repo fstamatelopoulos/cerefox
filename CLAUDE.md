@@ -212,9 +212,11 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 
 **Do NOT** add business logic directly in Edge Function TypeScript, Python routes, or `cerefox-mcp`. The only logic in Edge Functions is input validation, RPC call, and JSON response formatting.
 
-**Known exception -- ingestion orchestration**: The ingestion pipeline (chunk, embed, store, audit, set review_status) is implemented in both the Python `IngestionPipeline` and the `cerefox-ingest` Edge Function. This is because the pipeline requires external HTTP calls (embedding API) which cannot run inside a Postgres function. Individual operations within the pipeline (version snapshot, audit entry creation, search, document retrieval) use RPCs. The orchestration layer is intentionally duplicated. When changing ingestion logic, update both implementations and keep their behavior consistent.
+**Ingestion**: The ingestion pipeline has two steps: (1) chunking + embedding (requires external HTTP calls, runs in Python or TypeScript), and (2) database writes (insert document, insert chunks, snapshot version, set review_status, create audit entry). Step 2 is handled entirely by the `cerefox_ingest_document` RPC -- a single atomic transaction. Both the Python `IngestionPipeline` and the `cerefox-ingest` Edge Function call this RPC after completing step 1. This ensures all write logic, review_status transitions, and audit entry creation happen in one place.
 
-**Simple CRUD** operations (insert/update/delete on documents, chunks, projects) use the Supabase REST API directly (`client.table(...)`). This is acceptable as these are pure data access, not business logic. The REST API maps to the same SQL the RPCs would generate.
+**Important**: when adding new write logic (e.g., a new field on documents, a new side effect of ingestion), add it to the `cerefox_ingest_document` RPC, not to the Python pipeline or Edge Function. The callers should only handle chunking, embedding, and parameter preparation.
+
+**Simple CRUD** operations (read/list queries on documents, chunks, projects; project create/update/delete) use the Supabase REST API directly (`client.table(...)`). This is acceptable as these are pure data access with no business logic.
 
 ### Edge Function Inventory
 

@@ -261,82 +261,70 @@ class TestPipelineAuditIntegration:
         p = IngestionPipeline(mock_client, mock_embedder, settings)
         return p, mock_client, mock_embedder
 
-    def test_ingest_text_passes_author_and_author_type_to_audit(self, pipeline):
+    def test_ingest_text_passes_author_and_author_type_to_rpc(self, pipeline):
         p, mock_client, mock_embedder = pipeline
         mock_client.get_document_by_hash.return_value = None
-        mock_client.insert_document.return_value = {"id": "doc-new"}
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-new", "chunk_count": 1, "total_chars": 50,
+            "operation": "create", "version_id": None,
+        }
         mock_embedder.embed_batch.return_value = [[0.1] * 768]
-        mock_client.insert_chunks.return_value = []
-        mock_client.create_audit_entry.return_value = {}
 
         p.ingest_text(
             "# Test\n\nBody", "Test", author="Claude Code", author_type="agent"
         )
 
-        mock_client.create_audit_entry.assert_called_once()
-        audit_kwargs = mock_client.create_audit_entry.call_args
-        assert audit_kwargs.kwargs.get("author") == "Claude Code" or \
-               audit_kwargs[1].get("author") == "Claude Code"
-        assert audit_kwargs.kwargs.get("author_type") == "agent" or \
-               audit_kwargs[1].get("author_type") == "agent"
+        mock_client.ingest_document_rpc.assert_called_once()
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["author"] == "Claude Code"
+        assert rpc_kwargs["author_type"] == "agent"
 
     def test_update_document_agent_sets_pending_review(self, pipeline):
         p, mock_client, mock_embedder = pipeline
         mock_client.get_document_by_id.return_value = {
             "id": "doc-001", "content_hash": "old-hash",
             "chunk_count": 1, "total_chars": 50, "review_status": "approved",
+            "source_path": "test.md", "metadata": {},
         }
         mock_client.get_document_by_hash.return_value = None
-        mock_client.list_chunks_for_document.return_value = [{"id": "chunk-1"}]
-        mock_client.snapshot_version.return_value = {
-            "version_id": "ver-001", "version_number": 1,
-            "chunk_count": 1, "total_chars": 50,
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-001", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "ver-001",
         }
-        mock_client.update_document.return_value = {"id": "doc-001"}
         mock_client.get_document_project_ids.return_value = []
         mock_embedder.embed_batch.return_value = [[0.1] * 768]
-        mock_client.insert_chunks.return_value = []
-        mock_client.create_audit_entry.return_value = {}
 
         p.update_document(
             "doc-001", "# New\n\nChanged content", "New",
             author="Claude Code", author_type="agent"
         )
 
-        # update_document is called twice: once for content, once for review_status
-        update_calls = mock_client.update_document.call_args_list
-        assert len(update_calls) == 2
-        # The second call should set review_status to pending_review
-        status_call = update_calls[1]
-        assert status_call[0][1] == {"review_status": "pending_review"}
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["review_status"] == "pending_review"
+        assert rpc_kwargs["document_id"] == "doc-001"
 
     def test_update_document_user_sets_approved(self, pipeline):
         p, mock_client, mock_embedder = pipeline
         mock_client.get_document_by_id.return_value = {
             "id": "doc-001", "content_hash": "old-hash",
             "chunk_count": 1, "total_chars": 50, "review_status": "pending_review",
+            "source_path": "test.md", "metadata": {},
         }
         mock_client.get_document_by_hash.return_value = None
-        mock_client.list_chunks_for_document.return_value = [{"id": "chunk-1"}]
-        mock_client.snapshot_version.return_value = {
-            "version_id": "ver-001", "version_number": 1,
-            "chunk_count": 1, "total_chars": 50,
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-001", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "ver-001",
         }
-        mock_client.update_document.return_value = {"id": "doc-001"}
         mock_client.get_document_project_ids.return_value = []
         mock_embedder.embed_batch.return_value = [[0.1] * 768]
-        mock_client.insert_chunks.return_value = []
-        mock_client.create_audit_entry.return_value = {}
 
         p.update_document(
             "doc-001", "# New\n\nChanged by human", "New",
             author="fotis", author_type="user"
         )
 
-        update_calls = mock_client.update_document.call_args_list
-        assert len(update_calls) == 2
-        status_call = update_calls[1]
-        assert status_call[0][1] == {"review_status": "approved"}
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["review_status"] == "approved"
 
     def test_metadata_only_update_does_not_change_review_status(self, pipeline):
         """When content is unchanged, review_status should not be modified."""
@@ -374,8 +362,8 @@ class TestVersionCleanupEnabled:
         settings = Settings(_env_file=None, version_cleanup_enabled=False)
         assert settings.version_cleanup_enabled is False
 
-    def test_cleanup_enabled_passed_to_snapshot_version(self):
-        """When version_cleanup_enabled=False, snapshot_version gets cleanup_enabled=False."""
+    def test_cleanup_enabled_passed_to_ingest_rpc(self):
+        """When version_cleanup_enabled=False, ingest_document_rpc gets cleanup_enabled=False."""
         from cerefox.ingestion.pipeline import IngestionPipeline
 
         mock_client = MagicMock()
@@ -391,20 +379,17 @@ class TestVersionCleanupEnabled:
         mock_client.get_document_by_id.return_value = {
             "id": "doc-001", "content_hash": "old-hash",
             "chunk_count": 1, "total_chars": 50,
+            "source_path": "test.md", "metadata": {},
         }
         mock_client.get_document_by_hash.return_value = None
-        mock_client.list_chunks_for_document.return_value = [{"id": "c1"}]
-        mock_client.snapshot_version.return_value = {
-            "version_id": "v1", "version_number": 1, "chunk_count": 1, "total_chars": 50
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-001", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "v1",
         }
-        mock_client.update_document.return_value = {"id": "doc-001"}
         mock_client.get_document_project_ids.return_value = []
         mock_embedder.embed_batch.return_value = [[0.1] * 768]
-        mock_client.insert_chunks.return_value = []
-        mock_client.create_audit_entry.return_value = {}
 
         p.update_document("doc-001", "# New\n\nChanged", "New")
 
-        mock_client.snapshot_version.assert_called_once_with(
-            "doc-001", source="manual", retention_hours=48, cleanup_enabled=False
-        )
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["cleanup_enabled"] is False
