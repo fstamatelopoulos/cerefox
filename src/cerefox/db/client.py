@@ -373,8 +373,6 @@ class CerefoxClient:
 
         Returns dict with: document_id, chunk_count, total_chars, operation, version_id.
         """
-        import json as _json  # noqa: PLC0415
-
         # Convert chunk embeddings to plain lists for JSONB serialization
         chunk_data = []
         for c in (chunks or []):
@@ -396,9 +394,9 @@ class CerefoxClient:
             "p_source": source,
             "p_source_path": source_path,
             "p_content_hash": content_hash,
-            "p_metadata": _json.dumps(metadata or {}),
+            "p_metadata": metadata or {},
             "p_review_status": review_status,
-            "p_chunks": _json.dumps(chunk_data),
+            "p_chunks": chunk_data,
             "p_author": author,
             "p_author_type": author_type,
             "p_source_label": source_label,
