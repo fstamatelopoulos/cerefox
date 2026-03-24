@@ -58,7 +58,18 @@ CEREFOX_FIREWORKS_API_KEY=fw_...
 
 ### Edge Functions (for agents)
 
-The `cerefox-search` and `cerefox-ingest` Supabase Edge Functions handle embeddings server-side — agents don't need to set up any embedder locally. The Edge Functions read `OPENAI_API_KEY` from the Supabase project's secrets. See `docs/guides/connect-agents.md`.
+The `cerefox-search` and `cerefox-ingest` Supabase Edge Functions handle embeddings server-side -- agents don't need to set up any embedder locally. The Edge Functions read `OPENAI_API_KEY` from the Supabase project's secrets. See `docs/guides/connect-agents.md`.
+
+### Embedding API retry
+
+All embedding API calls (Python `CloudEmbedder` and Edge Functions) include automatic retry with exponential backoff for transient failures:
+
+- **3 attempts** with backoff: 500ms, 1s, 2s
+- **Retried**: HTTP 5xx server errors, network timeouts, connection failures
+- **Not retried**: HTTP 4xx client errors (invalid API key, bad request)
+- **Logged**: every retry attempt is logged with the failure reason and attempt number
+
+This handles intermittent OpenAI API errors (500s) that would otherwise cause search or ingestion failures. The retry logic is consistent across both the Python path (local MCP, web UI, CLI) and the Edge Function path (remote MCP, GPT Actions).
 
 ---
 

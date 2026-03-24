@@ -17,6 +17,7 @@ for a typical personal knowledge base.
 from __future__ import annotations
 
 import logging
+import time
 
 import httpx
 
@@ -27,6 +28,8 @@ _DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _DEFAULT_MODEL = "text-embedding-3-small"
 _DEFAULT_DIMENSIONS = 768
 _BATCH_SIZE = 96  # OpenAI allows up to 2048 inputs; 96 is safe and efficient
+_MAX_RETRIES = 3
+_INITIAL_BACKOFF_S = 0.5  # 0.5s, 1s, 2s exponential backoff
 
 
 class CloudEmbedder:
@@ -93,32 +96,58 @@ class CloudEmbedder:
     # ── Internal ───────────────────────────────────────────────────────────
 
     def _call_api(self, texts: list[str]) -> list[list[float]]:
-        """POST to /embeddings and return the embedding vectors in input order."""
+        """POST to /embeddings and return the embedding vectors in input order.
+
+        Retries up to _MAX_RETRIES times with exponential backoff on transient
+        errors (HTTP 5xx, timeouts, connection failures). Non-retryable errors
+        (4xx) are raised immediately.
+        """
         payload: dict = {"model": self._model, "input": texts}
         # dimensions parameter is supported by OpenAI text-embedding-3-* models.
         # Providers like Fireworks ignore unknown params, so it is safe to always send.
         if self._dimensions != 1536:  # 1536 is the native dim; only send when reducing
             payload["dimensions"] = self._dimensions
 
-        try:
-            response = httpx.post(
-                f"{self._base_url}/embeddings",
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=60.0,
-            )
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise RuntimeError(
-                f"Embedding API error {exc.response.status_code}: {exc.response.text}"
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise RuntimeError(f"Embedding API request failed: {exc}") from exc
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = httpx.post(
+                    f"{self._base_url}/embeddings",
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=60.0,
+                )
+                response.raise_for_status()
+                data = response.json()["data"]
+                data.sort(key=lambda d: d["index"])
+                if attempt > 0:
+                    log.info("Embedding API succeeded on retry %d", attempt)
+                return [d["embedding"] for d in data]
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code < 500:
+                    raise RuntimeError(
+                        f"Embedding API error {exc.response.status_code}: "
+                        f"{exc.response.text}"
+                    ) from exc
+                last_exc = exc
+                backoff = _INITIAL_BACKOFF_S * (2 ** attempt)
+                log.warning(
+                    "Embedding API returned %d (attempt %d/%d), retrying in %.1fs",
+                    exc.response.status_code, attempt + 1, _MAX_RETRIES, backoff,
+                )
+                time.sleep(backoff)
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                backoff = _INITIAL_BACKOFF_S * (2 ** attempt)
+                log.warning(
+                    "Embedding API request failed: %s (attempt %d/%d), retrying in %.1fs",
+                    exc, attempt + 1, _MAX_RETRIES, backoff,
+                )
+                time.sleep(backoff)
 
-        data = response.json()["data"]
-        # Sort by index to guarantee order (API may reorder for efficiency)
-        data.sort(key=lambda d: d["index"])
-        return [d["embedding"] for d in data]
+        raise RuntimeError(
+            f"Embedding API failed after {_MAX_RETRIES} attempts: {last_exc}"
+        ) from last_exc

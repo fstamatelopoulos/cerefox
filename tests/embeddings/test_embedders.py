@@ -145,7 +145,7 @@ class TestCloudEmbedderEmbed:
         import httpx
 
         with patch("httpx.post", side_effect=httpx.HTTPError("connection refused")):
-            with pytest.raises(RuntimeError, match="Embedding API request failed"):
+            with pytest.raises(RuntimeError, match="Embedding API failed after"):
                 embedder.embed("boom")
 
     def test_embed_raises_on_status_error(self, embedder) -> None:
