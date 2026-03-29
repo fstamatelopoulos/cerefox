@@ -50,11 +50,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // Fire-and-forget usage logging
-    supabase.rpc("cerefox_log_usage", {
+    Promise.resolve(supabase.rpc("cerefox_log_usage", {
       p_operation: "list_metadata_keys",
       p_access_path: "edge-function",
       p_result_count: (data ?? []).length,
-    }).catch(() => {});
+    })).catch(() => {});
 
     return new Response(JSON.stringify(data ?? []), {
       status: 200,

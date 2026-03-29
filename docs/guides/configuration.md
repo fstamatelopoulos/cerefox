@@ -300,6 +300,94 @@ Or redeploy through the Supabase Dashboard → Edge Functions → Deploy.
 
 ---
 
+## Usage Tracking
+
+Cerefox can optionally log all read operations (search, metadata search, get document, list
+versions, get audit log, list metadata keys, list projects) across all access paths. This data
+feeds the analytics page and CSV export.
+
+**Usage tracking is opt-in and disabled by default.** No data is collected until you explicitly
+enable it.
+
+### How it works
+
+A `cerefox_config` table in Postgres stores runtime configuration as key-value pairs. The only
+key currently in use is `usage_tracking_enabled`. Every usage logging call goes through the
+`cerefox_log_usage` RPC, which checks this config value first:
+
+- If `usage_tracking_enabled` is `"true"` -- the RPC inserts a row into `cerefox_usage_log`
+- If `usage_tracking_enabled` is anything else (including missing) -- the RPC returns immediately without inserting
+
+The check happens **inside Postgres on every call**. All callers (Edge Functions, MCP tools,
+Python routes, CLI) call `cerefox_log_usage` unconditionally -- the RPC decides whether to
+actually log. Callers never wait for the logging result or handle errors from it
+(fire-and-forget).
+
+This means:
+- **No redeploy needed** to toggle tracking on or off -- just change the config value
+- **No performance impact when disabled** -- the RPC exits immediately
+- **One implementation** -- the check is in the RPC, not duplicated across callers
+
+### Enabling and disabling
+
+**Via CLI:**
+```bash
+# Enable
+cerefox config-set usage_tracking_enabled true
+
+# Disable
+cerefox config-set usage_tracking_enabled false
+
+# Check current state
+cerefox config-get usage_tracking_enabled
+```
+
+**Via REST API:**
+```bash
+# Enable
+curl -X PUT http://localhost:8000/api/v1/config/usage_tracking_enabled \
+  -H 'Content-Type: application/json' -d '{"value": "true"}'
+
+# Read
+curl http://localhost:8000/api/v1/config/usage_tracking_enabled
+```
+
+### What gets logged
+
+Each usage log entry records:
+
+| Field | Description |
+|-------|-------------|
+| `operation` | What was called: `search`, `metadata_search`, `get_document`, `list_versions`, `get_audit_log`, `list_metadata_keys`, `list_projects` |
+| `access_path` | Where the call came from: `remote-mcp`, `local-mcp`, `edge-function`, `webapp`, `cli` |
+| `reader` | Optional: who made the call (agent name, user, etc.) |
+| `document_id` | Optional: which document was accessed (for get_document, list_versions) |
+| `project_id` | Optional: which project was filtered on |
+| `query_text` | The search query or metadata filter |
+| `result_count` | Number of results returned |
+| `extra` | Flexible JSONB for additional context |
+
+The `access_path` is set by the caller layer (not the end user):
+- Edge Functions set `"edge-function"` (GPT Actions, direct HTTP callers)
+- `cerefox-mcp` tool handlers set `"remote-mcp"` (Claude Code, Cursor, Claude Desktop)
+- Python REST routes set `"webapp"` (the web UI)
+- Local MCP server sets `"local-mcp"`
+- CLI would set `"cli"` (not yet wired)
+
+### Viewing and exporting usage data
+
+**REST API endpoints:**
+- `GET /api/v1/usage-log` -- filtered list of entries (params: start, end, operation, access_path, reader, project_id, limit)
+- `GET /api/v1/usage-log/summary` -- aggregated stats (by day, operation, access path, top documents, top readers)
+- `GET /api/v1/usage-log/export.csv` -- CSV download with all columns
+
+**CLI:**
+```bash
+cerefox config-get usage_tracking_enabled
+```
+
+---
+
 ## Checking Your Configuration
 
 Run the status script to verify everything is connected:

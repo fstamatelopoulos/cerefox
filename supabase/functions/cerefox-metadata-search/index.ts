@@ -96,13 +96,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // Fire-and-forget usage logging
-    supabase.rpc("cerefox_log_usage", {
+    Promise.resolve(supabase.rpc("cerefox_log_usage", {
       p_operation: "metadata_search",
       p_access_path: "edge-function",
       p_query_text: JSON.stringify(metadata_filter),
       p_result_count: (data ?? []).length,
       p_project_id: project_id,
-    }).catch(() => {});
+    })).catch(() => {});
 
     return new Response(JSON.stringify(data ?? []), {
       status: 200,

@@ -86,7 +86,7 @@ export function logUsage(
     extra?: Record<string, unknown>;
   },
 ): void {
-  supabase.rpc("cerefox_log_usage", {
+  Promise.resolve(supabase.rpc("cerefox_log_usage", {
     p_operation: params.operation,
     p_access_path: "remote-mcp",
     p_reader: params.reader ?? null,
@@ -95,5 +95,5 @@ export function logUsage(
     p_query_text: params.query_text ?? null,
     p_result_count: params.result_count ?? null,
     p_extra: params.extra ?? {},
-  }).catch(() => {});
+  })).catch(() => {});
 }
