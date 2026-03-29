@@ -61,6 +61,25 @@ open http://localhost:8000/app/
 
 Most upgrades require no special steps beyond the standard checklist above. Notes below only apply when upgrading across specific version boundaries.
 
+### Upgrading to v0.1.11+ (from v0.1.10)
+
+**New migration**: `0006_usage_log.sql` adds the `cerefox_config` and `cerefox_usage_log`
+tables with 5 new RPCs. Applied automatically by `db_migrate.py` (step 3 above).
+
+**New REST API endpoints**: `/api/v1/usage-log`, `/api/v1/usage-log/export.csv`,
+`/api/v1/usage-log/summary`, `/api/v1/config/{key}`.
+
+**Usage tracking is opt-in**: disabled by default. Enable via CLI:
+```bash
+cerefox config-set usage_tracking_enabled true
+```
+Or via the web UI settings (future). When enabled, all read operations (search,
+metadata_search, get_document, list_versions, get_audit_log) are logged with operation
+type, access path, query text, and result count.
+
+**Edge Functions updated**: all primitive Edge Functions and `cerefox-mcp` now include
+fire-and-forget usage logging calls. Redeploy all Edge Functions (step 6 above).
+
 ### Upgrading to v0.1.10+ (from any earlier version)
 
 **New Edge Function**: `cerefox-metadata-search` must be deployed (included in step 6 above).

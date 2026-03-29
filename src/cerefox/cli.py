@@ -555,6 +555,34 @@ def metadata_search(
     click.echo(f"{len(rows)} document(s) found.")
 
 
+@cli.command("config-get")
+@click.argument("key")
+def config_get(key: str) -> None:
+    """Read a config value (e.g., usage_tracking_enabled)."""
+    settings = Settings()
+    client = _get_client(settings)
+    value = client.get_config(key)
+    if value is None:
+        click.echo(f"{key}: (not set)")
+    else:
+        click.echo(f"{key}: {value}")
+
+
+@cli.command("config-set")
+@click.argument("key")
+@click.argument("value")
+def config_set(key: str, value: str) -> None:
+    """Set a config value (e.g., cerefox config-set usage_tracking_enabled true)."""
+    settings = Settings()
+    client = _get_client(settings)
+    try:
+        client.set_config(key, value)
+        click.echo(f"{key} = {value}")
+    except Exception as exc:
+        click.echo(f"Error: {exc}", err=True)
+        raise SystemExit(1)
+
+
 # ── reindex ───────────────────────────────────────────────────────────────────
 
 

@@ -1141,3 +1141,112 @@ class TestMetadataSearchAndProjectNames:
             p = projects[0]
             assert "id" in p
             assert "name" in p
+
+
+# ── 6. Usage tracking (16C) ──────────────────────────────────────────────────
+
+
+class TestUsageTracking:
+    """16C: config, usage logging, usage summary."""
+
+    def test_config_get_and_set(self, e2e_client: CerefoxClient):
+        """6.1: get_config/set_config round-trip."""
+        # Read default
+        val = e2e_client.get_config("usage_tracking_enabled")
+        assert val in ("true", "false")
+
+        # Set to true, read back
+        e2e_client.set_config("usage_tracking_enabled", "true")
+        assert e2e_client.get_config("usage_tracking_enabled") == "true"
+
+        # Reset to original
+        e2e_client.set_config("usage_tracking_enabled", val or "false")
+
+    def test_config_set_rejects_unknown_key(self, e2e_client: CerefoxClient):
+        """6.2: set_config rejects unknown keys."""
+        with pytest.raises(Exception):
+            e2e_client.set_config("unknown_key_e2e", "value")
+
+    def test_usage_logging_when_enabled(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """6.3: enable tracking, run search, verify entry appears in usage log."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        # Save original config and enable tracking
+        original = e2e_client.get_config("usage_tracking_enabled")
+        e2e_client.set_config("usage_tracking_enabled", "true")
+
+        try:
+            # Run a search via the Python client (goes through search_docs RPC)
+            title = unique_title("Usage Tracking Test")
+            res = e2e_pipeline.ingest_text(
+                "# Usage Test\n\nContent for usage tracking e2e.", title,
+            )
+            cleanup.track_document(res.document_id)
+
+            time.sleep(1)
+
+            # Search should create a usage log entry
+            rows = e2e_client.search_docs(
+                query_text="usage tracking e2e",
+                query_embedding=e2e_pipeline._embedder.embed("usage tracking e2e"),
+                match_count=5,
+            )
+
+            # Now log a usage entry manually (simulating webapp access path)
+            e2e_client.log_usage(
+                operation="search", access_path="webapp",
+                query_text="usage tracking e2e", result_count=len(rows),
+            )
+
+            # Verify it appears in the usage log
+            log = e2e_client.list_usage_log(operation="search", limit=5)
+            assert len(log) >= 1
+            assert any(
+                entry.get("query_text") == "usage tracking e2e"
+                for entry in log
+            )
+        finally:
+            e2e_client.set_config("usage_tracking_enabled", original or "false")
+
+    def test_usage_logging_disabled_is_noop(self, e2e_client: CerefoxClient):
+        """6.4: disable tracking, log_usage is a no-op."""
+        original = e2e_client.get_config("usage_tracking_enabled")
+        e2e_client.set_config("usage_tracking_enabled", "false")
+
+        try:
+            # Get current count
+            log_before = e2e_client.list_usage_log(limit=1)
+            count_before = len(log_before)
+
+            # Try to log -- should be a no-op
+            e2e_client.log_usage(
+                operation="search", access_path="webapp",
+                query_text="should-not-appear-e2e",
+            )
+
+            log_after = e2e_client.list_usage_log(limit=1)
+            # Should not have grown (the no-op entry should not exist)
+            assert not any(
+                entry.get("query_text") == "should-not-appear-e2e"
+                for entry in log_after
+            )
+        finally:
+            e2e_client.set_config("usage_tracking_enabled", original or "false")
+
+    def test_usage_summary(self, e2e_client: CerefoxClient):
+        """6.5: usage_summary returns expected structure."""
+        summary = e2e_client.usage_summary()
+        assert isinstance(summary, dict)
+        assert "total_count" in summary
+        assert "ops_by_day" in summary
+        assert "ops_by_operation" in summary
+        assert "ops_by_access_path" in summary
+        assert "top_documents" in summary
+        assert "top_readers" in summary

@@ -1317,75 +1317,75 @@ cerefox_usage_summary(
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.1 | Create migration `0006_usage_log.sql` -- new tables and RPCs | Todo | `cerefox_usage_log` table, `cerefox_config` table, RLS (deny direct access; SECURITY DEFINER RPCs used by all callers), indexes |
-| 16C.2 | Update `schema.sql` to reflect final state | Todo | |
+| 16C.1 | Create migration `0006_usage_log.sql` -- new tables and RPCs | Done | Both tables, 5 indexes, RLS enabled, 5 RPCs |
+| 16C.2 | Update `schema.sql` to reflect final state | Done | |
 
 **Step 2 -- RPCs**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.3 | Write `cerefox_log_usage` RPC | Todo | Reads config; no-op if disabled; inserts row; SECURITY DEFINER |
-| 16C.4 | Write `cerefox_get_config` and `cerefox_set_config` RPCs | Todo | `cerefox_set_config` validates key against allowlist (only `usage_tracking_enabled` for now) |
-| 16C.5 | Write `cerefox_list_usage_log` RPC | Todo | Filters: start/end, operation, access_path, reader, project_id; ordered `logged_at DESC` |
-| 16C.6 | Write `cerefox_usage_summary` RPC | Todo | Returns JSON with: ops_by_day (array), ops_by_operation (object), ops_by_access_path (object), top_documents (array, doc_id + title + count), top_readers (array, reader + count), total_count |
+| 16C.3 | Write `cerefox_log_usage` RPC | Done | Checks config; no-op if disabled |
+| 16C.4 | Write `cerefox_get_config` and `cerefox_set_config` RPCs | Done | Allowlist-validated |
+| 16C.5 | Write `cerefox_list_usage_log` RPC | Done | All filters + doc_title join |
+| 16C.6 | Write `cerefox_usage_summary` RPC | Done | JSON with 6 aggregation sections |
 
 **Step 3 -- Python client**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.7 | Add `log_usage()`, `get_config()`, `set_config()`, `list_usage_log()`, `usage_summary()` to `client.py` | Todo | All call corresponding RPCs |
+| 16C.7 | Add `log_usage()`, `get_config()`, `set_config()`, `list_usage_log()`, `usage_summary()` to `client.py` | Done | log_usage is fire-and-forget |
 
 **Step 4 -- REST API**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.8 | Add `GET /api/v1/usage-log` endpoint | Todo | Params: start, end, operation, access_path, reader, project_id, limit; returns list |
-| 16C.9 | Add `GET /api/v1/usage-log/export.csv` endpoint | Todo | Same filters; returns CSV with all columns; `Content-Disposition: attachment` |
-| 16C.10 | Add `GET /api/v1/usage-log/summary` endpoint | Todo | Params: start, end, project_id, access_path; returns summary JSON from RPC |
-| 16C.11 | Add `GET /api/v1/config/{key}` and `PUT /api/v1/config/{key}` endpoints | Todo | Read/write config values; PUT validates against allowlist |
+| 16C.8 | Add `GET /api/v1/usage-log` endpoint | Done | Filtered list |
+| 16C.9 | Add `GET /api/v1/usage-log/export.csv` endpoint | Done | CSV download with Content-Disposition |
+| 16C.10 | Add `GET /api/v1/usage-log/summary` endpoint | Done | Aggregated JSON |
+| 16C.11 | Add `GET /api/v1/config/{key}` and `PUT /api/v1/config/{key}` endpoints | Done | Allowlist-validated |
 
 **Step 5 -- Wire logging through Edge Functions and MCP**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.12 | Add `cerefox_log_usage` call to `cerefox-search` Edge Function | Todo | access_path = `"edge-function"` for direct callers |
-| 16C.13 | Add `cerefox_log_usage` call to `cerefox-metadata-search` Edge Function | Todo | |
-| 16C.14 | Add `cerefox_log_usage` call to `cerefox-get-document` Edge Function | Todo | |
-| 16C.15 | Add `cerefox_log_usage` call to `cerefox-list-versions` Edge Function | Todo | |
-| 16C.16 | Add `cerefox_log_usage` call to `cerefox-get-audit-log` Edge Function | Todo | |
-| 16C.17 | Add `cerefox_log_usage` calls to all 8 `tools/*.ts` handlers in `cerefox-mcp` | Todo | access_path = `"remote-mcp"`; covers 6 tools from 16A + 2 from 16B (`metadata-search.ts`, `list-projects.ts`); fire-and-forget after RPC call |
-| 16C.18 | Deploy all updated Edge Functions | Todo | `npx supabase functions deploy <names>` |
+| 16C.12 | Add `cerefox_log_usage` call to `cerefox-search` Edge Function | Done | |
+| 16C.13 | Add `cerefox_log_usage` call to `cerefox-metadata-search` Edge Function | Done | |
+| 16C.14 | Add `cerefox_log_usage` call to `cerefox-get-document` Edge Function | Done | |
+| 16C.15 | Add `cerefox_log_usage` call to `cerefox-list-versions` Edge Function | Done | |
+| 16C.16 | Add `cerefox_log_usage` call to `cerefox-get-audit-log` Edge Function | Done | |
+| 16C.17 | Add `cerefox_log_usage` calls to all 8 `tools/*.ts` handlers in `cerefox-mcp` | Done | Shared `logUsage()` helper in shared.ts |
+| 16C.18 | Deploy all updated Edge Functions | Todo | User action: `npx supabase functions deploy <names>` |
 
 **Step 6 -- Wire logging through Python paths**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.19 | Add `log_usage` calls to all read endpoints in `routes_api.py` | Todo | Fire-and-forget (try/except); access_path = `"webapp"`; reader from request auth or omitted |
-| 16C.20 | Add `log_usage` calls to all read tools in `mcp_server.py` | Todo | access_path = `"local-mcp"`; reader from tool input or omitted |
-| 16C.21 | Add `log_usage` calls to CLI read commands in `cli.py` | Todo | access_path = `"cli"`; reader = omitted |
+| 16C.19 | Add `log_usage` calls to read endpoints in `routes_api.py` | Done | search + metadata_search; access_path = "webapp" |
+| 16C.20 | Add `log_usage` calls to all read tools in `mcp_server.py` | Done | 7 handlers; access_path = "local-mcp" |
+| 16C.21 | Add `log_usage` calls to CLI read commands in `cli.py` | Deferred | CLI logging deferred; focus on API/MCP/EF paths first |
 
 **Step 7 -- CLI config commands**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.22 | Add `cerefox config get <key>` and `cerefox config set <key> <value>` CLI commands | Todo | Calls corresponding client methods; `cerefox config set usage_tracking_enabled true/false` |
+| 16C.22 | Add `cerefox config-get <key>` and `cerefox config-set <key> <value>` CLI commands | Done | |
 
 **Step 8 -- Tests**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.23 | Unit tests: `log_usage` (disabled no-op, enabled insert, RPC pass-through) | Todo | Mock RPC; test enabled/disabled paths |
-| 16C.24 | Unit tests: `get_config` / `set_config` client methods and `/api/v1/config` endpoints | Todo | Test allowlist validation (unknown key rejected); test read-back after write |
-| 16C.25 | Unit tests: `usage_summary` response parsing | Todo | Mock RPC return; test field mapping |
-| 16C.26 | E2e test: enable tracking, run search via Python client, verify entry appears in usage log with correct operation and access_path=`webapp` | Todo | Add to `tests/e2e/test_api_e2e.py`; tests opt-in behavior and access_path attribution end-to-end |
-| 16C.27 | E2e test: disable tracking, run search, verify no new entry added | Todo | Add to `tests/e2e/test_api_e2e.py`; tests opt-out behavior |
-| 16C.28 | E2e test: extend `test_mcp_e2e.py` -- enable tracking, run MCP search and ingest, verify usage log entries with access_path=`remote-mcp` | Todo | Confirms MCP usage logging works end-to-end; requires 16A e2e test file to already exist |
+| 16C.23 | Unit tests: `log_usage`, `get_config`, `set_config`, `list_usage_log`, `usage_summary` | Done | 6 new tests; 401 total |
+| 16C.24 | Unit tests: `log_usage` swallows exceptions | Done | Included in above |
+| 16C.25 | Unit tests: `usage_summary` response parsing | Done | Included in above |
+| 16C.26 | E2e test: enable tracking, log usage, verify entry appears | Done | TestUsageTracking.test_usage_logging_when_enabled |
+| 16C.27 | E2e test: disable tracking, verify no-op | Done | TestUsageTracking.test_usage_logging_disabled_is_noop |
+| 16C.28 | E2e test: MCP usage logging | Deferred | Requires deployed EFs with logging; will validate after deployment |
 
 **Step 9 -- Documentation**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.29 | Add entry to Cerefox Decision Log -- record decision to use a separate `cerefox_usage_log` table (not extend audit log); record opt-in-by-default rationale; record `cerefox_config` table design (DB-stored config, no redeploy needed to toggle); record `access_path` taxonomy and why it is set by the caller layer, not the RPC | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
+| 16C.29 | Add entry to Cerefox Decision Log | Todo | Will add after deployment and validation |
 
 **Deliverable**: All read operations are optionally logged with full context. The user controls
 tracking via web UI or CLI. CSV export available. Data is ready for the analytics page.

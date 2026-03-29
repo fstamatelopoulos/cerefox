@@ -80,6 +80,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
+    // Fire-and-forget usage logging
+    Promise.resolve(supabase.rpc("cerefox_log_usage", {
+      p_operation: "get_document",
+      p_access_path: "edge-function",
+      p_document_id: document_id,
+      p_result_count: 1,
+    })).catch(() => {});
+
     return new Response(
       JSON.stringify({
         document_id,

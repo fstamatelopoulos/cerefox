@@ -328,6 +328,15 @@ Deno.serve(async (req: Request) => {
   // under the limit. This mirrors the local MCP server's truncation behaviour.
   const { accepted, truncated, usedBytes } = applyByteBudget(data ?? [], max_bytes);
 
+  // Fire-and-forget usage logging (never blocks the response)
+  Promise.resolve(supabase.rpc("cerefox_log_usage", {
+    p_operation: "search",
+    p_access_path: "edge-function",
+    p_query_text: query,
+    p_result_count: accepted.length,
+    p_project_id: projectId,
+  })).catch(() => {});
+
   return new Response(
     JSON.stringify({
       results: accepted,

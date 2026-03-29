@@ -3,7 +3,7 @@
 // Calls the cerefox_list_audit_entries RPC directly instead of delegating
 // to the cerefox-get-audit-log Edge Function.
 
-import { makeSupabaseClient } from "../shared.ts";
+import { makeSupabaseClient, logUsage } from "../shared.ts";
 
 export async function handleGetAuditLog(args: Record<string, unknown>): Promise<string> {
   const supabase = makeSupabaseClient();
@@ -35,6 +35,8 @@ export async function handleGetAuditLog(args: Record<string, unknown>): Promise<
     description: string;
     created_at: string;
   }>;
+
+  logUsage(supabase, { operation: "get_audit_log", result_count: entries.length });
 
   if (!entries.length) {
     return "No audit log entries found.";

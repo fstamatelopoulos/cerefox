@@ -3,7 +3,7 @@
 // Calls the cerefox_list_metadata_keys RPC directly instead of delegating
 // to the cerefox-metadata Edge Function.
 
-import { makeSupabaseClient } from "../shared.ts";
+import { makeSupabaseClient, logUsage } from "../shared.ts";
 
 export async function handleListMetadataKeys(): Promise<string> {
   const supabase = makeSupabaseClient();
@@ -19,6 +19,8 @@ export async function handleListMetadataKeys(): Promise<string> {
     doc_count: number;
     example_values: string[];
   }>;
+
+  logUsage(supabase, { operation: "list_metadata_keys", result_count: keys.length });
 
   if (keys.length === 0) {
     return "No metadata keys found across documents.";

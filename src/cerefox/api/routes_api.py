@@ -263,6 +263,11 @@ def api_search(
                 r for r in result_dicts if status_map.get(r["document_id"]) == review_status
             ]
 
+    client.log_usage(
+        operation="search", access_path="webapp",
+        query_text=q, project_id=pid, result_count=len(result_dicts),
+    )
+
     return SearchResponse(
         results=result_dicts,
         query=q,
@@ -326,6 +331,11 @@ def api_metadata_search(
         created_since=body.created_since,
         limit=body.limit,
         include_content=body.include_content,
+    )
+    client.log_usage(
+        operation="metadata_search", access_path="webapp",
+        query_text=json.dumps(body.metadata_filter), project_id=body.project_id,
+        result_count=len(rows),
     )
     return [
         MetadataSearchResultResponse(
@@ -999,3 +1009,148 @@ def api_set_version_archived(
     """Set or clear the archived flag on a version. Creates an audit entry."""
     client.set_version_archived(version_id, body.archived, author="user")
     return {"archived": body.archived}
+
+
+# ── Usage tracking ────────────────────────────────────────────────────────
+
+
+class UsageLogEntryResponse(BaseModel):
+    id: str
+    logged_at: str
+    operation: str
+    access_path: str
+    reader: str | None
+    document_id: str | None
+    doc_title: str | None
+    project_id: str | None
+    query_text: str | None
+    result_count: int | None
+    extra: dict[str, Any] = {}
+
+
+@api_router.get("/usage-log")
+def api_list_usage_log(
+    start: str | None = None,
+    end: str | None = None,
+    operation: str | None = None,
+    access_path: str | None = None,
+    reader: str | None = None,
+    project_id: str | None = None,
+    limit: int = 100,
+    client: CerefoxClient = Depends(get_client),
+) -> list[UsageLogEntryResponse]:
+    """List usage log entries with optional filters."""
+    rows = client.list_usage_log(
+        start=start,
+        end=end,
+        operation=operation,
+        access_path=access_path,
+        reader=reader,
+        project_id=project_id,
+        limit=limit,
+    )
+    return [
+        UsageLogEntryResponse(
+            id=row["id"],
+            logged_at=str(row.get("logged_at", "")),
+            operation=row["operation"],
+            access_path=row["access_path"],
+            reader=row.get("reader"),
+            document_id=row.get("document_id"),
+            doc_title=row.get("doc_title"),
+            project_id=row.get("project_id"),
+            query_text=row.get("query_text"),
+            result_count=row.get("result_count"),
+            extra=row.get("extra", {}),
+        )
+        for row in rows
+    ]
+
+
+@api_router.get("/usage-log/export.csv")
+def api_export_usage_csv(
+    start: str | None = None,
+    end: str | None = None,
+    operation: str | None = None,
+    access_path: str | None = None,
+    reader: str | None = None,
+    project_id: str | None = None,
+    limit: int = 10000,
+    client: CerefoxClient = Depends(get_client),
+) -> Response:
+    """Export usage log as CSV download."""
+    import csv
+    import io
+
+    rows = client.list_usage_log(
+        start=start, end=end, operation=operation,
+        access_path=access_path, reader=reader,
+        project_id=project_id, limit=limit,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "logged_at", "operation", "access_path", "reader",
+        "document_id", "doc_title", "project_id", "query_text",
+        "result_count", "extra",
+    ])
+    for row in rows:
+        writer.writerow([
+            row.get("id", ""),
+            row.get("logged_at", ""),
+            row.get("operation", ""),
+            row.get("access_path", ""),
+            row.get("reader", ""),
+            row.get("document_id", ""),
+            row.get("doc_title", ""),
+            row.get("project_id", ""),
+            row.get("query_text", ""),
+            row.get("result_count", ""),
+            json.dumps(row.get("extra", {})),
+        ])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=cerefox-usage-log.csv"},
+    )
+
+
+@api_router.get("/usage-log/summary")
+def api_usage_summary(
+    start: str | None = None,
+    end: str | None = None,
+    project_id: str | None = None,
+    access_path: str | None = None,
+    client: CerefoxClient = Depends(get_client),
+) -> dict[str, Any]:
+    """Get aggregated usage statistics for the analytics page."""
+    return client.usage_summary(
+        start=start, end=end, project_id=project_id, access_path=access_path,
+    )
+
+
+@api_router.get("/config/{key}")
+def api_get_config(
+    key: str,
+    client: CerefoxClient = Depends(get_client),
+) -> dict[str, str | None]:
+    """Read a config value."""
+    value = client.get_config(key)
+    return {"key": key, "value": value}
+
+
+class SetConfigRequest(BaseModel):
+    value: str
+
+
+@api_router.put("/config/{key}")
+def api_set_config(
+    key: str,
+    body: SetConfigRequest,
+    client: CerefoxClient = Depends(get_client),
+) -> dict[str, str]:
+    """Write a config value (validated against allowlist)."""
+    client.set_config(key, body.value)
+    return {"key": key, "value": body.value}

@@ -292,6 +292,51 @@ BEGIN
 END;
 $$;
 
+-- ── Config table ─────────────────────────────────────────────────────────────
+-- Key-value configuration stored in Postgres. Edge Functions and Python read
+-- this at call time -- no redeploy needed to toggle settings.
+-- Currently used for: usage_tracking_enabled (true/false).
+
+CREATE TABLE IF NOT EXISTS cerefox_config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- Seed default config (idempotent)
+INSERT INTO cerefox_config (key, value)
+VALUES ('usage_tracking_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;
+
+
+-- ── Usage log ────────────────────────────────────────────────────────────────
+-- Tracks read operations across all access paths. Opt-in; controlled by
+-- cerefox_config 'usage_tracking_enabled'. Feeds the analytics page.
+
+CREATE TABLE IF NOT EXISTS cerefox_usage_log (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    logged_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    operation    TEXT NOT NULL,
+    access_path  TEXT NOT NULL,
+    reader       TEXT,
+    document_id  UUID REFERENCES cerefox_documents(id) ON DELETE SET NULL,
+    project_id   UUID REFERENCES cerefox_projects(id) ON DELETE SET NULL,
+    query_text   TEXT,
+    result_count INT,
+    extra        JSONB DEFAULT '{}'::JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_log_logged_at
+    ON cerefox_usage_log (logged_at DESC);
+CREATE INDEX IF NOT EXISTS idx_usage_log_operation_logged_at
+    ON cerefox_usage_log (operation, logged_at DESC);
+CREATE INDEX IF NOT EXISTS idx_usage_log_access_path
+    ON cerefox_usage_log (access_path);
+CREATE INDEX IF NOT EXISTS idx_usage_log_reader
+    ON cerefox_usage_log (reader) WHERE reader IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_usage_log_document_id
+    ON cerefox_usage_log (document_id) WHERE document_id IS NOT NULL;
+
+
 -- ── Row Level Security ────────────────────────────────────────────────────────
 -- Enable RLS on all tables. No permissive policies are added: direct table
 -- access via the anon key (PostgREST) is denied by default.
@@ -310,3 +355,5 @@ ALTER TABLE cerefox_document_projects     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cerefox_document_versions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cerefox_audit_log              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cerefox_migrations            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cerefox_config                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cerefox_usage_log             ENABLE ROW LEVEL SECURITY;
