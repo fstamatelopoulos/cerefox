@@ -4,7 +4,7 @@
 // via the cerefox_ingest_document RPC directly -- no delegation to the
 // cerefox-ingest Edge Function.
 
-import { makeSupabaseClient } from "../shared.ts";
+import { makeSupabaseClient, logUsage } from "../shared.ts";
 import { embedBatch, OPENAI_MODEL } from "../embeddings.ts";
 
 // ── Chunker constants ──────────────────────────────────────────────────────
@@ -271,6 +271,11 @@ export async function handleIngest(
         throw new Error(`Ingest RPC failed: ${ingestErr.message}`);
       }
 
+      logUsage(supabase, {
+        operation: "ingest", requestor: author,
+        document_id: existingDoc.id, result_count: chunks.length,
+      });
+
       return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars.`;
     }
     // No existing doc found -- fall through to create path
@@ -351,6 +356,11 @@ export async function handleIngest(
         .insert({ document_id: documentId, project_id: projectId });
     }
   }
+
+  logUsage(supabase, {
+    operation: "ingest", requestor: author,
+    document_id: documentId, result_count: chunks.length,
+  });
 
   const projectInfo = project_name ? `, project: "${project_name}"` : "";
   return `Document saved: "${title}" (id: ${documentId}), ${chunks.length} chunk(s), ${totalChars} chars${projectInfo}.`;

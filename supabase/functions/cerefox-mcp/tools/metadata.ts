@@ -5,7 +5,7 @@
 
 import { makeSupabaseClient, logUsage } from "../shared.ts";
 
-export async function handleListMetadataKeys(): Promise<string> {
+export async function handleListMetadataKeys(args: Record<string, unknown> = {}): Promise<string> {
   const supabase = makeSupabaseClient();
 
   const { data, error } = await supabase.rpc("cerefox_list_metadata_keys");
@@ -20,7 +20,7 @@ export async function handleListMetadataKeys(): Promise<string> {
     example_values: string[];
   }>;
 
-  logUsage(supabase, { operation: "list_metadata_keys", result_count: keys.length });
+  logUsage(supabase, { operation: "list_metadata_keys", requestor: args.requestor as string | undefined, result_count: keys.length });
 
   if (keys.length === 0) {
     return "No metadata keys found across documents.";

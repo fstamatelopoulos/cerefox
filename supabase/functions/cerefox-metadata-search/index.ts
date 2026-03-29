@@ -99,6 +99,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     Promise.resolve(supabase.rpc("cerefox_log_usage", {
       p_operation: "metadata_search",
       p_access_path: "edge-function",
+      p_requestor: body.requestor ?? null,
       p_query_text: JSON.stringify(metadata_filter),
       p_result_count: (data ?? []).length,
       p_project_id: project_id,

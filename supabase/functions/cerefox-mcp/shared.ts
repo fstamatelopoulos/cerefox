@@ -82,14 +82,14 @@ export function logUsage(
     document_id?: string | null;
     project_id?: string | null;
     result_count?: number | null;
-    reader?: string | null;
+    requestor?: string | null;
     extra?: Record<string, unknown>;
   },
 ): void {
   Promise.resolve(supabase.rpc("cerefox_log_usage", {
     p_operation: params.operation,
     p_access_path: "remote-mcp",
-    p_reader: params.reader ?? null,
+    p_requestor: params.requestor ?? "mcp-agent",
     p_document_id: params.document_id ?? null,
     p_project_id: params.project_id ?? null,
     p_query_text: params.query_text ?? null,

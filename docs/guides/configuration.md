@@ -302,9 +302,9 @@ Or redeploy through the Supabase Dashboard → Edge Functions → Deploy.
 
 ## Usage Tracking
 
-Cerefox can optionally log all read operations (search, metadata search, get document, list
-versions, get audit log, list metadata keys, list projects) across all access paths. This data
-feeds the analytics page and CSV export.
+Cerefox can optionally log all operations (both reads and writes) across all access paths.
+This includes search, metadata search, get document, list versions, get audit log, list
+metadata keys, list projects, and ingest. This data feeds the analytics page and CSV export.
 
 **Usage tracking is opt-in and disabled by default.** No data is collected until you explicitly
 enable it.
@@ -360,7 +360,7 @@ Each usage log entry records:
 |-------|-------------|
 | `operation` | What was called: `search`, `metadata_search`, `get_document`, `list_versions`, `get_audit_log`, `list_metadata_keys`, `list_projects` |
 | `access_path` | Where the call came from: `remote-mcp`, `local-mcp`, `edge-function`, `webapp`, `cli` |
-| `reader` | Optional: who made the call (agent name, user, etc.) |
+| `requestor` | Who made the call: agent name (e.g., "Claude Code", "mcp-agent") or "user" for webapp/CLI |
 | `document_id` | Optional: which document was accessed (for get_document, list_versions) |
 | `project_id` | Optional: which project was filtered on |
 | `query_text` | The search query or metadata filter |
@@ -372,13 +372,13 @@ The `access_path` is set by the caller layer (not the end user):
 - `cerefox-mcp` tool handlers set `"remote-mcp"` (Claude Code, Cursor, Claude Desktop)
 - Python REST routes set `"webapp"` (the web UI)
 - Local MCP server sets `"local-mcp"`
-- CLI would set `"cli"` (not yet wired)
+- CLI sets `"cli"` for search, get-doc, and list-versions commands
 
 ### Viewing and exporting usage data
 
 **REST API endpoints:**
-- `GET /api/v1/usage-log` -- filtered list of entries (params: start, end, operation, access_path, reader, project_id, limit)
-- `GET /api/v1/usage-log/summary` -- aggregated stats (by day, operation, access path, top documents, top readers)
+- `GET /api/v1/usage-log` -- filtered list of entries (params: start, end, operation, access_path, requestor, project_id, limit)
+- `GET /api/v1/usage-log/summary` -- aggregated stats (by day, operation, access path, top documents, top requestors)
 - `GET /api/v1/usage-log/export.csv` -- CSV download with all columns
 
 **CLI:**

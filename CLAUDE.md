@@ -98,6 +98,7 @@ cerefox/
 - **Fire-and-forget ingestion**: ingestion can be async; failures log errors but don't block
 - **Parameterized limits**: response size limits, chunk sizes, etc. are configurable via settings
 - **Two-table design**: `cerefox_documents` (document-level) + `cerefox_chunks` (chunk-level) for clean separation
+- **Usage tracking**: `cerefox_usage_log` logs all operations (reads and writes); `cerefox_config` stores runtime config (e.g., `usage_tracking_enabled`). Opt-in; controlled via RPC, not env vars. `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled. Each entry records `requestor` (who: agent name or "user") and `access_path` (where: remote-mcp, local-mcp, edge-function, webapp, cli).
 
 ### Configuration
 - Use pydantic-settings with `.env` file support
@@ -191,6 +192,7 @@ GPT Actions (Custom GPT) ──────▶  cerefox-search           (primit
                          ──────▶  cerefox-list-versions
                          ──────▶  cerefox-get-audit-log
                          ──────▶  cerefox-metadata-search
+                         ──────▶  cerefox-list-projects
 
 Python CLI / Web UI ───────────▶  cerefox.db.client     ──psycopg2 / REST──▶  same RPCs
 ```
@@ -234,6 +236,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-list-versions` | List archived version history for a document | GPT Actions, direct HTTP |
 | `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | GPT Actions, direct HTTP |
 | `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search | GPT Actions, direct HTTP |
+| `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
 | `cerefox-mcp` | MCP Streamable HTTP server; calls RPCs directly via `tools/*.ts` | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
 ### Edge Function Model Config

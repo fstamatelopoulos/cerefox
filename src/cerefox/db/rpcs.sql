@@ -1374,7 +1374,7 @@ $$;
 CREATE OR REPLACE FUNCTION cerefox_log_usage(
     p_operation    TEXT,
     p_access_path  TEXT,
-    p_reader       TEXT        DEFAULT NULL,
+    p_requestor       TEXT        DEFAULT NULL,
     p_document_id  UUID        DEFAULT NULL,
     p_project_id   UUID        DEFAULT NULL,
     p_query_text   TEXT        DEFAULT NULL,
@@ -1395,10 +1395,10 @@ BEGIN
     END IF;
 
     INSERT INTO cerefox_usage_log (
-        operation, access_path, reader, document_id, project_id,
+        operation, access_path, requestor, document_id, project_id,
         query_text, result_count, extra
     ) VALUES (
-        p_operation, p_access_path, p_reader, p_document_id, p_project_id,
+        p_operation, p_access_path, p_requestor, p_document_id, p_project_id,
         p_query_text, p_result_count, p_extra
     );
 END;
@@ -1412,7 +1412,7 @@ CREATE OR REPLACE FUNCTION cerefox_list_usage_log(
     p_end         TIMESTAMPTZ DEFAULT NULL,
     p_operation   TEXT        DEFAULT NULL,
     p_access_path TEXT        DEFAULT NULL,
-    p_reader      TEXT        DEFAULT NULL,
+    p_requestor      TEXT        DEFAULT NULL,
     p_project_id  UUID        DEFAULT NULL,
     p_limit       INT         DEFAULT 100
 )
@@ -1421,7 +1421,7 @@ RETURNS TABLE (
     logged_at    TIMESTAMPTZ,
     operation    TEXT,
     access_path  TEXT,
-    reader       TEXT,
+    requestor    TEXT,
     document_id  UUID,
     doc_title    TEXT,
     project_id   UUID,
@@ -1439,7 +1439,7 @@ AS $$
         ul.logged_at,
         ul.operation,
         ul.access_path,
-        ul.reader,
+        ul.requestor,
         ul.document_id,
         d.title AS doc_title,
         ul.project_id,
@@ -1452,7 +1452,7 @@ AS $$
       AND (p_end IS NULL         OR ul.logged_at <= p_end)
       AND (p_operation IS NULL   OR ul.operation = p_operation)
       AND (p_access_path IS NULL OR ul.access_path = p_access_path)
-      AND (p_reader IS NULL      OR ul.reader = p_reader)
+      AND (p_requestor IS NULL      OR ul.requestor = p_requestor)
       AND (p_project_id IS NULL  OR ul.project_id = p_project_id)
     ORDER BY ul.logged_at DESC
     LIMIT p_limit;
@@ -1511,11 +1511,11 @@ BEGIN
         ORDER BY count DESC
         LIMIT 10
     ),
-    top_readers AS (
-        SELECT reader, COUNT(*) AS count
+    top_requestors AS (
+        SELECT requestor, COUNT(*) AS count
         FROM filtered
-        WHERE reader IS NOT NULL
-        GROUP BY reader
+        WHERE requestor IS NOT NULL
+        GROUP BY requestor
         ORDER BY count DESC
         LIMIT 10
     )
@@ -1525,7 +1525,7 @@ BEGIN
         'ops_by_operation', COALESCE((SELECT json_agg(json_build_object('operation', operation, 'count', count)) FROM ops_by_operation), '[]'::JSON),
         'ops_by_access_path', COALESCE((SELECT json_agg(json_build_object('access_path', access_path, 'count', count)) FROM ops_by_access_path), '[]'::JSON),
         'top_documents', COALESCE((SELECT json_agg(json_build_object('document_id', document_id, 'doc_title', doc_title, 'count', count)) FROM top_documents), '[]'::JSON),
-        'top_readers', COALESCE((SELECT json_agg(json_build_object('reader', reader, 'count', count)) FROM top_readers), '[]'::JSON)
+        'top_requestors', COALESCE((SELECT json_agg(json_build_object('requestor', requestor, 'count', count)) FROM top_requestors), '[]'::JSON)
     ) INTO v_result;
 
     RETURN v_result;

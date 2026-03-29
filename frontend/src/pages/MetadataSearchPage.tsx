@@ -17,7 +17,6 @@ import {
 import { IconPlus, IconSearch, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import {
   fetchMetadataSearch,
@@ -27,8 +26,6 @@ import { fetchMetadataKeys, fetchProjects } from "../api/projects";
 import type { MetadataSearchResult } from "../api/types";
 
 export function MetadataSearchPage() {
-  const navigate = useNavigate();
-
   // ── Filter state ─────────────────────────────────────────────────────────
   const [filters, setFilters] = useState<Array<{ key: string; value: string }>>([
     { key: "", value: "" },
@@ -246,7 +243,6 @@ export function MetadataSearchPage() {
               key={doc.document_id}
               doc={doc}
               showContent={includeContent}
-              onNavigate={() => navigate(`/document/${doc.document_id}`)}
             />
           ))}
         </Stack>
@@ -260,64 +256,137 @@ export function MetadataSearchPage() {
 function MetadataResultCard({
   doc,
   showContent,
-  onNavigate,
 }: {
   doc: MetadataSearchResult;
   showContent: boolean;
-  onNavigate: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [renderMd, setRenderMd] = useState(true);
   const metaEntries = Object.entries(doc.doc_metadata ?? {});
+  const topMeta = metaEntries.slice(0, 3);
+  const hasMoreMeta = metaEntries.length > 3;
+
   return (
-    <Card withBorder p="sm" style={{ cursor: "pointer" }} onClick={onNavigate}>
-      <Group justify="space-between" mb={4}>
-        <Text fw={600} size="sm">
-          {doc.title}
-        </Text>
-        <Badge size="xs" variant="light" color={doc.review_status === "approved" ? "green" : "yellow"}>
-          {doc.review_status}
-        </Badge>
-      </Group>
+    <Card withBorder p="sm">
+      {/* ── Collapsed: click anywhere to expand/collapse ───────────── */}
+      <div
+        style={{ cursor: "pointer" }}
+        onClick={() => setExpanded((e) => !e)}
+      >
+        <Group justify="space-between" mb={4}>
+          <Group gap="xs">
+            <Text fw={600} size="sm">{doc.title}</Text>
+            <Badge size="xs" variant="light" color={doc.review_status === "approved" ? "green" : "yellow"}>
+              {doc.review_status}
+            </Badge>
+          </Group>
+        </Group>
 
-      <Group gap={4} mb={4}>
-        {metaEntries.map(([k, v]) => (
-          <Badge key={k} size="xs" variant="outline">
-            {k}={v}
-          </Badge>
-        ))}
-      </Group>
-
-      {doc.project_names.length > 0 && (
         <Group gap={4} mb={4}>
-          {doc.project_names.map((name) => (
-            <Badge key={name} size="xs" variant="filled" color="blue">
-              {name}
+          {(expanded ? metaEntries : topMeta).map(([k, v]) => (
+            <Badge key={k} size="xs" variant="outline">
+              {k}={String(v).length > 30 ? String(v).slice(0, 28) + "..." : String(v)}
             </Badge>
           ))}
+          {!expanded && hasMoreMeta && (
+            <Badge size="xs" variant="light" c="dimmed">+{metaEntries.length - 3} more</Badge>
+          )}
         </Group>
-      )}
 
-      <Text size="xs" c="dimmed">
-        {doc.total_chars.toLocaleString()} chars | {doc.chunk_count} chunks |
-        {doc.version_count > 0 ? ` ${doc.version_count} versions |` : ""} updated{" "}
-        {doc.updated_at?.slice(0, 10) ?? "?"}
-      </Text>
+        {doc.project_names.length > 0 && (
+          <Group gap={4} mb={4}>
+            {doc.project_names.map((name) => (
+              <Badge key={name} size="xs" variant="filled" color="blue">{name}</Badge>
+            ))}
+          </Group>
+        )}
 
-      {showContent && doc.content && (
-        <Text
-          size="xs"
-          mt="xs"
-          style={{
-            whiteSpace: "pre-wrap",
-            maxHeight: 200,
-            overflow: "auto",
-            background: "var(--mantine-color-gray-light)",
-            padding: 8,
-            borderRadius: 4,
-          }}
-        >
-          {doc.content.slice(0, 2000)}
-          {doc.content.length > 2000 ? "..." : ""}
+        <Text size="xs" c="dimmed">
+          {doc.total_chars.toLocaleString()} chars | {doc.chunk_count} chunks |
+          {doc.version_count > 0 ? ` ${doc.version_count} versions |` : ""} updated{" "}
+          {doc.updated_at?.slice(0, 10) ?? "?"}
         </Text>
+      </div>
+
+      {/* ── Expanded: full metadata + content + link ───────────────── */}
+      {expanded && (
+        <Stack gap="xs" mt="sm">
+          {/* All metadata as key-value table */}
+          {metaEntries.length > 0 && (
+            <Card p="xs" bg="var(--mantine-color-gray-light)" radius="sm">
+              <Text size="xs" fw={500} mb={4}>All Metadata</Text>
+              {metaEntries.map(([k, v]) => (
+                <Group key={k} gap={4}>
+                  <Text size="xs" fw={500} c="dimmed" style={{ minWidth: 100 }}>{k}:</Text>
+                  <Text size="xs">{String(v)}</Text>
+                </Group>
+              ))}
+            </Card>
+          )}
+
+          {/* Document fields */}
+          <Group gap="xs">
+            <Text size="xs" c="dimmed">ID: {doc.document_id}</Text>
+            {doc.source && <Text size="xs" c="dimmed">| Source: {doc.source}</Text>}
+            <Text size="xs" c="dimmed">| Created: {doc.created_at?.slice(0, 10) ?? "?"}</Text>
+          </Group>
+
+          {/* Content viewer with raw/md toggle */}
+          {showContent && doc.content && (
+            <Card p="xs" withBorder radius="sm">
+              <Group justify="space-between" mb={4}>
+                <Text size="xs" fw={500}>Content</Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  onClick={() => setRenderMd((r) => !r)}
+                >
+                  {renderMd ? "Raw" : "Rendered"}
+                </Button>
+              </Group>
+              {renderMd ? (
+                <div
+                  style={{ maxHeight: 300, overflow: "auto", fontSize: 12 }}
+                  dangerouslySetInnerHTML={{
+                    __html: doc.content
+                      .replace(/^### (.+)$/gm, "<h4>$1</h4>")
+                      .replace(/^## (.+)$/gm, "<h3>$1</h3>")
+                      .replace(/^# (.+)$/gm, "<h2>$1</h2>")
+                      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+                      .replace(/\n\n/g, "<br/><br/>")
+                      .replace(/\n/g, "<br/>"),
+                  }}
+                />
+              ) : (
+                <Text
+                  size="xs"
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    maxHeight: 300,
+                    overflow: "auto",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {doc.content}
+                </Text>
+              )}
+            </Card>
+          )}
+
+          {/* Link to document detail (opens in new tab) */}
+          <Group>
+            <Button
+              component="a"
+              href={`/app/document/${doc.document_id}`}
+              target="_blank"
+              rel="noopener"
+              size="compact-xs"
+              variant="light"
+            >
+              View Document Details
+            </Button>
+          </Group>
+        </Stack>
       )}
     </Card>
   );

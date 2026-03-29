@@ -850,7 +850,7 @@ class CerefoxClient:
         self,
         operation: str,
         access_path: str,
-        reader: str | None = None,
+        requestor: str | None = None,
         document_id: str | None = None,
         project_id: str | None = None,
         query_text: str | None = None,
@@ -862,7 +862,7 @@ class CerefoxClient:
             self.rpc("cerefox_log_usage", {
                 "p_operation": operation,
                 "p_access_path": access_path,
-                "p_reader": reader,
+                "p_requestor": requestor,
                 "p_document_id": document_id,
                 "p_project_id": project_id,
                 "p_query_text": query_text,
@@ -878,7 +878,7 @@ class CerefoxClient:
         end: str | None = None,
         operation: str | None = None,
         access_path: str | None = None,
-        reader: str | None = None,
+        requestor: str | None = None,
         project_id: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
@@ -892,8 +892,8 @@ class CerefoxClient:
             params["p_operation"] = operation
         if access_path is not None:
             params["p_access_path"] = access_path
-        if reader is not None:
-            params["p_reader"] = reader
+        if requestor is not None:
+            params["p_requestor"] = requestor
         if project_id is not None:
             params["p_project_id"] = project_id
         return self.rpc("cerefox_list_usage_log", params)
