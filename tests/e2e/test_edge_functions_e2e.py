@@ -393,7 +393,7 @@ class TestMetadataSearchEdgeFunction:
             "title": title,
             "content": SAMPLE_CONTENT,
             "metadata": {"ef_tag": "meta-proj-16b"},
-            "project_name": f"[E2E-EF] TestProj {uuid.uuid4().hex[:6]}",
+            "project_name": "Test Files",
             "author": "e2e-ef-test",
             "author_type": "agent",
         })

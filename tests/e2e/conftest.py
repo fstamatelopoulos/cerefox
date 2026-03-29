@@ -237,6 +237,16 @@ class E2ECleanup:
     def track_project(self, project_id: str) -> None:
         self.project_ids.append(project_id)
 
+    def track_project_by_name(self, name: str) -> None:
+        """Look up a project by name and track it for cleanup."""
+        try:
+            for p in self._client.list_projects():
+                if p.get("name") == name:
+                    self.project_ids.append(p["id"])
+                    return
+        except Exception:
+            pass
+
     def cleanup(self) -> None:
         for doc_id in self.document_ids:
             try:

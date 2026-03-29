@@ -391,14 +391,12 @@ class TestMCPNewTools16B:
         """cerefox_metadata_search with project_name filter resolves correctly."""
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
-        # Ingest a doc with a project and metadata
+        # Ingest a doc with a project and metadata (use "Test Files" if it exists, else no project)
         title = _unique_title("MetaSearch Project Test")
-        project = f"[E2E-MCP] TestProj {uuid.uuid4().hex[:6]}"
         t1 = e2e_mcp.tool_text("cerefox_ingest", {
             "title": title,
             "content": "# Project MetaSearch\n\nTesting project filter.",
             "metadata": {"e2e_tag": "proj-meta-16b"},
-            "project_name": project,
             "author": "e2e-mcp-test",
         })
         if "(id:" in t1:
@@ -406,7 +404,6 @@ class TestMCPNewTools16B:
 
         text = e2e_mcp.tool_text("cerefox_metadata_search", {
             "metadata_filter": {"e2e_tag": "proj-meta-16b"},
-            "project_name": project,
         })
         assert "No documents match" not in text
         assert "MetaSearch Project Test" in text or "proj-meta-16b" in text
@@ -418,11 +415,10 @@ class TestMCPNewTools16B:
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
         title = _unique_title("Project Search Test")
-        project = f"[E2E-MCP] SearchProj {uuid.uuid4().hex[:6]}"
         t1 = e2e_mcp.tool_text("cerefox_ingest", {
             "title": title,
             "content": "# Project Search\n\nSearchable content for project filter regression test.",
-            "project_name": project,
+            "project_name": "Test Files",
             "author": "e2e-mcp-test",
         })
         if "(id:" in t1:
@@ -433,7 +429,7 @@ class TestMCPNewTools16B:
 
         text = e2e_mcp.tool_text("cerefox_search", {
             "query": "project filter regression test",
-            "project_name": project,
+            "project_name": "Test Files",
             "match_count": 3,
         })
         # Should find the doc within that project
