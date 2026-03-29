@@ -75,7 +75,7 @@ class TestListTools:
     @pytest.mark.asyncio
     async def test_returns_all_tools(self) -> None:
         tools = await list_tools()
-        assert len(tools) == 6
+        assert len(tools) == 8
 
     @pytest.mark.asyncio
     async def test_tool_names(self) -> None:
@@ -88,6 +88,8 @@ class TestListTools:
             "cerefox_get_document",
             "cerefox_list_versions",
             "cerefox_get_audit_log",
+            "cerefox_list_projects",
+            "cerefox_metadata_search",
         }
 
     @pytest.mark.asyncio
