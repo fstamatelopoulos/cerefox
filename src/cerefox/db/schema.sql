@@ -42,10 +42,16 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     review_status   TEXT        NOT NULL DEFAULT 'approved',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Soft delete: NULL = active, timestamp = deleted (recoverable).
+    -- Search indexes exclude soft-deleted docs. Purge does the real CASCADE DELETE.
+    deleted_at      TIMESTAMPTZ DEFAULT NULL,
 
     CONSTRAINT cerefox_documents_hash_unique UNIQUE (content_hash),
     CONSTRAINT cerefox_documents_review_status_check CHECK (review_status IN ('approved', 'pending_review'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_documents_deleted_at
+    ON cerefox_documents (deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- ── Document versions ──────────────────────────────────────────────────────────
 -- One row per archived version of a document. Created automatically before each

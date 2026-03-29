@@ -154,12 +154,45 @@ class CerefoxClient:
     def delete_document(
         self, document_id: str, author: str = "unknown", author_type: str = "user"
     ) -> None:
-        """Delete a document via RPC (creates audit entry, then cascade-deletes)."""
+        """Soft-delete a document (sets deleted_at, creates audit entry).
+
+        The document remains in the database but is excluded from search.
+        Use restore_document() to undo or purge_document() to permanently delete.
+        """
         self.rpc("cerefox_delete_document", {
             "p_document_id": document_id,
             "p_author": author,
             "p_author_type": author_type,
         })
+
+    def restore_document(
+        self, document_id: str, author: str = "unknown", author_type: str = "user"
+    ) -> None:
+        """Restore a soft-deleted document (clears deleted_at)."""
+        self.rpc("cerefox_restore_document", {
+            "p_document_id": document_id,
+            "p_author": author,
+            "p_author_type": author_type,
+        })
+
+    def purge_document(
+        self, document_id: str, author: str = "unknown", author_type: str = "user"
+    ) -> None:
+        """Permanently delete a soft-deleted document (CASCADE). Only works on soft-deleted docs."""
+        self.rpc("cerefox_purge_document", {
+            "p_document_id": document_id,
+            "p_author": author,
+            "p_author_type": author_type,
+        })
+
+    def list_deleted_documents(self, limit: int = 50) -> list[dict[str, Any]]:
+        """List soft-deleted documents (trash bin)."""
+        response = self.client.table("cerefox_documents").select(
+            "id, title, source, chunk_count, total_chars, review_status, deleted_at, updated_at"
+        ).not_.is_("deleted_at", "null").order(
+            "deleted_at", desc=True
+        ).limit(limit).execute()
+        return response.data or []
 
     def delete_chunks_for_document(self, document_id: str) -> None:
         """Delete all current chunks for a document without deleting the document itself.
@@ -205,6 +238,7 @@ class CerefoxClient:
                 .select(
                     "id, title, source, source_path, content_hash, metadata, chunk_count, total_chars, review_status, created_at, updated_at"
                 )
+                .is_("deleted_at", "null")
                 .order("updated_at", desc=True)
             )
             if project_id:

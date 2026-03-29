@@ -687,13 +687,50 @@ def api_delete_document(
     document_id: str,
     client: CerefoxClient = Depends(get_client),
 ) -> dict[str, bool]:
-    """Delete a document (creates audit entry via RPC before deletion)."""
+    """Soft-delete a document (moves to trash, recoverable)."""
     try:
         client.delete_document(document_id, author="web-ui", author_type="user")
         return {"success": True}
     except Exception as exc:
         logger.error("delete_document %s failed: %s", document_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post("/documents/{document_id}/restore")
+def api_restore_document(
+    document_id: str,
+    client: CerefoxClient = Depends(get_client),
+) -> dict[str, bool]:
+    """Restore a soft-deleted document from trash."""
+    try:
+        client.restore_document(document_id, author="web-ui", author_type="user")
+        return {"success": True}
+    except Exception as exc:
+        logger.error("restore_document %s failed: %s", document_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.delete("/documents/{document_id}/purge")
+def api_purge_document(
+    document_id: str,
+    client: CerefoxClient = Depends(get_client),
+) -> dict[str, bool]:
+    """Permanently delete a soft-deleted document (irreversible)."""
+    try:
+        client.purge_document(document_id, author="web-ui", author_type="user")
+        return {"success": True}
+    except Exception as exc:
+        logger.error("purge_document %s failed: %s", document_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.get("/documents/trash")
+def api_list_trash(
+    limit: int = 50,
+    client: CerefoxClient = Depends(get_client),
+) -> list[dict[str, Any]]:
+    """List soft-deleted documents (trash bin)."""
+    return client.list_deleted_documents(limit=limit)
 
 
 @api_router.post("/documents/{document_id}/upload")

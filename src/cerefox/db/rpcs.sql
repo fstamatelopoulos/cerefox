@@ -118,6 +118,7 @@ BEGIN
             FROM cerefox_chunks c
             JOIN cerefox_documents d ON c.document_id = d.id
             WHERE c.version_id IS NULL
+              AND d.deleted_at IS NULL
               AND c.fts @@ query_fts
               AND (p_project_id IS NULL OR EXISTS (
                       SELECT 1 FROM cerefox_document_projects dp
@@ -139,6 +140,7 @@ BEGIN
             FROM cerefox_chunks c
             JOIN cerefox_documents d ON c.document_id = d.id
             WHERE c.version_id IS NULL
+              AND d.deleted_at IS NULL
               AND (p_project_id IS NULL OR EXISTS (
                       SELECT 1 FROM cerefox_document_projects dp
                       WHERE dp.document_id = d.id AND dp.project_id = p_project_id
@@ -254,6 +256,7 @@ BEGIN
     FROM cerefox_chunks c
     JOIN cerefox_documents d ON c.document_id = d.id
     WHERE c.version_id IS NULL
+              AND d.deleted_at IS NULL
       AND c.fts @@ query_fts
       AND (p_project_id IS NULL OR EXISTS (
               SELECT 1 FROM cerefox_document_projects dp
@@ -325,6 +328,7 @@ BEGIN
     FROM cerefox_chunks c
     JOIN cerefox_documents d ON c.document_id = d.id
     WHERE c.version_id IS NULL
+              AND d.deleted_at IS NULL
       AND (p_project_id IS NULL OR EXISTS (
               SELECT 1 FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id AND dp.project_id = p_project_id
@@ -881,18 +885,14 @@ AS $$
     ORDER BY created_at DESC;
 $$;
 
--- ── cerefox_delete_document ──────────────────────────────────────────────────
--- Deletes a document and creates an audit entry recording the deletion.
--- The audit entry captures the document title and size before deletion.
--- After deletion, the audit entry's document_id becomes NULL (ON DELETE SET NULL)
--- but the description preserves the document identity.
---
--- Parameters:
---   p_document_id  : UUID of the document to delete
---   p_author       : who performed the deletion
---   p_author_type  : 'user' or 'agent'
+-- ── cerefox_delete_document (soft delete) ────────────────────────────────────
+-- Soft-deletes a document by setting deleted_at = NOW(). The document, its
+-- chunks, and versions remain in the database but are excluded from search.
+-- Use cerefox_purge_document for permanent deletion.
+-- Use cerefox_restore_document to undo a soft delete.
 
 DROP FUNCTION IF EXISTS cerefox_delete_document(UUID, TEXT, TEXT);
+DROP FUNCTION IF EXISTS cerefox_delete_document(UUID);
 CREATE FUNCTION cerefox_delete_document(
     p_document_id   UUID,
     p_author        TEXT    DEFAULT 'unknown',
@@ -907,7 +907,6 @@ DECLARE
     v_title      TEXT;
     v_total_chars INT;
 BEGIN
-    -- Capture document info before deletion
     SELECT title, total_chars INTO v_title, v_total_chars
     FROM cerefox_documents WHERE id = p_document_id;
 
@@ -915,7 +914,9 @@ BEGIN
         RAISE EXCEPTION 'Document % not found', p_document_id;
     END IF;
 
-    -- Create audit entry BEFORE deletion (so document_id FK is still valid)
+    -- Soft delete: set deleted_at timestamp
+    UPDATE cerefox_documents SET deleted_at = NOW() WHERE id = p_document_id;
+
     PERFORM cerefox_create_audit_entry(
         p_document_id := p_document_id,
         p_operation := 'delete',
@@ -923,11 +924,86 @@ BEGIN
         p_author_type := p_author_type,
         p_size_before := v_total_chars,
         p_size_after := 0,
-        p_description := 'Deleted document: ' || COALESCE(v_title, '(untitled)') ||
+        p_description := 'Soft-deleted document: ' || COALESCE(v_title, '(untitled)') ||
+                         ' (' || COALESCE(v_total_chars, 0) || ' chars)'
+    );
+END;
+$$;
+
+-- ── cerefox_restore_document ─────────────────────────────────────────────────
+-- Restores a soft-deleted document by clearing deleted_at.
+
+CREATE OR REPLACE FUNCTION cerefox_restore_document(
+    p_document_id   UUID,
+    p_author        TEXT    DEFAULT 'unknown',
+    p_author_type   TEXT    DEFAULT 'user'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_title      TEXT;
+    v_total_chars INT;
+BEGIN
+    SELECT title, total_chars INTO v_title, v_total_chars
+    FROM cerefox_documents WHERE id = p_document_id AND deleted_at IS NOT NULL;
+
+    IF v_title IS NULL THEN
+        RETURN;  -- Not found or not deleted
+    END IF;
+
+    UPDATE cerefox_documents SET deleted_at = NULL WHERE id = p_document_id;
+
+    PERFORM cerefox_create_audit_entry(
+        p_document_id := p_document_id,
+        p_operation := 'unarchive',
+        p_author := p_author,
+        p_author_type := p_author_type,
+        p_size_before := 0,
+        p_size_after := v_total_chars,
+        p_description := 'Restored document: ' || COALESCE(v_title, '(untitled)')
+    );
+END;
+$$;
+
+-- ── cerefox_purge_document ───────────────────────────────────────────────────
+-- Permanently deletes a soft-deleted document (CASCADE). Only works on
+-- documents that are already soft-deleted (deleted_at IS NOT NULL).
+
+CREATE OR REPLACE FUNCTION cerefox_purge_document(
+    p_document_id   UUID,
+    p_author        TEXT    DEFAULT 'unknown',
+    p_author_type   TEXT    DEFAULT 'user'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_title      TEXT;
+    v_total_chars INT;
+BEGIN
+    SELECT title, total_chars INTO v_title, v_total_chars
+    FROM cerefox_documents WHERE id = p_document_id AND deleted_at IS NOT NULL;
+
+    IF v_title IS NULL THEN
+        RETURN;  -- Not found or not soft-deleted
+    END IF;
+
+    PERFORM cerefox_create_audit_entry(
+        p_document_id := p_document_id,
+        p_operation := 'delete',
+        p_author := p_author,
+        p_author_type := p_author_type,
+        p_size_before := v_total_chars,
+        p_size_after := 0,
+        p_description := 'Permanently deleted document: ' || COALESCE(v_title, '(untitled)') ||
                          ' (' || COALESCE(v_total_chars, 0) || ' chars)'
     );
 
-    -- Delete document (cascades to chunks, versions, project associations)
     DELETE FROM cerefox_documents WHERE id = p_document_id;
 END;
 $$;

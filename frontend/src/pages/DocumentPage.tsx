@@ -2,6 +2,7 @@ import {
   Accordion,
   Badge,
   Button,
+  Card,
   Code,
   Container,
   Divider,
@@ -28,6 +29,7 @@ import { useState } from "react";
 
 import { fetchAuditLog, setReviewStatus, setVersionArchived } from "../api/audit";
 import { fetchDocument, fetchChunks, deleteDocument, fetchDocumentVersion, getDownloadUrl } from "../api/documents";
+import { restoreDocument, purgeDocument } from "../api/trash";
 import { DiffViewer } from "../components/DiffViewer";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 import { useProjects } from "../hooks/useProjects";
@@ -67,10 +69,32 @@ export function DocumentPage() {
     mutationFn: () => deleteDocument(id!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      showSuccess("Document deleted");
+      queryClient.invalidateQueries({ queryKey: ["document", id] });
+      showSuccess("Document moved to trash");
       navigate("/");
     },
     onError: (err) => showError("Delete failed", String(err)),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: () => restoreDocument(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["document", id] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      showSuccess("Document restored");
+    },
+    onError: (err) => showError("Restore failed", String(err)),
+  });
+
+  const purgeMutation = useMutation({
+    mutationFn: () => purgeDocument(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+      showSuccess("Document permanently deleted");
+      navigate("/trash");
+    },
+    onError: (err) => showError("Purge failed", String(err)),
   });
 
   const reviewMutation = useMutation({
@@ -226,6 +250,35 @@ export function DocumentPage() {
           )}
         </Group>
       </Group>
+
+      {doc.deleted_at && (
+        <Card withBorder p="sm" mt="sm" bg="var(--mantine-color-red-light)">
+          <Group justify="space-between">
+            <Group gap="xs">
+              <Badge color="red" variant="filled">Deleted</Badge>
+              <Text size="sm">This document is in the trash (deleted {doc.deleted_at?.slice(0, 10)}). It is excluded from search.</Text>
+            </Group>
+            <Group gap="xs">
+              <Button
+                size="compact-sm"
+                color="green"
+                onClick={() => restoreMutation.mutate()}
+                loading={restoreMutation.isPending}
+              >
+                Restore
+              </Button>
+              <Button
+                size="compact-sm"
+                color="red"
+                onClick={() => purgeMutation.mutate()}
+                loading={purgeMutation.isPending}
+              >
+                Permanently Delete
+              </Button>
+            </Group>
+          </Group>
+        </Card>
+      )}
 
       {metaEntries.length > 0 && (
         <>
