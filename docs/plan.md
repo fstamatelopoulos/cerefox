@@ -1198,9 +1198,9 @@ Returns: Array of {id, name, description} for all projects.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.29 | Update `docs/guides/connect-agents.md` -- updated tool schemas, new tools | Deferred | Will update when GPT Actions OpenAPI schema is revised |
+| 16B.29 | Update `docs/guides/connect-agents.md` -- updated tool schemas, new tools | Done | 8 tools, corrected cerefox-mcp description, Edge Function usage advantage, no legacy label |
 | 16B.30 | Update `docs/guides/upgrading.md` -- v0.1.10 breaking change notice | Done | Already drafted and cleaned up in earlier commit |
-| 16B.31 | Update `README.md` -- add metadata search and project discovery | Deferred | Will update with version release |
+| 16B.31 | Update `README.md` -- add metadata search and project discovery | Done | Feature table updated; local MCP reframed |
 | 16B.32 | Update `CLAUDE.md` -- Edge Function inventory and architecture diagram | Done | 8 Edge Functions, 8 MCP tools; diagram updated with new RPCs |
 | 16B.33 | Update `MEMORY.md` -- revised counts and current state | Done | |
 | 16B.34 | Update `docs/solution-design.md` -- metadata search and project name pattern | Done | Updated in 16A; metadata search noted in access path diagram |
