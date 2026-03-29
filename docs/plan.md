@@ -1410,13 +1410,14 @@ tracking via web UI or CLI. CSV export available. Data is ready for the analytic
 
 | # | Chart | Status | Library | Notes |
 |---|-------|--------|---------|-------|
-| V1 | Calls per day (time-series bar chart, stacked by operation type) | Included | @mantine/charts (Recharts) | Primary activity overview |
-| V2 | Calls per access path (time-series bar chart or grouped bar) | Included | @mantine/charts | Shows which clients are most active |
-| V3 | Top N most-accessed documents (horizontal bar chart) | Included | @mantine/charts | Ranked by access count |
-| V4 | Top N most-active readers (horizontal bar chart) | Included | @mantine/charts | Ranked by call count |
-| V5 | Operations breakdown (donut/pie chart) | Included | @mantine/charts | Quick proportion view |
-| V6 | Reader/author word cloud | Included | react-d3-cloud | Shows which agents and users are most active; word size proportional to call count |
-| V7 | HEB (Hierarchical Edge Bundling): readers → documents | Included | D3.js | Multi-agent coordination patterns: which agents accessed which documents |
+| V1 | Calls per day (bar chart) | Done | Nivo ResponsiveBar | Primary activity overview |
+| V2 | Calls per access path (bar chart) | Done | Nivo ResponsiveBar | Shows which clients are most active |
+| V3 | Top N most-accessed documents (horizontal bar) | Done | Nivo ResponsiveBar | Ranked by access count |
+| V4 | Top N most-active requestors (horizontal bar) | Done | Nivo ResponsiveBar | Ranked by call count |
+| V5 | Operations breakdown (donut chart) | Done | Nivo ResponsivePie | Quick proportion view |
+| V6 | Requestor activity word cloud | Done | CSS flex-wrap (no D3) | Word size proportional to call count; replaced react-d3-cloud (React 19 incompatible) |
+| V7 | HEB: requestors → documents | Done | D3.js (pure, no wrapper) | Multi-agent coordination patterns |
+| V8 | HEB: requestors → operations | Done | D3.js (pure, no wrapper) | Which agents use which operations |
 
 #### Tasks
 
@@ -1432,13 +1433,14 @@ tracking via web UI or CLI. CSV export available. Data is ready for the analytic
 |---|------|--------|-------|
 | 16D.2 | Create `AnalyticsPage.tsx` with date range picker, project filter, access path filter | Done | Period presets (7/30/90/all) + custom date range |
 | 16D.3 | Add summary stat cards (total calls, unique readers, docs accessed, top operation) | Done | 4 stat cards from usage summary |
-| 16D.4 | Implement V1: calls-per-day bar chart | Done | `@mantine/charts` BarChart |
-| 16D.5 | Implement V2: calls-per-access-path bar chart | Done | `@mantine/charts` BarChart |
-| 16D.6 | Implement V3: top documents horizontal bar chart | Done | `@mantine/charts` BarChart |
-| 16D.7 | Implement V4: top readers horizontal bar chart | Done | `@mantine/charts` BarChart |
-| 16D.8 | Implement V5: operations breakdown donut chart | Done | `@mantine/charts` DonutChart with percent labels |
-| 16D.9 | Implement V6: reader/author word cloud | Done | `react-d3-cloud`; word size proportional to call count |
-| 16D.9b | Implement V7: HEB readers-to-documents | Done | D3.js; curved paths, hover highlight, reader/document color legend |
+| 16D.4 | Implement V1: calls-per-day bar chart | Done | Nivo ResponsiveBar |
+| 16D.5 | Implement V2: calls-per-access-path bar chart | Done | Nivo ResponsiveBar |
+| 16D.6 | Implement V3: top documents horizontal bar chart | Done | Nivo ResponsiveBar |
+| 16D.7 | Implement V4: top requestors horizontal bar chart | Done | Nivo ResponsiveBar |
+| 16D.8 | Implement V5: operations breakdown donut chart | Done | Nivo ResponsivePie |
+| 16D.9 | Implement V6: requestor word cloud | Done | CSS flex-wrap (react-d3-cloud incompatible with React 19) |
+| 16D.9b | Implement V7: HEB requestors-to-documents | Done | D3.js pure; curved paths, hover highlight, legend |
+| 16D.9c | Implement V8: HEB requestors-to-operations | Done | D3.js pure; shows which agents use which operations |
 | 16D.10 | Add Usage Tracking toggle | Done | Switch in filter bar; calls PUT config API |
 | 16D.11 | Add CSV export button | Done | Link to /api/v1/usage-log/export.csv with current filters |
 | 16D.12 | Add "Analytics" to app navigation | Done | After "Audit Log" |
@@ -1454,7 +1456,7 @@ tracking via web UI or CLI. CSV export available. Data is ready for the analytic
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | 16D.14 | Add analytics section to `README.md` | Done | Usage tracking + analytics dashboard in feature table |
-| 16D.15 | Update `docs/solution-design.md` -- add usage log table and analytics page to architecture | Deferred | Architecture is documented in CLAUDE.md and configuration.md |
+| 16D.15 | Update `docs/solution-design.md` -- add usage log table and analytics page to architecture | Done | |
 | 16D.16 | Update `CLAUDE.md` -- note new `cerefox_config` and `cerefox_usage_log` tables | Done | Architecture principles section updated |
 
 **Deliverable**: Users can visualize Cerefox usage patterns with 7 filterable charts

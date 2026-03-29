@@ -46,7 +46,8 @@ The web UI covers management (browse, metadata, projects) and ingestion (upload,
 │  └───────────────────────┘                                      │
 │                                                                  │
 │  RPCs: hybrid_search ─ fts_search ─ semantic_search             │
-│        get_document ─ list_versions                              │
+│        get_document ─ list_versions ─ metadata_search           │
+│        list_projects ─ log_usage ─ usage_summary                │
 └─────────────────────────────────────────────────────────────────┘
                            ▲
                            │
@@ -75,6 +76,8 @@ The original spec used a single `cerefox_notes` table. The current design uses:
 - **`cerefox_chunks`** — search corpus and version store. Current chunks have `version_id IS NULL`; archived chunks have `version_id` pointing to their version row. All embeddings and FTS live here.
 - **`cerefox_document_versions`** — lightweight version metadata rows. No content TEXT -- content for any version is reconstructed from its archived chunks. Created only when content actually changes. Includes `archived` boolean for protecting specific versions from retention cleanup.
 - **`cerefox_audit_log`** — immutable, append-only log of all write operations. Records author, author_type ('user' or 'agent'), operation type, size delta, and description. FK references to documents and versions (SET NULL on delete). Used for accountability and temporal queries.
+- **`cerefox_usage_log`** — opt-in log of all operations (reads and writes) across all access paths. Records operation, access_path ('remote-mcp', 'local-mcp', 'edge-function', 'webapp', 'cli'), requestor (agent name or 'user'), document_id, query_text, result_count. Feeds the analytics page. Controlled by `cerefox_config` ('usage_tracking_enabled'). The `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled.
+- **`cerefox_config`** — key-value runtime config stored in Postgres. Currently used for `usage_tracking_enabled`. No redeploy needed to toggle -- `cerefox_set_config` validates against an allowlist.
 
 Key design properties:
 - **Document lifecycle**: delete/update a whole document cleanly (cascade deletes its chunks and versions)
@@ -995,6 +998,11 @@ Path 3 — GPT Actions / HTTP (dedicated primitive Edge Functions)
 | `cerefox_list_versions` | Read | List available versions for a document (version_number, size, timestamp, source). |
 | `cerefox_list_metadata_keys` | Read | Discover metadata keys in use across the knowledge base (key, doc_count, example values). |
 | `cerefox_get_audit_log` | Read | Query audit log entries with filters (document, author, operation type, time range). |
+| `cerefox_list_projects` | Read | List all projects with names, IDs, and descriptions for agent discovery. |
+| `cerefox_metadata_search` | Read | Find documents by metadata key-value criteria without a text search term. |
+
+All read tools accept an optional `requestor` parameter for usage log attribution.
+The `cerefox_ingest` tool uses `author` for the same purpose on writes.
 
 **How `cerefox_search` works internally:**
 1. Embeds the query with `CloudEmbedder` (OpenAI `text-embedding-3-small`)
@@ -1028,6 +1036,8 @@ key. They are the backend for ChatGPT GPT Actions, curl / scripted access, and a
 | `cerefox-get-document` | Read | GPT Actions, direct HTTP |
 | `cerefox-list-versions` | Read | GPT Actions, direct HTTP |
 | `cerefox-get-audit-log` | Audit | GPT Actions, direct HTTP |
+| `cerefox-metadata-search` | Search | GPT Actions, direct HTTP |
+| `cerefox-list-projects` | Read | GPT Actions, direct HTTP |
 | `cerefox-mcp` | MCP server | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
 **Design principle — Edge Function as thin HTTP adapter over Postgres RPC:**
@@ -1052,7 +1062,30 @@ For desktop AI clients, the remote `cerefox-mcp` Edge Function (Path 2) is the e
 setup. The local `cerefox mcp` server (Path 1) is a local alternative that avoids Edge
 Function invocations (relevant for free-tier limits), has lower latency, and works offline.
 
-### 10.4 Postgres RPCs (for direct SQL access)
+### 10.4 Usage Tracking and Analytics
+
+Usage tracking logs all operations (reads and writes) across all access paths. It is
+opt-in and disabled by default. The `cerefox_log_usage` RPC checks the `cerefox_config`
+table on every call and returns immediately when tracking is disabled (no performance
+impact).
+
+Each usage log entry records: `operation` (what), `access_path` (where: remote-mcp,
+local-mcp, edge-function, webapp, cli), `requestor` (who: agent name or "user"),
+`document_id`, `query_text`, and `result_count`. The `requestor` field enables
+multi-agent analytics -- distinguishing between different agents (e.g., "archiver",
+"master", "Claude Code") in usage patterns.
+
+**Analytics page** (`/app/analytics`): 8 interactive visualizations powered by Nivo
+(bar charts, donut chart) and D3.js (HEB charts, word cloud). On-demand analysis
+with date range, project, and access path filters. Includes a usage tracking toggle
+and CSV export.
+
+**Charting libraries**: Nivo (`@nivo/bar`, `@nivo/pie`) for standard charts -- chosen
+over `@mantine/charts` (Recharts) for better dark mode, tooltip quality, and React 19
+support. D3.js (pure, no React wrapper) for the HEB visualizations. CSS flex-wrap for
+the word cloud (react-d3-cloud was incompatible with React 19).
+
+### 10.5 Postgres RPCs (for direct SQL access)
 
 All search RPCs remain available for direct SQL execution via the Supabase MCP
 (`execute_sql` tool) or psql. Useful for cloud Claude.ai (FTS keyword search only):
@@ -1064,8 +1097,12 @@ All search RPCs remain available for direct SQL execution via the Supabase MCP
 | `cerefox_hybrid_search` | FTS + vector combined, requires embedding |
 | `cerefox_get_document` | Fetch full document by ID; optionally a specific version |
 | `cerefox_list_document_versions` | List version history for a document |
+| `cerefox_list_projects` | List all projects |
+| `cerefox_metadata_search` | Query by metadata key-value criteria |
+| `cerefox_log_usage` | Log a usage entry (no-op if tracking disabled) |
+| `cerefox_usage_summary` | Aggregated usage stats (JSON) |
 
-### 10.5 Remote MCP Edge Function (`cerefox-mcp`)
+### 10.6 Remote MCP Edge Function (`cerefox-mcp`)
 
 `supabase/functions/cerefox-mcp/index.ts` implements the MCP Streamable HTTP transport
 (spec 2025-03-26) as a Supabase Edge Function. It is a thin protocol adapter:
