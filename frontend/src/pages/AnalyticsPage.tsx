@@ -14,12 +14,13 @@ import {
   Title,
 } from "@mantine/core";
 import { BarChart, DonutChart } from "@mantine/charts";
-import { IconDownload } from "@tabler/icons-react";
+import { IconDownload, IconPlayerPlay } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   fetchUsageSummary,
+  fetchUsageLog,
   getConfig,
   getUsageExportUrl,
   setConfig,
@@ -29,7 +30,6 @@ import {
 import { fetchProjects } from "../api/projects";
 import { WordCloudChart } from "../components/WordCloudChart";
 import { HEBChart } from "../components/HEBChart";
-import { fetchUsageLog } from "../api/analytics";
 
 const DATE_PRESETS = [
   { value: "7", label: "Last 7 days" },
@@ -57,6 +57,24 @@ function daysAgo(n: number): string {
   return d.toISOString();
 }
 
+function buildFilters(
+  datePreset: string,
+  customStart: string,
+  customEnd: string,
+  projectId: string,
+  accessPath: string,
+): UsageFilters {
+  const filters: UsageFilters = {};
+  if (datePreset !== "all") {
+    filters.start = daysAgo(Number(datePreset));
+  }
+  if (customStart) filters.start = customStart;
+  if (customEnd) filters.end = customEnd;
+  if (projectId) filters.project_id = projectId;
+  if (accessPath) filters.access_path = accessPath;
+  return filters;
+}
+
 export function AnalyticsPage() {
   const queryClient = useQueryClient();
 
@@ -67,39 +85,39 @@ export function AnalyticsPage() {
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  const filters: UsageFilters = {};
-  if (datePreset !== "all") {
-    filters.start = daysAgo(Number(datePreset));
-  }
-  if (customStart) filters.start = customStart;
-  if (customEnd) filters.end = customEnd;
-  if (projectId) filters.project_id = projectId;
-  if (accessPath) filters.access_path = accessPath;
+  // ── On-demand analysis state ─────────────────────────────────────────────
+  const [analysisFilters, setAnalysisFilters] = useState<UsageFilters | null>(null);
 
-  // ── Data queries ─────────────────────────────────────────────────────────
-  const { data: summary, isLoading, error } = useQuery({
-    queryKey: ["usageSummary", filters],
-    queryFn: () => fetchUsageSummary(filters),
-    staleTime: 30_000,
-  });
-
+  // Only fetch projects and config on page load (lightweight)
   const { data: projects } = useQuery({
     queryKey: ["projects"],
     queryFn: fetchProjects,
     staleTime: 60_000,
+    retry: 1,
   });
 
   const { data: trackingEnabled } = useQuery({
     queryKey: ["config", "usage_tracking_enabled"],
     queryFn: () => getConfig("usage_tracking_enabled"),
     staleTime: 10_000,
+    retry: 1,
   });
 
-  // Fetch raw usage log for HEB (readers -> documents relationships)
-  const { data: usageLog } = useQuery({
-    queryKey: ["usageLog", filters],
-    queryFn: () => fetchUsageLog({ ...filters, limit: 500 }),
-    staleTime: 30_000,
+  // Summary and usage log only fetched on demand (after Run Analysis click)
+  const { data: summary, isLoading: summaryLoading, error: summaryError } = useQuery({
+    queryKey: ["usageSummary", analysisFilters],
+    queryFn: () => fetchUsageSummary(analysisFilters!),
+    enabled: analysisFilters !== null,
+    staleTime: 60_000,
+    retry: 0,
+  });
+
+  const { data: usageLog, isLoading: logLoading } = useQuery({
+    queryKey: ["usageLog", analysisFilters],
+    queryFn: () => fetchUsageLog({ ...analysisFilters!, limit: 200 }),
+    enabled: analysisFilters !== null && summary !== undefined,  // wait for summary first
+    staleTime: 60_000,
+    retry: 0,
   });
 
   const toggleMutation = useMutation({
@@ -116,6 +134,15 @@ export function AnalyticsPage() {
   ];
 
   const isEnabled = trackingEnabled === "true";
+  const isLoading = summaryLoading || logLoading;
+  const error = summaryError;
+
+  const handleRunAnalysis = useCallback(() => {
+    const filters = buildFilters(datePreset, customStart, customEnd, projectId, accessPath);
+    setAnalysisFilters(filters);
+  }, [datePreset, customStart, customEnd, projectId, accessPath]);
+
+  const exportFilters = analysisFilters ?? buildFilters(datePreset, customStart, customEnd, projectId, accessPath);
 
   return (
     <Container size="xl">
@@ -126,7 +153,7 @@ export function AnalyticsPage() {
             variant="subtle"
             leftSection={<IconDownload size={16} />}
             component="a"
-            href={getUsageExportUrl(filters)}
+            href={getUsageExportUrl(exportFilters)}
             download
             size="sm"
           >
@@ -189,6 +216,16 @@ export function AnalyticsPage() {
               color={isEnabled ? "green" : "gray"}
             />
           </Stack>
+          <Stack gap={2} justify="flex-end" style={{ paddingTop: 20 }}>
+            <Button
+              leftSection={<IconPlayerPlay size={16} />}
+              onClick={handleRunAnalysis}
+              loading={isLoading}
+              size="sm"
+            >
+              Run Analysis
+            </Button>
+          </Stack>
         </Group>
       </Card>
 
@@ -198,6 +235,14 @@ export function AnalyticsPage() {
       )}
       {error && (
         <Text c="red" mt="md">Error loading analytics: {(error as Error).message}</Text>
+      )}
+
+      {!analysisFilters && !isLoading && (
+        <Card withBorder p="xl" mt="md">
+          <Text ta="center" c="dimmed" size="lg">
+            Select filters and click "Run Analysis" to load usage data.
+          </Text>
+        </Card>
       )}
 
       {summary && <AnalyticsDashboard summary={summary} usageLog={usageLog ?? []} />}
@@ -239,8 +284,8 @@ function AnalyticsDashboard({
       {summary.total_count === 0 ? (
         <Card withBorder p="xl">
           <Text ta="center" c="dimmed" size="lg">
-            No usage data yet. Enable tracking and use the knowledge base to start
-            collecting analytics.
+            No usage data for the selected period. Enable tracking and use the
+            knowledge base to start collecting analytics.
           </Text>
         </Card>
       ) : (
@@ -366,11 +411,7 @@ function AnalyticsDashboard({
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
                 <Text fw={500} mb="sm">Reader → Document Access Patterns</Text>
-                {usageLog.length === 0 ? (
-                  <Text c="dimmed" size="sm">No access data available.</Text>
-                ) : (
-                  <HEBChart usageLog={usageLog} />
-                )}
+                <HEBChart usageLog={usageLog} />
               </Card>
             </Grid.Col>
           </Grid>
