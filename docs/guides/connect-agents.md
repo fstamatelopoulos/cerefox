@@ -65,7 +65,7 @@ client; you can also run both in parallel.
 **For Path B (Edge Functions / GPT Actions) only:**
 - Supabase Edge Functions deployed: `cerefox-search`, `cerefox-ingest`, `cerefox-metadata`,
   `cerefox-get-document`, `cerefox-list-versions`, `cerefox-get-audit-log`,
-  `cerefox-metadata-search` --
+  `cerefox-metadata-search`, `cerefox-list-projects` --
   see `setup-supabase.md` for the deploy procedure (`npx supabase functions deploy`)
 - Your **anon key**: Supabase Dashboard → Project Settings → API → `anon public`
 - Your **project ref**: visible in the Supabase Dashboard URL
@@ -655,6 +655,24 @@ paths:
             Array of audit log entries:
             [{ id, document_id, doc_title, version_id, operation, author, author_type,
                size_before, size_after, description, created_at }]
+  /cerefox-list-projects:
+    post:
+      operationId: listProjects
+      summary: List all projects with their names, IDs, and descriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                requestor:
+                  type: string
+                  description: Name of the agent making this request. Optional.
+      responses:
+        '200':
+          description: >
+            Array of projects: [{ id, name, description }]
   /cerefox-metadata-search:
     post:
       operationId: metadataSearch
