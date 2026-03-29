@@ -1453,9 +1453,9 @@ tracking via web UI or CLI. CSV export available. Data is ready for the analytic
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16D.14 | Add analytics section to `README.md` | Todo | |
-| 16D.15 | Update `docs/solution-design.md` -- add usage log table and analytics page to architecture | Todo | |
-| 16D.16 | Update `CLAUDE.md` -- note new `cerefox_config` and `cerefox_usage_log` tables | Todo | |
+| 16D.14 | Add analytics section to `README.md` | Done | Usage tracking + analytics dashboard in feature table |
+| 16D.15 | Update `docs/solution-design.md` -- add usage log table and analytics page to architecture | Deferred | Architecture is documented in CLAUDE.md and configuration.md |
+| 16D.16 | Update `CLAUDE.md` -- note new `cerefox_config` and `cerefox_usage_log` tables | Done | Architecture principles section updated |
 
 **Deliverable**: Users can visualize Cerefox usage patterns with 7 filterable charts
 (V1-V7 all included). Usage tracking is opt-in and controllable from the web UI.
