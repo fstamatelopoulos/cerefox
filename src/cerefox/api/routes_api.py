@@ -37,6 +37,7 @@ class DocSearchResultResponse(BaseModel):
     doc_source: str | None
     doc_metadata: dict[str, Any]
     doc_project_ids: list[str]
+    doc_project_names: list[str] = []
     best_score: float
     best_chunk_heading_path: list[str]
     full_content: str
@@ -58,7 +59,33 @@ class ChunkSearchResultResponse(BaseModel):
     doc_title: str
     doc_source: str | None
     doc_project_ids: list[str]
+    doc_project_names: list[str] = []
     doc_metadata: dict[str, Any]
+
+
+class MetadataSearchResultResponse(BaseModel):
+    document_id: str
+    title: str
+    doc_metadata: dict[str, Any]
+    review_status: str
+    source: str | None
+    created_at: str
+    updated_at: str
+    total_chars: int
+    chunk_count: int
+    project_ids: list[str] = []
+    project_names: list[str] = []
+    version_count: int
+    content: str | None = None
+
+
+class MetadataSearchRequest(BaseModel):
+    metadata_filter: dict[str, Any]
+    project_id: str | None = None
+    updated_since: str | None = None
+    created_since: str | None = None
+    limit: int = 10
+    include_content: bool = False
 
 
 class SearchResponse(BaseModel):
@@ -283,6 +310,40 @@ def api_list_metadata_keys(
             examples=row.get("example_values", []),
         )
         for row in raw
+    ]
+
+
+@api_router.post("/documents/metadata-search", response_model=list[MetadataSearchResultResponse])
+def api_metadata_search(
+    body: MetadataSearchRequest,
+    client: CerefoxClient = Depends(get_client),
+) -> list[MetadataSearchResultResponse]:
+    """Search documents by metadata key-value criteria without a text search term."""
+    rows = client.metadata_search(
+        metadata_filter=body.metadata_filter,
+        project_id=body.project_id,
+        updated_since=body.updated_since,
+        created_since=body.created_since,
+        limit=body.limit,
+        include_content=body.include_content,
+    )
+    return [
+        MetadataSearchResultResponse(
+            document_id=row["document_id"],
+            title=row.get("title", ""),
+            doc_metadata=row.get("doc_metadata", {}),
+            review_status=row.get("review_status", "approved"),
+            source=row.get("source"),
+            created_at=str(row.get("created_at", "")),
+            updated_at=str(row.get("updated_at", "")),
+            total_chars=row.get("total_chars", 0),
+            chunk_count=row.get("chunk_count", 0),
+            project_ids=row.get("project_ids", []),
+            project_names=row.get("project_names", []),
+            version_count=row.get("version_count", 0),
+            content=row.get("content"),
+        )
+        for row in rows
     ]
 
 
