@@ -31,6 +31,7 @@ import {
 import { fetchProjects } from "../api/projects";
 import { WordCloudChart } from "../components/WordCloudChart";
 import { HEBChart } from "../components/HEBChart";
+import { HEBOperationChart } from "../components/HEBOperationChart";
 
 const DATE_PRESETS = [
   { value: "7", label: "Last 7 days" },
@@ -277,7 +278,7 @@ function AnalyticsDashboard({
   usageLog,
 }: {
   summary: UsageSummary;
-  usageLog: Array<{ requestor: string | null; doc_title: string | null; document_id: string | null }>;
+  usageLog: Array<{ requestor: string | null; doc_title: string | null; document_id: string | null; operation: string }>;
 }) {
   const topOp = summary.ops_by_operation[0];
 
@@ -459,7 +460,7 @@ function AnalyticsDashboard({
               </Card>
             </Grid.Col>
 
-            {/* ── V7: HEB readers → documents ──────────────────────────── */}
+            {/* ── V7: HEB requestors → documents ─────────────────────────── */}
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
                 <Text fw={500} mb="sm">Requestor → Document Access Patterns</Text>
@@ -467,6 +468,12 @@ function AnalyticsDashboard({
               </Card>
             </Grid.Col>
           </Grid>
+
+          {/* ── V8: HEB requestors → operations ────────────────────────── */}
+          <Card withBorder p="md">
+            <Text fw={500} mb="sm">Requestor → Operation Patterns</Text>
+            <HEBOperationChart usageLog={usageLog} />
+          </Card>
         </>
       )}
     </Stack>
