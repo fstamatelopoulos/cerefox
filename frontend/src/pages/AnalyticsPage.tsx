@@ -13,7 +13,8 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { BarChart, DonutChart } from "@mantine/charts";
+import { ResponsiveBar } from "@nivo/bar";
+import { ResponsivePie } from "@nivo/pie";
 import { IconDownload, IconPlayerPlay } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
@@ -47,9 +48,28 @@ const ACCESS_PATH_OPTIONS = [
   { value: "cli", label: "CLI" },
 ];
 
-const CHART_COLORS = [
-  "blue", "teal", "orange", "grape", "cyan", "pink", "lime", "indigo",
+const PIE_COLORS = [
+  "#228be6", "#12b886", "#e8590c", "#9c36b5", "#15aabf", "#e03131", "#74b816", "#4263eb",
 ];
+
+// Nivo theme that respects the current color scheme via CSS variables
+const nivoTheme = {
+  text: { fill: "var(--mantine-color-text)" },
+  axis: {
+    ticks: { text: { fill: "var(--mantine-color-dimmed)", fontSize: 11 } },
+    legend: { text: { fill: "var(--mantine-color-text)", fontSize: 12 } },
+  },
+  grid: { line: { stroke: "var(--mantine-color-default-border)", strokeWidth: 1 } },
+  tooltip: {
+    container: {
+      background: "var(--mantine-color-body)",
+      color: "var(--mantine-color-text)",
+      border: "1px solid var(--mantine-color-default-border)",
+      borderRadius: 4,
+      fontSize: 12,
+    },
+  },
+};
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -293,16 +313,23 @@ function AnalyticsDashboard({
           {/* ── V1: Calls per day ──────────────────────────────────────── */}
           <Card withBorder p="md">
             <Text fw={500} mb="sm">Calls per Day</Text>
-            <BarChart
-              h={250}
-              data={summary.ops_by_day.map((d) => ({
-                day: d.day.slice(5),  // MM-DD
-                calls: d.count,
-              }))}
-              dataKey="day"
-              series={[{ name: "calls", color: "blue.6" }]}
-              tickLine="y"
-            />
+            <div style={{ height: 250 }}>
+              <ResponsiveBar
+                data={summary.ops_by_day.map((d) => ({
+                  day: d.day.slice(5),
+                  calls: d.count,
+                }))}
+                keys={["calls"]}
+                indexBy="day"
+                margin={{ top: 10, right: 20, bottom: 40, left: 50 }}
+                padding={0.3}
+                colors={["#228be6"]}
+                axisBottom={{ tickRotation: summary.ops_by_day.length > 15 ? -45 : 0 }}
+                axisLeft={{ legend: "Calls", legendPosition: "middle", legendOffset: -40 }}
+                enableLabel={false}
+                theme={nivoTheme}
+              />
+            </div>
           </Card>
 
           <Grid>
@@ -310,16 +337,21 @@ function AnalyticsDashboard({
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
                 <Text fw={500} mb="sm">By Access Path</Text>
-                <BarChart
-                  h={200}
-                  data={summary.ops_by_access_path.map((d) => ({
-                    path: d.access_path,
-                    calls: d.count,
-                  }))}
-                  dataKey="path"
-                  series={[{ name: "calls", color: "teal.6" }]}
-                  tickLine="y"
-                />
+                <div style={{ height: 200 }}>
+                  <ResponsiveBar
+                    data={summary.ops_by_access_path.map((d) => ({
+                      path: d.access_path,
+                      calls: d.count,
+                    }))}
+                    keys={["calls"]}
+                    indexBy="path"
+                    margin={{ top: 10, right: 20, bottom: 40, left: 50 }}
+                    padding={0.4}
+                    colors={["#12b886"]}
+                    enableLabel={false}
+                    theme={nivoTheme}
+                  />
+                </div>
               </Card>
             </Grid.Col>
 
@@ -327,16 +359,26 @@ function AnalyticsDashboard({
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
                 <Text fw={500} mb="sm">Operations Breakdown</Text>
-                <DonutChart
-                  h={200}
-                  data={summary.ops_by_operation.map((d, i) => ({
-                    name: d.operation,
-                    value: d.count,
-                    color: `${CHART_COLORS[i % CHART_COLORS.length]}.6`,
-                  }))}
-                  withLabelsLine
-                  labelsType="percent"
-                />
+                <div style={{ height: 200 }}>
+                  <ResponsivePie
+                    data={summary.ops_by_operation.map((d, i) => ({
+                      id: d.operation,
+                      label: d.operation,
+                      value: d.count,
+                      color: PIE_COLORS[i % PIE_COLORS.length],
+                    }))}
+                    margin={{ top: 20, right: 80, bottom: 20, left: 80 }}
+                    innerRadius={0.5}
+                    padAngle={1}
+                    cornerRadius={3}
+                    colors={{ datum: "data.color" }}
+                    arcLinkLabelsTextColor="var(--mantine-color-text)"
+                    arcLinkLabelsColor={{ from: "color" }}
+                    arcLabelsTextColor="#fff"
+                    enableArcLabels={false}
+                    theme={nivoTheme}
+                  />
+                </div>
               </Card>
             </Grid.Col>
           </Grid>
@@ -349,41 +391,51 @@ function AnalyticsDashboard({
                 {summary.top_documents.length === 0 ? (
                   <Text c="dimmed" size="sm">No document-specific access recorded.</Text>
                 ) : (
-                  <BarChart
-                    h={Math.max(150, summary.top_documents.length * 30)}
-                    data={summary.top_documents.map((d) => ({
-                      doc: d.doc_title.length > 30
-                        ? d.doc_title.slice(0, 28) + "..."
-                        : d.doc_title,
-                      calls: d.count,
-                    }))}
-                    dataKey="doc"
-                    series={[{ name: "calls", color: "orange.6" }]}
-                    orientation="vertical"
-                    tickLine="x"
-                  />
+                  <div style={{ height: Math.max(150, summary.top_documents.length * 32) }}>
+                    <ResponsiveBar
+                      data={summary.top_documents.map((d) => ({
+                        doc: d.doc_title.length > 25 ? d.doc_title.slice(0, 23) + "..." : d.doc_title,
+                        calls: d.count,
+                      }))}
+                      keys={["calls"]}
+                      indexBy="doc"
+                      layout="horizontal"
+                      margin={{ top: 5, right: 30, bottom: 30, left: 160 }}
+                      padding={0.3}
+                      colors={["#e8590c"]}
+                      enableLabel
+                      labelTextColor="#fff"
+                      theme={nivoTheme}
+                    />
+                  </div>
                 )}
               </Card>
             </Grid.Col>
 
-            {/* ── V4: Top readers ──────────────────────────────────────── */}
+            {/* ── V4: Top requestors ──────────────────────────────────────── */}
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
                 <Text fw={500} mb="sm">Most Active Requestors</Text>
                 {summary.top_requestors.length === 0 ? (
                   <Text c="dimmed" size="sm">No requestor attribution recorded.</Text>
                 ) : (
-                  <BarChart
-                    h={Math.max(150, summary.top_requestors.length * 30)}
-                    data={summary.top_requestors.map((d) => ({
-                      reader: d.requestor,
-                      calls: d.count,
-                    }))}
-                    dataKey="reader"
-                    series={[{ name: "calls", color: "grape.6" }]}
-                    orientation="vertical"
-                    tickLine="x"
-                  />
+                  <div style={{ height: Math.max(150, summary.top_requestors.length * 32) }}>
+                    <ResponsiveBar
+                      data={summary.top_requestors.map((d) => ({
+                        requestor: d.requestor,
+                        calls: d.count,
+                      }))}
+                      keys={["calls"]}
+                      indexBy="requestor"
+                      layout="horizontal"
+                      margin={{ top: 5, right: 30, bottom: 30, left: 120 }}
+                      padding={0.3}
+                      colors={["#9c36b5"]}
+                      enableLabel
+                      labelTextColor="#fff"
+                      theme={nivoTheme}
+                    />
+                  </div>
                 )}
               </Card>
             </Grid.Col>
