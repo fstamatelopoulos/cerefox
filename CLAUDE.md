@@ -175,14 +175,14 @@ Every Cerefox operation is implemented **once** in a Postgres RPC (SECURITY DEFI
 Agent / MCP client
       │
       ▼  (anon key, JWT validated by Supabase gateway)
-cerefox-mcp  ──internal fetch──▶  cerefox-search         ──supabase.rpc──▶  cerefox_hybrid_search
-             ──internal fetch──▶  cerefox-ingest          ──supabase.rpc──▶  cerefox_ingest_document
-             ──internal fetch──▶  cerefox-metadata        ──supabase.rpc──▶  cerefox_list_metadata_keys
-             ──internal fetch──▶  cerefox-get-document    ──supabase.rpc──▶  cerefox_get_document
-             ──internal fetch──▶  cerefox-list-versions   ──supabase.rpc──▶  cerefox_list_document_versions
-             ──internal fetch──▶  cerefox-get-audit-log   ──supabase.rpc──▶  cerefox_list_audit_entries
+cerefox-mcp  ──supabase.rpc──▶  cerefox_hybrid_search / cerefox_search_docs
+             ──supabase.rpc──▶  cerefox_ingest_document
+             ──supabase.rpc──▶  cerefox_list_metadata_keys
+             ──supabase.rpc──▶  cerefox_get_document
+             ──supabase.rpc──▶  cerefox_list_document_versions
+             ──supabase.rpc──▶  cerefox_list_audit_entries
 
-GPT Actions (Custom GPT) ──────▶  cerefox-search        (same Edge Functions, direct HTTP)
+GPT Actions (Custom GPT) ──────▶  cerefox-search        (primitive Edge Functions, direct HTTP)
                          ──────▶  cerefox-ingest
                          ──────▶  cerefox-metadata
                          ──────▶  cerefox-get-document
@@ -191,6 +191,8 @@ GPT Actions (Custom GPT) ──────▶  cerefox-search        (same Edge
 
 Python CLI / Web UI ───────────▶  cerefox.db.client     ──psycopg2 / REST──▶  same RPCs
 ```
+
+Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functions). This halves billable invocations for every MCP tool call. Primitive Edge Functions remain unchanged for GPT Actions and direct HTTP clients.
 
 ### Auth Pattern — Three Layers
 
@@ -207,8 +209,8 @@ See `docs/guides/access-paths.md` for a full breakdown with credential sources a
 Business logic lives **only in Postgres RPCs** wherever feasible. If you need to add logic to a tool:
 1. Add or modify the RPC in `src/cerefox/db/rpcs.sql`
 2. The Python client (`db/client.py`) calls the RPC via `supabase.rpc()`
-3. The dedicated Edge Function calls the same RPC via `supabase.rpc()`
-4. `cerefox-mcp` delegates to the dedicated Edge Function via `fetch()`
+3. The dedicated primitive Edge Function calls the same RPC via `supabase.rpc()`
+4. The corresponding `cerefox-mcp` tool handler in `tools/*.ts` calls the same RPC directly
 
 **Do NOT** add business logic directly in Edge Function TypeScript, Python routes, or `cerefox-mcp`. The only logic in Edge Functions is input validation, RPC call, and JSON response formatting.
 
@@ -222,13 +224,13 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 
 | Edge Function | Purpose | Called By |
 |---|---|---|
-| `cerefox-search` | Hybrid FTS + semantic search; handles server-side embedding | cerefox-mcp, GPT Actions, Python client |
-| `cerefox-ingest` | Ingest document; chunks, embeds, versions, stores | cerefox-mcp, GPT Actions, Python client |
-| `cerefox-metadata` | List metadata keys with doc counts + example values | cerefox-mcp, GPT Actions |
-| `cerefox-get-document` | Retrieve full doc content; supports archived versions | cerefox-mcp, GPT Actions |
-| `cerefox-list-versions` | List archived version history for a document | cerefox-mcp, GPT Actions |
-| `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | cerefox-mcp, GPT Actions |
-| `cerefox-mcp` | MCP Streamable HTTP adapter; delegates all 7 tools above | Claude Code, Cursor, Claude Desktop (via supergateway) |
+| `cerefox-search` | Hybrid FTS + semantic search; handles server-side embedding | GPT Actions, Python client, direct HTTP |
+| `cerefox-ingest` | Ingest document; chunks, embeds, versions, stores | GPT Actions, Python client, direct HTTP |
+| `cerefox-metadata` | List metadata keys with doc counts + example values | GPT Actions, direct HTTP |
+| `cerefox-get-document` | Retrieve full doc content; supports archived versions | GPT Actions, direct HTTP |
+| `cerefox-list-versions` | List archived version history for a document | GPT Actions, direct HTTP |
+| `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | GPT Actions, direct HTTP |
+| `cerefox-mcp` | MCP Streamable HTTP server; calls RPCs directly via `tools/*.ts` | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
 ### Edge Function Model Config
 
