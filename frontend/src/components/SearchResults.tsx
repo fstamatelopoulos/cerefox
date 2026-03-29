@@ -141,6 +141,15 @@ function DocResults({ results }: { results: DocSearchResult[] }) {
                 </Text>
               )}
             </Group>
+            {r.doc_project_names && r.doc_project_names.length > 0 && (
+              <Group gap={4} mt={4}>
+                {r.doc_project_names.map((name) => (
+                  <Badge key={name} size="xs" variant="filled" color="blue">
+                    {name}
+                  </Badge>
+                ))}
+              </Group>
+            )}
           </Accordion.Control>
           <Accordion.Panel>
             <Code block style={{ whiteSpace: "pre-wrap", maxHeight: 400, overflow: "auto" }}>

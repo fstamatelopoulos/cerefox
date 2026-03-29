@@ -8,6 +8,7 @@ export interface DocSearchResult {
   doc_source: string | null;
   doc_metadata: Record<string, string>;
   doc_project_ids: string[];
+  doc_project_names: string[];
   best_score: number;
   best_chunk_heading_path: string[];
   full_content: string;
@@ -29,6 +30,7 @@ export interface ChunkSearchResult {
   doc_title: string;
   doc_source: string | null;
   doc_project_ids: string[];
+  doc_project_names: string[];
   doc_metadata: Record<string, string>;
 }
 
@@ -88,6 +90,24 @@ export interface DocumentVersion {
   total_chars: number;
   archived: boolean;
   created_at: string;
+}
+
+// -- Metadata Search --
+
+export interface MetadataSearchResult {
+  document_id: string;
+  title: string;
+  doc_metadata: Record<string, string>;
+  review_status: string;
+  source: string | null;
+  created_at: string;
+  updated_at: string;
+  total_chars: number;
+  chunk_count: number;
+  project_ids: string[];
+  project_names: string[];
+  version_count: number;
+  content: string | null;
 }
 
 // -- Audit log --
