@@ -1354,7 +1354,7 @@ cerefox_usage_summary(
 | 16C.15 | Add `cerefox_log_usage` call to `cerefox-list-versions` Edge Function | Done | |
 | 16C.16 | Add `cerefox_log_usage` call to `cerefox-get-audit-log` Edge Function | Done | |
 | 16C.17 | Add `cerefox_log_usage` calls to all 8 `tools/*.ts` handlers in `cerefox-mcp` | Done | Shared `logUsage()` helper in shared.ts |
-| 16C.18 | Deploy all updated Edge Functions | Todo | User action: `npx supabase functions deploy <names>` |
+| 16C.18 | Deploy all updated Edge Functions | Done | All 8 Edge Functions redeployed; 68 e2e tests pass |
 
 **Step 6 -- Wire logging through Python paths**
 
@@ -1362,7 +1362,7 @@ cerefox_usage_summary(
 |---|------|--------|-------|
 | 16C.19 | Add `log_usage` calls to read endpoints in `routes_api.py` | Done | search + metadata_search; access_path = "webapp" |
 | 16C.20 | Add `log_usage` calls to all read tools in `mcp_server.py` | Done | 7 handlers; access_path = "local-mcp" |
-| 16C.21 | Add `log_usage` calls to CLI read commands in `cli.py` | Deferred | CLI logging deferred; focus on API/MCP/EF paths first |
+| 16C.21 | Add `log_usage` calls to CLI read commands in `cli.py` | Deferred | Low priority; CLI is rarely used for read operations; API/MCP/EF paths cover the main use cases |
 
 **Step 7 -- CLI config commands**
 
@@ -1385,7 +1385,7 @@ cerefox_usage_summary(
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.29 | Add entry to Cerefox Decision Log | Todo | Will add after deployment and validation |
+| 16C.29 | Add entry to Cerefox Decision Log | Done | 4 entries: separate table rationale, RPC-level config check, access_path taxonomy, Supabase thenable lesson |
 
 **Deliverable**: All read operations are optionally logged with full context. The user controls
 tracking via web UI or CLI. CSV export available. Data is ready for the analytics page.
