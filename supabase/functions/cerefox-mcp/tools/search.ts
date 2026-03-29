@@ -123,6 +123,7 @@ export async function handleSearch(
 
   logUsage(supabase, {
     operation: "search",
+    requestor: args.requestor as string | undefined,
     query_text: query,
     project_id: projectId,
     result_count: accepted.length,

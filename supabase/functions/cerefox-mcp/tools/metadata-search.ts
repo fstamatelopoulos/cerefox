@@ -92,6 +92,7 @@ export async function handleMetadataSearch(
 
   logUsage(supabase, {
     operation: "metadata_search",
+    requestor: args.requestor as string | undefined,
     query_text: JSON.stringify(metadata_filter),
     project_id: projectId,
     result_count: rows.length,

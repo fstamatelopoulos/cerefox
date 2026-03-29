@@ -31,7 +31,7 @@ export async function handleListVersions(args: Record<string, unknown>): Promise
     created_at: string;
   }>;
 
-  logUsage(supabase, { operation: "list_versions", document_id, result_count: versions.length });
+  logUsage(supabase, { operation: "list_versions", requestor: args.requestor as string | undefined, document_id, result_count: versions.length });
 
   if (!versions.length) {
     return "No archived versions found for this document.";

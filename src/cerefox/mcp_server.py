@@ -134,6 +134,13 @@ async def list_tools() -> list[types.Tool]:
                             "are silently capped."
                         ),
                     },
+                    "requestor": {
+                        "type": "string",
+                        "description": (
+                            'Name of the agent or user making this request (e.g., "Claude Code", '
+                            '"archiver"). Recorded in the usage log. Defaults to "mcp-agent".'
+                        ),
+                    },
                 },
             },
         ),
@@ -195,7 +202,12 @@ async def list_tools() -> list[types.Tool]:
             ),
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "requestor": {
+                        "type": "string",
+                        "description": 'Name of the agent/user. Recorded in the usage log. Defaults to "mcp-agent".',
+                    },
+                },
             },
         ),
         types.Tool(
@@ -221,6 +233,10 @@ async def list_tools() -> list[types.Tool]:
                             "Omit to get the current version."
                         ),
                     },
+                    "requestor": {
+                        "type": "string",
+                        "description": 'Name of the agent/user. Recorded in the usage log. Defaults to "mcp-agent".',
+                    },
                 },
             },
         ),
@@ -238,6 +254,10 @@ async def list_tools() -> list[types.Tool]:
                     "document_id": {
                         "type": "string",
                         "description": "UUID of the document",
+                    },
+                    "requestor": {
+                        "type": "string",
+                        "description": 'Name of the agent/user. Recorded in the usage log. Defaults to "mcp-agent".',
                     },
                 },
             },
@@ -281,6 +301,10 @@ async def list_tools() -> list[types.Tool]:
                             "Maximum number of entries to return (default: 50, max: 200)"
                         ),
                     },
+                    "requestor": {
+                        "type": "string",
+                        "description": 'Name of the agent/user. Recorded in the usage log. Defaults to "mcp-agent".',
+                    },
                 },
             },
         ),
@@ -292,7 +316,12 @@ async def list_tools() -> list[types.Tool]:
             ),
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "requestor": {
+                        "type": "string",
+                        "description": 'Name of the agent/user. Recorded in the usage log. Defaults to "mcp-agent".',
+                    },
+                },
             },
         ),
         types.Tool(
@@ -342,6 +371,10 @@ async def list_tools() -> list[types.Tool]:
                             "Defaults to server maximum."
                         ),
                     },
+                    "requestor": {
+                        "type": "string",
+                        "description": 'Name of the agent/user. Recorded in the usage log. Defaults to "mcp-agent".',
+                    },
                 },
             },
         ),
@@ -364,7 +397,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     elif name == "cerefox_ingest":
         return await _handle_ingest(client, pipeline, arguments)
     elif name == "cerefox_list_metadata_keys":
-        return await _handle_list_metadata_keys(client)
+        return await _handle_list_metadata_keys(client, arguments)
     elif name == "cerefox_get_document":
         return await _handle_get_document(client, arguments)
     elif name == "cerefox_list_versions":
@@ -372,7 +405,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     elif name == "cerefox_get_audit_log":
         return await _handle_get_audit_log(client, arguments)
     elif name == "cerefox_list_projects":
-        return await _handle_list_projects(client)
+        return await _handle_list_projects(client, arguments)
     elif name == "cerefox_metadata_search":
         return await _handle_metadata_search(client, settings, arguments)
     else:
@@ -451,7 +484,7 @@ async def _handle_search(
         text += f"\n\n[Results truncated at {total_bytes:,} bytes — response size limit reached. Use a more specific query, reduce match_count, or pass a larger max_bytes if your context allows.]"
 
     client.log_usage(
-        operation="search", access_path="local-mcp", requestor="mcp-agent",
+        operation="search", access_path="local-mcp", requestor=arguments.get("requestor") or "mcp-agent",
         query_text=query, project_id=project_id, result_count=len(parts),
     )
 
@@ -520,7 +553,7 @@ async def _handle_get_document(client: Any, arguments: dict) -> list[types.TextC
         label = f" (version {version_id})" if version_id else ""
         return [types.TextContent(type="text", text=f"Document{label} not found: {document_id}")]
     client.log_usage(
-        operation="get_document", access_path="local-mcp", requestor="mcp-agent",
+        operation="get_document", access_path="local-mcp", requestor=arguments.get("requestor") or "mcp-agent",
         document_id=document_id, result_count=1,
     )
     lines = [
@@ -539,7 +572,7 @@ async def _handle_list_versions(client: Any, arguments: dict) -> list[types.Text
         return [types.TextContent(type="text", text="Error: document_id is required.")]
     versions = client.list_document_versions(document_id)
     client.log_usage(
-        operation="list_versions", access_path="local-mcp", requestor="mcp-agent",
+        operation="list_versions", access_path="local-mcp", requestor=arguments.get("requestor") or "mcp-agent",
         document_id=document_id, result_count=len(versions),
     )
     if not versions:
@@ -553,10 +586,10 @@ async def _handle_list_versions(client: Any, arguments: dict) -> list[types.Text
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
-async def _handle_list_metadata_keys(client: Any) -> list[types.TextContent]:
+async def _handle_list_metadata_keys(client: Any, arguments: dict = {}) -> list[types.TextContent]:
     keys = client.list_metadata_keys()
     client.log_usage(
-        operation="list_metadata_keys", access_path="local-mcp", requestor="mcp-agent",
+        operation="list_metadata_keys", access_path="local-mcp", requestor=arguments.get("requestor") or "mcp-agent",
         result_count=len(keys),
     )
     if not keys:
@@ -579,7 +612,7 @@ async def _handle_get_audit_log(client: Any, arguments: dict) -> list[types.Text
         limit=limit,
     )
     client.log_usage(
-        operation="get_audit_log", access_path="local-mcp", requestor="mcp-agent",
+        operation="get_audit_log", access_path="local-mcp", requestor=arguments.get("requestor") or "mcp-agent",
         result_count=len(entries),
     )
     if not entries:
@@ -600,10 +633,10 @@ async def _handle_get_audit_log(client: Any, arguments: dict) -> list[types.Text
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
-async def _handle_list_projects(client: Any) -> list[types.TextContent]:
+async def _handle_list_projects(client: Any, arguments: dict = {}) -> list[types.TextContent]:
     projects = client.list_projects_rpc()
     client.log_usage(
-        operation="list_projects", access_path="local-mcp", requestor="mcp-agent",
+        operation="list_projects", access_path="local-mcp", requestor=arguments.get("requestor") or "mcp-agent",
         result_count=len(projects),
     )
     if not projects:
@@ -651,7 +684,7 @@ async def _handle_metadata_search(
     )
 
     client.log_usage(
-        operation="metadata_search", access_path="local-mcp", requestor="mcp-agent",
+        operation="metadata_search", access_path="local-mcp", requestor=arguments.get("requestor") or "mcp-agent",
         query_text=json.dumps(metadata_filter), project_id=project_id,
         result_count=len(rows),
     )

@@ -36,7 +36,7 @@ export async function handleGetAuditLog(args: Record<string, unknown>): Promise<
     created_at: string;
   }>;
 
-  logUsage(supabase, { operation: "get_audit_log", result_count: entries.length });
+  logUsage(supabase, { operation: "get_audit_log", requestor: args.requestor as string | undefined, result_count: entries.length });
 
   if (!entries.length) {
     return "No audit log entries found.";

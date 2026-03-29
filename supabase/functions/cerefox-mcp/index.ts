@@ -64,6 +64,11 @@ const TOOLS = [
           description:
             "Optional response size budget in bytes. Results are dropped whole until the budget is satisfied; a truncated flag is set when results are dropped. Defaults to the server maximum (200000). Pass a smaller value if your context window is limited. Values above the server maximum are silently capped.",
         },
+        requestor: {
+          type: "string",
+          description:
+            'Name of the agent or user making this request (e.g., "Claude Code", "archiver"). Recorded in the usage log for attribution. Defaults to "mcp-agent" if not provided.',
+        },
       },
     },
   },
@@ -113,7 +118,13 @@ const TOOLS = [
       "List all metadata keys currently in use across documents in the Cerefox knowledge base. Returns each key with its document count and up to 5 example values.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        requestor: {
+          type: "string",
+          description:
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+        },
+      },
     },
   },
   {
@@ -132,6 +143,11 @@ const TOOLS = [
           type: "string",
           description: "UUID of a specific archived version to retrieve (optional)",
         },
+        requestor: {
+          type: "string",
+          description:
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+        },
       },
     },
   },
@@ -146,6 +162,11 @@ const TOOLS = [
         document_id: {
           type: "string",
           description: "UUID of the document whose version history to list",
+        },
+        requestor: {
+          type: "string",
+          description:
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
         },
       },
     },
@@ -178,6 +199,11 @@ const TOOLS = [
           type: "integer",
           description: "Maximum number of entries to return (default: 50, max: 200)",
         },
+        requestor: {
+          type: "string",
+          description:
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+        },
       },
     },
   },
@@ -187,7 +213,13 @@ const TOOLS = [
       "List all projects with their names and IDs. Use this to discover available projects before filtering by project_name in other tools.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        requestor: {
+          type: "string",
+          description:
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+        },
+      },
     },
   },
   {
@@ -229,6 +261,11 @@ const TOOLS = [
           description:
             "Soft cap on total response bytes when include_content is true. Defaults to server maximum (200000).",
         },
+        requestor: {
+          type: "string",
+          description:
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+        },
       },
     },
   },
@@ -268,7 +305,7 @@ async function dispatchToolCall(
       return await handleIngest(args, openaiKey);
     }
     case "cerefox_list_metadata_keys":
-      return await handleListMetadataKeys();
+      return await handleListMetadataKeys(args);
     case "cerefox_get_document":
       return await handleGetDocument(args);
     case "cerefox_list_versions":
@@ -276,7 +313,7 @@ async function dispatchToolCall(
     case "cerefox_get_audit_log":
       return await handleGetAuditLog(args);
     case "cerefox_list_projects":
-      return await handleListProjects();
+      return await handleListProjects(args);
     case "cerefox_metadata_search":
       return await handleMetadataSearch(args);
     default:

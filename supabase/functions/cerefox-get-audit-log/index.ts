@@ -72,6 +72,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     Promise.resolve(supabase.rpc("cerefox_log_usage", {
       p_operation: "get_audit_log",
       p_access_path: "edge-function",
+      p_requestor: body.requestor ?? null,
       p_result_count: (data ?? []).length,
     })).catch(() => {});
 

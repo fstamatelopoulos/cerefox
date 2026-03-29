@@ -5,7 +5,7 @@
 
 import { makeSupabaseClient, logUsage } from "../shared.ts";
 
-export async function handleListProjects(): Promise<string> {
+export async function handleListProjects(args: Record<string, unknown> = {}): Promise<string> {
   const supabase = makeSupabaseClient();
 
   const { data, error } = await supabase.rpc("cerefox_list_projects");
@@ -20,7 +20,7 @@ export async function handleListProjects(): Promise<string> {
     description: string | null;
   }>;
 
-  logUsage(supabase, { operation: "list_projects", result_count: projects.length });
+  logUsage(supabase, { operation: "list_projects", requestor: args.requestor as string | undefined, result_count: projects.length });
 
   if (projects.length === 0) {
     return "No projects found.";

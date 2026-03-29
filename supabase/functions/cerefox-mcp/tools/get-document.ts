@@ -35,7 +35,7 @@ export async function handleGetDocument(args: Record<string, unknown>): Promise<
     return "Document not found.";
   }
 
-  logUsage(supabase, { operation: "get_document", document_id, result_count: 1 });
+  logUsage(supabase, { operation: "get_document", requestor: args.requestor as string | undefined, document_id, result_count: 1 });
 
   const label = version_id !== null ? " (archived version)" : " (current)";
   return `# ${row.doc_title ?? "Untitled"}${label}\n\n${row.full_content ?? ""}`;

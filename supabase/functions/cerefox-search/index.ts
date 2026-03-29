@@ -332,6 +332,7 @@ Deno.serve(async (req: Request) => {
   Promise.resolve(supabase.rpc("cerefox_log_usage", {
     p_operation: "search",
     p_access_path: "edge-function",
+    p_requestor: body.requestor ?? null,
     p_query_text: query,
     p_result_count: accepted.length,
     p_project_id: projectId,
