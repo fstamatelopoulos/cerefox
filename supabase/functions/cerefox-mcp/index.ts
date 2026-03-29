@@ -4,35 +4,25 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  * cerefox-mcp — Supabase Edge Function
  *
  * MCP Streamable HTTP server (spec 2025-03-26). Exposes all Cerefox tools
- * over HTTPS — no Python install, no local process, works from any
+ * over HTTPS -- no Python install, no local process, works from any
  * remote-capable MCP client.
  *
- * This is a thin protocol adapter. All business logic lives in dedicated
- * Edge Functions; this function handles the MCP JSON-RPC 2.0 layer only
- * and delegates every tool call via internal fetch():
- *
- *   cerefox_search            → cerefox-search
- *   cerefox_ingest             → cerefox-ingest
- *   cerefox_list_metadata_keys → cerefox-metadata
- *   cerefox_get_document       → cerefox-get-document
- *   cerefox_list_versions      → cerefox-list-versions
- *
- * Authentication: Deployed with standard JWT verification (default).
- * Internal calls forward the caller's Authorization header (validated by
- * the gateway before reaching this code). Dedicated Edge Functions use
- * the service-role key internally — callers only need the anon key.
+ * Each tool handler lives in tools/*.ts and calls Postgres RPCs directly
+ * via the service-role key. No delegation to primitive Edge Functions.
  *
  * Supported clients:
- *   Claude Code    — claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <anon-key>"
- *   Cursor         — url + headers.Authorization in mcp.json
- *   Claude Desktop — npx supergateway --streamableHttp <url> --header "Authorization: Bearer <anon-key>"
+ *   Claude Code    -- claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <anon-key>"
+ *   Cursor         -- url + headers.Authorization in mcp.json
+ *   Claude Desktop -- npx supergateway --streamableHttp <url> --header "Authorization: Bearer <anon-key>"
  */
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
-};
+import { CORS_HEADERS, jsonResponse, errorResponse, notificationResponse } from "./shared.ts";
+import { handleSearch } from "./tools/search.ts";
+import { handleIngest } from "./tools/ingest.ts";
+import { handleListMetadataKeys } from "./tools/metadata.ts";
+import { handleGetDocument } from "./tools/get-document.ts";
+import { handleListVersions } from "./tools/list-versions.ts";
+import { handleGetAuditLog } from "./tools/audit-log.ts";
 
 const MCP_VERSION = "2025-03-26";
 const SERVER_NAME = "cerefox";
@@ -191,34 +181,6 @@ const TOOLS = [
   },
 ];
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
-}
-
-function errorResponse(id: unknown, code: number, message: string): Response {
-  return jsonResponse(
-    {
-      jsonrpc: "2.0",
-      id: id ?? null,
-      error: { code, message },
-    },
-    200, // MCP errors are still HTTP 200 per spec; the error is in the payload
-  );
-}
-
-function notificationResponse(): Response {
-  // Notifications (no id field) get 202 with empty body
-  return new Response(null, {
-    status: 202,
-    headers: CORS_HEADERS,
-  });
-}
-
 // ── Method handlers ──────────────────────────────────────────────────────────
 
 function handleInitialize(id: unknown): Response {
@@ -227,283 +189,47 @@ function handleInitialize(id: unknown): Response {
     id,
     result: {
       protocolVersion: MCP_VERSION,
-      capabilities: {
-        tools: {},
-      },
-      serverInfo: {
-        name: SERVER_NAME,
-        version: SERVER_VERSION,
-      },
+      capabilities: { tools: {} },
+      serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
     },
   });
 }
 
 function handleToolsList(id: unknown): Response {
-  return jsonResponse({
-    jsonrpc: "2.0",
-    id,
-    result: { tools: TOOLS },
-  });
+  return jsonResponse({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
 }
 
-async function handleToolCall(
+async function dispatchToolCall(
   name: string,
   args: Record<string, unknown>,
-  callerAuth: string,
 ): Promise<string> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-
-  const internalHeaders = {
-    "Content-Type": "application/json",
-    "Authorization": callerAuth,
-  };
-
-  if (name === "cerefox_search") {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/cerefox-search`, {
-      method: "POST",
-      headers: internalHeaders,
-      body: JSON.stringify({
-        query: args.query,
-        match_count: args.match_count ?? 5,
-        project_name: args.project_name,
-        metadata_filter: args.metadata_filter ?? null,
-        ...(args.max_bytes != null ? { max_bytes: args.max_bytes } : {}),
-      }),
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      const errMsg = (data as { error?: string }).error ?? `HTTP ${resp.status}`;
-      throw new Error(`cerefox-search error: ${errMsg}`);
+  switch (name) {
+    case "cerefox_search": {
+      const openaiKey = Deno.env.get("OPENAI_API_KEY");
+      if (!openaiKey) throw new Error("OPENAI_API_KEY secret not set on this project");
+      return await handleSearch(args, openaiKey);
     }
-
-    const result = data as {
-      results: unknown[];
-      query: string;
-      truncated: boolean;
-      response_bytes: number;
-      project_name?: string | null;
-    };
-
-    if (result.results.length === 0) {
-      return "No results found.";
+    case "cerefox_ingest": {
+      const openaiKey = Deno.env.get("OPENAI_API_KEY");
+      if (!openaiKey) throw new Error("OPENAI_API_KEY secret not set on this project");
+      return await handleIngest(args, openaiKey);
     }
-
-    const rows = result.results as Array<{
-      document_id?: string;
-      doc_title?: string;
-      full_content?: string;
-      best_score?: number;
-      is_partial?: boolean;
-      chunk_count?: number;
-      total_chars?: number;
-    }>;
-
-    const parts: string[] = rows.map((row) => {
-      const title = row.doc_title ?? "Untitled";
-      const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
-      const score = row.best_score != null ? ` (score: ${row.best_score.toFixed(3)})` : "";
-      const partial = row.is_partial
-        ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
-        : "";
-      return `## ${title}${docId}${score}${partial}\n\n${row.full_content ?? ""}`;
-    });
-
-    let output = parts.join("\n\n---\n\n");
-
-    if (result.truncated) {
-      output +=
-        `\n\n[Results truncated at ${result.response_bytes} bytes. Use a more specific query or a smaller match_count to see more.]`;
-    }
-
-    return output;
+    case "cerefox_list_metadata_keys":
+      return await handleListMetadataKeys();
+    case "cerefox_get_document":
+      return await handleGetDocument(args);
+    case "cerefox_list_versions":
+      return await handleListVersions(args);
+    case "cerefox_get_audit_log":
+      return await handleGetAuditLog(args);
+    default:
+      throw new Error(`Unknown tool: ${name}`);
   }
-
-  if (name === "cerefox_ingest") {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/cerefox-ingest`, {
-      method: "POST",
-      headers: internalHeaders,
-      body: JSON.stringify({
-        title: args.title,
-        content: args.content,
-        project_name: args.project_name,
-        source: args.source ?? "agent",
-        update_if_exists: args.update_if_exists ?? false,
-        metadata: args.metadata ?? {},
-        author: args.author ?? "mcp-agent",
-        author_type: "agent",
-      }),
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      const errMsg = (data as { error?: string }).error ?? `HTTP ${resp.status}`;
-      throw new Error(`cerefox-ingest error: ${errMsg}`);
-    }
-
-    const result = data as {
-      document_id: string;
-      title: string;
-      chunk_count?: number;
-      total_chars?: number;
-      skipped?: boolean;
-      updated?: boolean;
-      message?: string;
-      project_name?: string | null;
-    };
-
-    if (result.skipped) {
-      return `Document already up-to-date: "${result.title}" (id: ${result.document_id}). ${result.message ?? ""}`.trim();
-    }
-
-    if (result.updated) {
-      return `Document updated: "${result.title}" (id: ${result.document_id}), ${result.chunk_count} chunk(s), ${result.total_chars} chars.`;
-    }
-
-    const projectInfo = result.project_name ? `, project: "${result.project_name}"` : "";
-    return `Document saved: "${result.title}" (id: ${result.document_id}), ${result.chunk_count} chunk(s), ${result.total_chars} chars${projectInfo}.`;
-  }
-
-  if (name === "cerefox_list_metadata_keys") {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/cerefox-metadata`, {
-      method: "POST",
-      headers: internalHeaders,
-      body: "{}",
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      const errMsg = (data as { error?: string }).error ?? `HTTP ${resp.status}`;
-      throw new Error(`cerefox-metadata error: ${errMsg}`);
-    }
-
-    const keys = data as Array<{ key: string; doc_count: number; example_values: string[] }>;
-
-    if (keys.length === 0) {
-      return "No metadata keys found across documents.";
-    }
-
-    return JSON.stringify(keys, null, 2);
-  }
-
-  if (name === "cerefox_get_document") {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/cerefox-get-document`, {
-      method: "POST",
-      headers: internalHeaders,
-      body: JSON.stringify({
-        document_id: args.document_id,
-        version_id: args.version_id ?? null,
-      }),
-    });
-
-    const data = await resp.json();
-
-    if (resp.status === 404) return "Document not found.";
-
-    if (!resp.ok) {
-      const errMsg = (data as { error?: string }).error ?? `HTTP ${resp.status}`;
-      throw new Error(`cerefox-get-document error: ${errMsg}`);
-    }
-
-    const result = data as {
-      doc_title: string;
-      full_content: string;
-      is_archived: boolean;
-    };
-
-    const label = result.is_archived ? " (archived version)" : " (current)";
-    return `# ${result.doc_title}${label}\n\n${result.full_content}`;
-  }
-
-  if (name === "cerefox_list_versions") {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/cerefox-list-versions`, {
-      method: "POST",
-      headers: internalHeaders,
-      body: JSON.stringify({ document_id: args.document_id }),
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      const errMsg = (data as { error?: string }).error ?? `HTTP ${resp.status}`;
-      throw new Error(`cerefox-list-versions error: ${errMsg}`);
-    }
-
-    const versions = data as Array<{
-      version_id: string;
-      version_number: number;
-      source: string;
-      chunk_count: number;
-      total_chars: number;
-      created_at: string;
-    }>;
-
-    if (!versions?.length) return "No archived versions found for this document.";
-
-    const lines = versions.map((v) =>
-      `v${v.version_number} | ${v.created_at.slice(0, 10)} | ${v.source} | ${v.chunk_count} chunks / ${v.total_chars.toLocaleString()} chars | id: ${v.version_id}`
-    );
-    return `Archived versions (newest first):\n\n${lines.join("\n")}`;
-  }
-
-  if (name === "cerefox_get_audit_log") {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/cerefox-get-audit-log`, {
-      method: "POST",
-      headers: internalHeaders,
-      body: JSON.stringify({
-        document_id: args.document_id ?? null,
-        author: args.author ?? null,
-        operation: args.operation ?? null,
-        since: args.since ?? null,
-        limit: args.limit ?? 50,
-      }),
-    });
-
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      const errMsg = (data as { error?: string }).error ?? `HTTP ${resp.status}`;
-      throw new Error(`cerefox-get-audit-log error: ${errMsg}`);
-    }
-
-    const entries = data as Array<{
-      id: string;
-      document_id: string | null;
-      doc_title: string | null;
-      operation: string;
-      author: string;
-      author_type: string;
-      size_before: number | null;
-      size_after: number | null;
-      description: string;
-      created_at: string;
-    }>;
-
-    if (!entries?.length) return "No audit log entries found.";
-
-    const lines = entries.map((e) => {
-      const docLabel = e.doc_title ?? (e.document_id ? e.document_id.slice(0, 8) + "..." : "(deleted)");
-      const sizeInfo = e.size_before != null && e.size_after != null
-        ? ` | ${e.size_before} -> ${e.size_after} chars`
-        : e.size_after != null
-          ? ` | ${e.size_after} chars`
-          : "";
-      return `${e.created_at.slice(0, 19)} | ${e.operation} | ${e.author} (${e.author_type}) | ${docLabel}${sizeInfo} | ${e.description}`;
-    });
-
-    return `Audit log (${entries.length} entries, newest first):\n\n${lines.join("\n")}`;
-  }
-
-  throw new Error(`Unknown tool: ${name}`);
 }
 
 async function handleToolsCall(
   id: unknown,
   params: { name?: string; arguments?: Record<string, unknown> } | undefined,
-  callerAuth: string,
 ): Promise<Response> {
   const toolName = params?.name;
   const args = params?.arguments ?? {};
@@ -512,26 +238,17 @@ async function handleToolsCall(
     return errorResponse(id, -32602, "Invalid params: missing tool name");
   }
 
-  const knownTools = [
-    "cerefox_search",
-    "cerefox_ingest",
-    "cerefox_list_metadata_keys",
-    "cerefox_get_document",
-    "cerefox_list_versions",
-    "cerefox_get_audit_log",
-  ];
+  const knownTools = TOOLS.map((t) => t.name);
   if (!knownTools.includes(toolName)) {
     return errorResponse(id, -32602, `Unknown tool: ${toolName}`);
   }
 
   try {
-    const text = await handleToolCall(toolName, args, callerAuth);
+    const text = await dispatchToolCall(toolName, args);
     return jsonResponse({
       jsonrpc: "2.0",
       id,
-      result: {
-        content: [{ type: "text", text }],
-      },
+      result: { content: [{ type: "text", text }] },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -547,7 +264,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
   }
 
-  // GET — health check for MCP clients that probe before connecting.
+  // GET -- health check for MCP clients that probe before connecting
   if (req.method === "GET") {
     return jsonResponse({
       name: SERVER_NAME,
@@ -559,10 +276,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   if (req.method !== "POST") {
-    return new Response("Method Not Allowed", {
-      status: 405,
-      headers: CORS_HEADERS,
-    });
+    return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
   }
 
   // ── Parse JSON-RPC body ───────────────────────────────────────────────────
@@ -603,14 +317,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     case "tools/list":
       return handleToolsList(id);
 
-    case "tools/call": {
-      const callerAuth = req.headers.get("Authorization") ?? "";
+    case "tools/call":
       return await handleToolsCall(
         id,
         params as { name?: string; arguments?: Record<string, unknown> } | undefined,
-        callerAuth,
       );
-    }
 
     default:
       return errorResponse(id ?? null, -32601, `Method not found: ${method}`);
