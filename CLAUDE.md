@@ -98,7 +98,7 @@ cerefox/
 - **Fire-and-forget ingestion**: ingestion can be async; failures log errors but don't block
 - **Parameterized limits**: response size limits, chunk sizes, etc. are configurable via settings
 - **Two-table design**: `cerefox_documents` (document-level) + `cerefox_chunks` (chunk-level) for clean separation
-- **Usage tracking**: `cerefox_usage_log` logs read operations; `cerefox_config` stores runtime config (e.g., `usage_tracking_enabled`). Opt-in; controlled via RPC, not env vars. `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled.
+- **Usage tracking**: `cerefox_usage_log` logs all operations (reads and writes); `cerefox_config` stores runtime config (e.g., `usage_tracking_enabled`). Opt-in; controlled via RPC, not env vars. `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled. Each entry records `requestor` (who: agent name or "user") and `access_path` (where: remote-mcp, local-mcp, edge-function, webapp, cli).
 
 ### Configuration
 - Use pydantic-settings with `.env` file support
