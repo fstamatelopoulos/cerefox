@@ -1249,4 +1249,4 @@ class TestUsageTracking:
         assert "ops_by_operation" in summary
         assert "ops_by_access_path" in summary
         assert "top_documents" in summary
-        assert "top_readers" in summary
+        assert "top_requestors" in summary

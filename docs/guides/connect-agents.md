@@ -439,7 +439,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 1.5.0
+  version: 1.6.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -475,6 +475,11 @@ paths:
                     Example: {"type": "decision", "status": "active"}.
                     Call listMetadataKeys to discover available keys and their values.
                     Omit or set to null to search all documents.
+                requestor:
+                  type: string
+                  description: >
+                    Name of the agent making this request (e.g., "ChatGPT").
+                    Recorded in the usage log for attribution. Optional.
       responses:
         '200':
           description: >
@@ -545,7 +550,10 @@ paths:
           application/json:
             schema:
               type: object
-              properties: {}
+              properties:
+                requestor:
+                  type: string
+                  description: Name of the agent making this request. Optional.
       responses:
         '200':
           description: Array of metadata keys with doc_count and example_values
@@ -571,6 +579,9 @@ paths:
                   description: >
                     UUID of a specific archived version to retrieve. Omit (or pass null)
                     for the current version. Version UUIDs are returned by listVersions.
+                requestor:
+                  type: string
+                  description: Name of the agent making this request. Optional.
       responses:
         '200':
           description: >
@@ -596,6 +607,9 @@ paths:
                 document_id:
                   type: string
                   description: UUID of the document whose version history to list
+                requestor:
+                  type: string
+                  description: Name of the agent making this request. Optional.
       responses:
         '200':
           description: >
@@ -632,12 +646,62 @@ paths:
                   type: integer
                   default: 50
                   description: Max entries to return (max 200)
+                requestor:
+                  type: string
+                  description: Name of the agent making this request. Optional.
       responses:
         '200':
           description: >
             Array of audit log entries:
             [{ id, document_id, doc_title, version_id, operation, author, author_type,
                size_before, size_after, description, created_at }]
+  /cerefox-metadata-search:
+    post:
+      operationId: metadataSearch
+      summary: >
+        Find documents by metadata key-value criteria without a text search term.
+        Use to discover documents tagged with specific attributes or browse by taxonomy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [metadata_filter]
+              properties:
+                metadata_filter:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >
+                    Key-value pairs; ALL must match (AND semantics).
+                    Example: {"type": "decision", "status": "active"}.
+                project_id:
+                  type: string
+                  description: Filter by project UUID (optional)
+                updated_since:
+                  type: string
+                  description: ISO-8601 timestamp; only docs updated on/after (optional)
+                created_since:
+                  type: string
+                  description: ISO-8601 timestamp; only docs created on/after (optional)
+                limit:
+                  type: integer
+                  default: 10
+                include_content:
+                  type: boolean
+                  default: false
+                  description: Include full document text in results
+                requestor:
+                  type: string
+                  description: Name of the agent making this request. Optional.
+      responses:
+        '200':
+          description: >
+            Array of matching documents:
+            [{ document_id, title, doc_metadata, review_status, source, created_at,
+               updated_at, total_chars, chunk_count, project_ids, project_names,
+               version_count, content }]
 ```
 
 **Step 3 — Configure authentication**

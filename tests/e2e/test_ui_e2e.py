@@ -203,6 +203,31 @@ class TestMetadataSearch:
         expect(results_or_empty).to_be_visible(timeout=10000)
 
 
+# ── Analytics ─────────────────────────────────────────────────────────────
+
+
+class TestAnalytics:
+    def test_analytics_page_loads(self, page: Page):
+        page.goto(f"{BASE_URL}/analytics")
+        expect(page.get_by_role("heading", name="Analytics")).to_be_visible()
+        # Filters and Run Analysis button should be present
+        expect(page.get_by_role("button", name="Run Analysis")).to_be_visible()
+        # Tracking toggle should be visible
+        expect(page.get_by_text("Tracking")).to_be_visible()
+
+    def test_analytics_run_analysis(self, page: Page):
+        """Click Run Analysis and verify charts area renders."""
+        page.goto(f"{BASE_URL}/analytics")
+        page.get_by_role("button", name="Run Analysis").click()
+        page.wait_for_timeout(5000)
+        # Should show either stat cards or "No usage data" message
+        result = (
+            page.get_by_text("Total Calls")
+            .or_(page.get_by_text("No usage data"))
+        )
+        expect(result).to_be_visible(timeout=10000)
+
+
 # ── Audit Log ─────────────────────────────────────────────────────────────
 
 
