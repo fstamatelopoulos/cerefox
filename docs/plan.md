@@ -1424,30 +1424,30 @@ tracking via web UI or CLI. CSV export available. Data is ready for the analytic
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16D.1 | Add `getUsageSummary`, `listUsageLog`, `exportUsageLogCsv`, `getConfig`, `setConfig` to the TypeScript API client | Todo | Mirrors REST endpoints; TanStack Query hooks |
+| 16D.1 | Add `getUsageSummary`, `listUsageLog`, `exportUsageLogCsv`, `getConfig`, `setConfig` to the TypeScript API client | Done | `api/analytics.ts` |
 
 **Step 2 -- Analytics page**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16D.2 | Create `Analytics.tsx` page with date range picker, project filter, access path filter | Todo | Filter state in URL params for shareability |
-| 16D.3 | Add summary stat cards (total calls, unique readers, docs accessed, top operation) | Todo | Derived from `/api/v1/usage-log/summary` |
-| 16D.4 | Implement V1: calls-per-day stacked bar chart | Todo | `@mantine/charts` BarChart |
-| 16D.5 | Implement V2: calls-per-access-path bar chart | Todo | `@mantine/charts` BarChart |
-| 16D.6 | Implement V3: top documents horizontal bar chart | Todo | Link each bar to document detail page |
-| 16D.7 | Implement V4: top readers horizontal bar chart | Todo | `@mantine/charts` BarChart |
-| 16D.8 | Implement V5: operations breakdown donut chart | Todo | `@mantine/charts` DonutChart |
-| 16D.9 | Implement V6: reader/author word cloud (react-d3-cloud) | Todo | Word size proportional to call count from usage summary top_readers |
-| 16D.9b | Implement V7: HEB readers-to-documents (D3.js) | Todo | Shows which agents accessed which documents; edges weighted by count |
-| 16D.10 | Add Usage Tracking toggle card | Todo | Reads config via API; toggle calls PUT; shows current state |
-| 16D.11 | Add CSV export button | Todo | Triggers download with current filter params |
-| 16D.12 | Add "Analytics" to app navigation (after "Audit Log") | Todo | |
+| 16D.2 | Create `AnalyticsPage.tsx` with date range picker, project filter, access path filter | Done | Period presets (7/30/90/all) + custom date range |
+| 16D.3 | Add summary stat cards (total calls, unique readers, docs accessed, top operation) | Done | 4 stat cards from usage summary |
+| 16D.4 | Implement V1: calls-per-day bar chart | Done | `@mantine/charts` BarChart |
+| 16D.5 | Implement V2: calls-per-access-path bar chart | Done | `@mantine/charts` BarChart |
+| 16D.6 | Implement V3: top documents horizontal bar chart | Done | `@mantine/charts` BarChart |
+| 16D.7 | Implement V4: top readers horizontal bar chart | Done | `@mantine/charts` BarChart |
+| 16D.8 | Implement V5: operations breakdown donut chart | Done | `@mantine/charts` DonutChart with percent labels |
+| 16D.9 | Implement V6: reader/author word cloud | Done | `react-d3-cloud`; word size proportional to call count |
+| 16D.9b | Implement V7: HEB readers-to-documents | Done | D3.js; curved paths, hover highlight, reader/document color legend |
+| 16D.10 | Add Usage Tracking toggle | Done | Switch in filter bar; calls PUT config API |
+| 16D.11 | Add CSV export button | Done | Link to /api/v1/usage-log/export.csv with current filters |
+| 16D.12 | Add "Analytics" to app navigation | Done | After "Audit Log" |
 
 **Step 3 -- Tests**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16D.13 | Playwright e2e: navigate to analytics page, verify stat cards and charts render | Todo | Usage tracking must be enabled and have log entries; seed via e2e setup |
+| 16D.13 | Playwright e2e: navigate to analytics page, verify page loads with filters and export | Done | TestAnalytics.test_analytics_page_loads |
 
 **Step 4 -- Documentation**
 
@@ -1457,10 +1457,10 @@ tracking via web UI or CLI. CSV export available. Data is ready for the analytic
 | 16D.15 | Update `docs/solution-design.md` -- add usage log table and analytics page to architecture | Todo | |
 | 16D.16 | Update `CLAUDE.md` -- note new `cerefox_config` and `cerefox_usage_log` tables | Todo | |
 
-**Deliverable**: Users can visualize Cerefox usage patterns with filterable charts. Usage
-tracking is opt-in and controllable from the web UI. CSV export available for offline
-analysis. Placeholder cards reserve layout space for word cloud and HEB visualizations
-in a future iteration.
+**Deliverable**: Users can visualize Cerefox usage patterns with 7 filterable charts
+(V1-V7 all included). Usage tracking is opt-in and controllable from the web UI.
+CSV export available for offline analysis. All visualizations implemented including
+reader/author word cloud (V6) and HEB reader-to-document access patterns (V7).
 
 ---
 

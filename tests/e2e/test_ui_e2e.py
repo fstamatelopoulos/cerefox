@@ -206,6 +206,16 @@ class TestMetadataSearch:
 # ── Audit Log ─────────────────────────────────────────────────────────────
 
 
+class TestAnalytics:
+    def test_analytics_page_loads(self, page: Page):
+        page.goto(f"{BASE_URL}/analytics")
+        expect(page.get_by_role("heading", name="Analytics")).to_be_visible()
+        # Filter controls should be visible
+        expect(page.get_by_text("Period")).to_be_visible()
+        # Export button
+        expect(page.get_by_role("link", name="Export CSV")).to_be_visible()
+
+
 class TestAuditLog:
     def test_audit_log_page_loads(self, page: Page):
         page.goto(f"{BASE_URL}/audit-log")

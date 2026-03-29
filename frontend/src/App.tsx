@@ -8,6 +8,7 @@ import { DocumentPage } from "./pages/DocumentPage";
 import { IngestPage } from "./pages/IngestPage";
 import { ProjectDocumentsPage } from "./pages/ProjectDocumentsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { MetadataSearchPage } from "./pages/MetadataSearchPage";
 import { SearchPage } from "./pages/SearchPage";
 
@@ -24,6 +25,7 @@ export function App() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:id/documents" element={<ProjectDocumentsPage />} />
         <Route path="/audit-log" element={<AuditLogPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
       </Route>
     </Routes>
   );
