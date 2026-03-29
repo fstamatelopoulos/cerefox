@@ -1023,12 +1023,12 @@ class UsageLogEntryResponse(BaseModel):
     logged_at: str
     operation: str
     access_path: str
-    requestor: str | None
-    document_id: str | None
-    doc_title: str | None
-    project_id: str | None
-    query_text: str | None
-    result_count: int | None
+    requestor: str | None = None
+    document_id: str | None = None
+    doc_title: str | None = None
+    project_id: str | None = None
+    query_text: str | None = None
+    result_count: int | None = None
     extra: dict[str, Any] = {}
 
 
@@ -1059,7 +1059,7 @@ def api_list_usage_log(
             logged_at=str(row.get("logged_at", "")),
             operation=row["operation"],
             access_path=row["access_path"],
-            reader=row.get("requestor"),
+            requestor=row.get("requestor"),
             document_id=row.get("document_id"),
             doc_title=row.get("doc_title"),
             project_id=row.get("project_id"),
