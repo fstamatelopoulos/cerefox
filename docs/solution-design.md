@@ -1048,8 +1048,9 @@ implementations. `cerefox-mcp` also calls Postgres RPCs directly (via per-tool h
 `tools/*.ts`), not the primitive Edge Functions. This halves billable invocations for every
 MCP tool call while keeping business logic exclusively in Postgres.
 
-For desktop AI clients, the recommended path is the remote `cerefox-mcp` Edge Function (Path
-2). The local `cerefox mcp` server (Path 1) is a legacy fallback for offline use.
+For desktop AI clients, the remote `cerefox-mcp` Edge Function (Path 2) is the easiest
+setup. The local `cerefox mcp` server (Path 1) is a local alternative that avoids Edge
+Function invocations (relevant for free-tier limits), has lower latency, and works offline.
 
 ### 10.4 Postgres RPCs (for direct SQL access)
 

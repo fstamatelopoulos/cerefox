@@ -1,12 +1,11 @@
-"""Cerefox MCP server (local stdio) — legacy fallback.
+"""Cerefox MCP server (local stdio).
 
-The **recommended** MCP path is the remote ``cerefox-mcp`` Supabase Edge Function
-(Streamable HTTP). It requires no Python install, no local repo clone, and works
-from Claude Code, Cursor, Claude Desktop (via supergateway), and other remote-
-capable MCP clients.
+The remote ``cerefox-mcp`` Supabase Edge Function (Streamable HTTP) is the easiest
+setup -- no Python install, no local repo clone. But this local server has its own
+advantages: zero Supabase Edge Function invocations (relevant for free-tier limits),
+lower latency (no HTTPS round-trip), and offline capability.
 
-This local stdio server is kept as a **legacy fallback** for environments where
-a remote connection is not available or practical. It exposes the same
+Both paths expose the same
 ``cerefox_search``, ``cerefox_ingest``, ``cerefox_list_metadata_keys``,
 ``cerefox_get_document``, ``cerefox_list_versions``, ``cerefox_get_audit_log``,
 ``cerefox_list_projects``, and ``cerefox_metadata_search`` tools as the remote

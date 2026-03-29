@@ -27,9 +27,9 @@ client; you can also run both in parallel.
 | Claude Code (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
 | Cursor (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
 | ChatGPT (chatgpt.com or desktop) | Path B — Custom GPT → Edge Functions | Hybrid | ChatGPT Plus required |
-| Claude Desktop (local) | Path A-Local — `cerefox mcp` | Hybrid | Legacy fallback; Python + uv + local clone |
-| Claude Code (local) | Path A-Local — `cerefox mcp` | Hybrid | Legacy fallback; Python + uv + local clone |
-| Cursor (local) | Path A-Local — `cerefox mcp` | Hybrid | Legacy fallback; Python + uv + local clone |
+| Claude Desktop (local) | Path A-Local — `cerefox mcp` | Hybrid | Local alternative; Python + uv + local clone; zero Edge Function invocations |
+| Claude Code (local) | Path A-Local — `cerefox mcp` | Hybrid | Local alternative; Python + uv + local clone; zero Edge Function invocations |
+| Cursor (local) | Path A-Local — `cerefox mcp` | Hybrid | Local alternative; Python + uv + local clone; zero Edge Function invocations |
 | Cloud Claude (claude.ai web) | Remote Supabase MCP | FTS only | No install; search quality limited |
 | curl / scripts | Path B — Edge Functions directly | Hybrid | Direct HTTP; no client needed |
 | Custom Python agents | Python SDK directly | Hybrid | Local Python required |
@@ -64,8 +64,9 @@ client; you can also run both in parallel.
 
 **For Path B (Edge Functions / GPT Actions) only:**
 - Supabase Edge Functions deployed: `cerefox-search`, `cerefox-ingest`, `cerefox-metadata`,
-  `cerefox-get-document`, `cerefox-list-versions` —
-  see `setup-supabase.md` → Step 8 for the deploy procedure (`npx supabase functions deploy`)
+  `cerefox-get-document`, `cerefox-list-versions`, `cerefox-get-audit-log`,
+  `cerefox-metadata-search` --
+  see `setup-supabase.md` for the deploy procedure (`npx supabase functions deploy`)
 - Your **anon key**: Supabase Dashboard → Project Settings → API → `anon public`
 - Your **project ref**: visible in the Supabase Dashboard URL
   (`app.supabase.com/project/<project-ref>`)
@@ -97,15 +98,18 @@ Once configured, every Path A client has these tools:
 
 | Tool | Description |
 |------|-------------|
-| `cerefox_search` | Hybrid (FTS + semantic) document-level search |
-| `cerefox_ingest` | Save a note or document to the knowledge base. Accepts optional `author` parameter for attribution. |
+| `cerefox_search` | Hybrid (FTS + semantic) document-level search. Filter by `project_name` or `metadata_filter`. |
+| `cerefox_ingest` | Save a note or document to the knowledge base. Accepts optional `author` and `project_name`. |
 | `cerefox_list_metadata_keys` | List all metadata keys in use across documents |
 | `cerefox_get_document` | Retrieve the full content of a document (current or archived version) |
 | `cerefox_list_versions` | List all archived versions of a document |
 | `cerefox_get_audit_log` | Query audit log entries with filters (document, author, operation, time range) |
+| `cerefox_list_projects` | List all projects with names and IDs. Use for discovering available projects. |
+| `cerefox_metadata_search` | Find documents by metadata key-value criteria without a text search term. Supports project, date, and content filters. |
 
-> All tools are available on both Path A (local and remote MCP) and Path B (GPT Actions
-> via dedicated Edge Functions).
+> All 8 tools are available on both Path A (local and remote MCP) and Path B (GPT Actions
+> via dedicated Edge Functions). MCP tools use `project_name` (human-readable); primitive
+> Edge Functions (Path B) use `project_id` (UUID).
 
 ### Path A system prompt
 
@@ -243,27 +247,27 @@ pick it up automatically.
 ### What it is
 
 `cerefox-mcp` is a Supabase Edge Function that speaks the MCP Streamable HTTP protocol
-(spec 2025-03-26). It is a thin adapter over the existing `cerefox-search` and
-`cerefox-ingest` Edge Functions — it handles the JSON-RPC layer and delegates all business
-logic to those functions internally.
+(spec 2025-03-26). It calls Postgres RPCs directly via per-tool handlers -- no delegation
+to primitive Edge Functions. This means each MCP tool call costs a single Edge Function
+invocation.
 
-A single HTTPS URL gives any remote-capable MCP client the same two tools
-(`cerefox_search` and `cerefox_ingest`) with full hybrid search — no Python, no `uv`, no
-local repository clone needed.
+A single HTTPS URL gives any remote-capable MCP client all 8 tools with full hybrid
+search -- no Python, no `uv`, no local repository clone needed.
 
 **URL format:**
 ```
 https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
 ```
 
-**When to choose Path A-Remote (recommended) vs Path A-Local (legacy fallback):**
+**When to choose Path A-Remote vs Path A-Local:**
 
 | Scenario | Prefer |
 |----------|--------|
-| Default / new setup | Path A-Remote — no Python, no local clone, one URL works everywhere |
+| Default / new setup | Path A-Remote -- no Python, no local clone, one URL works everywhere |
 | Multiple machines / cloud dev environments | Path A-Remote |
-| Offline use or development on the cerefox codebase | Path A-Local — no network dependency |
-| Lowest latency (same machine, no HTTPS round-trip) | Path A-Local — slightly faster |
+| Minimise Supabase Edge Function usage (free tier limits) | Path A-Local -- zero Edge Function invocations |
+| Offline use or development on the cerefox codebase | Path A-Local -- no network dependency |
+| Lowest latency (same machine, no HTTPS round-trip) | Path A-Local -- slightly faster |
 
 **Deploy the Edge Function** (once, after cloning the repo):
 ```bash

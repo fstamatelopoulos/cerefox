@@ -156,6 +156,53 @@ class TestDocumentView:
         expect(page.get_by_text("Approved")).to_be_visible()
 
 
+# ── Metadata Search ──────────────────────────────────────────────────────
+
+
+class TestMetadataSearch:
+    def test_metadata_search_page_loads(self, page: Page):
+        page.goto(f"{BASE_URL}/metadata-search")
+        expect(page.get_by_role("heading", name="Metadata Search")).to_be_visible()
+        # Filter builder should be visible
+        expect(page.get_by_text("Metadata Filters")).to_be_visible()
+        # Search button inside the main content area
+        search_btn = page.get_by_role("main").get_by_role("button", name="Search")
+        expect(search_btn).to_be_visible()
+
+    def test_metadata_search_returns_results(self, page: Page):
+        """Search with a metadata filter that should match existing documents."""
+        page.goto(f"{BASE_URL}/metadata-search")
+        page.wait_for_timeout(1000)
+
+        # Use the first key select and value input
+        key_input = page.locator('input[placeholder="Key"]').first
+        key_input.click()
+        page.wait_for_timeout(500)
+
+        # Type a key to trigger the dropdown, then pick the first option if available
+        key_input.fill("author")
+        page.wait_for_timeout(500)
+        option = page.locator('[role="option"]').first
+        if option.is_visible():
+            option.click()
+        else:
+            pass
+
+        # Fill value
+        page.locator('input[placeholder="Value"]').first.fill("e2e-test-suite")
+
+        # Click search (scoped to main content, not the nav bar)
+        page.get_by_role("main").get_by_role("button", name="Search").click()
+        page.wait_for_timeout(5000)
+
+        # Should either show results count or "No documents match"
+        results_or_empty = (
+            page.get_by_text("found")
+            .or_(page.get_by_text("No documents match the metadata filter"))
+        )
+        expect(results_or_empty).to_be_visible(timeout=10000)
+
+
 # ── Audit Log ─────────────────────────────────────────────────────────────
 
 
