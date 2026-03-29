@@ -47,12 +47,22 @@ DROP FUNCTION IF EXISTS cerefox_fts_search(TEXT, INT, UUID);
 DROP FUNCTION IF EXISTS cerefox_semantic_search(VECTOR(768), INT, BOOLEAN, UUID, FLOAT);
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT);
 
+-- Iteration 16B: Drop pre-project_names signatures so we can add doc_project_names TEXT[]
+-- to all RETURNS TABLE shapes. Also drops reconstruct_doc and get_document for the same reason.
+DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOOLEAN, UUID, FLOAT, JSONB);
+DROP FUNCTION IF EXISTS cerefox_fts_search(TEXT, INT, UUID, JSONB);
+DROP FUNCTION IF EXISTS cerefox_semantic_search(VECTOR(768), INT, BOOLEAN, UUID, FLOAT, JSONB);
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB);
+DROP FUNCTION IF EXISTS cerefox_reconstruct_doc(UUID);
+DROP FUNCTION IF EXISTS cerefox_get_document(UUID, UUID);
+
 -- ── Shared return type note ────────────────────────────────────────────────────
 -- All chunk-level search RPCs return the same shape for consistency:
 --   chunk_id, document_id, chunk_index, title, content, heading_path,
---   heading_level, score, doc_title, doc_source, doc_project_ids, doc_metadata,
---   version_count
+--   heading_level, score, doc_title, doc_source, doc_project_ids,
+--   doc_project_names, doc_metadata, version_count
 -- Note: doc_project_ids is UUID[] (array) — a document can belong to many projects.
+-- Note: doc_project_names is TEXT[] (array) — human-readable project names.
 -- Note: version_count is INT — number of archived versions for the parent document.
 --       Agents and the web UI use this to know when previous versions are available
 --       for retrieval. 0 means the current content has never been overwritten.
@@ -87,6 +97,7 @@ RETURNS TABLE (
     doc_title       TEXT,
     doc_source      TEXT,
     doc_project_ids UUID[],
+    doc_project_names TEXT[],
     doc_metadata    JSONB,
     version_count   INT
 )
@@ -170,6 +181,9 @@ BEGIN
         d.source        AS doc_source,
         ARRAY(SELECT dp.project_id FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id) AS doc_project_ids,
+        ARRAY(SELECT p.name FROM cerefox_projects p
+              JOIN cerefox_document_projects dp ON p.id = dp.project_id
+              WHERE dp.document_id = d.id) AS doc_project_names,
         d.metadata      AS doc_metadata,
         (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
          WHERE dv.document_id = d.id) AS version_count
@@ -206,6 +220,7 @@ RETURNS TABLE (
     doc_title       TEXT,
     doc_source      TEXT,
     doc_project_ids UUID[],
+    doc_project_names TEXT[],
     doc_metadata    JSONB,
     version_count   INT
 )
@@ -230,6 +245,9 @@ BEGIN
         d.source        AS doc_source,
         ARRAY(SELECT dp.project_id FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id) AS doc_project_ids,
+        ARRAY(SELECT p.name FROM cerefox_projects p
+              JOIN cerefox_document_projects dp ON p.id = dp.project_id
+              WHERE dp.document_id = d.id) AS doc_project_names,
         d.metadata      AS doc_metadata,
         (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
          WHERE dv.document_id = d.id) AS version_count
@@ -270,6 +288,7 @@ RETURNS TABLE (
     doc_title       TEXT,
     doc_source      TEXT,
     doc_project_ids UUID[],
+    doc_project_names TEXT[],
     doc_metadata    JSONB,
     version_count   INT
 )
@@ -297,6 +316,9 @@ BEGIN
         d.source        AS doc_source,
         ARRAY(SELECT dp.project_id FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id) AS doc_project_ids,
+        ARRAY(SELECT p.name FROM cerefox_projects p
+              JOIN cerefox_document_projects dp ON p.id = dp.project_id
+              WHERE dp.document_id = d.id) AS doc_project_names,
         d.metadata      AS doc_metadata,
         (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
          WHERE dv.document_id = d.id) AS version_count
@@ -341,6 +363,7 @@ RETURNS TABLE (
     doc_source      TEXT,
     doc_metadata    JSONB,
     doc_project_ids UUID[],
+    doc_project_names TEXT[],
     full_content    TEXT,
     chunk_count     INT,
     total_chars     INT,
@@ -358,6 +381,9 @@ AS $$
         d.metadata      AS doc_metadata,
         ARRAY(SELECT dp.project_id FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id) AS doc_project_ids,
+        ARRAY(SELECT p.name FROM cerefox_projects p
+              JOIN cerefox_document_projects dp ON p.id = dp.project_id
+              WHERE dp.document_id = d.id) AS doc_project_names,
         STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
         COUNT(*)::INT   AS chunk_count,
         SUM(c.char_count)::INT AS total_chars,
@@ -484,6 +510,7 @@ RETURNS TABLE (
     doc_source               TEXT,
     doc_metadata             JSONB,
     doc_project_ids          UUID[],
+    doc_project_names        TEXT[],
     best_score               FLOAT,
     best_chunk_heading_path  TEXT[],
     full_content             TEXT,
@@ -522,6 +549,7 @@ AS $$
             cr.doc_source,
             cr.doc_metadata,
             cr.doc_project_ids,
+            cr.doc_project_names,
             cr.version_count,
             d.updated_at       AS doc_updated_at
         FROM chunk_results cr
@@ -597,6 +625,7 @@ AS $$
         td.doc_source,
         td.doc_metadata,
         td.doc_project_ids,
+        td.doc_project_names,
         td.best_score,
         td.best_chunk_heading_path,
         ac.full_content,
@@ -776,21 +805,22 @@ $$;
 -- Pass a specific version UUID to retrieve an archived version.
 -- Version UUIDs are returned by cerefox_list_document_versions.
 
-DROP FUNCTION IF EXISTS cerefox_get_document(UUID, UUID);
 CREATE FUNCTION cerefox_get_document(
     p_document_id UUID,
     p_version_id  UUID DEFAULT NULL
 )
 RETURNS TABLE (
-    document_id  UUID,
-    doc_title    TEXT,
-    doc_source   TEXT,
-    doc_metadata JSONB,
-    version_id   UUID,
-    full_content TEXT,
-    chunk_count  INT,
-    total_chars  INT,
-    created_at   TIMESTAMPTZ
+    document_id     UUID,
+    doc_title       TEXT,
+    doc_source      TEXT,
+    doc_metadata    JSONB,
+    doc_project_ids UUID[],
+    doc_project_names TEXT[],
+    version_id      UUID,
+    full_content    TEXT,
+    chunk_count     INT,
+    total_chars     INT,
+    created_at      TIMESTAMPTZ
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -802,6 +832,11 @@ AS $$
         d.title         AS doc_title,
         d.source        AS doc_source,
         d.metadata      AS doc_metadata,
+        ARRAY(SELECT dp.project_id FROM cerefox_document_projects dp
+              WHERE dp.document_id = d.id) AS doc_project_ids,
+        ARRAY(SELECT p.name FROM cerefox_projects p
+              JOIN cerefox_document_projects dp ON p.id = dp.project_id
+              WHERE dp.document_id = d.id) AS doc_project_names,
         p_version_id    AS version_id,
         STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
         COUNT(*)::INT   AS chunk_count,
@@ -1171,4 +1206,132 @@ AS $$
       AND d.metadata != '{}'::jsonb
     GROUP BY k.key
     ORDER BY doc_count DESC, k.key;
+$$;
+
+-- ── cerefox_list_projects ────────────────────────────────────────────────────
+-- Lists all projects. Used by MCP tools for project discovery and by the
+-- web UI for project name dropdowns.
+
+CREATE OR REPLACE FUNCTION cerefox_list_projects()
+RETURNS TABLE (
+    id          UUID,
+    name        TEXT,
+    description TEXT
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+    SELECT p.id, p.name, p.description
+    FROM cerefox_projects p
+    ORDER BY p.name;
+$$;
+
+-- ── cerefox_metadata_search ──────────────────────────────────────────────────
+-- Query documents by metadata key-value criteria without a text search term.
+-- Uses JSONB containment (@>) which leverages the existing GIN index on
+-- cerefox_documents.metadata.
+--
+-- Parameters:
+--   p_metadata_filter : JSONB containment filter (AND semantics for all keys)
+--   p_project_id      : Optional project UUID filter
+--   p_updated_since   : Only docs updated on or after this timestamp
+--   p_created_since   : Only docs created on or after this timestamp
+--   p_limit           : Max results (default 10)
+--   p_include_content : When TRUE, reconstruct full text from current chunks
+--   p_max_bytes       : Byte budget for accumulated content (NULL = no limit)
+
+CREATE OR REPLACE FUNCTION cerefox_metadata_search(
+    p_metadata_filter   JSONB,
+    p_project_id        UUID        DEFAULT NULL,
+    p_updated_since     TIMESTAMPTZ DEFAULT NULL,
+    p_created_since     TIMESTAMPTZ DEFAULT NULL,
+    p_limit             INT         DEFAULT 10,
+    p_include_content   BOOLEAN     DEFAULT FALSE,
+    p_max_bytes         INT         DEFAULT NULL
+)
+RETURNS TABLE (
+    document_id     UUID,
+    title           TEXT,
+    doc_metadata    JSONB,
+    review_status   TEXT,
+    source          TEXT,
+    created_at      TIMESTAMPTZ,
+    updated_at      TIMESTAMPTZ,
+    total_chars     INT,
+    chunk_count     INT,
+    project_ids     UUID[],
+    project_names   TEXT[],
+    version_count   INT,
+    content         TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_bytes_used INT := 0;
+    v_row RECORD;
+    v_row_bytes INT;
+BEGIN
+    FOR v_row IN
+        SELECT
+            d.id              AS document_id,
+            d.title,
+            d.metadata        AS doc_metadata,
+            d.review_status,
+            d.source,
+            d.created_at,
+            d.updated_at,
+            d.total_chars,
+            d.chunk_count,
+            ARRAY(SELECT dp.project_id FROM cerefox_document_projects dp
+                  WHERE dp.document_id = d.id) AS project_ids,
+            ARRAY(SELECT p.name FROM cerefox_projects p
+                  JOIN cerefox_document_projects dp ON p.id = dp.project_id
+                  WHERE dp.document_id = d.id) AS project_names,
+            (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
+             WHERE dv.document_id = d.id) AS version_count,
+            CASE WHEN p_include_content THEN
+                (SELECT STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index)
+                 FROM cerefox_chunks c
+                 WHERE c.document_id = d.id AND c.version_id IS NULL)
+            ELSE NULL END AS content
+        FROM cerefox_documents d
+        WHERE d.metadata @> p_metadata_filter
+          AND (p_project_id IS NULL OR EXISTS (
+                  SELECT 1 FROM cerefox_document_projects dp
+                  WHERE dp.document_id = d.id AND dp.project_id = p_project_id
+              ))
+          AND (p_updated_since IS NULL OR d.updated_at >= p_updated_since)
+          AND (p_created_since IS NULL OR d.created_at >= p_created_since)
+        ORDER BY d.updated_at DESC
+        LIMIT p_limit
+    LOOP
+        -- Byte budget enforcement (when p_max_bytes is set and content is included)
+        IF p_max_bytes IS NOT NULL AND p_include_content AND v_row.content IS NOT NULL THEN
+            v_row_bytes := octet_length(v_row.content);
+            IF v_bytes_used + v_row_bytes > p_max_bytes THEN
+                EXIT;  -- stop emitting rows
+            END IF;
+            v_bytes_used := v_bytes_used + v_row_bytes;
+        END IF;
+
+        document_id   := v_row.document_id;
+        title         := v_row.title;
+        doc_metadata  := v_row.doc_metadata;
+        review_status := v_row.review_status;
+        source        := v_row.source;
+        created_at    := v_row.created_at;
+        updated_at    := v_row.updated_at;
+        total_chars   := v_row.total_chars;
+        chunk_count   := v_row.chunk_count;
+        project_ids   := v_row.project_ids;
+        project_names := v_row.project_names;
+        version_count := v_row.version_count;
+        content       := v_row.content;
+        RETURN NEXT;
+    END LOOP;
+END;
 $$;
