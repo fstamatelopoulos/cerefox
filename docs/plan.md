@@ -854,11 +854,581 @@ and lightweight review workflow. Temporal queries support multi-agent coordinati
 
 ---
 
+## Iteration 16: MCP Consolidation, Metadata Search, Usage Tracking, and Analytics
+
+**Three independent feature branches**, all part of this iteration:
+- `feat/mcp-consolidation` — 16A only, standalone, deployable independently; halves Edge Function invocations
+- `feat/metadata-search` — 16B only, standalone, deployable independently
+- `feat/usage-analytics` — 16C + 16D; depends on nothing in 16A or 16B but 16C wires usage logging
+  into `cerefox-mcp` so it should be implemented after 16A is merged
+
+**Overview**:
+- **16A**: Refactor `cerefox-mcp` Edge Function to call RPCs directly instead of delegating to
+  individual primitive Edge Functions -- halves billable invocations per MCP call
+- **16B**: New `cerefox_metadata_search` RPC and Edge Function -- query documents by metadata
+  key-value pairs without a text search term (resolves [issue #9](https://github.com/fstamatelopoulos/cerefox/issues/9))
+- **16C**: Usage tracking -- new `cerefox_usage_log` table with opt-in tracking of all read
+  operations across all access paths; opt-in control via web UI / CLI
+- **16D**: Analytics page in the React SPA -- visualizes access patterns from the usage log
+
+---
+
+### 16A: MCP Edge Function Consolidation (Cost Optimisation)
+
+**Goal**: Reduce billable Supabase Edge Function invocations from 2 to 1 per MCP tool call
+by refactoring `cerefox-mcp` to call Postgres RPCs directly, instead of delegating to
+individual primitive Edge Functions (`cerefox-search`, `cerefox-ingest`, etc.).
+
+**Background**: Every MCP tool invocation currently triggers two billable invocations: one
+for `cerefox-mcp` receiving the JSON-RPC request, and one for the internal `fetch()` call
+to the corresponding primitive function (e.g. `cerefox-search`). The Supabase free tier
+limits apply to Edge Function invocations only (not RPC calls), so this double-counting
+makes Cerefox unnecessarily expensive. With this refactor, `cerefox-mcp` calls RPCs
+directly -- exactly like the primitive Edge Functions already do -- and the primitive
+functions remain unchanged for external callers (GPT Actions, curl, direct HTTP).
+
+**Reference**: PR [#10](https://github.com/fstamatelopoulos/cerefox/pull/10) by tdebasis
+implements this pattern in a new parallel function (`supabase/functions/cerefox/`). We will
+**not merge that PR as-is** (it would create a second parallel MCP server with a different
+URL, and it predates the iteration 15 audit log tool). Instead, we refactor `cerefox-mcp`
+in-place using the PR's multi-file structure (`tools/`, `shared.ts`, `embeddings.ts`) as a
+reference. Credit will be given in the commit message.
+
+**Invariants** (must not change):
+- All 6 primitive Edge Functions (`cerefox-search`, `cerefox-ingest`, `cerefox-metadata`,
+  `cerefox-get-document`, `cerefox-list-versions`, `cerefox-get-audit-log`) remain deployed
+  and callable directly. External callers (GPT Actions, curl, direct HTTP integrations) must
+  continue to work. (`cerefox-metadata-search` will be added as the 7th primitive in 16B.)
+- MCP client configuration does not change -- same URL, same auth header.
+- All 6 MCP tools expose the same input/output schema; no breaking changes to callers.
+- **No DB migrations in 16A** -- this is a pure TypeScript refactor. `db_migrate.py` is not
+  involved. The 6 existing RPCs are called directly; none are modified.
+
+**Architecture after 16A**:
+```
+Agent (MCP) → cerefox-mcp → cerefox_hybrid_search RPC        (was: → cerefox-search → RPC)
+                           → cerefox_ingest_document RPC      (was: → cerefox-ingest → RPC)
+                           → cerefox_list_metadata_keys RPC   (was: → cerefox-metadata → RPC)
+                           → cerefox_get_document RPC         (was: → cerefox-get-document → RPC)
+                           → cerefox_list_document_versions   (was: → cerefox-list-versions → RPC)
+                           → cerefox_list_audit_entries RPC   (was: → cerefox-get-audit-log → RPC)
+
+GPT Actions → cerefox-search / cerefox-ingest / ... (unchanged, still go through primitive functions)
+```
+
+**File structure after 16A** (inside `supabase/functions/cerefox-mcp/`):
+```
+index.ts          -- MCP protocol handler + tool dispatch (no fetch delegation)
+shared.ts         -- CORS headers, Supabase client init, response utilities
+embeddings.ts     -- OpenAI embedding call (used by search and ingest tools)
+tools/
+  search.ts       -- cerefox_hybrid_search RPC call + response formatting
+  ingest.ts       -- chunk + embed + cerefox_ingest_document RPC call
+  metadata.ts     -- cerefox_list_metadata_keys RPC call
+  get-document.ts -- cerefox_get_document RPC call
+  list-versions.ts -- cerefox_list_document_versions RPC call
+  audit-log.ts    -- cerefox_list_audit_entries RPC call
+```
+
+#### Tasks
+
+**Step 1 -- Refactor `cerefox-mcp` to multi-file structure**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16A.1 | Extract `shared.ts` from current `cerefox-mcp/index.ts` | Todo | CORS headers, `createClient()` helper, standard error response formatter |
+| 16A.2 | Extract `embeddings.ts` -- unified OpenAI embedding call with retry | Todo | Used by both `tools/search.ts` (query embedding) and `tools/ingest.ts` (chunk embedding); exponential backoff (500ms initial, 3 attempts); distinguish retryable 5xx from non-retryable 4xx |
+| 16A.3 | Create `tools/search.ts` -- calls `cerefox_hybrid_search` RPC directly | Todo | Mirrors current `cerefox-search` Edge Function logic; handles `metadata_filter`, `max_bytes`, server ceiling; uses `embeddings.ts` for query vector |
+| 16A.4 | Create `tools/ingest.ts` -- chunks, embeds, calls `cerefox_ingest_document` RPC | Todo | Mirrors current `cerefox-ingest` Edge Function logic; handles `update_if_exists`, `author`, `author_type`, `review_status` transition |
+| 16A.5 | Create `tools/metadata.ts` -- calls `cerefox_list_metadata_keys` RPC directly | Todo | Thin; mirrors current `cerefox-metadata` delegation |
+| 16A.6 | Create `tools/get-document.ts` -- calls `cerefox_get_document` RPC directly | Todo | Supports optional `version_id` param |
+| 16A.7 | Create `tools/list-versions.ts` -- calls `cerefox_list_document_versions` RPC | Todo | |
+| 16A.8 | Create `tools/audit-log.ts` -- calls `cerefox_list_audit_entries` RPC directly | Todo | All filters: operation, author, document_id, start/end timestamps |
+| 16A.9 | Rewrite `index.ts` -- MCP protocol handler that dispatches to tools/ modules; no `fetch()` delegation | Todo | Keep tool schemas identical to current; dispatcher calls imported tool functions, not fetch |
+
+**Step 2 -- Verify parity**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16A.10 | Verify all 6 tool input/output schemas are identical to pre-refactor | Todo | Compare `tools/list` response before and after; no schema changes allowed |
+| 16A.11 | Verify `author` / `author_type` / `review_status` behavior unchanged in ingest tool | Todo | agent writes → pending_review; these semantics must be preserved |
+| 16A.12 | Verify `max_bytes` ceiling enforcement still works in search tool | Todo | |
+
+**Step 3 -- Deploy and test**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16A.13 | Deploy refactored `cerefox-mcp` | Todo | `npx supabase functions deploy cerefox-mcp` |
+| 16A.14 | Scan existing Python unit tests for any mocks referencing fetch delegation from `cerefox-mcp` and update if found | Todo | Expected: none -- Python tests test Python code, not TypeScript; but confirm before deploying |
+| 16A.15 | Run full unit test suite | Todo | `uv run pytest` -- all 391 tests must pass; no Python changes so this should be a no-op |
+| 16A.16 | Deploy refactored `cerefox-mcp` | Todo | `npx supabase functions deploy cerefox-mcp` |
+| 16A.17 | Run existing e2e test suite against deployed function | Todo | `uv run pytest -m e2e` -- all existing e2e tests must pass with no changes to test code |
+| 16A.18 | Manual smoke test: all 6 tools via Claude Code MCP connection | Todo | Test each tool end-to-end; confirms real-world client compatibility and that no delegation hop is occurring |
+
+**Step 5 -- Documentation**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16A.19 | Update `CLAUDE.md` -- Edge Function architecture section; remove "thin wrapper calling primitive functions" from `cerefox-mcp` description; update architecture diagram arrows | Todo | |
+| 16A.20 | Update `docs/solution-design.md` -- architecture flow diagram; clarify that `cerefox-mcp` calls RPCs directly while primitive functions remain for external callers | Todo | |
+| 16A.21 | Update `MEMORY.md` -- revise architecture note about `cerefox-mcp` delegation | Todo | |
+| 16A.22 | Add entry to Cerefox Decision Log -- record decision to refactor in-place vs merge PR #10; credit tdebasis | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
+
+**Deliverable**: `cerefox-mcp` calls RPCs directly. MCP tool calls cost 1 Edge Function
+invocation instead of 2. All 6 primitive functions remain deployed and unchanged. No
+breaking changes to any MCP client. All 391 unit tests pass; all e2e tests pass without
+modification. Closes PR #10 concept (with credit).
+Edge Function count stays at 7 (1 MCP + 6 primitive); MCP tool count stays at 6.
+
+---
+
+### 16B: Metadata-Only Document Search + Project Name Standardisation
+
+**Goal**: Two related improvements delivered together:
+
+1. New `cerefox_metadata_search` retrieval primitive -- query documents by metadata key-value
+   pairs without a text search term. First-class feature, not just an inter-agent coordination
+   hack. Primary audience: any caller (agent or human) that wants to filter by metadata without
+   caring about content, or that wants a list of matching document IDs to selectively retrieve
+   via `cerefox_get_document`. Resolves [issue #9](https://github.com/fstamatelopoulos/cerefox/issues/9).
+
+2. Project name standardisation across all MCP tool interfaces -- agents interact with project
+   names everywhere; UUIDs are an internal implementation detail. Includes returning
+   `project_names TEXT[]` alongside `project_ids UUID[]` in all document results, and a new
+   `cerefox_list_projects` MCP tool for project discovery.
+
+**Breaking change** (MCP remote path only): `cerefox-mcp` tool inputs change from
+`project_id` (UUID string) to `project_name` (human-readable name) for the `cerefox_search`,
+`cerefox_ingest`, and `cerefox_metadata_search` tools. Name-to-UUID resolution happens inside
+the tool handler. **Agents using `project_id` in their MCP calls must switch to `project_name`
+after upgrading.** Primitive Edge Functions (`cerefox-search` etc.) are unchanged -- they
+continue to accept `project_id UUID` for direct HTTP callers (GPT Actions, curl).
+
+After 16A is merged: new `cerefox-mcp` tools follow the 16A architecture (call RPCs directly,
+no fetch delegation).
+
+#### New and updated RPC designs
+
+```sql
+-- NEW: list all projects (for MCP tool and project discovery)
+CREATE FUNCTION cerefox_list_projects()
+RETURNS TABLE (id UUID, name TEXT, description TEXT)
+
+-- UPDATED: all 6 existing search/retrieve RPCs gain project_names TEXT[]
+-- in RETURNS TABLE. Input signatures (p_project_id UUID) are unchanged.
+-- Requires DROP FUNCTION + CREATE since RETURNS TABLE signature changes.
+-- project_names computed via: ARRAY(SELECT p.name FROM cerefox_projects p
+--   JOIN cerefox_document_projects dp ON p.id = dp.project_id
+--   WHERE dp.document_id = d.id)
+
+-- NEW: metadata-only document search
+CREATE FUNCTION cerefox_metadata_search(
+  p_metadata_filter   JSONB,
+  p_project_id        UUID        DEFAULT NULL,   -- internal; MCP resolves name → UUID
+  p_updated_since     TIMESTAMPTZ DEFAULT NULL,
+  p_created_since     TIMESTAMPTZ DEFAULT NULL,
+  p_limit             INT         DEFAULT 10,
+  p_include_content   BOOLEAN     DEFAULT FALSE,
+  p_max_bytes         INT         DEFAULT NULL
+)
+RETURNS TABLE (
+  document_id     UUID,
+  title           TEXT,
+  doc_metadata    JSONB,
+  review_status   TEXT,
+  created_at      TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ,
+  project_ids     UUID[],
+  project_names   TEXT[],
+  version_count   INT,
+  content         TEXT    -- NULL when p_include_content = FALSE
+)
+```
+
+- Matching: `d.doc_metadata @> p_metadata_filter` (JSONB containment -- uses GIN index)
+- `p_max_bytes` applies to accumulated response when `p_include_content = TRUE`; same pruning
+  model as `cerefox_search_docs`
+- Returns at most `p_limit` rows, ordered by `updated_at DESC`
+- `project_ids` and `project_names` both use `ARRAY(SELECT ...)` -- empty array `{}` for
+  documents with no projects (not NULL)
+
+#### Updated and new MCP tool designs
+
+```
+Tool: cerefox_search  (UPDATED input)
+  project_name   string   optional   Filter by project name (was: project_id UUID string)
+
+Tool: cerefox_ingest  (UPDATED input -- was already project_name in local MCP; now consistent)
+  project_name   string   optional   Assign to project by name (was: project_id UUID in remote MCP)
+
+Tool: cerefox_metadata_search  (NEW)
+Description: Find documents by metadata key-value criteria without a text search term.
+             Use to discover documents tagged with specific attributes, browse by taxonomy,
+             or retrieve messages/tasks by type and status.
+Parameters:
+  metadata_filter   object    required  Key-value pairs; ALL must match (AND semantics)
+  project_name      string    optional  Restrict to a project by name
+  updated_since     string    optional  ISO-8601 timestamp; only docs updated on/after
+  created_since     string    optional  ISO-8601 timestamp; only docs created on/after
+  limit             integer   optional  Max results (default 10)
+  include_content   boolean   optional  Include full document text (default false)
+  max_bytes         integer   optional  Soft cap on total response bytes
+Returns: Matching documents with metadata and project names; content if requested.
+
+Tool: cerefox_list_projects  (NEW)
+Description: List all projects with their names and IDs. Use this to discover available
+             projects before filtering by project_name in other tools.
+Parameters: none
+Returns: Array of {id, name, description} for all projects.
+```
+
+#### Tasks
+
+**Step 1 -- SQL RPCs (all bundled in migration `0005_metadata_search.sql`)**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.1 | Add `project_names TEXT[]` to RETURNS TABLE of all 6 existing search/retrieve RPCs | Todo | Affected: `cerefox_hybrid_search`, `cerefox_fts_search`, `cerefox_semantic_search`, `cerefox_search_docs`, `cerefox_reconstruct_doc`, `cerefox_get_document`. Requires `DROP FUNCTION IF EXISTS ...` before `CREATE OR REPLACE` for each (signature change). Use `ARRAY(SELECT p.name FROM cerefox_projects p JOIN cerefox_document_projects dp ON p.id = dp.project_id WHERE dp.document_id = d.id)` |
+| 16B.2 | Write `cerefox_list_projects()` RPC | Todo | `SELECT id, name, description FROM cerefox_projects ORDER BY name`; SECURITY DEFINER |
+| 16B.3 | Write `cerefox_metadata_search` RPC | Todo | SECURITY DEFINER; GIN containment filter; both `project_ids` and `project_names` in output; p_max_bytes pruning when include_content=true |
+| 16B.4 | Create and deploy migration `0005_metadata_search.sql` | Todo | Contains all changes from 16B.1–16B.3; `uv run python scripts/db_migrate.py` |
+
+**Step 2 -- Python client**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.5 | Add `project_names: list[str]` field to `SearchChunkResult`, `DocResult`, and any other result types in `search.py` and `client.py` | Todo | New field from updated RPCs; additive -- existing code ignores it |
+| 16B.6 | Add `list_projects_rpc()` to `client.py` | Todo | Calls `cerefox_list_projects` RPC; returns `list[dict]` with id/name/description |
+| 16B.7 | Add `metadata_search()` to `client.py` | Todo | Calls `cerefox_metadata_search` RPC; params mirror RPC signature |
+
+**Step 3 -- REST API**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.8 | Update search response models to include `project_names: list[str]` | Todo | `SearchResultResponse`, `DocResultResponse` in `routes_api.py` -- additive field |
+| 16B.9 | Add `POST /api/v1/documents/metadata-search` endpoint | Todo | JSON body matches RPC params; `max_bytes=None` (uncapped for web UI) |
+
+**Step 4 -- Edge Functions and MCP wiring**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.10 | Update `tools/search.ts` in `cerefox-mcp` -- change input from `project_id UUID` to `project_name TEXT`; resolve name → UUID via `cerefox_list_projects` RPC before calling `cerefox_hybrid_search` | Todo | Return error if project_name not found |
+| 16B.11 | Update `tools/ingest.ts` in `cerefox-mcp` -- same `project_name` input pattern | Todo | Already consistent with local MCP; remote was the odd one out |
+| 16B.12 | Add `tools/list-projects.ts` to `cerefox-mcp` -- calls `cerefox_list_projects` RPC directly | Todo | Thin; no params; returns formatted list |
+| 16B.13 | Update `index.ts` dispatcher -- add `cerefox_list_projects` tool; update tool schemas for search and ingest | Todo | Tool count: 6 → 8 (adding list_projects + metadata_search) |
+| 16B.14 | Create `cerefox-metadata-search` primitive Edge Function | Todo | Thin wrapper over `cerefox_metadata_search` RPC; accepts `project_id UUID` (primitive interface); enforces max_bytes ceiling |
+| 16B.15 | Add `tools/metadata-search.ts` to `cerefox-mcp` -- calls `cerefox_metadata_search` RPC directly; resolves `project_name` → UUID | Todo | Consistent with 16A architecture |
+| 16B.16 | Deploy all updated Edge Functions | Todo | `npx supabase functions deploy cerefox-metadata-search cerefox-mcp` |
+
+**Step 5 -- Local MCP server**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.17 | Add `cerefox_list_projects` tool to `mcp_server.py` | Todo | Calls `client.list_projects_rpc()`; returns formatted table |
+| 16B.18 | Add `cerefox_metadata_search` tool to `mcp_server.py` | Todo | Calls `client.metadata_search()`; resolves project_name → UUID via `client.list_projects_rpc()`; handles max_bytes ceiling |
+
+**Step 6 -- CLI**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.19 | Add `cerefox metadata-search` CLI command | Todo | Options: `--filter` (JSON), `--project` (name), `--updated-since`, `--created-since`, `--limit`, `--include-content`; output: formatted table |
+
+**Step 7 -- Web UI**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.20 | Update search results components to display `project_names` instead of (or alongside) raw UUIDs | Todo | Affects Search page result cards; use names for display, keep IDs for links |
+| 16B.21 | Add "Metadata Search" page at `/app/metadata-search` | Todo | Metadata filter builder (key/value rows with autocomplete), date filters, project name dropdown, include-content toggle; results show doc card with metadata chips, project names, optional content preview |
+| 16B.22 | Add "Metadata Search" nav link | Todo | After "Search" in the nav bar |
+
+**Step 8 -- Tests**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.23 | Unit tests: `project_names` field present in all result types; `list_projects_rpc()` param pass-through | Todo | Mock RPCs |
+| 16B.24 | Unit tests: `metadata_search()` in `client.py`; param propagation; max_bytes pass-through | Todo | Mock RPC call; test all param combinations |
+| 16B.25 | E2e test: ingest 3 docs with varying metadata across 2 projects; assert metadata_search returns correct docs with correct project names; assert cerefox_list_projects returns both projects | Todo | Test AND semantics, project_name filter, updated_since, include_content, result limit |
+| 16B.26 | E2e test: call cerefox_search with project_name via remote MCP; verify name resolves correctly | Todo | Regression check for breaking change |
+| 16B.27 | Playwright UI e2e test: navigate to `/app/metadata-search`; enter a filter; verify results render with project name chips | Todo | Add to `tests/e2e/test_ui_e2e.py` |
+
+**Step 9 -- Documentation**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16B.28 | Update `docs/guides/connect-agents.md` -- updated tool schemas (project_name inputs, new tools); GPT Actions OpenAPI schema v1.5.0; note primitive Edge Functions still use project_id UUID | Todo | |
+| 16B.29 | Update `docs/guides/upgrading.md` -- add v0.1.10 breaking change notice: MCP `project_id` input removed, replaced by `project_name`; affected tools: cerefox_search, cerefox_ingest, cerefox_metadata_search; primitive Edge Functions unaffected | Todo | Already drafted in upgrading.md; task is to verify accuracy after implementation |
+| 16B.30 | Update `README.md` -- add metadata search and project discovery to feature table | Todo | |
+| 16B.31 | Update `CLAUDE.md` -- Edge Function inventory (new `cerefox-metadata-search`; total 8 Edge Functions, 8 MCP tools); MCP tool list | Todo | |
+| 16B.32 | Update `MEMORY.md` -- revised Edge Function and MCP tool counts | Todo | |
+| 16B.33 | Update `docs/solution-design.md` -- add metadata search as a named retrieval mode; project name standardisation pattern | Todo | |
+| 16B.34 | Add entry to Cerefox Decision Log -- record: metadata search as first-class primitive; project name standardisation (names in MCP, UUIDs in primitive Edge Functions); decision to return both project_ids and project_names in all RPCs; `p_include_content` opt-in design; dual date filter rationale | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
+
+**Deliverable**: Agents query by metadata and filter by project name across all MCP paths.
+All document results include human-readable project names. Agents can discover available
+projects via `cerefox_list_projects`. Inter-agent coordination (message hub) fully supported.
+Resolves issue #9. Edge Functions: 7 → 8. MCP tools: 6 → 8 (adding list_projects + metadata_search).
+
+---
+
+### 16C: Usage Tracking
+
+**Goal**: Log all read operations (search, metadata_search, get_document, list_versions,
+get_audit_log) across all access paths with enough context to answer "who accessed what,
+when, and from where." Opt-in, disabled by default. The data feeds the analytics page (16D).
+
+**Design decisions**:
+- Separate `cerefox_usage_log` table -- not an extension of the audit log. The audit log
+  tracks write accountability (governance); the usage log tracks read observability (analytics).
+  Different schema needs, different retention semantics, different query patterns.
+- Opt-in via a new `cerefox_config` key-value table stored in Postgres. Edge Functions and
+  Python read this config at call time -- no redeploy needed to toggle. Only the user can
+  change it (via web UI or CLI).
+- `reader` parameter on read operations -- optional free-text, same pattern as `author` on
+  write operations. If omitted, defaults based on access path (e.g., `"webapp"`, `"cli"`).
+- `access_path` is set by the caller layer (not the caller of the caller): the Edge Function
+  sets `"remote-mcp"` or `"edge-function"` as appropriate; Python routes set `"webapp"`;
+  CLI sets `"cli"`; local MCP server sets `"local-mcp"`.
+
+#### New table: `cerefox_usage_log`
+
+```sql
+id             UUID PRIMARY KEY DEFAULT gen_random_uuid()
+logged_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+operation      TEXT NOT NULL   -- 'search', 'metadata_search', 'get_document',
+                               --   'list_versions', 'get_audit_log'
+access_path    TEXT NOT NULL   -- 'remote-mcp', 'local-mcp', 'edge-function',
+                               --   'webapp', 'cli'
+reader         TEXT            -- nullable; agent/user name
+document_id    UUID REFERENCES cerefox_documents(id) ON DELETE SET NULL
+project_id     UUID REFERENCES cerefox_projects(id) ON DELETE SET NULL
+query_text     TEXT            -- for search / metadata_search: the query or filter
+result_count   INT             -- number of results returned
+extra          JSONB           -- flexible: include_content flag, max_bytes, etc.
+```
+
+Indexes: `logged_at DESC`, `(operation, logged_at)`, `access_path`, `reader`, `document_id`.
+
+#### New table: `cerefox_config`
+
+```sql
+key    TEXT PRIMARY KEY
+value  TEXT NOT NULL
+```
+
+Initial row: `('usage_tracking_enabled', 'false')`.
+
+Future config keys (not in scope for this iteration): anything that Edge Functions
+currently have as TypeScript constants (OPENAI_MODEL, EMBEDDING_DIMENSIONS) could
+eventually migrate here, but that requires a separate migration and is out of scope.
+
+#### RPC design
+
+```sql
+-- Insert a usage log entry (checks tracking_enabled first; no-op if disabled)
+cerefox_log_usage(operation, access_path, reader, document_id, project_id,
+                  query_text, result_count, extra) -> void
+
+-- Read config value
+cerefox_get_config(p_key TEXT) -> TEXT
+
+-- Set config value (validates key against allowed list)
+cerefox_set_config(p_key TEXT, p_value TEXT) -> VOID
+
+-- Query usage log with filters
+cerefox_list_usage_log(
+  p_start        TIMESTAMPTZ DEFAULT NULL,
+  p_end          TIMESTAMPTZ DEFAULT NULL,
+  p_operation    TEXT        DEFAULT NULL,
+  p_access_path  TEXT        DEFAULT NULL,
+  p_reader       TEXT        DEFAULT NULL,
+  p_project_id   UUID        DEFAULT NULL,
+  p_limit        INT         DEFAULT 100
+) -> TABLE(...)
+
+-- Aggregated summary for analytics
+cerefox_usage_summary(
+  p_start       TIMESTAMPTZ DEFAULT NULL,
+  p_end         TIMESTAMPTZ DEFAULT NULL,
+  p_project_id  UUID        DEFAULT NULL,
+  p_access_path TEXT        DEFAULT NULL
+) -> JSON  -- flexible structure for the UI
+```
+
+#### Wiring: where usage logging is added
+
+| Access path | Where to add | Notes |
+|---|---|---|
+| `cerefox-search` Edge Function | After RPC call, before response | Fire-and-forget `cerefox_log_usage` call; never block on failure |
+| `cerefox-metadata-search` Edge Function | Same pattern | |
+| `cerefox-get-document` Edge Function | Same pattern | Pass document_id |
+| `cerefox-list-versions` Edge Function | Same pattern | Pass document_id |
+| `cerefox-get-audit-log` Edge Function | Same pattern | |
+| `cerefox-mcp` Edge Function | Log in each `tools/*.ts` handler (post-16A; no delegation layer) | access_path = `"remote-mcp"` for all 7 tools |
+| Python REST routes (`routes_api.py`) | After each read endpoint | access_path = `"webapp"` |
+| Local MCP server (`mcp_server.py`) | After each tool handler | access_path = `"local-mcp"` |
+| CLI (`cli.py`) | After each read command | access_path = `"cli"` |
+
+#### Tasks
+
+**Step 1 -- Schema**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.1 | Create migration `0006_usage_log.sql` -- new tables and RPCs | Todo | `cerefox_usage_log` table, `cerefox_config` table, RLS (deny direct access; SECURITY DEFINER RPCs used by all callers), indexes |
+| 16C.2 | Update `schema.sql` to reflect final state | Todo | |
+
+**Step 2 -- RPCs**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.3 | Write `cerefox_log_usage` RPC | Todo | Reads config; no-op if disabled; inserts row; SECURITY DEFINER |
+| 16C.4 | Write `cerefox_get_config` and `cerefox_set_config` RPCs | Todo | `cerefox_set_config` validates key against allowlist (only `usage_tracking_enabled` for now) |
+| 16C.5 | Write `cerefox_list_usage_log` RPC | Todo | Filters: start/end, operation, access_path, reader, project_id; ordered `logged_at DESC` |
+| 16C.6 | Write `cerefox_usage_summary` RPC | Todo | Returns JSON with: ops_by_day (array), ops_by_operation (object), ops_by_access_path (object), top_documents (array, doc_id + title + count), top_readers (array, reader + count), total_count |
+
+**Step 3 -- Python client**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.7 | Add `log_usage()`, `get_config()`, `set_config()`, `list_usage_log()`, `usage_summary()` to `client.py` | Todo | All call corresponding RPCs |
+
+**Step 4 -- REST API**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.8 | Add `GET /api/v1/usage-log` endpoint | Todo | Params: start, end, operation, access_path, reader, project_id, limit; returns list |
+| 16C.9 | Add `GET /api/v1/usage-log/export.csv` endpoint | Todo | Same filters; returns CSV with all columns; `Content-Disposition: attachment` |
+| 16C.10 | Add `GET /api/v1/usage-log/summary` endpoint | Todo | Params: start, end, project_id, access_path; returns summary JSON from RPC |
+| 16C.11 | Add `GET /api/v1/config/{key}` and `PUT /api/v1/config/{key}` endpoints | Todo | Read/write config values; PUT validates against allowlist |
+
+**Step 5 -- Wire logging through Edge Functions and MCP**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.12 | Add `cerefox_log_usage` call to `cerefox-search` Edge Function | Todo | access_path = `"edge-function"` for direct callers |
+| 16C.13 | Add `cerefox_log_usage` call to `cerefox-metadata-search` Edge Function | Todo | |
+| 16C.14 | Add `cerefox_log_usage` call to `cerefox-get-document` Edge Function | Todo | |
+| 16C.15 | Add `cerefox_log_usage` call to `cerefox-list-versions` Edge Function | Todo | |
+| 16C.16 | Add `cerefox_log_usage` call to `cerefox-get-audit-log` Edge Function | Todo | |
+| 16C.17 | Add `cerefox_log_usage` calls to all 8 `tools/*.ts` handlers in `cerefox-mcp` | Todo | access_path = `"remote-mcp"`; covers 6 tools from 16A + 2 from 16B (`metadata-search.ts`, `list-projects.ts`); fire-and-forget after RPC call |
+| 16C.18 | Deploy all updated Edge Functions | Todo | `npx supabase functions deploy <names>` |
+
+**Step 6 -- Wire logging through Python paths**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.19 | Add `log_usage` calls to all read endpoints in `routes_api.py` | Todo | Fire-and-forget (try/except); access_path = `"webapp"`; reader from request auth or omitted |
+| 16C.20 | Add `log_usage` calls to all read tools in `mcp_server.py` | Todo | access_path = `"local-mcp"`; reader from tool input or omitted |
+| 16C.21 | Add `log_usage` calls to CLI read commands in `cli.py` | Todo | access_path = `"cli"`; reader = omitted |
+
+**Step 7 -- CLI config commands**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.22 | Add `cerefox config get <key>` and `cerefox config set <key> <value>` CLI commands | Todo | Calls corresponding client methods; `cerefox config set usage_tracking_enabled true/false` |
+
+**Step 8 -- Tests**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.23 | Unit tests: `log_usage` (disabled no-op, enabled insert, RPC pass-through) | Todo | Mock RPC; test enabled/disabled paths |
+| 16C.24 | Unit tests: `get_config` / `set_config` client methods and `/api/v1/config` endpoints | Todo | Test allowlist validation (unknown key rejected); test read-back after write |
+| 16C.25 | Unit tests: `usage_summary` response parsing | Todo | Mock RPC return; test field mapping |
+| 16C.26 | E2e test: enable tracking, run search via Python client, verify entry appears in usage log with correct operation and access_path=`webapp` | Todo | Tests opt-in behavior and access_path attribution end-to-end |
+| 16C.27 | E2e test: disable tracking, run search, verify no new entry added | Todo | Tests opt-out behavior |
+
+**Step 9 -- Documentation**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16C.28 | Add entry to Cerefox Decision Log -- record decision to use a separate `cerefox_usage_log` table (not extend audit log); record opt-in-by-default rationale; record `cerefox_config` table design (DB-stored config, no redeploy needed to toggle); record `access_path` taxonomy and why it is set by the caller layer, not the RPC | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
+
+**Deliverable**: All read operations are optionally logged with full context. The user controls
+tracking via web UI or CLI. CSV export available. Data is ready for the analytics page.
+
+---
+
+### 16D: Analytics Page (Web UI)
+
+**Goal**: Visualize usage log data in the React SPA. Requires 16C to be complete.
+
+**Page**: `/app/analytics` -- new page in the main navigation.
+
+**Layout**:
+- Top row: date range picker (presets: last 7 / 30 / 90 days, custom range), project filter
+  dropdown, access path filter
+- Settings card: Usage Tracking toggle (on/off) -- calls `PUT /api/v1/config/usage_tracking_enabled`
+- Summary stat cards: total calls, unique readers, unique documents accessed, most-used operation
+- Visualization panels (described below)
+- Export button: downloads CSV via `GET /api/v1/usage-log/export.csv`
+
+**Visualizations** -- all included in the plan; some deferred to post-16 as noted:
+
+| # | Chart | Status | Library | Notes |
+|---|-------|--------|---------|-------|
+| V1 | Calls per day (time-series bar chart, stacked by operation type) | Included | @mantine/charts (Recharts) | Primary activity overview |
+| V2 | Calls per access path (time-series bar chart or grouped bar) | Included | @mantine/charts | Shows which clients are most active |
+| V3 | Top N most-accessed documents (horizontal bar chart) | Included | @mantine/charts | Ranked by access count |
+| V4 | Top N most-active readers (horizontal bar chart) | Included | @mantine/charts | Ranked by call count |
+| V5 | Operations breakdown (donut/pie chart) | Included | @mantine/charts | Quick proportion view |
+| V6 | Search query word cloud | Deferred | react-d3-cloud | Requires D3 dep; interesting for pattern discovery; add in post-16 |
+| V7 | HEB (Hierarchical Edge Bundling): readers → documents | Deferred | D3.js | Shows multi-agent coordination patterns; which agents accessed which documents; add in post-16 when usage data accumulates enough to make it meaningful |
+
+For V6 and V7, add placeholder cards in the UI with "Coming soon" text so the layout is
+reserved, making it easy to drop in the visualization without a layout redesign.
+
+#### Tasks
+
+**Step 1 -- API client (TypeScript)**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16D.1 | Add `getUsageSummary`, `listUsageLog`, `exportUsageLogCsv`, `getConfig`, `setConfig` to the TypeScript API client | Todo | Mirrors REST endpoints; TanStack Query hooks |
+
+**Step 2 -- Analytics page**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16D.2 | Create `Analytics.tsx` page with date range picker, project filter, access path filter | Todo | Filter state in URL params for shareability |
+| 16D.3 | Add summary stat cards (total calls, unique readers, docs accessed, top operation) | Todo | Derived from `/api/v1/usage-log/summary` |
+| 16D.4 | Implement V1: calls-per-day stacked bar chart | Todo | `@mantine/charts` BarChart |
+| 16D.5 | Implement V2: calls-per-access-path bar chart | Todo | `@mantine/charts` BarChart |
+| 16D.6 | Implement V3: top documents horizontal bar chart | Todo | Link each bar to document detail page |
+| 16D.7 | Implement V4: top readers horizontal bar chart | Todo | `@mantine/charts` BarChart |
+| 16D.8 | Implement V5: operations breakdown donut chart | Todo | `@mantine/charts` DonutChart |
+| 16D.9 | Add placeholder cards for V6 (word cloud) and V7 (HEB) | Todo | "Coming soon" with brief description |
+| 16D.10 | Add Usage Tracking toggle card | Todo | Reads config via API; toggle calls PUT; shows current state |
+| 16D.11 | Add CSV export button | Todo | Triggers download with current filter params |
+| 16D.12 | Add "Analytics" to app navigation (after "Audit Log") | Todo | |
+
+**Step 3 -- Tests**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16D.13 | Playwright e2e: navigate to analytics page, verify stat cards and charts render | Todo | Usage tracking must be enabled and have log entries; seed via e2e setup |
+
+**Step 4 -- Documentation**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 16D.14 | Add analytics section to `README.md` | Todo | |
+| 16D.15 | Update `docs/solution-design.md` -- add usage log table and analytics page to architecture | Todo | |
+| 16D.16 | Update `CLAUDE.md` -- note new `cerefox_config` and `cerefox_usage_log` tables | Todo | |
+
+**Deliverable**: Users can visualize Cerefox usage patterns with filterable charts. Usage
+tracking is opt-in and controllable from the web UI. CSV export available for offline
+analysis. Placeholder cards reserve layout space for word cloud and HEB visualizations
+in a future iteration.
+
+---
+
 ## Current Focus
 
-**Iteration 15 complete.** Full trust and governance layer implemented:
+**Iteration 15 complete.** Planning iteration 16.
+
+**Iteration 15 shipped:**
 - Audit log (immutable, append-only) with cerefox_create_audit_entry and cerefox_list_audit_entries RPCs
-- New cerefox-get-audit-log Edge Function + cerefox_get_audit_log MCP tool (7 Edge Functions, 7 MCP tools total)
+- New cerefox-get-audit-log Edge Function + cerefox_get_audit_log MCP tool (7 Edge Functions, 6 MCP tools total)
 - Review status (approved/pending_review) with auto-transition based on author_type
 - Version archival (archived flag protects from cleanup)
 - Version diff viewer (unified)
@@ -868,3 +1438,10 @@ and lightweight review workflow. Temporal queries support multi-agent coordinati
 - Author/author_type wired through all access paths (web UI, MCP, Edge Functions)
 - Upgrading guide with links from README and quickstart
 - All 391 unit tests + 9 UI e2e tests pass
+
+**Iteration 16 branches and order:**
+1. `feat/mcp-consolidation` -- implement 16A (MCP refactor); merge first; no DB changes
+2. `feat/metadata-search` -- implement 16B; can be developed in parallel with 16A but
+   **must merge after 16A** (16B.10–16B.13 wire new tools into the refactored cerefox-mcp)
+3. `feat/usage-analytics` -- implement 16C then 16D; start after 16A is merged (16C wires
+   logging into the refactored cerefox-mcp tool handlers)

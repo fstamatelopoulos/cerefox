@@ -30,6 +30,7 @@ npx supabase functions deploy cerefox-metadata
 npx supabase functions deploy cerefox-get-document
 npx supabase functions deploy cerefox-list-versions
 npx supabase functions deploy cerefox-get-audit-log
+npx supabase functions deploy cerefox-metadata-search
 npx supabase functions deploy cerefox-mcp
 
 # 7. Restart the application
@@ -59,6 +60,33 @@ open http://localhost:8000/app/
 ## Version-Specific Notes
 
 Most upgrades require no special steps beyond the standard checklist above. Notes below only apply when upgrading across specific version boundaries.
+
+### Upgrading to v0.1.10+ (from any earlier version)
+
+**New Edge Function**: `cerefox-metadata-search` must be deployed (step 6 above). The
+standard checklist does not yet include it -- add this line:
+
+```bash
+npx supabase functions deploy cerefox-metadata-search
+```
+
+**Breaking change -- MCP tool `project_id` input removed**: The `cerefox_search`,
+`cerefox_ingest`, and `cerefox_metadata_search` tools in `cerefox-mcp` now accept
+`project_name` (human-readable string) instead of `project_id` (UUID). If you have
+any AI agents that pass `project_id` in their MCP tool calls, update them to pass
+`project_name` with the project's display name instead.
+
+This change **only affects the MCP path** (`cerefox-mcp` Edge Function and local MCP
+server). The primitive Edge Functions (`cerefox-search`, `cerefox-ingest`, etc.) still
+accept `project_id UUID` and are unchanged.
+
+**New data in search results**: All search and retrieval results now include a
+`project_names` field (array of strings) alongside the existing `project_ids` field.
+Existing callers that ignore unknown fields are unaffected.
+
+**New MCP tools**: `cerefox_list_projects` (no parameters; returns all projects with
+names and IDs) and `cerefox_metadata_search` are now available on all MCP paths.
+MCP clients pick up new tools automatically on the next connection.
 
 ### Upgrading to v0.1.7+ (from any earlier version)
 
