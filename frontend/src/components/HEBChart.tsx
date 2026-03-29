@@ -142,7 +142,7 @@ export function HEBChart({ usageLog, width = 400, height = 400 }: HEBChartProps)
       .attr("dominant-baseline", "middle")
       .attr("fill", textColor)
       .attr("font-size", "11px")
-      .text((d) => d.id.length > 20 ? d.id.slice(0, 18) + "..." : d.id);
+      .text((d) => d.id.length > 35 ? d.id.slice(0, 33) + "..." : d.id);
 
   }, [links, readers, docs, width, height, dark]);
 
