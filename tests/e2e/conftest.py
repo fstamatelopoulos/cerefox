@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 
 E2E_PREFIX = "[E2E]"
 E2E_UI_PREFIX = "[E2E-UI]"
-E2E_PREFIXES = (E2E_PREFIX, E2E_UI_PREFIX)
+E2E_MCP_PREFIX = "[E2E-MCP]"
+E2E_EF_PREFIX = "[E2E-EF]"
+E2E_PREFIXES = (E2E_PREFIX, E2E_UI_PREFIX, E2E_MCP_PREFIX, E2E_EF_PREFIX)
 
 
 def _make_unique_title(label: str) -> str:
@@ -148,6 +150,77 @@ def e2e_edge(e2e_settings: Settings) -> EdgeFunctionClient | None:
     if not anon_key:
         return None
     return EdgeFunctionClient(e2e_settings.supabase_url, anon_key)
+
+
+class MCPClient:
+    """Thin wrapper for calling the cerefox-mcp Edge Function via MCP JSON-RPC 2.0.
+
+    Sends raw JSON-RPC 2.0 POST requests. Does not use any MCP SDK. This makes
+    failures unambiguous -- protocol errors are clearly from the Edge Function,
+    not from a client library.
+    """
+
+    def __init__(self, base_url: str, anon_key: str) -> None:
+        self._http = httpx.Client(
+            base_url=f"{base_url}/functions/v1/cerefox-mcp",
+            headers={
+                "Authorization": f"Bearer {anon_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=60.0,
+        )
+        self._req_id = 0
+
+    def _next_id(self) -> int:
+        self._req_id += 1
+        return self._req_id
+
+    def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Send a JSON-RPC 2.0 request and return the full response dict."""
+        body: dict[str, Any] = {"jsonrpc": "2.0", "id": self._next_id(), "method": method}
+        if params is not None:
+            body["params"] = params
+        resp = self._http.post("", json=body)
+        resp.raise_for_status()
+        return resp.json()
+
+    def tool(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Call a tools/call method and return the full JSON-RPC response."""
+        return self.call("tools/call", {"name": name, "arguments": arguments or {}})
+
+    def tool_text(self, name: str, arguments: dict[str, Any] | None = None) -> str:
+        """Call a tool and return the text content. Raises if the call returned an error."""
+        resp = self.tool(name, arguments)
+        if "error" in resp:
+            raise RuntimeError(f"MCP error: {resp['error']}")
+        return resp["result"]["content"][0]["text"]
+
+    def get(self) -> dict[str, Any]:
+        """GET health check."""
+        resp = self._http.get("")
+        resp.raise_for_status()
+        return resp.json()
+
+
+@pytest.fixture(scope="session")
+def e2e_mcp(e2e_settings: Settings) -> MCPClient | None:
+    """An MCP client that calls the deployed cerefox-mcp Edge Function directly.
+
+    Returns None (and tests skip) if no valid anon key is available.
+    """
+    from dotenv import dotenv_values
+
+    dotenv = dotenv_values(".env")
+    anon_key = os.environ.get("CEREFOX_SUPABASE_ANON_KEY", "") or dotenv.get(
+        "CEREFOX_SUPABASE_ANON_KEY", ""
+    )
+    if not anon_key:
+        main_key = e2e_settings.supabase_key
+        if main_key.startswith("eyJ"):
+            anon_key = main_key
+    if not anon_key:
+        return None
+    return MCPClient(e2e_settings.supabase_url, anon_key)
 
 
 class E2ECleanup:
