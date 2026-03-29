@@ -268,46 +268,45 @@ function MetadataResultCard({
 
   return (
     <Card withBorder p="sm">
-      {/* ── Collapsed: always visible ──────────────────────────────── */}
-      <Group
-        justify="space-between"
-        mb={4}
+      {/* ── Collapsed: click anywhere to expand/collapse ───────────── */}
+      <div
         style={{ cursor: "pointer" }}
         onClick={() => setExpanded((e) => !e)}
       >
-        <Group gap="xs">
-          <Text fw={600} size="sm">{doc.title}</Text>
-          <Badge size="xs" variant="light" color={doc.review_status === "approved" ? "green" : "yellow"}>
-            {doc.review_status}
-          </Badge>
+        <Group justify="space-between" mb={4}>
+          <Group gap="xs">
+            <Text fw={600} size="sm">{doc.title}</Text>
+            <Badge size="xs" variant="light" color={doc.review_status === "approved" ? "green" : "yellow"}>
+              {doc.review_status}
+            </Badge>
+          </Group>
         </Group>
-        <Text size="xs" c="dimmed">{expanded ? "collapse" : "expand"}</Text>
-      </Group>
 
-      <Group gap={4} mb={4}>
-        {(expanded ? metaEntries : topMeta).map(([k, v]) => (
-          <Badge key={k} size="xs" variant="outline">
-            {k}={String(v).length > 30 ? String(v).slice(0, 28) + "..." : String(v)}
-          </Badge>
-        ))}
-        {!expanded && hasMoreMeta && (
-          <Badge size="xs" variant="light" c="dimmed">+{metaEntries.length - 3} more</Badge>
-        )}
-      </Group>
-
-      {doc.project_names.length > 0 && (
         <Group gap={4} mb={4}>
-          {doc.project_names.map((name) => (
-            <Badge key={name} size="xs" variant="filled" color="blue">{name}</Badge>
+          {(expanded ? metaEntries : topMeta).map(([k, v]) => (
+            <Badge key={k} size="xs" variant="outline">
+              {k}={String(v).length > 30 ? String(v).slice(0, 28) + "..." : String(v)}
+            </Badge>
           ))}
+          {!expanded && hasMoreMeta && (
+            <Badge size="xs" variant="light" c="dimmed">+{metaEntries.length - 3} more</Badge>
+          )}
         </Group>
-      )}
 
-      <Text size="xs" c="dimmed">
-        {doc.total_chars.toLocaleString()} chars | {doc.chunk_count} chunks |
-        {doc.version_count > 0 ? ` ${doc.version_count} versions |` : ""} updated{" "}
-        {doc.updated_at?.slice(0, 10) ?? "?"}
-      </Text>
+        {doc.project_names.length > 0 && (
+          <Group gap={4} mb={4}>
+            {doc.project_names.map((name) => (
+              <Badge key={name} size="xs" variant="filled" color="blue">{name}</Badge>
+            ))}
+          </Group>
+        )}
+
+        <Text size="xs" c="dimmed">
+          {doc.total_chars.toLocaleString()} chars | {doc.chunk_count} chunks |
+          {doc.version_count > 0 ? ` ${doc.version_count} versions |` : ""} updated{" "}
+          {doc.updated_at?.slice(0, 10) ?? "?"}
+        </Text>
+      </div>
 
       {/* ── Expanded: full metadata + content + link ───────────────── */}
       {expanded && (
