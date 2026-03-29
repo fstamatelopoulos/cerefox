@@ -45,6 +45,7 @@ def _make_row(
         "doc_title": doc_title,
         "doc_source": "file",
         "doc_project_ids": [],
+        "doc_project_names": [],
         "doc_metadata": {},
     }
 
@@ -108,15 +109,23 @@ class TestSearchResultFromRow:
         assert result.score == pytest.approx(0.9)
         assert result.heading_path == ["My Document", "Section"]
 
+    def test_includes_project_names(self) -> None:
+        row = _make_row()
+        row["doc_project_names"] = ["Alpha", "Beta"]
+        result = SearchResult.from_row(row)
+        assert result.doc_project_names == ["Alpha", "Beta"]
+
     def test_handles_none_values_gracefully(self) -> None:
         row = _make_row()
         row["title"] = None
         row["heading_path"] = None
         row["doc_metadata"] = None
+        row["doc_project_names"] = None
         result = SearchResult.from_row(row)
         assert result.title == ""
         assert result.heading_path == []
         assert result.doc_metadata == {}
+        assert result.doc_project_names == []
 
 
 # ── Hybrid search ─────────────────────────────────────────────────────────────

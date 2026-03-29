@@ -1130,81 +1130,81 @@ Returns: Array of {id, name, description} for all projects.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.1 | Add `project_names TEXT[]` to RETURNS TABLE of all 6 existing search/retrieve RPCs | Todo | Affected: `cerefox_hybrid_search`, `cerefox_fts_search`, `cerefox_semantic_search`, `cerefox_search_docs`, `cerefox_reconstruct_doc`, `cerefox_get_document`. Requires `DROP FUNCTION IF EXISTS ...` before `CREATE OR REPLACE` for each (signature change). Use `ARRAY(SELECT p.name FROM cerefox_projects p JOIN cerefox_document_projects dp ON p.id = dp.project_id WHERE dp.document_id = d.id)` |
-| 16B.2 | Write `cerefox_list_projects()` RPC | Todo | `SELECT id, name, description FROM cerefox_projects ORDER BY name`; SECURITY DEFINER |
-| 16B.3 | Write `cerefox_metadata_search` RPC | Todo | SECURITY DEFINER; GIN containment filter; both `project_ids` and `project_names` in output; p_max_bytes pruning when include_content=true |
-| 16B.4 | Create and deploy migration `0005_metadata_search.sql` | Todo | Contains all changes from 16B.1–16B.3; `uv run python scripts/db_migrate.py` |
+| 16B.1 | Add `project_names TEXT[]` to RETURNS TABLE of all 6 existing search/retrieve RPCs | Done | All 6 RPCs updated via DROP+CREATE; `ARRAY(SELECT p.name ...)` pattern |
+| 16B.2 | Write `cerefox_list_projects()` RPC | Done | SECURITY DEFINER, STABLE, returns id/name/description |
+| 16B.3 | Write `cerefox_metadata_search` RPC | Done | JSONB containment, project/date filters, include_content, byte budget |
+| 16B.4 | Create and deploy migration `0005_metadata_search.sql` | Done | Applied to live Supabase; rpcs.sql updated as canonical source |
 
 **Step 2 -- Python client**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.5 | Add `project_names: list[str]` field to `SearchChunkResult`, `DocResult`, and any other result types in `search.py` and `client.py` | Todo | New field from updated RPCs; additive -- existing code ignores it |
-| 16B.6 | Add `list_projects_rpc()` to `client.py` | Todo | Calls `cerefox_list_projects` RPC; returns `list[dict]` with id/name/description |
-| 16B.7 | Add `metadata_search()` to `client.py` | Todo | Calls `cerefox_metadata_search` RPC; params mirror RPC signature |
+| 16B.5 | Add `project_names: list[str]` field to `SearchResult`, `DocResult` in `search.py` | Done | `doc_project_names` field added to both dataclasses and `from_row()` |
+| 16B.6 | Add `list_projects_rpc()` to `client.py` | Done | Calls `cerefox_list_projects` RPC |
+| 16B.7 | Add `metadata_search()` to `client.py` | Done | All params pass through; `p_max_bytes` omitted when None |
 
 **Step 3 -- REST API**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.8 | Update search response models to include `project_names: list[str]` | Todo | `SearchResultResponse`, `DocResultResponse` in `routes_api.py` -- additive field |
-| 16B.9 | Add `POST /api/v1/documents/metadata-search` endpoint | Todo | JSON body matches RPC params; `max_bytes=None` (uncapped for web UI) |
+| 16B.8 | Update search response models to include `project_names: list[str]` | Done | `DocSearchResultResponse`, `ChunkSearchResultResponse` gain `doc_project_names` |
+| 16B.9 | Add `POST /api/v1/documents/metadata-search` endpoint | Done | `MetadataSearchRequest`/`MetadataSearchResultResponse` models; uncapped for web UI |
 
 **Step 4 -- Edge Functions and MCP wiring**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.10 | Update `tools/search.ts` in `cerefox-mcp` -- change input from `project_id UUID` to `project_name TEXT`; resolve name → UUID via `cerefox_list_projects` RPC before calling `cerefox_hybrid_search` | Todo | Return error if project_name not found |
-| 16B.11 | Update `tools/ingest.ts` in `cerefox-mcp` -- same `project_name` input pattern | Todo | Already consistent with local MCP; remote was the odd one out |
-| 16B.12 | Add `tools/list-projects.ts` to `cerefox-mcp` -- calls `cerefox_list_projects` RPC directly | Todo | Thin; no params; returns formatted list |
-| 16B.13 | Update `index.ts` dispatcher -- add `cerefox_list_projects` tool; update tool schemas for search and ingest | Todo | Tool count: 6 → 8 (adding list_projects + metadata_search) |
-| 16B.14 | Create `cerefox-metadata-search` primitive Edge Function | Todo | Thin wrapper over `cerefox_metadata_search` RPC; accepts `project_id UUID` (primitive interface); enforces max_bytes ceiling |
-| 16B.15 | Add `tools/metadata-search.ts` to `cerefox-mcp` -- calls `cerefox_metadata_search` RPC directly; resolves `project_name` → UUID | Todo | Consistent with 16A architecture |
-| 16B.16 | Deploy all updated Edge Functions | Todo | `npx supabase functions deploy cerefox-metadata-search cerefox-mcp` |
+| 16B.10 | Update `tools/search.ts` in `cerefox-mcp` -- `project_name` input with name→UUID resolution | Done | Already used `project_name` since 16A; no change needed |
+| 16B.11 | Update `tools/ingest.ts` in `cerefox-mcp` -- same `project_name` input pattern | Done | Already used `project_name` since 16A; no change needed |
+| 16B.12 | Add `tools/list-projects.ts` to `cerefox-mcp` | Done | Calls `cerefox_list_projects` RPC; returns formatted list |
+| 16B.13 | Update `index.ts` dispatcher -- add 2 new tools, update schemas | Done | Tool count: 6 → 8 |
+| 16B.14 | Create `cerefox-metadata-search` primitive Edge Function | Done | Thin wrapper; accepts `project_id UUID`; enforces max_bytes ceiling |
+| 16B.15 | Add `tools/metadata-search.ts` to `cerefox-mcp` | Done | Calls RPC directly; resolves `project_name` → UUID |
+| 16B.16 | Deploy all updated Edge Functions | Done | Both `cerefox-metadata-search` and `cerefox-mcp` deployed |
 
 **Step 5 -- Local MCP server**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.17 | Add `cerefox_list_projects` tool to `mcp_server.py` | Todo | Calls `client.list_projects_rpc()`; returns formatted table |
-| 16B.18 | Add `cerefox_metadata_search` tool to `mcp_server.py` | Todo | Calls `client.metadata_search()`; resolves project_name → UUID via `client.list_projects_rpc()`; handles max_bytes ceiling |
+| 16B.17 | Add `cerefox_list_projects` tool to `mcp_server.py` | Done | |
+| 16B.18 | Add `cerefox_metadata_search` tool to `mcp_server.py` | Done | With project_name resolution and byte budget |
 
 **Step 6 -- CLI**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.19 | Add `cerefox metadata-search` CLI command | Todo | Options: `--filter` (JSON), `--project` (name), `--updated-since`, `--created-since`, `--limit`, `--include-content`; output: formatted table |
+| 16B.19 | Add `cerefox metadata-search` CLI command | Done | All options implemented |
 
 **Step 7 -- Web UI**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.20 | Update search results components to display `project_names` instead of (or alongside) raw UUIDs | Todo | Affects Search page result cards; use names for display, keep IDs for links |
-| 16B.21 | Add "Metadata Search" page at `/app/metadata-search` | Todo | Metadata filter builder (key/value rows with autocomplete), date filters, project name dropdown, include-content toggle; results show doc card with metadata chips, project names, optional content preview |
-| 16B.22 | Add "Metadata Search" nav link | Todo | After "Search" in the nav bar |
+| 16B.20 | Update search results components to display `project_names` as badges | Done | Blue badges on doc result cards in SearchResults component |
+| 16B.21 | Add "Metadata Search" page at `/app/metadata-search` | Done | Filter builder, project dropdown, date filters, include-content, result cards with metadata/project badges |
+| 16B.22 | Add "Metadata Search" nav link | Done | After "Search" in the nav bar |
 
 **Step 8 -- Tests**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.23 | Unit tests: `project_names` field present in all result types; `list_projects_rpc()` param pass-through | Todo | Mock RPCs |
-| 16B.24 | Unit tests: `metadata_search()` in `client.py`; param propagation; max_bytes pass-through | Todo | Mock RPC call; test all param combinations |
-| 16B.25 | E2e test: ingest 3 docs with varying metadata across 2 projects; assert metadata_search returns correct docs with correct project names; assert cerefox_list_projects returns both projects | Todo | Add to `tests/e2e/test_api_e2e.py`; test AND semantics, project_name filter, updated_since, include_content, result limit |
-| 16B.26 | E2e test: add `test_mcp_edf.py` tests for new MCP tools (`cerefox_list_projects`, `cerefox_metadata_search`) and project_name resolution via MCP | Todo | Extend `tests/e2e/test_mcp_e2e.py` (written in 16A); regression-test `cerefox_search` project_name breaking change |
-| 16B.27 | E2e test: add `test_edge_functions_e2e.py` tests for new `cerefox-metadata-search` primitive Edge Function | Todo | Extend `tests/e2e/test_edge_functions_e2e.py` (written in 16A); cover metadata filter, project_id filter, include_content=true |
-| 16B.28 | Playwright UI e2e test: navigate to `/app/metadata-search`; enter a filter; verify results render with project name chips | Todo | Add to `tests/e2e/test_ui_e2e.py` |
+| 16B.23 | Unit tests: `project_names` field present in all result types; `list_projects_rpc()` param pass-through | Done | 4 new tests in test_db_client.py and test_search.py; 395 total |
+| 16B.24 | Unit tests: `metadata_search()` in `client.py`; param propagation; max_bytes pass-through | Done | Covered by test_metadata_search_calls_rpc_with_params and test_metadata_search_omits_max_bytes_when_none |
+| 16B.25 | E2e test: metadata_search + list_projects via Python client | Deferred | Covered by MCP and Edge Function e2e tests below; Python client is a thin pass-through |
+| 16B.26 | E2e test: new MCP tools + project_name resolution via MCP | Done | 6 new tests in TestMCPNewTools16B; 23 MCP e2e tests total |
+| 16B.27 | E2e test: cerefox-metadata-search primitive Edge Function | Done | 4 new tests in TestMetadataSearchEdgeFunction; 16 EF e2e tests total |
+| 16B.28 | Playwright UI e2e test: metadata-search page | Deferred | Manual testing confirmed working; Playwright test deferred to future iteration |
 
 **Step 9 -- Documentation**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16B.28 | Update `docs/guides/connect-agents.md` -- updated tool schemas (project_name inputs, new tools); GPT Actions OpenAPI schema v1.5.0; note primitive Edge Functions still use project_id UUID | Todo | |
-| 16B.29 | Update `docs/guides/upgrading.md` -- add v0.1.10 breaking change notice: MCP `project_id` input removed, replaced by `project_name`; affected tools: cerefox_search, cerefox_ingest, cerefox_metadata_search; primitive Edge Functions unaffected | Todo | Already drafted in upgrading.md; task is to verify accuracy after implementation |
-| 16B.30 | Update `README.md` -- add metadata search and project discovery to feature table | Todo | |
-| 16B.31 | Update `CLAUDE.md` -- Edge Function inventory (new `cerefox-metadata-search`; total 8 Edge Functions, 8 MCP tools); MCP tool list | Todo | |
-| 16B.32 | Update `MEMORY.md` -- revised Edge Function and MCP tool counts | Todo | |
-| 16B.33 | Update `docs/solution-design.md` -- add metadata search as a named retrieval mode; project name standardisation pattern | Todo | |
-| 16B.34 | Add entry to Cerefox Decision Log -- record: metadata search as first-class primitive; project name standardisation (names in MCP, UUIDs in primitive Edge Functions); decision to return both project_ids and project_names in all RPCs; `p_include_content` opt-in design; dual date filter rationale | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
+| 16B.29 | Update `docs/guides/connect-agents.md` -- updated tool schemas, new tools | Deferred | Will update when GPT Actions OpenAPI schema is revised |
+| 16B.30 | Update `docs/guides/upgrading.md` -- v0.1.10 breaking change notice | Done | Already drafted and cleaned up in earlier commit |
+| 16B.31 | Update `README.md` -- add metadata search and project discovery | Deferred | Will update with version release |
+| 16B.32 | Update `CLAUDE.md` -- Edge Function inventory and architecture diagram | Done | 8 Edge Functions, 8 MCP tools; diagram updated with new RPCs |
+| 16B.33 | Update `MEMORY.md` -- revised counts and current state | Done | |
+| 16B.34 | Update `docs/solution-design.md` -- metadata search and project name pattern | Done | Updated in 16A; metadata search noted in access path diagram |
+| 16B.35 | Add entries to Cerefox Decision Log | Done | 3 entries: metadata search as separate primitive, project_name standardisation, list_projects for discovery |
 
 **Deliverable**: Agents query by metadata and filter by project name across all MCP paths.
 All document results include human-readable project names. Agents can discover available
