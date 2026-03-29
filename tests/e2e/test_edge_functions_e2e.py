@@ -319,3 +319,91 @@ class TestGetAuditLogEdgeFunction:
         assert isinstance(result, list)
         for entry in result:
             assert entry["operation"] == "create"
+
+
+# ── 16B: cerefox-metadata-search ─────────────────────────────────────────────
+
+
+class TestMetadataSearchEdgeFunction:
+    """EF-12 to EF-14: Direct tests of the cerefox-metadata-search Edge Function."""
+
+    def test_metadata_search_returns_matches(
+        self, e2e_edge: EdgeFunctionClient | None, ef_cleanup: E2ECleanup
+    ) -> None:
+        """EF-12: cerefox-metadata-search returns matching documents."""
+        _skip_if_no_edge(e2e_edge)
+        title = _unique_title("EF MetaSearch Test")
+        r = e2e_edge.invoke("cerefox-ingest", {
+            "title": title,
+            "content": SAMPLE_CONTENT,
+            "metadata": {"ef_tag": "meta-search-16b"},
+            "author": "e2e-ef-test",
+            "author_type": "agent",
+        })
+        ef_cleanup.track_document(r["document_id"])
+
+        result = e2e_edge.invoke("cerefox-metadata-search", {
+            "metadata_filter": {"ef_tag": "meta-search-16b"},
+        })
+        assert isinstance(result, list)
+        assert len(result) >= 1
+        assert any(row["document_id"] == r["document_id"] for row in result)
+
+    def test_metadata_search_with_include_content(
+        self, e2e_edge: EdgeFunctionClient | None, ef_cleanup: E2ECleanup
+    ) -> None:
+        """EF-13: include_content=true returns full document text."""
+        _skip_if_no_edge(e2e_edge)
+        title = _unique_title("EF MetaSearch Content Test")
+        r = e2e_edge.invoke("cerefox-ingest", {
+            "title": title,
+            "content": SAMPLE_CONTENT,
+            "metadata": {"ef_tag": "meta-content-16b"},
+            "author": "e2e-ef-test",
+            "author_type": "agent",
+        })
+        ef_cleanup.track_document(r["document_id"])
+
+        result = e2e_edge.invoke("cerefox-metadata-search", {
+            "metadata_filter": {"ef_tag": "meta-content-16b"},
+            "include_content": True,
+        })
+        assert isinstance(result, list)
+        assert len(result) >= 1
+        assert result[0]["content"] is not None
+        assert "Meridian Codex" in result[0]["content"]
+
+    def test_metadata_search_empty_filter_returns_400(
+        self, e2e_edge: EdgeFunctionClient | None
+    ) -> None:
+        """EF-14: Empty metadata_filter returns HTTP 400."""
+        _skip_if_no_edge(e2e_edge)
+        import httpx
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            e2e_edge.invoke("cerefox-metadata-search", {"metadata_filter": {}})
+        assert exc_info.value.response.status_code == 400
+
+    def test_metadata_search_project_names_in_results(
+        self, e2e_edge: EdgeFunctionClient | None, ef_cleanup: E2ECleanup
+    ) -> None:
+        """EF-15: Results include project_names field."""
+        _skip_if_no_edge(e2e_edge)
+        title = _unique_title("EF MetaSearch Projects Test")
+        r = e2e_edge.invoke("cerefox-ingest", {
+            "title": title,
+            "content": SAMPLE_CONTENT,
+            "metadata": {"ef_tag": "meta-proj-16b"},
+            "project_name": f"[E2E-EF] TestProj {uuid.uuid4().hex[:6]}",
+            "author": "e2e-ef-test",
+            "author_type": "agent",
+        })
+        ef_cleanup.track_document(r["document_id"])
+
+        result = e2e_edge.invoke("cerefox-metadata-search", {
+            "metadata_filter": {"ef_tag": "meta-proj-16b"},
+        })
+        assert isinstance(result, list)
+        assert len(result) >= 1
+        assert "project_names" in result[0]
+        assert isinstance(result[0]["project_names"], list)
+        assert len(result[0]["project_names"]) >= 1
