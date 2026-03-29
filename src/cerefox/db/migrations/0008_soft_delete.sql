@@ -8,6 +8,13 @@
 -- 1. Add deleted_at column (nullable, default NULL = not deleted)
 ALTER TABLE cerefox_documents ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
 
+-- 1b. Add 'restore' to the audit log operation CHECK constraint
+ALTER TABLE cerefox_audit_log DROP CONSTRAINT IF EXISTS cerefox_audit_log_operation_check;
+ALTER TABLE cerefox_audit_log ADD CONSTRAINT cerefox_audit_log_operation_check CHECK (
+    operation IN ('create', 'update-content', 'update-metadata', 'delete',
+                  'status-change', 'archive', 'unarchive', 'restore')
+);
+
 -- 2. Index for finding soft-deleted documents efficiently
 CREATE INDEX IF NOT EXISTS idx_documents_deleted_at
     ON cerefox_documents (deleted_at) WHERE deleted_at IS NOT NULL;
@@ -80,7 +87,7 @@ BEGIN
         document_id, operation, author, author_type,
         size_before, size_after, description
     ) VALUES (
-        p_document_id, 'unarchive', 'unknown', 'user',
+        p_document_id, 'restore', 'unknown', 'user',
         0, v_total_chars,
         format('Restored document: %s', v_title)
     );

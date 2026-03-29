@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
 
     CONSTRAINT cerefox_audit_log_operation_check CHECK (
         operation IN ('create', 'update-content', 'update-metadata', 'delete',
-                      'status-change', 'archive', 'unarchive')
+                      'status-change', 'archive', 'unarchive', 'restore')
     ),
     CONSTRAINT cerefox_audit_log_author_type_check CHECK (author_type IN ('user', 'agent'))
 );

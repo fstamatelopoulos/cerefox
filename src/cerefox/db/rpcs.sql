@@ -958,7 +958,7 @@ BEGIN
 
     PERFORM cerefox_create_audit_entry(
         p_document_id := p_document_id,
-        p_operation := 'unarchive',
+        p_operation := 'restore',
         p_author := p_author,
         p_author_type := p_author_type,
         p_size_before := 0,
