@@ -375,7 +375,7 @@ cerefox_search(query) →
 - `cerefox_expand_context(p_document_id, p_chunk_ids UUID[], p_context_window INT)` — returns ordered, deduplicated sibling chunks for a set of matched chunk IDs.
 - `cerefox_search_docs` — extended with `p_small_to_big_threshold INT` and `p_context_window INT` params. Internally: if `total_chars > threshold`, calls `cerefox_expand_context`; otherwise reconstructs the full document (current behaviour). Returns `is_partial` flag so callers know which path was taken.
 
-Python (`search.py`) and the `cerefox-search` Edge Function are thin pass-throughs that supply the config values as RPC params — no retrieval logic lives outside Postgres. `cerefox-mcp` requires no changes as it already delegates entirely to `cerefox-search`.
+Python (`search.py`) and the `cerefox-search` Edge Function are thin pass-throughs that supply the config values as RPC params — no retrieval logic lives outside Postgres. `cerefox-mcp` calls `cerefox_search_docs` directly via its `tools/search.ts` handler.
 
 **`match_count` semantics**: the parameter controls the number of **distinct documents** returned, not raw chunks. For large documents, each document match expands into multiple chunks (up to `(CEREFOX_CONTEXT_WINDOW * 2 + 1)` chunks per matched chunk hit). The total chunk count returned can exceed `match_count`.
 
@@ -537,9 +537,8 @@ logic is duplicated in Python or TypeScript.
 ```
 Caller                   Access path              RPC call
 ──────                   ───────────              ────────
-Agent (MCP)          →   cerefox-mcp              delegates to cerefox-search
-                     →   cerefox-search Edge Fn   .rpc("cerefox_search_docs", { p_metadata_filter: {...} })
-GPT Action           →   cerefox-search Edge Fn   same
+Agent (MCP)          →   cerefox-mcp              tools/search.ts → .rpc("cerefox_search_docs", { p_metadata_filter: {...} })
+GPT Action           →   cerefox-search Edge Fn   .rpc("cerefox_search_docs", { p_metadata_filter: {...} })
 Python CLI           →   search.py                client.search_docs(metadata_filter={...})
                      →   client.py                supabase.rpc("cerefox_search_docs", ...)
 Web UI               →   /search route            calls client.search_docs(metadata_filter=...)
@@ -549,9 +548,8 @@ Web UI               →   /search route            calls client.search_docs(met
 request body (JSON object or null). Passes it as `p_metadata_filter` to the RPC. No filter
 logic in TypeScript.
 
-**`cerefox-mcp` Edge Function** — the `cerefox_search` tool schema gains an optional
-`metadata_filter` parameter (`object`, nullable). Passed through to `cerefox-search` in the
-internal fetch body. No other changes.
+**`cerefox-mcp` Edge Function** — the `cerefox_search` tool (`tools/search.ts`) has an optional
+`metadata_filter` parameter (`object`, nullable). Passed directly to the RPC as `p_metadata_filter`.
 
 **Local MCP server (`mcp_server.py`)** — `cerefox_search` tool schema gains an optional
 `metadata_filter` input property (JSON object). Passed to `client.search_docs()`.
@@ -959,19 +957,22 @@ Path 2 — Remote MCP Edge Function (cerefox-mcp) [RECOMMENDED]
   Cursor: native url + headers in mcp.json
   Claude Desktop: via supergateway (npx, stdio-to-HTTP bridge)
   └── cerefox-mcp Supabase Edge Function (MCP Streamable HTTP, spec 2025-03-26)
-        └── Internal fetch → cerefox-search / cerefox-ingest Edge Functions
-              Tools: cerefox_search, cerefox_ingest, cerefox_get_document
+        └── Calls Postgres RPCs directly (no delegation to primitive Edge Functions)
+              Tools: cerefox_search, cerefox_ingest, cerefox_get_document,
+                     cerefox_list_versions, cerefox_list_metadata_keys,
+                     cerefox_get_audit_log
   Requires: URL + Supabase anon key; Node.js for Claude Desktop (npx supergateway)
   URL: https://<project>.supabase.co/functions/v1/cerefox-mcp
 
-Path 3 — GPT Actions / HTTP (dedicated Edge Functions)
+Path 3 — GPT Actions / HTTP (dedicated primitive Edge Functions)
   Cloud ChatGPT (chatgpt.com)
   └── GPT Actions → Edge Functions (HTTP POST, anon key)
         ├── cerefox-search        (search + embedding)
         ├── cerefox-ingest        (ingest + versioning via RPC)
         ├── cerefox-metadata      (list metadata keys)
         ├── cerefox-get-document  (full document retrieval, current or archived)
-        └── cerefox-list-versions (list version history)
+        ├── cerefox-list-versions (list version history)
+        └── cerefox-get-audit-log (audit log with filters)
               All Edge Functions use service-role key internally; callers use anon key
 
 (Limited) Cloud Claude (claude.ai web)
@@ -993,6 +994,7 @@ Path 3 — GPT Actions / HTTP (dedicated Edge Functions)
 | `cerefox_get_document` | Read | Retrieve complete document text by ID. Bypasses threshold logic. Optionally specify a version_id for historical content. |
 | `cerefox_list_versions` | Read | List available versions for a document (version_number, size, timestamp, source). |
 | `cerefox_list_metadata_keys` | Read | Discover metadata keys in use across the knowledge base (key, doc_count, example values). |
+| `cerefox_get_audit_log` | Read | Query audit log entries with filters (document, author, operation type, time range). |
 
 **How `cerefox_search` works internally:**
 1. Embeds the query with `CloudEmbedder` (OpenAI `text-embedding-3-small`)
@@ -1016,13 +1018,17 @@ base (in md format). If search returns partial results for a large document
 The dedicated Edge Functions are deployed to Supabase and callable via HTTP POST with an anon
 key. They are the backend for ChatGPT GPT Actions, curl / scripted access, and any HTTP client:
 
-| Edge Function | Operaton | Description |
-|--------------|----------|-------------|
-| `cerefox-search` | Search | Hybrid FTS + semantic search with server-side embedding |
-| `cerefox-ingest` | Write | Ingest/update a document; calls `cerefox_snapshot_version` RPC on update |
-| `cerefox-metadata` | Metadata | List all metadata keys across documents |
-| `cerefox-get-document` | Read | Full document retrieval (current or archived version) |
-| `cerefox-list-versions` | Read | List archived version history for a document |
+**Primitive Edge Functions (HTTP, for GPT Actions and direct callers):**
+
+| Edge Function | Operation | Called By |
+|--------------|-----------|-----------|
+| `cerefox-search` | Search | GPT Actions, Python client, direct HTTP |
+| `cerefox-ingest` | Write | GPT Actions, Python client, direct HTTP |
+| `cerefox-metadata` | Metadata | GPT Actions, direct HTTP |
+| `cerefox-get-document` | Read | GPT Actions, direct HTTP |
+| `cerefox-list-versions` | Read | GPT Actions, direct HTTP |
+| `cerefox-get-audit-log` | Audit | GPT Actions, direct HTTP |
+| `cerefox-mcp` | MCP server | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
 **Design principle — Edge Function as thin HTTP adapter over Postgres RPC:**
 
@@ -1033,13 +1039,14 @@ DEFINER, service-role access). The Edge Function:
 3. Formats and returns the response as JSON
 
 Callers authenticate with the **anon key** (JWT validated by the Supabase API gateway).
-The service-role key is never exposed to callers — it is read from `SUPABASE_SERVICE_ROLE_KEY`
+The service-role key is never exposed to callers -- it is read from `SUPABASE_SERVICE_ROLE_KEY`
 at runtime inside the Edge Function.
 
 **Single implementation principle**: each operation is implemented once in a Postgres RPC.
-Both the Python pipeline and the TypeScript Edge Functions call the same RPCs — no parallel
-implementations. The `cerefox-mcp` Edge Function calls the other dedicated Edge Functions via
-internal fetch (not the RPCs directly), keeping the business logic in one place per operation.
+Both the Python pipeline and the TypeScript Edge Functions call the same RPCs -- no parallel
+implementations. `cerefox-mcp` also calls Postgres RPCs directly (via per-tool handlers in
+`tools/*.ts`), not the primitive Edge Functions. This halves billable invocations for every
+MCP tool call while keeping business logic exclusively in Postgres.
 
 For desktop AI clients, the recommended path is the remote `cerefox-mcp` Edge Function (Path
 2). The local `cerefox mcp` server (Path 1) is a legacy fallback for offline use.
