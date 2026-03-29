@@ -830,6 +830,98 @@ class CerefoxClient:
             params["p_max_bytes"] = max_bytes
         return self.rpc("cerefox_metadata_search", params)
 
+    # ── Usage tracking ────────────────────────────────────────────────────────
+
+    def get_config(self, key: str) -> str | None:
+        """Read a config value from cerefox_config."""
+        rows = self.rpc("cerefox_get_config", {"p_key": key})
+        # RPC returns a scalar wrapped in a list by the Supabase client
+        if isinstance(rows, str):
+            return rows
+        if isinstance(rows, list) and rows:
+            return rows[0] if isinstance(rows[0], str) else None
+        return rows if isinstance(rows, str) else None
+
+    def set_config(self, key: str, value: str) -> None:
+        """Write a config value to cerefox_config (validated against allowlist)."""
+        self.rpc("cerefox_set_config", {"p_key": key, "p_value": value})
+
+    def log_usage(
+        self,
+        operation: str,
+        access_path: str,
+        reader: str | None = None,
+        document_id: str | None = None,
+        project_id: str | None = None,
+        query_text: str | None = None,
+        result_count: int | None = None,
+        extra: dict | None = None,
+    ) -> None:
+        """Log a usage entry (no-op if tracking is disabled in config)."""
+        try:
+            self.rpc("cerefox_log_usage", {
+                "p_operation": operation,
+                "p_access_path": access_path,
+                "p_reader": reader,
+                "p_document_id": document_id,
+                "p_project_id": project_id,
+                "p_query_text": query_text,
+                "p_result_count": result_count,
+                "p_extra": extra or {},
+            })
+        except Exception:
+            pass  # fire-and-forget; never block on usage logging failure
+
+    def list_usage_log(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+        operation: str | None = None,
+        access_path: str | None = None,
+        reader: str | None = None,
+        project_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Query usage log entries with optional filters."""
+        params: dict[str, Any] = {"p_limit": limit}
+        if start is not None:
+            params["p_start"] = start
+        if end is not None:
+            params["p_end"] = end
+        if operation is not None:
+            params["p_operation"] = operation
+        if access_path is not None:
+            params["p_access_path"] = access_path
+        if reader is not None:
+            params["p_reader"] = reader
+        if project_id is not None:
+            params["p_project_id"] = project_id
+        return self.rpc("cerefox_list_usage_log", params)
+
+    def usage_summary(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+        project_id: str | None = None,
+        access_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Get aggregated usage statistics."""
+        params: dict[str, Any] = {}
+        if start is not None:
+            params["p_start"] = start
+        if end is not None:
+            params["p_end"] = end
+        if project_id is not None:
+            params["p_project_id"] = project_id
+        if access_path is not None:
+            params["p_access_path"] = access_path
+        result = self.rpc("cerefox_usage_summary", params)
+        if isinstance(result, list) and result:
+            return result[0] if isinstance(result[0], dict) else {}
+        if isinstance(result, dict):
+            return result
+        return {}
+
     def save_note(
         self,
         title: str,
