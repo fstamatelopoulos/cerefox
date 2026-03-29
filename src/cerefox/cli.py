@@ -395,6 +395,11 @@ def search(
 
     click.echo(f"\n{len(resp.results)} result(s) shown  ({resp.response_bytes:,} bytes).")
 
+    client.log_usage(
+        operation="search", access_path="cli",
+        query_text=query, project_id=project_id, result_count=len(resp.results),
+    )
+
 
 # ── list-docs ─────────────────────────────────────────────────────────────────
 
@@ -703,6 +708,10 @@ def get_doc(document_id: str, version_id: str | None) -> None:
     click.echo("")
     click.echo(doc.get("full_content") or "")
 
+    client.log_usage(
+        operation="get_document", access_path="cli", document_id=document_id, result_count=1,
+    )
+
 
 # ── list-versions ─────────────────────────────────────────────────────────────
 
@@ -730,6 +739,11 @@ def list_versions(document_id: str) -> None:
             f"v{v['version_number']:<3}  {v['created_at']:<27}  {v['source']:<10}  "
             f"{v['chunk_count']:>6}  {v['total_chars']:>8}  {v['version_id']}"
         )
+
+    client.log_usage(
+        operation="list_versions", access_path="cli",
+        document_id=document_id, result_count=len(versions),
+    )
 
 
 # ── web ───────────────────────────────────────────────────────────────────────

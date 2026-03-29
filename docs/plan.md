@@ -1362,7 +1362,7 @@ cerefox_usage_summary(
 |---|------|--------|-------|
 | 16C.19 | Add `log_usage` calls to read endpoints in `routes_api.py` | Done | search + metadata_search; access_path = "webapp" |
 | 16C.20 | Add `log_usage` calls to all read tools in `mcp_server.py` | Done | 7 handlers; access_path = "local-mcp" |
-| 16C.21 | Add `log_usage` calls to CLI read commands in `cli.py` | Deferred | Low priority; CLI is rarely used for read operations; API/MCP/EF paths cover the main use cases |
+| 16C.21 | Add `log_usage` calls to CLI read commands in `cli.py` | Done | search, get-doc, list-versions; access_path = "cli" |
 
 **Step 7 -- CLI config commands**
 
@@ -1379,7 +1379,7 @@ cerefox_usage_summary(
 | 16C.25 | Unit tests: `usage_summary` response parsing | Done | Included in above |
 | 16C.26 | E2e test: enable tracking, log usage, verify entry appears | Done | TestUsageTracking.test_usage_logging_when_enabled |
 | 16C.27 | E2e test: disable tracking, verify no-op | Done | TestUsageTracking.test_usage_logging_disabled_is_noop |
-| 16C.28 | E2e test: MCP usage logging | Deferred | Requires deployed EFs with logging; will validate after deployment |
+| 16C.28 | E2e test: MCP usage logging | Done | Verifies remote-mcp access_path entry appears after MCP search |
 
 **Step 9 -- Documentation**
 
@@ -1415,11 +1415,8 @@ tracking via web UI or CLI. CSV export available. Data is ready for the analytic
 | V3 | Top N most-accessed documents (horizontal bar chart) | Included | @mantine/charts | Ranked by access count |
 | V4 | Top N most-active readers (horizontal bar chart) | Included | @mantine/charts | Ranked by call count |
 | V5 | Operations breakdown (donut/pie chart) | Included | @mantine/charts | Quick proportion view |
-| V6 | Search query word cloud | Deferred | react-d3-cloud | Requires D3 dep; interesting for pattern discovery; add in post-16 |
-| V7 | HEB (Hierarchical Edge Bundling): readers → documents | Deferred | D3.js | Shows multi-agent coordination patterns; which agents accessed which documents; add in post-16 when usage data accumulates enough to make it meaningful |
-
-For V6 and V7, add placeholder cards in the UI with "Coming soon" text so the layout is
-reserved, making it easy to drop in the visualization without a layout redesign.
+| V6 | Reader/author word cloud | Included | react-d3-cloud | Shows which agents and users are most active; word size proportional to call count |
+| V7 | HEB (Hierarchical Edge Bundling): readers → documents | Included | D3.js | Multi-agent coordination patterns: which agents accessed which documents |
 
 #### Tasks
 
@@ -1440,7 +1437,8 @@ reserved, making it easy to drop in the visualization without a layout redesign.
 | 16D.6 | Implement V3: top documents horizontal bar chart | Todo | Link each bar to document detail page |
 | 16D.7 | Implement V4: top readers horizontal bar chart | Todo | `@mantine/charts` BarChart |
 | 16D.8 | Implement V5: operations breakdown donut chart | Todo | `@mantine/charts` DonutChart |
-| 16D.9 | Add placeholder cards for V6 (word cloud) and V7 (HEB) | Todo | "Coming soon" with brief description |
+| 16D.9 | Implement V6: reader/author word cloud (react-d3-cloud) | Todo | Word size proportional to call count from usage summary top_readers |
+| 16D.9b | Implement V7: HEB readers-to-documents (D3.js) | Todo | Shows which agents accessed which documents; edges weighted by count |
 | 16D.10 | Add Usage Tracking toggle card | Todo | Reads config via API; toggle calls PUT; shows current state |
 | 16D.11 | Add CSV export button | Todo | Triggers download with current filter params |
 | 16D.12 | Add "Analytics" to app navigation (after "Audit Log") | Todo | |

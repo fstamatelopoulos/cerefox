@@ -434,3 +434,41 @@ class TestMCPNewTools16B:
         })
         # Should find the doc within that project
         assert text != "No results found."
+
+    def test_mcp_usage_logging_creates_entries(
+        self, e2e_mcp: MCPClient | None, e2e_client, mcp_cleanup: E2ECleanup
+    ) -> None:
+        """16C.28: MCP tool calls create usage log entries with access_path=remote-mcp."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+
+        from cerefox.db.client import CerefoxClient
+        client: CerefoxClient = e2e_client
+
+        # Enable tracking
+        original = client.get_config("usage_tracking_enabled")
+        client.set_config("usage_tracking_enabled", "true")
+
+        try:
+            # Run an MCP search (goes through deployed cerefox-mcp -> tools/search.ts)
+            e2e_mcp.tool_text("cerefox_search", {
+                "query": "usage logging mcp e2e test marker",
+                "match_count": 1,
+            })
+
+            import time
+            time.sleep(2)
+
+            # Check usage log for the entry
+            log = client.list_usage_log(operation="search", limit=10)
+            mcp_entries = [
+                e for e in log
+                if e.get("access_path") == "remote-mcp"
+                and e.get("query_text") == "usage logging mcp e2e test marker"
+            ]
+            assert len(mcp_entries) >= 1, (
+                f"Expected at least 1 remote-mcp usage entry, got {len(mcp_entries)}. "
+                f"Recent entries: {[e.get('access_path') for e in log[:5]]}"
+            )
+        finally:
+            client.set_config("usage_tracking_enabled", original or "false")
