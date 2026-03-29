@@ -986,3 +986,158 @@ class TestMetadataFilteredSearch:
         )
         assert resp.results == [], f"Expected empty results, got {resp.results}"
         assert not resp.truncated
+
+
+# ── 5. Metadata search, project names, list_projects (16B) ──────────────────
+
+
+class TestMetadataSearchAndProjectNames:
+    """16B: metadata_search RPC, project_names in results, list_projects_rpc."""
+
+    def test_metadata_search_returns_matching_docs(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """5.1: metadata_search finds documents by key-value filter."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        title = unique_title("MetaSearch API Test")
+        res = e2e_pipeline.ingest_text(
+            "# Metadata Search Test\n\nContent for API metadata search.",
+            title,
+            metadata={"e2e_ms_tag": "api-16b-test"},
+        )
+        cleanup.track_document(res.document_id)
+
+        rows = e2e_client.metadata_search(
+            metadata_filter={"e2e_ms_tag": "api-16b-test"},
+        )
+        assert len(rows) >= 1
+        doc_ids = [r["document_id"] for r in rows]
+        assert res.document_id in doc_ids
+
+    def test_metadata_search_with_include_content(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """5.2: include_content=True returns full document text."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        title = unique_title("MetaSearch Content Test")
+        res = e2e_pipeline.ingest_text(
+            "# Content Included\n\nThis text should appear in metadata search results.",
+            title,
+            metadata={"e2e_ms_tag": "api-content-16b"},
+        )
+        cleanup.track_document(res.document_id)
+
+        rows = e2e_client.metadata_search(
+            metadata_filter={"e2e_ms_tag": "api-content-16b"},
+            include_content=True,
+        )
+        assert len(rows) >= 1
+        row = next(r for r in rows if r["document_id"] == res.document_id)
+        assert row["content"] is not None
+        assert "Content Included" in row["content"]
+
+    def test_metadata_search_no_match(
+        self,
+        e2e_client: CerefoxClient,
+    ):
+        """5.3: metadata_search with impossible filter returns empty list."""
+        rows = e2e_client.metadata_search(
+            metadata_filter={"nonexistent_key_e2e_xyz": "no_match"},
+        )
+        assert rows == []
+
+    def test_project_names_in_search_docs(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """5.4: search_docs results include doc_project_names for docs with projects."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        title = unique_title("Project Names Search Test")
+        project_name = unique_title("ProjNames Test")
+
+        res = e2e_pipeline.ingest_text(
+            "# Project Names in Results\n\nVerify project names appear in search.",
+            title,
+            project_name=project_name,
+            metadata={"e2e_pn_tag": "projnames-16b"},
+        )
+        cleanup.track_document(res.document_id)
+        if res.project_ids:
+            cleanup.track_project(res.project_ids[0])
+
+        time.sleep(1)
+
+        rows = e2e_client.search_docs(
+            query_text="project names appear in search",
+            query_embedding=e2e_pipeline._embedder.embed("project names appear in search"),
+            match_count=10,
+            metadata_filter={"e2e_pn_tag": "projnames-16b"},
+        )
+        assert len(rows) >= 1
+        row = next(r for r in rows if r["document_id"] == res.document_id)
+        assert "doc_project_names" in row
+        assert isinstance(row["doc_project_names"], list)
+        assert any(project_name in name for name in row["doc_project_names"])
+
+    def test_project_names_in_metadata_search(
+        self,
+        e2e_client: CerefoxClient,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """5.5: metadata_search results include project_names."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        title = unique_title("MetaSearch ProjNames Test")
+        project_name = unique_title("MSProjNames Test")
+
+        res = e2e_pipeline.ingest_text(
+            "# MetaSearch with Projects\n\nVerify project names in metadata search.",
+            title,
+            project_name=project_name,
+            metadata={"e2e_mspn_tag": "msprojnames-16b"},
+        )
+        cleanup.track_document(res.document_id)
+        if res.project_ids:
+            cleanup.track_project(res.project_ids[0])
+
+        rows = e2e_client.metadata_search(
+            metadata_filter={"e2e_mspn_tag": "msprojnames-16b"},
+        )
+        assert len(rows) >= 1
+        row = next(r for r in rows if r["document_id"] == res.document_id)
+        assert "project_names" in row
+        assert isinstance(row["project_names"], list)
+        assert any(project_name in name for name in row["project_names"])
+
+    def test_list_projects_rpc(
+        self,
+        e2e_client: CerefoxClient,
+    ):
+        """5.6: list_projects_rpc returns projects with name and id."""
+        projects = e2e_client.list_projects_rpc()
+        assert isinstance(projects, list)
+        # There should be at least some projects in the KB
+        if projects:
+            p = projects[0]
+            assert "id" in p
+            assert "name" in p
