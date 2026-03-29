@@ -936,15 +936,15 @@ tools/
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16A.1 | Extract `shared.ts` from current `cerefox-mcp/index.ts` | Todo | CORS headers, `createClient()` helper, standard error response formatter |
-| 16A.2 | Extract `embeddings.ts` -- unified OpenAI embedding call with retry | Todo | Used by both `tools/search.ts` (query embedding) and `tools/ingest.ts` (chunk embedding); exponential backoff (500ms initial, 3 attempts); distinguish retryable 5xx from non-retryable 4xx |
-| 16A.3 | Create `tools/search.ts` -- calls `cerefox_hybrid_search` RPC directly | Todo | Mirrors current `cerefox-search` Edge Function logic; handles `metadata_filter`, `max_bytes`, server ceiling; uses `embeddings.ts` for query vector |
-| 16A.4 | Create `tools/ingest.ts` -- chunks, embeds, calls `cerefox_ingest_document` RPC | Todo | Mirrors current `cerefox-ingest` Edge Function logic; handles `update_if_exists`, `author`, `author_type`, `review_status` transition |
-| 16A.5 | Create `tools/metadata.ts` -- calls `cerefox_list_metadata_keys` RPC directly | Todo | Thin; mirrors current `cerefox-metadata` delegation |
-| 16A.6 | Create `tools/get-document.ts` -- calls `cerefox_get_document` RPC directly | Todo | Supports optional `version_id` param |
-| 16A.7 | Create `tools/list-versions.ts` -- calls `cerefox_list_document_versions` RPC | Todo | |
-| 16A.8 | Create `tools/audit-log.ts` -- calls `cerefox_list_audit_entries` RPC directly | Todo | All filters: operation, author, document_id, start/end timestamps |
-| 16A.9 | Rewrite `index.ts` -- MCP protocol handler that dispatches to tools/ modules; no `fetch()` delegation | Todo | Keep tool schemas identical to current; dispatcher calls imported tool functions, not fetch |
+| 16A.1 | Extract `shared.ts` from current `cerefox-mcp/index.ts` | Done | CORS headers, `makeSupabaseClient()`, `jsonResponse`, `errorResponse`, `notificationResponse`, `applyByteBudget` |
+| 16A.2 | Extract `embeddings.ts` -- unified OpenAI embedding call with retry | Done | `getEmbedding` (single, for search), `embedBatch` (batch, for ingest); exponential backoff 500ms/3 attempts; retry 5xx not 4xx |
+| 16A.3 | Create `tools/search.ts` -- calls search RPCs directly | Done | Handles all 3 modes (docs/hybrid/fts), `metadata_filter`, `max_bytes` ceiling, project_name→UUID resolution |
+| 16A.4 | Create `tools/ingest.ts` -- chunks, embeds, calls `cerefox_ingest_document` RPC | Done | Full heading-aware chunker + `embedBatch`; handles `update_if_exists`, hash dedup, `review_status` transition |
+| 16A.5 | Create `tools/metadata.ts` -- calls `cerefox_list_metadata_keys` RPC directly | Done | |
+| 16A.6 | Create `tools/get-document.ts` -- calls `cerefox_get_document` RPC directly | Done | Supports optional `version_id` param |
+| 16A.7 | Create `tools/list-versions.ts` -- calls `cerefox_list_document_versions` RPC | Done | |
+| 16A.8 | Create `tools/audit-log.ts` -- calls `cerefox_list_audit_entries` RPC directly | Done | All filters: operation, author, document_id, since, until, limit |
+| 16A.9 | Rewrite `index.ts` -- MCP protocol handler dispatching to tools/ modules | Done | Imports from tools/*.ts; `OPENAI_API_KEY` checked only for tools that need it; no `fetch()` delegation |
 
 **Step 2 -- Verify parity**
 
@@ -959,25 +959,67 @@ tools/
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | 16A.13 | Deploy refactored `cerefox-mcp` | Todo | `npx supabase functions deploy cerefox-mcp` |
-| 16A.14 | Scan existing Python unit tests for any mocks referencing fetch delegation from `cerefox-mcp` and update if found | Todo | Expected: none -- Python tests test Python code, not TypeScript; but confirm before deploying |
-| 16A.15 | Run full unit test suite | Todo | `uv run pytest` -- all 391 tests must pass; no Python changes so this should be a no-op |
-| 16A.16 | Deploy refactored `cerefox-mcp` | Todo | `npx supabase functions deploy cerefox-mcp` |
-| 16A.17 | Run existing e2e test suite against deployed function | Todo | `uv run pytest -m e2e` -- all existing e2e tests must pass with no changes to test code |
-| 16A.18 | Manual smoke test: all 6 tools via Claude Code MCP connection | Todo | Test each tool end-to-end; confirms real-world client compatibility and that no delegation hop is occurring |
+| 16A.14 | Scan existing Python unit tests for any mocks referencing fetch delegation from `cerefox-mcp` | Done | No matches -- Python tests do not reference MCP delegation |
+| 16A.15 | Run full unit test suite | Todo | `uv run pytest` -- all 391 tests must pass |
+| 16A.16 | Write `tests/e2e/test_mcp_e2e.py` -- MCP JSON-RPC e2e tests for deployed `cerefox-mcp` | Todo | See Step 4 below; mark `@pytest.mark.e2e`; covers all 6 tools via HTTP JSON-RPC 2.0 POSTs; uses `CEREFOX_SUPABASE_ANON_KEY` from `.env` |
+| 16A.17 | Write `tests/e2e/test_edge_functions_e2e.py` -- HTTP e2e tests for all 6 primitive Edge Functions | Todo | See Step 4 below; mark `@pytest.mark.e2e`; covers all 6 primitive EFs; uses `CEREFOX_SUPABASE_ANON_KEY` from `.env` |
+| 16A.18 | Run full e2e test suite (existing + new) against deployed functions | Todo | `uv run pytest -m e2e` -- all existing + new e2e tests must pass |
+| 16A.19 | Manual smoke test: all 6 tools via Claude Code MCP connection | Todo | Test each tool end-to-end; confirms real-world client compatibility |
+
+**Step 4 -- New e2e test suites**
+
+New test file: `tests/e2e/test_mcp_e2e.py` -- tests the deployed `cerefox-mcp` Edge Function
+via raw MCP JSON-RPC 2.0 HTTP calls. Does not use the Python MCP SDK -- calls the endpoint
+directly with `httpx` so failures are unambiguous. Reads `CEREFOX_SUPABASE_URL` and
+`CEREFOX_SUPABASE_ANON_KEY` from `.env`. Cleans up `[E2E-MCP]`-prefixed documents.
+
+| # | Test | Notes |
+|---|------|-------|
+| MCP-1 | GET / returns health check JSON (name, version, status: ok) | |
+| MCP-2 | `initialize` returns correct protocolVersion and tool capabilities | |
+| MCP-3 | `tools/list` returns all 6 tools with correct names and inputSchema | |
+| MCP-4 | `cerefox_ingest` -- create a new `[E2E-MCP]` document | |
+| MCP-5 | `cerefox_search` -- find the ingested document | |
+| MCP-6 | `cerefox_ingest` with `update_if_exists: true` -- update the document | |
+| MCP-7 | `cerefox_ingest` with same content -- skipped (hash dedup) | |
+| MCP-8 | `cerefox_get_document` -- retrieve the full document | |
+| MCP-9 | `cerefox_list_versions` -- list archived versions | |
+| MCP-10 | `cerefox_get_audit_log` -- filter by author | |
+| MCP-11 | `cerefox_list_metadata_keys` -- returns list (possibly empty) | |
+| MCP-12 | Unknown tool returns JSON-RPC error with code -32602 | |
+| MCP-13 | Missing required param returns JSON-RPC error (propagated from tool handler) | |
+
+New test file: `tests/e2e/test_edge_functions_e2e.py` -- tests the 6 primitive Edge Functions
+directly via HTTP POST. Each test is independent. Uses `CEREFOX_SUPABASE_ANON_KEY`.
+Cleans up `[E2E-EF]`-prefixed documents.
+
+| # | Test | Notes |
+|---|------|-------|
+| EF-1 | `cerefox-search` -- basic query returns results | |
+| EF-2 | `cerefox-search` -- metadata_filter narrows results | |
+| EF-3 | `cerefox-search` -- unknown project_name returns 404 | |
+| EF-4 | `cerefox-ingest` -- create document, confirm 201 + document_id | |
+| EF-5 | `cerefox-ingest` -- `update_if_exists: true` updates existing doc | |
+| EF-6 | `cerefox-metadata` -- returns array of key objects | |
+| EF-7 | `cerefox-get-document` -- returns title + full_content | |
+| EF-8 | `cerefox-get-document` -- non-existent UUID returns 404 | |
+| EF-9 | `cerefox-list-versions` -- returns array (possibly empty) | |
+| EF-10 | `cerefox-get-audit-log` -- returns array of entries | |
+| EF-11 | `cerefox-get-audit-log` -- `operation` filter returns subset | |
 
 **Step 5 -- Documentation**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16A.19 | Update `CLAUDE.md` -- Edge Function architecture section; remove "thin wrapper calling primitive functions" from `cerefox-mcp` description; update architecture diagram arrows | Todo | |
-| 16A.20 | Update `docs/solution-design.md` -- architecture flow diagram; clarify that `cerefox-mcp` calls RPCs directly while primitive functions remain for external callers | Todo | |
-| 16A.21 | Update `MEMORY.md` -- revise architecture note about `cerefox-mcp` delegation | Todo | |
-| 16A.22 | Add entry to Cerefox Decision Log -- record decision to refactor in-place vs merge PR #10; credit tdebasis | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
+| 16A.20 | Update `CLAUDE.md` -- Edge Function architecture section; update architecture diagram arrows | Done | |
+| 16A.21 | Update `docs/solution-design.md` -- architecture flow diagram; clarify that `cerefox-mcp` calls RPCs directly while primitive functions remain for external callers | Todo | |
+| 16A.22 | Update `MEMORY.md` -- revise architecture note about `cerefox-mcp` delegation | Todo | |
+| 16A.23 | Add entry to Cerefox Decision Log -- record decision to refactor in-place vs merge PR #10; credit tdebasis | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
 
 **Deliverable**: `cerefox-mcp` calls RPCs directly. MCP tool calls cost 1 Edge Function
 invocation instead of 2. All 6 primitive functions remain deployed and unchanged. No
-breaking changes to any MCP client. All 391 unit tests pass; all e2e tests pass without
-modification. Closes PR #10 concept (with credit).
+breaking changes to any MCP client. All 391 unit tests pass. Two new e2e test suites
+(MCP + primitive EFs) cover all tools end-to-end. Closes PR #10 concept (with credit).
 Edge Function count stays at 7 (1 MCP + 6 primitive); MCP tool count stays at 6.
 
 ---
@@ -1147,9 +1189,10 @@ Returns: Array of {id, name, description} for all projects.
 |---|------|--------|-------|
 | 16B.23 | Unit tests: `project_names` field present in all result types; `list_projects_rpc()` param pass-through | Todo | Mock RPCs |
 | 16B.24 | Unit tests: `metadata_search()` in `client.py`; param propagation; max_bytes pass-through | Todo | Mock RPC call; test all param combinations |
-| 16B.25 | E2e test: ingest 3 docs with varying metadata across 2 projects; assert metadata_search returns correct docs with correct project names; assert cerefox_list_projects returns both projects | Todo | Test AND semantics, project_name filter, updated_since, include_content, result limit |
-| 16B.26 | E2e test: call cerefox_search with project_name via remote MCP; verify name resolves correctly | Todo | Regression check for breaking change |
-| 16B.27 | Playwright UI e2e test: navigate to `/app/metadata-search`; enter a filter; verify results render with project name chips | Todo | Add to `tests/e2e/test_ui_e2e.py` |
+| 16B.25 | E2e test: ingest 3 docs with varying metadata across 2 projects; assert metadata_search returns correct docs with correct project names; assert cerefox_list_projects returns both projects | Todo | Add to `tests/e2e/test_api_e2e.py`; test AND semantics, project_name filter, updated_since, include_content, result limit |
+| 16B.26 | E2e test: add `test_mcp_edf.py` tests for new MCP tools (`cerefox_list_projects`, `cerefox_metadata_search`) and project_name resolution via MCP | Todo | Extend `tests/e2e/test_mcp_e2e.py` (written in 16A); regression-test `cerefox_search` project_name breaking change |
+| 16B.27 | E2e test: add `test_edge_functions_e2e.py` tests for new `cerefox-metadata-search` primitive Edge Function | Todo | Extend `tests/e2e/test_edge_functions_e2e.py` (written in 16A); cover metadata filter, project_id filter, include_content=true |
+| 16B.28 | Playwright UI e2e test: navigate to `/app/metadata-search`; enter a filter; verify results render with project name chips | Todo | Add to `tests/e2e/test_ui_e2e.py` |
 
 **Step 9 -- Documentation**
 
@@ -1334,14 +1377,15 @@ cerefox_usage_summary(
 | 16C.23 | Unit tests: `log_usage` (disabled no-op, enabled insert, RPC pass-through) | Todo | Mock RPC; test enabled/disabled paths |
 | 16C.24 | Unit tests: `get_config` / `set_config` client methods and `/api/v1/config` endpoints | Todo | Test allowlist validation (unknown key rejected); test read-back after write |
 | 16C.25 | Unit tests: `usage_summary` response parsing | Todo | Mock RPC return; test field mapping |
-| 16C.26 | E2e test: enable tracking, run search via Python client, verify entry appears in usage log with correct operation and access_path=`webapp` | Todo | Tests opt-in behavior and access_path attribution end-to-end |
-| 16C.27 | E2e test: disable tracking, run search, verify no new entry added | Todo | Tests opt-out behavior |
+| 16C.26 | E2e test: enable tracking, run search via Python client, verify entry appears in usage log with correct operation and access_path=`webapp` | Todo | Add to `tests/e2e/test_api_e2e.py`; tests opt-in behavior and access_path attribution end-to-end |
+| 16C.27 | E2e test: disable tracking, run search, verify no new entry added | Todo | Add to `tests/e2e/test_api_e2e.py`; tests opt-out behavior |
+| 16C.28 | E2e test: extend `test_mcp_e2e.py` -- enable tracking, run MCP search and ingest, verify usage log entries with access_path=`remote-mcp` | Todo | Confirms MCP usage logging works end-to-end; requires 16A e2e test file to already exist |
 
 **Step 9 -- Documentation**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 16C.28 | Add entry to Cerefox Decision Log -- record decision to use a separate `cerefox_usage_log` table (not extend audit log); record opt-in-by-default rationale; record `cerefox_config` table design (DB-stored config, no redeploy needed to toggle); record `access_path` taxonomy and why it is set by the caller layer, not the RPC | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
+| 16C.29 | Add entry to Cerefox Decision Log -- record decision to use a separate `cerefox_usage_log` table (not extend audit log); record opt-in-by-default rationale; record `cerefox_config` table design (DB-stored config, no redeploy needed to toggle); record `access_path` taxonomy and why it is set by the caller layer, not the RPC | Todo | Via `cerefox_ingest` with `update_if_exists: true` |
 
 **Deliverable**: All read operations are optionally logged with full context. The user controls
 tracking via web UI or CLI. CSV export available. Data is ready for the analytics page.
