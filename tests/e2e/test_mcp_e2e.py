@@ -87,7 +87,7 @@ class TestMCPHealthAndProtocol:
         assert result["serverInfo"]["name"] == "cerefox"
 
     def test_tools_list(self, e2e_mcp: MCPClient | None) -> None:
-        """MCP-3: tools/list returns all 6 tools with correct names and inputSchemas."""
+        """MCP-3: tools/list returns all 8 tools with correct names and inputSchemas."""
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
         resp = e2e_mcp.call("tools/list")
@@ -101,6 +101,8 @@ class TestMCPHealthAndProtocol:
             "cerefox_get_document",
             "cerefox_list_versions",
             "cerefox_get_audit_log",
+            "cerefox_list_projects",
+            "cerefox_metadata_search",
         }
         assert tool_names == expected
         for tool in tools:
@@ -329,3 +331,110 @@ class TestMCPToolCalls:
         resp = e2e_mcp.tool("cerefox_ingest", {"title": "No Content"})
         assert "error" in resp
         assert resp["error"]["code"] == -32603
+
+
+# ── 16B: New tool tests ──────────────────────────────────────────────────────
+
+
+class TestMCPNewTools16B:
+    """Tests for cerefox_list_projects and cerefox_metadata_search (16B)."""
+
+    def test_list_projects_returns_list(self, e2e_mcp: MCPClient | None) -> None:
+        """cerefox_list_projects returns a formatted list or 'No projects found.'"""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+        text = e2e_mcp.tool_text("cerefox_list_projects", {})
+        assert "Projects" in text or "No projects found" in text
+
+    def test_metadata_search_with_filter(
+        self, e2e_mcp: MCPClient | None, mcp_cleanup: E2ECleanup
+    ) -> None:
+        """cerefox_metadata_search finds documents matching metadata filter."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+        # Ingest a doc with known metadata
+        title = _unique_title("MetaSearch Test")
+        t1 = e2e_mcp.tool_text("cerefox_ingest", {
+            "title": title,
+            "content": "# Test Document\n\nContent for metadata search test.",
+            "metadata": {"e2e_tag": "mcp-meta-test-16b"},
+            "author": "e2e-mcp-test",
+        })
+        if "(id:" in t1:
+            mcp_cleanup.track_document(t1.split("(id:")[1].split(")")[0].strip())
+
+        text = e2e_mcp.tool_text("cerefox_metadata_search", {
+            "metadata_filter": {"e2e_tag": "mcp-meta-test-16b"},
+        })
+        assert "No documents match" not in text
+        assert "MetaSearch Test" in text or "e2e_tag" in text
+
+    def test_metadata_search_no_matches(self, e2e_mcp: MCPClient | None) -> None:
+        """cerefox_metadata_search with impossible filter returns no-match message."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+        text = e2e_mcp.tool_text("cerefox_metadata_search", {
+            "metadata_filter": {"nonexistent_key_abc123": "no_match_value"},
+        })
+        assert "No documents match" in text
+
+    def test_metadata_search_empty_filter_returns_error(self, e2e_mcp: MCPClient | None) -> None:
+        """cerefox_metadata_search with empty filter returns error."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+        resp = e2e_mcp.tool("cerefox_metadata_search", {"metadata_filter": {}})
+        assert "error" in resp
+
+    def test_metadata_search_with_project_name(
+        self, e2e_mcp: MCPClient | None, mcp_cleanup: E2ECleanup
+    ) -> None:
+        """cerefox_metadata_search with project_name filter resolves correctly."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+        # Ingest a doc with a project and metadata
+        title = _unique_title("MetaSearch Project Test")
+        project = f"[E2E-MCP] TestProj {uuid.uuid4().hex[:6]}"
+        t1 = e2e_mcp.tool_text("cerefox_ingest", {
+            "title": title,
+            "content": "# Project MetaSearch\n\nTesting project filter.",
+            "metadata": {"e2e_tag": "proj-meta-16b"},
+            "project_name": project,
+            "author": "e2e-mcp-test",
+        })
+        if "(id:" in t1:
+            mcp_cleanup.track_document(t1.split("(id:")[1].split(")")[0].strip())
+
+        text = e2e_mcp.tool_text("cerefox_metadata_search", {
+            "metadata_filter": {"e2e_tag": "proj-meta-16b"},
+            "project_name": project,
+        })
+        assert "No documents match" not in text
+        assert "MetaSearch Project Test" in text or "proj-meta-16b" in text
+
+    def test_search_with_project_name_resolves(
+        self, e2e_mcp: MCPClient | None, mcp_cleanup: E2ECleanup
+    ) -> None:
+        """cerefox_search with project_name resolves name to UUID (regression for breaking change)."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+        title = _unique_title("Project Search Test")
+        project = f"[E2E-MCP] SearchProj {uuid.uuid4().hex[:6]}"
+        t1 = e2e_mcp.tool_text("cerefox_ingest", {
+            "title": title,
+            "content": "# Project Search\n\nSearchable content for project filter regression test.",
+            "project_name": project,
+            "author": "e2e-mcp-test",
+        })
+        if "(id:" in t1:
+            mcp_cleanup.track_document(t1.split("(id:")[1].split(")")[0].strip())
+
+        import time
+        time.sleep(2)
+
+        text = e2e_mcp.tool_text("cerefox_search", {
+            "query": "project filter regression test",
+            "project_name": project,
+            "match_count": 3,
+        })
+        # Should find the doc within that project
+        assert text != "No results found."

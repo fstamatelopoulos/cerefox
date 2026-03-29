@@ -7,8 +7,10 @@ capable MCP clients.
 
 This local stdio server is kept as a **legacy fallback** for environments where
 a remote connection is not available or practical. It exposes the same
-``cerefox_search``, ``cerefox_ingest``, and ``cerefox_list_metadata_keys``
-tools as the remote Edge Function.
+``cerefox_search``, ``cerefox_ingest``, ``cerefox_list_metadata_keys``,
+``cerefox_get_document``, ``cerefox_list_versions``, ``cerefox_get_audit_log``,
+``cerefox_list_projects``, and ``cerefox_metadata_search`` tools as the remote
+Edge Function.
 
 Run via::
 
@@ -283,6 +285,67 @@ async def list_tools() -> list[types.Tool]:
                 },
             },
         ),
+        types.Tool(
+            name="cerefox_list_projects",
+            description=(
+                "List all projects with their names and IDs. Use this to discover "
+                "available projects before filtering by project_name in other tools."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        types.Tool(
+            name="cerefox_metadata_search",
+            description=(
+                "Find documents by metadata key-value criteria without a text search term. "
+                "Use to discover documents tagged with specific attributes, browse by "
+                "taxonomy, or retrieve messages/tasks by type and status."
+            ),
+            inputSchema={
+                "type": "object",
+                "required": ["metadata_filter"],
+                "properties": {
+                    "metadata_filter": {
+                        "type": "object",
+                        "description": (
+                            "Key-value pairs; ALL must match (AND semantics). "
+                            'Example: {"type": "decision", "status": "active"}. '
+                            "Call cerefox_list_metadata_keys first to discover available keys."
+                        ),
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "project_name": {
+                        "type": "string",
+                        "description": "Restrict to a project by name (optional)",
+                    },
+                    "updated_since": {
+                        "type": "string",
+                        "description": "ISO-8601 timestamp; only docs updated on/after (optional)",
+                    },
+                    "created_since": {
+                        "type": "string",
+                        "description": "ISO-8601 timestamp; only docs created on/after (optional)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results (default 10)",
+                    },
+                    "include_content": {
+                        "type": "boolean",
+                        "description": "Include full document text (default false)",
+                    },
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": (
+                            "Soft cap on total response bytes when include_content is true. "
+                            "Defaults to server maximum."
+                        ),
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -309,6 +372,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return await _handle_list_versions(client, arguments)
     elif name == "cerefox_get_audit_log":
         return await _handle_get_audit_log(client, arguments)
+    elif name == "cerefox_list_projects":
+        return await _handle_list_projects(client)
+    elif name == "cerefox_metadata_search":
+        return await _handle_metadata_search(client, settings, arguments)
     else:
         raise ValueError(f"Unknown tool: {name}")
 
@@ -505,6 +572,73 @@ async def _handle_get_audit_log(client: Any, arguments: dict) -> list[types.Text
         if e.get("description"):
             lines.append(f"    {e['description']}")
     return [types.TextContent(type="text", text="\n".join(lines))]
+
+
+async def _handle_list_projects(client: Any) -> list[types.TextContent]:
+    projects = client.list_projects_rpc()
+    if not projects:
+        return [types.TextContent(type="text", text="No projects found.")]
+    lines = [f"Projects ({len(projects)}):", ""]
+    for p in projects:
+        desc = f" -- {p['description']}" if p.get("description") else ""
+        lines.append(f"  - {p['name']} (id: {p['id']}){desc}")
+    return [types.TextContent(type="text", text="\n".join(lines))]
+
+
+async def _handle_metadata_search(
+    client: Any, settings: Any, arguments: dict
+) -> list[types.TextContent]:
+    metadata_filter = arguments.get("metadata_filter")
+    if not metadata_filter or not isinstance(metadata_filter, dict):
+        return [types.TextContent(type="text", text="Error: metadata_filter is required (JSON object).")]
+
+    project_name: str | None = arguments.get("project_name")
+    project_id: str | None = None
+    if project_name:
+        projects = client.list_projects()
+        for p in projects:
+            if p["name"].lower() == project_name.lower():
+                project_id = p["id"]
+                break
+        if project_id is None:
+            return [types.TextContent(type="text", text=f"Project not found: {project_name}")]
+
+    include_content = bool(arguments.get("include_content", False))
+    server_max: int = settings.max_response_bytes
+    requested: int | None = arguments.get("max_bytes")
+    max_bytes: int | None = (
+        min(int(requested), server_max) if requested is not None else server_max
+    ) if include_content else None
+
+    rows = client.metadata_search(
+        metadata_filter=metadata_filter,
+        project_id=project_id,
+        updated_since=arguments.get("updated_since"),
+        created_since=arguments.get("created_since"),
+        limit=int(arguments.get("limit", 10)),
+        include_content=include_content,
+        max_bytes=max_bytes,
+    )
+
+    if not rows:
+        return [types.TextContent(type="text", text="No documents match the metadata filter.")]
+
+    parts: list[str] = []
+    for row in rows:
+        proj_names = row.get("project_names") or []
+        projects_str = f" | projects: {', '.join(proj_names)}" if proj_names else ""
+        meta = ", ".join(f"{k}={v}" for k, v in (row.get("doc_metadata") or {}).items())
+        header = (
+            f"## {row['title']} [id: {row['document_id']}]\n"
+            f"{meta}{projects_str} | {row.get('total_chars', 0)} chars | "
+            f"{row.get('review_status', 'approved')} | updated {str(row.get('updated_at', ''))[:10]}"
+        )
+        if include_content and row.get("content"):
+            parts.append(f"{header}\n\n{row['content']}")
+        else:
+            parts.append(header)
+
+    return [types.TextContent(type="text", text="\n\n---\n\n".join(parts))]
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

@@ -238,6 +238,47 @@ class TestProjectMethods:
         result = cerefox_client.list_projects()
         assert result == []
 
+    def test_list_projects_rpc_calls_rpc(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        projects = [{"id": "p1", "name": "Alpha", "description": "First"}]
+        mock_supabase_client.rpc.return_value.execute.return_value.data = projects
+        result = cerefox_client.list_projects_rpc()
+        assert result == projects
+        mock_supabase_client.rpc.assert_called_with("cerefox_list_projects", {})
+
+    def test_metadata_search_calls_rpc_with_params(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        rows = [{"document_id": "d1", "title": "Test"}]
+        mock_supabase_client.rpc.return_value.execute.return_value.data = rows
+        result = cerefox_client.metadata_search(
+            metadata_filter={"type": "decision"},
+            project_id="p1",
+            updated_since="2026-03-01",
+            limit=5,
+            include_content=True,
+            max_bytes=50000,
+        )
+        assert result == rows
+        call_args = mock_supabase_client.rpc.call_args
+        assert call_args[0][0] == "cerefox_metadata_search"
+        params = call_args[0][1]
+        assert params["p_metadata_filter"] == {"type": "decision"}
+        assert params["p_project_id"] == "p1"
+        assert params["p_updated_since"] == "2026-03-01"
+        assert params["p_limit"] == 5
+        assert params["p_include_content"] is True
+        assert params["p_max_bytes"] == 50000
+
+    def test_metadata_search_omits_max_bytes_when_none(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        mock_supabase_client.rpc.return_value.execute.return_value.data = []
+        cerefox_client.metadata_search(metadata_filter={"key": "val"})
+        params = mock_supabase_client.rpc.call_args[0][1]
+        assert "p_max_bytes" not in params
+
     def test_get_project_doc_counts_returns_counts(
         self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
     ) -> None:

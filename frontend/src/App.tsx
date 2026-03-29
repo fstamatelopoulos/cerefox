@@ -8,6 +8,7 @@ import { DocumentPage } from "./pages/DocumentPage";
 import { IngestPage } from "./pages/IngestPage";
 import { ProjectDocumentsPage } from "./pages/ProjectDocumentsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { MetadataSearchPage } from "./pages/MetadataSearchPage";
 import { SearchPage } from "./pages/SearchPage";
 
 export function App() {
@@ -16,6 +17,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/metadata-search" element={<MetadataSearchPage />} />
         <Route path="/document/:id" element={<DocumentPage />} />
         <Route path="/document/:id/edit" element={<DocumentEditPage />} />
         <Route path="/ingest" element={<IngestPage />} />

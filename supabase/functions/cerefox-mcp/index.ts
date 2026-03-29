@@ -23,6 +23,8 @@ import { handleListMetadataKeys } from "./tools/metadata.ts";
 import { handleGetDocument } from "./tools/get-document.ts";
 import { handleListVersions } from "./tools/list-versions.ts";
 import { handleGetAuditLog } from "./tools/audit-log.ts";
+import { handleListProjects } from "./tools/list-projects.ts";
+import { handleMetadataSearch } from "./tools/metadata-search.ts";
 
 const MCP_VERSION = "2025-03-26";
 const SERVER_NAME = "cerefox";
@@ -179,6 +181,57 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: "cerefox_list_projects",
+    description:
+      "List all projects with their names and IDs. Use this to discover available projects before filtering by project_name in other tools.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "cerefox_metadata_search",
+    description:
+      "Find documents by metadata key-value criteria without a text search term. Use to discover documents tagged with specific attributes, browse by taxonomy, or retrieve messages/tasks by type and status.",
+    inputSchema: {
+      type: "object",
+      required: ["metadata_filter"],
+      properties: {
+        metadata_filter: {
+          type: "object",
+          description:
+            "Key-value pairs; ALL must match (AND semantics). Example: {\"type\": \"decision\", \"status\": \"active\"}. Call cerefox_list_metadata_keys first to discover available keys.",
+          additionalProperties: { type: "string" },
+        },
+        project_name: {
+          type: "string",
+          description: "Restrict to a project by name (optional)",
+        },
+        updated_since: {
+          type: "string",
+          description: "ISO-8601 timestamp; only docs updated on/after (optional)",
+        },
+        created_since: {
+          type: "string",
+          description: "ISO-8601 timestamp; only docs created on/after (optional)",
+        },
+        limit: {
+          type: "integer",
+          description: "Max results (default 10)",
+        },
+        include_content: {
+          type: "boolean",
+          description: "Include full document text (default false)",
+        },
+        max_bytes: {
+          type: "integer",
+          description:
+            "Soft cap on total response bytes when include_content is true. Defaults to server maximum (200000).",
+        },
+      },
+    },
+  },
 ];
 
 // ── Method handlers ──────────────────────────────────────────────────────────
@@ -222,6 +275,10 @@ async function dispatchToolCall(
       return await handleListVersions(args);
     case "cerefox_get_audit_log":
       return await handleGetAuditLog(args);
+    case "cerefox_list_projects":
+      return await handleListProjects();
+    case "cerefox_metadata_search":
+      return await handleMetadataSearch(args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

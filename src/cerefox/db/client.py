@@ -793,6 +793,43 @@ class CerefoxClient:
             {"p_chunk_ids": chunk_ids, "p_window_size": window_size},
         )
 
+    def list_projects_rpc(self) -> list[dict[str, Any]]:
+        """Call cerefox_list_projects RPC. Returns all projects sorted by name."""
+        return self.rpc("cerefox_list_projects", {})
+
+    def metadata_search(
+        self,
+        metadata_filter: dict,
+        project_id: str | None = None,
+        updated_since: str | None = None,
+        created_since: str | None = None,
+        limit: int = 10,
+        include_content: bool = False,
+        max_bytes: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Call cerefox_metadata_search RPC.
+
+        Args:
+            metadata_filter: JSONB containment filter (AND semantics).
+            project_id: Optional project UUID.
+            updated_since: ISO-8601 timestamp lower bound for updated_at.
+            created_since: ISO-8601 timestamp lower bound for created_at.
+            limit: Max results (default 10).
+            include_content: Reconstruct full text for each doc.
+            max_bytes: Byte budget for accumulated content (None = no limit).
+        """
+        params: dict[str, Any] = {
+            "p_metadata_filter": metadata_filter,
+            "p_project_id": project_id,
+            "p_updated_since": updated_since,
+            "p_created_since": created_since,
+            "p_limit": limit,
+            "p_include_content": include_content,
+        }
+        if max_bytes is not None:
+            params["p_max_bytes"] = max_bytes
+        return self.rpc("cerefox_metadata_search", params)
+
     def save_note(
         self,
         title: str,

@@ -63,12 +63,7 @@ Most upgrades require no special steps beyond the standard checklist above. Note
 
 ### Upgrading to v0.1.10+ (from any earlier version)
 
-**New Edge Function**: `cerefox-metadata-search` must be deployed (step 6 above). The
-standard checklist does not yet include it -- add this line:
-
-```bash
-npx supabase functions deploy cerefox-metadata-search
-```
+**New Edge Function**: `cerefox-metadata-search` must be deployed (included in step 6 above).
 
 **Breaking change -- MCP tool `project_id` input removed**: The `cerefox_search`,
 `cerefox_ingest`, and `cerefox_metadata_search` tools in `cerefox-mcp` now accept

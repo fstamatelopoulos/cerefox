@@ -181,13 +181,16 @@ cerefox-mcp  ──supabase.rpc──▶  cerefox_hybrid_search / cerefox_search
              ──supabase.rpc──▶  cerefox_get_document
              ──supabase.rpc──▶  cerefox_list_document_versions
              ──supabase.rpc──▶  cerefox_list_audit_entries
+             ──supabase.rpc──▶  cerefox_list_projects
+             ──supabase.rpc──▶  cerefox_metadata_search
 
-GPT Actions (Custom GPT) ──────▶  cerefox-search        (primitive Edge Functions, direct HTTP)
+GPT Actions (Custom GPT) ──────▶  cerefox-search           (primitive Edge Functions, direct HTTP)
                          ──────▶  cerefox-ingest
                          ──────▶  cerefox-metadata
                          ──────▶  cerefox-get-document
                          ──────▶  cerefox-list-versions
                          ──────▶  cerefox-get-audit-log
+                         ──────▶  cerefox-metadata-search
 
 Python CLI / Web UI ───────────▶  cerefox.db.client     ──psycopg2 / REST──▶  same RPCs
 ```
@@ -230,6 +233,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-get-document` | Retrieve full doc content; supports archived versions | GPT Actions, direct HTTP |
 | `cerefox-list-versions` | List archived version history for a document | GPT Actions, direct HTTP |
 | `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | GPT Actions, direct HTTP |
+| `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search | GPT Actions, direct HTTP |
 | `cerefox-mcp` | MCP Streamable HTTP server; calls RPCs directly via `tools/*.ts` | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
 ### Edge Function Model Config

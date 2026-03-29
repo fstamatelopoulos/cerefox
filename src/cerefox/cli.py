@@ -489,6 +489,72 @@ def list_metadata_keys() -> None:
     click.echo(f"\n{len(keys)} key(s) found.")
 
 
+@cli.command("metadata-search")
+@click.option("--filter", "filter_json", required=True, help="JSON metadata filter, e.g. '{\"type\":\"decision\"}'")
+@click.option("--project", "project_name", default=None, help="Filter by project name")
+@click.option("--updated-since", default=None, help="ISO-8601 timestamp lower bound for updated_at")
+@click.option("--created-since", default=None, help="ISO-8601 timestamp lower bound for created_at")
+@click.option("--limit", default=10, help="Max results (default: 10)")
+@click.option("--include-content", is_flag=True, help="Include full document text")
+def metadata_search(
+    filter_json: str,
+    project_name: str | None,
+    updated_since: str | None,
+    created_since: str | None,
+    limit: int,
+    include_content: bool,
+) -> None:
+    """Search documents by metadata key-value criteria."""
+    import json as json_mod
+
+    try:
+        metadata_filter = json_mod.loads(filter_json)
+    except json_mod.JSONDecodeError as exc:
+        click.echo(f"Invalid JSON filter: {exc}", err=True)
+        raise SystemExit(1)
+
+    if not isinstance(metadata_filter, dict) or not metadata_filter:
+        click.echo("metadata_filter must be a non-empty JSON object", err=True)
+        raise SystemExit(1)
+
+    settings = Settings()
+    client = _get_client(settings)
+
+    project_id: str | None = None
+    if project_name:
+        projects = client.list_projects()
+        for p in projects:
+            if p["name"].lower() == project_name.lower():
+                project_id = p["id"]
+                break
+        if project_id is None:
+            click.echo(f"Project not found: {project_name}", err=True)
+            raise SystemExit(1)
+
+    rows = client.metadata_search(
+        metadata_filter=metadata_filter,
+        project_id=project_id,
+        updated_since=updated_since,
+        created_since=created_since,
+        limit=limit,
+        include_content=include_content,
+    )
+
+    if not rows:
+        click.echo("No documents match the metadata filter.")
+        return
+
+    for row in rows:
+        proj_names = row.get("project_names") or []
+        projects_str = f"  projects: {', '.join(proj_names)}" if proj_names else ""
+        click.echo(f"  {row['title']}  (id: {row['document_id']})")
+        click.echo(f"    {row.get('total_chars', 0)} chars | {row.get('review_status', 'approved')} | updated {str(row.get('updated_at', ''))[:10]}{projects_str}")
+        if include_content and row.get("content"):
+            click.echo(f"    ---\n{row['content'][:500]}{'...' if len(row.get('content', '')) > 500 else ''}")
+        click.echo()
+    click.echo(f"{len(rows)} document(s) found.")
+
+
 # ── reindex ───────────────────────────────────────────────────────────────────
 
 
