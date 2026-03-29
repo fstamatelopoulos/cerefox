@@ -264,7 +264,7 @@ def api_search(
             ]
 
     client.log_usage(
-        operation="search", access_path="webapp",
+        operation="search", access_path="webapp", requestor="user",
         query_text=q, project_id=pid, result_count=len(result_dicts),
     )
 
@@ -333,7 +333,7 @@ def api_metadata_search(
         include_content=body.include_content,
     )
     client.log_usage(
-        operation="metadata_search", access_path="webapp",
+        operation="metadata_search", access_path="webapp", requestor="user",
         query_text=json.dumps(body.metadata_filter), project_id=body.project_id,
         result_count=len(rows),
     )
@@ -759,6 +759,10 @@ def api_ingest_paste(
             author="web-ui",
             author_type="user",
         )
+        client.log_usage(
+            operation="ingest", access_path="webapp", requestor="user",
+            document_id=res.document_id, result_count=res.chunk_count,
+        )
         return IngestResponse(
             success=not res.skipped,
             document_id=res.document_id,
@@ -1019,7 +1023,7 @@ class UsageLogEntryResponse(BaseModel):
     logged_at: str
     operation: str
     access_path: str
-    reader: str | None
+    requestor: str | None
     document_id: str | None
     doc_title: str | None
     project_id: str | None
@@ -1034,7 +1038,7 @@ def api_list_usage_log(
     end: str | None = None,
     operation: str | None = None,
     access_path: str | None = None,
-    reader: str | None = None,
+    requestor: str | None = None,
     project_id: str | None = None,
     limit: int = 100,
     client: CerefoxClient = Depends(get_client),
@@ -1045,7 +1049,7 @@ def api_list_usage_log(
         end=end,
         operation=operation,
         access_path=access_path,
-        reader=reader,
+        requestor=requestor,
         project_id=project_id,
         limit=limit,
     )
@@ -1055,7 +1059,7 @@ def api_list_usage_log(
             logged_at=str(row.get("logged_at", "")),
             operation=row["operation"],
             access_path=row["access_path"],
-            reader=row.get("reader"),
+            reader=row.get("requestor"),
             document_id=row.get("document_id"),
             doc_title=row.get("doc_title"),
             project_id=row.get("project_id"),
@@ -1073,7 +1077,7 @@ def api_export_usage_csv(
     end: str | None = None,
     operation: str | None = None,
     access_path: str | None = None,
-    reader: str | None = None,
+    requestor: str | None = None,
     project_id: str | None = None,
     limit: int = 10000,
     client: CerefoxClient = Depends(get_client),
@@ -1091,7 +1095,7 @@ def api_export_usage_csv(
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "id", "logged_at", "operation", "access_path", "reader",
+        "id", "logged_at", "operation", "access_path", "requestor",
         "document_id", "doc_title", "project_id", "query_text",
         "result_count", "extra",
     ])
@@ -1101,7 +1105,7 @@ def api_export_usage_csv(
             row.get("logged_at", ""),
             row.get("operation", ""),
             row.get("access_path", ""),
-            row.get("reader", ""),
+            row.get("requestor", ""),
             row.get("document_id", ""),
             row.get("doc_title", ""),
             row.get("project_id", ""),

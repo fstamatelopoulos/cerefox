@@ -396,7 +396,7 @@ def search(
     click.echo(f"\n{len(resp.results)} result(s) shown  ({resp.response_bytes:,} bytes).")
 
     client.log_usage(
-        operation="search", access_path="cli",
+        operation="search", access_path="cli", requestor="user",
         query_text=query, project_id=project_id, result_count=len(resp.results),
     )
 
@@ -709,7 +709,8 @@ def get_doc(document_id: str, version_id: str | None) -> None:
     click.echo(doc.get("full_content") or "")
 
     client.log_usage(
-        operation="get_document", access_path="cli", document_id=document_id, result_count=1,
+        operation="get_document", access_path="cli", requestor="user",
+        document_id=document_id, result_count=1,
     )
 
 
@@ -741,7 +742,7 @@ def list_versions(document_id: str) -> None:
         )
 
     client.log_usage(
-        operation="list_versions", access_path="cli",
+        operation="list_versions", access_path="cli", requestor="user",
         document_id=document_id, result_count=len(versions),
     )
 

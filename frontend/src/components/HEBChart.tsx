@@ -4,7 +4,7 @@ import * as d3 from "d3";
 import { useEffect, useRef } from "react";
 
 interface UsageEntry {
-  reader: string | null;
+  requestor: string | null;
   doc_title: string | null;
   document_id: string | null;
 }
@@ -16,7 +16,7 @@ interface HEBChartProps {
 }
 
 interface Link {
-  reader: string;
+  requestor: string;
   doc: string;
   count: number;
 }
@@ -30,16 +30,16 @@ export function HEBChart({ usageLog, width = 400, height = 400 }: HEBChartProps)
   const links: Link[] = [];
   const linkMap = new Map<string, number>();
   for (const entry of usageLog) {
-    if (!entry.reader || !entry.doc_title) continue;
-    const key = `${entry.reader}|||${entry.doc_title}`;
+    if (!entry.requestor || !entry.doc_title) continue;
+    const key = `${entry.requestor}|||${entry.doc_title}`;
     linkMap.set(key, (linkMap.get(key) ?? 0) + 1);
   }
   for (const [key, count] of linkMap) {
-    const [reader, doc] = key.split("|||");
-    links.push({ reader, doc, count });
+    const [requestor, doc] = key.split("|||");
+    links.push({ requestor, doc, count });
   }
 
-  const readers = [...new Set(links.map((l) => l.reader))];
+  const readers = [...new Set(links.map((l) => l.requestor))];
   const docs = [...new Set(links.map((l) => l.doc))];
 
   useEffect(() => {
@@ -99,7 +99,7 @@ export function HEBChart({ usageLog, width = 400, height = 400 }: HEBChartProps)
       .append("path")
       .attr("class", "link")
       .attr("d", (d) => {
-        const s = nodePositions.get(d.reader)!;
+        const s = nodePositions.get(d.requestor)!;
         const t = nodePositions.get(d.doc)!;
         return `M${s.x},${s.y} Q${cx},${cy} ${t.x},${t.y}`;
       })

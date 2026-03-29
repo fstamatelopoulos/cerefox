@@ -417,6 +417,15 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // Fire-and-forget usage logging for update
+      Promise.resolve(supabase.rpc("cerefox_log_usage", {
+        p_operation: "ingest",
+        p_access_path: "edge-function",
+        p_requestor: author,
+        p_document_id: existingDoc.id,
+        p_result_count: chunks.length,
+      })).catch(() => {});
+
       return new Response(
         JSON.stringify({
           document_id: existingDoc.id,
@@ -532,6 +541,15 @@ Deno.serve(async (req: Request) => {
         .insert({ document_id: documentId, project_id: projectId });
     }
   }
+
+  // Fire-and-forget usage logging for ingest
+  Promise.resolve(supabase.rpc("cerefox_log_usage", {
+    p_operation: "ingest",
+    p_access_path: "edge-function",
+    p_requestor: author,
+    p_document_id: documentId,
+    p_result_count: chunks.length,
+  })).catch(() => {});
 
   return new Response(
     JSON.stringify({

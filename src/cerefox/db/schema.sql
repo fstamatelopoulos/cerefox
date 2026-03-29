@@ -317,7 +317,7 @@ CREATE TABLE IF NOT EXISTS cerefox_usage_log (
     logged_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     operation    TEXT NOT NULL,
     access_path  TEXT NOT NULL,
-    reader       TEXT,
+    requestor    TEXT,
     document_id  UUID REFERENCES cerefox_documents(id) ON DELETE SET NULL,
     project_id   UUID REFERENCES cerefox_projects(id) ON DELETE SET NULL,
     query_text   TEXT,
@@ -331,8 +331,8 @@ CREATE INDEX IF NOT EXISTS idx_usage_log_operation_logged_at
     ON cerefox_usage_log (operation, logged_at DESC);
 CREATE INDEX IF NOT EXISTS idx_usage_log_access_path
     ON cerefox_usage_log (access_path);
-CREATE INDEX IF NOT EXISTS idx_usage_log_reader
-    ON cerefox_usage_log (reader) WHERE reader IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_usage_log_requestor
+    ON cerefox_usage_log (requestor) WHERE requestor IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_usage_log_document_id
     ON cerefox_usage_log (document_id) WHERE document_id IS NOT NULL;
 

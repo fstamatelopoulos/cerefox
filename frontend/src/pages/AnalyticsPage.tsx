@@ -257,7 +257,7 @@ function AnalyticsDashboard({
   usageLog,
 }: {
   summary: UsageSummary;
-  usageLog: Array<{ reader: string | null; doc_title: string | null; document_id: string | null }>;
+  usageLog: Array<{ requestor: string | null; doc_title: string | null; document_id: string | null }>;
 }) {
   const topOp = summary.ops_by_operation[0];
 
@@ -267,8 +267,8 @@ function AnalyticsDashboard({
       <SimpleGrid cols={{ base: 2, sm: 4 }}>
         <StatCard label="Total Calls" value={summary.total_count.toLocaleString()} />
         <StatCard
-          label="Unique Readers"
-          value={String(summary.top_readers.length)}
+          label="Unique Requestors"
+          value={String(summary.top_requestors.length)}
         />
         <StatCard
           label="Docs Accessed"
@@ -369,14 +369,14 @@ function AnalyticsDashboard({
             {/* ── V4: Top readers ──────────────────────────────────────── */}
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
-                <Text fw={500} mb="sm">Most Active Readers</Text>
-                {summary.top_readers.length === 0 ? (
-                  <Text c="dimmed" size="sm">No reader attribution recorded.</Text>
+                <Text fw={500} mb="sm">Most Active Requestors</Text>
+                {summary.top_requestors.length === 0 ? (
+                  <Text c="dimmed" size="sm">No requestor attribution recorded.</Text>
                 ) : (
                   <BarChart
-                    h={Math.max(150, summary.top_readers.length * 30)}
-                    data={summary.top_readers.map((d) => ({
-                      reader: d.reader,
+                    h={Math.max(150, summary.top_requestors.length * 30)}
+                    data={summary.top_requestors.map((d) => ({
+                      reader: d.requestor,
                       calls: d.count,
                     }))}
                     dataKey="reader"
@@ -393,13 +393,13 @@ function AnalyticsDashboard({
             {/* ── V6: Reader/author word cloud ──────────────────────────── */}
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
-                <Text fw={500} mb="sm">Reader Activity (Word Cloud)</Text>
-                {summary.top_readers.length === 0 ? (
-                  <Text c="dimmed" size="sm">No reader data available.</Text>
+                <Text fw={500} mb="sm">Requestor Activity (Word Cloud)</Text>
+                {summary.top_requestors.length === 0 ? (
+                  <Text c="dimmed" size="sm">No requestor data available.</Text>
                 ) : (
                   <WordCloudChart
-                    data={summary.top_readers.map((r) => ({
-                      text: r.reader,
+                    data={summary.top_requestors.map((r) => ({
+                      text: r.requestor,
                       value: r.count,
                     }))}
                   />
@@ -410,7 +410,7 @@ function AnalyticsDashboard({
             {/* ── V7: HEB readers → documents ──────────────────────────── */}
             <Grid.Col span={{ base: 12, md: 6 }}>
               <Card withBorder p="md" h="100%">
-                <Text fw={500} mb="sm">Reader → Document Access Patterns</Text>
+                <Text fw={500} mb="sm">Requestor → Document Access Patterns</Text>
                 <HEBChart usageLog={usageLog} />
               </Card>
             </Grid.Col>

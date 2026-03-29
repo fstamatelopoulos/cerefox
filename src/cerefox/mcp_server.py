@@ -451,7 +451,7 @@ async def _handle_search(
         text += f"\n\n[Results truncated at {total_bytes:,} bytes — response size limit reached. Use a more specific query, reduce match_count, or pass a larger max_bytes if your context allows.]"
 
     client.log_usage(
-        operation="search", access_path="local-mcp",
+        operation="search", access_path="local-mcp", requestor="mcp-agent",
         query_text=query, project_id=project_id, result_count=len(parts),
     )
 
@@ -501,6 +501,12 @@ async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[ty
         if result.project_ids:
             msg += f"\nProject IDs: {', '.join(result.project_ids)}"
 
+    if result.action != "skipped":
+        client.log_usage(
+            operation="ingest", access_path="local-mcp", requestor=author,
+            document_id=result.document_id, result_count=result.chunk_count,
+        )
+
     return [types.TextContent(type="text", text=msg)]
 
 
@@ -514,7 +520,7 @@ async def _handle_get_document(client: Any, arguments: dict) -> list[types.TextC
         label = f" (version {version_id})" if version_id else ""
         return [types.TextContent(type="text", text=f"Document{label} not found: {document_id}")]
     client.log_usage(
-        operation="get_document", access_path="local-mcp",
+        operation="get_document", access_path="local-mcp", requestor="mcp-agent",
         document_id=document_id, result_count=1,
     )
     lines = [
@@ -533,7 +539,7 @@ async def _handle_list_versions(client: Any, arguments: dict) -> list[types.Text
         return [types.TextContent(type="text", text="Error: document_id is required.")]
     versions = client.list_document_versions(document_id)
     client.log_usage(
-        operation="list_versions", access_path="local-mcp",
+        operation="list_versions", access_path="local-mcp", requestor="mcp-agent",
         document_id=document_id, result_count=len(versions),
     )
     if not versions:
@@ -550,7 +556,7 @@ async def _handle_list_versions(client: Any, arguments: dict) -> list[types.Text
 async def _handle_list_metadata_keys(client: Any) -> list[types.TextContent]:
     keys = client.list_metadata_keys()
     client.log_usage(
-        operation="list_metadata_keys", access_path="local-mcp",
+        operation="list_metadata_keys", access_path="local-mcp", requestor="mcp-agent",
         result_count=len(keys),
     )
     if not keys:
@@ -573,7 +579,7 @@ async def _handle_get_audit_log(client: Any, arguments: dict) -> list[types.Text
         limit=limit,
     )
     client.log_usage(
-        operation="get_audit_log", access_path="local-mcp",
+        operation="get_audit_log", access_path="local-mcp", requestor="mcp-agent",
         result_count=len(entries),
     )
     if not entries:
@@ -597,7 +603,7 @@ async def _handle_get_audit_log(client: Any, arguments: dict) -> list[types.Text
 async def _handle_list_projects(client: Any) -> list[types.TextContent]:
     projects = client.list_projects_rpc()
     client.log_usage(
-        operation="list_projects", access_path="local-mcp",
+        operation="list_projects", access_path="local-mcp", requestor="mcp-agent",
         result_count=len(projects),
     )
     if not projects:
@@ -645,7 +651,7 @@ async def _handle_metadata_search(
     )
 
     client.log_usage(
-        operation="metadata_search", access_path="local-mcp",
+        operation="metadata_search", access_path="local-mcp", requestor="mcp-agent",
         query_text=json.dumps(metadata_filter), project_id=project_id,
         result_count=len(rows),
     )

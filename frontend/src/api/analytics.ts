@@ -5,7 +5,7 @@ export interface UsageLogEntry {
   logged_at: string;
   operation: string;
   access_path: string;
-  reader: string | null;
+  requestor: string | null;
   document_id: string | null;
   doc_title: string | null;
   project_id: string | null;
@@ -20,7 +20,7 @@ export interface UsageSummary {
   ops_by_operation: Array<{ operation: string; count: number }>;
   ops_by_access_path: Array<{ access_path: string; count: number }>;
   top_documents: Array<{ document_id: string; doc_title: string; count: number }>;
-  top_readers: Array<{ reader: string; count: number }>;
+  top_requestors: Array<{ requestor: string; count: number }>;
 }
 
 export interface UsageFilters {
