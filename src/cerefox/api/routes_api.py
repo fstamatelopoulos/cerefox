@@ -513,6 +513,15 @@ class EditResponse(BaseModel):
     error: str | None = None
 
 
+@api_router.get("/documents/trash")
+def api_list_trash(
+    limit: int = 50,
+    client: CerefoxClient = Depends(get_client),
+) -> list[dict[str, Any]]:
+    """List soft-deleted documents (trash bin)."""
+    return client.list_deleted_documents(limit=limit)
+
+
 @api_router.get("/documents/{document_id}")
 def api_get_document(
     document_id: str,
@@ -722,15 +731,6 @@ def api_purge_document(
     except Exception as exc:
         logger.error("purge_document %s failed: %s", document_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
-
-
-@api_router.get("/documents/trash")
-def api_list_trash(
-    limit: int = 50,
-    client: CerefoxClient = Depends(get_client),
-) -> list[dict[str, Any]]:
-    """List soft-deleted documents (trash bin)."""
-    return client.list_deleted_documents(limit=limit)
 
 
 @api_router.post("/documents/{document_id}/upload")
