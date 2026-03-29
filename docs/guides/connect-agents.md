@@ -439,7 +439,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 1.6.0
+  version: 1.7.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
