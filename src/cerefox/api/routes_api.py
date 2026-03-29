@@ -263,6 +263,11 @@ def api_search(
                 r for r in result_dicts if status_map.get(r["document_id"]) == review_status
             ]
 
+    client.log_usage(
+        operation="search", access_path="webapp",
+        query_text=q, project_id=pid, result_count=len(result_dicts),
+    )
+
     return SearchResponse(
         results=result_dicts,
         query=q,
@@ -326,6 +331,11 @@ def api_metadata_search(
         created_since=body.created_since,
         limit=body.limit,
         include_content=body.include_content,
+    )
+    client.log_usage(
+        operation="metadata_search", access_path="webapp",
+        query_text=json.dumps(body.metadata_filter), project_id=body.project_id,
+        result_count=len(rows),
     )
     return [
         MetadataSearchResultResponse(

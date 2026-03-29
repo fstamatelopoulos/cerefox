@@ -3,7 +3,7 @@
 // Calls the cerefox_search_docs / cerefox_hybrid_search / cerefox_fts_search
 // RPC directly instead of delegating to the cerefox-search Edge Function.
 
-import { makeSupabaseClient, applyByteBudget } from "../shared.ts";
+import { makeSupabaseClient, applyByteBudget, logUsage } from "../shared.ts";
 import { getEmbedding } from "../embeddings.ts";
 
 // Server-enforced hard limit. Agents may pass a smaller max_bytes to fit their
@@ -120,6 +120,13 @@ export async function handleSearch(
 
   // Apply byte budget -- drop whole results (never truncate mid-doc)
   const { accepted, truncated, usedBytes } = applyByteBudget(data ?? [], max_bytes);
+
+  logUsage(supabase, {
+    operation: "search",
+    query_text: query,
+    project_id: projectId,
+    result_count: accepted.length,
+  });
 
   if (accepted.length === 0) {
     return "No results found.";

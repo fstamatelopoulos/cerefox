@@ -70,3 +70,30 @@ export function applyByteBudget(
 
   return { accepted, truncated, usedBytes };
 }
+
+// ── Usage logging helper ─────────────────────────────────────────────────────
+// Fire-and-forget; never blocks the tool response.
+
+export function logUsage(
+  supabase: ReturnType<typeof makeSupabaseClient>,
+  params: {
+    operation: string;
+    query_text?: string | null;
+    document_id?: string | null;
+    project_id?: string | null;
+    result_count?: number | null;
+    reader?: string | null;
+    extra?: Record<string, unknown>;
+  },
+): void {
+  supabase.rpc("cerefox_log_usage", {
+    p_operation: params.operation,
+    p_access_path: "remote-mcp",
+    p_reader: params.reader ?? null,
+    p_document_id: params.document_id ?? null,
+    p_project_id: params.project_id ?? null,
+    p_query_text: params.query_text ?? null,
+    p_result_count: params.result_count ?? null,
+    p_extra: params.extra ?? {},
+  }).catch(() => {});
+}

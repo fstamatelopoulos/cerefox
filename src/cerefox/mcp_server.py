@@ -450,6 +450,11 @@ async def _handle_search(
     if truncated:
         text += f"\n\n[Results truncated at {total_bytes:,} bytes — response size limit reached. Use a more specific query, reduce match_count, or pass a larger max_bytes if your context allows.]"
 
+    client.log_usage(
+        operation="search", access_path="local-mcp",
+        query_text=query, project_id=project_id, result_count=len(parts),
+    )
+
     return [types.TextContent(type="text", text=text)]
 
 
@@ -508,6 +513,10 @@ async def _handle_get_document(client: Any, arguments: dict) -> list[types.TextC
     if doc is None:
         label = f" (version {version_id})" if version_id else ""
         return [types.TextContent(type="text", text=f"Document{label} not found: {document_id}")]
+    client.log_usage(
+        operation="get_document", access_path="local-mcp",
+        document_id=document_id, result_count=1,
+    )
     lines = [
         f"# {doc.get('doc_title', 'Untitled')}",
         f"source: {doc.get('doc_source', '')} | "
@@ -523,6 +532,10 @@ async def _handle_list_versions(client: Any, arguments: dict) -> list[types.Text
     if not document_id:
         return [types.TextContent(type="text", text="Error: document_id is required.")]
     versions = client.list_document_versions(document_id)
+    client.log_usage(
+        operation="list_versions", access_path="local-mcp",
+        document_id=document_id, result_count=len(versions),
+    )
     if not versions:
         return [types.TextContent(type="text", text="No archived versions found for this document.")]
     lines = [f"Versions for document {document_id}:", ""]
@@ -536,6 +549,10 @@ async def _handle_list_versions(client: Any, arguments: dict) -> list[types.Text
 
 async def _handle_list_metadata_keys(client: Any) -> list[types.TextContent]:
     keys = client.list_metadata_keys()
+    client.log_usage(
+        operation="list_metadata_keys", access_path="local-mcp",
+        result_count=len(keys),
+    )
     if not keys:
         return [types.TextContent(type="text", text="No metadata keys found across documents.")]
     return [types.TextContent(type="text", text=json.dumps(keys, indent=2))]
@@ -554,6 +571,10 @@ async def _handle_get_audit_log(client: Any, arguments: dict) -> list[types.Text
         operation=operation,
         since=since,
         limit=limit,
+    )
+    client.log_usage(
+        operation="get_audit_log", access_path="local-mcp",
+        result_count=len(entries),
     )
     if not entries:
         return [types.TextContent(type="text", text="No audit log entries found.")]
@@ -575,6 +596,10 @@ async def _handle_get_audit_log(client: Any, arguments: dict) -> list[types.Text
 
 async def _handle_list_projects(client: Any) -> list[types.TextContent]:
     projects = client.list_projects_rpc()
+    client.log_usage(
+        operation="list_projects", access_path="local-mcp",
+        result_count=len(projects),
+    )
     if not projects:
         return [types.TextContent(type="text", text="No projects found.")]
     lines = [f"Projects ({len(projects)}):", ""]
@@ -617,6 +642,12 @@ async def _handle_metadata_search(
         limit=int(arguments.get("limit", 10)),
         include_content=include_content,
         max_bytes=max_bytes,
+    )
+
+    client.log_usage(
+        operation="metadata_search", access_path="local-mcp",
+        query_text=json.dumps(metadata_filter), project_id=project_id,
+        result_count=len(rows),
     )
 
     if not rows:

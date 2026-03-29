@@ -3,7 +3,7 @@
 // Calls the cerefox_list_document_versions RPC directly instead of
 // delegating to the cerefox-list-versions Edge Function.
 
-import { makeSupabaseClient } from "../shared.ts";
+import { makeSupabaseClient, logUsage } from "../shared.ts";
 
 export async function handleListVersions(args: Record<string, unknown>): Promise<string> {
   const document_id = args.document_id as string | undefined;
@@ -30,6 +30,8 @@ export async function handleListVersions(args: Record<string, unknown>): Promise
     total_chars: number;
     created_at: string;
   }>;
+
+  logUsage(supabase, { operation: "list_versions", document_id, result_count: versions.length });
 
   if (!versions.length) {
     return "No archived versions found for this document.";

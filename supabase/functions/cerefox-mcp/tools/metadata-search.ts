@@ -3,7 +3,7 @@
 // Calls the cerefox_metadata_search RPC directly. Queries documents by
 // metadata key-value criteria without a text search term.
 
-import { makeSupabaseClient, applyByteBudget } from "../shared.ts";
+import { makeSupabaseClient, applyByteBudget, logUsage } from "../shared.ts";
 
 const MAX_BYTES = 200_000;
 
@@ -89,6 +89,13 @@ export async function handleMetadataSearch(
     version_count: number;
     content: string | null;
   }>;
+
+  logUsage(supabase, {
+    operation: "metadata_search",
+    query_text: JSON.stringify(metadata_filter),
+    project_id: projectId,
+    result_count: rows.length,
+  });
 
   if (rows.length === 0) {
     return "No documents match the metadata filter.";

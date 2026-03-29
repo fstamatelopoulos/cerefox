@@ -3,7 +3,7 @@
 // Calls the cerefox_list_projects RPC directly. Returns all projects with
 // their names, IDs, and descriptions for agent discovery.
 
-import { makeSupabaseClient } from "../shared.ts";
+import { makeSupabaseClient, logUsage } from "../shared.ts";
 
 export async function handleListProjects(): Promise<string> {
   const supabase = makeSupabaseClient();
@@ -19,6 +19,8 @@ export async function handleListProjects(): Promise<string> {
     name: string;
     description: string | null;
   }>;
+
+  logUsage(supabase, { operation: "list_projects", result_count: projects.length });
 
   if (projects.length === 0) {
     return "No projects found.";

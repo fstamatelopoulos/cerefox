@@ -3,7 +3,7 @@
 // Calls the cerefox_get_document RPC directly instead of delegating to
 // the cerefox-get-document Edge Function.
 
-import { makeSupabaseClient } from "../shared.ts";
+import { makeSupabaseClient, logUsage } from "../shared.ts";
 
 export async function handleGetDocument(args: Record<string, unknown>): Promise<string> {
   const document_id = args.document_id as string | undefined;
@@ -34,6 +34,8 @@ export async function handleGetDocument(args: Record<string, unknown>): Promise<
   if (!row) {
     return "Document not found.";
   }
+
+  logUsage(supabase, { operation: "get_document", document_id, result_count: 1 });
 
   const label = version_id !== null ? " (archived version)" : " (current)";
   return `# ${row.doc_title ?? "Untitled"}${label}\n\n${row.full_content ?? ""}`;
