@@ -39,7 +39,7 @@ const TOOLS = [
       "Search the Cerefox personal knowledge base. Returns complete documents ranked by hybrid (FTS + semantic) relevance.",
     inputSchema: {
       type: "object",
-      required: ["query"],
+      required: ["query", "requestor"],
       properties: {
         query: {
           type: "string",
@@ -67,7 +67,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request (e.g., "Claude Code", "archiver"). Recorded in the usage log for attribution. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist"). Recorded in the usage log for attribution.',
         },
       },
     },
@@ -77,7 +77,7 @@ const TOOLS = [
     description: "Save a note or document to the Cerefox knowledge base.",
     inputSchema: {
       type: "object",
-      required: ["title", "content"],
+      required: ["title", "content", "author"],
       properties: {
         title: {
           type: "string",
@@ -107,7 +107,7 @@ const TOOLS = [
         author: {
           type: "string",
           description:
-            'Name of the agent or tool performing the ingestion (e.g., "Claude Code", "Cursor"). Recorded in the audit log for attribution. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:artificer"). Recorded in the audit log for attribution.',
         },
       },
     },
@@ -118,11 +118,12 @@ const TOOLS = [
       "List all metadata keys currently in use across documents in the Cerefox knowledge base. Returns each key with its document count and up to 5 example values.",
     inputSchema: {
       type: "object",
+      required: ["requestor"],
       properties: {
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist"). Recorded in the usage log.',
         },
       },
     },
@@ -133,7 +134,7 @@ const TOOLS = [
       "Retrieve the full reconstructed content of a document. Pass version_id to retrieve an archived version; omit it (or pass null) for the current version. Version UUIDs are returned by cerefox_list_versions.",
     inputSchema: {
       type: "object",
-      required: ["document_id"],
+      required: ["document_id", "requestor"],
       properties: {
         document_id: {
           type: "string",
@@ -146,7 +147,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist"). Recorded in the usage log.',
         },
       },
     },
@@ -157,7 +158,7 @@ const TOOLS = [
       "List all archived versions of a document, newest first. Returns version_id (use with cerefox_get_document), version_number, source, chunk_count, total_chars, and created_at.",
     inputSchema: {
       type: "object",
-      required: ["document_id"],
+      required: ["document_id", "requestor"],
       properties: {
         document_id: {
           type: "string",
@@ -166,7 +167,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist"). Recorded in the usage log.',
         },
       },
     },
@@ -177,6 +178,7 @@ const TOOLS = [
       "Retrieve audit log entries showing who changed what and when. Supports filtering by document, author, operation type, and time range. Returns entries with document titles, author attribution, size changes, and descriptions.",
     inputSchema: {
       type: "object",
+      required: ["requestor"],
       properties: {
         document_id: {
           type: "string",
@@ -202,7 +204,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist"). Recorded in the usage log.',
         },
       },
     },
@@ -213,11 +215,12 @@ const TOOLS = [
       "List all projects with their names and IDs. Use this to discover available projects before filtering by project_name in other tools.",
     inputSchema: {
       type: "object",
+      required: ["requestor"],
       properties: {
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist"). Recorded in the usage log.',
         },
       },
     },
@@ -228,7 +231,7 @@ const TOOLS = [
       "Find documents by metadata key-value criteria without a text search term. Use to discover documents tagged with specific attributes, browse by taxonomy, or retrieve messages/tasks by type and status.",
     inputSchema: {
       type: "object",
-      required: ["metadata_filter"],
+      required: ["metadata_filter", "requestor"],
       properties: {
         metadata_filter: {
           type: "object",
@@ -264,7 +267,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'REQUIRED. Caller identity in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist"). Recorded in the usage log.',
         },
       },
     },
@@ -335,6 +338,17 @@ async function handleToolsCall(
   const knownTools = TOOLS.map((t) => t.name);
   if (!knownTools.includes(toolName)) {
     return errorResponse(id, -32602, `Unknown tool: ${toolName}`);
+  }
+
+  // Require caller attribution: "requestor" for read tools, "author" for ingest
+  const identityParam = toolName === "cerefox_ingest" ? "author" : "requestor";
+  const identityValue = args[identityParam];
+  if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {
+    return errorResponse(
+      id,
+      -32602,
+      `Missing required parameter "${identityParam}". All cerefox calls must identify the caller in "conclave:agent" format (e.g., "personal:steward", "upwork:archivist").`,
+    );
   }
 
   try {
