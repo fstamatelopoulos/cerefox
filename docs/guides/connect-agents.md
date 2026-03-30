@@ -42,6 +42,10 @@ client; you can also run both in parallel.
 
 > **Perplexity** does not support MCP and has no integration path at this time.
 
+> **Quick start with templates:** Copy-pasteable `.mcp.json` templates for each client are
+> available in [`examples/mcp-configs/`](../../examples/mcp-configs/). Pick the one for your
+> client, replace the placeholders, and you're connected.
+
 ---
 
 ## Prerequisites
@@ -278,7 +282,37 @@ npx supabase functions deploy cerefox-mcp
 
 ### Path A-Remote: Claude Code
 
-Claude Code supports Streamable HTTP MCP natively — no proxy needed.
+> **Recommended: use `mcp-remote` stdio bridge.** Claude Code's native Streamable HTTP
+> transport maintains an SSE connection that polls the Edge Function at ~5 GET requests/second
+> even when idle — burning ~130-198K invocations/day against your Supabase quota. Using
+> `mcp-remote` as a stdio bridge eliminates this overhead while keeping all functionality
+> intact. See [#7](https://github.com/tdebasis/cerefox/issues/7) for details.
+
+**Option 1 — `mcp-remote` (recommended):**
+
+Add to your project's `.mcp.json` (or copy
+[`examples/mcp-configs/claude-code-remote.json`](../../examples/mcp-configs/claude-code-remote.json)):
+
+```json
+{
+  "mcpServers": {
+    "cerefox": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
+        "--header",
+        "Authorization: Bearer <your-anon-key>"
+      ]
+    }
+  }
+}
+```
+
+**Option 2 — native HTTP (higher Edge Function cost):**
+
+Claude Code also supports Streamable HTTP natively. This works but incurs significant idle
+invocation overhead (see warning above).
 
 ```bash
 claude mcp add --transport http cerefox \

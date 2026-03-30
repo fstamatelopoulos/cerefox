@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "cerefox": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
+        "--header",
+        "Authorization: Bearer <your-anon-key>"
+      ]
+    }
+  }
+}
