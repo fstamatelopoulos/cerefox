@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [v0.1.13] -- 2026-03-30
+
+Configurable requestor identity enforcement. Contributed by @tdebasis (PR #20, issue #18).
+
+### Added
+- **Requestor identity enforcement**: opt-in via `require_requestor_identity` config (default false). When enabled, all MCP tool calls and Edge Function calls must include a `requestor` (reads) or `author` (writes) identity. Returns -32602 (MCP) or 400 (HTTP) with helpful error message when missing.
+- **Identity format validation**: `requestor_identity_format` config (default `^[a-zA-Z0-9_:.\- ]+$`). Validates identity against a regex pattern. Applied to both `requestor` and `author`. Users can customize (e.g., `^[a-z]+:[a-z]+$` for conclave:agent format).
+- **Enforcement across all access paths**: cerefox-mcp (MCP), all 8 primitive Edge Functions (GPT Actions), and local MCP server (stdio).
+- Migration `0010_requestor_enforcement_config.sql` seeds config defaults.
+- Documentation in `docs/guides/configuration.md`.
+
+### Fixed
+- **E2e test reliability**: `retry_until()` helper replaces fixed `sleep(1)` for embedding propagation, eliminating intermittent timing failures.
+- **E2e test cleanup**: soft-delete then purge for permanent test data removal.
+- **Health check test**: updated for 405 GET response (MCP spec compliance from v0.1.12).
+
+---
+
 ## [v0.1.12] -- 2026-03-30
 
 Fix excessive Edge Function invocations from MCP SSE polling.
