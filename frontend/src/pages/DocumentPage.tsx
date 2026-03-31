@@ -70,6 +70,8 @@ export function DocumentPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["document", id] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
       showSuccess("Document moved to trash");
       navigate("/");
     },
@@ -82,6 +84,7 @@ export function DocumentPage() {
       queryClient.invalidateQueries({ queryKey: ["document", id] });
       queryClient.invalidateQueries({ queryKey: ["trash"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
       showSuccess("Document restored");
     },
     onError: (err) => showError("Restore failed", String(err)),
@@ -91,6 +94,8 @@ export function DocumentPage() {
     mutationFn: () => purgeDocument(id!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trash"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
       showSuccess("Document permanently deleted");
       navigate("/trash");
     },

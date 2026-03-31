@@ -29,6 +29,7 @@ export function TrashPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trash"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
     },
   });
 
@@ -36,6 +37,8 @@ export function TrashPage() {
     mutationFn: purgeDocument,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trash"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
     },
   });
 
