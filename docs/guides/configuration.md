@@ -405,17 +405,20 @@ with a helpful message telling the agent what to provide.
 # Require all MCP tool calls to include requestor/author
 cerefox config-set require_requestor_identity true
 
-# Optionally enforce a naming format (regex)
-cerefox config-set requestor_identity_format "^[a-zA-Z0-9_:. -]+$"
+# Optionally override the default naming format (regex)
+# Default: ^[a-zA-Z0-9_:.\- ]+$ (letters, numbers, underscores, colons, dots, hyphens, spaces)
+cerefox config-set requestor_identity_format "^[a-z]+:[a-z]+$"
 ```
 
 ### Format examples
 
 | Format regex | Allows | Use case |
 |-------------|--------|----------|
-| (not set) | Any non-empty string | Default -- no format restriction |
-| `^[a-zA-Z0-9_:. -]+$` | Letters, numbers, underscores, colons, dots, spaces, hyphens | General purpose |
-| `^[a-z]+:[a-z]+$` | `conclave:agent` format | Multi-conclave setups (e.g., `personal:steward`) |
+| `^[a-zA-Z0-9_:.\- ]+$` | Letters, numbers, underscores, colons, dots, hyphens, spaces | **Default** -- covers "Claude Code", "mcp-agent", "personal:steward", "user" |
+| `^[a-z]+:[a-z]+$` | `conclave:agent` format only | Multi-conclave setups (e.g., `personal:steward`) |
+| (empty string) | Any non-empty string | No format restriction |
+
+The format is applied to both `requestor` (read tools) and `author` (ingest).
 
 ### Disabling enforcement
 

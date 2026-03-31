@@ -1269,10 +1269,10 @@ class TestUsageTracking:
         val = e2e_client.get_config("require_requestor_identity")
         assert val == "false"
 
-        e2e_client.set_config("requestor_identity_format", "^[a-zA-Z0-9_: -]+$")
+        e2e_client.set_config("requestor_identity_format", "^[a-z]+:[a-z]+$")
         val = e2e_client.get_config("requestor_identity_format")
-        assert val == "^[a-zA-Z0-9_: -]+$"
+        assert val == "^[a-z]+:[a-z]+$"
 
-        # Clean up
+        # Clean up -- restore defaults
         e2e_client.set_config("require_requestor_identity", "false")
-        e2e_client.set_config("requestor_identity_format", "")
+        e2e_client.set_config("requestor_identity_format", "^[a-zA-Z0-9_:.\\- ]+$")
