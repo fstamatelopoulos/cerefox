@@ -1465,26 +1465,93 @@ CSV export available for offline analysis. All visualizations implemented.
 
 ---
 
+---
+
+## Iteration 17: Search Quality — Title Boosting and Contextual Enrichment
+
+**Goal**: Include document titles in search indexes to dramatically improve search quality.
+Currently, searching for a document by its exact title fails unless the title words appear
+in the body text. This iteration adds title boosting to both FTS and semantic search.
+
+**Research**: see `docs/research/search-quality-title-boosting.md` for full analysis.
+
+**Branch**: `feat/search-quality`
+
+### 17A: Title Boosting for FTS and Semantic Search
+
+#### Tasks
+
+**Step 1 -- Schema and ingestion pipeline**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17A.1 | Change `fts` column from GENERATED to regular tsvector | Todo | Migration: `ALTER TABLE cerefox_chunks ALTER COLUMN fts DROP EXPRESSION`; column stays, just no longer auto-computed |
+| 17A.2 | Update Python `IngestionPipeline` to compute weighted tsvector at ingestion | Todo | `setweight(to_tsvector('english', doc_title), 'A') || setweight(to_tsvector('english', chunk_content), 'B')` |
+| 17A.3 | Update `cerefox_ingest_document` RPC to accept and store the pre-computed tsvector | Todo | New `p_fts` parameter per chunk in the JSONB array; or compute in the RPC itself using the document title |
+| 17A.4 | Update TypeScript chunker in `cerefox-ingest` Edge Function | Todo | Same weighted tsvector computation |
+| 17A.5 | Update TypeScript chunker in `cerefox-mcp/tools/ingest.ts` | Todo | Same |
+| 17A.6 | Prepend `# {title}\n` to chunk content before embedding (not stored) | Todo | Python pipeline: embedding input = `f"# {title}\n{chunk.content}"` |
+| 17A.7 | Same title prefix for TypeScript embedding in Edge Function and MCP | Todo | |
+
+**Step 2 -- Search RPC updates**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17A.8 | Verify `ts_rank` / `ts_rank_cd` correctly weights A > B in existing RPCs | Todo | May need no change -- depends on whether the rank functions use the existing weight array |
+| 17A.9 | Update `cerefox_hybrid_search` if rank computation needs adjustment | Todo | |
+| 17A.10 | Update `cerefox_fts_search` if rank computation needs adjustment | Todo | |
+
+**Step 3 -- Reindex script**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17A.11 | Update `cerefox reindex` CLI command to produce weighted tsvectors | Todo | Each document: re-chunk, embed with title prefix, compute weighted tsvector, store |
+| 17A.12 | Add `--dry-run` flag to reindex to preview what would change | Todo | |
+| 17A.13 | Create `scripts/reindex_all.py` convenience script for migration | Todo | Calls `cerefox reindex` for all documents; progress bar; can be interrupted and resumed |
+
+**Step 4 -- Migration**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17A.14 | Create migration `0011_title_boosting.sql` | Todo | ALTER fts column; note in migration that `cerefox reindex` is required after applying |
+| 17A.15 | Update `schema.sql` as canonical source | Todo | |
+| 17A.16 | Update `docs/guides/upgrading.md` with reindex instruction | Todo | |
+
+**Step 5 -- Tests**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17A.17 | Unit tests: verify weighted tsvector includes title at weight A | Todo | |
+| 17A.18 | Unit tests: verify embedding input includes title prefix | Todo | |
+| 17A.19 | E2e test: ingest document, search by title only, verify it's found | Todo | This test should FAIL on pre-17A code and PASS after |
+| 17A.20 | E2e test: title match ranks higher than body-only match | Todo | |
+
+**Step 6 -- Documentation**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17A.21 | Update `docs/solution-design.md` -- search architecture section | Todo | |
+| 17A.22 | Update `CLAUDE.md` -- chunking and search notes | Todo | |
+| 17A.23 | Add entry to Cerefox Decision Log | Todo | Already added for the decision; update with implementation outcome |
+
+**Deliverable**: Searching for a document by its title returns the document as a top result.
+FTS title matches rank ~10x higher than body matches. Semantic search captures the title's
+meaning in the embedding. Existing documents require a one-time `cerefox reindex`.
+
+---
+
 ## Current Focus
 
-**Iteration 15 complete.** Planning iteration 16.
+**Iteration 16 complete** (v0.1.10 through v0.1.13). Iteration 17 planned.
 
-**Iteration 15 shipped:**
-- Audit log (immutable, append-only) with cerefox_create_audit_entry and cerefox_list_audit_entries RPCs
-- New cerefox-get-audit-log Edge Function + cerefox_get_audit_log MCP tool (7 Edge Functions, 6 MCP tools total)
-- Review status (approved/pending_review) with auto-transition based on author_type
-- Version archival (archived flag protects from cleanup)
-- Version diff viewer (unified)
-- Review status filter on search (docs mode)
-- Audit log shows document titles (SQL join in RPC)
-- Author pass-through: MCP agents can set their name via author parameter
-- Author/author_type wired through all access paths (web UI, MCP, Edge Functions)
-- Upgrading guide with links from README and quickstart
-- All 391 unit tests + 9 UI e2e tests pass
+**Iteration 16 shipped:**
+- 16A: MCP consolidation -- cerefox-mcp calls RPCs directly (halves EF invocations)
+- 16B: Metadata search, project names, list_projects (resolves #9)
+- 16C: Usage tracking with opt-in config, requestor attribution
+- 16D: Analytics dashboard (8 Nivo charts, HEB visualizations)
+- Soft delete with trash bin, restore, purge (v0.1.11.1)
+- 405 SSE polling fix (v0.1.12) -- eliminates ~86K/day idle invocations
+- Configurable requestor enforcement (v0.1.13) -- PR #20 from tdebasis
+- 9 Edge Functions, 8 MCP tools, 471 tests (401 unit + 70 e2e)
 
-**Iteration 16 branches and order:**
-1. `feat/mcp-consolidation` -- implement 16A (MCP refactor); merge first; no DB changes
-2. `feat/metadata-search` -- implement 16B; can be developed in parallel with 16A but
-   **must merge after 16A** (16B.10–16B.13 wire new tools into the refactored cerefox-mcp)
-3. `feat/usage-analytics` -- implement 16C then 16D; start after 16A is merged (16C wires
-   logging into the refactored cerefox-mcp tool handlers)
+**Next**: Iteration 17A -- search quality (title boosting)
