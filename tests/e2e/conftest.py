@@ -30,6 +30,25 @@ E2E_EF_PREFIX = "[E2E-EF]"
 E2E_PREFIXES = (E2E_PREFIX, E2E_UI_PREFIX, E2E_MCP_PREFIX, E2E_EF_PREFIX)
 
 
+def retry_until(fn, *, attempts: int = 5, delay: float = 2.0, description: str = ""):
+    """Retry a callable until it returns a truthy value or attempts are exhausted.
+
+    Useful for waiting on Supabase embedding propagation after ingestion.
+    Returns the result of the last call. Raises AssertionError if all attempts fail.
+    """
+    import time as _time
+    result = None
+    for i in range(attempts):
+        result = fn()
+        if result:
+            return result
+        if i < attempts - 1:
+            _time.sleep(delay)
+    raise AssertionError(
+        f"retry_until failed after {attempts} attempts ({description}). Last result: {result}"
+    )
+
+
 def _make_unique_title(label: str) -> str:
     """Generate a unique test title to avoid collisions between runs."""
     return f"{E2E_PREFIX} {label} {uuid.uuid4().hex[:8]}"

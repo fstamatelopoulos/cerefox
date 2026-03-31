@@ -128,14 +128,19 @@ class TestDocumentLifecycle:
         # After the update, we should see author, genre, status
         assert "author" in key_names or "genre" in key_names
 
-        # 1.9 FTS search
-        fts_results = e2e_client.fts_search("Luminous Archipelago", match_count=10)
+        # 1.9 FTS search (retry for embedding propagation)
+        from .conftest import retry_until
+        fts_results = retry_until(
+            lambda: e2e_client.fts_search("Luminous Archipelago", match_count=10),
+            description=f"FTS search for doc {doc_id}",
+        )
         found_ids = [r.get("document_id") for r in fts_results]
         assert doc_id in found_ids, f"FTS did not find doc {doc_id}. Results: {found_ids}"
 
-        # 1.10 Delete document
+        # 1.10 Delete document (soft delete then purge)
         e2e_client.delete_document(doc_id)
-        cleanup.document_ids.remove(doc_id)  # Already deleted
+        e2e_client.purge_document(doc_id)
+        cleanup.document_ids.remove(doc_id)  # Already purged
         deleted = e2e_client.get_document_by_id(doc_id)
         assert deleted is None
 
@@ -334,8 +339,9 @@ class TestVersioningLifecycle:
         assert "Beta content" in current["full_content"]
         assert "Alpha content" not in current["full_content"]
 
-        # Delete document — versions and archived chunks should cascade
+        # Delete document — soft delete then purge; versions and chunks should cascade
         e2e_client.delete_document(doc_id)
+        e2e_client.purge_document(doc_id)
         cleanup.document_ids.remove(doc_id)
 
         assert e2e_client.get_document_by_id(doc_id) is None
@@ -531,16 +537,21 @@ class TestSmallToBigRetrieval:
             "it should be well below the 40 000 char threshold"
         )
 
-        time.sleep(1)
-
+        from .conftest import retry_until
         embedding = e2e_embedder.embed("Luminous Archipelago floating islands")
-        rows = e2e_client.search_docs(
-            "Luminous Archipelago floating islands", embedding, match_count=10
+
+        def _search_for_small_doc():
+            rows = e2e_client.search_docs(
+                "Luminous Archipelago floating islands", embedding, match_count=10
+            )
+            return [r for r in rows if r["document_id"] == result.document_id]
+
+        our_rows = retry_until(
+            _search_for_small_doc,
+            description=f"search_docs for small doc {result.document_id}",
         )
-        our_rows = [r for r in rows if r["document_id"] == result.document_id]
         assert our_rows, (
-            f"Small doc {result.document_id} not found in search results. "
-            f"Returned IDs: {[r['document_id'] for r in rows]}"
+            f"Small doc {result.document_id} not found in search results."
         )
         row = our_rows[0]
         assert row["is_partial"] is False
