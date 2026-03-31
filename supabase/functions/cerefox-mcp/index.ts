@@ -16,7 +16,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  *   Claude Desktop -- npx supergateway --streamableHttp <url> --header "Authorization: Bearer <anon-key>"
  */
 
-import { CORS_HEADERS, jsonResponse, errorResponse, notificationResponse } from "./shared.ts";
+import { CORS_HEADERS, jsonResponse, errorResponse, notificationResponse, makeSupabaseClient } from "./shared.ts";
 import { handleSearch } from "./tools/search.ts";
 import { handleIngest } from "./tools/ingest.ts";
 import { handleListMetadataKeys } from "./tools/metadata.ts";
@@ -67,7 +67,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request (e.g., "Claude Code", "archiver"). Recorded in the usage log for attribution. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or user making this request (e.g., "Claude Code", "archiver"). Recorded in the usage log for attribution. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -107,7 +107,7 @@ const TOOLS = [
         author: {
           type: "string",
           description:
-            'Name of the agent or tool performing the ingestion (e.g., "Claude Code", "Cursor"). Recorded in the audit log for attribution. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or tool performing the ingestion (e.g., "Claude Code", "archiver"). Recorded in the audit log for attribution. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -122,7 +122,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -146,7 +146,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -166,7 +166,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -177,6 +177,7 @@ const TOOLS = [
       "Retrieve audit log entries showing who changed what and when. Supports filtering by document, author, operation type, and time range. Returns entries with document titles, author attribution, size changes, and descriptions.",
     inputSchema: {
       type: "object",
+      required: [],
       properties: {
         document_id: {
           type: "string",
@@ -202,7 +203,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -217,7 +218,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -264,7 +265,7 @@ const TOOLS = [
         requestor: {
           type: "string",
           description:
-            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided.',
+            'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
         },
       },
     },
@@ -335,6 +336,50 @@ async function handleToolsCall(
   const knownTools = TOOLS.map((t) => t.name);
   if (!knownTools.includes(toolName)) {
     return errorResponse(id, -32602, `Unknown tool: ${toolName}`);
+  }
+
+  // Configurable caller identity enforcement.
+  // When require_requestor_identity is "true" in cerefox_config, all tool calls
+  // must include a requestor (reads) or author (writes) parameter.
+  // When requestor_identity_format is set, the value must match the regex.
+  const identityParam = toolName === "cerefox_ingest" ? "author" : "requestor";
+  const identityValue = args[identityParam] as string | undefined;
+
+  try {
+    const supabaseForConfig = makeSupabaseClient();
+    const { data: requireConfig } = await supabaseForConfig.rpc("cerefox_get_config", {
+      p_key: "require_requestor_identity",
+    });
+    const requireIdentity = requireConfig === "true";
+
+    if (requireIdentity) {
+      if (!identityValue || identityValue.trim() === "") {
+        return errorResponse(
+          id,
+          -32602,
+          `Missing required parameter "${identityParam}". Server requires caller identity. ` +
+          `Pass "${identityParam}" with your agent name (e.g., "Claude Code", "archiver").`,
+        );
+      }
+
+      // Check format if configured
+      const { data: formatConfig } = await supabaseForConfig.rpc("cerefox_get_config", {
+        p_key: "requestor_identity_format",
+      });
+      if (formatConfig && typeof formatConfig === "string" && formatConfig.trim() !== "") {
+        const formatRegex = new RegExp(formatConfig);
+        if (!formatRegex.test(identityValue)) {
+          return errorResponse(
+            id,
+            -32602,
+            `Invalid "${identityParam}" format. Value "${identityValue}" does not match ` +
+            `required pattern: ${formatConfig}`,
+          );
+        }
+      }
+    }
+  } catch {
+    // Config check failed -- don't block the tool call
   }
 
   try {

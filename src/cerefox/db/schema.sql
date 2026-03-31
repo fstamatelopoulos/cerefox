@@ -301,7 +301,8 @@ $$;
 -- ── Config table ─────────────────────────────────────────────────────────────
 -- Key-value configuration stored in Postgres. Edge Functions and Python read
 -- this at call time -- no redeploy needed to toggle settings.
--- Currently used for: usage_tracking_enabled (true/false).
+-- Currently used for: usage_tracking_enabled, require_requestor_identity,
+-- requestor_identity_format.
 
 CREATE TABLE IF NOT EXISTS cerefox_config (
     key   TEXT PRIMARY KEY,
@@ -311,6 +312,12 @@ CREATE TABLE IF NOT EXISTS cerefox_config (
 -- Seed default config (idempotent)
 INSERT INTO cerefox_config (key, value)
 VALUES ('usage_tracking_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;
+INSERT INTO cerefox_config (key, value)
+VALUES ('require_requestor_identity', 'false')
+ON CONFLICT (key) DO NOTHING;
+INSERT INTO cerefox_config (key, value)
+VALUES ('requestor_identity_format', '^[a-zA-Z0-9_:.\- ]+$')
 ON CONFLICT (key) DO NOTHING;
 
 

@@ -384,6 +384,44 @@ async def list_tools() -> list[types.Tool]:
 # ── Tool execution ─────────────────────────────────────────────────────────────
 
 
+def _validate_requestor_identity(client: Any, arguments: dict, identity_field: str) -> None:
+    """Check configurable requestor identity enforcement.
+
+    Reads ``require_requestor_identity`` and ``requestor_identity_format`` from
+    ``cerefox_config``.  Raises ``ValueError`` when enforcement is on and the
+    caller identity is missing or does not match the configured pattern.
+
+    Config-read failures are silently ignored so that a missing or broken config
+    row never blocks a tool call.
+    """
+    import re as _re
+
+    try:
+        require = client.get_config("require_requestor_identity")
+    except Exception:
+        return  # config unavailable -- don't block
+
+    if require != "true":
+        return
+
+    identity_value = arguments.get(identity_field)
+    if not identity_value or (isinstance(identity_value, str) and not identity_value.strip()):
+        raise ValueError(
+            f'Missing required parameter "{identity_field}". Server requires caller identity.'
+        )
+
+    try:
+        fmt = client.get_config("requestor_identity_format")
+    except Exception:
+        fmt = None
+
+    if fmt and isinstance(fmt, str) and fmt.strip():
+        if not _re.search(fmt, identity_value):
+            raise ValueError(
+                f'Invalid "{identity_field}" format. Does not match pattern: {fmt}'
+            )
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     deps = _get_deps()
@@ -391,6 +429,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     embedder = deps["embedder"]
     pipeline = deps["pipeline"]
     settings = deps["settings"]
+
+    # Configurable requestor identity enforcement
+    identity_field = "author" if name == "cerefox_ingest" else "requestor"
+    _validate_requestor_identity(client, arguments, identity_field)
 
     if name == "cerefox_search":
         return await _handle_search(client, embedder, settings, arguments)

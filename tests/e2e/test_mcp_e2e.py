@@ -65,15 +65,14 @@ def _unique_title(label: str) -> str:
 class TestMCPHealthAndProtocol:
     """MCP-1 to MCP-3: Protocol-level checks before any tool calls."""
 
-    def test_get_health_check(self, e2e_mcp: MCPClient | None) -> None:
-        """MCP-1: GET / returns a health check JSON payload."""
+    def test_get_returns_405(self, e2e_mcp: MCPClient | None) -> None:
+        """MCP-1: GET / returns 405 (server doesn't support SSE notifications)."""
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
-        data = e2e_mcp.get()
-        assert data.get("status") == "ok"
-        assert data.get("name") == "cerefox"
-        assert "version" in data
-        assert data.get("protocol") == "mcp"
+        import httpx
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            e2e_mcp.get()
+        assert exc_info.value.response.status_code == 405
 
     def test_initialize(self, e2e_mcp: MCPClient | None) -> None:
         """MCP-2: initialize returns correct protocol version and capabilities."""

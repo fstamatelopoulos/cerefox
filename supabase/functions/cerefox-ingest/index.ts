@@ -318,6 +318,34 @@ Deno.serve(async (req: Request) => {
 
   const { title, content, project_name, source = "agent", metadata = {}, update_if_exists = false, author = "agent", author_type = "agent" } = body;
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // Configurable requestor enforcement
+  {
+    const identityField = "author";
+    const identityValue = body[identityField as keyof IngestRequest] as string | undefined;
+    const { data: reqConfig } = await supabase.rpc("cerefox_get_config", { p_key: "require_requestor_identity" });
+    if (reqConfig === "true") {
+      if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {
+        return new Response(
+          JSON.stringify({ error: `Missing required parameter "${identityField}". Server requires caller identity.` }),
+          { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+        );
+      }
+      const { data: fmtConfig } = await supabase.rpc("cerefox_get_config", { p_key: "requestor_identity_format" });
+      if (fmtConfig && typeof fmtConfig === "string" && fmtConfig.trim() !== "") {
+        if (!new RegExp(fmtConfig).test(identityValue)) {
+          return new Response(
+            JSON.stringify({ error: `Invalid "${identityField}" format. Does not match pattern: ${fmtConfig}` }),
+            { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+          );
+        }
+      }
+    }
+  }
+
   if (!title?.trim() || !content?.trim()) {
     return new Response(JSON.stringify({ error: "title and content are required" }), {
       status: 400,
@@ -332,10 +360,6 @@ Deno.serve(async (req: Request) => {
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   const contentHash = await sha256hex(normalizeContent(content));
   const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };

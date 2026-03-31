@@ -388,6 +388,49 @@ cerefox config-get usage_tracking_enabled
 
 ---
 
+## Requestor Identity Enforcement
+
+By default, the `requestor` parameter on MCP read tools (and `author` on ingest) is
+optional. When omitted, it defaults to `"mcp-agent"`. This means the usage log shows
+`"mcp-agent"` for all calls that don't explicitly identify themselves, making analytics
+less useful in multi-agent setups.
+
+You can optionally enforce caller identification so that all MCP tool calls must include
+a requestor/author identity. Calls without identity receive a JSON-RPC `-32602` error
+with a helpful message telling the agent what to provide.
+
+### Enabling enforcement
+
+```bash
+# Require all MCP tool calls to include requestor/author
+cerefox config-set require_requestor_identity true
+
+# Optionally override the default naming format (regex)
+# Default: ^[a-zA-Z0-9_:.\- ]+$ (letters, numbers, underscores, colons, dots, hyphens, spaces)
+cerefox config-set requestor_identity_format "^[a-z]+:[a-z]+$"
+```
+
+### Format examples
+
+| Format regex | Allows | Use case |
+|-------------|--------|----------|
+| `^[a-zA-Z0-9_:.\- ]+$` | Letters, numbers, underscores, colons, dots, hyphens, spaces | **Default** -- covers "Claude Code", "mcp-agent", "personal:steward", "user" |
+| `^[a-z]+:[a-z]+$` | `conclave:agent` format only | Multi-conclave setups (e.g., `personal:steward`) |
+| (empty string) | Any non-empty string | No format restriction |
+
+The format is applied to both `requestor` (read tools) and `author` (ingest).
+
+### Disabling enforcement
+
+```bash
+cerefox config-set require_requestor_identity false
+```
+
+When disabled, the requestor parameter remains optional with the `"mcp-agent"` default.
+This is the default state -- no configuration needed for backward compatibility.
+
+---
+
 ## Checking Your Configuration
 
 Run the status script to verify everything is connected:

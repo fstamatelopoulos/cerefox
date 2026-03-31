@@ -1432,7 +1432,7 @@ SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    v_allowed TEXT[] := ARRAY['usage_tracking_enabled'];
+    v_allowed TEXT[] := ARRAY['usage_tracking_enabled', 'require_requestor_identity', 'requestor_identity_format'];
 BEGIN
     IF NOT (p_key = ANY(v_allowed)) THEN
         RAISE EXCEPTION 'Unknown config key: %. Allowed keys: %', p_key, v_allowed;

@@ -48,6 +48,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const body = await req.json().catch(() => ({}));
 
+    // Configurable requestor enforcement
+    const identityField = "requestor";
+    const identityValue = body[identityField];
+    const { data: reqConfig } = await supabase.rpc("cerefox_get_config", { p_key: "require_requestor_identity" });
+    if (reqConfig === "true") {
+      if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {
+        return new Response(
+          JSON.stringify({ error: `Missing required parameter "${identityField}". Server requires caller identity.` }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+        );
+      }
+      const { data: fmtConfig } = await supabase.rpc("cerefox_get_config", { p_key: "requestor_identity_format" });
+      if (fmtConfig && typeof fmtConfig === "string" && fmtConfig.trim() !== "") {
+        if (!new RegExp(fmtConfig).test(identityValue)) {
+          return new Response(
+            JSON.stringify({ error: `Invalid "${identityField}" format. Does not match pattern: ${fmtConfig}` }),
+            { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    }
+
     const params: Record<string, unknown> = {};
     if (body.document_id) params.p_document_id = body.document_id;
     if (body.author) params.p_author = body.author;

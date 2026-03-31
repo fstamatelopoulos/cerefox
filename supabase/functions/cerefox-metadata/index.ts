@@ -41,6 +41,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Configurable requestor enforcement
+    const identityField = "requestor";
+    const identityValue = body[identityField];
+    const { data: reqConfig } = await supabase.rpc("cerefox_get_config", { p_key: "require_requestor_identity" });
+    if (reqConfig === "true") {
+      if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {
+        return new Response(
+          JSON.stringify({ error: `Missing required parameter "${identityField}". Server requires caller identity.` }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+        );
+      }
+      const { data: fmtConfig } = await supabase.rpc("cerefox_get_config", { p_key: "requestor_identity_format" });
+      if (fmtConfig && typeof fmtConfig === "string" && fmtConfig.trim() !== "") {
+        if (!new RegExp(fmtConfig).test(identityValue)) {
+          return new Response(
+            JSON.stringify({ error: `Invalid "${identityField}" format. Does not match pattern: ${fmtConfig}` }),
+            { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    }
+
     const { data, error } = await supabase.rpc("cerefox_list_metadata_keys");
 
     if (error) {
