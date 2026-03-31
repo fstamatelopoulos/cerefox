@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [v0.1.12] -- 2026-03-30
+
+Fix excessive Edge Function invocations from MCP SSE polling.
+
+### Fixed
+- **`cerefox-mcp` GET endpoint returns 405** instead of 200. Per MCP spec (2025-03-26), servers that don't support SSE notifications MUST return 405 Method Not Allowed for GET requests. Our server was returning 200, which MCP clients interpreted as "SSE supported" and maintained persistent polling at ~1 GET/sec (~86K invocations/day per client). The 405 response tells clients this server is POST-only, eliminating all idle polling.
+
+### Added
+- **MCP config templates** in `examples/mcp-configs/`: copy-pasteable `.mcp.json` files for Claude Code (`mcp-remote`), Claude Desktop (`supergateway`), Cursor (native HTTP), and local stdio. Contributed by @tdebasis (PR #19, resolves #17).
+- **`mcp-remote` recommended** for Claude Code remote MCP: `mcp-remote --header` works with Supabase Edge Functions, bypassing the GoTrue OAuth discovery conflict. Updated in `docs/guides/connect-agents.md` with SSE polling warning.
+
+---
+
 ## [v0.1.11.1] -- 2026-03-29
 
 Soft delete with trash bin, restore, and purge.
