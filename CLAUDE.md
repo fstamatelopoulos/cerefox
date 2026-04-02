@@ -250,8 +250,11 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 |---|---|---|
 | Claude Code | `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <anon-key>"` | Direct Streamable HTTP |
 | Cursor | `url` + `headers.Authorization` in mcp.json | Same as Claude Code |
-| Claude Desktop | `npx -y supergateway --streamableHttp <url> --header "Authorization: Bearer <anon-key>"` | `supergateway` is required; `mcp-remote` does NOT work (GoTrue OAuth conflict) |
+| OpenAI Codex CLI | `url` + `bearer_token_env_var` in `~/.codex/config.toml` | Direct Streamable HTTP; TOML config; **tested, working** |
+| Gemini CLI | `httpUrl` + `headers` in `~/.gemini/settings.json` | Direct Streamable HTTP; **untested, expected to work** |
+| Claude Desktop | `npx supergateway` or `npx mcp-remote` (see connect-agents.md) | `supergateway` tested and working; `mcp-remote` may work (untested for Desktop) |
 | ChatGPT | Custom GPT + GPT Actions (OpenAPI spec pointing at Edge Functions) | Streamable HTTP MCP not supported by ChatGPT |
+| ChatGPT Desktop | Developer Mode MCP (beta) or Custom GPT + GPT Actions | Dev Mode requires Plus/Pro; **untested for MCP path** |
 | Claude.ai web | Not supported | No native Streamable HTTP MCP |
 
 ---

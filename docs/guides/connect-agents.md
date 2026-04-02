@@ -23,14 +23,16 @@ client; you can also run both in parallel.
 
 | Client | Path | Search | Requirements / caveats |
 |--------|------|--------|-----------------------|
-| Claude Desktop (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | Node.js for `npx supergateway`; no Python needed |
+| Claude Desktop (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | Node.js for `npx supergateway` or `npx mcp-remote`; no Python needed |
 | Claude Code (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
 | Cursor (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
+| OpenAI Codex CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key env var; TOML config |
 | ChatGPT (chatgpt.com or desktop) | Path B — Custom GPT → Edge Functions | Hybrid | ChatGPT Plus required |
 | Claude Desktop (local) | Path A-Local — `cerefox mcp` | Hybrid | Local alternative; Python + uv + local clone; zero Edge Function invocations |
 | Claude Code (local) | Path A-Local — `cerefox mcp` | Hybrid | Local alternative; Python + uv + local clone; zero Edge Function invocations |
 | Cursor (local) | Path A-Local — `cerefox mcp` | Hybrid | Local alternative; Python + uv + local clone; zero Edge Function invocations |
 | Cloud Claude (claude.ai web) | Remote Supabase MCP | FTS only | No install; search quality limited |
+| Gemini CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
 | curl / scripts | Path B — Edge Functions directly | Hybrid | Direct HTTP; no client needed |
 | Custom Python agents | Python SDK directly | Hybrid | Local Python required |
 
@@ -40,7 +42,11 @@ client; you can also run both in parallel.
 > **Cloud hybrid for all clients (future)**: deploying the MCP server to Cloud Run would give
 > cloud clients (claude.ai, chatgpt.com) full hybrid search. Tracked in `docs/TODO.md`.
 
-> **Perplexity** does not support MCP and has no integration path at this time.
+> **Perplexity** supports stdio-only MCP on macOS Desktop (via Helper App). Remote MCP is
+> "coming soon." Perplexity's CTO has signalled a strategic shift away from MCP (March 2026),
+> so API-based integration may be the long-term path. Not a priority.
+>
+> **Gemini web** (gemini.google.com) does not support custom MCP servers. No integration path.
 
 > **Quick start with templates:** Copy-pasteable `.mcp.json` templates for each client are
 > available in [`examples/mcp-configs/`](../../examples/mcp-configs/). Pick the one for your
@@ -63,8 +69,8 @@ client; you can also run both in parallel.
 **For Path A-Remote (remote MCP Edge Function) — recommended:**
 - `cerefox-mcp` Edge Function deployed (`npx supabase functions deploy cerefox-mcp`)
 - Your **anon key**: Supabase Dashboard → Project Settings → API → `anon public`
-- For Claude Desktop: [Node.js](https://nodejs.org) installed (for `npx supergateway`)
-- For Claude Code: no extra dependencies (native HTTP transport)
+- For Claude Desktop: [Node.js](https://nodejs.org) installed (for `npx supergateway` or `npx mcp-remote`)
+- For Claude Code: [Node.js](https://nodejs.org) for `npx mcp-remote` (recommended), or no extra deps for native HTTP
 
 **For Path B (Edge Functions / GPT Actions) only:**
 - Supabase Edge Functions deployed: `cerefox-search`, `cerefox-ingest`, `cerefox-metadata`,
@@ -282,11 +288,11 @@ npx supabase functions deploy cerefox-mcp
 
 ### Path A-Remote: Claude Code
 
-> **Recommended: use `mcp-remote` stdio bridge.** Claude Code's native Streamable HTTP
-> transport maintains an SSE connection that polls the Edge Function at ~5 GET requests/second
-> even when idle — burning ~130-198K invocations/day against your Supabase quota. Using
-> `mcp-remote` as a stdio bridge eliminates this overhead while keeping all functionality
-> intact. See [issue #17](https://github.com/fstamatelopoulos/cerefox/issues/17) for details.
+> **Recommended: use `mcp-remote` stdio bridge.** While the SSE idle polling issue has been
+> fixed server-side (v0.1.12 -- the server returns 405 for GET per the MCP spec), `mcp-remote`
+> is still recommended because it cleanly bypasses Supabase's GoTrace OAuth discovery conflict
+> via `--header`. See [issue #17](https://github.com/fstamatelopoulos/cerefox/issues/17) for
+> the full investigation.
 
 **Option 1 — `mcp-remote` (recommended):**
 
@@ -309,10 +315,10 @@ Add to your project's `.mcp.json` (or copy
 }
 ```
 
-**Option 2 — native HTTP (higher Edge Function cost):**
+**Option 2 — native HTTP:**
 
-Claude Code also supports Streamable HTTP natively. This works but incurs significant idle
-invocation overhead (see warning above).
+Claude Code also supports Streamable HTTP natively. This works and no longer has idle polling
+overhead (fixed in v0.1.12). However, `mcp-remote` is still preferred for the OAuth bypass.
 
 ```bash
 claude mcp add --transport http cerefox \
@@ -363,15 +369,14 @@ project-scoped access.
 
 ### Path A-Remote: Claude Desktop
 
-Claude Desktop does not support remote MCP servers natively — it requires a local subprocess
-(`command` field). Use [`supergateway`](https://www.npmjs.com/package/supergateway) as a
-stdio-to-HTTP bridge. It translates between Claude Desktop's stdio transport and the Edge
-Function's Streamable HTTP endpoint.
+Claude Desktop does not support remote MCP servers natively -- it requires a local subprocess
+(`command` field). Use [`supergateway`](https://www.npmjs.com/package/supergateway) or
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote) as a stdio-to-HTTP bridge.
 
-> **Why supergateway and not `mcp-remote`?** `mcp-remote` 0.1.x proactively discovers OAuth
-> servers at the Supabase root domain and fails when Supabase's built-in auth (GoTrue) rejects
-> dynamic client registration. `supergateway` does not attempt OAuth — it connects directly
-> with the Bearer token. Tested and confirmed working with Supabase Edge Functions.
+> **`supergateway` vs `mcp-remote` for Claude Desktop:** `mcp-remote --header` works for
+> Claude Code (tested). For Claude Desktop, `supergateway` is the tested and confirmed option.
+> `mcp-remote` may also work for Claude Desktop now that the 405 SSE fix is in place, but
+> this has not been verified. If you try it, use the same config as Claude Code.
 
 **Requirements:** [Node.js](https://nodejs.org) installed (for `npx`).
 
@@ -402,6 +407,85 @@ Replace `<your-project-ref>` and `<your-anon-key>` with your actual values.
 - Restart Claude Desktop fully (Cmd+Q on macOS) after saving the config.
 - `-y` tells npx to auto-install `supergateway` without prompting.
 - No Python, no local repo clone, no `.env` file needed — just the URL and anon key.
+
+---
+
+### Path A-Remote: OpenAI Codex CLI
+
+[Codex](https://github.com/openai/codex) supports remote MCP servers natively via Streamable
+HTTP. Configuration uses TOML (not JSON like most other MCP clients).
+
+**Step 1 — Set the anon key as an environment variable:**
+
+Codex references Bearer tokens by environment variable name, not by value. Add to your
+`~/.zshrc` (or `~/.bashrc`):
+
+```bash
+export CEREFOX_ANON_KEY="<your-anon-key>"
+```
+
+Then reload: `source ~/.zshrc`
+
+**Step 2 — Add the server to `~/.codex/config.toml`:**
+
+```toml
+[mcp_servers.cerefox]
+url = "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp"
+bearer_token_env_var = "CEREFOX_ANON_KEY"
+```
+
+Replace `<your-project-ref>` with your Supabase project ref.
+
+**Step 3 — Verify:**
+
+Launch Codex and use the `/mcp` slash command to confirm the `cerefox` server is connected
+and all 8 tools are listed.
+
+**Notes:**
+- `bearer_token_env_var` is the **name** of the env var (e.g. `"CEREFOX_ANON_KEY"`), not the
+  token itself. Codex reads the value at runtime.
+- No Python, no local repo clone needed — just the URL and anon key.
+- No idle SSE polling cost — the 405 GET fix in `cerefox-mcp` prevents it.
+
+---
+
+### Path A-Remote: Gemini CLI
+
+[Gemini CLI](https://github.com/google-gemini/gemini-cli) supports Streamable HTTP with static
+Bearer token headers natively — no bridge needed. Architecturally identical to Claude Code and
+Cursor.
+
+**Config file location:**
+- Global: `~/.gemini/settings.json`
+- Project: `.gemini/settings.json` in the project root
+
+Add (or merge into) the file:
+
+```json
+{
+  "mcpServers": {
+    "cerefox": {
+      "httpUrl": "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
+      "headers": {
+        "Authorization": "Bearer <your-anon-key>"
+      }
+    }
+  }
+}
+```
+
+Replace `<your-project-ref>` and `<your-anon-key>` with your actual values.
+
+**Verify:**
+
+Launch `gemini` and use `/mcp` to confirm tools are listed, or ask:
+> "What tools do you have available?"
+
+**Notes:**
+- Use `httpUrl` (not `url`) for Streamable HTTP transport.
+- Static headers bypass OAuth discovery entirely — no GoTrue conflict.
+- No Python, no local repo clone needed.
+- Status: **untested** — expected to work based on architecture match with Claude Code/Cursor.
 
 ---
 
