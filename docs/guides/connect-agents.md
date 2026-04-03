@@ -134,7 +134,7 @@ Always set your requestor/author parameter to identify yourself.
 For the full tool reference, search Cerefox for "How AI Agents Use Cerefox".
 ```
 
-> **Agent reference docs**: `AGENT_GUIDE.md` (comprehensive) and `CEREFOX_SKILL.md` (quick
+> **Agent reference docs**: `AGENT_GUIDE.md` (comprehensive) and `AGENT_QUICK_REFERENCE.md` (quick
 > reference) in the repo root contain the full tool reference for AI agents. These are also
 > ingested into the Cerefox KB via `sync_docs.py`, so agents can find them by searching.
 

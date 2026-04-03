@@ -1,7 +1,7 @@
 # How AI Agents Use Cerefox
 
 Reference guide for AI agents interacting with the Cerefox knowledge base via MCP tools.
-Read this before your first interaction. For a minimal quick reference, see `CEREFOX_SKILL.md`.
+Read this before your first interaction. For a minimal quick reference, see `AGENT_QUICK_REFERENCE.md`.
 
 ---
 

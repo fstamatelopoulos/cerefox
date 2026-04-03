@@ -30,7 +30,7 @@ from cerefox.ingestion.pipeline import IngestionPipeline
 _TARGETS = [
     "README.md",          # project overview
     "AGENT_GUIDE.md",     # comprehensive agent reference for using Cerefox tools
-    "CEREFOX_SKILL.md",   # minimal quick reference card for AI agents
+    "AGENT_QUICK_REFERENCE.md",   # minimal quick reference card for AI agents
     "docs/",              # all guides, plans, specs, and research notes (recursively)
 ]
 
@@ -49,7 +49,7 @@ def _collect_files(repo_root: Path) -> list[tuple[Path, str]]:
     files: list[tuple[Path, str]] = []
 
     # Root-level Markdown files
-    for root_file in ["README.md", "AGENT_GUIDE.md", "CEREFOX_SKILL.md"]:
+    for root_file in ["README.md", "AGENT_GUIDE.md", "AGENT_QUICK_REFERENCE.md"]:
         path = repo_root / root_file
         if path.exists():
             files.append((path, root_file))
