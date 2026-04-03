@@ -336,6 +336,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 ## Quick Reference
 
 - **Docs**: `docs/plan.md` for current status, `docs/TODO.md` for backlog
+- **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `CEREFOX_SKILL.md` (minimal quick reference card -- 8 tools, key rules, workflows)
 - **Schema**: `src/cerefox/db/schema.sql`
 - **Config**: `.env` file or environment variables (see `src/cerefox/config.py`)
 - **Max response size**: defaults to 200000 bytes (MCP/Edge Function paths only; web UI and CLI are unlimited; configurable via `CEREFOX_MAX_RESPONSE_BYTES`)
