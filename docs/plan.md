@@ -1540,6 +1540,68 @@ meaning in the embedding. Existing documents require a one-time `cerefox reindex
 
 ---
 
+### 17B: ID-Based Document Updates in Ingest
+
+**Goal**: Add optional `document_id` parameter to `cerefox_ingest` for deterministic
+updates. Currently, updates rely on title matching (`update_if_exists: true`), which is
+fragile (typos, case changes, duplicates create new documents instead of updating).
+
+**Design decisions** (see `docs/research/search-quality-title-boosting.md`):
+- `document_id` is optional. When provided, update that specific document by ID.
+- When `document_id` is provided but does not exist: return error (don't create with client-provided IDs).
+- When `document_id` is provided and `update_if_exists: false`: update anyway (ID is deterministic),
+  but include a warning note in the response: `"note": "document_id provided; update_if_exists flag was overridden"`.
+- When `document_id` is not provided: current behavior unchanged (title match via `update_if_exists`).
+- No separate `cerefox_update` tool -- extending `cerefox_ingest` keeps the tool surface at 8.
+
+**Agent workflow after 17A + 17B:**
+1. `cerefox_search("topic")` -- finds doc with `[id: abc123]` (title in results from 17A)
+2. `cerefox_get_document(document_id: "abc123")` -- gets full content
+3. `cerefox_ingest(document_id: "abc123", title: "...", content: "...")` -- updates exactly that doc
+
+#### Tasks
+
+**Step 1 -- MCP and Edge Function changes**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17B.1 | Add optional `document_id` to `cerefox_ingest` MCP tool schema | Todo | Not in `required` array; description explains ID-based update behavior |
+| 17B.2 | Update `tools/ingest.ts` handler: if `document_id` provided, look up by ID instead of title | Todo | Error if document not found; skip hash dedup (ID is explicit intent to update) |
+| 17B.3 | Handle `update_if_exists: false` + `document_id` conflict: update anyway, add warning note to response | Todo | |
+| 17B.4 | Update `cerefox-ingest` primitive Edge Function with same logic | Todo | Same behavior for GPT Actions path |
+| 17B.5 | Update local MCP server `_handle_ingest` with same logic | Todo | |
+| 17B.6 | Update Python `IngestionPipeline.ingest_text()` to accept optional `document_id` | Todo | Pass through to the RPC; skip title-based lookup when ID provided |
+
+**Step 2 -- REST API**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17B.7 | Update `POST /api/v1/ingest` to accept optional `document_id` in request body | Todo | Web UI ingest form doesn't need this (uses title); API supports it for programmatic access |
+
+**Step 3 -- Tests**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17B.8 | E2e test: ingest with `document_id` updates the correct document | Todo | Verify content changes, version created |
+| 17B.9 | E2e test: ingest with nonexistent `document_id` returns error | Todo | |
+| 17B.10 | E2e test: ingest with `document_id` + `update_if_exists: false` still updates, includes warning | Todo | |
+| 17B.11 | E2e test: ingest without `document_id` preserves current title-matching behavior | Todo | Regression test |
+
+**Step 4 -- Documentation**
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17B.12 | Update `docs/guides/connect-agents.md` MCP tool table with `document_id` param | Todo | |
+| 17B.13 | Update GPT Actions OpenAPI schema with optional `document_id` on ingest | Todo | |
+| 17B.14 | Add examples to tool description showing both workflows (title-based vs ID-based) | Todo | |
+| 17B.15 | Update `CLAUDE.md` with ingest ID-based update pattern | Todo | |
+| 17B.16 | Add entry to Cerefox Decision Log | Todo | |
+
+**Deliverable**: Agents can update documents by ID (deterministic) or by title (existing behavior).
+The search -> get -> update workflow is fully supported without title-matching fragility.
+
+---
+
 ## Current Focus
 
 **Iteration 16 complete** (v0.1.10 through v0.1.13). Iteration 17 planned.
