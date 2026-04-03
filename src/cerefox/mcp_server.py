@@ -513,7 +513,8 @@ async def _handle_search(
             if row.get("is_partial")
             else ""
         )
-        block = f"## {row['doc_title']} (score: {row['best_score']:.3f}{partial_note})\n\n{row['full_content']}"
+        doc_id = f" [id: {row['document_id']}]" if row.get('document_id') else ""
+        block = f"## {row['doc_title']}{doc_id} (score: {row['best_score']:.3f}{partial_note})\n\n{row['full_content']}"
         block_bytes = len(block.encode())
         if total_bytes + block_bytes > max_bytes:
             truncated = True
