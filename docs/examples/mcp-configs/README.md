@@ -16,7 +16,7 @@ placeholders with your Supabase project values.
 
 1. Copy the template for your client:
    ```bash
-   cp examples/mcp-configs/claude-code-remote.json /path/to/your/project/.mcp.json
+   cp docs/examples/mcp-configs/claude-code-remote.json /path/to/your/project/.mcp.json
    ```
 
 2. Replace the placeholders:

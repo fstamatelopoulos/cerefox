@@ -49,7 +49,7 @@ client; you can also run both in parallel.
 > **Gemini web** (gemini.google.com) does not support custom MCP servers. No integration path.
 
 > **Quick start with templates:** Copy-pasteable `.mcp.json` templates for each client are
-> available in [`examples/mcp-configs/`](../../examples/mcp-configs/). Pick the one for your
+> available in [`examples/mcp-configs/`](../examples/mcp-configs/). Pick the one for your
 > client, replace the placeholders, and you're connected.
 
 ---
@@ -297,7 +297,7 @@ npx supabase functions deploy cerefox-mcp
 **Option 1 — `mcp-remote` (recommended):**
 
 Add to your project's `.mcp.json` (or copy
-[`examples/mcp-configs/claude-code-remote.json`](../../examples/mcp-configs/claude-code-remote.json)):
+[`examples/mcp-configs/claude-code-remote.json`](../examples/mcp-configs/claude-code-remote.json)):
 
 ```json
 {
