@@ -1602,6 +1602,45 @@ The search -> get -> update workflow is fully supported without title-matching f
 
 ---
 
+## Iteration 18: Unify Local MCP Server in TypeScript (Architectural)
+
+**Goal**: Rewrite the local MCP server from Python to TypeScript to share code with the
+`cerefox-mcp` Edge Function and eliminate the dual-implementation problem.
+
+**Motivation**: Every feature added to the MCP tool handlers must be implemented twice --
+once in TypeScript (`cerefox-mcp/tools/*.ts`) and once in Python (`mcp_server.py`). This has
+caused repeated drift and bugs:
+- Missing document IDs in local MCP search results (fixed post-16A)
+- Requestor enforcement needed adding to both paths independently
+- Usage logging wired separately into both
+- Every new tool requires parallel implementation
+
+**Scope**:
+- Rewrite `mcp_server.py` as a TypeScript stdio MCP server that imports from a shared
+  library with the Edge Function tool handlers
+- Create a `_shared/` directory (or npm workspace) for code shared between `cerefox-mcp`
+  (Edge Function) and the local MCP server
+- Shared code: tool handlers, validation, result formatting, requestor enforcement
+- Non-shared: transport layer (Edge Function uses HTTP, local uses stdio)
+- CLI and web app remain Python -- they have deep Python dependencies (ingestion pipeline,
+  embedders, file converters, FastAPI)
+- The local MCP server is the only piece that benefits from TypeScript because it's the only
+  piece with a parallel TypeScript implementation
+
+**User-facing change**: `cerefox mcp` command changes from launching a Python process to
+launching a Node.js process. Config files update from `uv run cerefox mcp` to
+`npx cerefox-mcp-local` (or similar). Existing functionality unchanged.
+
+**Prerequisites**: Iteration 17 (title boosting + ID-based ingest) should be complete first
+so the shared code includes these features from the start.
+
+**Estimated effort**: Medium-large. The tool handler logic already exists in TypeScript; the
+work is extracting it into a shared library and creating the stdio transport wrapper.
+
+Detailed task breakdown will be created when this iteration is started.
+
+---
+
 ## Current Focus
 
 **Iteration 16 complete** (v0.1.10 through v0.1.13). Iteration 17 planned.
