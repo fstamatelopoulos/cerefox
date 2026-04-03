@@ -150,9 +150,13 @@ For full setup details (remote MCP, Cursor, cloud clients, GPT Actions), see `do
 - Re-embed existing content: `cerefox reindex`
 - Create a backup: `python scripts/backup_create.py`
 - Sync project docs into your knowledge base: `python scripts/sync_docs.py`
+  (this also ingests the agent reference guides -- `AGENT_GUIDE.md` and `CEREFOX_SKILL.md` --
+  so your AI agents can search for "How AI Agents Use Cerefox" and learn how to use the tools)
 - See all commands: `cerefox --help`
 
 **More guides:**
+- `AGENT_GUIDE.md` -- comprehensive reference for AI agents using Cerefox tools
+- `CEREFOX_SKILL.md` -- minimal quick reference card for AI agents
 - `docs/guides/setup-supabase.md` -- detailed Supabase setup
 - `docs/guides/configuration.md` -- all configuration options
 - `docs/guides/connect-agents.md` -- connecting AI agents via MCP and Edge Functions

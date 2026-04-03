@@ -126,11 +126,17 @@ Once configured, every Path A client has these tools:
 Set this as Custom Instructions / System Prompt in your client:
 
 ```
-You have access to a personal knowledge base via the cerefox_search tool.
+You have access to a personal knowledge base via Cerefox MCP tools.
 When answering questions, always call cerefox_search first with a relevant query.
 Cite doc_title for every claim drawn from the knowledge base.
 Use cerefox_ingest to save anything the user asks you to remember.
+Always set your requestor/author parameter to identify yourself.
+For the full tool reference, search Cerefox for "How AI Agents Use Cerefox".
 ```
+
+> **Agent reference docs**: `AGENT_GUIDE.md` (comprehensive) and `CEREFOX_SKILL.md` (quick
+> reference) in the repo root contain the full tool reference for AI agents. These are also
+> ingested into the Cerefox KB via `sync_docs.py`, so agents can find them by searching.
 
 ### Path A verification prompts
 

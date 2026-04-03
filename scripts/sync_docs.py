@@ -28,8 +28,10 @@ from cerefox.ingestion.pipeline import IngestionPipeline
 
 # Files / directories to sync, relative to the repo root.
 _TARGETS = [
-    "README.md",        # project overview
-    "docs/",            # all guides, plans, specs, and research notes (recursively)
+    "README.md",          # project overview
+    "AGENT_GUIDE.md",     # comprehensive agent reference for using Cerefox tools
+    "CEREFOX_SKILL.md",   # minimal quick reference card for AI agents
+    "docs/",              # all guides, plans, specs, and research notes (recursively)
 ]
 
 
@@ -46,9 +48,11 @@ def _collect_files(repo_root: Path) -> list[tuple[Path, str]]:
     """Return (absolute_path, relative_source_path) pairs to sync."""
     files: list[tuple[Path, str]] = []
 
-    readme = repo_root / "README.md"
-    if readme.exists():
-        files.append((readme, "README.md"))
+    # Root-level Markdown files
+    for root_file in ["README.md", "AGENT_GUIDE.md", "CEREFOX_SKILL.md"]:
+        path = repo_root / root_file
+        if path.exists():
+            files.append((path, root_file))
 
     docs_dir = repo_root / "docs"
     if docs_dir.is_dir():
