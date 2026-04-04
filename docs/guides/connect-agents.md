@@ -109,7 +109,7 @@ Once configured, every Path A client has these tools:
 | Tool | Description |
 |------|-------------|
 | `cerefox_search` | Hybrid (FTS + semantic) document-level search. Filter by `project_name` or `metadata_filter`. |
-| `cerefox_ingest` | Save a note or document to the knowledge base. Accepts optional `author` and `project_name`. |
+| `cerefox_ingest` | Save a note or document to the knowledge base. Pass `document_id` to update by ID (deterministic); or `update_if_exists: true` to update by title match. Accepts optional `author` and `project_name`. |
 | `cerefox_list_metadata_keys` | List all metadata keys in use across documents |
 | `cerefox_get_document` | Retrieve the full content of a document (current or archived version) |
 | `cerefox_list_versions` | List all archived versions of a document |
@@ -632,6 +632,13 @@ paths:
                   type: string
                 content:
                   type: string
+                document_id:
+                  type: string
+                  description: >
+                    UUID of an existing document to update. When provided, updates
+                    that document directly regardless of update_if_exists. Returns
+                    an error if the document does not exist. Workflow: search for
+                    the document, note the document_id, pass it here.
                 project_name:
                   type: string
                 source:
@@ -646,7 +653,7 @@ paths:
                     When true, update an existing document with the same title
                     instead of creating a new one. The previous content is archived
                     as a version. If content is unchanged, the document is skipped
-                    (no re-indexing).
+                    (no re-indexing). Ignored when document_id is provided.
                 author:
                   type: string
                   description: >
@@ -1030,10 +1037,11 @@ Save a note or document to the knowledge base.
 |-----------|------|---------|-------------|
 | `title` | string | required | Document title |
 | `content` | string | required | Markdown content |
+| `document_id` | string | optional | UUID of an existing document to update. When provided, updates that document directly regardless of `update_if_exists`. Returns an error if the document does not exist. Workflow: `cerefox_search` → note `[id: ...]` → pass here. |
 | `project_name` | string | optional | Assign to a project (created if absent) |
 | `source` | string | `"agent"` | Origin label |
 | `metadata` | object | `{}` | Arbitrary JSON metadata |
-| `update_if_exists` | boolean | `false` | When true, update an existing document with the same title instead of creating a new one. The previous version is archived automatically. Content is re-indexed only if it changed. |
+| `update_if_exists` | boolean | `false` | When true, update an existing document with the same title instead of creating a new one. The previous version is archived automatically. Content is re-indexed only if it changed. Ignored when `document_id` is provided. |
 
 ### `cerefox_list_metadata_keys`
 

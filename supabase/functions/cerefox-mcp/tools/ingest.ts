@@ -201,6 +201,7 @@ export async function handleIngest(
 ): Promise<string> {
   const title = (args.title as string | undefined)?.trim();
   const content = args.content as string | undefined;
+  const document_id = (args.document_id as string | undefined) ?? null;
   const project_name = args.project_name as string | undefined;
   const source = (args.source as string | undefined) ?? "agent";
   const metadata = (args.metadata as Record<string, unknown> | undefined) ?? {};
@@ -215,6 +216,76 @@ export async function handleIngest(
   const supabase = makeSupabaseClient();
   const contentHash = await sha256hex(normalizeContent(content));
   const reviewStatus = author_type === "agent" ? "pending_review" : "approved";
+
+  // ── ID-based update path ─────────────────────────────────────────────────
+  // When document_id is provided, update that exact document regardless of
+  // update_if_exists. Skip hash dedup -- explicit ID = explicit intent to update.
+  if (document_id) {
+    const { data: existing } = await supabase
+      .from("cerefox_documents")
+      .select("id, title, content_hash")
+      .eq("id", document_id)
+      .is("deleted_at", null)
+      .limit(1);
+
+    if (!existing?.length) {
+      throw new Error(`Document not found: ${document_id}`);
+    }
+
+    const existingDoc = existing[0];
+
+    // Content unchanged -- skip re-indexing
+    if (existingDoc.content_hash === contentHash) {
+      const note = update_if_exists ? "" : " Note: update_if_exists flag was overridden by document_id.";
+      return `Document already up-to-date: "${existingDoc.title}" (id: ${existingDoc.id}). Content hash unchanged.${note}`;
+    }
+
+    // Content changed -- re-chunk, re-embed, ingest via RPC
+    const chunks = chunkMarkdown(content);
+    if (chunks.length === 0) {
+      throw new Error("Content produced no chunks");
+    }
+
+    const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+    const embeddings = await embedBatch(texts, openaiKey);
+    const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
+
+    const chunkData = chunks.map((chunk, i) => ({
+      chunk_index: i,
+      heading_path: chunk.heading_path,
+      heading_level: chunk.heading_level,
+      title: chunk.title,
+      content: chunk.content,
+      char_count: chunk.char_count,
+      embedding: embeddings[i],
+      embedder: OPENAI_MODEL,
+    }));
+
+    const { error: ingestErr } = await supabase.rpc("cerefox_ingest_document", {
+      p_document_id: existingDoc.id,
+      p_title: title,
+      p_source: source,
+      p_content_hash: contentHash,
+      p_metadata: metadata,
+      p_review_status: reviewStatus,
+      p_chunks: chunkData,
+      p_author: author,
+      p_author_type: author_type,
+      p_source_label: source,
+    });
+
+    if (ingestErr) {
+      throw new Error(`Ingest RPC failed: ${ingestErr.message}`);
+    }
+
+    logUsage(supabase, {
+      operation: "ingest", requestor: author,
+      document_id: existingDoc.id, result_count: chunks.length,
+    });
+
+    const note = update_if_exists ? "" : " Note: update_if_exists flag was overridden by document_id.";
+    return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars.${note}`;
+  }
 
   // ── Update-existing path ─────────────────────────────────────────────────
   if (update_if_exists) {

@@ -434,6 +434,84 @@ class TestMCPNewTools16B:
         # Should find the doc within that project
         assert text != "No results found."
 
+    def test_ingest_by_document_id_updates(
+        self, e2e_mcp: MCPClient | None, mcp_cleanup: E2ECleanup
+    ) -> None:
+        """17B.8 (MCP): document_id param updates the named document deterministically."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+
+        title = _unique_title("ID-Based Update Test")
+        original = "# ID-Based Update Test\n\nOriginal content for MCP test."
+        updated = original + "\n\n## Added Section\n\nContent added via document_id update."
+
+        # Create
+        t1 = e2e_mcp.tool_text("cerefox_ingest", {
+            "title": title,
+            "content": original,
+            "author": "e2e-mcp-test",
+        })
+        assert "(id:" in t1, f"Expected doc id in response, got: {t1}"
+        doc_id = t1.split("(id:")[1].split(")")[0].strip()
+        mcp_cleanup.track_document(doc_id)
+
+        # Update by ID
+        t2 = e2e_mcp.tool_text("cerefox_ingest", {
+            "title": title,
+            "content": updated,
+            "document_id": doc_id,
+            "author": "e2e-mcp-test",
+        })
+        assert "updated" in t2.lower(), f"Expected 'updated' in response, got: {t2}"
+        assert doc_id in t2
+
+    def test_ingest_by_document_id_not_found_returns_error(
+        self, e2e_mcp: MCPClient | None
+    ) -> None:
+        """17B.9 (MCP): document_id pointing to non-existent doc returns a JSON-RPC error."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+
+        resp = e2e_mcp.tool("cerefox_ingest", {
+            "title": "Ghost Document",
+            "content": "# Ghost\n\nShould not be created.",
+            "document_id": str(uuid.uuid4()),
+            "author": "e2e-mcp-test",
+        })
+        assert "error" in resp, f"Expected error response, got: {resp}"
+        assert resp["error"]["code"] == -32603
+
+    def test_ingest_by_document_id_note_when_update_existing_false(
+        self, e2e_mcp: MCPClient | None, mcp_cleanup: E2ECleanup
+    ) -> None:
+        """17B.10 (MCP): document_id + update_if_exists=false → note in response."""
+        if e2e_mcp is None:
+            pytest.skip("No anon key -- skipping MCP e2e tests")
+
+        title = _unique_title("ID Note Test")
+        original = "# ID Note Test\n\nOriginal."
+        updated = "# ID Note Test\n\nChanged to trigger note."
+
+        t1 = e2e_mcp.tool_text("cerefox_ingest", {
+            "title": title,
+            "content": original,
+            "author": "e2e-mcp-test",
+        })
+        assert "(id:" in t1
+        doc_id = t1.split("(id:")[1].split(")")[0].strip()
+        mcp_cleanup.track_document(doc_id)
+
+        t2 = e2e_mcp.tool_text("cerefox_ingest", {
+            "title": title,
+            "content": updated,
+            "document_id": doc_id,
+            "update_if_exists": False,  # should be overridden by document_id
+            "author": "e2e-mcp-test",
+        })
+        # The response must contain the update confirmation and a Note
+        assert "updated" in t2.lower(), f"Expected 'updated' in response, got: {t2}"
+        assert "Note:" in t2, f"Expected 'Note:' warning in response, got: {t2}"
+
     def test_mcp_usage_logging_creates_entries(
         self, e2e_mcp: MCPClient | None, e2e_client, mcp_cleanup: E2ECleanup
     ) -> None:

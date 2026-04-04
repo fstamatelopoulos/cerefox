@@ -407,3 +407,83 @@ class TestMetadataSearchEdgeFunction:
         assert "project_names" in result[0]
         assert isinstance(result[0]["project_names"], list)
         assert len(result[0]["project_names"]) >= 1
+
+
+# ── EF-17B: ID-based ingest (primitive EF) ───────────────────────────────────
+
+
+class TestIdBasedIngestEdgeFunction:
+    """17B: document_id parameter on the cerefox-ingest Edge Function."""
+
+    def test_ingest_by_id_updates_document(
+        self, e2e_edge: EdgeFunctionClient | None, ef_cleanup: E2ECleanup
+    ) -> None:
+        """17B.8 (EF): document_id routes to the update path and returns updated=true."""
+        _skip_if_no_edge(e2e_edge)
+        title = _unique_title("EF ID Update")
+        original = "# EF ID Update\n\nOriginal content."
+        updated = original + "\n\n## Added\n\nAdded via ID-based path."
+
+        r1 = e2e_edge.invoke("cerefox-ingest", {
+            "title": title,
+            "content": original,
+            "author": "e2e-ef-test",
+            "author_type": "agent",
+        })
+        ef_cleanup.track_document(r1["document_id"])
+
+        r2 = e2e_edge.invoke("cerefox-ingest", {
+            "title": title,
+            "content": updated,
+            "document_id": r1["document_id"],
+            "author": "e2e-ef-test",
+            "author_type": "agent",
+        })
+        assert r2.get("updated") is True
+        assert r2["document_id"] == r1["document_id"]
+
+    def test_ingest_by_id_not_found_returns_404(
+        self, e2e_edge: EdgeFunctionClient | None
+    ) -> None:
+        """17B.9 (EF): document_id pointing to non-existent doc returns HTTP 404."""
+        _skip_if_no_edge(e2e_edge)
+        import httpx
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            e2e_edge.invoke("cerefox-ingest", {
+                "title": "Ghost",
+                "content": "# Ghost\n\nContent.",
+                "document_id": str(uuid.uuid4()),
+                "author": "e2e-ef-test",
+                "author_type": "agent",
+            })
+        assert exc_info.value.response.status_code == 404
+
+    def test_ingest_by_id_note_when_update_if_exists_false(
+        self, e2e_edge: EdgeFunctionClient | None, ef_cleanup: E2ECleanup
+    ) -> None:
+        """17B.10 (EF): document_id + update_if_exists=false → note in response."""
+        _skip_if_no_edge(e2e_edge)
+        title = _unique_title("EF ID Note")
+        original = "# EF ID Note\n\nOriginal."
+        updated = "# EF ID Note\n\nModified for note test."
+
+        r1 = e2e_edge.invoke("cerefox-ingest", {
+            "title": title,
+            "content": original,
+            "author": "e2e-ef-test",
+            "author_type": "agent",
+        })
+        ef_cleanup.track_document(r1["document_id"])
+
+        r2 = e2e_edge.invoke("cerefox-ingest", {
+            "title": title,
+            "content": updated,
+            "document_id": r1["document_id"],
+            "update_if_exists": False,
+            "author": "e2e-ef-test",
+            "author_type": "agent",
+        })
+        assert r2.get("updated") is True
+        assert r2["document_id"] == r1["document_id"]
+        assert "note" in r2 and r2["note"]
+
