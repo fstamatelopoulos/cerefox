@@ -538,8 +538,14 @@ def api_get_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     meta = client.get_document_by_id(document_id)
-    project_ids = client.get_document_project_ids(document_id)
-    versions = client.list_document_versions(document_id)
+    try:
+        project_ids = client.get_document_project_ids(document_id)
+    except Exception:
+        project_ids = []
+    try:
+        versions = client.list_document_versions(document_id)
+    except Exception:
+        versions = []
 
     return DocumentDetailResponse(
         document_id=document_id,

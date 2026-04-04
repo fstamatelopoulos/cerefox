@@ -48,6 +48,10 @@ def _make_client_mock() -> MagicMock:
         {"id": "proj-1", "name": "Personal"},
         {"id": "proj-2", "name": "Work"},
     ]
+    client.list_all_documents_basic.return_value = [
+        {"id": "doc-1", "title": "Alpha"},
+        {"id": "doc-2", "title": "Beta"},
+    ]
     return client
 
 
@@ -327,8 +331,8 @@ class TestIngestDir:
 
 
 class TestReindex:
-    def _make_chunk(self, chunk_id: str, embedder: str = "old-model") -> dict:
-        return {"id": chunk_id, "content": "Some text.", "embedder_primary": embedder}
+    def _make_chunk(self, chunk_id: str, embedder: str = "old-model", doc_id: str = "doc-1") -> dict:
+        return {"id": chunk_id, "content": "Some text.", "embedder_primary": embedder, "document_id": doc_id}
 
     def test_nothing_to_reindex_when_all_current(self, runner) -> None:
         client_mock = _make_client_mock()

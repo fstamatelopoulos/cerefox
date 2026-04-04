@@ -268,6 +268,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 5. **Cloud-only embeddings** (OpenAI / Fireworks) — local models (mpnet, Ollama) removed; they caused platform-specific failures and added install complexity
 6. **Edge Function per operation** — each operation has a dedicated Edge Function that is a thin HTTP adapter over a Postgres RPC; `cerefox-mcp` delegates to dedicated Edge Functions via internal fetch; single implementation principle (see above)
 7. **Chunks-anchored versioning** — `version_id IS NULL` = current version; `version_id = <uuid>` = archived; partial indexes automatically exclude archived chunks from search; no separate content table
+8. **Title boosting** — `cerefox_chunks.fts` is a regular `TSVECTOR` (not `GENERATED`) because `GENERATED` columns cannot cross-reference another table. The `cerefox_ingest_document` RPC computes `fts` inline using its `p_title` parameter: document title at weight A, chunk heading at weight A, body at weight B. Embeddings are similarly enriched: `# {doc_title}\n{chunk.content}` is the embedding input (stored content is unchanged). Title changes trigger `cerefox_update_chunk_fts` + re-embed of current chunks.
 
 ## Documentation as Source of Truth
 

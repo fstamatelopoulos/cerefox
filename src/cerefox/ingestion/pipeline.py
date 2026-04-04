@@ -196,9 +196,13 @@ class IngestionPipeline:
             source_path = f"{slug}.md"
 
         # ── Embed chunks ──────────────────────────────────────────────────
+        # Prepend document title to embedding input (contextual enrichment).
+        # The stored chunk.content is unchanged -- only the embedding vector
+        # captures the title context. This improves semantic search recall
+        # when searching by document name or related terms.
         chunk_rows: list[dict[str, Any]] = []
         if chunks:
-            texts = [c.content for c in chunks]
+            texts = [f"# {title}\n{c.content}" for c in chunks]
             embeddings = self._embedder.embed_batch(texts)
 
             chunk_rows = [
@@ -322,12 +326,42 @@ class IngestionPipeline:
         actual_chunks = self._client.list_chunks_for_document(document_id)
         has_chunks = len(actual_chunks) > 0
         if content_unchanged and has_chunks:
-            # Content didn't change and chunks exist — skip chunking, embedding,
-            # and chunk swap.  Only update title, metadata, and project associations.
+            # Content didn't change and chunks exist — skip chunking, versioning,
+            # and chunk swap.  Update title, metadata, and project associations.
+            old_title = existing.get("title", "")
+            title_changed = old_title != title
+
             update_data: dict = {"title": title}
             if metadata is not None:
                 update_data["metadata"] = metadata
             self._client.update_document(document_id, update_data)
+
+            # If title changed, refresh embeddings (contextual enrichment) and FTS
+            # for all current chunks. No version snapshot — content is identical.
+            if title_changed:
+                log.info(
+                    "Document %s title changed '%s' → '%s' -- re-embedding %d chunks",
+                    document_id, old_title, title, len(actual_chunks),
+                )
+                texts = [f"# {title}\n{c['content']}" for c in actual_chunks]
+                try:
+                    embeddings = self._embedder.embed_batch(texts)
+                    for chunk, embedding in zip(actual_chunks, embeddings):
+                        self._client.update_chunk_embedding(
+                            chunk["id"], embedding, self._embedder.model_name
+                        )
+                except Exception as exc:
+                    log.warning(
+                        "Failed to re-embed chunks after title change for %s: %s",
+                        document_id, exc,
+                    )
+                try:
+                    self._client.update_chunk_fts(document_id, title)
+                except Exception as exc:
+                    log.warning(
+                        "Failed to update FTS after title change for %s: %s",
+                        document_id, exc,
+                    )
 
             if new_project_ids is not None:
                 self._client.assign_document_projects(document_id, new_project_ids)
@@ -372,7 +406,8 @@ class IngestionPipeline:
         total_chars = sum(c.char_count for c in chunks)
 
         # Embed before touching the DB -- if embedding fails we haven't broken anything.
-        texts = [c.content for c in chunks]
+        # Prepend document title for contextual enrichment (stored content unchanged).
+        texts = [f"# {title}\n{c.content}" for c in chunks]
         embeddings = self._embedder.embed_batch(texts) if chunks else []
 
         chunk_rows = [

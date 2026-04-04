@@ -519,6 +519,35 @@ class CerefoxClient:
             logger.error("update_chunk_embedding failed for chunk %s: %s", chunk_id, exc)
             raise RuntimeError(f"update_chunk_embedding failed: {exc}") from exc
 
+    def update_chunk_fts(self, document_id: str, new_title: str) -> None:
+        """Refresh the FTS tsvector for all current chunks of a document.
+
+        Called when a document's title changes without a content change, so
+        the FTS index stays consistent with the new title (weight A).
+        """
+        self.rpc("cerefox_update_chunk_fts", {
+            "p_document_id": document_id,
+            "p_new_title": new_title,
+        })
+
+    def list_all_documents_basic(self) -> list[dict[str, Any]]:
+        """Return id and title for all non-deleted documents.
+
+        Used by the reindex command to build a document_id → title map,
+        so chunks can be re-embedded with the correct title prefix.
+        """
+        try:
+            response = (
+                self.client.table("cerefox_documents")
+                .select("id, title")
+                .is_("deleted_at", "null")
+                .execute()
+            )
+            return response.data or []
+        except Exception as exc:
+            logger.error("list_all_documents_basic failed: %s", exc)
+            raise RuntimeError(f"list_all_documents_basic failed: {exc}") from exc
+
     # ── Document versions ───────────────────────────────────────────────────────
 
     def snapshot_version(

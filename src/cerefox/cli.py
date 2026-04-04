@@ -605,12 +605,23 @@ def config_set(key: str, value: str) -> None:
     default=False,
     help="Re-embed every chunk, even those already embedded with the current model.",
 )
-def reindex(batch: int, reindex_all: bool) -> None:
-    """Re-embed all chunks with the currently configured embedder.
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show what would be reindexed without making any changes.",
+)
+def reindex(batch: int, reindex_all: bool, dry_run: bool) -> None:
+    """Re-embed all chunks with title-enriched embeddings.
 
-    Use this after switching embedders (e.g. from OpenAI to Fireworks) to migrate
-    existing content. By default, skips chunks already embedded by the current
-    model. Use --all to force re-embedding of everything.
+    Adds the document title as a prefix to each chunk's embedding input
+    (contextual enrichment) and updates the FTS tsvector to include the
+    document title at weight A. Use this after migrating to v0.1.14+ to
+    apply title boosting to existing documents.
+
+    Also use after switching embedders (e.g. from OpenAI to Fireworks).
+    By default, skips chunks already embedded with the current model.
+    Use --all to force re-embedding of everything.
     """
     settings = Settings()
     client = _get_client(settings)
@@ -623,16 +634,33 @@ def reindex(batch: int, reindex_all: bool) -> None:
         click.echo("✓  Nothing to reindex — all chunks already use the current embedder.")
         return
 
+    # Build a document_id → title map for embedding prefix
+    docs = client.list_all_documents_basic()
+    doc_titles: dict[str, str] = {d["id"]: d["title"] for d in docs}
+
+    if dry_run:
+        click.echo(
+            f"[dry-run] Would reindex {len(chunks)} chunk(s) across "
+            f"{len({c['document_id'] for c in chunks})} document(s)."
+        )
+        return
+
     click.echo(
         f"Reindexing {len(chunks)} chunk(s) with {embedder.model_name} "
-        f"(batch size {batch})…"
+        f"(batch size {batch}, title-enriched embeddings + FTS update)…"
     )
 
     updated = 0
     failed = 0
+    docs_reindexed: set[str] = set()
+
     for i in range(0, len(chunks), batch):
         chunk_batch = chunks[i : i + batch]
-        texts = [c["content"] for c in chunk_batch]
+        # Embed with title prefix for contextual enrichment
+        texts = [
+            f"# {doc_titles.get(c['document_id'], '')}\n{c['content']}"
+            for c in chunk_batch
+        ]
         try:
             embeddings = embedder.embed_batch(texts)
         except Exception as exc:
@@ -644,6 +672,7 @@ def reindex(batch: int, reindex_all: bool) -> None:
             try:
                 client.update_chunk_embedding(chunk["id"], embedding, embedder.model_name)
                 updated += 1
+                docs_reindexed.add(chunk["document_id"])
             except Exception as exc:
                 click.echo(f"  ⚠  Failed to update chunk {chunk['id']}: {exc}", err=True)
                 failed += 1
@@ -651,7 +680,21 @@ def reindex(batch: int, reindex_all: bool) -> None:
         click.echo(f"  {updated}/{len(chunks)} chunks done…", nl=False)
         click.echo("\r", nl=False)
 
-    click.echo(f"✓  Reindex complete: {updated} updated, {failed} failed.")
+    # Update FTS for each document that had chunks re-embedded
+    fts_updated = 0
+    fts_failed = 0
+    for doc_id in docs_reindexed:
+        try:
+            client.update_chunk_fts(doc_id, doc_titles.get(doc_id, ""))
+            fts_updated += 1
+        except Exception as exc:
+            click.echo(f"  ⚠  Failed to update FTS for document {doc_id}: {exc}", err=True)
+            fts_failed += 1
+
+    click.echo(
+        f"✓  Reindex complete: {updated} chunks re-embedded, {failed} failed; "
+        f"{fts_updated} document FTS indexes updated, {fts_failed} failed."
+    )
 
 
 # ── mcp ───────────────────────────────────────────────────────────────────────

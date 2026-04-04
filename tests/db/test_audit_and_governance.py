@@ -333,6 +333,7 @@ class TestPipelineAuditIntegration:
             "id": "doc-001",
             "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "chunk_count": 0, "total_chars": 0, "review_status": "pending_review",
+            "title": "Updated Title",  # same as new title so no title-change path
         }
         mock_client.list_chunks_for_document.return_value = [{"id": "chunk-1"}]
         mock_client.update_document.return_value = {"id": "doc-001"}

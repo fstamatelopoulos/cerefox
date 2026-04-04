@@ -1465,8 +1465,6 @@ CSV export available for offline analysis. All visualizations implemented.
 
 ---
 
----
-
 ## Iteration 17: Search Quality — Title Boosting and Contextual Enrichment
 
 **Goal**: Include document titles in search indexes to dramatically improve search quality.
@@ -1485,58 +1483,81 @@ in the body text. This iteration adds title boosting to both FTS and semantic se
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 17A.1 | Change `fts` column from GENERATED to regular tsvector | Todo | Migration: `ALTER TABLE cerefox_chunks ALTER COLUMN fts DROP EXPRESSION`; column stays, just no longer auto-computed |
-| 17A.2 | Update Python `IngestionPipeline` to compute weighted tsvector at ingestion | Todo | `setweight(to_tsvector('english', doc_title), 'A') || setweight(to_tsvector('english', chunk_content), 'B')` |
-| 17A.3 | Update `cerefox_ingest_document` RPC to accept and store the pre-computed tsvector | Todo | New `p_fts` parameter per chunk in the JSONB array; or compute in the RPC itself using the document title |
-| 17A.4 | Update TypeScript chunker in `cerefox-ingest` Edge Function | Todo | Same weighted tsvector computation |
-| 17A.5 | Update TypeScript chunker in `cerefox-mcp/tools/ingest.ts` | Todo | Same |
-| 17A.6 | Prepend `# {title}\n` to chunk content before embedding (not stored) | Todo | Python pipeline: embedding input = `f"# {title}\n{chunk.content}"` |
-| 17A.7 | Same title prefix for TypeScript embedding in Edge Function and MCP | Todo | |
+| 17A.1 | Change `fts` column from GENERATED to regular tsvector | Done | Migration: `ALTER TABLE cerefox_chunks ALTER COLUMN fts DROP EXPRESSION`; column stays, just no longer auto-computed |
+| 17A.2 | Prepend `# {title}\n` to chunk content before computing embeddings in Python pipeline | Done | Embedding input = `f"# {title}\n{chunk.content}"`; stored `chunk.content` unchanged; replaces 17A.6 |
+| 17A.3 | Update `cerefox_ingest_document` RPC to compute weighted tsvector internally using `p_title` (Option B) | Done | `setweight(to_tsvector('english', p_title), 'A') \|\| setweight(to_tsvector('english', chunk_content), 'B')` -- `p_title` is already a parameter; no pre-computed tsvector needed from caller; no denormalization; no trigger |
+| 17A.4 | Prepend `# {title}\n` to chunk content before embedding in `cerefox-ingest` Edge Function | Done | Same as 17A.2; tsvector computation handled by RPC (17A.3); replaces 17A.7 |
+| 17A.5 | Same embedding title prefix in `cerefox-mcp/tools/ingest.ts` | Done | Same as 17A.4 |
+
+**Step 1B -- Title change: auto-update indexes**
+
+When a document's title is updated (without content change), FTS and embeddings become stale.
+Instead of requiring manual reindex, the pipeline auto-updates when a title change is detected.
+
+- **FTS**: pure SQL -- UPDATE all current chunks' `fts` with the new title at weight A. Handled in a new `cerefox_update_chunk_fts` RPC called from the pipeline.
+- **Embeddings**: re-embed all current chunks with new title prefix (external API call). Done in Python pipeline before calling the FTS update RPC.
+- **No version snapshot**: content unchanged, so no new version is created.
+- **Audit entry**: records the title change (existing audit path).
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 17A.X1 | Detect title change in `update_document()` pipeline (compare old vs new title) | Done | Skip if title unchanged |
+| 17A.X2 | Write `cerefox_update_chunk_fts(p_document_id, p_new_title)` RPC | Done | `UPDATE cerefox_chunks SET fts = setweight(to_tsvector('english', p_new_title), 'A') \|\| setweight(to_tsvector('english', content), 'B') WHERE document_id = p_document_id AND version_id IS NULL`; SECURITY DEFINER |
+| 17A.X3 | When title changes: re-embed current chunks with new title prefix, then call `cerefox_update_chunk_fts` | Done | Python pipeline; uses existing embedder; fire-and-forget embedding update pattern; existing chunk rows updated in-place (no new version) |
+| 17A.X4 | Wire title-change detection through REST API title edit path | Deferred | REST API `PUT /documents/{id}` calls `pipeline.update_document()` which already has title-change detection; no extra wiring needed |
+| 17A.X5 | Update `cerefox_update_chunk_fts` call in `cerefox_ingest_document` RPC | N/A | FTS computed inline in RPC at ingestion; standalone RPC used only for title-change updates from Python pipeline |
 
 **Step 2 -- Search RPC updates**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 17A.8 | Verify `ts_rank` / `ts_rank_cd` correctly weights A > B in existing RPCs | Todo | May need no change -- depends on whether the rank functions use the existing weight array |
-| 17A.9 | Update `cerefox_hybrid_search` if rank computation needs adjustment | Todo | |
-| 17A.10 | Update `cerefox_fts_search` if rank computation needs adjustment | Todo | |
+| 17A.8 | Verify `ts_rank` / `ts_rank_cd` correctly weights A > B in existing RPCs | Done | `ts_rank` respects weight A > B by default; no changes needed to search RPCs |
+| 17A.9 | Update `cerefox_hybrid_search` if rank computation needs adjustment | N/A | No change needed |
+| 17A.10 | Update `cerefox_fts_search` if rank computation needs adjustment | N/A | No change needed |
 
-**Step 3 -- Reindex script**
+**Step 3 -- Reindex script (optional migration aid)**
+
+Reindexing existing documents after applying this migration is **optional but recommended**
+for full benefit. New documents ingested after the migration will automatically use title
+boosting. Old documents will continue to work (just without title in their FTS/embeddings)
+until reindexed.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 17A.11 | Update `cerefox reindex` CLI command to produce weighted tsvectors | Todo | Each document: re-chunk, embed with title prefix, compute weighted tsvector, store |
-| 17A.12 | Add `--dry-run` flag to reindex to preview what would change | Todo | |
-| 17A.13 | Create `scripts/reindex_all.py` convenience script for migration | Todo | Calls `cerefox reindex` for all documents; progress bar; can be interrupted and resumed |
+| 17A.11 | Update `cerefox reindex` CLI command to produce weighted tsvectors with title prefix | Done | Each chunk now embedded with title prefix; `update_chunk_fts` called per document after embedding |
+| 17A.12 | Add `--dry-run` flag to reindex to preview what would change | Done | |
+| 17A.13 | Create `scripts/reindex_all.py` convenience script | Done | Calls `cerefox reindex --all` with optional `--dry-run` and `--batch` flags |
 
 **Step 4 -- Migration**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 17A.14 | Create migration `0011_title_boosting.sql` | Todo | ALTER fts column; note in migration that `cerefox reindex` is required after applying |
-| 17A.15 | Update `schema.sql` as canonical source | Todo | |
-| 17A.16 | Update `docs/guides/upgrading.md` with reindex instruction | Todo | |
+| 17A.14 | Create migration `0011_title_boosting.sql` | Done | ALTER fts column; add `cerefox_update_chunk_fts` RPC |
+| 17A.15 | Update `schema.sql` as canonical source | Done | |
+| 17A.16 | Update `docs/guides/upgrading.md` with step-by-step reindex instructions | Done | v0.1.14 section added with dry-run example, cost estimate, and resumability note |
 
 **Step 5 -- Tests**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 17A.17 | Unit tests: verify weighted tsvector includes title at weight A | Todo | |
-| 17A.18 | Unit tests: verify embedding input includes title prefix | Todo | |
-| 17A.19 | E2e test: ingest document, search by title only, verify it's found | Todo | This test should FAIL on pre-17A code and PASS after |
+| 17A.17 | Unit tests: verify weighted tsvector includes title at weight A | Done | Covered in TestTitleBoosting (test_pipeline.py) |
+| 17A.18 | Unit tests: verify embedding input includes title prefix | Done | Covered in TestTitleBoosting (test_pipeline.py) |
+| 17A.19 | E2e test: ingest document, search by title only, verify it's found | Todo | Requires live Supabase (e2e suite) |
 | 17A.20 | E2e test: title match ranks higher than body-only match | Todo | |
 
 **Step 6 -- Documentation**
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 17A.21 | Update `docs/solution-design.md` -- search architecture section | Todo | |
-| 17A.22 | Update `CLAUDE.md` -- chunking and search notes | Todo | |
-| 17A.23 | Add entry to Cerefox Decision Log | Todo | Already added for the decision; update with implementation outcome |
+| 17A.21 | Update `docs/solution-design.md` -- search architecture section | Done | Added section 5.2 Title Boosting |
+| 17A.22 | Update `CLAUDE.md` -- chunking and search notes | Done | Added item 8 to Key Design Decisions |
+| 17A.23 | Add entry to Cerefox Decision Log | Todo | Update with implementation outcome after e2e tests |
 
 **Deliverable**: Searching for a document by its title returns the document as a top result.
 FTS title matches rank ~10x higher than body matches. Semantic search captures the title's
-meaning in the embedding. Existing documents require a one-time `cerefox reindex`.
+meaning in the embedding. New documents get title boosting automatically. Existing documents
+can optionally be reindexed via `scripts/reindex_all.py` (instructions in upgrading.md).
+Title changes auto-trigger FTS and embedding updates -- no manual reindex needed for title edits.
 
 ---
 

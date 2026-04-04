@@ -45,6 +45,7 @@ _EXPECTED_FUNCTIONS = [
     "cerefox_list_audit_entries",
     "cerefox_ingest_document",
     "cerefox_delete_document",
+    "cerefox_update_chunk_fts",
 ]
 
 _EXPECTED_EXTENSIONS = ["uuid-ossp", "vector"]

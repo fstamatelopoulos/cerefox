@@ -398,7 +398,8 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const texts = chunks.map((c) => c.content);
+      // Prepend document title for contextual enrichment (stored content unchanged)
+      const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
       let embeddings: number[][];
       try {
         embeddings = await embedBatch(texts, openaiKey);
@@ -492,8 +493,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Embed all chunks
-  const texts = chunks.map((c) => c.content);
+  // Embed all chunks with title prefix for contextual enrichment (stored content unchanged)
+  const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
   let embeddings: number[][];
   try {
     embeddings = await embedBatch(texts, openaiKey);

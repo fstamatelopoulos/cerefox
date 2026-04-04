@@ -61,6 +61,44 @@ open http://localhost:8000/app/
 
 Most upgrades require no special steps beyond the standard checklist above. Notes below only apply when upgrading across specific version boundaries.
 
+### Upgrading to v0.1.14+ (from v0.1.13) -- Title Boosting
+
+**One new migration**: `0011_title_boosting.sql`
+
+- Drops the `GENERATED ALWAYS AS` expression on `cerefox_chunks.fts` (it can't cross-reference `cerefox_documents.title`)
+- Adds `cerefox_update_chunk_fts(p_document_id, p_new_title)` RPC for title-change FTS refresh
+
+Both are applied automatically by `db_migrate.py` (step 3). After the migration, also run `db_deploy.py` (step 4) to update the RPC definitions.
+
+**Redeploy Edge Functions**: `cerefox-ingest` and `cerefox-mcp` now prepend the document title to chunk embedding inputs. Redeploy both:
+
+```bash
+npx supabase functions deploy cerefox-ingest
+npx supabase functions deploy cerefox-mcp
+```
+
+**Optional reindex** (recommended for better search quality):
+
+Existing chunks were embedded without the document title prefix and their FTS vectors don't include the document title at weight A. New documents ingested after this upgrade are automatically correct.
+
+To upgrade existing chunks:
+
+```bash
+# Preview what would be reindexed (no changes made)
+uv run python scripts/reindex_all.py --dry-run
+
+# Reindex all chunks (re-embeds with title prefix, updates FTS)
+# Uses 50 chunks per API call by default; lower --batch if you hit rate limits
+uv run python scripts/reindex_all.py
+
+# Or run directly via the CLI (same effect)
+uv run cerefox reindex --all
+```
+
+The reindex is **resumable**: if interrupted, re-running it skips chunks already embedded with the current model. Archived chunks (historical versions) are not reindexed -- they are not searched.
+
+Cost estimate: ~$0.01-0.05 for a typical personal knowledge base (a few thousand chunks at `text-embedding-3-small` rates).
+
 ### Upgrading to v0.1.11+ (from v0.1.10)
 
 **Two new migrations**:

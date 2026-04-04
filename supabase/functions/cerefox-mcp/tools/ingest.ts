@@ -239,7 +239,8 @@ export async function handleIngest(
         throw new Error("Content produced no chunks");
       }
 
-      const texts = chunks.map((c) => c.content);
+      // Prepend document title for contextual enrichment (stored content unchanged)
+      const texts = chunks.map((c) => `# ${title}\n${c.content}`);
       const embeddings = await embedBatch(texts, openaiKey);
       const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 
@@ -298,7 +299,8 @@ export async function handleIngest(
     throw new Error("Content produced no chunks");
   }
 
-  const texts = chunks.map((c) => c.content);
+  // Prepend document title for contextual enrichment (stored content unchanged)
+  const texts = chunks.map((c) => `# ${title}\n${c.content}`);
   const embeddings = await embedBatch(texts, openaiKey);
   const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 

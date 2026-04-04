@@ -163,11 +163,11 @@ CREATE TABLE cerefox_chunks (
   embedding_primary VECTOR(768) NOT NULL,
   embedding_upgrade VECTOR(768),               -- optional: alternative embedder
 
-  -- Full Text Search (generated column — always in sync with content)
-  fts tsvector GENERATED ALWAYS AS (
-    setweight(to_tsvector('english', COALESCE(title, '')), 'A') ||
-    setweight(to_tsvector('english', content), 'B')
-  ) STORED,
+  -- Full Text Search: document title (A) + chunk heading title (A) + body content (B).
+  -- Computed by cerefox_ingest_document RPC at ingestion time (not a GENERATED column,
+  -- because GENERATED can't cross-reference cerefox_documents.title on a different table).
+  -- Updated by cerefox_update_chunk_fts RPC when a document title changes.
+  fts TSVECTOR,
 
   -- Embedder tracking
   embedder_primary TEXT NOT NULL DEFAULT 'text-embedding-3-small',
@@ -347,7 +347,34 @@ RPCs exposed via Supabase MCP / Edge Functions:
 
 The `cerefox_search` MCP tool (exposed via Edge Function) wraps `cerefox_hybrid_search` and applies automatic threshold-based retrieval assembly — agents never call raw RPCs directly.
 
-### 5.2 Automatic Small-to-Big Retrieval
+### 5.2 Title Boosting (Search Quality)
+
+Both FTS and semantic search give extra weight to the document title.
+
+**FTS formula** (set at ingestion by `cerefox_ingest_document` RPC):
+```
+fts = setweight(to_tsvector('english', doc_title), 'A')
+    || setweight(to_tsvector('english', chunk_heading_title), 'A')
+    || setweight(to_tsvector('english', chunk_body_content), 'B')
+```
+Weight A ranks above weight B in `ts_rank`. The document title and the deepest section heading both rank at A; body content ranks at B.
+
+**Semantic embedding formula** (applied before each embed call):
+```python
+embed_text = f"# {doc_title}\n{chunk.content}"  # stored chunk content unchanged
+```
+The document title is prepended as a Markdown H1 heading to the embedding input. This gives the embedding model the document title as context for every chunk, making semantic search more title-sensitive. The `content` column in the database stores the original chunk content without the prefix.
+
+**FTS column**: `cerefox_chunks.fts` is a regular `TSVECTOR` column (not a `GENERATED ALWAYS AS` expression). PostgreSQL `GENERATED` columns cannot cross-reference another table (`cerefox_documents.title`), so the FTS vector is computed inline by the `cerefox_ingest_document` RPC using its `p_title` parameter.
+
+**Title changes**: when a document title changes but content does not, the ingestion pipeline:
+1. Re-embeds all current chunks with the new title prefix
+2. Calls `cerefox_update_chunk_fts(document_id, new_title)` to refresh FTS vectors
+No version snapshot is created because content is identical.
+
+**Reindex**: existing documents ingested before v0.1.14 can be upgraded with `uv run cerefox reindex --all` (or `scripts/reindex_all.py`). See `docs/guides/upgrading.md` for details.
+
+### 5.3 Automatic Small-to-Big Retrieval
 
 The `cerefox_search` tool automatically adjusts how results are assembled based on document size. Agents always call the same tool; the threshold logic is internal.
 

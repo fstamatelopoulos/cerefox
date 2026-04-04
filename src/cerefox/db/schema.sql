@@ -158,11 +158,12 @@ CREATE TABLE IF NOT EXISTS cerefox_chunks (
     embedder_primary   TEXT        NOT NULL DEFAULT 'text-embedding-3-small',
     embedder_upgrade   TEXT,
 
-    -- Full-text search vector (generated, always kept in sync)
-    fts TSVECTOR GENERATED ALWAYS AS (
-        setweight(to_tsvector('english', COALESCE(title, '')), 'A') ||
-        setweight(to_tsvector('english', content), 'B')
-    ) STORED,
+    -- Full-text search vector: document title (A) + chunk heading (A) + body content (B).
+    -- Set explicitly at ingestion time by cerefox_ingest_document RPC (Option B: computed in
+    -- the RPC using p_title, which is already a parameter). Not GENERATED because a generated
+    -- column cannot reference cerefox_documents.title (cross-table reference forbidden).
+    -- Updated by cerefox_update_chunk_fts RPC when document title changes without content change.
+    fts TSVECTOR,
 
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()

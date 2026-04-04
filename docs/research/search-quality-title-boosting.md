@@ -116,24 +116,45 @@ Implement both Tier 1 and Tier 2 together:
 
 ### Migration Path
 
-1. **Schema migration**: change `fts` column from GENERATED to regular tsvector; add migration
-   to recompute all existing tsvectors with title boosting
-2. **Ingestion pipeline update**: both Python `IngestionPipeline` and TypeScript `cerefox-ingest`
-   Edge Function (and `cerefox-mcp` ingest handler) compute the weighted tsvector at ingestion
-3. **Embedding recomputation**: `cerefox reindex` command re-embeds all chunks with title prefix
-4. **RPC updates**: search RPCs may need minor adjustments if the `ts_rank` call changes
+1. **Schema migration**: change `fts` column from GENERATED to regular tsvector
+2. **Tsvector computation (Option B -- decided)**: computed inside `cerefox_ingest_document` RPC
+   using the `p_title` parameter it already receives -- no pre-computed tsvector passed from caller,
+   no denormalization of title into `cerefox_chunks`, no trigger needed. Python and TypeScript
+   callers only need to handle the embedding prefix (17A.2, 17A.4, 17A.5).
+3. **Embedding prefix**: both Python `IngestionPipeline` and TypeScript ingest handlers prepend
+   `# {title}\n` before calling the embedding API; stored `content` unchanged
+4. **Reindex existing documents (optional)**: `scripts/reindex_all.py` re-embeds and updates
+   tsvectors for all current documents. Not required -- new documents get title boosting
+   automatically; old documents work without it until reindexed. Archived chunks are NOT
+   reindexed (excluded from search; manual re-ingestion required if restored).
+5. **RPC updates**: search RPCs need no changes -- `ts_rank` natively respects the A/B weights
+   encoded in the tsvector
 
 ### Reindex Script
 
-A `cerefox reindex --include-title` (or just `cerefox reindex` with the new pipeline)
-command that:
-1. For each document: re-chunks with the current chunker
-2. Computes embeddings with title prefix
-3. Computes weighted tsvector with title at weight A
-4. Replaces current chunks (via `cerefox_ingest_document` RPC)
+The existing `cerefox reindex` command (updated to use the new pipeline) re-chunks,
+re-embeds with title prefix, and replaces current chunks via `cerefox_ingest_document`.
+`scripts/reindex_all.py` is a convenience wrapper for reindexing all documents in sequence.
 
-This is the same `cerefox reindex` that already exists but updated to produce the new
-tsvector and title-enriched embeddings.
+Reindexing is **optional**. Only current-version chunks are reindexed. Archived chunks are
+deliberately skipped -- they are excluded from all search indexes and if a specific version
+ever needs to be restored, re-ingestion is required anyway (the same process also reindexes).
+
+### Title Change Behavior (decided)
+
+When a document's title is updated without a content change, the FTS index and embeddings
+for existing chunks reference the old title. Rather than requiring manual reindex, the
+pipeline auto-updates when a title change is detected:
+
+1. Detect title changed (old title != new title) in `update_document()`
+2. Re-embed all current chunks with new title prefix (external API call, one per chunk)
+3. Call `cerefox_update_chunk_fts(document_id, new_title)` RPC to update FTS in-place
+4. No version snapshot (content unchanged), audit entry records the title change
+
+**Trade-offs**:
+- Title-only edits now involve an embedding API call -- adds latency proportional to doc size
+- Cost is small (a few small API calls per document) and predictable
+- The alternative (stale indexes until manual reindex) is worse UX for a frequent operation
 
 ### Impact on Existing Features
 

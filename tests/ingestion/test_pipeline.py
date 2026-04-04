@@ -425,15 +425,24 @@ class TestUpdateDocument:
         assert rpc_kwargs["title"] == "New Title"
 
     def test_unchanged_content_action_is_updated_not_reindexed(
-        self, pipeline, mock_client, existing_doc
+        self, pipeline, mock_client, mock_embedder, existing_doc
     ) -> None:
-        """Title-only edit: action='updated', reindexed=False."""
+        """Title-only edit: action='updated', reindexed=False.
+
+        Title changed (Original Title → New Title), content unchanged.
+        Re-embedding is triggered (title-change path) but reindexed stays False
+        because the content itself didn't change -- the flag signals content reindexing.
+        """
         text = "Same content."
         existing_doc["content_hash"] = _hash(text)
         mock_client.get_document_by_id.return_value = existing_doc
         mock_client.update_document.return_value = existing_doc
         mock_client.get_document_project_ids.return_value = []
-        mock_client.list_chunks_for_document.return_value = [{"id": "c1"}]
+        # chunks must include content so the title-change re-embed path can read it
+        mock_client.list_chunks_for_document.return_value = [
+            {"id": "c1", "content": text}
+        ]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
 
         result = pipeline.update_document("doc-001", text, "New Title")
 
@@ -783,3 +792,177 @@ class TestUpdateExisting:
 
         assert result.document_id == "doc-existing"
         mock_client.ingest_document_rpc.assert_called_once()
+
+
+# ── Title boosting (17A) ──────────────────────────────────────────────────────
+
+
+class TestTitleBoosting:
+    """Verify that document title is prepended to embedding inputs.
+
+    The stored chunk.content is unchanged -- only the vector captures the
+    title context. FTS is handled by the cerefox_ingest_document RPC using
+    the p_title parameter (Option B; not tested at the Python layer).
+    """
+
+    def test_ingest_embeds_with_title_prefix(self, pipeline, mock_client, mock_embedder) -> None:
+        """embed_batch receives '# {title}\\n{content}' for each chunk."""
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text("# Espresso Guide\n\nPull a 1:2 ratio.", title="Espresso Guide")
+
+        call_args = mock_embedder.embed_batch.call_args
+        assert call_args is not None
+        texts = call_args[0][0]  # first positional arg is the texts list
+        assert len(texts) == 1
+        assert texts[0].startswith("# Espresso Guide\n")
+        assert "1:2 ratio" in texts[0]  # chunk body is present
+
+    def test_ingest_title_prefix_does_not_change_stored_content(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """chunk_rows passed to the RPC must still have the original content (no title prefix)."""
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text("# My Doc\n\nOriginal body.", title="My Doc")
+
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        chunks = rpc_kwargs["chunks"]
+        assert len(chunks) == 1
+        assert chunks[0]["content"] == "# My Doc\n\nOriginal body."  # unchanged
+
+    def test_update_content_change_embeds_with_title_prefix(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """Content-change update path also uses title-prefixed embedding input."""
+        existing = {
+            "id": "doc-001",
+            "title": "Guide",
+            "content_hash": "oldhash",
+            "metadata": {},
+            "chunk_count": 1,
+            "total_chars": 50,
+            "source_path": "guide.md",
+        }
+        mock_client.get_document_by_id.return_value = existing
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-001", "chunk_count": 1, "total_chars": 40,
+            "operation": "update-content", "version_id": "ver-001",
+        }
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.update_document("doc-001", "# Guide\n\nNew body.", "Guide")
+
+        texts = mock_embedder.embed_batch.call_args[0][0]
+        assert texts[0].startswith("# Guide\n")
+        assert "New body" in texts[0]
+
+    def test_title_change_triggers_reembed_of_current_chunks(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """Title change (content unchanged) re-embeds current chunks with new title prefix."""
+        text = "Chunk body text."
+        existing = {
+            "id": "doc-001",
+            "title": "Old Title",
+            "content_hash": _hash(text),
+            "metadata": {},
+            "chunk_count": 1,
+            "total_chars": len(text),
+        }
+        mock_client.get_document_by_id.return_value = existing
+        mock_client.update_document.return_value = existing
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.list_chunks_for_document.return_value = [
+            {"id": "chunk-1", "content": text}
+        ]
+        mock_embedder.embed_batch.return_value = [[0.1] * 768]
+
+        pipeline.update_document("doc-001", text, "New Title")
+
+        # embed_batch must be called with the new title prefix
+        texts = mock_embedder.embed_batch.call_args[0][0]
+        assert len(texts) == 1
+        assert texts[0] == f"# New Title\n{text}"
+
+        # update_chunk_embedding must be called to persist the new vector
+        mock_client.update_chunk_embedding.assert_called_once_with(
+            "chunk-1", [0.1] * 768, mock_embedder.model_name
+        )
+
+    def test_title_change_calls_update_chunk_fts(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """Title change also calls update_chunk_fts to refresh the FTS index."""
+        text = "Body text."
+        existing = {
+            "id": "doc-001",
+            "title": "Old Title",
+            "content_hash": _hash(text),
+            "metadata": {},
+            "chunk_count": 1,
+            "total_chars": len(text),
+        }
+        mock_client.get_document_by_id.return_value = existing
+        mock_client.update_document.return_value = existing
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.list_chunks_for_document.return_value = [
+            {"id": "chunk-1", "content": text}
+        ]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.update_document("doc-001", text, "New Title")
+
+        mock_client.update_chunk_fts.assert_called_once_with("doc-001", "New Title")
+
+    def test_no_title_change_skips_reembed_and_fts_update(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """When title is unchanged (only metadata), no re-embedding or FTS update."""
+        text = "Body text."
+        existing = {
+            "id": "doc-001",
+            "title": "Same Title",
+            "content_hash": _hash(text),
+            "metadata": {},
+            "chunk_count": 1,
+            "total_chars": len(text),
+        }
+        mock_client.get_document_by_id.return_value = existing
+        mock_client.update_document.return_value = existing
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.list_chunks_for_document.return_value = [
+            {"id": "chunk-1", "content": text}
+        ]
+
+        pipeline.update_document("doc-001", text, "Same Title")
+
+        mock_embedder.embed_batch.assert_not_called()
+        mock_client.update_chunk_fts.assert_not_called()
+
+    def test_title_change_reembed_failure_is_swallowed(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """Embedding failure during title-change update must not raise -- just log a warning."""
+        text = "Body."
+        existing = {
+            "id": "doc-001",
+            "title": "Old Title",
+            "content_hash": _hash(text),
+            "metadata": {},
+            "chunk_count": 1,
+            "total_chars": len(text),
+        }
+        mock_client.get_document_by_id.return_value = existing
+        mock_client.update_document.return_value = existing
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.list_chunks_for_document.return_value = [
+            {"id": "chunk-1", "content": text}
+        ]
+        mock_embedder.embed_batch.side_effect = RuntimeError("API down")
+
+        # Must not raise
+        result = pipeline.update_document("doc-001", text, "New Title")
+        assert result.action == "updated"

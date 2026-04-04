@@ -1123,9 +1123,13 @@ BEGIN
     END IF;
 
     -- ── Insert chunks ────────────────────────────────────────────────
+    -- fts is computed here (Option B) using p_title (document title, already a parameter)
+    -- and the chunk's own heading title + content. This avoids pre-computing tsvectors in
+    -- the Python/TypeScript callers and keeps logic in one place (single-implementation).
+    -- Formula: doc_title (A) || chunk_heading (A) || body_content (B)
     INSERT INTO cerefox_chunks (
         document_id, chunk_index, heading_path, heading_level,
-        title, content, char_count, embedding_primary, embedder_primary
+        title, content, char_count, embedding_primary, embedder_primary, fts
     )
     SELECT
         v_doc_id,
@@ -1136,7 +1140,10 @@ BEGIN
         c->>'content',
         (c->>'char_count')::INT,
         (SELECT array_agg(e::FLOAT)::VECTOR(768) FROM jsonb_array_elements_text(c->'embedding') AS e),
-        c->>'embedder'
+        c->>'embedder',
+        setweight(to_tsvector('english', COALESCE(p_title, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(c->>'title', '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(c->>'content', '')), 'B')
     FROM jsonb_array_elements(p_chunks) AS c;
 
     -- ── Audit entry ──────────────────────────────────────────────────
@@ -1153,6 +1160,39 @@ BEGIN
 
     RETURN QUERY SELECT v_doc_id, v_chunk_count, v_total_chars, v_operation, v_version_id;
 END;
+$$;
+
+
+-- ── cerefox_update_chunk_fts ──────────────────────────────────────────────────
+-- Updates the FTS tsvector for all current chunks of a document using a new
+-- document title. Called when a document's title changes without a content change
+-- (the content-unchanged path in the ingestion pipeline skips cerefox_ingest_document).
+--
+-- Formula: doc_title (A) || chunk_heading (A) || body_content (B)
+-- Reads chunk title and content directly from the DB -- caller only needs to
+-- supply the new document title.
+--
+-- Only affects current chunks (version_id IS NULL). Archived chunks retain their
+-- original tsvectors (they are excluded from all search indexes and require
+-- re-ingestion to restore anyway).
+
+DROP FUNCTION IF EXISTS cerefox_update_chunk_fts(UUID, TEXT);
+CREATE FUNCTION cerefox_update_chunk_fts(
+    p_document_id   UUID,
+    p_new_title     TEXT
+)
+RETURNS VOID
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+    UPDATE cerefox_chunks
+    SET fts =
+        setweight(to_tsvector('english', COALESCE(p_new_title, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(title, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(content, '')), 'B')
+    WHERE document_id = p_document_id
+      AND version_id IS NULL;
 $$;
 
 
