@@ -87,6 +87,11 @@ const TOOLS = [
           type: "string",
           description: "Markdown content",
         },
+        document_id: {
+          type: "string",
+          description:
+            "UUID of an existing document to update. When provided, updates that specific document regardless of update_if_exists. Returns an error if the document does not exist. Workflow: cerefox_search → note the [id: ...] → pass here for deterministic update.",
+        },
         project_name: {
           type: "string",
           description: "Project to assign to (created if absent, optional)",
@@ -98,7 +103,7 @@ const TOOLS = [
         update_if_exists: {
           type: "boolean",
           description:
-            "When true, update an existing document with the same title instead of creating a new one (default: false)",
+            "When true, update an existing document with the same title instead of creating a new one (default: false). Ignored when document_id is provided.",
         },
         metadata: {
           type: "object",

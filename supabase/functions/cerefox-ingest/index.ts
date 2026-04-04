@@ -31,6 +31,7 @@ const MIN_CHUNK_CHARS = 100;
 interface IngestRequest {
   title: string;
   content: string;
+  document_id?: string;
   project_name?: string;
   source?: string;
   metadata?: Record<string, unknown>;
@@ -316,7 +317,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const { title, content, project_name, source = "agent", metadata = {}, update_if_exists = false, author = "agent", author_type = "agent" } = body;
+  const { title, content, document_id = null, project_name, source = "agent", metadata = {}, update_if_exists = false, author = "agent", author_type = "agent" } = body;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -363,6 +364,108 @@ Deno.serve(async (req: Request) => {
 
   const contentHash = await sha256hex(normalizeContent(content));
   const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };
+  const reviewStatus = author_type === "agent" ? "pending_review" : "approved";
+
+  // ── ID-based update path ────────────────────────────────────────────────────
+  // When document_id is provided, update that exact document regardless of
+  // update_if_exists. Skip hash dedup -- explicit ID = explicit intent to update.
+  if (document_id) {
+    const { data: existing } = await supabase
+      .from("cerefox_documents")
+      .select("id, title, content_hash")
+      .eq("id", document_id)
+      .is("deleted_at", null)
+      .limit(1);
+
+    if (!existing?.length) {
+      return new Response(
+        JSON.stringify({ error: `Document not found: ${document_id}` }),
+        { status: 404, headers },
+      );
+    }
+
+    const existingDoc = existing[0];
+
+    // Content unchanged -- skip re-indexing
+    if (existingDoc.content_hash === contentHash) {
+      const note = update_if_exists ? undefined : "update_if_exists flag was overridden by document_id";
+      return new Response(
+        JSON.stringify({
+          document_id: existingDoc.id,
+          title: existingDoc.title,
+          skipped: true,
+          updated: false,
+          message: "Document already up-to-date (content hash match)",
+          ...(note && { note }),
+        }),
+        { headers },
+      );
+    }
+
+    // Content changed -- re-chunk, re-embed, ingest via RPC
+    const chunks = chunkMarkdown(content);
+    if (chunks.length === 0) {
+      return new Response(JSON.stringify({ error: "Content produced no chunks" }), { status: 422, headers });
+    }
+
+    const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
+    let embeddings: number[][];
+    try {
+      embeddings = await embedBatch(texts, openaiKey);
+    } catch (err) {
+      return new Response(JSON.stringify({ error: String(err) }), { status: 502, headers });
+    }
+
+    const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
+    const chunkData = chunks.map((chunk, i) => ({
+      chunk_index: i,
+      heading_path: chunk.heading_path,
+      heading_level: chunk.heading_level,
+      title: chunk.title,
+      content: chunk.content,
+      char_count: chunk.char_count,
+      embedding: embeddings[i],
+      embedder: OPENAI_MODEL,
+    }));
+
+    const { error: ingestErr } = await supabase.rpc("cerefox_ingest_document", {
+      p_document_id: existingDoc.id,
+      p_title: title.trim(),
+      p_source: source,
+      p_content_hash: contentHash,
+      p_metadata: metadata,
+      p_review_status: reviewStatus,
+      p_chunks: chunkData,
+      p_author: author,
+      p_author_type: author_type,
+      p_source_label: source,
+    });
+
+    if (ingestErr) {
+      return new Response(JSON.stringify({ error: `Ingest RPC failed: ${ingestErr.message}` }), { status: 500, headers });
+    }
+
+    Promise.resolve(supabase.rpc("cerefox_log_usage", {
+      p_operation: "ingest",
+      p_access_path: "edge-function",
+      p_requestor: author,
+      p_document_id: existingDoc.id,
+      p_result_count: chunks.length,
+    })).catch(() => {});
+
+    const note = update_if_exists ? undefined : "update_if_exists flag was overridden by document_id";
+    return new Response(
+      JSON.stringify({
+        document_id: existingDoc.id,
+        title: title.trim(),
+        chunk_count: chunks.length,
+        total_chars: totalChars,
+        updated: true,
+        ...(note && { note }),
+      }),
+      { headers },
+    );
+  }
 
   // ── Update-existing path ────────────────────────────────────────────────────
   if (update_if_exists) {
@@ -408,7 +511,6 @@ Deno.serve(async (req: Request) => {
       }
 
       const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
-      const reviewStatus = author_type === "agent" ? "pending_review" : "approved";
 
       // Single RPC handles: snapshot version, update doc, insert chunks, set review_status, audit entry
       const chunkData = chunks.map((chunk, i) => ({
@@ -506,7 +608,6 @@ Deno.serve(async (req: Request) => {
   }
 
   const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
-  const reviewStatus = author_type === "agent" ? "pending_review" : "approved";
 
   // Single RPC handles: insert doc, insert chunks, set review_status, audit entry
   const chunkData = chunks.map((chunk, i) => ({

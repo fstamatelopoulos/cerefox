@@ -60,6 +60,7 @@ class IngestResult:
     action: Literal["created", "updated", "skipped"]
     reindexed: bool = False  # True when chunks were re-embedded (content changed on update)
     project_ids: list[str] = field(default_factory=list)
+    note: str = ""  # Optional warning (e.g. update_if_exists overridden by document_id)
 
     @property
     def skipped(self) -> bool:
@@ -102,6 +103,7 @@ class IngestionPipeline:
         project_ids: list[str] | None = None,
         metadata: dict | None = None,
         update_existing: bool = False,
+        document_id: str | None = None,
         author: str = "unknown",
         author_type: str = "user",
     ) -> IngestResult:
@@ -129,6 +131,28 @@ class IngestionPipeline:
         Returns:
             :class:`IngestResult` summary.
         """
+        # ── ID-based update (explicit document_id provided) ───────────────────
+        # Bypasses title lookup and hash dedup -- the caller explicitly named
+        # which document to update.  Errors if the document does not exist.
+        if document_id is not None:
+            existing_doc = self._client.get_document_by_id(document_id)
+            if existing_doc is None:
+                raise ValueError(f"Document not found: {document_id}")
+            resolved_ids = self._resolve_project_ids(project_ids, project_id, project_name)
+            result = self.update_document(
+                document_id=document_id,
+                text=text,
+                title=title,
+                source=source,
+                project_ids=resolved_ids if resolved_ids else None,
+                metadata=metadata,
+                author=author,
+                author_type=author_type,
+            )
+            if not update_existing:
+                result.note = "document_id provided; update_if_exists flag was overridden"
+            return result
+
         # ── Update-existing shortcut ───────────────────────────────────────────
         if update_existing:
             existing_doc: dict | None = None

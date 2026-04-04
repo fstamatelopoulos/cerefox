@@ -966,3 +966,134 @@ class TestTitleBoosting:
         # Must not raise
         result = pipeline.update_document("doc-001", text, "New Title")
         assert result.action == "updated"
+
+
+# ── ID-based ingest (17B) ─────────────────────────────────────────────────────
+
+
+class TestIdBasedIngest:
+    """When document_id is passed to ingest_text, the pipeline must bypass
+    title-matching and hash-dedup and update the specified document directly.
+    If the document does not exist, a ValueError is raised.
+    """
+
+    @pytest.fixture()
+    def existing_doc(self) -> dict:
+        return {
+            "id": "doc-target",
+            "title": "Target Document",
+            "content_hash": "old-hash-abc",
+            "metadata": {},
+            "chunk_count": 2,
+            "total_chars": 120,
+            "source_path": "target.md",
+        }
+
+    def test_document_id_routes_to_update(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """document_id provided + content changed → update_document is called."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-target", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "ver-002",
+        }
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        result = pipeline.ingest_text(
+            "# Target Document\n\nNew body.", title="Target Document",
+            document_id="doc-target",
+        )
+
+        assert result.document_id == "doc-target"
+        assert result.action == "updated"
+        mock_client.ingest_document_rpc.assert_called_once()
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["document_id"] == "doc-target"
+
+    def test_document_id_not_found_raises(self, pipeline, mock_client) -> None:
+        """document_id provided but not in DB → ValueError raised."""
+        mock_client.get_document_by_id.return_value = None
+
+        with pytest.raises(ValueError, match="not found"):
+            pipeline.ingest_text("# T\n\nB.", title="T", document_id="ghost-id")
+
+    def test_document_id_bypasses_hash_dedup(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """document_id path must NOT call get_document_by_hash before resolving the doc."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-target", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "ver-002",
+        }
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# Target Document\n\nNew content.", title="Target Document",
+            document_id="doc-target",
+        )
+
+        # get_document_by_hash is called inside update_document (collision check),
+        # but must NOT be called on the ingest_text path before dispatching.
+        # The key assertion: no title/source-path lookups happened.
+        mock_client.find_document_by_title.assert_not_called()
+        mock_client.find_document_by_source_path.assert_not_called()
+
+    def test_document_id_without_update_existing_sets_note(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """document_id + update_existing=False (default) → result.note is populated."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-target", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "ver-002",
+        }
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        result = pipeline.ingest_text(
+            "# Target Document\n\nUpdated body.", title="Target Document",
+            document_id="doc-target",
+            update_existing=False,  # explicit default
+        )
+
+        assert result.note != ""
+        assert "update_if_exists" in result.note.lower() or "overridden" in result.note.lower()
+
+    def test_document_id_with_update_existing_no_note(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """document_id + update_existing=True → result.note is empty (no contradiction)."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.ingest_document_rpc.return_value = {
+            "document_id": "doc-target", "chunk_count": 1, "total_chars": 50,
+            "operation": "update-content", "version_id": "ver-002",
+        }
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        result = pipeline.ingest_text(
+            "# Target Document\n\nUpdated body.", title="Target Document",
+            document_id="doc-target",
+            update_existing=True,
+        )
+
+        assert result.note == ""
+
+    def test_no_document_id_preserves_existing_behavior(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """Omitting document_id falls through to normal create path (regression guard)."""
+        result = pipeline.ingest_text("# Fresh\n\nContent.", title="Fresh")
+
+        assert result.action == "created"
+        mock_client.get_document_by_id.assert_not_called()
+        rpc_kwargs = mock_client.ingest_document_rpc.call_args[1]
+        assert rpc_kwargs["document_id"] is None

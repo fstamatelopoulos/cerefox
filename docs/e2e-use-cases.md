@@ -105,6 +105,23 @@ Tests target the React SPA at `/app/`.
 | `TestDocumentView` | `test_review_status_toggle_visible` | Document detail shows review status (Approved badge) | Done |
 | `TestAuditLog` | `test_audit_log_page_loads` | Audit log page renders with heading | Done |
 
+### 6B. ID-Based Ingest (17B)
+
+Files: `tests/e2e/test_api_e2e.py`, `tests/e2e/test_mcp_e2e.py`, `tests/e2e/test_edge_functions_e2e.py` — marker: `@pytest.mark.e2e`
+
+| Class | Test | Use Case | Status |
+|-------|------|----------|--------|
+| `TestIdBasedIngest17B` | `test_pipeline_id_update_content_changed` | Ingest doc → update by `document_id` → verify same doc ID returned, action=updated | Done |
+| `TestIdBasedIngest17B` | `test_pipeline_id_not_found_raises` | Pass non-existent UUID as `document_id` → ValueError raised | Done |
+| `TestIdBasedIngest17B` | `test_pipeline_id_overrides_update_existing_and_sets_note` | `document_id` + `update_existing=False` → update proceeds, `result.note` non-empty | Done |
+| `TestIdBasedIngest17B` | `test_pipeline_id_with_update_existing_no_note` | `document_id` + `update_existing=True` → update proceeds, `result.note` empty | Done |
+| `TestMCPNewTools16B` (extended) | `test_ingest_by_document_id_updates` | MCP: `cerefox_ingest` with `document_id` → "updated" in response, same doc ID | Done |
+| `TestMCPNewTools16B` (extended) | `test_ingest_by_document_id_not_found_returns_error` | MCP: non-existent UUID → JSON-RPC error -32603 | Done |
+| `TestMCPNewTools16B` (extended) | `test_ingest_by_document_id_note_when_update_existing_false` | MCP: `document_id` + `update_if_exists=false` → "Note:" in response text | Done |
+| `TestIdBasedIngestEdgeFunction` | `test_ingest_by_id_updates_document` | Primitive EF: `document_id` → `updated=true`, same doc ID | Done |
+| `TestIdBasedIngestEdgeFunction` | `test_ingest_by_id_not_found_returns_404` | Primitive EF: non-existent UUID → HTTP 404 | Done |
+| `TestIdBasedIngestEdgeFunction` | `test_ingest_by_id_note_when_update_if_exists_false` | Primitive EF: `document_id` + `update_if_exists=false` → `note` field in response | Done |
+
 ### 7. Governance Features (future e2e)
 
 | # | Use Case | Status |

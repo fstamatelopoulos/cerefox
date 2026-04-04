@@ -543,6 +543,7 @@ async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[ty
         project_name=arguments.get("project_name"),
         metadata=arguments.get("metadata") or {},
         update_existing=bool(arguments.get("update_if_exists", False)),
+        document_id=arguments.get("document_id") or None,
         author=author,
         author_type="agent",
     )
@@ -576,6 +577,9 @@ async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[ty
         )
         if result.project_ids:
             msg += f"\nProject IDs: {', '.join(result.project_ids)}"
+
+    if result.note:
+        msg += f"\nNote: {result.note}"
 
     if result.action != "skipped":
         client.log_usage(

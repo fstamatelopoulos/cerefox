@@ -487,6 +487,7 @@ class IngestRequest(BaseModel):
     title: str = ""
     content: str = ""
     update_existing: bool = False
+    document_id: str | None = None
     project_ids: list[str] = []
     metadata: dict[str, str] = {}
 
@@ -497,6 +498,7 @@ class IngestResponse(BaseModel):
     title: str = ""
     skipped: bool = False
     updated: bool = False
+    note: str = ""
     error: str | None = None
 
 
@@ -799,6 +801,7 @@ def api_ingest_paste(
             project_ids=body.project_ids if body.project_ids else None,
             metadata=body.metadata if body.metadata else None,
             update_existing=body.update_existing,
+            document_id=body.document_id or None,
             author="web-ui",
             author_type="user",
         )
@@ -812,6 +815,7 @@ def api_ingest_paste(
             title=res.title,
             skipped=res.skipped,
             updated=res.reindexed,
+            note=res.note,
         )
     except Exception as exc:
         return IngestResponse(success=False, error=str(exc))

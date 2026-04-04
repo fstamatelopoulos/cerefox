@@ -1276,3 +1276,101 @@ class TestUsageTracking:
         # Clean up -- restore defaults
         e2e_client.set_config("require_requestor_identity", "false")
         e2e_client.set_config("requestor_identity_format", "^[a-zA-Z0-9_:.\\- ]+$")
+
+
+# ── 17B: ID-based ingest ───────────────────────────────────────────────────────
+
+
+class TestIdBasedIngest17B:
+    """17B.8-17B.11: document_id parameter in the Python pipeline and REST API."""
+
+    def test_pipeline_id_update_content_changed(
+        self,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """17B.8: document_id provided + content changed → document updated deterministically."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        title = unique_title("ID Update Content")
+        original = "# ID Update Content\n\nOriginal content."
+        updated = "# ID Update Content\n\nUpdated content -- ID-based path."
+
+        # Create the document
+        result1 = e2e_pipeline.ingest_text(original, title)
+        cleanup.track_document(result1.document_id)
+        assert result1.action == "created"
+
+        # Update by ID
+        result2 = e2e_pipeline.ingest_text(updated, title, document_id=result1.document_id)
+        assert result2.document_id == result1.document_id
+        assert result2.action == "updated"
+
+    def test_pipeline_id_not_found_raises(
+        self,
+        e2e_pipeline: IngestionPipeline | None,
+    ):
+        """17B.9: document_id pointing to non-existent document raises ValueError."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        import uuid as _uuid
+        with pytest.raises(ValueError, match="not found"):
+            e2e_pipeline.ingest_text(
+                "# Ghost\n\nContent.", "Ghost",
+                document_id=str(_uuid.uuid4()),
+            )
+
+    def test_pipeline_id_overrides_update_existing_and_sets_note(
+        self,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """17B.10: document_id + update_existing=False → updates anyway, note is set."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        title = unique_title("ID Override Note")
+        original = "# ID Override Note\n\nOriginal."
+        updated = "# ID Override Note\n\nModified for note test."
+
+        result1 = e2e_pipeline.ingest_text(original, title)
+        cleanup.track_document(result1.document_id)
+
+        result2 = e2e_pipeline.ingest_text(
+            updated, title,
+            document_id=result1.document_id,
+            update_existing=False,  # should be overridden
+        )
+        assert result2.document_id == result1.document_id
+        assert result2.action == "updated"
+        assert result2.note != ""
+
+    def test_pipeline_id_with_update_existing_no_note(
+        self,
+        e2e_pipeline: IngestionPipeline | None,
+        cleanup: E2ECleanup,
+        unique_title,
+    ):
+        """17B.11: document_id + update_existing=True → updates, note is empty."""
+        if e2e_pipeline is None:
+            pytest.skip("Embedder not configured")
+
+        title = unique_title("ID No Note")
+        original = "# ID No Note\n\nOriginal content."
+        updated = "# ID No Note\n\nChanged for no-note test."
+
+        result1 = e2e_pipeline.ingest_text(original, title)
+        cleanup.track_document(result1.document_id)
+
+        result2 = e2e_pipeline.ingest_text(
+            updated, title,
+            document_id=result1.document_id,
+            update_existing=True,
+        )
+        assert result2.document_id == result1.document_id
+        assert result2.action == "updated"
+        assert result2.note == ""

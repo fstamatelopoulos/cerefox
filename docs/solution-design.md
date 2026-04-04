@@ -749,7 +749,23 @@ Ingestion is designed to be asynchronous and non-blocking:
 
 ### 6.4 Update vs. Create
 
-When `update_if_exists=True`:
+Ingest supports two update modes: **ID-based** (preferred) and **title-based** (fallback).
+
+#### ID-based update (preferred)
+
+When `document_id` is provided, the pipeline bypasses title-matching and hash-dedup and updates the named document directly:
+
+| Case | Action |
+|------|--------|
+| `document_id` not found | Error -- never creates a document with a caller-supplied ID |
+| `document_id` found, content unchanged | Update metadata/title only -- no version snapshot, no re-chunking |
+| `document_id` found, content changed | `cerefox_snapshot_version` RPC → insert new chunks → update document metadata |
+
+If `update_if_exists=False` is also set (the default), the update proceeds anyway and a `note` field is included in the response warning that the flag was overridden. This makes the intent explicit without silently ignoring the parameter.
+
+#### Title-based update (fallback)
+
+When `document_id` is not provided and `update_if_exists=True`:
 
 | Case | Action |
 |------|--------|
@@ -761,7 +777,7 @@ The version snapshot captures the state *before* the update: `content_hash`, `me
 
 **Metadata-only updates do not create a version**: when only title or metadata changes (content hash matches), the document is updated directly. No version row is created. This is documented in the web UI and CLI — version history tracks content changes only.
 
-**Title matching note**: there is no `UNIQUE` constraint on `title` in `cerefox_documents`. If multiple documents share the same title (e.g., different versions manually ingested), `update_if_exists` matches the first result (by `created_at` ascending). For reliable update behavior, titles should be treated as unique identifiers by the caller — a convention, not a DB constraint. A uniqueness warning is surfaced when a match returns multiple rows.
+**Title matching note**: there is no `UNIQUE` constraint on `title` in `cerefox_documents`. If multiple documents share the same title (e.g., different versions manually ingested), `update_if_exists` matches the first result (by `created_at` ascending). For reliable update behavior, prefer ID-based updates. When using title-based updates, titles should be treated as unique identifiers by the caller -- a convention, not a DB constraint.
 
 ## 7. Document Versioning Design
 

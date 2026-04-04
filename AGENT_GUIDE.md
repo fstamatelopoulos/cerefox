@@ -47,17 +47,22 @@ Save a new document or update an existing one.
 |-----------|----------|-------------|
 | `title` | Yes | Descriptive, stable title (e.g., "OAuth 2.1 Design Document", not "doc1"). |
 | `content` | Yes | Markdown content. Use H1/H2/H3 headings -- the chunker uses them for segmentation. |
-| `update_if_exists` | No | When `true`, updates the document with the same title (versions the old content). Default `false`. |
+| `document_id` | No | UUID of an existing document to update. When provided, updates that document directly regardless of `update_if_exists`. Returns an error if the document does not exist. Workflow: search → note the `[id: ...]` → pass here. |
+| `update_if_exists` | No | When `true`, updates the document with the same title (versions the old content). Default `false`. Ignored when `document_id` is provided. |
 | `project_name` | No | Assign to a project (created automatically if it doesn't exist). |
 | `metadata` | No | Arbitrary JSON. Use at minimum: `type` and `status`. |
 | `author` | No | Your agent name for audit attribution. Always set this. |
 | `source` | No | Origin label (default "agent"). |
 
-**The update workflow (critical)**:
+**The update workflow (preferred -- ID-based)**:
+1. Search for the document. Note the `[id: abc123]` in the result.
+2. Call `cerefox_ingest` with `document_id: "abc123"` and the new content.
+3. The old content is automatically versioned and recoverable.
+
+**The update workflow (fallback -- title-based)**:
 1. Search for the document first.
 2. Call `cerefox_ingest` with the **exact same title** and `update_if_exists: true`.
-3. The old content is automatically versioned and recoverable.
-4. If you use a different title, a **new** document is created (the old one remains). This is almost never what you want when revising.
+3. If you use a different title, a **new** document is created (the old one remains). This is almost never what you want when revising.
 
 **Deduplication**: Content is SHA-256 hashed. Identical content is skipped (no re-indexing). Metadata-only changes update metadata without creating a version.
 
@@ -154,10 +159,19 @@ Query the immutable audit log of all write operations.
 
 ## Key Workflows
 
-### Search then act
+### Search then update (ID-based -- preferred)
 
 ```
 1. cerefox_search("topic")           -- find relevant docs, note [id: uuid]
+2. cerefox_get_document(id)          -- get full text if partial
+3. cerefox_ingest(title, content,    -- update by document ID (deterministic)
+     document_id="uuid")
+```
+
+### Search then update (title-based -- fallback)
+
+```
+1. cerefox_search("topic")           -- find relevant docs
 2. cerefox_get_document(id)          -- get full text if partial
 3. cerefox_ingest(title, content,    -- update with same title
      update_if_exists=true)
@@ -168,7 +182,7 @@ Query the immutable audit log of all write operations.
 ```
 1. cerefox_search("topic")           -- check if it already exists
 2. If not found: cerefox_ingest(title, content, project_name, metadata)
-3. If found: cerefox_ingest(same_title, new_content, update_if_exists=true)
+3. If found: cerefox_ingest(same_title, new_content, document_id="uuid")
 ```
 
 ### Catch up on recent changes
@@ -184,9 +198,9 @@ Query the immutable audit log of all write operations.
 ## Rules
 
 1. **Always search before ingesting.** Check for existing documents on the topic.
-2. **Use `update_if_exists: true` with the exact same title** to update. Different title = new document.
+2. **Prefer `document_id` for updates** -- pass the UUID from search results to update a specific document. Use `update_if_exists: true` as a fallback when you don't have the ID.
 3. **Always set `author`/`requestor`** to your agent name for attribution.
-4. **Use the `document_id` from search results** for `cerefox_get_document` and `cerefox_list_versions`.
+4. **Use the `document_id` from search results** for `cerefox_get_document`, `cerefox_list_versions`, and targeted `cerefox_ingest` updates.
 5. **Add metadata**: at minimum `type` (e.g., "research", "decision-log") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings. The chunker uses heading structure.
 7. **Distill, don't dump.** Summaries > transcripts. Decisions > discussions. Insights > raw data.
