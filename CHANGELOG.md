@@ -7,6 +7,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [v0.1.14] -- 2026-04-03
+
+Title boosting for FTS and semantic search (Iteration 17A).
+
+### Added
+- **Title boosting (FTS)**: document title now included in `cerefox_chunks.fts` at weight A (highest), chunk heading at weight A, body content at weight B. Title matches rank ~10x higher than body-only matches. Implemented via `cerefox_ingest_document` RPC computing the tsvector inline using `p_title`.
+- **Title boosting (semantic)**: embedding input prepended with `# {doc_title}\n` for every chunk across Python pipeline, `cerefox-ingest` Edge Function, and `cerefox-mcp`. Stored content is unchanged.
+- **Title-change auto-reindex**: when a document title changes without a content change, the pipeline re-embeds all current chunks with the new title prefix and updates FTS vectors via new `cerefox_update_chunk_fts` RPC. No version snapshot -- content is identical.
+- **`cerefox_update_chunk_fts(p_document_id, p_new_title)` RPC**: updates FTS vectors for all current chunks of a document with a new title.
+- **`cerefox reindex --all` improvements**: now embeds with title prefix and calls `update_chunk_fts` per document. Existing documents without title boosting can be upgraded.
+- **`scripts/reindex_all.py`**: convenience wrapper for `cerefox reindex --all` with `--dry-run` and `--batch` options.
+- Migration `0011_title_boosting.sql`: drops GENERATED expression on `fts` column, adds `cerefox_update_chunk_fts` RPC.
+
+### Fixed
+- **`GET /api/v1/documents/{id}` no longer returns 500** on transient network errors fetching supplementary data (versions, project IDs). Returns the document with empty lists instead.
+
+### Changed
+- `cerefox_chunks.fts` changed from `GENERATED ALWAYS AS` to a regular `TSVECTOR` column. PostgreSQL GENERATED columns cannot cross-reference other tables; the RPC now computes it inline.
+
+---
+
 ## [v0.1.13] -- 2026-03-30
 
 Configurable requestor identity enforcement. Contributed by @tdebasis (PR #20, issue #18).
