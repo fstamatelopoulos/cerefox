@@ -1504,7 +1504,7 @@ Instead of requiring manual reindex, the pipeline auto-updates when a title chan
 | 17A.X1 | Detect title change in `update_document()` pipeline (compare old vs new title) | Done | Skip if title unchanged |
 | 17A.X2 | Write `cerefox_update_chunk_fts(p_document_id, p_new_title)` RPC | Done | `UPDATE cerefox_chunks SET fts = setweight(to_tsvector('english', p_new_title), 'A') \|\| setweight(to_tsvector('english', content), 'B') WHERE document_id = p_document_id AND version_id IS NULL`; SECURITY DEFINER |
 | 17A.X3 | When title changes: re-embed current chunks with new title prefix, then call `cerefox_update_chunk_fts` | Done | Python pipeline; uses existing embedder; fire-and-forget embedding update pattern; existing chunk rows updated in-place (no new version) |
-| 17A.X4 | Wire title-change detection through REST API title edit path | Deferred | REST API `PUT /documents/{id}` calls `pipeline.update_document()` which already has title-change detection; no extra wiring needed |
+| 17A.X4 | Wire title-change detection through REST API title edit path | Done | REST API edit endpoint already calls `pipeline.update_document()` which contains the title-change detection; no extra wiring was needed |
 | 17A.X5 | Update `cerefox_update_chunk_fts` call in `cerefox_ingest_document` RPC | N/A | FTS computed inline in RPC at ingestion; standalone RPC used only for title-change updates from Python pipeline |
 
 **Step 2 -- Search RPC updates**
