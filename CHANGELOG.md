@@ -7,6 +7,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [v0.1.15] -- 2026-04-03
+
+ID-based document updates in `cerefox_ingest` (Iteration 17B).
+
+### Added
+- **`document_id` parameter on `cerefox_ingest`**: pass the UUID of an existing document to update it deterministically, bypassing title-matching. Available across all access layers: MCP tools (`cerefox-mcp`), primitive Edge Function (`cerefox-ingest`), Python pipeline, and REST API (`POST /api/v1/ingest`).
+- **`note` field in ingest responses**: when `document_id` is provided but `update_if_exists` is `false` (the default), the update proceeds and the response includes a `note` warning that the flag was overridden. Available in MCP text responses, Edge Function JSON responses, and `IngestResult.note`.
+- 6 new unit tests (`TestIdBasedIngest`) and 10 new e2e tests covering the ID-based path across pipeline, MCP, and Edge Function layers.
+- `AGENT_GUIDE.md` and `AGENT_QUICK_REFERENCE.md` updated with ID-based update workflow as the preferred pattern.
+
+### Changed
+- `AGENT_GUIDE.md`: update workflow section now shows ID-based (preferred) and title-based (fallback) patterns separately.
+- `docs/solution-design.md` section 6.4 documents both update modes with decision tables.
+- `docs/requirements-and-specs.md`: FR-11.11 and FR-11.12 added.
+
+---
+
 ## [v0.1.14] -- 2026-04-03
 
 Title boosting for FTS and semantic search (Iteration 17A).
