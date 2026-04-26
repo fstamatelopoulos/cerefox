@@ -15,7 +15,7 @@ Run the Cerefox web server and database on your own machine using Docker for Pos
 ## Step 1 — Clone and install
 
 ```bash
-git clone https://github.com/yourname/cerefox.git
+git clone https://github.com/fstamatelopoulos/cerefox.git
 cd cerefox
 uv sync
 ```

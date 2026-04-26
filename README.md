@@ -66,7 +66,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/yourname/cerefox.git
+git clone https://github.com/fstamatelopoulos/cerefox.git
 cd cerefox
 uv sync
 ```
