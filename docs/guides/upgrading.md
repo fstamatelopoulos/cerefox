@@ -177,7 +177,11 @@ After deploying new Edge Functions (step 6), AI agent integrations may need reco
 
 ### MCP clients (Claude Code, Cursor, Claude Desktop)
 
-If you are using the **remote MCP server** (Streamable HTTP via `cerefox-mcp` Edge Function), MCP clients will pick up new tools automatically on the next connection. No reconfiguration needed.
+If you are using the **remote MCP server** (Streamable HTTP via `cerefox-mcp` Edge Function), MCP clients will pick up new tools and updated tool signatures in **new sessions** started after the deploy. No reconfiguration needed -- just start a new conversation.
+
+**Important**: MCP tool schemas are cached for the lifetime of a session. An existing session that already loaded the old tool definitions will not see changes even if you "restart" the AI client within the same session context. The schema is fetched once at session initialization and held in memory. Starting a completely new session (new conversation/window) is the only way to pick up schema changes.
+
+This matters when you add a new parameter to an existing tool (e.g., adding `project_name` to `cerefox_search`): agents in open sessions will not know the parameter exists until they start a fresh session.
 
 If you are still using the **local MCP server** (`cerefox mcp` via stdio), consider switching to the remote MCP server. The remote path is now the recommended default -- it supports all tools, runs server-side embedding, and works across machines. See `docs/guides/connect-agents.md` for setup instructions.
 

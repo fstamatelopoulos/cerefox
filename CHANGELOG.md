@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [v0.1.16] -- 2026-05-03
+
+Documentation fixes and clarifications.
+
+### Fixed
+- **Incorrect clone URL in README and setup-local guide**: replaced placeholder `yourname/cerefox` with the correct `fstamatelopoulos/cerefox` repository URL. Fixes #24.
+- **MCP session schema caching**: documented in `docs/guides/upgrading.md` that MCP tool schemas are cached for the lifetime of a session. Agents in open sessions will not see updated tool signatures after a redeploy -- only sessions started after the deploy pick up changes. Restarting the AI client within the same session does not help; a completely new session is required.
+
+---
+
 ## [v0.1.15] -- 2026-04-03
 
 ID-based document updates in `cerefox_ingest` (Iteration 17B).
