@@ -9,9 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [v0.1.16] -- 2026-05-03
 
-Documentation fixes and clarifications.
+Documentation fixes and security fix for metadata search.
 
 ### Fixed
+- **`cerefox_metadata_search` exposes soft-deleted documents**: the RPC was missing `AND d.deleted_at IS NULL` in its WHERE clause, causing deleted documents to appear in metadata search results. All other search paths (`cerefox_hybrid_search`, `cerefox_search_docs`) already filtered soft-deleted documents correctly. Fixed in `src/cerefox/db/rpcs.sql`.
 - **Incorrect clone URL in README and setup-local guide**: replaced placeholder `yourname/cerefox` with the correct `fstamatelopoulos/cerefox` repository URL. Fixes #24.
 - **MCP session schema caching**: documented in `docs/guides/upgrading.md` that MCP tool schemas are cached for the lifetime of a session. Agents in open sessions will not see updated tool signatures after a redeploy -- only sessions started after the deploy pick up changes. Restarting the AI client within the same session does not help; a completely new session is required.
 

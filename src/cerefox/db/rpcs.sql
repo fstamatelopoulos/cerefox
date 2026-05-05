@@ -1416,6 +1416,7 @@ BEGIN
             ELSE NULL END AS content
         FROM cerefox_documents d
         WHERE d.metadata @> p_metadata_filter
+          AND d.deleted_at IS NULL
           AND (p_project_id IS NULL OR EXISTS (
                   SELECT 1 FROM cerefox_document_projects dp
                   WHERE dp.document_id = d.id AND dp.project_id = p_project_id
