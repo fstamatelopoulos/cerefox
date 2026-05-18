@@ -22,7 +22,7 @@ after each run, even on failure.
 ## Configuration
 
 - **Supabase REST API tests**: Use credentials from `.env` (`CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`)
-- **Edge Function tests**: Need a JWT-format key. Set `CEREFOX_SUPABASE_ANON_KEY` in `.env` (the Supabase anon key from Dashboard > Settings > API). Skipped if not available.
+- **Edge Function tests**: Need a JWT-format key. Set `CEREFOX_SUPABASE_ANON_KEY` in `.env` — use the **legacy anon JWT** (Project Settings → API Keys → Legacy → anon). The new `sb_publishable_…` key fails at the Edge Function gateway. See [`docs/guides/setup-supabase.md` → Supabase API keys (2026)](guides/setup-supabase.md#supabase-api-keys-2026). Tests are skipped if `CEREFOX_SUPABASE_ANON_KEY` is not set.
 - **UI tests**: Require the web app running (`uv run uvicorn cerefox.api.app:app`) and frontend built (`cd frontend && npm run build`). Tests target the React SPA at `http://127.0.0.1:8000/app/`.
 
 ---

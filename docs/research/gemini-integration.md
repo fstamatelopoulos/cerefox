@@ -50,7 +50,7 @@ a personal Google account.
     "cerefox": {
       "httpUrl": "https://<project>.supabase.co/functions/v1/cerefox-mcp",
       "headers": {
-        "Authorization": "Bearer <supabase-anon-key>"
+        "Authorization": "Bearer <legacy-anon-jwt>"
       }
     }
   }

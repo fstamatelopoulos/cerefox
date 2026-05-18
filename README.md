@@ -89,16 +89,18 @@ Open `.env` and fill in these values:
 
 | Variable | Where to find it |
 |---|---|
-| `CEREFOX_SUPABASE_URL` | Supabase → Settings → API → Project URL |
-| `CEREFOX_SUPABASE_KEY` | Supabase → Settings → API → Secret keys → `default` |
-| `CEREFOX_DATABASE_URL` | Supabase → Settings → Database → Connection string → **Session pooler** (port 5432) |
+| `CEREFOX_SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
+| `CEREFOX_SUPABASE_KEY` | Supabase → Project Settings → API Keys → **Secret key** (`sb_secret_…`). Legacy `service_role` JWT also works. |
+| `CEREFOX_DATABASE_URL` | Supabase → Project Settings → Database → **Connection pooling → Session Pooler** (port `5432`). See notes below. |
 | `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| `CEREFOX_SUPABASE_ANON_KEY` (only for Edge Functions / MCP / GPT Actions) | Supabase → Project Settings → API Keys → **Legacy → anon** (JWT, `eyJ…`). The new `sb_publishable_…` does **not** work for Edge Function Bearer auth. See [`docs/guides/setup-supabase.md` → Supabase API keys (2026)](docs/guides/setup-supabase.md#supabase-api-keys-2026). |
 
 **`CEREFOX_DATABASE_URL` notes:**
-- Use the **Session pooler** string (port 5432), not the Direct connection or Transaction pooler.
-- The username must include your project ref: `postgres.your-project-ref` — not just `postgres`.
-- Direct connection is IPv6 only on the free tier. If you get `nodename nor servname provided`, you are on IPv4 — use the Session pooler.
-- See `.env.example` for both URL formats with full explanations.
+- Use the **Session Pooler** (port `5432`), not the Transaction Pooler (`6543`, no DDL) or the Direct Connection (IPv6-only on free tier).
+- The Session Pooler may not be a first-class option in the new "Connect" dialog; either find it under **Connection pooling**, or take the Transaction Pooler URI and change `:6543` → `:5432`.
+- The username must include your project ref: `postgres.your-project-ref` — not just `postgres`. Without the suffix Supabase returns "Tenant or user not found".
+- Append `?sslmode=require` to enforce TLS.
+- Full reference: [`docs/guides/setup-supabase.md` → Connection pooling (2026)](docs/guides/setup-supabase.md#connection-pooling-2026).
 
 ### 4. Deploy the schema
 
@@ -168,7 +170,7 @@ Search RPCs (MCP tools): `cerefox_hybrid_search`, `cerefox_fts_search`,
 
 ## Connecting AI agents
 
-**Option 1 — Remote MCP (recommended)** — just a URL, an anon key, and `npx`:
+**Option 1 — Remote MCP (recommended)** — just a URL, a legacy anon JWT (Supabase → Project Settings → API Keys → **Legacy → anon**, not the new `sb_publishable_…` key — see [setup-supabase.md](docs/guides/setup-supabase.md#supabase-api-keys-2026)), and `npx`:
 
 The `cerefox-mcp` Supabase Edge Function speaks MCP Streamable HTTP. No Python, no local
 repo clone — works from any machine with Node.js installed.
@@ -218,6 +220,16 @@ as Bearer auth.
   }
 }
 ```
+
+**Option 4 — Shell CLI for local coding agents** — no MCP setup at all:
+
+Modern local coding agents (Claude Code, OpenAI Codex CLI, opencode, OpenClaw, Hermes, …)
+have a Bash tool. If you've already got Cerefox checked out and your `.env` configured for
+the CLI, you can simply point the agent at the repo path in its system prompt / project
+memory, and tell it to read `AGENT_GUIDE.md`. The agent reads and writes Cerefox by
+running `uv run cerefox …`. No `.mcp.json`, no `claude mcp add`, no Claude Desktop edit.
+Useful when you want one Cerefox checkout to serve any number of local agents in the
+same project with zero per-agent configuration.
 
 Full setup for all options: `docs/guides/connect-agents.md`
 

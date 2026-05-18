@@ -253,7 +253,7 @@ user management not tool auth, and disproportionate for a single-user system.
 Perplexity Pro web UI → Settings → Custom connector → Remote:
 - Name: Cerefox
 - URL: `https://ljdznqldchupuohjcbti.supabase.co/functions/v1/cerefox-mcp`
-- Auth: API Key (anon key)
+- Auth: API Key (legacy anon JWT)
 - Transport: Streamable HTTP
 
 **Result**: Connection failed. The request never reached the `cerefox-mcp` Edge Function.

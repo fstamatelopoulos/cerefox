@@ -31,19 +31,20 @@ uv sync
 ## 3. Set up Supabase (5 min)
 
 1. Create a new Supabase project at [app.supabase.com](https://app.supabase.com).
-2. Go to **Settings > API** and copy:
-   - **Project URL** (looks like `https://abcd1234.supabase.co`)
-   - **service_role** key (under "Project API keys" -- use service_role, not anon)
-3. Go to **Settings > Database** and copy the **Connection string** (URI format).
+2. Go to **Project Settings → API → Project URL** and copy it. Also note your project ref (the slug in the URL, e.g. `abcd1234`).
+3. Go to **Project Settings → API Keys** and copy the **Secret key** (`sb_secret_…`). The legacy `service_role` JWT also works if you prefer; either goes into `CEREFOX_SUPABASE_KEY`. See [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026) for the full key story (including why the anon key, if you ever need it, must currently stay as the legacy JWT — `sb_publishable_…` does not work for Edge Functions).
+4. Go to **Project Settings → Database → Connection pooling** and copy the **Session Pooler** URI (host ends `.pooler.supabase.com`, port `5432`). If you only see the Transaction Pooler in the dashboard, take that URI and change `:6543` → `:5432`. **Do not use port 6543** — Transaction Pooler does not support DDL. See [`setup-supabase.md` → Connection pooling (2026)](setup-supabase.md#connection-pooling-2026) for context.
 
 Create a `.env` file:
 
 ```env
 CEREFOX_SUPABASE_URL=https://your-project-ref.supabase.co
-CEREFOX_SUPABASE_KEY=your-service-role-key
-CEREFOX_DATABASE_URL=postgresql://postgres:password@db.your-project-ref.supabase.co:5432/postgres
+CEREFOX_SUPABASE_KEY=sb_secret_...your-supabase-secret-key...
+CEREFOX_DATABASE_URL=postgresql://postgres.your-project-ref:your-db-password@aws-N-region.pooler.supabase.com:5432/postgres?sslmode=require
 OPENAI_API_KEY=sk-...your-openai-key...
 ```
+
+The username must include the `.<project-ref>` suffix (e.g. `postgres.abcd1234`) — without it, Supabase returns "Tenant or user not found".
 
 ---
 

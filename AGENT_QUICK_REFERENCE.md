@@ -1,6 +1,6 @@
 # Cerefox Knowledge Base -- Agent Quick Reference
 
-Cerefox is a persistent, shared knowledge base. You have 8 MCP tools.
+Cerefox is a persistent, shared knowledge base. You have 8 MCP tools (or, if MCP isn't configured, the same 8 operations via the local CLI — see CLI section at the bottom).
 For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 
 ## Tools
@@ -44,3 +44,20 @@ ingest(title="Same Title", content="...", update_if_exists=true, author="my-agen
 ```
 metadata_search(metadata_filter={"type": "decision-log"}, updated_since="2026-03-28T00:00:00Z")
 ```
+
+## CLI fallback (when MCP is unavailable)
+
+If `cerefox_search` is not in your tool list, your user has likely pointed you at a local Cerefox checkout. Use `uv run cerefox <subcommand>` via your Bash tool. Same operations, same conventions.
+
+| MCP tool | CLI |
+|---|---|
+| `cerefox_search` | `uv run cerefox search "<q>"` |
+| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<t>"` |
+| `cerefox_get_document` | `uv run cerefox get-doc <id>` |
+| `cerefox_list_versions` | `uv run cerefox list-versions <id>` |
+| `cerefox_list_projects` | `uv run cerefox list-projects` |
+| `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
+| `cerefox_metadata_search` | `uv run cerefox metadata-search --filter '<json>'` |
+| `cerefox_get_audit_log` | _no CLI equivalent yet_ |
+
+Caveats today (pending [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28)): CLI writes log `author = "unknown"`, reads log `requestor = "user"` — agent attribution is not yet pluggable on the CLI. See `AGENT_GUIDE.md` → "Using Cerefox via the CLI" for full details.

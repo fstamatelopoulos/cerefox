@@ -204,8 +204,8 @@ Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functio
 
 Cerefox has three distinct access layers, each with its own credential:
 
-1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **anon key** (JWT). The Supabase gateway validates it; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key.
-2. **Python web app & CLI** — `CerefoxClient` authenticates with the **service-role key** via the Supabase REST API. This bypasses RLS and gives unrestricted read/write access. Never expose this key to clients.
+1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **legacy anon JWT** (`eyJ…`). The Supabase gateway validates it as a JWT; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. **Important (2026):** the new `sb_publishable_…` API key cannot be used here — the Edge Function gateway rejects non-JWT keys. The Data API (Layer 2) accepts the new key system; the Edge Function gateway does not. See `docs/guides/setup-supabase.md` → "Supabase API keys (2026)" and the Decision Log 2026 Q2 entry for context.
+2. **Python web app & CLI** — `CerefoxClient` authenticates via the Supabase REST API using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
 3. **Deployment scripts only** — `db_deploy.py` / `db_migrate.py` connect directly to Postgres via psycopg2 using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
 
 See `docs/guides/access-paths.md` for a full breakdown with credential sources and a summary table.
@@ -248,7 +248,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 
 | Client | How to connect | Notes |
 |---|---|---|
-| Claude Code | `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <anon-key>"` | Direct Streamable HTTP |
+| Claude Code | `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <legacy-anon-jwt>"` (legacy `eyJ…` only — see Layer 1 note above) | Direct Streamable HTTP |
 | Cursor | `url` + `headers.Authorization` in mcp.json | Same as Claude Code |
 | OpenAI Codex CLI | `url` + `bearer_token_env_var` in `~/.codex/config.toml` | Direct Streamable HTTP; TOML config; **tested, working** |
 | Gemini CLI | `httpUrl` + `headers` in `~/.gemini/settings.json` | Direct Streamable HTTP; **untested, expected to work** |

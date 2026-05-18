@@ -7,6 +7,112 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [Unreleased]
+
+Documentation and process work to support the Supabase 2026 API key migration, the new
+"Path C" CLI-for-local-agents access pattern, and a set of follow-up tickets that will
+land code changes in subsequent releases.
+
+### Added
+- **Path C — Shell CLI for local coding agents** as a documented access path. Local
+  coding agents (Claude Code, OpenAI Codex CLI, opencode, OpenClaw, Hermes, etc.) can
+  read and write Cerefox by invoking `uv run cerefox …` via their Bash tool, instead of
+  configuring an MCP server. New top-level section in [`docs/guides/connect-agents.md`](docs/guides/connect-agents.md)
+  covering setup, system-prompt template, MCP-tool ↔ CLI-command mapping, verification
+  prompts, caveats (privilege level, audit attribution gap pending #28), and a per-agent
+  footprint table.
+- **AGENT_GUIDE.md** now opens with a "Two ways to interact with Cerefox" section
+  (MCP vs CLI) and ends with a "Using Cerefox via the CLI" section: full MCP-tool ↔
+  CLI-command mapping, behavioural differences (lossy attribution pending #28,
+  human-formatted output, exit-code quirks with #27), and quick-pattern recipes.
+- **AGENT_QUICK_REFERENCE.md** gains a "CLI fallback" section pointing at the new
+  mapping when MCP is not available.
+- **README.md** gains "Option 4 — Shell CLI for local coding agents" in the
+  "Connecting AI agents" section.
+- **[`docs/guides/setup-supabase.md`](docs/guides/setup-supabase.md)** gains two new canonical reference sections:
+  - "Supabase API keys (2026)" — explains the asymmetric Supabase key migration: the
+    new `sb_secret_…` key works for the Data API (`CEREFOX_SUPABASE_KEY`), but the
+    Edge Function gateway still requires the **legacy anon JWT** for Bearer auth
+    (`CEREFOX_SUPABASE_ANON_KEY`). The new `sb_publishable_…` key cannot replace
+    the legacy anon JWT today. Sources linked.
+  - "Connection pooling (2026)" — full reference for finding the Session Pooler URI
+    in the redesigned Supabase dashboard, the port-change shortcut from Transaction
+    Pooler to Session Pooler, username/sslmode requirements, and a common-errors
+    table.
+  All other Supabase-related docs (README, quickstart, configuration, access-paths,
+  connect-agents, e2e-use-cases, response-limits, upgrading, mcp-configs example,
+  CLAUDE.md, solution-design, research notes) link back to these two anchors instead
+  of repeating the explanation.
+
+### Changed
+- **All Supabase setup docs** updated for the 2026 key migration:
+  - `CEREFOX_SUPABASE_KEY` examples now use the new secret key (`sb_secret_…`);
+    legacy `service_role` JWT documented as still working.
+  - `CEREFOX_SUPABASE_ANON_KEY` instructions explicitly call for the **legacy anon
+    JWT** (`eyJ…`); explain that `sb_publishable_…` is rejected by the Edge Function
+    gateway with `UNAUTHORIZED_INVALID_JWT_FORMAT`.
+  - Files touched: [`.env.example`](.env.example), [`README.md`](README.md), [`CLAUDE.md`](CLAUDE.md), [`docs/guides/quickstart.md`](docs/guides/quickstart.md),
+    [`docs/guides/setup-supabase.md`](docs/guides/setup-supabase.md), [`docs/guides/configuration.md`](docs/guides/configuration.md),
+    [`docs/guides/access-paths.md`](docs/guides/access-paths.md), [`docs/guides/connect-agents.md`](docs/guides/connect-agents.md),
+    [`docs/guides/response-limits.md`](docs/guides/response-limits.md), [`docs/guides/upgrading.md`](docs/guides/upgrading.md),
+    [`docs/e2e-use-cases.md`](docs/e2e-use-cases.md), [`docs/examples/mcp-configs/README.md`](docs/examples/mcp-configs/README.md),
+    [`docs/solution-design.md`](docs/solution-design.md), `docs/research/gemini-integration.md`,
+    `docs/research/oauth-mcp-auth.md`.
+- **Connection pooling guidance** rewritten across all setup docs to reflect the
+  redesigned Supabase Connect dashboard: explicitly mandate the **Session Pooler**
+  (port `5432`), warn against the Transaction Pooler (`6543`, breaks DDL), document
+  the port-change shortcut from the Transaction Pooler URI, require the
+  `postgres.<project-ref>` username suffix, and recommend appending `?sslmode=require`.
+
+### Filed (pending implementation)
+The following tickets capture work that did **not** ship in this docs-only PR — they
+will be picked up one by one in subsequent releases. Each ticket includes a
+"Documentation to update when this ships" section so doc drift is prevented as the
+work lands.
+
+- [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26) — Add explicit
+  `GRANT` block to `schema.sql` for the Supabase Data API role-grants change rolling
+  out on 2026-05-30 (new projects) and 2026-10-30 (existing projects). Also tightens
+  `cerefox_audit_log` and `cerefox_document_versions` to `INSERT, SELECT` only at the
+  privilege level, enforcing the existing "append-only" comment as a real
+  immutability boundary.
+- [cerefox#27](https://github.com/fstamatelopoulos/cerefox/issues/27) — `cerefox
+  search` CLI raises `NameError: name 'project_id' is not defined` after rendering
+  results. One-word fix at [`src/cerefox/cli.py:400`](src/cerefox/cli.py:400). Note:
+  contributor [@reggaeguitar](https://github.com/reggaeguitar) independently caught
+  the same bug in PR #25 (which also fixes an `rpcs.sql` ordering issue that blocks
+  fresh deploys); if PR #25 merges, #27 can be closed as resolved.
+- [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28) — Add
+  `--author`, `--author-type`, and `--requestor` flags to the CLI for caller-identity
+  parity with the MCP and Edge Function paths. Amends the 2026-03-23
+  access-path-as-trust-signal decision for ambiguous channels (CLI, Edge Functions).
+- [cerefox#29](https://github.com/fstamatelopoulos/cerefox/issues/29) — CLI parity
+  with MCP for `ingest`: add `--document-id` (enables the *preferred* ID-based update
+  workflow), `--source`, and `--metadata` on `ingest-dir`.
+- [cerefox#30](https://github.com/fstamatelopoulos/cerefox/issues/30) — Add
+  `cerefox get-audit-log` CLI command. Last remaining MCP-tool ↔ CLI-command
+  parity gap.
+- [cerefox#31](https://github.com/fstamatelopoulos/cerefox/issues/31) — Add
+  [`docs/guides/cli.md`](docs/guides/cli.md) — comprehensive CLI reference. Scheduled
+  intentionally **after** #28/#29/#30 so it documents the final CLI surface.
+
+### Decision-log entries (in Cerefox knowledge base, not the repo)
+- 2026-05-18 — "CLI gains caller-set author / author_type / requestor; amend the
+  2026-03-23 access-path principle for ambiguous channels". Captures the rationale
+  for #28.
+- 2026-05-18 — "Supabase API key migration is asymmetric: Data API yes, Edge
+  Functions no". Captures the empirical findings behind the Supabase API key docs
+  updates, the deprecation timeline (none announced), the future plan for replacing
+  the legacy anon JWT (`verify_jwt = false` + in-function validation), and the
+  trigger conditions for that future work.
+- 2026-05-18 — "Supabase removing implicit role grants on public-schema tables".
+  Captures the rationale for #26.
+- Plus lessons-learned entries: install `uv` outside any venv; "Legacy" dashboard
+  label is misleading; Session Pooler vs Transaction Pooler; OpenAI keys per
+  machine.
+
+---
+
 ## [v0.1.16] -- 2026-05-03
 
 Documentation fixes and security fix for metadata search.

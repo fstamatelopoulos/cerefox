@@ -14,8 +14,9 @@ cp .env.example .env
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | `CEREFOX_SUPABASE_URL` | `""` | For app | Supabase project URL. Found in: Project Settings → API → Project URL |
-| `CEREFOX_SUPABASE_KEY` | `""` | For app | Service role key. Found in: Project Settings → API → service_role key. **Keep secret.** |
-| `CEREFOX_DATABASE_URL` | `""` | For scripts | Direct Postgres connection URL. Found in: Project Settings → Database → Connection string (URI). Required for `db_deploy.py` and `db_status.py`. |
+| `CEREFOX_SUPABASE_KEY` | `""` | For app | New **secret key** (`sb_secret_…`) from Project Settings → API Keys → Secret key. Legacy `service_role` JWT also works. **Keep secret.** See [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026). |
+| `CEREFOX_SUPABASE_ANON_KEY` | `""` | For Edge Functions / e2e | **Legacy anon JWT** (`eyJ…`), under "Legacy" in Project Settings → API Keys. Used as Bearer token for Edge Function / MCP / GPT Action calls. The new `sb_publishable_…` key fails at the Edge Function gateway and cannot replace this. See [`setup-supabase.md`](setup-supabase.md#supabase-api-keys-2026). |
+| `CEREFOX_DATABASE_URL` | `""` | For scripts | Direct Postgres URL for deployment scripts. **Use the Session Pooler** (port `5432`) — Transaction Pooler (`6543`) does not support DDL. Username must include the project-ref suffix (`postgres.<project-ref>`). Append `?sslmode=require`. See [`setup-supabase.md` → Connection pooling (2026)](setup-supabase.md#connection-pooling-2026). |
 
 **When each is needed:**
 - `CEREFOX_SUPABASE_URL` + `CEREFOX_SUPABASE_KEY` — used by the Python app (ingestion, search, CLI, web UI) via supabase-py
@@ -224,7 +225,7 @@ CEREFOX_SUPABASE_URL=https://abcdefghijkl.supabase.co
 CEREFOX_SUPABASE_KEY=eyJhbGciOiJIUzI1NiIs...
 
 # Required for scripts only
-CEREFOX_DATABASE_URL=postgresql://postgres.abcdefghijkl:MyPassword@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+CEREFOX_DATABASE_URL=postgresql://postgres.abcdefghijkl:MyPassword@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
 
 # Embeddings — OpenAI (default)
 OPENAI_API_KEY=sk-...
