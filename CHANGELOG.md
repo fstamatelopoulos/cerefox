@@ -64,6 +64,23 @@ land code changes in subsequent releases.
   the port-change shortcut from the Transaction Pooler URI, require the
   `postgres.<project-ref>` username suffix, and recommend appending `?sslmode=require`.
 
+### Fixed
+- **Fresh-deploy bug: `rpcs.sql` function ordering.** `cerefox_context_expand` is now
+  defined before `cerefox_search_docs`. `cerefox_search_docs` is `LANGUAGE sql` and
+  validates references at creation time, so any fresh `db_deploy.py` run was failing
+  with `function cerefox_context_expand does not exist`. Pure reordering — function
+  bodies are byte-identical, existing deploys are unaffected, only fresh installs
+  were broken. Contributed by [@reggaeguitar](https://github.com/reggaeguitar) —
+  see [PR #34](https://github.com/fstamatelopoulos/cerefox/pull/34) (originally
+  submitted as [PR #25](https://github.com/fstamatelopoulos/cerefox/pull/25)).
+- **`cerefox search` CLI raised `NameError` after rendering results.** The
+  `log_usage` call at [`src/cerefox/cli.py:400`](src/cerefox/cli.py#L400) referenced
+  an undefined `project_id`; the click parameter is named `project`. Search results
+  were printed correctly but the command exited non-zero with a traceback,
+  polluting terminals and breaking scripts that piped its output. Resolves
+  [cerefox#27](https://github.com/fstamatelopoulos/cerefox/issues/27). Contributed
+  by [@reggaeguitar](https://github.com/reggaeguitar) in the same PR above.
+
 ### Filed (pending implementation)
 The following tickets capture work that did **not** ship in this docs-only PR — they
 will be picked up one by one in subsequent releases. Each ticket includes a
@@ -76,12 +93,6 @@ work lands.
   `cerefox_audit_log` and `cerefox_document_versions` to `INSERT, SELECT` only at the
   privilege level, enforcing the existing "append-only" comment as a real
   immutability boundary.
-- [cerefox#27](https://github.com/fstamatelopoulos/cerefox/issues/27) — `cerefox
-  search` CLI raises `NameError: name 'project_id' is not defined` after rendering
-  results. One-word fix at [`src/cerefox/cli.py:400`](src/cerefox/cli.py:400). Note:
-  contributor [@reggaeguitar](https://github.com/reggaeguitar) independently caught
-  the same bug in PR #25 (which also fixes an `rpcs.sql` ordering issue that blocks
-  fresh deploys); if PR #25 merges, #27 can be closed as resolved.
 - [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28) — Add
   `--author`, `--author-type`, and `--requestor` flags to the CLI for caller-identity
   parity with the MCP and Edge Function paths. Amends the 2026-03-23
@@ -110,6 +121,18 @@ work lands.
 - Plus lessons-learned entries: install `uv` outside any venv; "Legacy" dashboard
   label is misleading; Session Pooler vs Transaction Pooler; OpenAI keys per
   machine.
+
+### Contributors
+- **[@reggaeguitar](https://github.com/reggaeguitar)** — fresh-deploy bug fixes
+  (`rpcs.sql` function ordering and `cerefox search` CLI `NameError`), see
+  [PR #34](https://github.com/fstamatelopoulos/cerefox/pull/34) (originally
+  submitted as [PR #25](https://github.com/fstamatelopoulos/cerefox/pull/25)).
+  Note: the commit author email (`jbrady@grandtimber.com`) is not yet linked to
+  the contributor's GitHub account, so the GitHub Contributors graph does not
+  currently surface them; once the email is verified at
+  https://github.com/settings/emails the graph picks up past commits
+  retroactively. Until then, this changelog entry and the linked PR are the
+  durable record of the contribution.
 
 ---
 
