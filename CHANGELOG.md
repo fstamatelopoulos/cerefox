@@ -9,6 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+CLI parity work — making the local CLI a complete alternative to the MCP and Edge
+Function paths. Tracks [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28),
+[#29](https://github.com/fstamatelopoulos/cerefox/issues/29),
+[#30](https://github.com/fstamatelopoulos/cerefox/issues/30),
+[#31](https://github.com/fstamatelopoulos/cerefox/issues/31). Will be released
+together once all four land and are tested end-to-end.
+
+---
+
+## [v0.1.17] -- 2026-05-18
+
 Documentation and process work to support the Supabase 2026 API key migration, the new
 "Path C" CLI-for-local-agents access pattern, and a set of follow-up tickets that will
 land code changes in subsequent releases.
