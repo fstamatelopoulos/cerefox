@@ -20,7 +20,7 @@ For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 
 1. **Search before ingesting** -- check if the document exists first.
 2. **Prefer ID-based updates** -- pass `document_id` from search results for deterministic updates. Falls back to title-matching with `update_if_exists: true`.
-3. **Set `author`/`requestor`** to your name on every call (e.g., "Claude Code", "archiver").
+3. **Set `author`/`requestor`** to your name on every call (e.g., "Claude Code", "archiver"). On MCP, pass as parameters. On CLI, pass `--author`/`--author-type`/`--requestor` flags, or rely on `CEREFOX_AUTHOR_NAME`/`CEREFOX_AUTHOR_TYPE`/`CEREFOX_REQUESTOR_NAME` env vars set in the user's `.env`.
 4. **Use `document_id` from search results** `[id: uuid]` for get_document and list_versions.
 5. **Add metadata** -- at minimum `type` ("decision-log", "research", "design-doc") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings for good chunking and search.
@@ -47,17 +47,22 @@ metadata_search(metadata_filter={"type": "decision-log"}, updated_since="2026-03
 
 ## CLI fallback (when MCP is unavailable)
 
-If `cerefox_search` is not in your tool list, your user has likely pointed you at a local Cerefox checkout. Use `uv run cerefox <subcommand>` via your Bash tool. Same operations, same conventions.
+If `cerefox_search` is not in your tool list, your user has likely pointed you at a local Cerefox checkout. Use `uv run cerefox <subcommand>` via your Bash tool. Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md).
 
 | MCP tool | CLI |
 |---|---|
-| `cerefox_search` | `uv run cerefox search "<q>"` |
-| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<t>"` |
-| `cerefox_get_document` | `uv run cerefox get-doc <id>` |
-| `cerefox_list_versions` | `uv run cerefox list-versions <id>` |
-| `cerefox_list_projects` | `uv run cerefox list-projects` |
+| `cerefox_search` | `uv run cerefox search "<q>" --requestor "<your-name>"` |
+| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<t>" --author "<your-name>" --author-type agent` |
+| `cerefox_ingest` (update by ID) | `printf '...' \| uv run cerefox ingest --paste --title "<t>" --document-id "<uuid>" --author "<your-name>" --author-type agent` |
+| `cerefox_get_document` | `uv run cerefox get-doc <id> --requestor "<your-name>"` |
+| `cerefox_list_versions` | `uv run cerefox list-versions <id> --requestor "<your-name>"` |
+| `cerefox_list_projects` | `uv run cerefox list-projects --requestor "<your-name>"` |
 | `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
-| `cerefox_metadata_search` | `uv run cerefox metadata-search --filter '<json>'` |
-| `cerefox_get_audit_log` | _no CLI equivalent yet_ |
+| `cerefox_metadata_search` | `uv run cerefox metadata-search --filter '<json>' --requestor "<your-name>"` |
+| `cerefox_get_audit_log` | `uv run cerefox get-audit-log --requestor "<your-name>"` (add `--json` for scripted access) |
 
-Caveats today (pending [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28)): CLI writes log `author = "unknown"`, reads log `requestor = "user"` — agent attribution is not yet pluggable on the CLI. See `AGENT_GUIDE.md` → "Using Cerefox via the CLI" for full details.
+**Set identity on every call**, exactly as you would on MCP:
+- Writes (`ingest`, `ingest-dir`): `--author "<your-name>" --author-type agent`
+- Reads: `--requestor "<your-name>"`
+
+Or have your user set `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` in their `.env` to apply defaults once.

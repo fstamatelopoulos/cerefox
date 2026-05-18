@@ -243,6 +243,7 @@ Full setup for all options: `docs/guides/connect-agents.md`
 | `docs/guides/setup-supabase.md` | Supabase project setup |
 | `docs/guides/configuration.md` | All configuration options |
 | `docs/guides/connect-agents.md` | MCP agent integration |
+| `docs/guides/cli.md` | Complete CLI reference (all `cerefox` subcommands) |
 | `docs/guides/agent-coordination.md` | Multi-agent coordination patterns and best practices |
 | `docs/guides/response-limits.md` | Response size limits: per-path behaviour and tuning |
 | `docs/guides/access-paths.md` | All access layers, credentials, and integration paths |
