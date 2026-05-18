@@ -232,11 +232,12 @@ Call `cerefox_list_metadata_keys` for the current list -- conventions evolve.
 ## Governance
 
 - **Review status**: agent writes set `pending_review`; human edits set `approved`. Both are searchable.
-- **Soft delete**: deleted documents go to trash (recoverable). They are excluded from search.
+- **Soft delete**: deleted documents go to trash (recoverable). They are excluded from search. You can soft-delete via MCP (`cerefox_delete_document` if your client exposes it) or CLI (`cerefox delete-doc --yes --author <you> --author-type agent`).
+- **Permanent purge and restore-from-trash are web-UI-only**, by design. If you decide to delete something, **tell the user explicitly** that you soft-deleted it and that they can review or restore it via the Cerefox web UI. You cannot un-do your own soft-delete from agent code; only the human can. See [`docs/guides/access-paths.md` → Destructive operations and the trust model](docs/guides/access-paths.md#destructive-operations-and-the-trust-model).
 - **Versioning**: every update via `update_if_exists` creates an archived version. Old content is always recoverable.
 - **Audit log**: all write operations are recorded with author, timestamp, and size changes.
 
-This is a human-on-the-loop model: agents write freely, humans monitor and correct.
+This is a human-on-the-loop model: agents write and soft-delete freely with full audit attribution; humans review the trash, restore mistakes, and decide when to purge.
 
 ---
 

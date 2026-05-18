@@ -615,18 +615,76 @@ def list_docs(project: str | None, limit: int) -> None:
 @cli.command("delete-doc")
 @click.argument("document_id")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-def delete_doc(document_id: str, yes: bool) -> None:
-    """Delete a document and all its chunks by ID."""
+@click.option(
+    "--author",
+    default=None,
+    help=(
+        "Identity recorded in the audit log for this delete. "
+        "Defaults to CEREFOX_AUTHOR_NAME (or 'unknown'). "
+        "Human users: set to your name. Agents: set to your agent name (e.g. 'claude-code')."
+    ),
+)
+@click.option(
+    "--author-type",
+    type=click.Choice(["user", "agent"], case_sensitive=False),
+    default=None,
+    help="Caller type for governance. Defaults to CEREFOX_AUTHOR_TYPE (or 'user').",
+)
+def delete_doc(
+    document_id: str,
+    yes: bool,
+    author: str | None,
+    author_type: str | None,
+) -> None:
+    """Soft-delete a document — moves it to trash. Recoverable.
+
+    \b
+    What this command does:
+      • Sets `deleted_at` on the document row (document stays in the DB).
+      • Excludes the document from search and from `cerefox list-docs`.
+      • Writes an immutable audit-log entry recording author, author_type, and time.
+
+    \b
+    What this command does NOT do:
+      • It does NOT permanently delete the document.
+      • It does NOT free database storage.
+      • Versions, chunks, and audit entries remain intact under the trash.
+
+    \b
+    Recovery: a soft-deleted document can be restored OR permanently purged
+    only from the Cerefox web UI (Trash view). These destructive / restorative
+    actions are intentionally web-UI-only to require human-in-the-loop
+    confirmation. See `docs/guides/access-paths.md` →
+    "Destructive operations and the trust model" for the full rationale.
+
+    \b
+    Agent usage: agents calling this via Bash MUST pass `--yes` (no TTY for
+    confirmation) AND should pass `--author <your-name> --author-type agent`
+    so the soft-delete is correctly attributed in the audit log.
+    """
     settings = Settings()
+    resolved_author = _resolve_author(author, settings)
+    resolved_author_type = _resolve_author_type(author_type, settings)
     client = _get_client(settings)
 
     if not yes:
         click.confirm(
-            f"Delete document {document_id} and all its chunks?", default=False, abort=True
+            f"Soft-delete document {document_id}? It will be moved to trash "
+            f"(recoverable via the web UI; this command CANNOT permanently delete).",
+            default=False,
+            abort=True,
         )
 
-    client.delete_document(document_id)
-    click.echo(f"✓  Deleted document {document_id}")
+    client.delete_document(
+        document_id,
+        author=resolved_author,
+        author_type=resolved_author_type,
+    )
+    click.echo(
+        f"✓  Soft-deleted document {document_id} "
+        f"(author={resolved_author}, type={resolved_author_type}). "
+        f"Use the web UI to restore or purge."
+    )
 
 
 # ── list-projects ─────────────────────────────────────────────────────────────

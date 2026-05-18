@@ -161,3 +161,75 @@ only call the operations exposed by the Edge Functions, and the Supabase gateway
 rate-limits and validates it. The secret key / `service_role` JWT and the database
 password must never be embedded in client-facing configuration or committed to the
 repository.
+
+---
+
+## Destructive operations and the trust model
+
+Cerefox classifies write operations into three tiers based on how irreversible they are.
+The access surface for each tier is **not** the same — this asymmetry is a deliberate
+architectural property, not an oversight. Future contributors should read this section
+before "completing" the parity table by adding purge or restore to agent-facing access
+paths.
+
+### The three tiers
+
+| Tier | Operations | Reversible? | Where exposed |
+|---|---|---|---|
+| 1. Reads + soft mutations | search, get, list-*, ingest (create/update), metadata-search, get-audit-log | n/a (reads) / yes (versioned) | All paths — MCP, Edge Functions, CLI, web UI |
+| 2. Soft-destructive | `delete_document` (soft delete to trash), `set_review_status` | yes — restorable via web UI | All paths (CLI: `cerefox delete-doc`; web UI; Python; **not** MCP or Edge Functions today) |
+| 3. **Hard-destructive** | `purge_document` (permanent), `restore_document` (un-trash), `set_version_archived` (toggle version retention) | no (purge) / yes (restore, but recovers from a destructive action) | **Web UI only** |
+
+### Why purge / restore are web-UI-only
+
+The recovery story behind Cerefox depends on a **human-in-the-loop confirmation step
+before irreversible action.** Soft-delete on its own is not enough — an agent that
+mistakenly soft-deletes a document needs to be unable to silently restore the same
+document later (covering its tracks), and certainly unable to escalate from soft-delete
+to permanent purge.
+
+So the access model is:
+
+1. **An agent (via MCP, Edge Function, or CLI) can write or soft-delete freely.** Every
+   such operation is recorded in `cerefox_audit_log` with `author`, `author_type`, and
+   `created_at`. Soft-deleted documents land in trash and are excluded from search.
+2. **A human reviews the trash through the Cerefox web UI.** They see the audit history
+   for each document, decide whether the agent's action was correct, and either restore
+   the document or — only after seeing what they're about to destroy — purge it.
+3. **Purge is the only operation that frees database storage.** Soft delete keeps every
+   version, every chunk, every audit entry. The "I made a mistake; recover this" workflow
+   is therefore always possible until the human explicitly chooses purge.
+
+A `cerefox purge-doc` CLI command, a `cerefox_purge_document` MCP tool, or a
+`/documents/{id}/purge` HTTP endpoint accessible via the anon JWT would each break this
+property. **Do not add them without a governance design that replaces the human-in-the-
+loop step with an equivalent guard** (e.g. a "purge approval queue" the web UI must
+clear before the operation actually runs).
+
+### What this means for agent operations
+
+If you're building tooling that uses the CLI (Path C) or any MCP/Edge Function path:
+
+- **Use `cerefox delete-doc` freely** to soft-delete agent-authored content. Pair it
+  with `--author <name> --author-type agent` so the audit trail is correct.
+- **Surface the soft-delete to the user.** When your agent decides to delete something,
+  tell the user explicitly: "I soft-deleted X (recoverable from the Cerefox trash in
+  the web UI)." This gives them the visibility to review and either restore or commit.
+- **Do not attempt to purge or restore from agent code.** There is intentionally no
+  programmatic path. If your workflow needs purge / restore, that workflow needs human
+  intervention — the design is correct, not incomplete.
+
+### CLI delete-doc — interactive vs scripted
+
+`cerefox delete-doc` prompts for confirmation by default (since `click.confirm` requires
+a TTY, an agent's Bash tool will get an abort instead of accidentally deleting). Agents
+that legitimately need to soft-delete must pass `--yes` *and* set `--author` /
+`--author-type` so the audit log captures who acted:
+
+```bash
+cerefox delete-doc <doc-id> --yes \
+  --author "claude-code" --author-type "agent"
+```
+
+The success message echoes the resolved values back so the agent can include them in
+its response to the user.

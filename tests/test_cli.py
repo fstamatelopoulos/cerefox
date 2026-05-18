@@ -174,16 +174,21 @@ class TestListDocs:
 
 
 class TestDeleteDoc:
-    def test_delete_with_yes_flag(self, runner) -> None:
+    def test_delete_with_yes_flag_defaults_audit_to_unknown_user(self, runner) -> None:
         client_mock = _make_client_mock()
         with (
-            patch("cerefox.cli.Settings"),
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
             patch("cerefox.cli._get_client", return_value=client_mock),
         ):
             result = runner.invoke(cli, ["delete-doc", "doc-1", "--yes"])
         assert result.exit_code == 0
-        assert "Deleted" in result.output
-        client_mock.delete_document.assert_called_once_with("doc-1")
+        # Output explicitly says "Soft-deleted" (not "Deleted") — important
+        # safety messaging since this command does NOT permanently delete.
+        assert "Soft-deleted" in result.output
+        # Built-in defaults when neither flag nor env var is set
+        client_mock.delete_document.assert_called_once_with(
+            "doc-1", author="unknown", author_type="user",
+        )
 
     def test_delete_aborted_on_no(self, runner) -> None:
         client_mock = _make_client_mock()
@@ -193,6 +198,87 @@ class TestDeleteDoc:
         ):
             result = runner.invoke(cli, ["delete-doc", "doc-1"], input="n\n")
         # Aborted — delete should not be called
+        client_mock.delete_document.assert_not_called()
+
+    def test_delete_prompt_mentions_recovery(self, runner) -> None:
+        """The interactive confirmation must make recovery visible.
+
+        Aborting still proves the prompt rendered; checking output ensures
+        the prompt language says "trash" / "web UI" / not-permanent.
+        """
+        client_mock = _make_client_mock()
+        with (
+            patch("cerefox.cli.Settings"),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["delete-doc", "doc-1"], input="n\n")
+        assert "trash" in result.output.lower()
+        assert "recoverable" in result.output.lower() or "restore" in result.output.lower()
+        client_mock.delete_document.assert_not_called()
+
+    def test_delete_author_and_type_plumbed_through(self, runner) -> None:
+        client_mock = _make_client_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(
+                cli, ["delete-doc", "doc-1", "--yes",
+                      "--author", "claude-code",
+                      "--author-type", "agent"],
+            )
+        assert result.exit_code == 0, result.output
+        client_mock.delete_document.assert_called_once_with(
+            "doc-1", author="claude-code", author_type="agent",
+        )
+        # Success message echoes the resolved values back to the caller for clarity.
+        assert "author=claude-code" in result.output
+        assert "type=agent" in result.output
+
+    def test_delete_env_var_defaults_apply(self, runner) -> None:
+        """When --author / --author-type are omitted, env vars supply defaults."""
+        from cerefox.config import Settings  # noqa: PLC0415
+        env_settings = Settings(
+            _env_file=None,
+            cli_author_name="sync-script",
+            cli_author_type="agent",
+            cli_requestor_name="user",
+        )
+        client_mock = _make_client_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=env_settings),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["delete-doc", "doc-1", "--yes"])
+        assert result.exit_code == 0
+        client_mock.delete_document.assert_called_once_with(
+            "doc-1", author="sync-script", author_type="agent",
+        )
+
+    def test_delete_invalid_author_type_rejected(self, runner) -> None:
+        client_mock = _make_client_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(
+                cli, ["delete-doc", "doc-1", "--yes",
+                      "--author-type", "robot"],
+            )
+        assert result.exit_code != 0
+        client_mock.delete_document.assert_not_called()
+
+    def test_delete_empty_author_rejected(self, runner) -> None:
+        client_mock = _make_client_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(
+                cli, ["delete-doc", "doc-1", "--yes", "--author", ""],
+            )
+        assert result.exit_code != 0
+        assert "--author cannot be empty" in result.output
         client_mock.delete_document.assert_not_called()
 
 

@@ -24,6 +24,7 @@ For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 4. **Use `document_id` from search results** `[id: uuid]` for get_document and list_versions.
 5. **Add metadata** -- at minimum `type` ("decision-log", "research", "design-doc") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings for good chunking and search.
+7. **Deletes are soft (recoverable); purge is web-UI-only.** If you decide to delete, surface it to the user (`I soft-deleted X — recoverable from the Cerefox web UI trash`). You cannot un-do your own delete from agent code by design.
 
 ## Update Workflow (ID-based -- preferred)
 

@@ -313,7 +313,7 @@ cerefox get-audit-log --json --limit 1000 | jq 'select(.author_type == "agent")'
 
 ### `cerefox delete-doc`
 
-**Purpose**: soft-delete a document (and all chunks) by ID.
+**Purpose**: **soft-delete** a document — moves it to trash, recoverable. The CLI cannot permanently delete or restore; see [Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the rationale.
 
 **Synopsis**: `cerefox delete-doc [OPTIONS] DOCUMENT_ID`
 
@@ -321,9 +321,31 @@ cerefox get-audit-log --json --limit 1000 | jq 'select(.author_type == "agent")'
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `-y, --yes` | flag | off | Skip confirmation prompt. |
+| `-y, --yes` | flag | off | Skip confirmation prompt. Required for non-interactive use (agents, scripts). |
+| `--author` | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Identity recorded in the audit log. |
+| `--author-type` | `user`\|`agent` | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type, recorded in the audit log. |
 
-The deleted document is recoverable from the audit log + version snapshots; see `docs/guides/upgrading.md` for restore steps.
+**What this command does:**
+- Sets `deleted_at` on the document row. The document stays in the database.
+- Excludes the document from search and from `cerefox list-docs`.
+- Writes an immutable `delete` audit-log entry with the resolved author / author_type and timestamp.
+
+**What this command does NOT do:**
+- Does NOT permanently delete the document.
+- Does NOT free database storage.
+- Versions, chunks, and audit entries remain intact under the trash.
+
+**Recovery**: a soft-deleted document can be restored OR permanently purged **only from the Cerefox web UI** (Trash view). These destructive / restorative actions are intentionally web-UI-only to require human-in-the-loop confirmation. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model).
+
+**Agent usage**:
+```bash
+# Required: --yes (no TTY for confirmation) + identity flags
+cerefox delete-doc <doc-id> --yes \
+  --author "claude-code" --author-type "agent"
+```
+The success message echoes the resolved author / author_type back so you can surface it to the user in your response.
+
+**Exit codes**: `0` on success. `1` on confirmation abort, missing document, or auth failure.
 
 ---
 

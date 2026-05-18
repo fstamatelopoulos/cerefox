@@ -95,6 +95,34 @@ Existing flags that already matched the MCP name (`--document-id`, `--author`,
 tests under `TestMcpParityFlagAliases` verify both the long forms and the short
 aliases work.
 
+**Safety gaps closed on `cerefox delete-doc`** (surfaced during smoke-testing
+the parity work):
+
+- **`--author` / `--author-type` plumbed through** so agent soft-deletes are
+  correctly attributed in `cerefox_audit_log` (was: every CLI delete logged as
+  `author="unknown"`, `author_type="user"` — the same gap #28 closed for ingest).
+- **Docstring rewritten** to be unambiguous about what the command does and does
+  not do. "Delete a document" → "Soft-delete a document — moves it to trash.
+  Recoverable." Help text spells out the recovery path (web-UI-only) and tells
+  agents to pass `--yes --author <name> --author-type agent`.
+- **Success message clarified**: "✓ Deleted document …" → "✓ Soft-deleted
+  document … (author=…, type=…). Use the web UI to restore or purge."
+- **Confirmation prompt language** says the document goes to "trash" and is
+  "recoverable", so the human's mental model is right before they answer y/n.
+- 7 tests under `TestDeleteDoc` cover: default attribution, flag plumb-through,
+  env-var defaults, invalid `--author-type` rejection, empty-string rejection,
+  confirmation-prompt wording.
+
+**Destructive operations trust model documented** as an explicit architectural
+property (not an oversight). New canonical section in
+[`docs/guides/access-paths.md` → "Destructive operations and the trust model"](docs/guides/access-paths.md)
+covering the three operation tiers (reads / soft-mutations / hard-destructive),
+why purge and restore are web-UI-only by design, what to tell agent contributors
+who reach for "parity completion" on these operations, and the recommended
+recovery flow. Cross-linked from `AGENT_GUIDE.md` Governance section,
+`AGENT_QUICK_REFERENCE.md` rule #7, `connect-agents.md` Path C caveats, and
+`cli.md` `delete-doc` section.
+
 ### Changed
 - `AGENT_GUIDE.md` — "Using Cerefox via the CLI" section updated: mapping table
   now includes all new flags; removes the "lossy attribution" caveat (resolved);
