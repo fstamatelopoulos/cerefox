@@ -397,7 +397,7 @@ def search(
 
     client.log_usage(
         operation="search", access_path="cli", requestor="user",
-        query_text=query, project_id=project_id, result_count=len(resp.results),
+        query_text=query, project_id=project, result_count=len(resp.results),
     )
 
 
