@@ -998,6 +998,106 @@ def list_versions(document_id: str, requestor: str | None) -> None:
         click.echo(f"Warning: usage logging failed: {exc}", err=True)
 
 
+# ── get-audit-log ─────────────────────────────────────────────────────────────
+
+
+# Operation values allowed by the cerefox_audit_log CHECK constraint
+# (kept in sync with src/cerefox/db/schema.sql).
+_AUDIT_OPERATIONS = (
+    "create", "update-content", "update-metadata", "delete",
+    "status-change", "archive", "unarchive", "restore",
+)
+
+
+@cli.command("get-audit-log")
+@click.option("--document-id", "document_id", default=None, help="Filter by document UUID.")
+@click.option(
+    "--author", default=None,
+    help="Filter by author name (exact match, free-text — e.g. 'unknown', 'claude-code').",
+)
+@click.option(
+    "--operation",
+    type=click.Choice(_AUDIT_OPERATIONS, case_sensitive=False),
+    default=None,
+    help=f"Filter by operation type. One of: {', '.join(_AUDIT_OPERATIONS)}.",
+)
+@click.option("--since", default=None, help="ISO-8601 timestamp lower bound (e.g. '2026-01-01').")
+@click.option("--until", default=None, help="ISO-8601 timestamp upper bound.")
+@click.option("--limit", default=50, show_default=True, help="Max rows to return.")
+@click.option(
+    "--json", "as_json", is_flag=True, default=False,
+    help="Emit one JSON object per line (for piping to jq / scripts) instead of the human-readable table.",
+)
+@click.option(
+    "--requestor",
+    default=None,
+    help="Identity recorded in the usage log. Defaults to CEREFOX_REQUESTOR_NAME (or 'user').",
+)
+def get_audit_log(
+    document_id: str | None,
+    author: str | None,
+    operation: str | None,
+    since: str | None,
+    until: str | None,
+    limit: int,
+    as_json: bool,
+    requestor: str | None,
+) -> None:
+    """Query audit-log entries with filters (parity with the cerefox_get_audit_log MCP tool).
+
+    Each row records who changed what, when, with size-change info and a description.
+    Use --json for scripted access.
+    """
+    import json as _json  # noqa: PLC0415
+
+    settings = Settings()
+    resolved_requestor = _resolve_requestor(requestor, settings)
+    client = _get_client(settings)
+
+    entries = client.list_audit_entries(
+        document_id=document_id,
+        author=author,
+        operation=operation,
+        since=since,
+        until=until,
+        limit=limit,
+    )
+
+    if as_json:
+        for entry in entries:
+            click.echo(_json.dumps(entry, default=str))
+    elif not entries:
+        click.echo("No audit-log entries match the filters.")
+    else:
+        click.echo(
+            f"{'created_at':<27}  {'operation':<15}  {'author':<22}  "
+            f"{'size Δ':<12}  description"
+        )
+        click.echo("─" * 110)
+        for e in entries:
+            created = str(e.get("created_at", ""))[:26]
+            op = str(e.get("operation", ""))
+            author_label = f"{e.get('author', 'unknown')} ({e.get('author_type', '?')})"
+            sb = e.get("size_before")
+            sa = e.get("size_after")
+            size_delta = (
+                f"{sb} → {sa}" if (sb is not None or sa is not None) else "—"
+            )
+            desc = (str(e.get("description", "")) or "—")[:60]
+            click.echo(
+                f"{created:<27}  {op:<15}  {author_label:<22}  {size_delta:<12}  {desc}"
+            )
+        click.echo(f"\n{len(entries)} entr{'y' if len(entries) == 1 else 'ies'}.")
+
+    try:
+        client.log_usage(
+            operation="get_audit_log", access_path="cli", requestor=resolved_requestor,
+            document_id=document_id, result_count=len(entries),
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget
+        click.echo(f"Warning: usage logging failed: {exc}", err=True)
+
+
 # ── web ───────────────────────────────────────────────────────────────────────
 
 

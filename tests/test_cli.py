@@ -823,3 +823,122 @@ class TestIngestDirMetadataFlag:
             result = runner.invoke(cli, ["ingest-dir", str(tmp_path)])
         assert result.exit_code == 0
         assert pipeline_mock.ingest_file.call_args.kwargs["metadata"] == {}
+
+
+# ── get-audit-log (#30) ────────────────────────────────────────────────────────
+
+
+def _make_audit_entries() -> list[dict]:
+    return [
+        {
+            "id": "a1", "document_id": "d1", "version_id": "v1",
+            "operation": "create", "author": "alice", "author_type": "user",
+            "size_before": None, "size_after": 500, "description": "Initial create",
+            "created_at": "2026-05-18T12:00:00Z",
+        },
+        {
+            "id": "a2", "document_id": "d1", "version_id": "v2",
+            "operation": "update-content", "author": "claude-code", "author_type": "agent",
+            "size_before": 500, "size_after": 650, "description": "Refined section 2",
+            "created_at": "2026-05-18T13:00:00Z",
+        },
+    ]
+
+
+class TestGetAuditLogCommand:
+    """cerefox get-audit-log: filters, output formats, usage logging."""
+
+    def test_default_table_output(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.list_audit_entries.return_value = _make_audit_entries()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["get-audit-log"])
+        assert result.exit_code == 0
+        # Both entries show up with author and operation
+        assert "alice (user)" in result.output
+        assert "claude-code (agent)" in result.output
+        assert "Initial create" in result.output
+        assert "2 entries" in result.output
+
+    def test_json_output(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.list_audit_entries.return_value = _make_audit_entries()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["get-audit-log", "--json"])
+        assert result.exit_code == 0
+        # One JSON object per line — should be parseable
+        import json as _json
+        lines = [line for line in result.output.strip().split("\n") if line.strip()]
+        assert len(lines) == 2
+        parsed = [_json.loads(line) for line in lines]
+        assert parsed[0]["author"] == "alice"
+        assert parsed[1]["operation"] == "update-content"
+
+    def test_empty_result_message(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.list_audit_entries.return_value = []
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["get-audit-log"])
+        assert result.exit_code == 0
+        assert "No audit-log entries" in result.output
+
+    def test_filters_passed_to_client(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.list_audit_entries.return_value = []
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, [
+                "get-audit-log",
+                "--document-id", "d1",
+                "--author", "alice",
+                "--operation", "create",
+                "--since", "2026-05-01",
+                "--until", "2026-05-19",
+                "--limit", "10",
+            ])
+        assert result.exit_code == 0
+        call_kwargs = client_mock.list_audit_entries.call_args.kwargs
+        assert call_kwargs == {
+            "document_id": "d1", "author": "alice", "operation": "create",
+            "since": "2026-05-01", "until": "2026-05-19", "limit": 10,
+        }
+
+    def test_invalid_operation_rejected(self, runner) -> None:
+        client_mock = MagicMock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["get-audit-log", "--operation", "bogus"])
+        assert result.exit_code != 0
+        # Click's Choice validation catches it
+        client_mock.list_audit_entries.assert_not_called()
+
+    def test_requestor_recorded_in_usage_log(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.list_audit_entries.return_value = _make_audit_entries()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(
+                cli, ["get-audit-log", "--requestor", "researcher"],
+            )
+        assert result.exit_code == 0
+        assert client_mock.log_usage.called
+        call_kwargs = client_mock.log_usage.call_args.kwargs
+        assert call_kwargs["requestor"] == "researcher"
+        assert call_kwargs["operation"] == "get_audit_log"
+        assert call_kwargs["access_path"] == "cli"
+        assert call_kwargs["result_count"] == 2
