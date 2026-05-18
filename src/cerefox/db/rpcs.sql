@@ -458,68 +458,6 @@ BEGIN
 END;
 $$;
 
--- ── cerefox_context_expand ────────────────────────────────────────────────────
--- Small-to-big retrieval: given a set of chunk IDs from a search result,
--- return those chunks plus their immediate neighbours (±window_size by
--- chunk_index within the same document).  Use this after a chunk-level search
--- to recover more surrounding context without fetching the full document.
---
--- Parameters:
---   p_chunk_ids   : Array of chunk UUIDs from the search results
---   p_window_size : Number of chunks to expand in each direction (default: 1)
---
--- Returns each expanded chunk with is_seed=TRUE for original results.
-
-CREATE OR REPLACE FUNCTION cerefox_context_expand(
-    p_chunk_ids   UUID[],
-    p_window_size INT DEFAULT 1
-)
-RETURNS TABLE (
-    chunk_id      UUID,
-    document_id   UUID,
-    chunk_index   INT,
-    title         TEXT,
-    content       TEXT,
-    heading_path  TEXT[],
-    heading_level INT,
-    doc_title     TEXT,
-    is_seed       BOOL
-)
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-SET search_path = public, pg_catalog
-AS $$
-    WITH seeds AS (
-        SELECT c.id, c.document_id, c.chunk_index
-        FROM cerefox_chunks c
-        WHERE c.id = ANY(p_chunk_ids)
-          AND c.version_id IS NULL
-    ),
-    expanded AS (
-        SELECT DISTINCT c.id
-        FROM cerefox_chunks c
-        JOIN seeds s ON c.document_id = s.document_id
-        WHERE c.version_id IS NULL
-          AND c.chunk_index BETWEEN s.chunk_index - p_window_size
-                                AND s.chunk_index + p_window_size
-    )
-    SELECT
-        c.id            AS chunk_id,
-        c.document_id,
-        c.chunk_index,
-        c.title,
-        c.content,
-        c.heading_path,
-        c.heading_level,
-        d.title         AS doc_title,
-        c.id = ANY(p_chunk_ids) AS is_seed
-    FROM expanded e
-    JOIN cerefox_chunks   c ON c.id = e.id
-    JOIN cerefox_documents d ON c.document_id = d.id
-    ORDER BY c.document_id, c.chunk_index;
-$$;
-
 -- ── cerefox_search_docs ───────────────────────────────────────────────────────
 -- Document-level hybrid search: runs hybrid search internally, deduplicates
 -- results by document (keeping the best-scoring chunk per document), and
@@ -704,6 +642,68 @@ AS $$
     JOIN doc_sizes ds ON ds.document_id = td.document_id
     JOIN all_content ac ON ac.document_id = td.document_id
     ORDER BY td.best_score DESC;
+$$;
+
+-- ── cerefox_context_expand ────────────────────────────────────────────────────
+-- Small-to-big retrieval: given a set of chunk IDs from a search result,
+-- return those chunks plus their immediate neighbours (±window_size by
+-- chunk_index within the same document).  Use this after a chunk-level search
+-- to recover more surrounding context without fetching the full document.
+--
+-- Parameters:
+--   p_chunk_ids   : Array of chunk UUIDs from the search results
+--   p_window_size : Number of chunks to expand in each direction (default: 1)
+--
+-- Returns each expanded chunk with is_seed=TRUE for original results.
+
+CREATE OR REPLACE FUNCTION cerefox_context_expand(
+    p_chunk_ids   UUID[],
+    p_window_size INT DEFAULT 1
+)
+RETURNS TABLE (
+    chunk_id      UUID,
+    document_id   UUID,
+    chunk_index   INT,
+    title         TEXT,
+    content       TEXT,
+    heading_path  TEXT[],
+    heading_level INT,
+    doc_title     TEXT,
+    is_seed       BOOL
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+    WITH seeds AS (
+        SELECT c.id, c.document_id, c.chunk_index
+        FROM cerefox_chunks c
+        WHERE c.id = ANY(p_chunk_ids)
+          AND c.version_id IS NULL
+    ),
+    expanded AS (
+        SELECT DISTINCT c.id
+        FROM cerefox_chunks c
+        JOIN seeds s ON c.document_id = s.document_id
+        WHERE c.version_id IS NULL
+          AND c.chunk_index BETWEEN s.chunk_index - p_window_size
+                                AND s.chunk_index + p_window_size
+    )
+    SELECT
+        c.id            AS chunk_id,
+        c.document_id,
+        c.chunk_index,
+        c.title,
+        c.content,
+        c.heading_path,
+        c.heading_level,
+        d.title         AS doc_title,
+        c.id = ANY(p_chunk_ids) AS is_seed
+    FROM expanded e
+    JOIN cerefox_chunks   c ON c.id = e.id
+    JOIN cerefox_documents d ON c.document_id = d.id
+    ORDER BY c.document_id, c.chunk_index;
 $$;
 
 -- ── Metadata key discovery RPC ───────────────────────────────────────────────
