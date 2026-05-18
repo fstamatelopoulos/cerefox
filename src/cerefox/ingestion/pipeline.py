@@ -495,6 +495,8 @@ class IngestionPipeline:
         project_ids: list[str] | None = None,
         metadata: dict | None = None,
         update_existing: bool = False,
+        document_id: str | None = None,
+        source: str | None = None,
         author: str = "unknown",
         author_type: str = "user",
     ) -> IngestResult:
@@ -509,6 +511,9 @@ class IngestionPipeline:
             update_existing: When True, update an existing document with the
                 same ``source_path`` (resolved absolute path) instead of
                 creating a new document.
+            document_id: UUID of an existing document to update deterministically.
+                Bypasses source-path matching. Errors if the document does not exist.
+            source: Source label to record on the document. Defaults to ``"file"``.
             author: Free-text identity recorded in the audit log.
             author_type: ``"user"`` or ``"agent"``; drives review_status routing.
 
@@ -522,12 +527,13 @@ class IngestionPipeline:
         return self.ingest_text(
             text=text,
             title=title or p.stem,
-            source="file",
+            source=source or "file",
             source_path=str(p.resolve()),
             project_name=project_name,
             project_ids=project_ids,
             metadata=metadata,
             update_existing=update_existing,
+            document_id=document_id,
             author=author,
             author_type=author_type,
         )

@@ -136,6 +136,25 @@ def _resolve_requestor(cli_value: str | None, settings: Settings) -> str:
     ),
 )
 @click.option(
+    "--document-id",
+    "document_id",
+    default=None,
+    help=(
+        "UUID of an existing document to update deterministically. "
+        "Bypasses title / source-path matching. Errors if the document does "
+        "not exist (no silent create). Mutually exclusive with --update."
+    ),
+)
+@click.option(
+    "--source",
+    default=None,
+    help=(
+        "Source label recorded on the document (free-text). "
+        "Defaults to 'paste' for --paste, 'file' for file ingestion. "
+        "Agents may set this to 'agent' or a custom label."
+    ),
+)
+@click.option(
     "--author",
     default=None,
     help=(
@@ -161,6 +180,8 @@ def ingest(
     paste: bool,
     metadata: str | None,
     update: bool,
+    document_id: str | None,
+    source: str | None,
     author: str | None,
     author_type: str | None,
 ) -> None:
@@ -176,6 +197,14 @@ def ingest(
         sys.exit(1)
     if not paste and not path:
         click.echo("❌  Provide a file PATH or use --paste to read from stdin.", err=True)
+        sys.exit(1)
+    if document_id is not None and update:
+        click.echo(
+            "❌  --document-id and --update are mutually exclusive. "
+            "Use --document-id for deterministic ID-based updates, or --update for "
+            "title/source-path-based fallback matching — not both.",
+            err=True,
+        )
         sys.exit(1)
 
     settings = Settings()
@@ -197,11 +226,18 @@ def ingest(
 
     if paste:
         text = sys.stdin.read()
-        result = pipeline.ingest_text(
-            text=text, title=title, source="paste", project_name=project,
-            metadata=extra_meta, update_existing=update,
-            author=resolved_author, author_type=resolved_author_type,
-        )
+        try:
+            result = pipeline.ingest_text(
+                text=text, title=title,
+                source=source or "paste",
+                project_name=project,
+                metadata=extra_meta, update_existing=update,
+                document_id=document_id,
+                author=resolved_author, author_type=resolved_author_type,
+            )
+        except ValueError as exc:
+            click.echo(f"❌  {exc}", err=True)
+            sys.exit(1)
     else:
         from pathlib import Path as _Path  # noqa: PLC0415
 
@@ -212,23 +248,34 @@ def ingest(
             except ImportError as exc:
                 click.echo(f"❌  {exc}", err=True)
                 sys.exit(1)
-            result = pipeline.ingest_text(
-                text=text,
-                title=title or p.stem,
-                source="file",
-                source_path=str(p),
-                project_name=project,
-                metadata=extra_meta,
-                update_existing=update,
-                author=resolved_author,
-                author_type=resolved_author_type,
-            )
+            try:
+                result = pipeline.ingest_text(
+                    text=text,
+                    title=title or p.stem,
+                    source=source or "file",
+                    source_path=str(p),
+                    project_name=project,
+                    metadata=extra_meta,
+                    update_existing=update,
+                    document_id=document_id,
+                    author=resolved_author,
+                    author_type=resolved_author_type,
+                )
+            except ValueError as exc:
+                click.echo(f"❌  {exc}", err=True)
+                sys.exit(1)
         else:
-            result = pipeline.ingest_file(
-                path=path, title=title, project_name=project, metadata=extra_meta,
-                update_existing=update,
-                author=resolved_author, author_type=resolved_author_type,
-            )
+            try:
+                result = pipeline.ingest_file(
+                    path=path, title=title, project_name=project, metadata=extra_meta,
+                    update_existing=update,
+                    document_id=document_id,
+                    source=source,
+                    author=resolved_author, author_type=resolved_author_type,
+                )
+            except ValueError as exc:
+                click.echo(f"❌  {exc}", err=True)
+                sys.exit(1)
 
     if result.skipped:
         click.echo(f"⏭  Skipped (already ingested): {result.title}")
@@ -286,6 +333,15 @@ def ingest(
     ),
 )
 @click.option(
+    "--metadata",
+    "-m",
+    default=None,
+    help=(
+        "JSON metadata applied to every file in this run, e.g. '{\"type\":\"research\"}'. "
+        "Useful when bulk-ingesting a directory of related notes with a shared tag."
+    ),
+)
+@click.option(
     "--author",
     default=None,
     help="Identity recorded in the audit log for every write in this run. Defaults to CEREFOX_AUTHOR_NAME (or 'unknown').",
@@ -303,14 +359,28 @@ def ingest_dir(
     recursive: bool,
     dry_run: bool,
     update: bool,
+    metadata: str | None,
     author: str | None,
     author_type: str | None,
 ) -> None:
     """Ingest all matching files in a directory."""
+    import json  # noqa: PLC0415
     from pathlib import Path as _Path  # noqa: PLC0415
 
     from cerefox.chunking.converters import convert_to_markdown  # noqa: PLC0415
     from cerefox.ingestion.pipeline import IngestionPipeline  # noqa: PLC0415
+
+    # Parse shared metadata JSON if supplied.
+    extra_meta: dict = {}
+    if metadata:
+        try:
+            extra_meta = json.loads(metadata)
+        except json.JSONDecodeError as exc:
+            click.echo(f"❌  Invalid --metadata JSON: {exc}", err=True)
+            sys.exit(1)
+        if not isinstance(extra_meta, dict):
+            click.echo("❌  --metadata must be a JSON object.", err=True)
+            sys.exit(1)
 
     d = _Path(directory)
     glob_fn = d.rglob if recursive else d.glob
@@ -346,13 +416,15 @@ def ingest_dir(
                     source="file",
                     source_path=str(f),
                     project_name=project,
+                    metadata=extra_meta,
                     update_existing=update,
                     author=resolved_author,
                     author_type=resolved_author_type,
                 )
             else:
                 result = pipeline.ingest_file(
-                    path=str(f), project_name=project, update_existing=update,
+                    path=str(f), project_name=project, metadata=extra_meta,
+                    update_existing=update,
                     author=resolved_author, author_type=resolved_author_type,
                 )
 

@@ -674,3 +674,152 @@ class TestReadCommandRequestorFlag:
             result = runner.invoke(cli, ["list-projects"])
         assert result.exit_code == 0
         assert client_mock.log_usage.call_args.kwargs["requestor"] == "claude-code"
+
+
+# ── ingest parity flags: --document-id, --source, ingest-dir --metadata (#29) ──
+
+
+def _ingest_patches(pipeline_mock: MagicMock):
+    """Common patches for CLI ingest tests; returns a tuple of context managers."""
+    return (
+        patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+        patch("cerefox.cli._get_client", return_value=MagicMock()),
+        patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+        patch("cerefox.ingestion.pipeline.IngestionPipeline", return_value=pipeline_mock),
+    )
+
+
+class TestIngestDocumentIdFlag:
+    """ingest --document-id: deterministic ID-based update path."""
+
+    def test_document_id_passed_to_pipeline(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock(
+            IngestResult("known-id", "T", 2, 100, action="updated", reindexed=True),
+        )
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T",
+                      "--document-id", "known-id"],
+                input="updated body",
+            )
+        assert result.exit_code == 0, result.output
+        assert pipeline_mock.ingest_text.call_args.kwargs["document_id"] == "known-id"
+
+    def test_document_id_and_update_mutually_exclusive(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T",
+                      "--document-id", "x", "--update"],
+                input="x",
+            )
+        assert result.exit_code != 0
+        assert "mutually exclusive" in result.output
+        pipeline_mock.ingest_text.assert_not_called()
+
+    def test_document_id_not_found_returns_clean_error(self, runner) -> None:
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest_text.side_effect = ValueError("Document not found: bogus-id")
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T", "--document-id", "bogus-id"],
+                input="x",
+            )
+        assert result.exit_code != 0
+        assert "Document not found: bogus-id" in result.output
+
+    def test_default_no_document_id(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T"], input="x",
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_text.call_args.kwargs["document_id"] is None
+
+
+class TestIngestSourceFlag:
+    """ingest --source: override of default 'paste' / 'file' source labels."""
+
+    def test_paste_default_source_is_paste(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T"], input="x",
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_text.call_args.kwargs["source"] == "paste"
+
+    def test_source_override_paste(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T",
+                      "--source", "agent"],
+                input="x",
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_text.call_args.kwargs["source"] == "agent"
+
+    def test_source_override_file(self, runner, tmp_path) -> None:
+        md_file = tmp_path / "n.md"
+        md_file.write_text("# n\n\nbody", encoding="utf-8")
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", str(md_file), "--source", "sync-script"],
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_file.call_args.kwargs["source"] == "sync-script"
+
+
+class TestIngestDirMetadataFlag:
+    """ingest-dir --metadata: shared metadata applied to every file in the run."""
+
+    def test_metadata_applied_to_every_file(self, runner, tmp_path) -> None:
+        (tmp_path / "a.md").write_text("# A\n\nbody", encoding="utf-8")
+        (tmp_path / "b.md").write_text("# B\n\nbody", encoding="utf-8")
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest-dir", str(tmp_path),
+                      "--metadata", '{"type":"research","status":"active"}'],
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_file.call_count == 2
+        for call in pipeline_mock.ingest_file.call_args_list:
+            assert call.kwargs["metadata"] == {"type": "research", "status": "active"}
+
+    def test_invalid_metadata_json_rejected(self, runner, tmp_path) -> None:
+        (tmp_path / "a.md").write_text("# A\n\nbody", encoding="utf-8")
+        result = runner.invoke(
+            cli, ["ingest-dir", str(tmp_path), "--metadata", "not-json"],
+        )
+        assert result.exit_code != 0
+        assert "JSON" in result.output
+
+    def test_metadata_non_object_rejected(self, runner, tmp_path) -> None:
+        (tmp_path / "a.md").write_text("# A\n\nbody", encoding="utf-8")
+        result = runner.invoke(
+            cli, ["ingest-dir", str(tmp_path), "--metadata", '["not", "object"]'],
+        )
+        assert result.exit_code != 0
+        assert "JSON object" in result.output
+
+    def test_no_metadata_flag_preserves_default(self, runner, tmp_path) -> None:
+        """When --metadata is not passed, metadata={} is forwarded (back-compat)."""
+        (tmp_path / "a.md").write_text("# A\n\nbody", encoding="utf-8")
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(cli, ["ingest-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_file.call_args.kwargs["metadata"] == {}
