@@ -1059,19 +1059,19 @@ from the knowledge base.
 
 ### MCP tool ↔ CLI command mapping
 
-The agent docs are written around MCP tool names. Here is how each maps to a CLI command. Full per-flag reference: [`docs/guides/cli.md`](cli.md).
+The agent docs are written around MCP tool names. **CLI flag names match MCP parameter names exactly** (kebab-cased) — short forms like `--project`, `--filter`, `--count`, `--update`, `--version` are accepted as aliases. Full per-flag reference: [`docs/guides/cli.md`](cli.md).
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search` | `uv run cerefox search "<query>"` (flags: `--mode`, `--count`, `--project`, `--filter`, `--min-score`, `--requestor`) |
-| `cerefox_ingest` (file) | `uv run cerefox ingest <path>` (flags: `--title`, `--project`, `--metadata`, `--update` _or_ `--document-id`, `--source`, `--author`, `--author-type`) |
+| `cerefox_search` | `uv run cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`) |
+| `cerefox_ingest` (file) | `uv run cerefox ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<title>"` (same flags) |
-| `cerefox_get_document` | `uv run cerefox get-doc <document-id> --requestor <name>` |
+| `cerefox_get_document` | `uv run cerefox get-doc <document-id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions` | `uv run cerefox list-versions <document-id> --requestor <name>` |
 | `cerefox_list_projects` | `uv run cerefox list-projects --requestor <name>` |
 | `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
-| `cerefox_metadata_search` | `uv run cerefox metadata-search --filter '<json>' --requestor <name>` |
-| `cerefox_get_audit_log` | `uv run cerefox get-audit-log` (flags: `--document-id`, `--author`, `--operation`, `--since`, `--until`, `--limit`, `--json`, `--requestor`) |
+| `cerefox_metadata_search` | `uv run cerefox metadata-search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
+| `cerefox_get_audit_log` | `uv run cerefox get-audit-log --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
 
 ### Path C verification prompts
 

@@ -78,6 +78,23 @@ written against the post-#28/#29/#30 surface so it documents the final shape:
 - Cross-linked from `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`,
   `connect-agents.md` (Path C), `ops-scripts.md`, `quickstart.md`.
 
+**MCP-parity flag long forms** — every CLI flag now matches its MCP parameter name
+exactly (kebab-cased). Short forms preserved as aliases so existing scripts keep
+working; the long form is the canonical name shown in `--help`.
+
+| Canonical (matches MCP) | Aliases | Used by |
+|---|---|---|
+| `--project-name` | `--project`, `-p` | `ingest`, `ingest-dir`, `search`, `list-docs`, `metadata-search` |
+| `--metadata-filter` | `--filter`, `-f` | `search`, `metadata-search` |
+| `--match-count` | `--count`, `-n` | `search` |
+| `--update-if-exists` | `--update` | `ingest`, `ingest-dir` |
+| `--version-id` | `--version` | `get-doc` |
+
+Existing flags that already matched the MCP name (`--document-id`, `--author`,
+`--author-type`, `--requestor`, `--source`, `--metadata`) are unchanged. 14 new
+tests under `TestMcpParityFlagAliases` verify both the long forms and the short
+aliases work.
+
 ### Changed
 - `AGENT_GUIDE.md` — "Using Cerefox via the CLI" section updated: mapping table
   now includes all new flags; removes the "lossy attribution" caveat (resolved);

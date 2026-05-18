@@ -942,3 +942,205 @@ class TestGetAuditLogCommand:
         assert call_kwargs["operation"] == "get_audit_log"
         assert call_kwargs["access_path"] == "cli"
         assert call_kwargs["result_count"] == 2
+
+
+# ── MCP-parity flag long forms ────────────────────────────────────────────────
+#
+# Six flags gained MCP-parity long-form names with the short forms kept as
+# aliases. These tests confirm both forms work and bind to the same parameter.
+
+
+class TestMcpParityFlagAliases:
+    """All MCP-parity flag renames preserve the short form as an alias."""
+
+    # ── --project-name / --project / -p ──────────────────────────────────────
+
+    def test_ingest_project_name_long_form(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T",
+                      "--project-name", "Research"],
+                input="x",
+            )
+        assert result.exit_code == 0, result.output
+        assert pipeline_mock.ingest_text.call_args.kwargs["project_name"] == "Research"
+
+    def test_ingest_project_short_alias(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T", "--project", "Research"],
+                input="x",
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_text.call_args.kwargs["project_name"] == "Research"
+
+    def test_ingest_p_short_alias(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T", "-p", "Research"],
+                input="x",
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_text.call_args.kwargs["project_name"] == "Research"
+
+    # ── --update-if-exists / --update ────────────────────────────────────────
+
+    def test_ingest_update_if_exists_long_form(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock(
+            IngestResult("d", "T", 1, 50, action="updated", reindexed=True),
+        )
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T", "--update-if-exists"],
+                input="x",
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_text.call_args.kwargs["update_existing"] is True
+
+    def test_ingest_update_short_alias_still_works(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock(
+            IngestResult("d", "T", 1, 50, action="updated", reindexed=True),
+        )
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T", "--update"], input="x",
+            )
+        assert result.exit_code == 0
+        assert pipeline_mock.ingest_text.call_args.kwargs["update_existing"] is True
+
+    def test_document_id_and_update_if_exists_mutually_exclusive(self, runner) -> None:
+        """The new long-form name still triggers the mutual-exclusivity check."""
+        pipeline_mock = _make_pipeline_mock()
+        s, c, e, p = _ingest_patches(pipeline_mock)
+        with s, c, e, p:
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T",
+                      "--document-id", "x", "--update-if-exists"],
+                input="x",
+            )
+        assert result.exit_code != 0
+        assert "mutually exclusive" in result.output
+
+    # ── search: --match-count / --count / -n ─────────────────────────────────
+
+    @staticmethod
+    def _empty_search_response():
+        from cerefox.retrieval.search import SearchResponse  # noqa: PLC0415
+        return SearchResponse(
+            results=[], query="q", mode="hybrid",
+            total_found=0, response_bytes=0, truncated=False,
+        )
+
+    def _run_search(self, runner, args: list[str], search_mock: MagicMock):
+        client_mock = MagicMock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.retrieval.search.SearchClient", return_value=search_mock),
+        ):
+            return runner.invoke(cli, args)
+
+    def test_search_match_count_long_form(self, runner) -> None:
+        search_mock = MagicMock()
+        search_mock.hybrid.return_value = self._empty_search_response()
+        result = self._run_search(runner, ["search", "q", "--match-count", "25"], search_mock)
+        assert result.exit_code == 0
+        assert search_mock.hybrid.call_args.kwargs["match_count"] == 25
+
+    def test_search_count_short_alias(self, runner) -> None:
+        search_mock = MagicMock()
+        search_mock.hybrid.return_value = self._empty_search_response()
+        result = self._run_search(runner, ["search", "q", "--count", "25"], search_mock)
+        assert result.exit_code == 0
+        assert search_mock.hybrid.call_args.kwargs["match_count"] == 25
+
+    # ── search: --metadata-filter / --filter / -f ────────────────────────────
+
+    def test_search_metadata_filter_long_form(self, runner) -> None:
+        search_mock = MagicMock()
+        search_mock.hybrid.return_value = self._empty_search_response()
+        result = self._run_search(
+            runner, ["search", "q", "--metadata-filter", '{"type":"note"}'], search_mock,
+        )
+        assert result.exit_code == 0
+        assert search_mock.hybrid.call_args.kwargs["metadata_filter"] == {"type": "note"}
+
+    def test_search_filter_short_alias(self, runner) -> None:
+        search_mock = MagicMock()
+        search_mock.hybrid.return_value = self._empty_search_response()
+        result = self._run_search(
+            runner, ["search", "q", "--filter", '{"type":"note"}'], search_mock,
+        )
+        assert result.exit_code == 0
+        assert search_mock.hybrid.call_args.kwargs["metadata_filter"] == {"type": "note"}
+
+    # ── metadata-search: --metadata-filter / --filter ────────────────────────
+
+    def test_metadata_search_metadata_filter_long_form(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.metadata_search.return_value = []
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(
+                cli, ["metadata-search", "--metadata-filter", '{"type":"note"}'],
+            )
+        assert result.exit_code == 0
+        assert client_mock.metadata_search.call_args.kwargs["metadata_filter"] == {"type": "note"}
+
+    def test_metadata_search_project_name_long_form(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.metadata_search.return_value = []
+        client_mock.list_projects.return_value = [{"id": "p1", "name": "Research"}]
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(
+                cli, ["metadata-search",
+                      "--metadata-filter", '{"x":"y"}',
+                      "--project-name", "Research"],
+            )
+        assert result.exit_code == 0
+        # Resolved to project_id by the command
+        assert client_mock.metadata_search.call_args.kwargs["project_id"] == "p1"
+
+    # ── get-doc: --version-id / --version ────────────────────────────────────
+
+    def test_get_doc_version_id_long_form(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.get_document_content.return_value = {
+            "doc_title": "T", "doc_source": "paste", "chunk_count": 1,
+            "total_chars": 10, "full_content": "x",
+        }
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["get-doc", "d-1", "--version-id", "v-1"])
+        assert result.exit_code == 0
+        assert client_mock.get_document_content.call_args.kwargs["version_id"] == "v-1"
+
+    def test_get_doc_version_short_alias(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.get_document_content.return_value = {
+            "doc_title": "T", "doc_source": "paste", "chunk_count": 1,
+            "total_chars": 10, "full_content": "x",
+        }
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["get-doc", "d-1", "--version", "v-1"])
+        assert result.exit_code == 0
+        assert client_mock.get_document_content.call_args.kwargs["version_id"] == "v-1"

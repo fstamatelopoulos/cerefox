@@ -108,7 +108,7 @@ The `metadata_filter` search parameter (available in all search modes, all acces
 
 Access paths:
 - **MCP tool**: `metadata_filter` argument on `cerefox_search`
-- **CLI**: `cerefox search "query" --filter '{"type": "decision"}'`
+- **CLI**: `cerefox search "query" --metadata-filter '{"type": "decision"}'` (alias: `--filter`, `-f`)
 - **Web UI**: Metadata Filter section (collapsible) in the Knowledge Browser
 - **GPT Actions**: `metadata_filter` field in `searchKnowledgeBase` request body (schema v1.4.0)
 - **HTTP API**: `metadata_filter` JSON key in the `cerefox-search` Edge Function POST body

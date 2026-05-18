@@ -112,7 +112,11 @@ def _resolve_requestor(cli_value: str | None, settings: Settings) -> str:
 @cli.command()
 @click.argument("path", required=False, type=click.Path(exists=True, dir_okay=False))
 @click.option("--title", "-t", default=None, help="Document title (defaults to filename stem).")
-@click.option("--project", "-p", default=None, help="Project name to assign the document to.")
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Project name to assign the document to. (Alias: --project, -p)",
+)
 @click.option(
     "--paste",
     is_flag=True,
@@ -126,13 +130,13 @@ def _resolve_requestor(cli_value: str | None, settings: Settings) -> str:
     help="Extra metadata as a JSON string, e.g. '{\"tags\":[\"work\"]}'.",
 )
 @click.option(
-    "--update",
+    "--update-if-exists", "--update", "update",
     is_flag=True,
     default=False,
     help=(
         "Update an existing document instead of creating a new one. "
         "Matches by source path (for files) or title (for --paste). "
-        "Falls through to a normal create when no match is found."
+        "Falls through to a normal create when no match is found. (Alias: --update)"
     ),
 )
 @click.option(
@@ -310,7 +314,11 @@ def ingest(
     show_default=True,
     help="Glob pattern for files to ingest (e.g. '*.md', '**/*.md', '*.pdf').",
 )
-@click.option("--project", "-p", default=None, help="Project name to assign all documents to.")
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Project name to assign all documents to. (Alias: --project, -p)",
+)
 @click.option(
     "--recursive/--no-recursive",
     default=False,
@@ -324,12 +332,12 @@ def ingest(
     help="Print files that would be ingested without actually ingesting them.",
 )
 @click.option(
-    "--update",
+    "--update-if-exists", "--update", "update",
     is_flag=True,
     default=False,
     help=(
         "Update existing documents by source path instead of creating new ones. "
-        "Useful for re-ingesting a directory after editing files."
+        "Useful for re-ingesting a directory after editing files. (Alias: --update)"
     ),
 )
 @click.option(
@@ -459,8 +467,16 @@ def ingest_dir(
     show_default=True,
     help="Search mode.",
 )
-@click.option("--count", "-n", default=10, show_default=True, help="Number of results to request.")
-@click.option("--project", "-p", default=None, help="Limit search to a project UUID.")
+@click.option(
+    "--match-count", "--count", "-n", "count",
+    default=10, show_default=True,
+    help="Number of results to request. (Alias: --count, -n)",
+)
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Limit search to a project (by name). (Alias: --project, -p)",
+)
 @click.option("--alpha", default=0.7, show_default=True, help="FTS/semantic weight (hybrid only).")
 @click.option(
     "--min-score",
@@ -472,15 +488,14 @@ def ingest_dir(
     ),
 )
 @click.option(
-    "--filter",
-    "-f",
-    "metadata_filter",
+    "--metadata-filter", "--filter", "-f", "metadata_filter",
     default=None,
     help=(
         "JSONB metadata containment filter as a JSON string. "
         'Only documents whose metadata contains ALL specified key-value pairs are returned. '
         'Example: \'{"type": "decision", "status": "active"}\'. '
-        "Run 'cerefox list-metadata-keys' to discover available keys."
+        "Run 'cerefox list-metadata-keys' to discover available keys. "
+        "(Alias: --filter, -f)"
     ),
 )
 @click.option(
@@ -568,7 +583,11 @@ def search(
 
 
 @cli.command("list-docs")
-@click.option("--project", "-p", default=None, help="Filter by project ID or name.")
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Filter by project ID or name. (Alias: --project, -p)",
+)
 @click.option("--limit", "-n", default=20, show_default=True, help="Maximum rows to show.")
 def list_docs(project: str | None, limit: int) -> None:
     """List documents in the knowledge base."""
@@ -671,8 +690,16 @@ def list_metadata_keys() -> None:
 
 
 @cli.command("metadata-search")
-@click.option("--filter", "filter_json", required=True, help="JSON metadata filter, e.g. '{\"type\":\"decision\"}'")
-@click.option("--project", "project_name", default=None, help="Filter by project name")
+@click.option(
+    "--metadata-filter", "--filter", "filter_json",
+    required=True,
+    help='JSON metadata filter, e.g. \'{"type":"decision"}\'. (Alias: --filter)',
+)
+@click.option(
+    "--project-name", "--project", "project_name",
+    default=None,
+    help="Filter by project name. (Alias: --project)",
+)
 @click.option("--updated-since", default=None, help="ISO-8601 timestamp lower bound for updated_at")
 @click.option("--created-since", default=None, help="ISO-8601 timestamp lower bound for created_at")
 @click.option("--limit", default=10, help="Max results (default: 10)")
@@ -919,10 +946,9 @@ def mcp_server() -> None:
 @cli.command("get-doc")
 @click.argument("document_id")
 @click.option(
-    "--version",
-    "version_id",
+    "--version-id", "--version", "version_id",
     default=None,
-    help="UUID of an archived version to retrieve (from 'cerefox list-versions').",
+    help="UUID of an archived version to retrieve (from 'cerefox list-versions'). (Alias: --version)",
 )
 @click.option(
     "--requestor",

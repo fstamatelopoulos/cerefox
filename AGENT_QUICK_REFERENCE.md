@@ -47,18 +47,18 @@ metadata_search(metadata_filter={"type": "decision-log"}, updated_since="2026-03
 
 ## CLI fallback (when MCP is unavailable)
 
-If `cerefox_search` is not in your tool list, your user has likely pointed you at a local Cerefox checkout. Use `uv run cerefox <subcommand>` via your Bash tool. Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md).
+If `cerefox_search` is not in your tool list, your user has likely pointed you at a local Cerefox checkout. Use `uv run cerefox <subcommand>` via your Bash tool. Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md). CLI flag names match MCP parameter names exactly (e.g. `metadata_filter` ↔ `--metadata-filter`); short forms (`--filter`, `--project`, `--count`, `--update`, `--version`) work as aliases.
 
 | MCP tool | CLI |
 |---|---|
 | `cerefox_search` | `uv run cerefox search "<q>" --requestor "<your-name>"` |
 | `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<t>" --author "<your-name>" --author-type agent` |
 | `cerefox_ingest` (update by ID) | `printf '...' \| uv run cerefox ingest --paste --title "<t>" --document-id "<uuid>" --author "<your-name>" --author-type agent` |
-| `cerefox_get_document` | `uv run cerefox get-doc <id> --requestor "<your-name>"` |
+| `cerefox_get_document` | `uv run cerefox get-doc <id> --version-id <vid> --requestor "<your-name>"` |
 | `cerefox_list_versions` | `uv run cerefox list-versions <id> --requestor "<your-name>"` |
 | `cerefox_list_projects` | `uv run cerefox list-projects --requestor "<your-name>"` |
 | `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
-| `cerefox_metadata_search` | `uv run cerefox metadata-search --filter '<json>' --requestor "<your-name>"` |
+| `cerefox_metadata_search` | `uv run cerefox metadata-search --metadata-filter '<json>' --requestor "<your-name>"` |
 | `cerefox_get_audit_log` | `uv run cerefox get-audit-log --requestor "<your-name>"` (add `--json` for scripted access) |
 
 **Set identity on every call**, exactly as you would on MCP:

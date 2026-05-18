@@ -250,21 +250,21 @@ Your user will have told you where their Cerefox checkout lives (commonly `/User
 
 If a command fails with `command not found: cerefox`, run it as `uv run cerefox <subcommand>` (the project's `uv` environment provides the binary).
 
-> Full per-flag reference lives in [`docs/guides/cli.md`](docs/guides/cli.md). The mapping table below is the agent-facing summary.
+> Full per-flag reference lives in [`docs/guides/cli.md`](docs/guides/cli.md). The mapping table below is the agent-facing summary. **CLI flag names match MCP parameter names exactly** (kebab-case); short forms like `--project`, `--filter`, `--count`, `--update`, `--version` are accepted as aliases.
 
 ### MCP tool ↔ CLI command mapping
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, ..., requestor)` | `uv run cerefox search "<query>"` (flags: `--mode hybrid\|fts\|semantic`, `--count N`, `--project <name>`, `--filter '<json>'`, `--min-score 0.X`, `--requestor <name>`) |
-| `cerefox_ingest(title, content, ..., author, document_id, source)` from a file | `uv run cerefox ingest <path>` (flags: `--title`, `--project <name>`, `--metadata '<json>'`, `--update` _or_ `--document-id <uuid>`, `--source <label>`, `--author <name>`, `--author-type user\|agent`) |
-| `cerefox_ingest(title, content, ..., author, document_id, source)` from a string | `printf '%s' "<content>" \| uv run cerefox ingest --paste --title "<title>"` (same flags) |
-| `cerefox_get_document(document_id, ..., requestor)` | `uv run cerefox get-doc <document-id> --requestor <name>` |
-| `cerefox_list_versions(document_id, ..., requestor)` | `uv run cerefox list-versions <document-id> --requestor <name>` |
+| `cerefox_search(query, match_count, project_name, metadata_filter, requestor)` | `uv run cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (also `--mode`, `--alpha`, `--min-score` — CLI-only) |
+| `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, source, author, author_type)` (file) | `uv run cerefox ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
+| `cerefox_ingest(...)` (paste) | `printf '%s' "<content>" \| uv run cerefox ingest --paste --title "<title>"` (same flags) |
+| `cerefox_get_document(document_id, version_id, requestor)` | `uv run cerefox get-doc <document-id> --version-id <vid> --requestor <name>` |
+| `cerefox_list_versions(document_id, requestor)` | `uv run cerefox list-versions <document-id> --requestor <name>` |
 | `cerefox_list_projects(requestor)` | `uv run cerefox list-projects --requestor <name>` |
 | `cerefox_list_metadata_keys()` | `uv run cerefox list-metadata-keys` |
-| `cerefox_metadata_search(metadata_filter, ..., requestor)` | `uv run cerefox metadata-search --filter '<json>' --requestor <name>` (also: `--project`, `--updated-since`, `--created-since`, `--limit`, `--include-content`) |
-| `cerefox_get_audit_log(..., requestor)` | `uv run cerefox get-audit-log` (flags: `--document-id`, `--author`, `--operation`, `--since`, `--until`, `--limit`, `--json`, `--requestor`) |
+| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `uv run cerefox metadata-search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
+| `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `uv run cerefox get-audit-log --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
 
 ### Caller-identity flags (set these the same way you would on MCP)
 
@@ -287,12 +287,12 @@ Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `C
 
 **Search before answering:**
 ```bash
-uv run cerefox search "OAuth design notes" --count 5 --requestor "claude-code"
+uv run cerefox search "OAuth design notes" --match-count 5 --requestor "claude-code"
 ```
 
 **Search then read full content of a hit:**
 ```bash
-uv run cerefox search "OAuth design" --count 3 --requestor "claude-code"
+uv run cerefox search "OAuth design" --match-count 3 --requestor "claude-code"
 # Note the [n] entries. Pick one and grab the doc id from `list-docs` or the result preview.
 uv run cerefox get-doc <document-id> --requestor "claude-code"
 ```
@@ -302,7 +302,7 @@ uv run cerefox get-doc <document-id> --requestor "claude-code"
 printf '# Title\n\nBody markdown with H2s for chunking.\n' \
   | uv run cerefox ingest --paste \
       --title "Stable Title" \
-      --project "Cerefox" \
+      --project-name "Cerefox" \
       --metadata '{"type":"decision-log","status":"active"}' \
       --author "claude-code" --author-type "agent"
 ```
@@ -310,7 +310,7 @@ printf '# Title\n\nBody markdown with H2s for chunking.\n' \
 **ID-based update (preferred — deterministic):**
 ```bash
 # Step 1: search and note the [id: abc12345-...] in the result
-uv run cerefox search "the exact doc" --count 1 --requestor "claude-code"
+uv run cerefox search "the exact doc" --match-count 1 --requestor "claude-code"
 
 # Step 2: update by ID
 printf '...new content...' \
@@ -323,7 +323,7 @@ printf '...new content...' \
 **Title-based update (fallback when ID isn't available):**
 ```bash
 printf '...new content...' \
-  | uv run cerefox ingest --paste --title "Exact Same Title" --update \
+  | uv run cerefox ingest --paste --title "Exact Same Title" --update-if-exists \
       --author "claude-code" --author-type "agent"
 ```
 
