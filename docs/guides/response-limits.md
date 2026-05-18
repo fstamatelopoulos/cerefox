@@ -95,7 +95,7 @@ JSON body field:
 
 ```http
 POST https://<project>.supabase.co/functions/v1/cerefox-search
-Authorization: Bearer <anon-key>
+Authorization: Bearer <legacy-anon-jwt>   # see docs/guides/setup-supabase.md#supabase-api-keys-2026
 Content-Type: application/json
 
 {

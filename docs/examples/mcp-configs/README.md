@@ -21,7 +21,7 @@ placeholders with your Supabase project values.
 
 2. Replace the placeholders:
    - `<your-project-ref>` -- your Supabase project reference (from Project Settings > General)
-   - `<your-anon-key>` -- your Supabase anon/public key (from Project Settings > API)
+   - `<your-anon-key>` -- your Supabase **legacy anon JWT** (Project Settings > API Keys > Legacy > anon). Do **not** use the new `sb_publishable_…` key — Edge Function gateway rejects it. See [`docs/guides/setup-supabase.md` → Supabase API keys (2026)](../../guides/setup-supabase.md#supabase-api-keys-2026).
    - `/path/to/cerefox` -- (local-stdio only) absolute path to your cerefox clone
 
 3. Restart your MCP client.

@@ -21,6 +21,12 @@ client; you can also run both in parallel.
 
 ## Access paths at a glance
 
+Three top-level paths plus a few special cases:
+
+- **Path A** — MCP server (local subprocess or remote Edge Function). Best for purpose-built agent clients like Claude Desktop, Cursor, and Claude Code's MCP integration.
+- **Path B** — direct Edge Function HTTP. Best for ChatGPT Custom GPTs and any HTTP caller (curl, scripts).
+- **Path C** — local shell CLI invoked by a coding agent's Bash tool. Best for Claude Code, Codex CLI, opencode, OpenClaw, Hermes, and similar local-agent CLIs **when the user prefers not to configure MCP** but still wants the agent to read and write Cerefox.
+
 | Client | Path | Search | Requirements / caveats |
 |--------|------|--------|-----------------------|
 | Claude Desktop (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | Node.js for `npx supergateway` or `npx mcp-remote`; no Python needed |
@@ -33,6 +39,7 @@ client; you can also run both in parallel.
 | Cursor (local) | Path A-Local — `cerefox mcp` | Hybrid | Local alternative; Python + uv + local clone; zero Edge Function invocations |
 | Cloud Claude (claude.ai web) | Remote Supabase MCP | FTS only | No install; search quality limited |
 | Gemini CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
+| Local coding agents (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) | Path C — Shell CLI (Bash tool) | Hybrid | Local clone + `uv`; agent runs `uv run cerefox …` as a shell command. Useful when MCP setup is friction. |
 | curl / scripts | Path B — Edge Functions directly | Hybrid | Direct HTTP; no client needed |
 | Custom Python agents | Python SDK directly | Hybrid | Local Python required |
 
@@ -66,9 +73,17 @@ client; you can also run both in parallel.
 - `.env` file configured with `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`,
   and your embedding API key (`OPENAI_API_KEY`)
 
+> **Important — which anon key to use (2026):** Path A-Remote and Path B both require an
+> "anon key" as a Bearer token. As of 2026, you **must** use the **legacy anon JWT**
+> (`eyJ…`) — the new `sb_publishable_…` key is rejected by the Supabase Edge Function
+> gateway with `UNAUTHORIZED_INVALID_JWT_FORMAT`. Find the legacy key in **Project
+> Settings → API Keys → Legacy → anon**. This is a Supabase platform constraint;
+> see [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026)
+> for the full story.
+
 **For Path A-Remote (remote MCP Edge Function) — recommended:**
 - `cerefox-mcp` Edge Function deployed (`npx supabase functions deploy cerefox-mcp`)
-- Your **anon key**: Supabase Dashboard → Project Settings → API → `anon public`
+- Your **legacy anon JWT** (see callout above): Supabase Dashboard → Project Settings → API Keys → Legacy → anon
 - For Claude Desktop: [Node.js](https://nodejs.org) installed (for `npx supergateway` or `npx mcp-remote`)
 - For Claude Code: [Node.js](https://nodejs.org) for `npx mcp-remote` (recommended), or no extra deps for native HTTP
 
@@ -77,7 +92,7 @@ client; you can also run both in parallel.
   `cerefox-get-document`, `cerefox-list-versions`, `cerefox-get-audit-log`,
   `cerefox-metadata-search`, `cerefox-list-projects` --
   see `setup-supabase.md` for the deploy procedure (`npx supabase functions deploy`)
-- Your **anon key**: Supabase Dashboard → Project Settings → API → `anon public`
+- Your **legacy anon JWT** (see callout above): Supabase Dashboard → Project Settings → API Keys → Legacy → anon
 - Your **project ref**: visible in the Supabase Dashboard URL
   (`app.supabase.com/project/<project-ref>`)
 
@@ -517,7 +532,7 @@ Authorization: Bearer <your-anon-key>
 Content-Type: application/json
 ```
 
-Find your anon key: **Supabase Dashboard → Project Settings → API → `anon public`**
+Find your anon key: **Supabase Dashboard → Project Settings → API Keys → Legacy → anon** (use the legacy JWT, not the new `sb_publishable_…` — see the API keys callout in the Prerequisites section).
 
 ### Path B system prompt
 
@@ -972,6 +987,118 @@ Claude.ai web can connect to the Supabase-hosted remote MCP (no local install):
 > **Limitation**: The cloud Supabase MCP only supports **FTS keyword search** — no hybrid or
 > semantic search. For full hybrid search from the web, deploy the MCP server to Cloud Run
 > (see `docs/TODO.md` → "Remote HTTP MCP server").
+
+---
+
+## Path C — Shell CLI for local coding agents
+
+### What it is
+
+Modern local coding agents — Claude Code, OpenAI Codex CLI, opencode, OpenClaw, Hermes, and many others — all expose a **Bash tool** (or similar shell-execution tool) to their underlying model. If the agent's user grants the agent access to a checked-out Cerefox repo, the agent can read and write the knowledge base by running `uv run cerefox …` exactly the same way a human would.
+
+This is **not a separate Cerefox installation path** — it's the same Layer 2 access (Python REST + service-role key) that you already use as a human via the CLI. What's new is the *usage model*: the user authorizes a local agent to use that CLI on their behalf, instead of (or alongside) configuring MCP.
+
+When to choose Path C over Path A:
+
+- **No MCP setup friction** — the agent already has a Bash tool; no `.mcp.json`, no `claude mcp add`, no Claude Desktop config edits.
+- **One Cerefox checkout serves any number of local agents** — Claude Code, Codex CLI, opencode, etc. running in the same project all use the same `uv run cerefox …` commands.
+- **Best for power users who already use the CLI themselves** — the agent and the user share one mental model and one set of conventions.
+
+When Path A is still better:
+
+- Cleaner agent UX — named tool calls (`cerefox_search(...)`) read better in agent transcripts than `Bash("uv run cerefox search 'foo'")`.
+- Some agents may rate-limit or budget Bash calls separately from MCP calls.
+- Cloud-only agents (claude.ai, chatgpt.com) cannot use Path C at all — they have no Bash tool.
+
+### Prerequisites
+
+Same as **Path A-Local**:
+
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) installed on your machine
+- Cerefox repository cloned locally (e.g. `/Users/yourname/src/cerefox`)
+- `.env` configured with `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY` (service-role / new secret key), and your embedding API key (`OPENAI_API_KEY`)
+
+Quick sanity check before pointing an agent at it:
+
+```bash
+cd /path/to/cerefox
+uv run cerefox search "any query"
+uv run cerefox list-projects
+```
+
+If both work for you, they'll work for the agent.
+
+### How to enable it for an agent
+
+The pattern is the same across Claude Code, Codex CLI, opencode, OpenClaw, Hermes, and similar tools:
+
+1. **Tell the agent the Cerefox checkout path** (e.g. via system prompt, project memory, or your agent's equivalent of `CLAUDE.md`).
+2. **Point the agent at the agent docs** in that checkout: `AGENT_GUIDE.md` and `AGENT_QUICK_REFERENCE.md`. These already describe what to read, what to write, and the audit/metadata conventions. They cover MCP usage; the CLI mapping is in `AGENT_GUIDE.md` ("Using Cerefox via the CLI").
+3. **Optionally**: add a one-line reminder in the agent's system prompt so the model defaults to using Cerefox proactively.
+
+Example system-prompt snippet (adapt for your agent — Claude Code's `CLAUDE.md`, Codex's `AGENTS.md`, opencode's project config, etc.):
+
+```
+You have access to a personal Cerefox knowledge base via a local CLI.
+
+- Path: /path/to/cerefox  (cd here before running commands)
+- Run any command with: uv run cerefox <subcommand>
+- Read AGENT_GUIDE.md and AGENT_QUICK_REFERENCE.md in that directory for
+  conventions, metadata rules, and the MCP-tool → CLI-command mapping.
+
+When answering questions, search Cerefox first. When the user asks you to
+remember something, ingest it. Cite document titles for every claim drawn
+from the knowledge base.
+```
+
+### MCP tool ↔ CLI command mapping
+
+The agent docs are written around MCP tool names. Here is how each maps to a CLI command:
+
+| MCP tool | CLI command |
+|---|---|
+| `cerefox_search` | `uv run cerefox search "<query>"`  (flags: `--mode`, `--count`, `--project`, `--filter`, `--min-score`) |
+| `cerefox_ingest` (file) | `uv run cerefox ingest <path>` (flags: `--title`, `--project`, `--metadata`, `--update`) |
+| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<title>"` |
+| `cerefox_get_document` | `uv run cerefox get-doc <document-id>` |
+| `cerefox_list_versions` | `uv run cerefox list-versions <document-id>` |
+| `cerefox_list_projects` | `uv run cerefox list-projects` |
+| `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
+| `cerefox_metadata_search` | `uv run cerefox metadata-search --filter '<json>'` |
+| `cerefox_get_audit_log` | **No CLI equivalent today** — use MCP (Path A) or query the web UI / API |
+
+> The audit-log CLI gap is the only feature where Path C is strictly worse than Path A. If you need scripted audit-log access, use Path A or the JSON API.
+
+### Path C verification prompts
+
+After pointing your agent at the repo, ask it:
+
+> "Run a Cerefox search for 'second brain'. What did you find?"
+> Expected: agent runs `uv run cerefox search "second brain"` via its Bash tool and reports results.
+
+> "Save a note titled 'Test Note' to Cerefox with the content '# Test\nThis is a Path C test.'"
+> Expected: agent runs `cerefox ingest --paste --title "Test Note"` (or equivalent) and reports the new document ID.
+
+> "List my Cerefox projects."
+> Expected: agent runs `uv run cerefox list-projects`.
+
+### Caveats
+
+- **Privilege level**: the CLI uses the **service-role key** (`CEREFOX_SUPABASE_KEY`), which bypasses Row Level Security. An agent with Bash access has the same full read/write power you do. Only enable Path C for agents you trust to act on your behalf — the same trust level you'd grant Cursor/Claude Code for editing your source code.
+- **Audit attribution is currently limited**: today, every CLI write lands in the audit log with `author = "unknown"`, `author_type = "user"`, regardless of which agent issued the command. Read commands log `requestor = "user"`. Proper attribution flags (`--author`, `--author-type`, `--requestor`) are tracked in [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28). Until that lands, you cannot tell from the audit log whether a Path C entry came from you or from an agent acting on your behalf. The Decision Log (`2026 Q2`) records this gap and the planned fix.
+- **One repo per machine**: the agent needs your checkout — there's no "Path C without a local clone". If you skip the local install entirely, Path A-Remote or Path B is the only option.
+- **No sandboxing beyond the agent's existing Bash sandbox**: the CLI is just shell. If your agent's tool framework restricts which commands run, allowlist `uv run cerefox …` explicitly.
+
+### Path C is configuration-free, but here's the per-agent footprint
+
+| Agent | Where to mention the Cerefox path |
+|---|---|
+| Claude Code | `CLAUDE.md` in the project, or `~/.claude/CLAUDE.md` globally. No MCP entry needed. |
+| OpenAI Codex CLI | `AGENTS.md` or the project's instructions file. |
+| opencode | Project config / agent system prompt. |
+| OpenClaw, Hermes, custom local agents | Whatever the tool's system-prompt / memory mechanism is. |
+
+There is nothing Cerefox-specific to install for the agent itself — just the repo + your `.env`.
 
 ---
 

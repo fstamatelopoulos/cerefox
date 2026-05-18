@@ -1,6 +1,6 @@
 # How AI Agents Use Cerefox
 
-Reference guide for AI agents interacting with the Cerefox knowledge base via MCP tools.
+Reference guide for AI agents interacting with the Cerefox knowledge base.
 Read this before your first interaction. For a minimal quick reference, see `AGENT_QUICK_REFERENCE.md`.
 
 ---
@@ -11,7 +11,16 @@ Cerefox is a persistent, shared knowledge base that multiple AI agents can read 
 Knowledge written by one agent (or a human) is immediately searchable by any other agent.
 It is not a message bus -- it is curated, versioned, searchable memory backed by Postgres + pgvector.
 
-You interact with Cerefox through 8 MCP tools described below.
+## Two ways to interact with Cerefox
+
+You'll be using **one** of these — whichever your user (or the harness) has configured:
+
+1. **MCP tools (default)** — eight named tools (`cerefox_search`, `cerefox_ingest`, …) exposed by either a local MCP server (`cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 8 Tools** below. This is the recommended path for purpose-built agent clients.
+2. **Shell CLI (Bash tool)** — the same operations exposed as a local `uv run cerefox …` command, invoked via your Bash tool. Used when your user prefers not to install/configure an MCP server. The semantics are identical; only the surface differs. See **Using Cerefox via the CLI** near the bottom of this guide for the MCP-tool → CLI-command mapping and the small list of behavioural differences.
+
+If you're not sure which mode you're in: check whether `cerefox_search` shows up in your tool list. If yes, use MCP. If no, ask your user where the Cerefox checkout lives — they'll have told you, typically in `CLAUDE.md`, `AGENTS.md`, or an equivalent project memory file.
+
+The rest of this guide is written around the MCP tool names, since those are stable across both modes. The CLI section maps each tool name to its CLI command.
 
 ---
 
@@ -228,3 +237,70 @@ Call `cerefox_list_metadata_keys` for the current list -- conventions evolve.
 - **Audit log**: all write operations are recorded with author, timestamp, and size changes.
 
 This is a human-on-the-loop model: agents write freely, humans monitor and correct.
+
+---
+
+## Using Cerefox via the CLI
+
+Read this section only if you do **not** have MCP tools available (no `cerefox_search` in your tool list) and your user has pointed you at a local Cerefox checkout. The semantics of every operation are identical to MCP — only the calling surface differs. The conventions above (when to search, when to ingest, metadata rules, ID-based update workflow, governance) all still apply.
+
+### Setup
+
+Your user will have told you where their Cerefox checkout lives (commonly `/Users/<name>/src/cerefox`, but check `CLAUDE.md` / `AGENTS.md` / project memory for the exact path). Run every command from that directory, or use `cd /path/to/cerefox && uv run cerefox …` in your Bash tool call.
+
+If a command fails with `command not found: cerefox`, run it as `uv run cerefox <subcommand>` (the project's `uv` environment provides the binary).
+
+### MCP tool ↔ CLI command mapping
+
+| MCP tool | CLI command |
+|---|---|
+| `cerefox_search(query, ...)` | `uv run cerefox search "<query>"`  (flags: `--mode hybrid\|fts\|semantic`, `--count N`, `--project <name>`, `--filter '<json>'`, `--min-score 0.X`) |
+| `cerefox_ingest(title, content, ...)` from a file | `uv run cerefox ingest <path>` (flags: `--title`, `--project <name>`, `--metadata '<json>'`, `--update`) |
+| `cerefox_ingest(title, content, ...)` from a string | `printf '%s' "<content>" \| uv run cerefox ingest --paste --title "<title>"` (same flags) |
+| `cerefox_get_document(document_id)` | `uv run cerefox get-doc <document-id>` |
+| `cerefox_list_versions(document_id)` | `uv run cerefox list-versions <document-id>` |
+| `cerefox_list_projects()` | `uv run cerefox list-projects` |
+| `cerefox_list_metadata_keys()` | `uv run cerefox list-metadata-keys` |
+| `cerefox_metadata_search(metadata_filter, ...)` | `uv run cerefox metadata-search --filter '<json>'` (flags: `--project <name>`, `--updated-since <iso>`, `--created-since <iso>`, `--limit N`, `--include-content`) |
+| `cerefox_get_audit_log(...)` | **No CLI equivalent today.** If you need audit-log data, tell your user — they can query via the web UI, the JSON API, or by installing the MCP server. |
+
+### Behavioural differences worth knowing
+
+1. **Author / requestor attribution is currently lossy.** Every CLI write today lands in the audit log with `author = "unknown"`, `author_type = "user"` regardless of what value you would set on an MCP `cerefox_ingest` call. Read commands record `requestor = "user"`. There is no `--author` / `--author-type` / `--requestor` flag yet — the work is tracked in [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28). Once that lands, agents on the CLI path should set `--author "<your-agent-name>" --author-type "agent"` on every write and `--requestor "<your-agent-name>"` on every read, exactly mirroring the MCP `author` / `requestor` rule. Until then, **mention this in your response to the user when ingesting** — they may want to manually attribute the write later, or use the MCP path for governance-sensitive entries.
+
+2. **CLI output is human-formatted, not JSON.** `cerefox search` returns a numbered, indented text block with title, score, and a 300-char preview per result. To extract document IDs reliably, parse the `Doc: <title>  (<source>)` lines or fall back to `cerefox list-docs` for a clean tabular listing. `cerefox get-doc <id>` prints raw Markdown to stdout, which you can read back like any other file.
+
+3. **No automatic `requestor` propagation.** With MCP, your tool framework passes `requestor` once per tool call. With the CLI, every invocation is independent — if `--requestor` ever lands (per #28), you'd pass it on every command. Until then, no action is possible.
+
+4. **Errors come back on stderr with a non-zero exit code.** Check both — a successful command prints results on stdout and exits 0; a failure prints to stderr and exits non-zero. Some CLI commands (notably `cerefox search`) currently have a known cosmetic bug where a Python traceback prints *after* successful results — the results themselves are correct, but exit code is non-zero. Tracked in [cerefox#27](https://github.com/fstamatelopoulos/cerefox/issues/27); when scripting against `cerefox search`, treat any results-shaped stdout as success even if exit code is non-zero, until the fix lands.
+
+### Quick patterns
+
+**Search before answering:**
+```bash
+uv run cerefox search "OAuth design notes" --count 5
+```
+
+**Search then read full content of a hit:**
+```bash
+uv run cerefox search "OAuth design" --count 3
+# Note the [n] entries. Pick one and grab the doc id from `list-docs` or the result preview.
+uv run cerefox get-doc <document-id>
+```
+
+**Ingest a note:**
+```bash
+printf '# Title\n\nBody markdown with H2s for chunking.\n' \
+  | uv run cerefox ingest --paste \
+      --title "Stable Title" \
+      --project "Cerefox" \
+      --metadata '{"type":"decision-log","status":"active"}'
+```
+
+**Update an existing document (title-based, fallback):**
+```bash
+printf '...new content...' \
+  | uv run cerefox ingest --paste --title "Exact Same Title" --update
+```
+
+**ID-based update is not yet exposed on the CLI** — `cerefox ingest` does not currently accept a `--document-id` flag the way `cerefox_ingest` accepts `document_id`. Use title-based update (with `--update`) for revisions, or use the MCP path when ID-based determinism matters.

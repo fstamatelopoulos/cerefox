@@ -1091,9 +1091,12 @@ DEFINER, service-role access). The Edge Function:
 2. Calls the Supabase client with the **service-role key** to execute the RPC
 3. Formats and returns the response as JSON
 
-Callers authenticate with the **anon key** (JWT validated by the Supabase API gateway).
-The service-role key is never exposed to callers -- it is read from `SUPABASE_SERVICE_ROLE_KEY`
-at runtime inside the Edge Function.
+Callers authenticate with the **legacy anon JWT** (validated as a JWT by the Supabase API
+gateway). As of 2026, the new `sb_publishable_…` key is not accepted here — the Edge
+Function gateway has not been migrated. See `docs/guides/setup-supabase.md` →
+"Supabase API keys (2026)" for context. The service-role-equivalent key (new `sb_secret_…`
+or legacy `service_role` JWT) is never exposed to callers -- it is read from
+`SUPABASE_SERVICE_ROLE_KEY` at runtime inside the Edge Function.
 
 **Single implementation principle**: each operation is implemented once in a Postgres RPC.
 Both the Python pipeline and the TypeScript Edge Functions call the same RPCs -- no parallel
