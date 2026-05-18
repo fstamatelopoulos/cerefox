@@ -72,13 +72,51 @@ def _get_embedder(settings: Settings):
     )
 
 
+# ── caller-identity resolution ────────────────────────────────────────────────
+# Precedence: CLI flag > env var (via Settings) > built-in default.
+# These helpers are used by ingest / ingest-dir (writes) and the read commands
+# that record usage (search, get-doc, list-versions, list-projects,
+# metadata-search). See ticket #28 and the Q2 2026 decision-log entry.
+
+
+def _resolve_author(cli_value: str | None, settings: Settings) -> str:
+    """Return the effective author name, rejecting empty strings."""
+    if cli_value is not None:
+        if cli_value == "":
+            click.echo("❌  --author cannot be empty.", err=True)
+            sys.exit(1)
+        return cli_value
+    return settings.cli_author_name
+
+
+def _resolve_author_type(cli_value: str | None, settings: Settings) -> str:
+    """Return the effective author_type. CLI Choice already validates the value."""
+    if cli_value is not None:
+        return cli_value
+    return settings.cli_author_type
+
+
+def _resolve_requestor(cli_value: str | None, settings: Settings) -> str:
+    """Return the effective requestor name, rejecting empty strings."""
+    if cli_value is not None:
+        if cli_value == "":
+            click.echo("❌  --requestor cannot be empty.", err=True)
+            sys.exit(1)
+        return cli_value
+    return settings.cli_requestor_name
+
+
 # ── ingest ────────────────────────────────────────────────────────────────────
 
 
 @cli.command()
 @click.argument("path", required=False, type=click.Path(exists=True, dir_okay=False))
 @click.option("--title", "-t", default=None, help="Document title (defaults to filename stem).")
-@click.option("--project", "-p", default=None, help="Project name to assign the document to.")
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Project name to assign the document to. (Alias: --project, -p)",
+)
 @click.option(
     "--paste",
     is_flag=True,
@@ -92,13 +130,51 @@ def _get_embedder(settings: Settings):
     help="Extra metadata as a JSON string, e.g. '{\"tags\":[\"work\"]}'.",
 )
 @click.option(
-    "--update",
+    "--update-if-exists", "--update", "update",
     is_flag=True,
     default=False,
     help=(
         "Update an existing document instead of creating a new one. "
         "Matches by source path (for files) or title (for --paste). "
-        "Falls through to a normal create when no match is found."
+        "Falls through to a normal create when no match is found. (Alias: --update)"
+    ),
+)
+@click.option(
+    "--document-id",
+    "document_id",
+    default=None,
+    help=(
+        "UUID of an existing document to update deterministically. "
+        "Bypasses title / source-path matching. Errors if the document does "
+        "not exist (no silent create). Mutually exclusive with --update."
+    ),
+)
+@click.option(
+    "--source",
+    default=None,
+    help=(
+        "Source label recorded on the document (free-text). "
+        "Defaults to 'paste' for --paste, 'file' for file ingestion. "
+        "Agents may set this to 'agent' or a custom label."
+    ),
+)
+@click.option(
+    "--author",
+    default=None,
+    help=(
+        "Identity recorded in the audit log for this write. "
+        "Defaults to CEREFOX_AUTHOR_NAME (or 'unknown'). "
+        "Human users: set to your name. Agents: set to your agent name (e.g. 'claude-code')."
+    ),
+)
+@click.option(
+    "--author-type",
+    type=click.Choice(["user", "agent"], case_sensitive=False),
+    default=None,
+    help=(
+        "Caller type for governance review_status routing. "
+        "Defaults to CEREFOX_AUTHOR_TYPE (or 'user'). "
+        "Agent writes are auto-set to 'pending_review'; user writes are 'approved'."
     ),
 )
 def ingest(
@@ -108,6 +184,10 @@ def ingest(
     paste: bool,
     metadata: str | None,
     update: bool,
+    document_id: str | None,
+    source: str | None,
+    author: str | None,
+    author_type: str | None,
 ) -> None:
     """Ingest a markdown, PDF, or DOCX file (or stdin) into the knowledge base."""
     import json  # noqa: PLC0415
@@ -122,8 +202,19 @@ def ingest(
     if not paste and not path:
         click.echo("❌  Provide a file PATH or use --paste to read from stdin.", err=True)
         sys.exit(1)
+    if document_id is not None and update:
+        click.echo(
+            "❌  --document-id and --update are mutually exclusive. "
+            "Use --document-id for deterministic ID-based updates, or --update for "
+            "title/source-path-based fallback matching — not both.",
+            err=True,
+        )
+        sys.exit(1)
 
     settings = Settings()
+    resolved_author = _resolve_author(author, settings)
+    resolved_author_type = _resolve_author_type(author_type, settings)
+
     client = _get_client(settings)
     embedder = _get_embedder(settings)
     pipeline = IngestionPipeline(client, embedder, settings)
@@ -139,10 +230,18 @@ def ingest(
 
     if paste:
         text = sys.stdin.read()
-        result = pipeline.ingest_text(
-            text=text, title=title, source="paste", project_name=project,
-            metadata=extra_meta, update_existing=update,
-        )
+        try:
+            result = pipeline.ingest_text(
+                text=text, title=title,
+                source=source or "paste",
+                project_name=project,
+                metadata=extra_meta, update_existing=update,
+                document_id=document_id,
+                author=resolved_author, author_type=resolved_author_type,
+            )
+        except ValueError as exc:
+            click.echo(f"❌  {exc}", err=True)
+            sys.exit(1)
     else:
         from pathlib import Path as _Path  # noqa: PLC0415
 
@@ -153,20 +252,34 @@ def ingest(
             except ImportError as exc:
                 click.echo(f"❌  {exc}", err=True)
                 sys.exit(1)
-            result = pipeline.ingest_text(
-                text=text,
-                title=title or p.stem,
-                source="file",
-                source_path=str(p),
-                project_name=project,
-                metadata=extra_meta,
-                update_existing=update,
-            )
+            try:
+                result = pipeline.ingest_text(
+                    text=text,
+                    title=title or p.stem,
+                    source=source or "file",
+                    source_path=str(p),
+                    project_name=project,
+                    metadata=extra_meta,
+                    update_existing=update,
+                    document_id=document_id,
+                    author=resolved_author,
+                    author_type=resolved_author_type,
+                )
+            except ValueError as exc:
+                click.echo(f"❌  {exc}", err=True)
+                sys.exit(1)
         else:
-            result = pipeline.ingest_file(
-                path=path, title=title, project_name=project, metadata=extra_meta,
-                update_existing=update,
-            )
+            try:
+                result = pipeline.ingest_file(
+                    path=path, title=title, project_name=project, metadata=extra_meta,
+                    update_existing=update,
+                    document_id=document_id,
+                    source=source,
+                    author=resolved_author, author_type=resolved_author_type,
+                )
+            except ValueError as exc:
+                click.echo(f"❌  {exc}", err=True)
+                sys.exit(1)
 
     if result.skipped:
         click.echo(f"⏭  Skipped (already ingested): {result.title}")
@@ -201,7 +314,11 @@ def ingest(
     show_default=True,
     help="Glob pattern for files to ingest (e.g. '*.md', '**/*.md', '*.pdf').",
 )
-@click.option("--project", "-p", default=None, help="Project name to assign all documents to.")
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Project name to assign all documents to. (Alias: --project, -p)",
+)
 @click.option(
     "--recursive/--no-recursive",
     default=False,
@@ -215,13 +332,33 @@ def ingest(
     help="Print files that would be ingested without actually ingesting them.",
 )
 @click.option(
-    "--update",
+    "--update-if-exists", "--update", "update",
     is_flag=True,
     default=False,
     help=(
         "Update existing documents by source path instead of creating new ones. "
-        "Useful for re-ingesting a directory after editing files."
+        "Useful for re-ingesting a directory after editing files. (Alias: --update)"
     ),
+)
+@click.option(
+    "--metadata",
+    "-m",
+    default=None,
+    help=(
+        "JSON metadata applied to every file in this run, e.g. '{\"type\":\"research\"}'. "
+        "Useful when bulk-ingesting a directory of related notes with a shared tag."
+    ),
+)
+@click.option(
+    "--author",
+    default=None,
+    help="Identity recorded in the audit log for every write in this run. Defaults to CEREFOX_AUTHOR_NAME (or 'unknown').",
+)
+@click.option(
+    "--author-type",
+    type=click.Choice(["user", "agent"], case_sensitive=False),
+    default=None,
+    help="Caller type for governance review_status routing. Defaults to CEREFOX_AUTHOR_TYPE (or 'user').",
 )
 def ingest_dir(
     directory: str,
@@ -230,12 +367,28 @@ def ingest_dir(
     recursive: bool,
     dry_run: bool,
     update: bool,
+    metadata: str | None,
+    author: str | None,
+    author_type: str | None,
 ) -> None:
     """Ingest all matching files in a directory."""
+    import json  # noqa: PLC0415
     from pathlib import Path as _Path  # noqa: PLC0415
 
     from cerefox.chunking.converters import convert_to_markdown  # noqa: PLC0415
     from cerefox.ingestion.pipeline import IngestionPipeline  # noqa: PLC0415
+
+    # Parse shared metadata JSON if supplied.
+    extra_meta: dict = {}
+    if metadata:
+        try:
+            extra_meta = json.loads(metadata)
+        except json.JSONDecodeError as exc:
+            click.echo(f"❌  Invalid --metadata JSON: {exc}", err=True)
+            sys.exit(1)
+        if not isinstance(extra_meta, dict):
+            click.echo("❌  --metadata must be a JSON object.", err=True)
+            sys.exit(1)
 
     d = _Path(directory)
     glob_fn = d.rglob if recursive else d.glob
@@ -253,6 +406,9 @@ def ingest_dir(
         return
 
     settings = Settings()
+    resolved_author = _resolve_author(author, settings)
+    resolved_author_type = _resolve_author_type(author_type, settings)
+
     client = _get_client(settings)
     embedder = _get_embedder(settings)
     pipeline = IngestionPipeline(client, embedder, settings)
@@ -268,11 +424,16 @@ def ingest_dir(
                     source="file",
                     source_path=str(f),
                     project_name=project,
+                    metadata=extra_meta,
                     update_existing=update,
+                    author=resolved_author,
+                    author_type=resolved_author_type,
                 )
             else:
                 result = pipeline.ingest_file(
-                    path=str(f), project_name=project, update_existing=update
+                    path=str(f), project_name=project, metadata=extra_meta,
+                    update_existing=update,
+                    author=resolved_author, author_type=resolved_author_type,
                 )
 
             if result.skipped:
@@ -306,8 +467,16 @@ def ingest_dir(
     show_default=True,
     help="Search mode.",
 )
-@click.option("--count", "-n", default=10, show_default=True, help="Number of results to request.")
-@click.option("--project", "-p", default=None, help="Limit search to a project UUID.")
+@click.option(
+    "--match-count", "--count", "-n", "count",
+    default=10, show_default=True,
+    help="Number of results to request. (Alias: --count, -n)",
+)
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Limit search to a project (by name). (Alias: --project, -p)",
+)
 @click.option("--alpha", default=0.7, show_default=True, help="FTS/semantic weight (hybrid only).")
 @click.option(
     "--min-score",
@@ -319,16 +488,20 @@ def ingest_dir(
     ),
 )
 @click.option(
-    "--filter",
-    "-f",
-    "metadata_filter",
+    "--metadata-filter", "--filter", "-f", "metadata_filter",
     default=None,
     help=(
         "JSONB metadata containment filter as a JSON string. "
         'Only documents whose metadata contains ALL specified key-value pairs are returned. '
         'Example: \'{"type": "decision", "status": "active"}\'. '
-        "Run 'cerefox list-metadata-keys' to discover available keys."
+        "Run 'cerefox list-metadata-keys' to discover available keys. "
+        "(Alias: --filter, -f)"
     ),
+)
+@click.option(
+    "--requestor",
+    default=None,
+    help="Identity recorded in the usage log. Defaults to CEREFOX_REQUESTOR_NAME (or 'user').",
 )
 def search(
     query: str,
@@ -338,6 +511,7 @@ def search(
     alpha: float,
     min_score: float | None,
     metadata_filter: str | None,
+    requestor: str | None,
 ) -> None:
     """Search the knowledge base."""
     import json  # noqa: PLC0415
@@ -357,6 +531,7 @@ def search(
             return
 
     settings = Settings()
+    resolved_requestor = _resolve_requestor(requestor, settings)
     if min_score is not None:
         settings.min_search_score = min_score
     client = _get_client(settings)
@@ -395,17 +570,24 @@ def search(
 
     click.echo(f"\n{len(resp.results)} result(s) shown  ({resp.response_bytes:,} bytes).")
 
-    client.log_usage(
-        operation="search", access_path="cli", requestor="user",
-        query_text=query, project_id=project, result_count=len(resp.results),
-    )
+    try:
+        client.log_usage(
+            operation="search", access_path="cli", requestor=resolved_requestor,
+            query_text=query, project_id=project, result_count=len(resp.results),
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget; never block on logging
+        click.echo(f"Warning: usage logging failed: {exc}", err=True)
 
 
 # ── list-docs ─────────────────────────────────────────────────────────────────
 
 
 @cli.command("list-docs")
-@click.option("--project", "-p", default=None, help="Filter by project ID or name.")
+@click.option(
+    "--project-name", "--project", "-p", "project",
+    default=None,
+    help="Filter by project ID or name. (Alias: --project, -p)",
+)
 @click.option("--limit", "-n", default=20, show_default=True, help="Maximum rows to show.")
 def list_docs(project: str | None, limit: int) -> None:
     """List documents in the knowledge base."""
@@ -433,39 +615,110 @@ def list_docs(project: str | None, limit: int) -> None:
 @cli.command("delete-doc")
 @click.argument("document_id")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-def delete_doc(document_id: str, yes: bool) -> None:
-    """Delete a document and all its chunks by ID."""
+@click.option(
+    "--author",
+    default=None,
+    help=(
+        "Identity recorded in the audit log for this delete. "
+        "Defaults to CEREFOX_AUTHOR_NAME (or 'unknown'). "
+        "Human users: set to your name. Agents: set to your agent name (e.g. 'claude-code')."
+    ),
+)
+@click.option(
+    "--author-type",
+    type=click.Choice(["user", "agent"], case_sensitive=False),
+    default=None,
+    help="Caller type for governance. Defaults to CEREFOX_AUTHOR_TYPE (or 'user').",
+)
+def delete_doc(
+    document_id: str,
+    yes: bool,
+    author: str | None,
+    author_type: str | None,
+) -> None:
+    """Soft-delete a document — moves it to trash. Recoverable.
+
+    \b
+    What this command does:
+      • Sets `deleted_at` on the document row (document stays in the DB).
+      • Excludes the document from search and from `cerefox list-docs`.
+      • Writes an immutable audit-log entry recording author, author_type, and time.
+
+    \b
+    What this command does NOT do:
+      • It does NOT permanently delete the document.
+      • It does NOT free database storage.
+      • Versions, chunks, and audit entries remain intact under the trash.
+
+    \b
+    Recovery: a soft-deleted document can be restored OR permanently purged
+    only from the Cerefox web UI (Trash view). These destructive / restorative
+    actions are intentionally web-UI-only to require human-in-the-loop
+    confirmation. See `docs/guides/access-paths.md` →
+    "Destructive operations and the trust model" for the full rationale.
+
+    \b
+    Agent usage: agents calling this via Bash MUST pass `--yes` (no TTY for
+    confirmation) AND should pass `--author <your-name> --author-type agent`
+    so the soft-delete is correctly attributed in the audit log.
+    """
     settings = Settings()
+    resolved_author = _resolve_author(author, settings)
+    resolved_author_type = _resolve_author_type(author_type, settings)
     client = _get_client(settings)
 
     if not yes:
         click.confirm(
-            f"Delete document {document_id} and all its chunks?", default=False, abort=True
+            f"Soft-delete document {document_id}? It will be moved to trash "
+            f"(recoverable via the web UI; this command CANNOT permanently delete).",
+            default=False,
+            abort=True,
         )
 
-    client.delete_document(document_id)
-    click.echo(f"✓  Deleted document {document_id}")
+    client.delete_document(
+        document_id,
+        author=resolved_author,
+        author_type=resolved_author_type,
+    )
+    click.echo(
+        f"✓  Soft-deleted document {document_id} "
+        f"(author={resolved_author}, type={resolved_author_type}). "
+        f"Use the web UI to restore or purge."
+    )
 
 
 # ── list-projects ─────────────────────────────────────────────────────────────
 
 
 @cli.command("list-projects")
-def list_projects() -> None:
+@click.option(
+    "--requestor",
+    default=None,
+    help="Identity recorded in the usage log. Defaults to CEREFOX_REQUESTOR_NAME (or 'user').",
+)
+def list_projects(requestor: str | None) -> None:
     """List all projects."""
     settings = Settings()
+    resolved_requestor = _resolve_requestor(requestor, settings)
     client = _get_client(settings)
     projects = client.list_projects()
 
     if not projects:
         click.echo("No projects found.")
-        return
+    else:
+        click.echo(f"{'ID':<38}  Name")
+        click.echo("─" * 60)
+        for proj in projects:
+            click.echo(f"{proj['id']:<38}  {proj['name']}")
+        click.echo(f"\n{len(projects)} project(s).")
 
-    click.echo(f"{'ID':<38}  Name")
-    click.echo("─" * 60)
-    for proj in projects:
-        click.echo(f"{proj['id']:<38}  {proj['name']}")
-    click.echo(f"\n{len(projects)} project(s).")
+    try:
+        client.log_usage(
+            operation="list_projects", access_path="cli", requestor=resolved_requestor,
+            result_count=len(projects),
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget
+        click.echo(f"Warning: usage logging failed: {exc}", err=True)
 
 
 # ── list-metadata-keys ────────────────────────────────────────────────────────
@@ -495,12 +748,25 @@ def list_metadata_keys() -> None:
 
 
 @cli.command("metadata-search")
-@click.option("--filter", "filter_json", required=True, help="JSON metadata filter, e.g. '{\"type\":\"decision\"}'")
-@click.option("--project", "project_name", default=None, help="Filter by project name")
+@click.option(
+    "--metadata-filter", "--filter", "filter_json",
+    required=True,
+    help='JSON metadata filter, e.g. \'{"type":"decision"}\'. (Alias: --filter)',
+)
+@click.option(
+    "--project-name", "--project", "project_name",
+    default=None,
+    help="Filter by project name. (Alias: --project)",
+)
 @click.option("--updated-since", default=None, help="ISO-8601 timestamp lower bound for updated_at")
 @click.option("--created-since", default=None, help="ISO-8601 timestamp lower bound for created_at")
 @click.option("--limit", default=10, help="Max results (default: 10)")
 @click.option("--include-content", is_flag=True, help="Include full document text")
+@click.option(
+    "--requestor",
+    default=None,
+    help="Identity recorded in the usage log. Defaults to CEREFOX_REQUESTOR_NAME (or 'user').",
+)
 def metadata_search(
     filter_json: str,
     project_name: str | None,
@@ -508,6 +774,7 @@ def metadata_search(
     created_since: str | None,
     limit: int,
     include_content: bool,
+    requestor: str | None,
 ) -> None:
     """Search documents by metadata key-value criteria."""
     import json as json_mod
@@ -523,6 +790,7 @@ def metadata_search(
         raise SystemExit(1)
 
     settings = Settings()
+    resolved_requestor = _resolve_requestor(requestor, settings)
     client = _get_client(settings)
 
     project_id: str | None = None
@@ -547,17 +815,24 @@ def metadata_search(
 
     if not rows:
         click.echo("No documents match the metadata filter.")
-        return
+    else:
+        for row in rows:
+            proj_names = row.get("project_names") or []
+            projects_str = f"  projects: {', '.join(proj_names)}" if proj_names else ""
+            click.echo(f"  {row['title']}  (id: {row['document_id']})")
+            click.echo(f"    {row.get('total_chars', 0)} chars | {row.get('review_status', 'approved')} | updated {str(row.get('updated_at', ''))[:10]}{projects_str}")
+            if include_content and row.get("content"):
+                click.echo(f"    ---\n{row['content'][:500]}{'...' if len(row.get('content', '')) > 500 else ''}")
+            click.echo()
+        click.echo(f"{len(rows)} document(s) found.")
 
-    for row in rows:
-        proj_names = row.get("project_names") or []
-        projects_str = f"  projects: {', '.join(proj_names)}" if proj_names else ""
-        click.echo(f"  {row['title']}  (id: {row['document_id']})")
-        click.echo(f"    {row.get('total_chars', 0)} chars | {row.get('review_status', 'approved')} | updated {str(row.get('updated_at', ''))[:10]}{projects_str}")
-        if include_content and row.get("content"):
-            click.echo(f"    ---\n{row['content'][:500]}{'...' if len(row.get('content', '')) > 500 else ''}")
-        click.echo()
-    click.echo(f"{len(rows)} document(s) found.")
+    try:
+        client.log_usage(
+            operation="metadata_search", access_path="cli", requestor=resolved_requestor,
+            project_id=project_id, result_count=len(rows),
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget
+        click.echo(f"Warning: usage logging failed: {exc}", err=True)
 
 
 @cli.command("config-get")
@@ -729,17 +1004,22 @@ def mcp_server() -> None:
 @cli.command("get-doc")
 @click.argument("document_id")
 @click.option(
-    "--version",
-    "version_id",
+    "--version-id", "--version", "version_id",
     default=None,
-    help="UUID of an archived version to retrieve (from 'cerefox list-versions').",
+    help="UUID of an archived version to retrieve (from 'cerefox list-versions'). (Alias: --version)",
 )
-def get_doc(document_id: str, version_id: str | None) -> None:
+@click.option(
+    "--requestor",
+    default=None,
+    help="Identity recorded in the usage log. Defaults to CEREFOX_REQUESTOR_NAME (or 'user').",
+)
+def get_doc(document_id: str, version_id: str | None, requestor: str | None) -> None:
     """Print the full content of a document to stdout.
 
     Pass --version <uuid> to retrieve an archived (previous) version.
     """
     settings = Settings()
+    resolved_requestor = _resolve_requestor(requestor, settings)
     client = _get_client(settings)
     doc = client.get_document_content(document_id, version_id=version_id)
     if doc is None:
@@ -751,10 +1031,13 @@ def get_doc(document_id: str, version_id: str | None) -> None:
     click.echo("")
     click.echo(doc.get("full_content") or "")
 
-    client.log_usage(
-        operation="get_document", access_path="cli", requestor="user",
-        document_id=document_id, result_count=1,
-    )
+    try:
+        client.log_usage(
+            operation="get_document", access_path="cli", requestor=resolved_requestor,
+            document_id=document_id, result_count=1,
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget
+        click.echo(f"Warning: usage logging failed: {exc}", err=True)
 
 
 # ── list-versions ─────────────────────────────────────────────────────────────
@@ -762,7 +1045,12 @@ def get_doc(document_id: str, version_id: str | None) -> None:
 
 @cli.command("list-versions")
 @click.argument("document_id")
-def list_versions(document_id: str) -> None:
+@click.option(
+    "--requestor",
+    default=None,
+    help="Identity recorded in the usage log. Defaults to CEREFOX_REQUESTOR_NAME (or 'user').",
+)
+def list_versions(document_id: str, requestor: str | None) -> None:
     """List all archived versions of a document.
 
     Each row shows the version number, UUID, source, size, and timestamp.
@@ -770,6 +1058,7 @@ def list_versions(document_id: str) -> None:
     the content of a specific version.
     """
     settings = Settings()
+    resolved_requestor = _resolve_requestor(requestor, settings)
     client = _get_client(settings)
     versions = client.list_document_versions(document_id)
     if not versions:
@@ -784,10 +1073,113 @@ def list_versions(document_id: str) -> None:
             f"{v['chunk_count']:>6}  {v['total_chars']:>8}  {v['version_id']}"
         )
 
-    client.log_usage(
-        operation="list_versions", access_path="cli", requestor="user",
-        document_id=document_id, result_count=len(versions),
+    try:
+        client.log_usage(
+            operation="list_versions", access_path="cli", requestor=resolved_requestor,
+            document_id=document_id, result_count=len(versions),
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget
+        click.echo(f"Warning: usage logging failed: {exc}", err=True)
+
+
+# ── get-audit-log ─────────────────────────────────────────────────────────────
+
+
+# Operation values allowed by the cerefox_audit_log CHECK constraint
+# (kept in sync with src/cerefox/db/schema.sql).
+_AUDIT_OPERATIONS = (
+    "create", "update-content", "update-metadata", "delete",
+    "status-change", "archive", "unarchive", "restore",
+)
+
+
+@cli.command("get-audit-log")
+@click.option("--document-id", "document_id", default=None, help="Filter by document UUID.")
+@click.option(
+    "--author", default=None,
+    help="Filter by author name (exact match, free-text — e.g. 'unknown', 'claude-code').",
+)
+@click.option(
+    "--operation",
+    type=click.Choice(_AUDIT_OPERATIONS, case_sensitive=False),
+    default=None,
+    help=f"Filter by operation type. One of: {', '.join(_AUDIT_OPERATIONS)}.",
+)
+@click.option("--since", default=None, help="ISO-8601 timestamp lower bound (e.g. '2026-01-01').")
+@click.option("--until", default=None, help="ISO-8601 timestamp upper bound.")
+@click.option("--limit", default=50, show_default=True, help="Max rows to return.")
+@click.option(
+    "--json", "as_json", is_flag=True, default=False,
+    help="Emit one JSON object per line (for piping to jq / scripts) instead of the human-readable table.",
+)
+@click.option(
+    "--requestor",
+    default=None,
+    help="Identity recorded in the usage log. Defaults to CEREFOX_REQUESTOR_NAME (or 'user').",
+)
+def get_audit_log(
+    document_id: str | None,
+    author: str | None,
+    operation: str | None,
+    since: str | None,
+    until: str | None,
+    limit: int,
+    as_json: bool,
+    requestor: str | None,
+) -> None:
+    """Query audit-log entries with filters (parity with the cerefox_get_audit_log MCP tool).
+
+    Each row records who changed what, when, with size-change info and a description.
+    Use --json for scripted access.
+    """
+    import json as _json  # noqa: PLC0415
+
+    settings = Settings()
+    resolved_requestor = _resolve_requestor(requestor, settings)
+    client = _get_client(settings)
+
+    entries = client.list_audit_entries(
+        document_id=document_id,
+        author=author,
+        operation=operation,
+        since=since,
+        until=until,
+        limit=limit,
     )
+
+    if as_json:
+        for entry in entries:
+            click.echo(_json.dumps(entry, default=str))
+    elif not entries:
+        click.echo("No audit-log entries match the filters.")
+    else:
+        click.echo(
+            f"{'created_at':<27}  {'operation':<15}  {'author':<22}  "
+            f"{'size Δ':<12}  description"
+        )
+        click.echo("─" * 110)
+        for e in entries:
+            created = str(e.get("created_at", ""))[:26]
+            op = str(e.get("operation", ""))
+            author_label = f"{e.get('author', 'unknown')} ({e.get('author_type', '?')})"
+            sb = e.get("size_before")
+            sa = e.get("size_after")
+            size_delta = (
+                f"{sb} → {sa}" if (sb is not None or sa is not None) else "—"
+            )
+            desc = (str(e.get("description", "")) or "—")[:60]
+            click.echo(
+                f"{created:<27}  {op:<15}  {author_label:<22}  {size_delta:<12}  {desc}"
+            )
+        click.echo(f"\n{len(entries)} entr{'y' if len(entries) == 1 else 'ies'}.")
+
+    try:
+        client.log_usage(
+            operation="get_audit_log", access_path="cli", requestor=resolved_requestor,
+            document_id=document_id, result_count=len(entries),
+        )
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget
+        click.echo(f"Warning: usage logging failed: {exc}", err=True)
 
 
 # ── web ───────────────────────────────────────────────────────────────────────

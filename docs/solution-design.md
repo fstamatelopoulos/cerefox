@@ -587,8 +587,8 @@ logic in TypeScript.
 **Python `search.py` / `client.py`** — `search_docs()` gains `metadata_filter: dict | None = None`.
 Serialises to JSON when calling the RPC. The `SearchResponse` dataclass is unchanged.
 
-**Python CLI (`cerefox search`)** — gains a `--filter` / `-f` option accepting a JSON string:
-`cerefox search "my query" --filter '{"type": "decision"}'`. Parsed with `json.loads()` and
+**Python CLI (`cerefox search`)** — `--metadata-filter` option (aliases: `--filter`, `-f`) accepts a JSON string:
+`cerefox search "my query" --metadata-filter '{"type": "decision"}'`. Parsed with `json.loads()` and
 passed to `search_docs()`.
 
 #### Web UI: metadata filter in the Knowledge Browser

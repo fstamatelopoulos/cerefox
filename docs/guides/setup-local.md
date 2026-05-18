@@ -95,7 +95,7 @@ You should see all tables (cerefox_documents, cerefox_chunks, cerefox_projects) 
 
 ```bash
 # Ingest a markdown file
-cerefox ingest my-notes.md --project "personal"
+cerefox ingest my-notes.md --project-name "personal"
 
 # Or paste content from stdin
 echo "# Quick Note\n\nThis is a quick note." | cerefox ingest --paste --title "Quick Note"

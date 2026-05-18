@@ -1,6 +1,8 @@
 # Operations Scripts
 
-Reference guide for the operational scripts in `scripts/`. Run these from the project root.
+Reference guide for the operational scripts in `scripts/` (`db_deploy.py`, `db_migrate.py`, `db_status.py`, `backup_create.py`, `backup_restore.py`, `sync_docs.py`, `reindex_all.py`). Run these from the project root.
+
+> Looking for `cerefox <subcommand>` reference (ingest, search, get-doc, etc.)? See [`docs/guides/cli.md`](cli.md). This guide covers the `scripts/` directory only.
 
 ---
 

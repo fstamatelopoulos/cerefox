@@ -10,11 +10,161 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 CLI parity work — making the local CLI a complete alternative to the MCP and Edge
-Function paths. Tracks [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28),
+Function paths. Implements
+[cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28),
 [#29](https://github.com/fstamatelopoulos/cerefox/issues/29),
-[#30](https://github.com/fstamatelopoulos/cerefox/issues/30),
-[#31](https://github.com/fstamatelopoulos/cerefox/issues/31). Will be released
-together once all four land and are tested end-to-end.
+[#30](https://github.com/fstamatelopoulos/cerefox/issues/30), and
+[#31](https://github.com/fstamatelopoulos/cerefox/issues/31).
+
+### Added
+
+**Caller-identity flags (#28)** — bring CLI in line with MCP / Edge Function paths
+for audit-log and usage-log attribution:
+
+- **Writes** (`ingest`, `ingest-dir`): new `--author <name>` (default
+  `CEREFOX_AUTHOR_NAME` env var, falling back to `"unknown"`) and
+  `--author-type [user|agent]` (default `CEREFOX_AUTHOR_TYPE`, falling back to
+  `"user"`). The Choice validation rejects anything other than `user`/`agent`.
+  `--author=""` is rejected with a clear error.
+- **Reads** (`search`, `get-doc`, `list-versions`, `list-projects`,
+  `metadata-search`): new `--requestor <name>` (default `CEREFOX_REQUESTOR_NAME`,
+  falling back to `"user"`). `--requestor=""` rejected.
+- **New env vars**: `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`,
+  `CEREFOX_REQUESTOR_NAME`. Useful for agent harnesses that want to set identity
+  once instead of on every invocation. Precedence: CLI flag > env var > default.
+- **Usage logging added** to `list-projects` and `metadata-search` (previously had
+  none — added so the new `--requestor` flag has somewhere to land).
+
+**ingest parity flags (#29)** — close the remaining MCP-tool ↔ CLI gap for writes:
+
+- `cerefox ingest --document-id <uuid>` — deterministic ID-based update (the
+  *preferred* pattern per `AGENT_GUIDE.md`). Errors cleanly if the document
+  doesn't exist. **Mutually exclusive with `--update`** (the title/source-path
+  fallback) — passing both fails with a clear error.
+- `cerefox ingest --source <label>` — override the default source label
+  (`"paste"` / `"file"`). Agents can set this to `"agent"` or any custom value.
+- `cerefox ingest-dir --metadata <json>` — JSON metadata applied to every file
+  in a bulk-ingest run. Common case: bulk-importing related notes with a shared
+  tag (e.g. `'{"type":"research"}'`).
+- `IngestionPipeline.ingest_file` gains matching `document_id` and `source`
+  parameters; forwards them to `ingest_text`.
+
+**`cerefox get-audit-log` command (#30)** — the last MCP-tool ↔ CLI parity gap:
+
+- Filters: `--document-id`, `--author`, `--operation`, `--since`, `--until`,
+  `--limit`, `--requestor`.
+- `--operation` validated against the `cerefox_audit_log` CHECK-constraint
+  values (`create`, `update-content`, `update-metadata`, `delete`,
+  `status-change`, `archive`, `unarchive`, `restore`).
+- `--json` flag emits one JSON object per line, ideal for piping to `jq` /
+  scripts (e.g. `cerefox get-audit-log --json | jq 'select(.author_type=="agent")'`).
+- Default human-readable table shows timestamp, operation, `author
+  (author_type)`, size-change, and description.
+- Reuses `CerefoxClient.list_audit_entries` and the existing
+  `cerefox_list_audit_entries` RPC — no schema changes.
+
+**[`docs/guides/cli.md`](docs/guides/cli.md) — comprehensive CLI reference (#31)** —
+written against the post-#28/#29/#30 surface so it documents the final shape:
+
+- Per-command section for every `cerefox` subcommand (ingest, ingest-dir,
+  search, get-doc, list-docs, list-versions, list-projects,
+  list-metadata-keys, metadata-search, get-audit-log, delete-doc, reindex,
+  config-get/set, web, mcp).
+- Synopsis, full options table, examples, output format, exit codes, and
+  MCP-tool equivalent for each.
+- Common-recipes section: bulk import with shared metadata, ID-based update
+  workflow, unattended sync job, agent Bash-tool usage.
+- Full MCP tool ↔ CLI command mapping table.
+- Cross-linked from `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`,
+  `connect-agents.md` (Path C), `ops-scripts.md`, `quickstart.md`.
+
+**MCP-parity flag long forms** — every CLI flag now matches its MCP parameter name
+exactly (kebab-cased). Short forms preserved as aliases so existing scripts keep
+working; the long form is the canonical name shown in `--help`.
+
+| Canonical (matches MCP) | Aliases | Used by |
+|---|---|---|
+| `--project-name` | `--project`, `-p` | `ingest`, `ingest-dir`, `search`, `list-docs`, `metadata-search` |
+| `--metadata-filter` | `--filter`, `-f` | `search`, `metadata-search` |
+| `--match-count` | `--count`, `-n` | `search` |
+| `--update-if-exists` | `--update` | `ingest`, `ingest-dir` |
+| `--version-id` | `--version` | `get-doc` |
+
+Existing flags that already matched the MCP name (`--document-id`, `--author`,
+`--author-type`, `--requestor`, `--source`, `--metadata`) are unchanged. 14 new
+tests under `TestMcpParityFlagAliases` verify both the long forms and the short
+aliases work.
+
+**Safety gaps closed on `cerefox delete-doc`** (surfaced during smoke-testing
+the parity work):
+
+- **`--author` / `--author-type` plumbed through** so agent soft-deletes are
+  correctly attributed in `cerefox_audit_log` (was: every CLI delete logged as
+  `author="unknown"`, `author_type="user"` — the same gap #28 closed for ingest).
+- **Docstring rewritten** to be unambiguous about what the command does and does
+  not do. "Delete a document" → "Soft-delete a document — moves it to trash.
+  Recoverable." Help text spells out the recovery path (web-UI-only) and tells
+  agents to pass `--yes --author <name> --author-type agent`.
+- **Success message clarified**: "✓ Deleted document …" → "✓ Soft-deleted
+  document … (author=…, type=…). Use the web UI to restore or purge."
+- **Confirmation prompt language** says the document goes to "trash" and is
+  "recoverable", so the human's mental model is right before they answer y/n.
+- 7 tests under `TestDeleteDoc` cover: default attribution, flag plumb-through,
+  env-var defaults, invalid `--author-type` rejection, empty-string rejection,
+  confirmation-prompt wording.
+
+**Destructive operations trust model documented** as an explicit architectural
+property (not an oversight). New canonical section in
+[`docs/guides/access-paths.md` → "Destructive operations and the trust model"](docs/guides/access-paths.md)
+covering the three operation tiers (reads / soft-mutations / hard-destructive),
+why purge and restore are web-UI-only by design, what to tell agent contributors
+who reach for "parity completion" on these operations, and the recommended
+recovery flow. Cross-linked from `AGENT_GUIDE.md` Governance section,
+`AGENT_QUICK_REFERENCE.md` rule #7, `connect-agents.md` Path C caveats, and
+`cli.md` `delete-doc` section.
+
+### Changed
+- `AGENT_GUIDE.md` — "Using Cerefox via the CLI" section updated: mapping table
+  now includes all new flags; removes the "lossy attribution" caveat (resolved);
+  removes the "no CLI equivalent for audit-log" note; removes the "ID-based
+  update is not yet exposed" callout. New "Caller-identity flags" subsection
+  explicitly tells agents to set `--author`/`--author-type`/`--requestor` on
+  every call.
+- `AGENT_QUICK_REFERENCE.md` — CLI fallback table updated to include all new
+  flags; rule #3 ("Set `author`/`requestor`") spelled out for both MCP and CLI.
+- `docs/guides/connect-agents.md` — Path C section: mapping table updated; the
+  "audit-log CLI gap" callout removed; "Audit attribution" caveat rewritten to
+  describe the new flags as the way to set proper attribution; example system
+  prompt updated to include the identity-flag instruction.
+- `docs/guides/configuration.md` — three new env-var rows (already shipped in
+  v0.1.17 as part of the docs sweep).
+- `docs/guides/ops-scripts.md` — header note clarifying that it covers
+  `scripts/`, not the `cerefox` CLI; link to `cli.md` for the latter.
+- `.env.example` — new commented-out section for the three caller-identity
+  env vars with brief explanation.
+- `README.md` — Documentation table gains a row for `docs/guides/cli.md`.
+- **Reggaeguitar-style hardening applied to CLI**: all `client.log_usage(...)`
+  calls in the CLI now wrapped in `try / except`, with a stderr warning on
+  failure. Prevents future regressions where a NameError or similar at the
+  call site crashes the command after rendering results (the failure mode
+  that produced cerefox#27).
+
+### Decision Log
+
+- The 2026-05-18 "CLI gains caller-set author / author_type / requestor"
+  decision (Q2 2026 Decision Log) is now implemented end-to-end. After this
+  PR ships, append an outcome note to that entry confirming the rollout.
+
+### Filed (pending implementation)
+
+Open tickets carried forward — not in this release.
+
+- [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26) — Add explicit
+  `GRANT` block to `schema.sql` for the Supabase Data API role-grants change rolling
+  out on 2026-05-30 (new projects) and 2026-10-30 (existing projects). Also tightens
+  `cerefox_audit_log` and `cerefox_document_versions` to `INSERT, SELECT` only at the
+  privilege level, enforcing the existing "append-only" comment as a real
+  immutability boundary.
 
 ---
 

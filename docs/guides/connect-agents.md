@@ -1045,6 +1045,12 @@ You have access to a personal Cerefox knowledge base via a local CLI.
 - Run any command with: uv run cerefox <subcommand>
 - Read AGENT_GUIDE.md and AGENT_QUICK_REFERENCE.md in that directory for
   conventions, metadata rules, and the MCP-tool → CLI-command mapping.
+  Full per-flag reference: docs/guides/cli.md.
+
+Identify yourself on every call:
+- Writes (ingest, ingest-dir): pass --author "<your-name>" --author-type agent
+- Reads (search, get-doc, list-versions, list-projects, metadata-search,
+  get-audit-log): pass --requestor "<your-name>"
 
 When answering questions, search Cerefox first. When the user asks you to
 remember something, ingest it. Cite document titles for every claim drawn
@@ -1053,21 +1059,19 @@ from the knowledge base.
 
 ### MCP tool ↔ CLI command mapping
 
-The agent docs are written around MCP tool names. Here is how each maps to a CLI command:
+The agent docs are written around MCP tool names. **CLI flag names match MCP parameter names exactly** (kebab-cased) — short forms like `--project`, `--filter`, `--count`, `--update`, `--version` are accepted as aliases. Full per-flag reference: [`docs/guides/cli.md`](cli.md).
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search` | `uv run cerefox search "<query>"`  (flags: `--mode`, `--count`, `--project`, `--filter`, `--min-score`) |
-| `cerefox_ingest` (file) | `uv run cerefox ingest <path>` (flags: `--title`, `--project`, `--metadata`, `--update`) |
-| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<title>"` |
-| `cerefox_get_document` | `uv run cerefox get-doc <document-id>` |
-| `cerefox_list_versions` | `uv run cerefox list-versions <document-id>` |
-| `cerefox_list_projects` | `uv run cerefox list-projects` |
+| `cerefox_search` | `uv run cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`) |
+| `cerefox_ingest` (file) | `uv run cerefox ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
+| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<title>"` (same flags) |
+| `cerefox_get_document` | `uv run cerefox get-doc <document-id> --version-id <vid> --requestor <name>` |
+| `cerefox_list_versions` | `uv run cerefox list-versions <document-id> --requestor <name>` |
+| `cerefox_list_projects` | `uv run cerefox list-projects --requestor <name>` |
 | `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
-| `cerefox_metadata_search` | `uv run cerefox metadata-search --filter '<json>'` |
-| `cerefox_get_audit_log` | **No CLI equivalent today** — use MCP (Path A) or query the web UI / API |
-
-> The audit-log CLI gap is the only feature where Path C is strictly worse than Path A. If you need scripted audit-log access, use Path A or the JSON API.
+| `cerefox_metadata_search` | `uv run cerefox metadata-search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
+| `cerefox_get_audit_log` | `uv run cerefox get-audit-log --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
 
 ### Path C verification prompts
 
@@ -1085,7 +1089,8 @@ After pointing your agent at the repo, ask it:
 ### Caveats
 
 - **Privilege level**: the CLI uses the **service-role key** (`CEREFOX_SUPABASE_KEY`), which bypasses Row Level Security. An agent with Bash access has the same full read/write power you do. Only enable Path C for agents you trust to act on your behalf — the same trust level you'd grant Cursor/Claude Code for editing your source code.
-- **Audit attribution is currently limited**: today, every CLI write lands in the audit log with `author = "unknown"`, `author_type = "user"`, regardless of which agent issued the command. Read commands log `requestor = "user"`. Proper attribution flags (`--author`, `--author-type`, `--requestor`) are tracked in [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28). Until that lands, you cannot tell from the audit log whether a Path C entry came from you or from an agent acting on your behalf. The Decision Log (`2026 Q2`) records this gap and the planned fix.
+- **Audit attribution**: Path C records `access_path = "cli"` in usage logs, distinct from `"local-mcp"` / `"remote-mcp"`. **Agents must set `--author <name> --author-type agent` on writes and `--requestor <name>` on reads** (or rely on `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` env vars). Without these flags, writes attribute to `"unknown"` / `"user"`, which under-reports agent activity. See the 2026-05-18 Decision Log Q2 entry for the design rationale (`author_type` is caller-declared on ambiguous channels — CLI and Edge Functions — but `access_path` is always derived from the code layer).
+- **Soft-delete is reachable; purge and restore are not** — by design. `cerefox delete-doc` is exposed on the CLI and sends documents to trash with an audit entry. **Permanent purge** (irreversible) and **restore from trash** (un-doing a destructive action) are intentionally web-UI-only and require human-in-the-loop confirmation. If an agent on Path C decides to delete content, it should surface that to the user explicitly so they can review and either restore or commit. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
 - **One repo per machine**: the agent needs your checkout — there's no "Path C without a local clone". If you skip the local install entirely, Path A-Remote or Path B is the only option.
 - **No sandboxing beyond the agent's existing Bash sandbox**: the CLI is just shell. If your agent's tool framework restricts which commands run, allowlist `uv run cerefox …` explicitly.
 
