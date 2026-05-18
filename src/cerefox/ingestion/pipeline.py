@@ -495,6 +495,8 @@ class IngestionPipeline:
         project_ids: list[str] | None = None,
         metadata: dict | None = None,
         update_existing: bool = False,
+        author: str = "unknown",
+        author_type: str = "user",
     ) -> IngestResult:
         """Read a markdown file from disk and ingest it.
 
@@ -507,6 +509,8 @@ class IngestionPipeline:
             update_existing: When True, update an existing document with the
                 same ``source_path`` (resolved absolute path) instead of
                 creating a new document.
+            author: Free-text identity recorded in the audit log.
+            author_type: ``"user"`` or ``"agent"``; drives review_status routing.
 
         Returns:
             :class:`IngestResult` summary.
@@ -524,6 +528,8 @@ class IngestionPipeline:
             project_ids=project_ids,
             metadata=metadata,
             update_existing=update_existing,
+            author=author,
+            author_type=author_type,
         )
 
     # ── Private helpers ────────────────────────────────────────────────────

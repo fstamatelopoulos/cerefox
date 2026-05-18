@@ -17,6 +17,10 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_ignore_empty=False,
         extra="ignore",
+        # Allow construction via field names (e.g. cli_author_name=...) even when
+        # validation_alias is set. Important for tests that construct Settings
+        # directly with explicit values.
+        populate_by_name=True,
     )
 
     # ── Supabase ──────────────────────────────────────────────────────────────
@@ -75,6 +79,30 @@ class Settings(BaseSettings):
 
     # ── Storage ───────────────────────────────────────────────────────────────
     backup_dir: str = "./backups"
+
+    # ── CLI caller identity ───────────────────────────────────────────────────
+    # Default attribution for CLI invocations when --author / --author-type /
+    # --requestor are not passed. Used by `cerefox ingest`, `ingest-dir`,
+    # `search`, `get-doc`, `list-versions`, `list-projects`, `metadata-search`,
+    # and `get-audit-log`. Per the Q2 2026 decision-log entry
+    # ("CLI gains caller-set author / author_type / requestor"), `access_path`
+    # remains "cli" regardless — only the caller identity is configurable.
+    #
+    # Precedence: CLI flag > env var > built-in default. Env vars are named
+    # without the CEREFOX_CLI_ prefix because they apply to all CLI invocations
+    # (a single identity per machine is the typical case for agent harnesses).
+    cli_author_name: str = Field(
+        default="unknown",
+        validation_alias=AliasChoices("CEREFOX_AUTHOR_NAME"),
+    )
+    cli_author_type: Literal["user", "agent"] = Field(
+        default="user",
+        validation_alias=AliasChoices("CEREFOX_AUTHOR_TYPE"),
+    )
+    cli_requestor_name: str = Field(
+        default="user",
+        validation_alias=AliasChoices("CEREFOX_REQUESTOR_NAME"),
+    )
 
     # ── Logging ───────────────────────────────────────────────────────────────
     log_level: str = "INFO"

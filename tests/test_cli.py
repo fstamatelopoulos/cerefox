@@ -377,3 +377,300 @@ class TestReindex:
         ):
             runner.invoke(cli, ["reindex", "--all"])
         client_mock.list_all_chunks.assert_called_once_with(embedder_not=None)
+
+
+# ── caller-identity flags (--author, --author-type, --requestor) ──────────────
+# Tests for cerefox#28. See also docs/guides/setup-supabase.md for the principle
+# being amended (per the Q2 2026 Decision Log entry).
+
+
+def _patched_settings_default():
+    """Settings instance with built-in CLI identity defaults (no env overrides)."""
+    from cerefox.config import Settings  # noqa: PLC0415
+    # Construct without reading .env so test environment doesn't leak in.
+    return Settings(
+        _env_file=None,
+        cli_author_name="unknown",
+        cli_author_type="user",
+        cli_requestor_name="user",
+    )
+
+
+class TestIngestCallerIdentityFlags:
+    """Writes: --author and --author-type plumbed through to the pipeline."""
+
+    def _run_paste(self, runner, extra_args: list[str], pipeline_mock: MagicMock):
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=MagicMock()),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.ingestion.pipeline.IngestionPipeline", return_value=pipeline_mock),
+        ):
+            return runner.invoke(
+                cli,
+                ["ingest", "--paste", "--title", "T", *extra_args],
+                input="# T\n\nBody",
+            )
+
+    def test_default_author_is_unknown_user(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        result = self._run_paste(runner, [], pipeline_mock)
+        assert result.exit_code == 0
+        call_kwargs = pipeline_mock.ingest_text.call_args.kwargs
+        assert call_kwargs["author"] == "unknown"
+        assert call_kwargs["author_type"] == "user"
+
+    def test_author_flag_plumbed_through(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        result = self._run_paste(runner, ["--author", "alice"], pipeline_mock)
+        assert result.exit_code == 0
+        call_kwargs = pipeline_mock.ingest_text.call_args.kwargs
+        assert call_kwargs["author"] == "alice"
+        assert call_kwargs["author_type"] == "user"
+
+    def test_author_type_agent_plumbed_through(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        result = self._run_paste(
+            runner, ["--author", "claude-code", "--author-type", "agent"], pipeline_mock
+        )
+        assert result.exit_code == 0
+        call_kwargs = pipeline_mock.ingest_text.call_args.kwargs
+        assert call_kwargs["author"] == "claude-code"
+        assert call_kwargs["author_type"] == "agent"
+
+    def test_author_type_invalid_value_rejected(self, runner) -> None:
+        result = runner.invoke(
+            cli, ["ingest", "--paste", "--title", "T", "--author-type", "robot"],
+            input="x",
+        )
+        # Click rejects invalid Choice before reaching the body — exit code != 0.
+        assert result.exit_code != 0
+        assert "robot" in result.output or "Invalid value" in result.output
+
+    def test_empty_author_rejected(self, runner) -> None:
+        pipeline_mock = _make_pipeline_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=MagicMock()),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.ingestion.pipeline.IngestionPipeline", return_value=pipeline_mock),
+        ):
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T", "--author", ""],
+                input="x",
+            )
+        assert result.exit_code != 0
+        assert "--author cannot be empty" in result.output
+        pipeline_mock.ingest_text.assert_not_called()
+
+    def test_env_var_default_used_when_no_flag(self, runner) -> None:
+        from cerefox.config import Settings  # noqa: PLC0415
+        env_settings = Settings(
+            _env_file=None,
+            cli_author_name="claude-code",
+            cli_author_type="agent",
+            cli_requestor_name="user",
+        )
+        pipeline_mock = _make_pipeline_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=env_settings),
+            patch("cerefox.cli._get_client", return_value=MagicMock()),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.ingestion.pipeline.IngestionPipeline", return_value=pipeline_mock),
+        ):
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T"], input="x",
+            )
+        assert result.exit_code == 0
+        call_kwargs = pipeline_mock.ingest_text.call_args.kwargs
+        assert call_kwargs["author"] == "claude-code"
+        assert call_kwargs["author_type"] == "agent"
+
+    def test_cli_flag_overrides_env_var(self, runner) -> None:
+        from cerefox.config import Settings  # noqa: PLC0415
+        env_settings = Settings(
+            _env_file=None,
+            cli_author_name="alice",
+            cli_author_type="user",
+            cli_requestor_name="user",
+        )
+        pipeline_mock = _make_pipeline_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=env_settings),
+            patch("cerefox.cli._get_client", return_value=MagicMock()),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.ingestion.pipeline.IngestionPipeline", return_value=pipeline_mock),
+        ):
+            result = runner.invoke(
+                cli, ["ingest", "--paste", "--title", "T", "--author", "bob"],
+                input="x",
+            )
+        assert result.exit_code == 0
+        # CLI flag wins; env-var default ignored.
+        assert pipeline_mock.ingest_text.call_args.kwargs["author"] == "bob"
+
+
+class TestIngestDirCallerIdentityFlags:
+    """ingest-dir: --author and --author-type apply across the whole run."""
+
+    def test_author_flags_applied_to_every_file(self, runner, tmp_path) -> None:
+        (tmp_path / "a.md").write_text("# A\n\nbody", encoding="utf-8")
+        (tmp_path / "b.md").write_text("# B\n\nbody", encoding="utf-8")
+        pipeline_mock = _make_pipeline_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=MagicMock()),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.ingestion.pipeline.IngestionPipeline", return_value=pipeline_mock),
+        ):
+            result = runner.invoke(
+                cli, ["ingest-dir", str(tmp_path),
+                      "--author", "sync-script", "--author-type", "agent"],
+            )
+        assert result.exit_code == 0
+        # Every ingest_file call should have the same author / author_type.
+        assert pipeline_mock.ingest_file.call_count == 2
+        for call in pipeline_mock.ingest_file.call_args_list:
+            assert call.kwargs["author"] == "sync-script"
+            assert call.kwargs["author_type"] == "agent"
+
+
+class TestReadCommandRequestorFlag:
+    """Reads: --requestor plumbed through to the usage log."""
+
+    def _client_with_search(self) -> MagicMock:
+        client = MagicMock()
+        # SearchClient stub: return an empty result so we exit cleanly past rendering.
+        return client
+
+    @staticmethod
+    def _make_search_result() -> "object":
+        from cerefox.retrieval.search import SearchResult  # noqa: PLC0415
+        return SearchResult(
+            chunk_id="c-1", document_id="d-1", chunk_index=0,
+            title="T", content="x", heading_path=[], heading_level=1,
+            score=0.5, doc_title="T", doc_source="paste",
+            doc_project_ids=[], doc_project_names=[], doc_metadata={},
+        )
+
+    def test_search_requestor_flag_recorded_in_usage_log(self, runner) -> None:
+        from cerefox.retrieval.search import SearchResponse  # noqa: PLC0415
+        client_mock = MagicMock()
+        search_mock = MagicMock()
+        search_mock.hybrid.return_value = SearchResponse(
+            results=[self._make_search_result()],
+            query="q", mode="hybrid",
+            total_found=1, response_bytes=10, truncated=False,
+        )
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.retrieval.search.SearchClient", return_value=search_mock),
+        ):
+            result = runner.invoke(cli, ["search", "q", "--requestor", "claude-code"])
+        assert result.exit_code == 0
+        # log_usage called with requestor='claude-code'
+        assert client_mock.log_usage.called
+        call_kwargs = client_mock.log_usage.call_args.kwargs
+        assert call_kwargs["requestor"] == "claude-code"
+        assert call_kwargs["access_path"] == "cli"
+        assert call_kwargs["operation"] == "search"
+
+    def test_search_default_requestor_is_user(self, runner) -> None:
+        """Empty results path returns early, so verify with one result + default flags."""
+        from cerefox.retrieval.search import SearchResponse  # noqa: PLC0415
+        client_mock = MagicMock()
+        search_mock = MagicMock()
+        search_mock.hybrid.return_value = SearchResponse(
+            results=[self._make_search_result()],
+            query="q", mode="hybrid",
+            total_found=1, response_bytes=10, truncated=False,
+        )
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+            patch("cerefox.cli._get_embedder", return_value=MagicMock()),
+            patch("cerefox.retrieval.search.SearchClient", return_value=search_mock),
+        ):
+            result = runner.invoke(cli, ["search", "anything"])
+        assert result.exit_code == 0
+        assert client_mock.log_usage.call_args.kwargs["requestor"] == "user"
+
+    def test_get_doc_requestor_recorded(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.get_document_content.return_value = {
+            "doc_title": "T", "doc_source": "paste", "chunk_count": 1,
+            "total_chars": 10, "full_content": "x",
+        }
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["get-doc", "doc-1", "--requestor", "alice"])
+        assert result.exit_code == 0
+        assert client_mock.log_usage.call_args.kwargs["requestor"] == "alice"
+
+    def test_list_versions_requestor_recorded(self, runner) -> None:
+        client_mock = MagicMock()
+        client_mock.list_document_versions.return_value = [
+            {"version_id": "v1", "version_number": 1, "created_at": "2026-01-01",
+             "source": "paste", "chunk_count": 1, "total_chars": 10},
+        ]
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["list-versions", "d-1", "--requestor", "agent-x"])
+        assert result.exit_code == 0
+        assert client_mock.log_usage.call_args.kwargs["requestor"] == "agent-x"
+
+    def test_list_projects_requestor_recorded(self, runner) -> None:
+        client_mock = _make_client_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["list-projects", "--requestor", "scripted"])
+        assert result.exit_code == 0
+        assert client_mock.log_usage.call_args.kwargs["requestor"] == "scripted"
+
+    def test_metadata_search_requestor_recorded(self, runner) -> None:
+        client_mock = _make_client_mock()
+        client_mock.metadata_search.return_value = []
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(
+                cli, ["metadata-search",
+                      "--filter", '{"type":"note"}',
+                      "--requestor", "researcher"],
+            )
+        assert result.exit_code == 0
+        assert client_mock.log_usage.call_args.kwargs["requestor"] == "researcher"
+
+    def test_empty_requestor_rejected(self, runner) -> None:
+        with (
+            patch("cerefox.cli.Settings", return_value=_patched_settings_default()),
+            patch("cerefox.cli._get_client", return_value=MagicMock()),
+        ):
+            result = runner.invoke(cli, ["list-projects", "--requestor", ""])
+        assert result.exit_code != 0
+        assert "--requestor cannot be empty" in result.output
+
+    def test_env_var_default_for_requestor(self, runner) -> None:
+        from cerefox.config import Settings  # noqa: PLC0415
+        env_settings = Settings(
+            _env_file=None,
+            cli_author_name="unknown", cli_author_type="user",
+            cli_requestor_name="claude-code",
+        )
+        client_mock = _make_client_mock()
+        with (
+            patch("cerefox.cli.Settings", return_value=env_settings),
+            patch("cerefox.cli._get_client", return_value=client_mock),
+        ):
+            result = runner.invoke(cli, ["list-projects"])
+        assert result.exit_code == 0
+        assert client_mock.log_usage.call_args.kwargs["requestor"] == "claude-code"
