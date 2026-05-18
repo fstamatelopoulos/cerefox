@@ -9,12 +9,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open tickets pending implementation (none open against this release window — the
+roadmap items from the v0.1.18 sweep have all landed). The only carried-forward
+ticket is the pre-existing [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26)
+(Supabase Data API role-grants change), which is time-bound to the 2026-10-30
+rollout for existing projects and will be picked up before then.
+
+---
+
+## [v0.1.18] -- 2026-05-18
+
 CLI parity work — making the local CLI a complete alternative to the MCP and Edge
 Function paths. Implements
 [cerefox#28](https://github.com/fstamatelopoulos/cerefox/issues/28),
 [#29](https://github.com/fstamatelopoulos/cerefox/issues/29),
 [#30](https://github.com/fstamatelopoulos/cerefox/issues/30), and
-[#31](https://github.com/fstamatelopoulos/cerefox/issues/31).
+[#31](https://github.com/fstamatelopoulos/cerefox/issues/31). Shipped via
+[PR #35](https://github.com/fstamatelopoulos/cerefox/pull/35).
 
 ### Added
 
