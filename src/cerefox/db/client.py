@@ -109,6 +109,125 @@ class CerefoxClient:
             logger.error("find_document_by_title failed: %s", exc)
             raise RuntimeError(f"find_document_by_title failed: {exc}") from exc
 
+    def resolve_link(
+        self, path: str, *, exclude_id: str | None = None, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """Best-effort lookup of documents matching a path from a markdown link.
+
+        Tries three strategies in order of specificity and returns the first
+        tier that yields at least one match:
+
+        1. **source_path suffix match** -- ``source_path LIKE '%/<path>'``.
+           Catches `[link](docs/guides/setup.md)` against a doc whose
+           source_path ends with the same suffix. Most specific.
+        2. **basename suffix match** -- only the final path component, e.g.
+           `setup.md`. Wider net; can match multiple documents.
+        3. **title-slug match** -- the basename without its extension,
+           slugified, compared (case-insensitive substring) against doc
+           titles. Catches `[link](setup-supabase.md)` against a doc titled
+           "Setup Supabase" even when no source_path was recorded.
+
+        Each returned row carries a ``match_method`` field indicating which
+        tier produced it. Soft-deleted documents are excluded. ``exclude_id``
+        suppresses the caller's own document so an article linking to itself
+        is not a hit.
+
+        Args:
+            path: the relative path from the markdown link, e.g.
+                ``"docs/guides/setup.md"`` or ``"setup.md"``. Leading
+                ``../`` and ``./`` components are stripped before lookup.
+                ``#anchor`` suffixes should be stripped by the caller before
+                invoking this method.
+            exclude_id: optional document UUID to filter out of the results
+                (typically the document containing the link).
+            limit: maximum candidates per tier (default 10).
+
+        Returns:
+            A list of `{id, title, source_path, match_method}` dicts. Empty
+            list if no tier produced a match.
+        """
+        # Normalise: strip leading "./" and any "../" prefix runs. We don't
+        # honour relative path semantics; we just remove the parent-dir
+        # garbage so the remaining string can be matched as a vault-relative
+        # path or a basename.
+        import re  # noqa: PLC0415
+
+        normalised = path.strip()
+        # Strip "./" and any number of "../" prefixes
+        normalised = re.sub(r"^(?:\.\./)+", "", normalised)
+        normalised = re.sub(r"^\./", "", normalised)
+        normalised = normalised.lstrip("/")
+        if not normalised:
+            return []
+
+        basename = normalised.rsplit("/", 1)[-1]
+        select_cols = "id, title, source_path"
+
+        # ── Tier 1: source_path ends with the full normalised path ─────────
+        try:
+            t1 = (
+                self.client.table("cerefox_documents")
+                .select(select_cols)
+                .is_("deleted_at", "null")
+                .like("source_path", f"%/{normalised}")
+                .order("updated_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            rows = [r for r in (t1.data or []) if r["id"] != exclude_id]
+            if rows:
+                return [{**r, "match_method": "source_path_suffix"} for r in rows]
+        except Exception as exc:
+            logger.warning("resolve_link tier 1 failed: %s", exc)
+
+        # ── Tier 2: source_path ends with just the basename ────────────────
+        # Only if it's distinct from tier 1 (i.e. the path actually had a
+        # directory component). Skips the redundant query when the user
+        # wrote `[link](setup.md)` and we already searched for `%/setup.md`.
+        if basename != normalised:
+            try:
+                t2 = (
+                    self.client.table("cerefox_documents")
+                    .select(select_cols)
+                    .is_("deleted_at", "null")
+                    .like("source_path", f"%/{basename}")
+                    .order("updated_at", desc=True)
+                    .limit(limit)
+                    .execute()
+                )
+                rows = [r for r in (t2.data or []) if r["id"] != exclude_id]
+                if rows:
+                    return [{**r, "match_method": "basename"} for r in rows]
+            except Exception as exc:
+                logger.warning("resolve_link tier 2 failed: %s", exc)
+
+        # ── Tier 3: title-slug match ───────────────────────────────────────
+        # Strip extension, then case-insensitive substring against title.
+        # Slug equality (after slugifying both sides) is more precise but
+        # requires fetching candidates first; deferred until measured to
+        # matter at Cerefox's scale.
+        stem = basename.rsplit(".", 1)[0] if "." in basename else basename
+        stem = stem.replace("-", " ").replace("_", " ").strip()
+        if stem:
+            try:
+                # Postgrest .ilike is wildcard-friendly; wrap in %...%
+                t3 = (
+                    self.client.table("cerefox_documents")
+                    .select(select_cols)
+                    .is_("deleted_at", "null")
+                    .ilike("title", f"%{stem}%")
+                    .order("updated_at", desc=True)
+                    .limit(limit)
+                    .execute()
+                )
+                rows = [r for r in (t3.data or []) if r["id"] != exclude_id]
+                if rows:
+                    return [{**r, "match_method": "title_match"} for r in rows]
+            except Exception as exc:
+                logger.warning("resolve_link tier 3 failed: %s", exc)
+
+        return []
+
     def get_document_by_hash(self, content_hash: str) -> dict[str, Any] | None:
         """Return the document with the given content hash, or None if not found."""
         try:

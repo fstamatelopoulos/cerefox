@@ -9,11 +9,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open tickets pending implementation (none open against this release window — the
-roadmap items from the v0.1.18 sweep have all landed). The only carried-forward
-ticket is the pre-existing [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26)
-(Supabase Data API role-grants change), which is time-bound to the 2026-10-30
-rollout for existing projects and will be picked up before then.
+### Added
+
+- **Web UI: clickable repo links in markdown content.** The document detail
+  page's markdown renderer now intercepts relative-path links (e.g.
+  `[Quickstart](docs/guides/quickstart.md)` inside README.md) and resolves
+  them to Cerefox documents at click time via a new
+  `GET /api/v1/resolve-link` endpoint. Single match → navigate. Multiple
+  candidates → popover chooser. No match → popover with "Search instead?"
+  Pure render-time behaviour: stored content is unchanged. External links,
+  `#anchor`-only links, and absolute SPA paths pass through untouched.
+  - Resolver strategy (most → least specific): exact `source_path` suffix
+    match → basename match → title substring match. Soft-deleted documents
+    excluded; `from_doc_id` query param suppresses self-links.
+  - New `CerefoxClient.resolve_link()` method.
+  - New `MarkdownLink` React component, used as the `a` override on
+    `react-markdown` in `MarkdownViewer`.
+  - 10 new unit tests under `tests/test_db_client.py::TestResolveLink` cover
+    input normalisation, tier short-circuit, self-link exclusion, tier-DB
+    error tolerance.
+  - Scope is intentionally Need 1 only from the implied-links discussion
+    (clickable repo links in web UI). Auto-populating the relation graph
+    from markdown links is **not** done — that's Iteration 18's job and
+    a separate decision.
+
+### Filed (carried forward)
+
+- [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26) —
+  Supabase Data API role-grants change. Time-bound to the 2026-10-30
+  rollout for existing projects; will be picked up before then.
+- [cerefox#36](https://github.com/fstamatelopoulos/cerefox/issues/36) —
+  Cerefox installer + interactive bootstrap (cfcf-style UX). Design at
+  [`docs/research/installer-design.md`](docs/research/installer-design.md)
+  on branch `research/installer-design`.
 
 ---
 

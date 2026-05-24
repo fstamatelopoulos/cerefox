@@ -198,3 +198,22 @@ export function isChunkResult(
 ): result is ChunkSearchResult {
   return "chunk_id" in result;
 }
+
+/** Single candidate document returned by /api/v1/resolve-link. */
+export interface LinkResolveMatch {
+  document_id: string;
+  title: string;
+  source_path: string | null;
+  /** Which resolver tier produced this match (most → least specific). */
+  match_method: "source_path_suffix" | "basename" | "title_match";
+}
+
+/** Response from GET /api/v1/resolve-link. */
+export interface LinkResolveResponse {
+  /** Path used for the lookup (after normalisation; leading ../ stripped). */
+  tried_path: string;
+  /** Fragment from the original link (e.g. "#section"), preserved for navigation. */
+  anchor: string | null;
+  /** Matching documents — empty if nothing resolved. All matches share the same tier. */
+  matches: LinkResolveMatch[];
+}

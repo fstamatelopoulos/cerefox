@@ -406,3 +406,172 @@ class TestLookupMethods:
         self._mock_chain(mock_supabase_client, [])
         result = cerefox_client.find_document_by_title("Ghost Title")
         assert result is None
+
+
+class TestResolveLink:
+    """resolve_link tries 3 tiers in order and returns the first that hits."""
+
+    @staticmethod
+    def _set_like_chain(mock_supabase_client: MagicMock, rows: list) -> None:
+        """Wire table().select().is_().like().order().limit().execute() → rows."""
+        (
+            mock_supabase_client.table.return_value
+            .select.return_value
+            .is_.return_value
+            .like.return_value
+            .order.return_value
+            .limit.return_value
+            .execute.return_value
+        ).data = rows
+
+    @staticmethod
+    def _set_ilike_chain(mock_supabase_client: MagicMock, rows: list) -> None:
+        """Wire table().select().is_().ilike().order().limit().execute() → rows."""
+        (
+            mock_supabase_client.table.return_value
+            .select.return_value
+            .is_.return_value
+            .ilike.return_value
+            .order.return_value
+            .limit.return_value
+            .execute.return_value
+        ).data = rows
+
+    # ── Input normalisation ──────────────────────────────────────────────
+
+    def test_empty_path_returns_empty_without_db_calls(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        result = cerefox_client.resolve_link("")
+        assert result == []
+        mock_supabase_client.table.assert_not_called()
+
+    def test_all_dots_path_returns_empty_without_db_calls(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # `../` strips to empty → no lookup
+        result = cerefox_client.resolve_link("../")
+        assert result == []
+        mock_supabase_client.table.assert_not_called()
+
+    def test_path_normalisation_strips_dot_dot_prefix(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # `../../docs/setup.md` should be looked up as `docs/setup.md`.
+        # We assert via the mocked .like() call argument.
+        self._set_like_chain(mock_supabase_client, [])
+        self._set_ilike_chain(mock_supabase_client, [])
+        cerefox_client.resolve_link("../../docs/setup.md")
+        # Inspect the first .like() call's pattern arg
+        like_calls = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.call_args_list
+        # First call is tier 1: full path
+        assert any(call.args == ("source_path", "%/docs/setup.md") for call in like_calls)
+
+    # ── Tier 1: source_path suffix match ──────────────────────────────────
+
+    def test_tier1_hit_short_circuits(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        doc = {"id": "abc", "title": "Setup", "source_path": "/repo/docs/setup.md"}
+        self._set_like_chain(mock_supabase_client, [doc])
+        # Don't even need to set ilike — should not be called
+        result = cerefox_client.resolve_link("docs/setup.md")
+        assert len(result) == 1
+        assert result[0]["id"] == "abc"
+        assert result[0]["match_method"] == "source_path_suffix"
+        # Tier 3 (ilike) must NOT have been reached
+        mock_supabase_client.table.return_value.select.return_value.is_.return_value.ilike.assert_not_called()
+
+    def test_exclude_id_filters_self_links(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # tier 1 returns only the caller's own doc → tier 2/3 should be tried
+        own = {"id": "self", "title": "Me", "source_path": "/x/me.md"}
+        other = {"id": "other", "title": "Me", "source_path": "/y/me.md"}
+        self._set_like_chain(mock_supabase_client, [own])  # tier 1 + tier 2 both see this
+        self._set_ilike_chain(mock_supabase_client, [other])  # tier 3 hits
+        result = cerefox_client.resolve_link("docs/me.md", exclude_id="self")
+        # 'self' must not appear in any returned tier
+        assert all(r["id"] != "self" for r in result)
+        # We should have the other doc from tier 3
+        assert any(r["id"] == "other" for r in result)
+
+    # ── Tier 2: basename suffix match ─────────────────────────────────────
+
+    def test_tier2_basename_fallback_when_tier1_empty(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # Tier 1 returns empty; tier 2 (basename only) hits
+        # The like_chain returns the same on each call, so to differentiate
+        # tier 1 from tier 2 we use side_effect on the .execute()
+        like_execute = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.return_value.order.return_value.limit.return_value.execute
+        like_execute.side_effect = [
+            MagicMock(data=[]),  # tier 1: full path no match
+            MagicMock(data=[{"id": "x", "title": "T", "source_path": "/p/setup.md"}]),  # tier 2: basename hits
+        ]
+        result = cerefox_client.resolve_link("nonexistent-dir/setup.md")
+        assert len(result) == 1
+        assert result[0]["match_method"] == "basename"
+
+    def test_tier2_skipped_when_path_is_just_basename(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # `setup.md` has no directory — tier 2 is the same query as tier 1
+        # and would be redundant. The implementation must skip it.
+        like_execute = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.return_value.order.return_value.limit.return_value.execute
+        like_execute.side_effect = [
+            MagicMock(data=[]),  # tier 1
+            # If tier 2 ran, this MagicMock(data=[]) would be consumed and the test
+            # could mis-pass; absence is asserted via call_count
+        ]
+        self._set_ilike_chain(mock_supabase_client, [])
+        cerefox_client.resolve_link("setup.md")
+        # Only one .like() execute should have run (tier 1)
+        assert like_execute.call_count == 1
+
+    # ── Tier 3: title-slug fallback ───────────────────────────────────────
+
+    def test_tier3_title_match_when_no_source_path_hits(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # Both tier 1 and tier 2 empty; tier 3 hits.
+        like_execute = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.return_value.order.return_value.limit.return_value.execute
+        like_execute.side_effect = [MagicMock(data=[]), MagicMock(data=[])]
+        self._set_ilike_chain(
+            mock_supabase_client,
+            [{"id": "z", "title": "Setup Supabase", "source_path": None}],
+        )
+        result = cerefox_client.resolve_link("docs/setup-supabase.md")
+        assert len(result) == 1
+        assert result[0]["match_method"] == "title_match"
+
+    def test_no_match_returns_empty(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        like_execute = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.return_value.order.return_value.limit.return_value.execute
+        like_execute.side_effect = [MagicMock(data=[]), MagicMock(data=[])]
+        self._set_ilike_chain(mock_supabase_client, [])
+        result = cerefox_client.resolve_link("docs/no-such-file.md")
+        assert result == []
+
+    # ── Tier-failure tolerance ────────────────────────────────────────────
+
+    def test_tier_db_error_falls_through_to_next_tier(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # Tier 1 raises → resolver should log + continue, not crash.
+        # Implemented via side_effect of an exception on first .execute() call.
+        like_execute = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.return_value.order.return_value.limit.return_value.execute
+        like_execute.side_effect = [
+            RuntimeError("supabase boom"),         # tier 1
+            MagicMock(data=[]),                    # tier 2 empty
+        ]
+        self._set_ilike_chain(
+            mock_supabase_client,
+            [{"id": "ok", "title": "Setup", "source_path": "/x/setup.md"}],
+        )
+        result = cerefox_client.resolve_link("docs/setup.md")
+        # Tier 3 hit despite tier 1 raising
+        assert len(result) == 1
+        assert result[0]["id"] == "ok"
+        assert result[0]["match_method"] == "title_match"
