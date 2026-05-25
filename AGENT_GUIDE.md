@@ -229,6 +229,73 @@ Call `cerefox_list_metadata_keys` for the current list -- conventions evolve.
 
 ---
 
+## Writing linkable content
+
+Documents you ingest may contain markdown links to other Cerefox documents. The Cerefox web UI intercepts these links at click time and resolves them to the target document. This makes a `README.md` you ingested from a git repo behave the same way inside Cerefox as it does on disk or on GitHub — clickable cross-references. The resolution happens entirely in the browser; the stored markdown is untouched.
+
+**You should write your link URLs in one of these four forms.** The resolver tries them in this order of stability; the first that matches wins.
+
+### 1. Document UUID (preferred when you have one)
+
+```markdown
+[Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d)
+```
+
+The most stable and unambiguous form. Survives title changes. Never collides with another document. No spaces, no encoding gotchas. **If you have the target document's ID from a prior `cerefox_search` or `cerefox_ingest` response, use this.**
+
+### 2. Repository-relative path (for docs originally ingested from a file)
+
+```markdown
+[Quickstart](docs/guides/quickstart.md)
+```
+
+Works when the target document has a `source_path` ending in that suffix — i.e. it was ingested from a file at that location, via `cerefox ingest` or `sync_docs.py`. Same link works on disk and on GitHub, so this is the right form for repo documentation.
+
+### 3. Filename only (laxer fallback for paths)
+
+```markdown
+[Quickstart](quickstart.md)
+```
+
+Matches any document whose `source_path` ends with `/quickstart.md`. If multiple documents share that basename, the web UI shows a chooser. Use form 2 (with directory) when you want precision.
+
+### 4. Title (for documents created via ingest / paste, no source_path)
+
+For documents that were paste-ingested or agent-created, there is no `source_path` to match. The resolver falls back to a case-insensitive substring match against document titles.
+
+**Spaces in URLs require escaping** — this is a standard-markdown requirement, not a Cerefox quirk:
+
+| Form | Renders as link? |
+|---|---|
+| `[Career Coach](<Career Coach - Lisa Nichols>)` | ✓ Angle-bracket form — recommended for titles with spaces |
+| `[Career Coach](Career%20Coach%20-%20Lisa%20Nichols)` | ✓ URL-encoded — also valid, less readable in source |
+| `[Career Coach](Career Coach - Lisa Nichols)` | ✗ **Bare spaces break the markdown parser** — renders as plain text, not a link |
+
+The resolver receives the decoded form either way, so both valid forms above produce the same lookup.
+
+### Always set explicit link text
+
+The `[Link Text](target)` syntax has two halves — both matter:
+
+- **The link text** (`[…]`) is what the human reader sees. Use the actual title or a meaningful phrase.
+- **The target** (`(…)`) is what the resolver consumes. Use a UUID for stability or a path/title for readability.
+
+Bad: `[c937b70f-77af-...](c937b70f-77af-...)` — opaque to the reader.
+Good: `[Job Hunting - Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d)`.
+
+### What you don't need to do
+
+- **You don't need to escape `#` anchors.** `[Section](setup.md#configuration)` works — the resolver splits the anchor off and reattaches it to the target document URL.
+- **You don't need to handle external URLs.** Links starting with `http://`, `https://`, `mailto:`, etc. pass through unchanged and open in a new tab.
+- **You don't need to handle absolute SPA paths.** Links starting with `/` (e.g. `/search?q=foo`) pass through to the SPA router unchanged.
+- **You don't need to create relation rows** for these links. The resolver does not populate the relation graph at this stage — that's a separate, future feature (see Iteration 18 design). If you want explicit relations between documents, use `cerefox_set_relation` when it ships.
+
+### A note on agents on Path C (CLI via Bash tool)
+
+If you're using Cerefox via the local CLI (Path C from `connect-agents.md`), the same writing conventions apply. The web UI is where the resolution actually happens; the CLI is just how you wrote the content. A user reading your ingested document later in the web UI gets the clickable behaviour for free, as long as you authored the links in one of the four forms above.
+
+---
+
 ## Governance
 
 - **Review status**: agent writes set `pending_review`; human edits set `approved`. Both are searchable.

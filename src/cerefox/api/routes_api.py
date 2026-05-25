@@ -524,6 +524,78 @@ def api_list_trash(
     return client.list_deleted_documents(limit=limit)
 
 
+@api_router.get("/resolve-link")
+def api_resolve_link(
+    path: str = Query(..., description="Path from a markdown link, e.g. 'docs/guides/setup.md' or 'setup.md'. May include #anchor (preserved separately in the response)."),
+    from_doc_id: str | None = Query(None, description="Document ID containing the link. Excluded from candidates so self-links don't dominate."),
+    limit: int = Query(10, ge=1, le=50, description="Max candidates returned per match tier."),
+    client: CerefoxClient = Depends(get_client),
+) -> dict[str, Any]:
+    """Best-effort resolution of a relative markdown link to a Cerefox document.
+
+    Used by the React SPA's markdown renderer to make repo-internal links
+    clickable (e.g. README.md linking to docs/guides/quickstart.md). See
+    docs/research/installer-design.md context section "Need 1 — clickable
+    repo links in web UI" for the design rationale.
+
+    Returns a structured result the frontend uses to decide between:
+    - one match  → navigate immediately
+    - many       → show a chooser
+    - zero       → show "couldn't resolve — search?" UX
+
+    Response shape::
+
+        {
+          "tried_path": "<normalised path used for lookup>",
+          "anchor": "<#anchor>" | null,
+          "matches": [
+            {
+              "document_id": "<uuid>",
+              "title": "...",
+              "source_path": "...",
+              "match_method": "source_path_suffix" | "basename" | "title_match"
+            },
+            ...
+          ]
+        }
+
+    Soft-deleted documents are excluded. The `match_method` field tells the
+    frontend how confident the match is (suffix is most precise, title_match
+    least). All matches in a response share the same tier — the resolver
+    returns the most specific tier that produced at least one result.
+    """
+    # Split off any #anchor before lookup; preserve to append to the
+    # navigation URL on the client side.
+    anchor: str | None = None
+    raw_path = path
+    if "#" in raw_path:
+        raw_path, anchor_part = raw_path.split("#", 1)
+        anchor = f"#{anchor_part}" if anchor_part else None
+
+    raw_path = raw_path.strip()
+    if not raw_path:
+        # Pure-anchor link or empty — the frontend shouldn't have called us;
+        # return an empty result rather than 400 so the UX stays calm.
+        return {"tried_path": "", "anchor": anchor, "matches": []}
+
+    matches = client.resolve_link(raw_path, exclude_id=from_doc_id, limit=limit)
+    normalised = re.sub(r"^(?:\.\./)+", "", raw_path)
+    normalised = re.sub(r"^\./", "", normalised).lstrip("/")
+    return {
+        "tried_path": normalised,
+        "anchor": anchor,
+        "matches": [
+            {
+                "document_id": m["id"],
+                "title": m["title"],
+                "source_path": m.get("source_path"),
+                "match_method": m["match_method"],
+            }
+            for m in matches
+        ],
+    }
+
+
 @api_router.get("/documents/{document_id}")
 def api_get_document(
     document_id: str,

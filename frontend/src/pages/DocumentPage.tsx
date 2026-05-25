@@ -533,6 +533,7 @@ export function DocumentPage() {
             <MarkdownViewer
               content={doc.full_content}
               defaultView="rendered"
+              documentId={doc.document_id}
             />
           </Accordion.Panel>
         </Accordion.Item>

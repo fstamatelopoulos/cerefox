@@ -9,11 +9,69 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open tickets pending implementation (none open against this release window — the
-roadmap items from the v0.1.18 sweep have all landed). The only carried-forward
-ticket is the pre-existing [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26)
-(Supabase Data API role-grants change), which is time-bound to the 2026-10-30
-rollout for existing projects and will be picked up before then.
+### Added
+
+- **Web UI: clickable repo links in markdown content.** The document detail
+  page's markdown renderer now intercepts relative-path links (e.g.
+  `[Quickstart](docs/guides/quickstart.md)` inside README.md) and resolves
+  them to Cerefox documents at click time via a new
+  `GET /api/v1/resolve-link` endpoint. Single match → navigate. Multiple
+  candidates → popover chooser. No match → popover with "Search instead?"
+  Pure render-time behaviour: stored content is unchanged. External links,
+  `#anchor`-only links, and absolute SPA paths pass through untouched.
+  - **Resolver strategy** (most → least specific), first tier that hits wins:
+    0. **`document_id` match** — if the link target is a literal UUID,
+       look up directly. Most stable form (survives title changes, never
+       ambiguous). If the UUID doesn't resolve, returns "couldn't
+       resolve" rather than falling through to fuzzy tiers — explicit
+       UUID encodes explicit intent.
+    1. **`source_path` suffix match** — full path as authored.
+    2. **basename suffix match** — final path component only.
+    3. **title substring match** — case-insensitive ILIKE on title for
+       paste-ingested docs without `source_path`.
+  - Soft-deleted documents excluded; `from_doc_id` query param suppresses
+    self-links.
+  - **URL-decode fix**: the frontend `decodeURIComponent`s the href before
+    calling the resolver. Closes a bug where `<Title With Spaces>`-form
+    links round-tripped through `URLSearchParams` and arrived at the
+    server with literal `%20` strings, causing title matches to fail.
+  - **Tier-3 mangled-spaces fix**: the title-substring tier previously
+    converted *all* dashes to spaces unconditionally — meant to turn the
+    slug `setup-supabase` into the needle `setup supabase`, but it also
+    turned the human title `Job Hunting - Opportunity Index` into
+    `Job Hunting   Opportunity Index` (three spaces where ` - ` was),
+    which never substring-matched any real title. Fixed with a heuristic:
+    if the stem already contains whitespace it's treated as a human title
+    and used literally; otherwise it's treated as a slug and gets the
+    dash→space conversion. Both shapes now work; regression tests
+    `test_tier3_slug_input_converts_dashes_to_spaces` and
+    `test_tier3_human_title_input_used_literally` lock the behaviour.
+  - New `CerefoxClient.resolve_link()` method.
+  - New `MarkdownLink` React component, used as the `a` override on
+    `react-markdown` in `MarkdownViewer`.
+  - 15 new unit tests under `tests/test_db_client.py::TestResolveLink`
+    cover input normalisation, all tier short-circuit and fallthrough
+    paths, UUID tier (case-insensitive, soft-delete filter, self-link
+    via UUID, no-fallthrough on miss), self-link exclusion in fuzzy
+    tiers, tier-DB error tolerance.
+  - Scope is intentionally Need 1 only from the implied-links discussion
+    (clickable repo links in web UI). Auto-populating the relation graph
+    from markdown links is **not** done — that's Iteration 18's job and
+    a separate decision.
+  - Agent docs updated: new "Writing linkable content" section in
+    `AGENT_GUIDE.md` (four supported link forms, the spaces-break-markdown
+    gotcha, why explicit link text matters), one-liner rule #8 in
+    `AGENT_QUICK_REFERENCE.md`, brief mention in `connect-agents.md` Path C.
+
+### Filed (carried forward)
+
+- [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26) —
+  Supabase Data API role-grants change. Time-bound to the 2026-10-30
+  rollout for existing projects; will be picked up before then.
+- [cerefox#36](https://github.com/fstamatelopoulos/cerefox/issues/36) —
+  Cerefox installer + interactive bootstrap (cfcf-style UX). Design at
+  [`docs/research/installer-design.md`](docs/research/installer-design.md)
+  on branch `research/installer-design`.
 
 ---
 
