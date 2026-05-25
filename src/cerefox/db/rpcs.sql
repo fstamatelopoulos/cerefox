@@ -106,7 +106,13 @@ SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    query_fts tsquery := websearch_to_tsquery('english', p_query_text);
+    -- plainto_tsquery: ANDs all terms, treats every token as a literal word.
+    -- We deliberately avoid websearch_to_tsquery here because it interprets `-` as
+    -- a negation operator, which traps natural queries against dashed titles
+    -- (e.g. `Job Hunting - Opportunity Index`). Agent queries don't use the
+    -- websearch operators (phrase, OR, NOT); semantic ranking is the soft-match
+    -- layer for "broadly related". See Decision Log 2026-05-19 for context.
+    query_fts tsquery := plainto_tsquery('english', p_query_text);
     candidate_count INT := p_match_count * 5;
 BEGIN
     RETURN QUERY
@@ -231,7 +237,8 @@ SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    query_fts tsquery := websearch_to_tsquery('english', p_query_text);
+    -- plainto_tsquery: see rationale comment in cerefox_hybrid_search above.
+    query_fts tsquery := plainto_tsquery('english', p_query_text);
 BEGIN
     RETURN QUERY
     SELECT

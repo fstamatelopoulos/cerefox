@@ -21,14 +21,6 @@ Open roadmap. No new code yet — the next batch of work is being scoped:
 - Iteration 18 — document relations & lifecycle metadata. Design at
   `docs/research/iteration-18-design.md` on branch `feat/document-relations`.
 
-Known small issues identified during testing of v0.1.19 link-resolver work
-that may warrant their own tickets:
-
-- Hyphenated-title search ranking: `[Search for…]` fallback button on
-  unresolved links returns no results when the title contains `-` (e.g.
-  "Job Hunting - Opportunity Index"). Postgres FTS tokenisation treats
-  the dash as a word separator. Investigation in progress.
-
 ---
 
 ## [v0.1.19] -- 2026-05-18
@@ -94,6 +86,26 @@ Shipped via [PR #37](https://github.com/fstamatelopoulos/cerefox/pull/37).
     `AGENT_GUIDE.md` (four supported link forms, the spaces-break-markdown
     gotcha, why explicit link text matters), one-liner rule #8 in
     `AGENT_QUICK_REFERENCE.md`, brief mention in `connect-agents.md` Path C.
+
+### Changed
+
+- **FTS query parser: `websearch_to_tsquery` → `plainto_tsquery`.** Both
+  `cerefox_hybrid_search` and `cerefox_fts_search` now parse the user's
+  query with `plainto_tsquery('english', …)`, which treats every token as
+  a literal word and ANDs them together. Operator interpretation (phrase
+  quotes, `OR`, `-` negation) is no longer applied. The trigger was the
+  v0.1.19 link-resolver "Search instead" fallback returning zero results
+  for any dashed title (e.g. "Job Hunting - Opportunity Index"):
+  `websearch_to_tsquery` was parsing the dash as negation. The tradeoff
+  is small — agent queries are natural-language phrases that don't use
+  Google-style operators, and the semantic-similarity half of hybrid
+  search already provides "broadly related" matching. If operator support
+  is ever needed, it should be an opt-in flag, not the default. Verified
+  end-to-end against live Supabase (RPCs redeployed via `db_deploy.py`,
+  all 80 e2e tests pass). Rationale recorded in the Decision Log entry
+  "2026-05-19 — Switch FTS query parser from websearch_to_tsquery to
+  plainto_tsquery"; brief architectural note added to
+  [`docs/solution-design.md` §5.2](docs/solution-design.md#52-title-boosting-search-quality).
 
 ### Filed (carried forward)
 
