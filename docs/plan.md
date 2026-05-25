@@ -1661,44 +1661,60 @@ No TS migration yet. Backward-compatible across the board.
 | 19.4 | Verify `cerefox --version` returns `0.2.0` (currently returns `0.1.0`) | Test in CI |
 | 19.5 | Add `<VersionFooter>` React component to web UI, reads version from a new `/api/v1/version` endpoint | Small text in app footer, links to GitHub Release for that version |
 | 19.6 | Add `/api/v1/version` endpoint returning `{version, git_commit_short, build_date}` | Read from injected env at startup |
-| 19.7 | Write `scripts/cut_release.py` (Python; will be TS-ported in v0.5) | Bumps VERSION, updates CHANGELOG, tags, pushes |
-| 19.8 | Create `.github/ISSUE_TEMPLATE/` with: `bug.yml`, `feature.yml`, `install-problem.yml`, `question.yml` | Standard OSS templates |
-| 19.9 | Create `.github/pull_request_template.md` (mirrors current commit-message conventions) | One-time |
-| 19.10 | Create `SECURITY.md` (how to report security issues responsibly) | Standard |
-| 19.11 | Create `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 boilerplate) | Standard |
-| 19.12 | Create empty `.github/FUNDING.yml` placeholder | Can be filled later |
-| 19.13 | Update `CONTRIBUTING.md` with SemVer + deprecation policy (see design doc §11) | Codifies the rules |
-| 19.14 | Update `README.md` "Project status" section to reference the new Polish & Distribution roadmap | Sets reader expectations |
-| 19.15 | Move `docs/research/polish-and-distribution-design.md` to `docs/specs/` (now "design-of-record" not "research") | Promotes status |
-| 19.16 | Decision Log entry: "v0.2.0 — Start of the polish-and-distribution arc; strategic shift to TS/Bun" | Internal memory |
-| 19.17 | Cut release v0.2.0 via `scripts/cut_release.py 0.2.0` | First test of the release script |
+| 19.7 | Write `scripts/cut_release.ts` (TypeScript, Bun-runnable) per design doc §12b | Bumps VERSION, syncs `pyproject.toml`, updates CHANGELOG, commits, tags, pushes, **AND creates the GitHub Release via `gh release create`** (today's process skips this — `gh release list` currently returns empty) |
+| 19.8 | Add Bun as contributor prerequisite — document the one-line install in `CONTRIBUTING.md` | First TS script means contributors need Bun; end users unaffected |
+| 19.9 | Create `.github/ISSUE_TEMPLATE/` with: `bug.yml`, `feature.yml`, `install-problem.yml`, `question.yml` | Standard OSS templates |
+| 19.10 | Create `.github/pull_request_template.md` (mirrors current commit-message conventions) | One-time |
+| 19.11 | Create `SECURITY.md` (how to report security issues responsibly) | Standard |
+| 19.12 | Create `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 boilerplate) | Standard |
+| 19.13 | Create empty `.github/FUNDING.yml` placeholder | Can be filled later |
+| 19.14 | Update `CONTRIBUTING.md` with: SemVer + deprecation policy (design doc §11), **script-language policy (design doc §12f)**, Bun prereq, dev-install path | Codifies the rules; new contributors get the TS-first message on day one |
+| 19.15 | Update `README.md` "Project status" section to reference the new Polish & Distribution roadmap | Sets reader expectations |
+| 19.16 | Move `docs/research/polish-and-distribution-design.md` to `docs/specs/` (now "design-of-record" not "research") | Promotes status |
+| 19.17 | Decision Log entry: "v0.2.0 — Start of the polish-and-distribution arc; strategic shift to TS/Bun" | Internal memory |
+| 19.18 | Cut release v0.2.0 via `bun scripts/cut_release.ts 0.2.0` | First test of the release script; first GitHub Release ever for Cerefox |
 
 **Deliverable**: `cerefox --version` shows `0.2.0` everywhere (CLI + web UI footer). Repo
-has full OSS hygiene. Release process is reproducible from `cut_release.py`. SemVer policy
-documented and committed.
+has full OSS hygiene. Release process is reproducible from `bun scripts/cut_release.ts`,
+which also creates the first-ever GitHub Release for Cerefox. SemVer policy AND
+script-language policy documented and committed. Contributors now need Bun (one-line
+install); end users unaffected.
 
 **Tests / risk**: minimal. Version reading is a 5-line change per surface. Hygiene files
-are templated. The cut-release script is the only new code worth careful testing.
+are templated. The cut-release TS script is the only meaningful new code; test by using
+it to cut v0.2.0 itself (dogfooding).
 
 ---
 
-## Iteration 20: v0.3.0 — "Install Anywhere" (config-state refactor)
+## Iteration 20: v0.3.0 — "Install Anywhere" (config-state refactor + first script ports)
 
 **Goal**: Make `cerefox` callable from any directory (today it requires `cd /path/to/repo`).
-Last big Python investment before the TS migration starts.
+CLI / MCP / web server remain Python, but **two scripts migrate to TS** per the
+script-language policy (§12f of the design doc) because they're being extended in this
+iteration. Establishes the `_shared/` TS module structure that grows through v0.4-v0.7.
 
-**Design**: [`docs/research/polish-and-distribution-design.md` §7 + §13 v0.3.0](research/polish-and-distribution-design.md).
+**Design**: [`docs/research/polish-and-distribution-design.md` §7 + §12f + §13 v0.3.0](research/polish-and-distribution-design.md).
 
 **Estimated effort**: 3-4 weeks part-time.
 
 **Detailed task breakdown will be created when this iteration is started.** Headline items:
+
+*Config-state refactor (Python)*:
 - `_resolve_config_dir()` precedence: `CEREFOX_CONFIG_DIR` env → `./.env` (dev mode) → `~/.cerefox/.env`
-- `~/.cerefox/` becomes user state root
+- `~/.cerefox/` becomes user state root (.env, backups default move here)
 - `importlib.resources` for SQL files (schema deploy works from installed package)
 - Frontend `dist/` bundled into wheel via hatchling config
+
+*Docs surfacing (Python CLI + React)*:
 - `cerefox docs` opens bundled docs in browser
 - Web UI `/app/help` page renders bundled docs (no Supabase dependency)
 - Schema-version-mismatch banner in web UI (catches the v0.1.19 redeploy footgun)
+
+*Script migrations (per §12f script-language policy — these are extended in v0.3, so they port now)*:
+- **`scripts/sync_docs.ts`** replaces `scripts/sync_docs.py` — extended for bundled-docs work; ported instead of extended in Python
+- **`scripts/db_status.ts`** replaces `scripts/db_status.py` — refactored into a reusable `_shared/db-status/` TS module so the v0.5 `cerefox doctor` command imports the same logic
+- **`_shared/` directory** created (TS-only, ESM, zod schemas) — first piece of the cross-context shared code that grows through v0.4-v0.7
+- Update `docs/guides/ops-scripts.md` to document the new TS scripts; mark remaining Python scripts as "ports in v0.5/v0.7"
 
 ---
 
@@ -1835,9 +1851,14 @@ via a Python → TypeScript strangler-fig migration. Design-of-record:
 
 **Next**: Iteration 19 (v0.2.0 — "Real Release"). Smallest meaningful slice: VERSION file
 + `cerefox --version` truth + web UI version footer + OSS hygiene files + SemVer policy
-in CONTRIBUTING.md. Ships as v0.2.0. Pure prerequisite work; backward-compatible; gives
-every subsequent release a coherent version surface.
++ **script-language policy (§12f of the design doc): TypeScript becomes the preferred
+language for all new scripts, CLI tooling, and installation surfaces from v0.2.0 onward**.
+First concrete application: `scripts/cut_release.ts` (TS, Bun-runnable) instead of a Python
+script. Contributors gain Bun as a prerequisite (one-line install); end users unaffected
+until v0.4. Ships as v0.2.0. Pure prerequisite work; backward-compatible; gives every
+subsequent release a coherent version surface.
 
-**After Iteration 19**: Iteration 20 (v0.3.0 — config refactor, `~/.cerefox/`, last big
-Python investment) → Iteration 22 (v0.4.0 — TS MCP server, supersedes old Iteration 18) →
-Iterations 23-27 (TS CLI, web server, ingestion, Python removal, v1.0 commitment).
+**After Iteration 19**: Iteration 20 (v0.3.0 — config refactor + `~/.cerefox/` + first
+two scripts ported to TS: `sync_docs.ts` and `db_status.ts`) → Iteration 22 (v0.4.0 — TS
+MCP server, supersedes old Iteration 18) → Iterations 23-27 (TS CLI + remaining script
+ports, web server, ingestion, Python removal, v1.0 commitment).

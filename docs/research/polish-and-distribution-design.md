@@ -550,27 +550,28 @@ Plain text, one line, e.g. `0.2.0`. **Single source of truth** for the project v
 
 Fixing today's `cerefox --version` saying `0.1.0` (eight tags behind reality) is a v0.2.0 task and the easiest "we're starting" signal.
 
-### 12b. `scripts/cut-release.{py,ts}`
+### 12b. `scripts/cut-release.ts`
 
 ```bash
-bun scripts/cut-release.ts 0.3.0           # bump VERSION, update CHANGELOG, tag, push
+bun scripts/cut-release.ts 0.3.0           # bump VERSION, update CHANGELOG, tag, push, create GitHub Release
 bun scripts/cut-release.ts 0.3.0 --dry-run # show what would happen
 bun scripts/cut-release.ts --check         # show what the next bump should be
 ```
 
-(In v0.2.0 this is Python; ported to TS in v0.5 with the CLI.)
+**Written in TypeScript from v0.2.0** (per the script-language policy in §12f). Bun-runnable. This is the first piece of TS we own outside the existing TS surfaces (Edge Functions, frontend) — chosen deliberately to set the direction.
 
 Steps:
 1. Verify clean working tree, on `main`, up to date with origin.
 2. Verify CHANGELOG `[Unreleased]` section has content.
 3. Update `VERSION` file to the new version.
-4. Update `package.json` version (or let the build step do it).
+4. Sync `pyproject.toml` version from `VERSION` (and `package.json` once it exists in v0.4+).
 5. Move `[Unreleased]` heading to `[vX.Y.Z] -- <today>` in CHANGELOG.
 6. Add a fresh empty `[Unreleased]` section.
 7. Commit: `chore: cut vX.Y.Z`.
 8. Tag annotated: `vX.Y.Z` with the CHANGELOG section as the tag message.
 9. Push commit + tag to origin.
-10. CI picks up the tag → builds → publishes to npm → creates GitHub Release.
+10. **Create GitHub Release** via `gh release create vX.Y.Z --notes-file <extracted-changelog-section>`. (Today's release process skips this step — `gh release list` returns empty. v0.2.0 closes that gap.)
+11. (Future, v0.5+) CI picks up tag → builds → publishes to npm.
 
 ### 12c. CI: trusted publishing on tag
 
@@ -592,7 +593,32 @@ GitHub Actions workflow on `v*` tag push:
 - `SECURITY.md` (how to report security issues responsibly)
 - `CODE_OF_CONDUCT.md` (Contributor Covenant boilerplate)
 - `.github/FUNDING.yml` (empty placeholder; can be filled later)
-- `CONTRIBUTING.md` updated with SemVer policy + dev-install path
+- `CONTRIBUTING.md` updated with SemVer policy, dev-install path, and the script-language policy (§12f)
+
+### 12f. Script-language policy (effective from v0.2.0)
+
+A direct consequence of the strangler-fig migration framing: **TypeScript becomes the preferred language for all new CLI tooling, scripts, and installation surfaces from v0.2.0 onward**, even while the bulk of the local codebase is still Python. The rule:
+
+1. **All new scripts, CLI tools, and installer pieces are written in TypeScript.** Bun-runnable, Node 20+ compatible. Reduces migration debt by default; every new artifact is born on the destination side.
+2. **Existing Python scripts get migrated when they're extended.**
+   - *Trivial extensions* (add a flag, change a default, fix a small bug): port to TS first, then make the change.
+   - *Complex extensions* (real new functionality, restructure): defer the port to its scheduled iteration (v0.5 for CLI-invoked scripts, v0.7 for the remaining ops scripts); do the extension in Python.
+3. **Untouched Python scripts stay Python.** Don't migrate for migration's sake. The point is to amortise migration into work you're already doing, not to create busywork.
+4. **Bun becomes a contributor prerequisite from v0.2.0.** End users are unaffected (no install changes for them until v0.4); contributors add one line to their dev-setup (`curl -fsSL https://bun.sh/install | bash`). Documented in `CONTRIBUTING.md`.
+
+**Application to the v0.2 → v1.0 arc**:
+
+| Script | Status in v0.2.0 | Migration | Reason |
+|---|---|---|---|
+| `cut_release` (new) | Born TS | n/a | New artifact — policy rule 1 |
+| `scripts/sync_docs.py` | Python | Port in v0.3 | Extended in v0.3 for bundled-docs work — policy rule 2 |
+| `scripts/db_status.py` | Python | Port in v0.3 | Becomes basis for `cerefox doctor` prototype in v0.3; later extended fully in v0.5 |
+| `scripts/db_deploy.py` | Python | Port in v0.5 | TS CLI's `cerefox init` needs to call schema-deploy logic |
+| `scripts/db_migrate.py` | Python | Port in v0.5 | TS CLI's `cerefox init` needs migration logic |
+| `scripts/reindex_all.py` | Python | Port in v0.7 | TS ingestion pipeline lands then; reindex is part of that |
+| `scripts/backup_create.py` / `backup_restore.py` | Python | Port in v0.7 | Both relate to ingestion / chunk handling; port alongside |
+
+**Why this matters beyond mechanics**: it's a consistency signal. From v0.2.0 a contributor opening a PR with a new Python script gets reviewed-out and pointed at the TS-first rule. By v0.5 the muscle memory is established. By v0.7 the codebase is mostly TS. By v0.9 Python is gone. The policy makes the migration feel like a steady current rather than a periodic Big Push.
 
 ---
 
@@ -611,29 +637,34 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 | 3 | `cerefox.__version__` reads from `VERSION` |
 | 4 | `cerefox --version` shows the real version |
 | 5 | Web UI footer shows version (small text, link to GitHub Release) |
-| 6 | `scripts/cut_release.py` (Python version for now; will be TS-ported in v0.5) |
-| 7 | `.github/ISSUE_TEMPLATE/`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, PR template, `.github/FUNDING.yml` (empty) |
-| 8 | SemVer & deprecation policy added to `CONTRIBUTING.md` |
-| 9 | This design doc moved from `research/` to `specs/` (now "design-of-record") |
+| 6 | `scripts/cut_release.ts` — **written in TS** (Bun-runnable). Includes the new `gh release create` step that today's release process skips |
+| 7 | Bun added as contributor prerequisite — bootstrap line documented in CONTRIBUTING.md |
+| 8 | `.github/ISSUE_TEMPLATE/`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, PR template, `.github/FUNDING.yml` (empty) |
+| 9 | SemVer + deprecation policy + **script-language policy (§12f)** added to `CONTRIBUTING.md` |
+| 10 | This design doc moved from `research/` to `specs/` (now "design-of-record") |
 
-**Tests / risk**: trivial. Version reading is a 5-line change per surface. Hygiene files are templated.
+**Tests / risk**: trivial. Version reading is a 5-line change per surface. Hygiene files are templated. The cut-release script is the only meaningful new code; test by using it to cut v0.2.0 itself.
 
 ### v0.3.0 — "Install Anywhere" (~3-4 weeks)
 
-**Theme**: config-state refactor + working-directory independence. Still Python. Last big Python investment.
+**Theme**: config-state refactor + working-directory independence. Mostly still Python at the CLI/MCP/web-server level, but the **first two scripts migrate to TS** (per §12f script-language policy — they're touched here, so they port now).
 
 | # | Item |
 |---|---|
 | 1 | `_resolve_config_dir()` precedence: `CEREFOX_CONFIG_DIR` → `./.env` → `~/.cerefox/.env` |
 | 2 | `~/.cerefox/` becomes user state root (.env, backups default move here) |
-| 3 | `importlib.resources` for SQL files (so `db_deploy.py` works from any directory) |
+| 3 | `importlib.resources` for SQL files (so `db_deploy.py` works from any directory; still Python) |
 | 4 | Frontend `dist/` bundled into wheel via hatchling config |
-| 5 | `cerefox docs` opens bundled docs in browser |
+| 5 | `cerefox docs` opens bundled docs in browser (still Python CLI calling out to the OS browser) |
 | 6 | Web UI `/app/help` page renders bundled docs (no Supabase dependency) |
 | 7 | Schema-version-mismatch banner in web UI |
-| 8 | Update CONTRIBUTING.md: "dev install" path uses `uv sync` from repo; "end user install" still pending (v0.5) |
+| 8 | **`scripts/sync_docs.ts`** replaces `scripts/sync_docs.py`. Extended here for bundled-docs work; ported instead of extended-in-Python. Python script removed in same commit |
+| 9 | **`scripts/db_status.ts`** replaces `scripts/db_status.py`. Refactored into a reusable TS module under `_shared/db-status/` so the v0.5 `cerefox doctor` command imports the same logic. Python script removed |
+| 10 | `_shared/` directory created (TS-only, ESM, zod schemas) — the first piece of the cross-context shared code that will grow through v0.4-v0.7 |
+| 11 | Update CONTRIBUTING.md: confirm Bun prerequisite + document the `_shared/` layout |
+| 12 | Update `docs/guides/ops-scripts.md` to document the new TS scripts; mark the remaining Python scripts as "will be ported in v0.5/v0.7" |
 
-**Tests / risk**: medium. Touches config loading; test coverage for the precedence rules; backward-compat tests for existing dev installs with repo-local `.env`.
+**Tests / risk**: medium. Touches config loading; test coverage for the precedence rules; backward-compat tests for existing dev installs with repo-local `.env`. New: vitest test suite for the two TS scripts; parity-test that `sync_docs.ts` ingests the same docs the Python version would have.
 
 ### v0.4.0 — "TS MCP Server" (~3-4 weeks) — supersedes old Iteration 18
 
