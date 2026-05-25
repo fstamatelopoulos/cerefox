@@ -244,6 +244,54 @@ async function ensureDocumentInProject(
   return projectId;
 }
 
+// ── Destructive set-the-full-list helper (project_names list form) ─────────
+//
+// Resolves each name to a project_id (creating if absent), then REPLACES the
+// document's project memberships with exactly that set. Used by the
+// project_names: string[] form on cerefox_ingest (full-set semantics) and by
+// the cerefox_set_document_projects MCP tool.
+//
+// Empty list = remove from all projects.
+
+// deno-lint-ignore no-explicit-any
+async function setDocumentProjectsByName(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  documentId: string,
+  projectNames: string[],
+): Promise<string[]> {
+  // Resolve each name → project_id (create if absent). Preserve order.
+  const projectIds: string[] = [];
+  for (const name of projectNames) {
+    if (!name) continue;
+    const { data: proj } = await supabase
+      .from("cerefox_projects")
+      .select("id")
+      .ilike("name", name)
+      .limit(1);
+    if (proj?.length) {
+      projectIds.push(proj[0].id);
+    } else {
+      const { data: newProj } = await supabase
+        .from("cerefox_projects")
+        .insert({ name })
+        .select("id");
+      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
+    }
+  }
+
+  // DELETE-then-INSERT replace (matches Python assign_document_projects).
+  await supabase
+    .from("cerefox_document_projects")
+    .delete()
+    .eq("document_id", documentId);
+  if (projectIds.length > 0) {
+    const rows = projectIds.map((pid) => ({ document_id: documentId, project_id: pid }));
+    await supabase.from("cerefox_document_projects").insert(rows);
+  }
+  return projectIds;
+}
+
 // ── Handler ────────────────────────────────────────────────────────────────
 
 export async function handleIngest(
@@ -254,6 +302,7 @@ export async function handleIngest(
   const content = args.content as string | undefined;
   const document_id = (args.document_id as string | undefined) ?? null;
   const project_name = args.project_name as string | undefined;
+  const project_names_raw = args.project_names;
   const source = (args.source as string | undefined) ?? "agent";
   const metadata = (args.metadata as Record<string, unknown> | undefined) ?? {};
   const update_if_exists = (args.update_if_exists as boolean | undefined) ?? false;
@@ -263,6 +312,16 @@ export async function handleIngest(
   if (!title || !content?.trim()) {
     throw new Error("title and content are required");
   }
+  // Validate project_names is an array if provided
+  if (project_names_raw !== undefined && project_names_raw !== null
+      && !Array.isArray(project_names_raw)) {
+    throw new Error(
+      "project_names must be a JSON array of strings; for a single project use project_name (string)",
+    );
+  }
+  const project_names: string[] | null = Array.isArray(project_names_raw)
+    ? project_names_raw.filter((s): s is string => typeof s === "string" && s.length > 0)
+    : null;
 
   const supabase = makeSupabaseClient();
   const contentHash = await sha256hex(normalizeContent(content));
@@ -334,10 +393,13 @@ export async function handleIngest(
       document_id: existingDoc.id, result_count: chunks.length,
     });
 
-    // Non-destructive project membership add (issue #38). If project_name is
-    // provided on an update, ensure the document is in that project without
-    // touching existing memberships.
-    if (project_name) {
+    // Project membership semantics on update (issue #38):
+    // - project_names (list) → destructive replace (full-set semantics)
+    // - project_name (singular) → non-destructive add (only if project_names absent)
+    // - Neither → no change
+    if (project_names !== null) {
+      await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+    } else if (project_name) {
       await ensureDocumentInProject(supabase, existingDoc.id, project_name);
     }
 
@@ -406,8 +468,12 @@ export async function handleIngest(
         document_id: existingDoc.id, result_count: chunks.length,
       });
 
-      // Non-destructive project membership add (issue #38).
-      if (project_name) {
+      // Project membership semantics on update (issue #38):
+      // - project_names (list) → destructive replace (full-set semantics)
+      // - project_name (singular) → non-destructive add (only if project_names absent)
+      if (project_names !== null) {
+        await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+      } else if (project_name) {
         await ensureDocumentInProject(supabase, existingDoc.id, project_name);
       }
 
@@ -467,10 +533,14 @@ export async function handleIngest(
 
   const documentId = ingestResult[0].document_id;
 
-  // Resolve / create project if requested. Uses the shared non-destructive
-  // helper so create + update paths behave identically (issue #38).
+  // Project assignment on CREATE:
+  // - project_names (list) → assign all (destructive primitive runs on empty doc, so
+  //   no existing memberships are lost)
+  // - project_name (singular) → assign one via the non-destructive helper
   let projectId: string | null = null;
-  if (project_name) {
+  if (project_names !== null && project_names.length > 0) {
+    await setDocumentProjectsByName(supabase, documentId, project_names);
+  } else if (project_name) {
     projectId = await ensureDocumentInProject(supabase, documentId, project_name);
   }
 

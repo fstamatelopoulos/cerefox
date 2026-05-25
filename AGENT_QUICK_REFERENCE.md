@@ -1,6 +1,6 @@
 # Cerefox Knowledge Base -- Agent Quick Reference
 
-Cerefox is a persistent, shared knowledge base. You have 8 MCP tools (or, if MCP isn't configured, the same 8 operations via the local CLI — see CLI section at the bottom).
+Cerefox is a persistent, shared knowledge base. You have 9 MCP tools (or, if MCP isn't configured, the same 9 operations via the local CLI — see CLI section at the bottom).
 For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 
 ## Tools
@@ -8,12 +8,13 @@ For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 | Tool | Purpose | Key params |
 |------|---------|------------|
 | `cerefox_search` | Find documents (hybrid FTS + semantic) | `query` (required), `project_name`, `metadata_filter`, `requestor` |
-| `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `update_if_exists`, `project_name`, `metadata`, `author` |
+| `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata`, `author` |
 | `cerefox_get_document` | Get full document by ID | `document_id` (required) |
 | `cerefox_list_versions` | Version history of a document | `document_id` (required) |
 | `cerefox_metadata_search` | Find docs by metadata (no text query) | `metadata_filter` (required), `include_content`, `updated_since` |
 | `cerefox_list_metadata_keys` | Discover available metadata keys | (none required) |
 | `cerefox_list_projects` | List all projects | (none required) |
+| `cerefox_set_document_projects` | Set doc's project memberships to exactly the given list (destructive replace; metadata-only, no content change) | `document_id`, `project_names` (required) |
 | `cerefox_get_audit_log` | Query write operation history | `document_id`, `author`, `operation`, `since` |
 
 ## Essential Rules
@@ -26,6 +27,7 @@ For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 6. **Write structured Markdown** with H1/H2/H3 headings for good chunking and search.
 7. **Deletes are soft (recoverable); purge is web-UI-only.** If you decide to delete, surface it to the user (`I soft-deleted X — recoverable from the Cerefox web UI trash`). You cannot un-do your own delete from agent code by design.
 8. **Cross-doc links inside content**: **always use `[Text](document-uuid)`.** UUIDs are the only fully reliable link form — stable across title changes, never ambiguous, no encoding gotchas. Every `cerefox_search` result shows `[id: <uuid>]` after the title; grab it and use it. Title-based linking (`[Text](<Title With Spaces>)`) is fragile (breaks on colons, parens, ampersands, brackets — silently navigates to wrong page) — **don't write title-based links**; do an extra search to get the UUID instead. Repo-path forms (`[Text](docs/path.md)`) exist for repo-ingested files; don't construct manually. See `AGENT_GUIDE.md → Writing linkable content` for the full rule.
+9. **Project memberships — non-destructive by default**: on `cerefox_ingest` updates, **`project_name` (singular) is a non-destructive add** (ensures membership, preserves others). Use **`project_names` (list)** when you want to set the doc's full project set in one call (destructive replace). For metadata-only project changes without writing content, use **`cerefox_set_document_projects(document_id, project_names)`** — that tool is the destructive-replace contract made explicit. Never call `cerefox_set_document_projects` with a single name when you mean "add" — that would REMOVE the doc from all other projects. When in doubt, use `cerefox_ingest` with singular `project_name`.
 
 ## Update Workflow (ID-based -- preferred)
 
@@ -61,6 +63,7 @@ If `cerefox_search` is not in your tool list, your user has likely pointed you a
 | `cerefox_list_projects` | `uv run cerefox list-projects --requestor "<your-name>"` |
 | `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
 | `cerefox_metadata_search` | `uv run cerefox metadata-search --metadata-filter '<json>' --requestor "<your-name>"` |
+| `cerefox_set_document_projects` | _MCP-only in v0.1.20; a CLI command will be added in a future release. Until then, run via MCP if available._ |
 | `cerefox_get_audit_log` | `uv run cerefox get-audit-log --requestor "<your-name>"` (add `--json` for scripted access) |
 
 **Set identity on every call**, exactly as you would on MCP:

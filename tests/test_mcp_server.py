@@ -75,7 +75,8 @@ class TestListTools:
     @pytest.mark.asyncio
     async def test_returns_all_tools(self) -> None:
         tools = await list_tools()
-        assert len(tools) == 8
+        # v0.1.20 adds cerefox_set_document_projects (Part 4 of issue #38 fix) → 9
+        assert len(tools) == 9
 
     @pytest.mark.asyncio
     async def test_tool_names(self) -> None:
@@ -90,6 +91,7 @@ class TestListTools:
             "cerefox_get_audit_log",
             "cerefox_list_projects",
             "cerefox_metadata_search",
+            "cerefox_set_document_projects",
         }
 
     @pytest.mark.asyncio

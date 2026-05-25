@@ -161,7 +161,26 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "project_name": {
                         "type": "string",
-                        "description": "Optional: assign to a project (created if it doesn't exist)",
+                        "description": (
+                            "Optional: single project name (created if absent). "
+                            "On update: non-destructive add — ensures this membership "
+                            "exists; preserves other memberships an operator may have "
+                            "added via the web UI. For explicit set-the-full-list "
+                            "semantics, use project_names (list) instead, or call "
+                            "cerefox_set_document_projects."
+                        ),
+                    },
+                    "project_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Optional: explicit list of project names (each created "
+                            "if absent). Full-set semantics — on update this REPLACES "
+                            "the document's project memberships with exactly this set. "
+                            "Use when you want to set multiple projects at once or "
+                            "deliberately change the membership list. Wins over "
+                            "project_name when both are passed."
+                        ),
                     },
                     "source": {
                         "type": "string",
@@ -178,7 +197,16 @@ async def list_tools() -> list[types.Tool]:
                         "description": (
                             "When true, update an existing document with the same title "
                             "instead of creating a new one. Useful for keeping notes in sync "
-                            "across multiple agent sessions."
+                            "across multiple agent sessions. Ignored when document_id is set."
+                        ),
+                    },
+                    "document_id": {
+                        "type": "string",
+                        "description": (
+                            "UUID of an existing document to update. When set, updates "
+                            "that document directly regardless of update_if_exists; errors "
+                            "if the document doesn't exist. The deterministic update path — "
+                            "prefer this when you have the ID from a prior cerefox_search."
                         ),
                     },
                     "author": {
@@ -378,6 +406,48 @@ async def list_tools() -> list[types.Tool]:
                 },
             },
         ),
+        types.Tool(
+            name="cerefox_set_document_projects",
+            description=(
+                "Set the document's project memberships to EXACTLY the given list. "
+                "Destructive replace: any existing memberships not in this list are "
+                "removed. Pass an empty list to clear all project memberships. "
+                "Projects are looked up by name (case-insensitive); missing projects "
+                "are created. Logged as update-metadata in the audit log — content "
+                "is untouched. Use cerefox_ingest with project_names if you want to "
+                "set memberships AND update content in one call. Use this tool when "
+                "you only need to change project membership without re-writing the "
+                "document body."
+            ),
+            inputSchema={
+                "type": "object",
+                "required": ["document_id", "project_names"],
+                "properties": {
+                    "document_id": {
+                        "type": "string",
+                        "description": (
+                            "UUID of the document. Get this from a prior cerefox_search "
+                            "result (the [id: ...] tag after the title)."
+                        ),
+                    },
+                    "project_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Explicit list of project names. Each created if absent. "
+                            "Order is preserved. Empty list = remove from all projects."
+                        ),
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": (
+                            "Agent or tool name recorded in the audit log. "
+                            'Defaults to "mcp-agent".'
+                        ),
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -431,13 +501,19 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     settings = deps["settings"]
 
     # Configurable requestor identity enforcement
-    identity_field = "author" if name == "cerefox_ingest" else "requestor"
+    # cerefox_ingest + cerefox_set_document_projects are writes → check author
+    if name in ("cerefox_ingest", "cerefox_set_document_projects"):
+        identity_field = "author"
+    else:
+        identity_field = "requestor"
     _validate_requestor_identity(client, arguments, identity_field)
 
     if name == "cerefox_search":
         return await _handle_search(client, embedder, settings, arguments)
     elif name == "cerefox_ingest":
         return await _handle_ingest(client, pipeline, arguments)
+    elif name == "cerefox_set_document_projects":
+        return await _handle_set_document_projects(client, arguments)
     elif name == "cerefox_list_metadata_keys":
         return await _handle_list_metadata_keys(client, arguments)
     elif name == "cerefox_get_document":
@@ -536,11 +612,23 @@ async def _handle_search(
 
 async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[types.TextContent]:
     author = arguments.get("author") or "mcp-agent"
+    project_names_arg = arguments.get("project_names")
+    # Validate type (MCP clients sometimes pass a string for an array param)
+    if project_names_arg is not None and not isinstance(project_names_arg, list):
+        return [types.TextContent(
+            type="text",
+            text=(
+                "Invalid argument: project_names must be a JSON array of strings, "
+                f"got {type(project_names_arg).__name__}. For a single project use "
+                "project_name (string)."
+            ),
+        )]
     result = pipeline.ingest_text(
         text=arguments["content"],
         title=arguments["title"],
         source=arguments.get("source", "agent"),
         project_name=arguments.get("project_name"),
+        project_names=project_names_arg,
         metadata=arguments.get("metadata") or {},
         update_existing=bool(arguments.get("update_if_exists", False)),
         document_id=arguments.get("document_id") or None,
@@ -587,6 +675,68 @@ async def _handle_ingest(client: Any, pipeline: Any, arguments: dict) -> list[ty
             document_id=result.document_id, result_count=result.chunk_count,
         )
 
+    return [types.TextContent(type="text", text=msg)]
+
+
+async def _handle_set_document_projects(
+    client: Any, arguments: dict,
+) -> list[types.TextContent]:
+    """Set the full project-membership list for a document. Destructive replace."""
+    document_id = arguments.get("document_id", "")
+    project_names_arg = arguments.get("project_names")
+    author = arguments.get("author") or "mcp-agent"
+
+    if not document_id:
+        return [types.TextContent(
+            type="text",
+            text="Missing required argument: document_id (UUID from a prior cerefox_search result).",
+        )]
+    if project_names_arg is None or not isinstance(project_names_arg, list):
+        return [types.TextContent(
+            type="text",
+            text=(
+                "Missing or invalid argument: project_names must be a JSON array of "
+                "strings (empty array allowed to clear all memberships). Got: "
+                f"{type(project_names_arg).__name__}."
+            ),
+        )]
+    if not all(isinstance(n, str) for n in project_names_arg):
+        return [types.TextContent(
+            type="text",
+            text="project_names must contain only strings.",
+        )]
+
+    try:
+        result = client.set_document_projects(
+            document_id=document_id,
+            project_names=project_names_arg,
+            author=author,
+            author_type="agent",
+        )
+    except ValueError as exc:
+        return [types.TextContent(type="text", text=str(exc))]
+
+    client.log_usage(
+        operation="set-document-projects",
+        access_path="local-mcp",
+        requestor=author,
+        document_id=document_id,
+        result_count=len(result["project_ids"]),
+    )
+
+    if result["project_names"]:
+        msg = (
+            f"Set project memberships for document {document_id}:\n"
+            f"  Projects ({len(result['project_names'])}): {', '.join(result['project_names'])}\n"
+            f"  Project IDs: {', '.join(result['project_ids'])}\n"
+            "  Note: this REPLACED the previous membership set. Any projects not "
+            "listed above are no longer associated with this document."
+        )
+    else:
+        msg = (
+            f"Cleared all project memberships for document {document_id}. "
+            "The document no longer belongs to any project."
+        )
     return [types.TextContent(type="text", text=msg)]
 
 

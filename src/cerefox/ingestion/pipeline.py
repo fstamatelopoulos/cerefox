@@ -101,6 +101,7 @@ class IngestionPipeline:
         project_name: str | None = None,
         project_id: str | None = None,
         project_ids: list[str] | None = None,
+        project_names: list[str] | None = None,
         metadata: dict | None = None,
         update_existing: bool = False,
         document_id: str | None = None,
@@ -114,13 +115,17 @@ class IngestionPipeline:
             title: Human-readable document title.
             source: Origin label (e.g. ``"file"``, ``"paste"``, ``"agent"``).
             source_path: Optional filesystem path or URL the content came from.
-            project_name: If given, the document is linked to this project
-                (created automatically if it doesn't exist).  Ignored when
-                ``project_ids`` is provided.
-            project_id: Single project UUID (legacy convenience; converted to
-                ``project_ids=[project_id]`` internally).
-            project_ids: List of project UUIDs to assign (M2M).  Takes
-                precedence over ``project_id`` and ``project_name``.
+            project_name: Single project name (created if absent). On update,
+                non-destructive add — "ensure this membership exists, leave
+                others alone."
+            project_id: Single project UUID. Same non-destructive-add semantics
+                as ``project_name`` on update.
+            project_ids: Explicit list of project UUIDs. Full-set semantics —
+                destructive replace on update. Wins over ``project_names``.
+            project_names: Explicit list of project names (each created if
+                absent). Full-set semantics — destructive replace on update.
+                The name-based equivalent of ``project_ids``. Use when an agent
+                wants to set the document's full project membership in one call.
             metadata: Arbitrary key/value pairs stored as JSONB on the document.
             update_existing: When True, look up an existing document by
                 ``source_path`` (for file ingestion) or by ``title`` (for
@@ -136,30 +141,42 @@ class IngestionPipeline:
         # which document to update.  Errors if the document does not exist.
         #
         # Project semantics on update (per issue #38):
-        # - ``project_ids=[…]`` (an explicit list, even one-element): full-set
-        #   semantics — destructive replace. Used by the web UI's edit form.
-        # - ``project_name`` / ``project_id`` (singular): non-destructive add
-        #   — "ensure this membership exists, leave others alone." This is
-        #   the agent-facing path; agents must not be able to silently strip
-        #   project memberships an operator added via the web UI.
+        # - List form (``project_ids=[…]`` or ``project_names=[…]``): full-set
+        #   semantics — destructive replace. Used by the web UI's edit form
+        #   and by agents that want explicit set-the-membership semantics.
+        # - Singular form (``project_name`` / ``project_id``): non-destructive
+        #   add — "ensure this membership exists, leave others alone." Agents
+        #   must not be able to silently strip memberships an operator added
+        #   via the web UI when they only intended to add one.
+        list_form_provided = project_ids is not None or project_names is not None
         if document_id is not None:
             existing_doc = self._client.get_document_by_id(document_id)
             if existing_doc is None:
                 raise ValueError(f"Document not found: {document_id}")
+            # Resolve the full-set list (if either form was provided) for the
+            # destructive-replace path. Both project_ids and project_names
+            # converge to a single resolved list here.
+            full_set_resolved: list[str] | None = None
+            if list_form_provided:
+                full_set_resolved = self._resolve_project_ids(
+                    project_ids=project_ids,
+                    project_id=None,
+                    project_name=None,
+                    project_names=project_names,
+                )
             result = self.update_document(
                 document_id=document_id,
                 text=text,
                 title=title,
                 source=source,
-                # Only the explicit list form propagates as a full-set replace.
-                # Singular project_name/project_id are handled non-destructively below.
-                project_ids=project_ids if project_ids is not None else None,
+                project_ids=full_set_resolved,
                 metadata=metadata,
                 author=author,
                 author_type=author_type,
             )
             # Non-destructive add for singular project_name / project_id on update.
-            if project_ids is None and (project_id or project_name):
+            # Only fires when the caller did NOT supply a list form.
+            if not list_form_provided and (project_id or project_name):
                 singular_resolved = self._resolve_project_ids(
                     project_ids=None, project_id=project_id, project_name=project_name,
                 )
@@ -184,19 +201,28 @@ class IngestionPipeline:
                     existing_doc["id"],
                     lookup_key,
                 )
-                # Same semantics as the document_id branch: explicit list = full set,
-                # singular project_name/project_id = non-destructive add (issue #38).
+                # Same semantics as the document_id branch:
+                # list form = full-set destructive replace,
+                # singular form = non-destructive add (issue #38).
+                full_set_resolved = None
+                if list_form_provided:
+                    full_set_resolved = self._resolve_project_ids(
+                        project_ids=project_ids,
+                        project_id=None,
+                        project_name=None,
+                        project_names=project_names,
+                    )
                 result = self.update_document(
                     document_id=existing_doc["id"],
                     text=text,
                     title=title,
                     source=source,
-                    project_ids=project_ids if project_ids is not None else None,
+                    project_ids=full_set_resolved,
                     metadata=metadata,
                     author=author,
                     author_type=author_type,
                 )
-                if project_ids is None and (project_id or project_name):
+                if not list_form_provided and (project_id or project_name):
                     singular_resolved = self._resolve_project_ids(
                         project_ids=None, project_id=project_id, project_name=project_name,
                     )
@@ -206,8 +232,10 @@ class IngestionPipeline:
                 return result
             log.info("update_existing: no existing doc found — creating new document")
 
-        # Resolve project_ids from the various caller styles.
-        resolved_ids = self._resolve_project_ids(project_ids, project_id, project_name)
+        # Resolve project_ids from the various caller styles (singular or list, ID or name).
+        resolved_ids = self._resolve_project_ids(
+            project_ids, project_id, project_name, project_names=project_names,
+        )
 
         validated_meta = metadata or {}
 
@@ -571,10 +599,33 @@ class IngestionPipeline:
         project_ids: list[str] | None,
         project_id: str | None,
         project_name: str | None,
+        project_names: list[str] | None = None,
     ) -> list[str]:
-        """Return a normalised list of project UUIDs from the caller's inputs."""
+        """Return a normalised list of project UUIDs from the caller's inputs.
+
+        Precedence (highest wins):
+          1. ``project_ids`` (explicit UUID list) — used as-is, empties stripped.
+          2. ``project_names`` (explicit name list) — each name resolved via
+             ``get_or_create_project`` and assembled in order.
+          3. ``project_id`` (single UUID) — wrapped in a list.
+          4. ``project_name`` (single name) — resolved and wrapped in a list.
+
+        Note that tiers 1 and 2 carry FULL-SET semantics (destructive replace
+        when passed to ``assign_document_projects``) and tiers 3 and 4 carry
+        SINGLE-HINT semantics (non-destructive add via
+        ``add_document_to_projects``). The caller chooses semantics by which
+        argument they pass; this helper just resolves the values.
+        """
         if project_ids is not None:
-            return [p for p in project_ids if p]  # strip empties / empty strings
+            return [p for p in project_ids if p]
+        if project_names is not None:
+            resolved: list[str] = []
+            for name in project_names:
+                if not name:
+                    continue
+                project = self._client.get_or_create_project(name)
+                resolved.append(project["id"])
+            return resolved
         if project_id:
             return [project_id]
         if project_name:

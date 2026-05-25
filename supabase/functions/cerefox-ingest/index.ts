@@ -33,6 +33,7 @@ interface IngestRequest {
   content: string;
   document_id?: string;
   project_name?: string;
+  project_names?: string[]; // Full-set semantics; wins over project_name when both provided
   source?: string;
   metadata?: Record<string, unknown>;
   update_if_exists?: boolean;
@@ -344,6 +345,52 @@ async function ensureDocumentInProject(
   return projectId;
 }
 
+// ── Destructive set-the-full-list helper (project_names list form) ─────────
+//
+// Resolves each name to a project_id (creating if absent), then REPLACES the
+// document's project memberships with exactly that set. Used by the
+// project_names: string[] form on cerefox_ingest (full-set semantics).
+//
+// Empty list = remove from all projects.
+
+// deno-lint-ignore no-explicit-any
+async function setDocumentProjectsByName(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  documentId: string,
+  projectNames: string[],
+): Promise<string[]> {
+  const projectIds: string[] = [];
+  for (const name of projectNames) {
+    if (!name) continue;
+    const { data: proj } = await supabase
+      .from("cerefox_projects")
+      .select("id")
+      .ilike("name", name)
+      .limit(1);
+    if (proj?.length) {
+      projectIds.push(proj[0].id);
+    } else {
+      const { data: newProj } = await supabase
+        .from("cerefox_projects")
+        .insert({ name })
+        .select("id");
+      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
+    }
+  }
+
+  // DELETE-then-INSERT replace (matches Python assign_document_projects).
+  await supabase
+    .from("cerefox_document_projects")
+    .delete()
+    .eq("document_id", documentId);
+  if (projectIds.length > 0) {
+    const rows = projectIds.map((pid) => ({ document_id: documentId, project_id: pid }));
+    await supabase.from("cerefox_document_projects").insert(rows);
+  }
+  return projectIds;
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -374,6 +421,18 @@ Deno.serve(async (req: Request) => {
   }
 
   const { title, content, document_id = null, project_name, source = "agent", metadata = {}, update_if_exists = false, author = "agent", author_type = "agent" } = body;
+
+  // Validate + normalize project_names if provided (full-set destructive form)
+  let project_names: string[] | null = null;
+  if (body.project_names !== undefined && body.project_names !== null) {
+    if (!Array.isArray(body.project_names)) {
+      return new Response(
+        JSON.stringify({ error: "project_names must be an array of strings; use project_name (string) for a single project" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    project_names = body.project_names.filter((s): s is string => typeof s === "string" && s.length > 0);
+  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -509,10 +568,12 @@ Deno.serve(async (req: Request) => {
       p_result_count: chunks.length,
     })).catch(() => {});
 
-    // Non-destructive project membership add (issue #38). If project_name is
-    // provided on an update, ensure the document is in that project without
-    // touching existing memberships.
-    if (project_name) {
+    // Project membership semantics on update (issue #38):
+    // - project_names (list) → destructive replace (full-set semantics)
+    // - project_name (singular) → non-destructive add (only if project_names absent)
+    if (project_names !== null) {
+      await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+    } else if (project_name) {
       await ensureDocumentInProject(supabase, existingDoc.id, project_name);
     }
 
@@ -616,8 +677,12 @@ Deno.serve(async (req: Request) => {
         p_result_count: chunks.length,
       })).catch(() => {});
 
-      // Non-destructive project membership add (issue #38).
-      if (project_name) {
+      // Project membership semantics on update (issue #38):
+      // - project_names (list) → destructive replace (full-set semantics)
+      // - project_name (singular) → non-destructive add (only if project_names absent)
+      if (project_names !== null) {
+        await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+      } else if (project_name) {
         await ensureDocumentInProject(supabase, existingDoc.id, project_name);
       }
 
@@ -710,11 +775,13 @@ Deno.serve(async (req: Request) => {
 
   const documentId = ingestResult[0].document_id;
 
-  // Resolve / create project if requested (separate from ingestion -- pure CRUD).
-  // Uses the shared non-destructive helper so create + update paths behave
-  // identically with respect to membership semantics (issue #38).
+  // Project assignment on CREATE:
+  // - project_names (list) → assign all
+  // - project_name (singular) → assign one via the non-destructive helper
   let projectId: string | null = null;
-  if (project_name) {
+  if (project_names !== null && project_names.length > 0) {
+    await setDocumentProjectsByName(supabase, documentId, project_names);
+  } else if (project_name) {
     projectId = await ensureDocumentInProject(supabase, documentId, project_name);
   }
 
