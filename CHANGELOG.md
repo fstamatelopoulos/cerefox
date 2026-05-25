@@ -9,6 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap. Next batch of work is being scoped on the
+`research/installer-design` branch (polish & distribution design,
+v0.2.0 onward).
+
+---
+
+## [v0.1.20] -- 2026-05-25
+
 ### Fixed
 
 - **[cerefox#38](https://github.com/fstamatelopoulos/cerefox/issues/38) —
