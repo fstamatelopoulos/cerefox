@@ -61,6 +61,39 @@ open http://localhost:8000/app/
 
 Most upgrades require no special steps beyond the standard checklist above. Notes below only apply when upgrading across specific version boundaries.
 
+### Upgrading to v0.1.19 (from v0.1.18) -- FTS Query Parser
+
+**RPC redeploy is required.** v0.1.19 changes the FTS query parser used by
+`cerefox_hybrid_search` and `cerefox_fts_search` from `websearch_to_tsquery`
+to `plainto_tsquery`. The change lives in `src/cerefox/db/rpcs.sql` — pulling
+the new code does **not** apply it. After `git pull`, step 4 of the standard
+checklist (redeploy RPCs) is mandatory, not optional:
+
+```bash
+uv run python scripts/db_deploy.py
+```
+
+`db_deploy.py` is idempotent (`CREATE OR REPLACE FUNCTION`) and safe to
+re-run. **If you skip this step, searches for any title containing `-`
+(e.g. "Job Hunting - Opportunity Index", `setup-supabase`) will continue
+to return zero results until the RPCs are redeployed.** This is the
+single most common upgrade mistake for v0.1.19.
+
+**No schema migration**, **no Edge Function redeploy**, **no chunk reindex**
+needed for this change — the corpus side (`to_tsvector` in chunk `fts`
+column) is unchanged; only the query parser changed. The link-resolver web
+UI feature (the other half of v0.1.19) requires step 5 of the standard
+checklist (rebuild the frontend); no backend changes are needed for that
+half.
+
+**Behaviour change to be aware of**: the new parser treats every query
+token as a literal word and ANDs them together. It does **not** interpret
+phrase quotes (`"…"`), `OR`, or `-` as operators. If you or any scripts
+relied on Google-style search operators in `cerefox_search` queries, those
+queries now treat the operator characters as literal tokens. Rationale and
+revisit triggers in the Decision Log entry "2026-05-24 — Switch FTS query
+parser from websearch_to_tsquery to plainto_tsquery".
+
 ### Upgrading to v0.1.14+ (from v0.1.13) -- Title Boosting
 
 **One new migration**: `0011_title_boosting.sql`

@@ -33,6 +33,23 @@ to stored content or any new schema. Pure render-time resolution.
 
 Shipped via [PR #37](https://github.com/fstamatelopoulos/cerefox/pull/37).
 
+> **⚠️ Upgrading? RPC redeploy is REQUIRED.** The FTS-parser fix below
+> (`websearch_to_tsquery` → `plainto_tsquery`) lives in
+> `src/cerefox/db/rpcs.sql`. **The new code does nothing on its own** —
+> the updated function definitions must be pushed to your Supabase
+> instance before the fix takes effect. Run:
+>
+> ```bash
+> uv run python scripts/db_deploy.py
+> ```
+>
+> `db_deploy.py` is idempotent (`CREATE OR REPLACE FUNCTION`); safe to
+> re-run. No schema migration, no Edge Function redeploy, no reindex
+> needed. **Skipping this step is the single most common upgrade
+> mistake for v0.1.19** — searches for any dashed title will continue to
+> return zero results until the RPCs are redeployed. See
+> [`docs/guides/upgrading.md` → Upgrading to v0.1.19](docs/guides/upgrading.md#upgrading-to-v0119-from-v0118--fts-query-parser).
+
 ### Added
 
 - **Web UI: clickable repo links in markdown content.** The document detail
@@ -100,12 +117,20 @@ Shipped via [PR #37](https://github.com/fstamatelopoulos/cerefox/pull/37).
   is small — agent queries are natural-language phrases that don't use
   Google-style operators, and the semantic-similarity half of hybrid
   search already provides "broadly related" matching. If operator support
-  is ever needed, it should be an opt-in flag, not the default. Verified
-  end-to-end against live Supabase (RPCs redeployed via `db_deploy.py`,
-  all 80 e2e tests pass). Rationale recorded in the Decision Log entry
-  "2026-05-19 — Switch FTS query parser from websearch_to_tsquery to
-  plainto_tsquery"; brief architectural note added to
-  [`docs/solution-design.md` §5.2](docs/solution-design.md#52-title-boosting-search-quality).
+  is ever needed, it should be an opt-in flag, not the default.
+  - **⚠️ Requires RPC redeploy.** This change lives in `rpcs.sql` —
+    pulling the new code does **not** apply it. After `git pull`, run
+    `uv run python scripts/db_deploy.py` to push the updated function
+    definitions to your Supabase instance. Without this step the bug
+    persists. See the upgrade callout at the top of this release entry.
+  - No schema migration, no Edge Function redeploy, no chunk reindex
+    needed — the corpus side (`to_tsvector` in chunk `fts` column) is
+    unchanged; only the query parser changed.
+  - Verified end-to-end against live Supabase (all 80 e2e tests pass
+    after redeploy). Rationale recorded in the Decision Log entry
+    "2026-05-24 — Switch FTS query parser from websearch_to_tsquery to
+    plainto_tsquery"; brief architectural note added to
+    [`docs/solution-design.md` §5.2](docs/solution-design.md#52-title-boosting-search-quality).
 
 ### Filed (carried forward)
 
