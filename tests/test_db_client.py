@@ -437,6 +437,80 @@ class TestResolveLink:
             .execute.return_value
         ).data = rows
 
+    # ── Tier 0: UUID short-circuit ───────────────────────────────────────
+
+    @staticmethod
+    def _set_get_by_id_chain(mock_supabase_client: MagicMock, row: dict | None) -> None:
+        """Wire table().select().eq().limit().execute() → [row] (or [])."""
+        (
+            mock_supabase_client.table.return_value
+            .select.return_value
+            .eq.return_value
+            .limit.return_value
+            .execute.return_value
+        ).data = [row] if row else []
+
+    def test_uuid_path_resolves_via_document_id(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        uuid = "c937b70f-77af-43d3-b9bc-9f31e0d2041d"
+        self._set_get_by_id_chain(mock_supabase_client, {
+            "id": uuid, "title": "Job Hunting", "source_path": None, "deleted_at": None,
+        })
+        result = cerefox_client.resolve_link(uuid)
+        assert len(result) == 1
+        assert result[0]["id"] == uuid
+        assert result[0]["match_method"] == "document_id"
+        # Fuzzy tiers MUST NOT have been called when the UUID resolved
+        mock_supabase_client.table.return_value.select.return_value.is_.assert_not_called()
+
+    def test_uuid_path_is_case_insensitive(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        # User pastes uppercase UUID — should still be recognised
+        uppercase = "C937B70F-77AF-43D3-B9BC-9F31E0D2041D"
+        self._set_get_by_id_chain(mock_supabase_client, {
+            "id": uppercase.lower(), "title": "T", "source_path": None, "deleted_at": None,
+        })
+        result = cerefox_client.resolve_link(uppercase)
+        assert len(result) == 1
+        assert result[0]["match_method"] == "document_id"
+
+    def test_uuid_not_found_returns_empty_no_fallthrough(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """An explicit UUID for a missing doc must not silently fuzzy-match."""
+        self._set_get_by_id_chain(mock_supabase_client, None)
+        # Pre-load fuzzy tiers with hits we DON'T want the user to see
+        self._set_like_chain(mock_supabase_client, [
+            {"id": "decoy", "title": "Job Hunting Notes", "source_path": "/x.md"},
+        ])
+        result = cerefox_client.resolve_link("c937b70f-77af-43d3-b9bc-9f31e0d2041d")
+        assert result == []
+        # `decoy` must NOT have been returned
+        assert all(r.get("id") != "decoy" for r in result)
+
+    def test_uuid_soft_deleted_returns_empty(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        uuid = "c937b70f-77af-43d3-b9bc-9f31e0d2041d"
+        self._set_get_by_id_chain(mock_supabase_client, {
+            "id": uuid, "title": "Trashed", "source_path": None,
+            "deleted_at": "2026-05-18T00:00:00Z",
+        })
+        result = cerefox_client.resolve_link(uuid)
+        assert result == []
+
+    def test_uuid_equals_exclude_id_returns_empty(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """Self-link via explicit UUID must be filtered, same as fuzzy self-links."""
+        uuid = "c937b70f-77af-43d3-b9bc-9f31e0d2041d"
+        result = cerefox_client.resolve_link(uuid, exclude_id=uuid)
+        assert result == []
+        # We should not have even consulted get_document_by_id
+        mock_supabase_client.table.assert_not_called()
+
     # ── Input normalisation ──────────────────────────────────────────────
 
     def test_empty_path_returns_empty_without_db_calls(

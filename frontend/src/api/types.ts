@@ -204,8 +204,17 @@ export interface LinkResolveMatch {
   document_id: string;
   title: string;
   source_path: string | null;
-  /** Which resolver tier produced this match (most → least specific). */
-  match_method: "source_path_suffix" | "basename" | "title_match";
+  /** Which resolver tier produced this match (most → least specific):
+   * - `document_id` — the link was a literal UUID and matched a live document
+   * - `source_path_suffix` — full path matched a doc's source_path tail
+   * - `basename` — just the filename matched a doc's source_path tail
+   * - `title_match` — basename substring matched a doc title (fallback)
+   */
+  match_method:
+    | "document_id"
+    | "source_path_suffix"
+    | "basename"
+    | "title_match";
 }
 
 /** Response from GET /api/v1/resolve-link. */

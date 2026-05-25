@@ -25,6 +25,7 @@ For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 5. **Add metadata** -- at minimum `type` ("decision-log", "research", "design-doc") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings for good chunking and search.
 7. **Deletes are soft (recoverable); purge is web-UI-only.** If you decide to delete, surface it to the user (`I soft-deleted X — recoverable from the Cerefox web UI trash`). You cannot un-do your own delete from agent code by design.
+8. **Cross-doc links inside content**: `[Text](uuid)` is the most stable (UUID never changes, never collides). For repo files: `[Text](docs/path.md)`. For titles with spaces: `[Text](<Title With Spaces>)` (angle brackets — bare spaces break markdown). Always set meaningful link text. Web UI resolves these at click time. See `AGENT_GUIDE.md → Writing linkable content` for full rules.
 
 ## Update Workflow (ID-based -- preferred)
 

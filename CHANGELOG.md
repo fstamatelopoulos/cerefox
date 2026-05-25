@@ -19,19 +19,38 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   candidates → popover chooser. No match → popover with "Search instead?"
   Pure render-time behaviour: stored content is unchanged. External links,
   `#anchor`-only links, and absolute SPA paths pass through untouched.
-  - Resolver strategy (most → least specific): exact `source_path` suffix
-    match → basename match → title substring match. Soft-deleted documents
-    excluded; `from_doc_id` query param suppresses self-links.
+  - **Resolver strategy** (most → least specific), first tier that hits wins:
+    0. **`document_id` match** — if the link target is a literal UUID,
+       look up directly. Most stable form (survives title changes, never
+       ambiguous). If the UUID doesn't resolve, returns "couldn't
+       resolve" rather than falling through to fuzzy tiers — explicit
+       UUID encodes explicit intent.
+    1. **`source_path` suffix match** — full path as authored.
+    2. **basename suffix match** — final path component only.
+    3. **title substring match** — case-insensitive ILIKE on title for
+       paste-ingested docs without `source_path`.
+  - Soft-deleted documents excluded; `from_doc_id` query param suppresses
+    self-links.
+  - **URL-decode fix**: the frontend `decodeURIComponent`s the href before
+    calling the resolver. Closes a bug where `<Title With Spaces>`-form
+    links round-tripped through `URLSearchParams` and arrived at the
+    server with literal `%20` strings, causing title matches to fail.
   - New `CerefoxClient.resolve_link()` method.
   - New `MarkdownLink` React component, used as the `a` override on
     `react-markdown` in `MarkdownViewer`.
-  - 10 new unit tests under `tests/test_db_client.py::TestResolveLink` cover
-    input normalisation, tier short-circuit, self-link exclusion, tier-DB
-    error tolerance.
+  - 15 new unit tests under `tests/test_db_client.py::TestResolveLink`
+    cover input normalisation, all tier short-circuit and fallthrough
+    paths, UUID tier (case-insensitive, soft-delete filter, self-link
+    via UUID, no-fallthrough on miss), self-link exclusion in fuzzy
+    tiers, tier-DB error tolerance.
   - Scope is intentionally Need 1 only from the implied-links discussion
     (clickable repo links in web UI). Auto-populating the relation graph
     from markdown links is **not** done — that's Iteration 18's job and
     a separate decision.
+  - Agent docs updated: new "Writing linkable content" section in
+    `AGENT_GUIDE.md` (four supported link forms, the spaces-break-markdown
+    gotcha, why explicit link text matters), one-liner rule #8 in
+    `AGENT_QUICK_REFERENCE.md`, brief mention in `connect-agents.md` Path C.
 
 ### Filed (carried forward)
 

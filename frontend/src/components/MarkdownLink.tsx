@@ -77,10 +77,31 @@ export function MarkdownLink({ href, children, fromDocId, ...rest }: MarkdownLin
       return;
     }
 
+    // URL-decode the href before sending to the resolver.
+    //
+    // react-markdown / remark-gfm normalises `<Title With Spaces>` markdown
+    // syntax to a URL-encoded href like `Title%20With%20Spaces`. Without
+    // decoding here, the encoded form gets re-encoded by URLSearchParams
+    // and the server eventually sees the literal "%20" string as the
+    // lookup path — which never matches any title. Decoding once here
+    // restores the original.
+    //
+    // decodeURIComponent throws on malformed sequences (e.g. `%FF` without
+    // a valid UTF-8 continuation); fall back to the raw href in that case
+    // so a weirdly-encoded link still produces a best-effort lookup
+    // instead of a runtime error.
+    let lookupHref = href!;
+    try {
+      lookupHref = decodeURIComponent(href!);
+    } catch {
+      // Malformed URI sequence — keep raw href; server will attempt
+      // best-effort matching on the literal characters.
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const resolved = await resolveLink(href!, fromDocId);
+      const resolved = await resolveLink(lookupHref, fromDocId);
       setResult(resolved);
       if (resolved.matches.length === 1) {
         const m = resolved.matches[0];

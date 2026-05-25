@@ -8,6 +8,7 @@ the RPCs defined in rpcs.sql.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from supabase import Client, create_client
@@ -109,17 +110,33 @@ class CerefoxClient:
             logger.error("find_document_by_title failed: %s", exc)
             raise RuntimeError(f"find_document_by_title failed: {exc}") from exc
 
+    # Recognises a canonical lowercase UUID (8-4-4-4-12 hex with hyphens).
+    # Case-insensitive — uppercase / mixed-case UUIDs from sloppy hand-typed
+    # links still match. Anchored with ^ and $ so substrings inside a longer
+    # path don't accidentally trigger the UUID short-circuit.
+    _UUID_RE = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        re.IGNORECASE,
+    )
+
     def resolve_link(
         self, path: str, *, exclude_id: str | None = None, limit: int = 10
     ) -> list[dict[str, Any]]:
         """Best-effort lookup of documents matching a path from a markdown link.
 
-        Tries three strategies in order of specificity and returns the first
-        tier that yields at least one match:
+        Tries strategies in order of specificity and returns the first tier
+        that yields at least one match:
 
+        0. **document_id match** -- if the path is a valid UUID, look up the
+           document directly. Most stable (survives title changes, no
+           ambiguity). If the UUID doesn't resolve to a live document, the
+           method returns ``[]`` *without* falling through to fuzzy tiers --
+           an explicit UUID encodes explicit intent, so a missing target
+           should surface as "couldn't resolve" rather than substituting
+           three loosely-related alternatives.
         1. **source_path suffix match** -- ``source_path LIKE '%/<path>'``.
            Catches `[link](docs/guides/setup.md)` against a doc whose
-           source_path ends with the same suffix. Most specific.
+           source_path ends with the same suffix. Most specific path tier.
         2. **basename suffix match** -- only the final path component, e.g.
            `setup.md`. Wider net; can match multiple documents.
         3. **title-slug match** -- the basename without its extension,
@@ -133,11 +150,12 @@ class CerefoxClient:
         is not a hit.
 
         Args:
-            path: the relative path from the markdown link, e.g.
-                ``"docs/guides/setup.md"`` or ``"setup.md"``. Leading
-                ``../`` and ``./`` components are stripped before lookup.
-                ``#anchor`` suffixes should be stripped by the caller before
-                invoking this method.
+            path: the path from the markdown link. May be a UUID (most
+                stable), a vault-relative path like ``"docs/guides/setup.md"``,
+                a bare filename like ``"setup.md"``, or a document title.
+                Leading ``../`` and ``./`` components are stripped before
+                path-based lookup. ``#anchor`` suffixes should be stripped
+                by the caller before invoking this method.
             exclude_id: optional document UUID to filter out of the results
                 (typically the document containing the link).
             limit: maximum candidates per tier (default 10).
@@ -146,15 +164,36 @@ class CerefoxClient:
             A list of `{id, title, source_path, match_method}` dicts. Empty
             list if no tier produced a match.
         """
+        candidate = path.strip()
+        if not candidate:
+            return []
+
+        # ── Tier 0: UUID short-circuit ────────────────────────────────────
+        # Explicit document_id wins over any fuzzy match. If the target was
+        # deleted or doesn't exist, return [] -- don't degrade silently into
+        # similarly-named documents.
+        if self._UUID_RE.match(candidate):
+            if candidate == exclude_id:
+                return []
+            try:
+                doc = self.get_document_by_id(candidate)
+            except Exception as exc:
+                logger.warning("resolve_link tier 0 (uuid) failed: %s", exc)
+                return []
+            if doc is None or doc.get("deleted_at") is not None:
+                return []
+            return [{
+                "id": doc["id"],
+                "title": doc.get("title", ""),
+                "source_path": doc.get("source_path"),
+                "match_method": "document_id",
+            }]
+
         # Normalise: strip leading "./" and any "../" prefix runs. We don't
         # honour relative path semantics; we just remove the parent-dir
         # garbage so the remaining string can be matched as a vault-relative
         # path or a basename.
-        import re  # noqa: PLC0415
-
-        normalised = path.strip()
-        # Strip "./" and any number of "../" prefixes
-        normalised = re.sub(r"^(?:\.\./)+", "", normalised)
+        normalised = re.sub(r"^(?:\.\./)+", "", candidate)
         normalised = re.sub(r"^\./", "", normalised)
         normalised = normalised.lstrip("/")
         if not normalised:
