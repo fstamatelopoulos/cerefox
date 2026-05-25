@@ -86,7 +86,7 @@ class TestMCPHealthAndProtocol:
         assert result["serverInfo"]["name"] == "cerefox"
 
     def test_tools_list(self, e2e_mcp: MCPClient | None) -> None:
-        """MCP-3: tools/list returns all 8 tools with correct names and inputSchemas."""
+        """MCP-3: tools/list returns all 9 tools with correct names and inputSchemas."""
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
         resp = e2e_mcp.call("tools/list")
@@ -102,6 +102,7 @@ class TestMCPHealthAndProtocol:
             "cerefox_get_audit_log",
             "cerefox_list_projects",
             "cerefox_metadata_search",
+            "cerefox_set_document_projects",  # v0.1.20: Part 4 of issue #38 fix
         }
         assert tool_names == expected
         for tool in tools:

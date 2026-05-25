@@ -493,6 +493,82 @@ class CerefoxClient:
             logger.error("assign_document_projects failed: %s", exc)
             raise RuntimeError(f"assign_document_projects failed: {exc}") from exc
 
+    def set_document_projects(
+        self,
+        document_id: str,
+        project_names: list[str],
+        *,
+        author: str = "unknown",
+        author_type: str = "user",
+    ) -> dict[str, Any]:
+        """Set the document's project memberships to exactly ``project_names``.
+
+        Resolves each name to a project_id (creating projects that don't exist),
+        then performs a DELETE-then-INSERT replace on ``cerefox_document_projects``.
+        Empty list = remove from all projects.
+
+        Logged in the audit log as ``update-metadata`` (project membership is
+        document metadata, not content). The agent-facing
+        ``cerefox_set_document_projects`` MCP tool wraps this method.
+
+        Returns:
+            Dict with ``document_id``, ``project_ids`` (resolved UUIDs in order),
+            and ``project_names`` (the names, mirrored back).
+
+        Raises:
+            ValueError: If the document doesn't exist (or is soft-deleted).
+        """
+        # Verify the document exists and isn't soft-deleted.
+        doc = self.get_document_by_id(document_id)
+        if doc is None:
+            raise ValueError(f"Document not found: {document_id}")
+
+        # Strip empties; preserve order; dedup case-insensitively to avoid
+        # creating the same project twice when an agent passes ["Foo", "foo"].
+        seen_lower: set[str] = set()
+        clean_names: list[str] = []
+        for n in project_names:
+            if not isinstance(n, str) or not n.strip():
+                continue
+            stripped = n.strip()
+            key = stripped.lower()
+            if key in seen_lower:
+                continue
+            seen_lower.add(key)
+            clean_names.append(stripped)
+
+        # Resolve names to UUIDs (create missing projects).
+        resolved_ids: list[str] = []
+        for name in clean_names:
+            project = self.get_or_create_project(name)
+            resolved_ids.append(project["id"])
+
+        # Destructive replace via the existing primitive.
+        self.assign_document_projects(document_id, resolved_ids)
+
+        # Audit entry. update-metadata semantics — project membership is part
+        # of the document's structured metadata, not its content.
+        try:
+            self.create_audit_entry(
+                operation="update-metadata",
+                author=author,
+                author_type=author_type,
+                document_id=document_id,
+                description=(
+                    f"Set document projects to [{', '.join(clean_names)}]"
+                    if clean_names
+                    else "Cleared all project memberships"
+                ),
+            )
+        except Exception as exc:
+            logger.warning("set_document_projects: audit entry failed: %s", exc)
+
+        return {
+            "document_id": document_id,
+            "project_ids": resolved_ids,
+            "project_names": clean_names,
+        }
+
     def add_document_to_projects(self, document_id: str, project_ids: list[str]) -> None:
         """Non-destructively add project memberships. Idempotent.
 

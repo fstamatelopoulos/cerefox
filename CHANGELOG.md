@@ -21,53 +21,87 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   MCP and `cerefox-ingest` Edge Function) had a related but different bug:
   they silently *ignored* `project_name` on update, so agents could neither
   destroy memberships nor add them.
-  - **New contract for `project_name` on update (all three paths)**:
-    non-destructive add — "ensure this membership exists, leave others
-    alone." Idempotent if the doc is already in that project.
-  - **`project_ids: [...]`** (the Python-API list form, used by the web UI's
-    explicit `POST /documents/{id}/edit` endpoint) keeps its existing
-    full-set / destructive-replace semantics. Only the agent-facing
-    single-`project_name` path changed.
-  - **Implementation**:
-    - New `CerefoxClient.add_document_to_projects(doc_id, [pid…])` — the
-      non-destructive primitive. Idempotent. Computes the diff against
-      existing memberships and only inserts missing rows.
-    - `IngestionPipeline.ingest_text` no longer collapses single
-      `project_name`/`project_id` into a `project_ids=[uuid]` list when
-      taking an update branch. On update it passes `project_ids=None`
-      (preserving) and then calls the new non-destructive helper for any
-      singular project hint.
-    - Both Edge Functions (`cerefox-ingest/index.ts` and
-      `cerefox-mcp/tools/ingest.ts`) gain a shared
-      `ensureDocumentInProject(supabase, docId, projectName)` helper that
-      resolves the project (creating if absent), checks for existing
-      membership, and inserts only when missing. Called from both update
-      branches (id-based and title-based) and from the create path
-      (refactored for consistency).
-  - **Not implemented in this PR — proposed for follow-up**:
-    - `project_names: string[]` on `cerefox_ingest` for explicit full-set
-      semantics from the MCP layer (today the only way to get full-set
-      semantics is via the Python `project_ids` list or the web UI edit
-      form).
-    - Dedicated metadata-only tool `cerefox_set_document_projects` /
-      `cerefox_add_project` / `cerefox_remove_project` so agents have
-      first-class project-membership write surface independent of content
-      updates. The audit log already enumerates `update-metadata` as a
-      distinct operation type, so the data model is ready.
-  - **Tests**: 12 new unit tests under
-    `tests/ingestion/test_pipeline.py::TestMultiProjectPreservationOnUpdate`
-    + `TestAddDocumentToProjects`. All 495 unit + 80 e2e tests pass against
-    the newly deployed Edge Functions. Live repro against the maintainer's
-    Cerefox instance confirmed: doc that started in two projects survives
-    a content update via `cerefox_ingest` with `project_name="Cerefox"`
-    intact — both project filters return the doc afterwards.
-  - **⚠️ Edge Function redeploy required to pick up the TS fixes** (the
-    Python-side fix takes effect on `git pull` + restarting the local MCP
-    server):
-    ```bash
-    npx supabase functions deploy cerefox-ingest
-    npx supabase functions deploy cerefox-mcp
-    ```
+
+  **The fix is a coordinated set of four pieces** (the full
+  proposal from the issue):
+  - **Part 1**: non-destructive add semantics for singular `project_name`
+    on update across all three paths (local Python MCP, remote MCP,
+    Edge Function).
+  - **Part 2**: parity across the three paths — same contract everywhere.
+  - **Part 3**: new `project_names: string[]` parameter on `cerefox_ingest`
+    for **explicit full-set semantics from the MCP layer**.
+  - **Part 4**: new MCP tool `cerefox_set_document_projects` for
+    **metadata-only project-membership writes** (no content update needed).
+
+  **Final contract on update (all three paths)**:
+
+  | Caller form on update | Behavior |
+  |---|---|
+  | `project_name: "X"` (singular) | **Non-destructive add.** Ensures membership X exists; other memberships untouched. |
+  | `project_names: ["X","Y","Z"]` (list) | **Destructive replace.** Sets the doc's project set to exactly `{X,Y,Z}`. |
+  | `project_ids: ["uuid-a","uuid-b"]` (Python API only) | Same destructive-replace semantics; used by web UI's edit form. |
+  | None of the above | No change to memberships. |
+
+  The destructive `project_ids` form (Python API only) is the web UI's
+  explicit edit contract — preserved. The new `project_names` form
+  gives agents the same full-set semantics by name. Singular
+  `project_name` is the safe-by-default agent path.
+
+  **New MCP tool surface**: `cerefox_set_document_projects(document_id,
+  project_names: string[])` — sets the doc's project membership to
+  exactly the given list, no content write. Empty list clears all
+  memberships. Logged as `update-metadata` in the audit log. Tool count
+  goes from 8 to 9.
+
+  **Implementation**:
+  - New `CerefoxClient.add_document_to_projects(doc_id, [pid…])` — the
+    non-destructive primitive (Part 1). Idempotent.
+  - New `CerefoxClient.set_document_projects(doc_id, project_names,
+    author=..., author_type=...)` — destructive replace by name with
+    audit (Part 4). Case-insensitive dedup; creates missing projects.
+  - `IngestionPipeline.ingest_text` now accepts `project_names: list[str]`
+    (Part 3). Precedence on the resolved set: `project_ids` (Python API
+    list) > `project_names` (name list) > `project_id` (singular) >
+    `project_name` (singular).
+  - Both Edge Functions (`cerefox-ingest/index.ts` and
+    `cerefox-mcp/tools/ingest.ts`) gain two helpers:
+    `ensureDocumentInProject` (non-destructive, Part 1) and
+    `setDocumentProjectsByName` (destructive, Part 3). Both wired into
+    every code path (create + both update branches).
+  - New TS handler `cerefox-mcp/tools/set-document-projects.ts` exposes
+    Part 4 over remote MCP. Registered in `cerefox-mcp/index.ts`.
+  - **Local MCP gap closed**: `cerefox_ingest` on the local Python MCP
+    now also exposes `document_id` (previously local-MCP-only schema gap
+    relative to remote MCP).
+
+  **Tests**: 25 new unit tests across two new classes — 12 from the
+  original fix (`TestMultiProjectPreservationOnUpdate` +
+  `TestAddDocumentToProjects`) and 13 added for Parts 3+4
+  (`TestProjectNamesListParameter` + `TestSetDocumentProjects`). All
+  508 unit + 80 e2e tests pass against the newly deployed Edge
+  Functions. Live verification on the maintainer's Cerefox instance
+  confirmed all four scenarios end-to-end (destructive replace via
+  list, non-destructive add via singular, set-projects via dedicated
+  tool, clear-all via empty list).
+
+  **Documentation**: `AGENT_GUIDE.md` gained a "Project membership
+  semantics" section under `cerefox_ingest` and a full section for
+  `cerefox_set_document_projects`. `AGENT_QUICK_REFERENCE.md` rule #9
+  codifies the non-destructive default. The CLI mapping notes
+  `cerefox_set_document_projects` is MCP-only in v0.1.20 (CLI command
+  in a future release).
+
+  **⚠️ Edge Function redeploy required to pick up the TS fixes** (the
+  Python-side fix takes effect on `git pull` + restarting the local MCP
+  server):
+
+  ```bash
+  npx supabase functions deploy cerefox-ingest
+  npx supabase functions deploy cerefox-mcp
+  ```
+
+  See [`docs/guides/upgrading.md` → Upgrading to v0.1.20](docs/guides/upgrading.md#upgrading-to-v0120-from-v0119----multi-project-preservation-fix)
+  for the full upgrade note.
 
 ### Filed (carried forward, no new code)
 

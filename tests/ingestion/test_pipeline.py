@@ -1065,6 +1065,302 @@ class TestAddDocumentToProjects:
         )
 
 
+# ── Issue #38 follow-up: project_names list parameter (full-set semantics) ────
+
+
+class TestProjectNamesListParameter:
+    """Parts 3 of the issue #38 coordinated fix.
+
+    The new ``project_names: list[str]`` parameter on ``cerefox_ingest`` gives
+    agents explicit full-set semantics — "set the document's project memberships
+    to exactly this list." Wins over the singular ``project_name`` when both are
+    passed. On update, this is a destructive replace (the contract the web UI's
+    edit form already used via ``project_ids``).
+    """
+
+    @pytest.fixture()
+    def existing_doc(self) -> dict:
+        return {
+            "id": "doc-multi",
+            "title": "Multi-Project Note",
+            "content_hash": "oldhash",
+            "metadata": {},
+            "chunk_count": 1,
+            "total_chars": 50,
+            "source_path": "multi.md",
+        }
+
+    # ── Create path: project_names assigns the full set ──────────────────────
+
+    def test_create_with_project_names_assigns_all(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        # get_or_create_project called once per name; assign called with full UUID list
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_or_create_project.side_effect = [
+            {"id": "pid-a", "name": "Cerefox"},
+            {"id": "pid-b", "name": "research"},
+        ]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        result = pipeline.ingest_text(
+            "# T\n\nBody.",
+            title="Multi-Project Note",
+            project_names=["Cerefox", "research"],
+        )
+
+        assert mock_client.get_or_create_project.call_count == 2
+        mock_client.assign_document_projects.assert_called_once_with(
+            "doc-001", ["pid-a", "pid-b"]
+        )
+        assert result.project_ids == ["pid-a", "pid-b"]
+
+    def test_project_names_takes_precedence_over_project_name(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """When both project_names and project_name are passed, the list wins."""
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_or_create_project.side_effect = [
+            {"id": "pid-list-a", "name": "A"},
+            {"id": "pid-list-b", "name": "B"},
+        ]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nBody.",
+            title="X",
+            project_names=["A", "B"],
+            project_name="would-be-ignored",
+        )
+
+        # Only the two names from project_names get resolved
+        assert mock_client.get_or_create_project.call_count == 2
+        mock_client.assign_document_projects.assert_called_once_with(
+            "doc-001", ["pid-list-a", "pid-list-b"]
+        )
+
+    def test_project_ids_still_takes_precedence_over_project_names(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """project_ids is the most direct form; wins even over project_names."""
+        mock_client.get_document_by_hash.return_value = None
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nBody.",
+            title="X",
+            project_ids=["pid-direct"],
+            project_names=["would-be-ignored"],
+        )
+
+        # project_names should NOT be resolved when project_ids is provided
+        mock_client.get_or_create_project.assert_not_called()
+        mock_client.assign_document_projects.assert_called_once_with(
+            "doc-001", ["pid-direct"]
+        )
+
+    # ── Update path: project_names = destructive replace ─────────────────────
+
+    def test_update_existing_with_project_names_replaces(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """On update_existing, project_names is full-set destructive replace."""
+        mock_client.find_document_by_source_path.return_value = None
+        mock_client.find_document_by_title.return_value = existing_doc
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.get_or_create_project.side_effect = [
+            {"id": "pid-x", "name": "X"},
+            {"id": "pid-y", "name": "Y"},
+        ]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nBody.",
+            title="Multi-Project Note",
+            update_existing=True,
+            project_names=["X", "Y"],
+        )
+
+        # Destructive primitive called with the resolved list (full-set replace)
+        mock_client.assign_document_projects.assert_called_once_with(
+            "doc-multi", ["pid-x", "pid-y"]
+        )
+        # Non-destructive add primitive NOT called (list form short-circuits it)
+        mock_client.add_document_to_projects.assert_not_called()
+
+    def test_document_id_branch_with_project_names_replaces(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """Same for the document_id update branch."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = []
+        mock_client.get_or_create_project.return_value = {"id": "pid-only", "name": "Only"}
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nBody.",
+            title="Multi-Project Note",
+            document_id="doc-multi",
+            project_names=["Only"],
+        )
+
+        mock_client.assign_document_projects.assert_called_once_with("doc-multi", ["pid-only"])
+        mock_client.add_document_to_projects.assert_not_called()
+
+    def test_update_with_empty_project_names_clears_all(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """Empty project_names list = remove from all projects (matches assign contract)."""
+        mock_client.find_document_by_source_path.return_value = None
+        mock_client.find_document_by_title.return_value = existing_doc
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = []
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nBody.",
+            title="Multi-Project Note",
+            update_existing=True,
+            project_names=[],
+        )
+
+        # Empty list → assign called with [] (the documented "clear all" form)
+        mock_client.assign_document_projects.assert_called_once_with("doc-multi", [])
+
+    def test_project_names_empty_strings_filtered(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """Empty-string entries are dropped, same as project_ids."""
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.get_or_create_project.return_value = {"id": "pid-x", "name": "X"}
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nBody.",
+            title="X",
+            project_names=["", "X", ""],
+        )
+
+        # Only 'X' was resolved
+        assert mock_client.get_or_create_project.call_count == 1
+        mock_client.assign_document_projects.assert_called_once_with("doc-001", ["pid-x"])
+
+
+# ── Issue #38 follow-up: CerefoxClient.set_document_projects (Part 4) ─────────
+
+
+class TestSetDocumentProjects:
+    """Unit tests for the new CerefoxClient.set_document_projects method.
+
+    Backs the new cerefox_set_document_projects MCP tool. Semantics:
+      - Verify document exists (raise on missing).
+      - Resolve each project name (create if absent), dedup case-insensitively.
+      - Destructive replace via assign_document_projects.
+      - Audit entry with operation=update-metadata.
+    """
+
+    @pytest.fixture()
+    def client_with_mocks(self):
+        from cerefox.db.client import CerefoxClient
+
+        client = CerefoxClient.__new__(CerefoxClient)
+        client._client = MagicMock()
+        # Replace the methods we exercise with mocks; we test the orchestration,
+        # not the underlying primitives (which have their own tests).
+        client.get_document_by_id = MagicMock(return_value={"id": "doc-1", "title": "T"})
+        client.get_or_create_project = MagicMock()
+        client.assign_document_projects = MagicMock()
+        client.create_audit_entry = MagicMock()
+        return client
+
+    def test_resolves_names_and_replaces(self, client_with_mocks) -> None:
+        client_with_mocks.get_or_create_project.side_effect = [
+            {"id": "pid-a", "name": "Cerefox"},
+            {"id": "pid-b", "name": "research"},
+        ]
+
+        result = client_with_mocks.set_document_projects(
+            "doc-1", ["Cerefox", "research"], author="test", author_type="agent",
+        )
+
+        # Each name resolved exactly once
+        assert client_with_mocks.get_or_create_project.call_count == 2
+        # Destructive replace called with the resolved UUIDs in order
+        client_with_mocks.assign_document_projects.assert_called_once_with(
+            "doc-1", ["pid-a", "pid-b"],
+        )
+        # Audit entry created with update-metadata operation
+        audit_call = client_with_mocks.create_audit_entry.call_args
+        assert audit_call.kwargs["operation"] == "update-metadata"
+        assert audit_call.kwargs["document_id"] == "doc-1"
+        assert "Cerefox" in audit_call.kwargs["description"]
+        assert "research" in audit_call.kwargs["description"]
+        # Return shape
+        assert result["document_id"] == "doc-1"
+        assert result["project_ids"] == ["pid-a", "pid-b"]
+        assert result["project_names"] == ["Cerefox", "research"]
+
+    def test_empty_list_clears_all_memberships(self, client_with_mocks) -> None:
+        result = client_with_mocks.set_document_projects(
+            "doc-1", [], author="test", author_type="agent",
+        )
+
+        # No project resolution
+        client_with_mocks.get_or_create_project.assert_not_called()
+        # Destructive replace called with empty list (the documented "clear all" form)
+        client_with_mocks.assign_document_projects.assert_called_once_with("doc-1", [])
+        # Audit entry mentions clearing
+        audit_call = client_with_mocks.create_audit_entry.call_args
+        assert "Cleared" in audit_call.kwargs["description"]
+        assert result["project_ids"] == []
+        assert result["project_names"] == []
+
+    def test_raises_when_document_not_found(self, client_with_mocks) -> None:
+        client_with_mocks.get_document_by_id.return_value = None
+        with pytest.raises(ValueError, match="not found"):
+            client_with_mocks.set_document_projects("missing", ["any"])
+
+    def test_case_insensitive_dedup(self, client_with_mocks) -> None:
+        """Passing ['Foo', 'foo', 'FOO'] should resolve only one project."""
+        client_with_mocks.get_or_create_project.return_value = {"id": "pid-foo", "name": "Foo"}
+
+        result = client_with_mocks.set_document_projects(
+            "doc-1", ["Foo", "foo", "FOO"], author="test", author_type="agent",
+        )
+
+        assert client_with_mocks.get_or_create_project.call_count == 1
+        # Only the first form (with original casing) is kept
+        assert result["project_names"] == ["Foo"]
+        assert result["project_ids"] == ["pid-foo"]
+
+    def test_empty_string_names_filtered(self, client_with_mocks) -> None:
+        client_with_mocks.get_or_create_project.return_value = {"id": "pid-x", "name": "X"}
+        result = client_with_mocks.set_document_projects(
+            "doc-1", ["", "X", "   ", "X"], author="test", author_type="agent",
+        )
+        assert result["project_names"] == ["X"]
+        assert result["project_ids"] == ["pid-x"]
+
+    def test_audit_failure_does_not_break_call(self, client_with_mocks) -> None:
+        """If the audit entry fails (e.g., RLS), the project set still succeeds."""
+        client_with_mocks.get_or_create_project.return_value = {"id": "pid-a", "name": "A"}
+        client_with_mocks.create_audit_entry.side_effect = RuntimeError("audit logging down")
+
+        # Should not raise — audit failure is logged but swallowed
+        result = client_with_mocks.set_document_projects(
+            "doc-1", ["A"], author="test", author_type="agent",
+        )
+        assert result["project_ids"] == ["pid-a"]
+        client_with_mocks.assign_document_projects.assert_called_once_with("doc-1", ["pid-a"])
+
+
 # ── Title boosting (17A) ──────────────────────────────────────────────────────
 
 

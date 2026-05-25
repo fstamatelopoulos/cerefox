@@ -24,7 +24,7 @@ The rest of this guide is written around the MCP tool names, since those are sta
 
 ---
 
-## The 8 Tools
+## The 9 Tools
 
 ### cerefox_search
 
@@ -58,7 +58,8 @@ Save a new document or update an existing one.
 | `content` | Yes | Markdown content. Use H1/H2/H3 headings -- the chunker uses them for segmentation. |
 | `document_id` | No | UUID of an existing document to update. When provided, updates that document directly regardless of `update_if_exists`. Returns an error if the document does not exist. Workflow: search → note the `[id: ...]` → pass here. |
 | `update_if_exists` | No | When `true`, updates the document with the same title (versions the old content). Default `false`. Ignored when `document_id` is provided. |
-| `project_name` | No | Assign to a project (created automatically if it doesn't exist). |
+| `project_name` | No | **Single** project name (created if absent). On update: **non-destructive add** — ensures this membership exists, preserves others. See "Project membership semantics" below. |
+| `project_names` | No | **List** of project names (each created if absent). On update: **destructive replace** — sets the document's full project set to exactly this list. Use when you want to set multiple projects at once, or deliberately change the membership list. Wins over `project_name` when both are passed. |
 | `metadata` | No | Arbitrary JSON. Use at minimum: `type` and `status`. |
 | `author` | No | Your agent name for audit attribution. Always set this. |
 | `source` | No | Origin label (default "agent"). |
@@ -76,6 +77,18 @@ Save a new document or update an existing one.
 **Deduplication**: Content is SHA-256 hashed. Identical content is skipped (no re-indexing). Metadata-only changes update metadata without creating a version.
 
 **What to ingest**: Distilled summaries, decisions with rationale, curated insights. Not raw dumps, logs, or transcripts. Use Markdown headings for structure.
+
+#### Project membership semantics
+
+This is subtle but important — a document can belong to multiple projects (many-to-many), and an operator may have curated the project list via the web UI. **You must not silently strip their work when updating content.** The rules:
+
+| What you pass on update | What happens to memberships |
+|---|---|
+| `project_name: "X"` (singular) | **Non-destructive add.** Ensures the doc is in project X. Other memberships untouched. |
+| `project_names: ["X", "Y"]` (list) | **Destructive replace.** Sets the doc's project set to exactly `{X, Y}`. Other memberships are removed. Use when you want this. |
+| Neither | **No change** to project memberships. |
+
+**Rule of thumb**: if you just want to ensure a doc is *associated with* a project, use singular `project_name`. If you want to *change* the project list, use `project_names`. If you don't know — use singular. When in doubt, use the dedicated `cerefox_set_document_projects` tool, which makes the destructive replace intent explicit and doesn't require also writing content.
 
 ---
 
@@ -148,6 +161,28 @@ List all projects with names, IDs, and descriptions.
 | `requestor` | No | Your agent name. |
 
 Call once per session to discover available projects before filtering search results by `project_name`.
+
+---
+
+### cerefox_set_document_projects
+
+Set the document's project memberships to EXACTLY the given list. **Destructive replace.** Any existing memberships not in the list are removed. Content is untouched. Logged as `update-metadata` in the audit log.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `document_id` | Yes | UUID of the document. Get from a prior `cerefox_search` result (the `[id: ...]` tag). |
+| `project_names` | Yes | Explicit list of project names. Each created if absent (case-insensitive lookup). Empty list = clear all memberships. Order is preserved. |
+| `author` | No | Your agent name for audit attribution. |
+
+**Use cases**:
+- You want to change project membership without rewriting the document body. This tool is faster and clearer than calling `cerefox_ingest` again.
+- You want to add a doc to multiple projects in one call (cleaner than N separate `cerefox_ingest` calls).
+- You want to *remove* a project from a doc's set (use the list of remaining projects without the one to drop).
+- An operator asked you to consolidate or clean up a doc's project list.
+
+**Use `cerefox_ingest` with `project_names` instead** if you're updating the content anyway — same destructive-replace semantics, one call instead of two.
+
+**Never use this tool to "just ensure X is in the list"** — that's what `cerefox_ingest` with singular `project_name` does, non-destructively. If you call this tool with only one name, you will REMOVE the document from every other project it was in.
 
 ---
 

@@ -61,6 +61,52 @@ open http://localhost:8000/app/
 
 Most upgrades require no special steps beyond the standard checklist above. Notes below only apply when upgrading across specific version boundaries.
 
+### Upgrading to v0.1.20 (from v0.1.19) -- Multi-Project Preservation Fix
+
+**Edge Function redeploy is required.** v0.1.20 fixes
+[issue #38](https://github.com/fstamatelopoulos/cerefox/issues/38): `cerefox_ingest`
+no longer destructively replaces multi-project memberships when an agent updates
+content with a single `project_name`. It also adds a new `project_names: string[]`
+parameter for explicit full-set semantics and a new MCP tool
+`cerefox_set_document_projects` for first-class agent control over project
+membership independent of content updates.
+
+The fix touches two Edge Functions in `supabase/functions/`. Pulling the new
+code does **not** apply the TS changes to your live Supabase. After `git pull`,
+step 6 of the standard checklist (Edge Function redeploy) is **mandatory for
+this release**:
+
+```bash
+npx supabase functions deploy cerefox-ingest
+npx supabase functions deploy cerefox-mcp
+```
+
+**If you skip this step**: the Python pipeline fix still applies on next local
+MCP server restart, so the destructive bug is fixed for the local Python MCP
+path. But the **remote MCP** (Claude.ai, ChatGPT Custom GPT via OpenAPI, any
+HTTP MCP client pointed at `cerefox-mcp` Edge Function) and the **direct
+`cerefox-ingest` Edge Function** path will still silently ignore `project_name`
+on update — non-destructive, but agents can't add a membership via that path.
+And the new `cerefox_set_document_projects` MCP tool won't appear in the remote
+MCP tool list until `cerefox-mcp` is redeployed.
+
+**No schema migration, no RPC redeploy, no chunk reindex** needed. The fix is
+purely application-layer; the underlying junction table (`cerefox_document_projects`)
+and its many-to-many semantics were always correct. Only the write surface had bugs.
+
+**New behaviour to be aware of (no breaking changes)**:
+- `cerefox_ingest` with `project_name="X"` on update → ensures membership in X,
+  preserves all others (was: destructive replace in local MCP / silent ignore in TS).
+- `cerefox_ingest` with `project_names=["X","Y","Z"]` (new) on update → sets
+  full project set to exactly {X, Y, Z}; opt-in to destructive replace.
+- `cerefox_ingest` with neither → no membership changes.
+- `cerefox_set_document_projects(document_id, project_names=["X","Y"])` (new tool)
+  → explicit metadata-only write of the full project set. Logged as
+  `update-metadata` in the audit log.
+
+Architectural rationale: see the cerefox#38 PR commit message and
+[`docs/solution-design.md`](../solution-design.md).
+
 ### Upgrading to v0.1.19 (from v0.1.18) -- FTS Query Parser
 
 **RPC redeploy is required.** v0.1.19 changes the FTS query parser used by
