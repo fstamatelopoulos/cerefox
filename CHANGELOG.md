@@ -103,6 +103,20 @@ Shipped via [PR #37](https://github.com/fstamatelopoulos/cerefox/pull/37).
     `AGENT_GUIDE.md` (four supported link forms, the spaces-break-markdown
     gotcha, why explicit link text matters), one-liner rule #8 in
     `AGENT_QUICK_REFERENCE.md`, brief mention in `connect-agents.md` Path C.
+  - **2026-05-24 agent-guidance refinement**: AGENT_GUIDE.md "Writing
+    linkable content" rewritten to make `[Text](document-uuid)` **the only
+    recommended pattern for agent-authored cross-references**. Title-based
+    linking (`[Text](<Title With Spaces>)`) is now documented as fragile
+    (silently navigates to wrong page when the title contains colons,
+    parentheses, ampersands, or other punctuation that react-markdown's
+    URL sanitizer treats as suspicious schemes — e.g. a title of "Published
+    Article: CrewAI" has the `:` interpreted as a scheme separator;
+    sanitizer strips the URL; click goes to current page). The resolver
+    code is unchanged — tier 3 (title substring) still works for plain
+    titles, but the agent guidance no longer advertises it. Failed-link
+    popover gains a teaching message: *"For reliable cross-references,
+    link by ID: `[Text](document-uuid)`. Search results show the UUID
+    after each title."* AGENT_QUICK_REFERENCE.md rule #8 tightened to match.
 
 ### Changed
 

@@ -153,6 +153,10 @@ export function MarkdownLink({ href, children, fromDocId, ...rest }: MarkdownLin
             <Text size="xs" c="dimmed">
               The path didn't match a source file or document title in the knowledge base.
             </Text>
+            <Text size="xs" c="dimmed">
+              For reliable cross-references, link by ID: <Text component="span" ff="monospace">[Text](document-uuid)</Text>.
+              Search results show the UUID after each title.
+            </Text>
             <Button
               size="xs"
               variant="light"
