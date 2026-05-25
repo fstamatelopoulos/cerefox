@@ -288,6 +288,62 @@ async function sha256hex(text: string): Promise<string> {
     .join("");
 }
 
+// ── Non-destructive project membership helper ─────────────────────────────
+//
+// Per issue #38: on UPDATE flows, passing project_name must not silently
+// strip existing memberships. Semantics:
+//   - Look up (or create) the project by name → project_id.
+//   - If (document_id, project_id) row already exists → no-op (idempotent).
+//   - Otherwise INSERT a new row, preserving all other existing memberships.
+//
+// Used by both update branches AND the create path so resolution is consistent.
+
+// deno-lint-ignore no-explicit-any
+async function ensureDocumentInProject(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  documentId: string,
+  projectName: string,
+): Promise<string | null> {
+  // Resolve project name → id (look up; create if absent).
+  let projectId: string | null = null;
+  const { data: proj } = await supabase
+    .from("cerefox_projects")
+    .select("id")
+    .ilike("name", projectName)
+    .limit(1);
+  if (proj?.length) {
+    projectId = proj[0].id;
+  } else {
+    const { data: newProj } = await supabase
+      .from("cerefox_projects")
+      .insert({ name: projectName })
+      .select("id");
+    projectId = newProj?.[0]?.id ?? null;
+  }
+  if (!projectId) return null;
+
+  // Check membership; INSERT only if missing. PRIMARY KEY (document_id, project_id)
+  // guarantees uniqueness, so this is safe under concurrent calls (worst case:
+  // one of two concurrent inserts fails with 23505 unique_violation — we log
+  // and treat as "already a member"; outcome is identical).
+  const { data: existing } = await supabase
+    .from("cerefox_document_projects")
+    .select("document_id")
+    .eq("document_id", documentId)
+    .eq("project_id", projectId)
+    .limit(1);
+  if (existing?.length) return projectId;  // Already a member — non-destructive
+
+  const { error: insertErr } = await supabase
+    .from("cerefox_document_projects")
+    .insert({ document_id: documentId, project_id: projectId });
+  if (insertErr && !String(insertErr.message ?? "").includes("duplicate key")) {
+    console.warn("ensureDocumentInProject: insert failed", insertErr);
+  }
+  return projectId;
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -453,6 +509,13 @@ Deno.serve(async (req: Request) => {
       p_result_count: chunks.length,
     })).catch(() => {});
 
+    // Non-destructive project membership add (issue #38). If project_name is
+    // provided on an update, ensure the document is in that project without
+    // touching existing memberships.
+    if (project_name) {
+      await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+    }
+
     const note = update_if_exists ? undefined : "update_if_exists flag was overridden by document_id";
     return new Response(
       JSON.stringify({
@@ -553,6 +616,11 @@ Deno.serve(async (req: Request) => {
         p_result_count: chunks.length,
       })).catch(() => {});
 
+      // Non-destructive project membership add (issue #38).
+      if (project_name) {
+        await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+      }
+
       return new Response(
         JSON.stringify({
           document_id: existingDoc.id,
@@ -642,30 +710,12 @@ Deno.serve(async (req: Request) => {
 
   const documentId = ingestResult[0].document_id;
 
-  // Resolve / create project if requested (separate from ingestion -- pure CRUD)
+  // Resolve / create project if requested (separate from ingestion -- pure CRUD).
+  // Uses the shared non-destructive helper so create + update paths behave
+  // identically with respect to membership semantics (issue #38).
   let projectId: string | null = null;
   if (project_name) {
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", project_name)
-      .limit(1);
-
-    if (proj?.length) {
-      projectId = proj[0].id;
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name: project_name })
-        .select("id");
-      projectId = newProj?.[0]?.id ?? null;
-    }
-
-    if (projectId) {
-      await supabase
-        .from("cerefox_document_projects")
-        .insert({ document_id: documentId, project_id: projectId });
-    }
+    projectId = await ensureDocumentInProject(supabase, documentId, project_name);
   }
 
   // Fire-and-forget usage logging for ingest

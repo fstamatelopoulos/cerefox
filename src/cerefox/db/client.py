@@ -476,6 +476,11 @@ class CerefoxClient:
 
         Deletes existing associations then inserts the new set.
         Pass an empty list to remove the document from all projects.
+
+        DESTRUCTIVE. Use ``add_document_to_projects`` for non-destructive
+        additions that preserve existing memberships (the right choice when
+        the caller is updating content and only intends to ensure one project
+        membership exists — see issue #38).
         """
         try:
             self.client.table("cerefox_document_projects").delete().eq(
@@ -487,6 +492,32 @@ class CerefoxClient:
         except Exception as exc:
             logger.error("assign_document_projects failed: %s", exc)
             raise RuntimeError(f"assign_document_projects failed: {exc}") from exc
+
+    def add_document_to_projects(self, document_id: str, project_ids: list[str]) -> None:
+        """Non-destructively add project memberships. Idempotent.
+
+        Inserts rows for any ``(document_id, project_id)`` pair not already
+        present. Existing memberships are preserved. Pass an empty list to
+        no-op.
+
+        This is the right primitive for content-update flows where a single
+        ``project_name`` was supplied: the intent is "ensure this membership
+        exists" not "set the full membership list". See ``assign_document_projects``
+        for the destructive replace path used by the web UI's explicit
+        project-edit form.
+        """
+        if not project_ids:
+            return
+        try:
+            existing = set(self.get_document_project_ids(document_id))
+            new_ids = [pid for pid in project_ids if pid and pid not in existing]
+            if not new_ids:
+                return  # All requested memberships already exist — idempotent
+            rows = [{"document_id": document_id, "project_id": pid} for pid in new_ids]
+            self.client.table("cerefox_document_projects").insert(rows).execute()
+        except Exception as exc:
+            logger.error("add_document_to_projects failed: %s", exc)
+            raise RuntimeError(f"add_document_to_projects failed: {exc}") from exc
 
     def get_projects_for_documents(
         self,

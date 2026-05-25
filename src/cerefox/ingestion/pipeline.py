@@ -134,21 +134,38 @@ class IngestionPipeline:
         # ── ID-based update (explicit document_id provided) ───────────────────
         # Bypasses title lookup and hash dedup -- the caller explicitly named
         # which document to update.  Errors if the document does not exist.
+        #
+        # Project semantics on update (per issue #38):
+        # - ``project_ids=[…]`` (an explicit list, even one-element): full-set
+        #   semantics — destructive replace. Used by the web UI's edit form.
+        # - ``project_name`` / ``project_id`` (singular): non-destructive add
+        #   — "ensure this membership exists, leave others alone." This is
+        #   the agent-facing path; agents must not be able to silently strip
+        #   project memberships an operator added via the web UI.
         if document_id is not None:
             existing_doc = self._client.get_document_by_id(document_id)
             if existing_doc is None:
                 raise ValueError(f"Document not found: {document_id}")
-            resolved_ids = self._resolve_project_ids(project_ids, project_id, project_name)
             result = self.update_document(
                 document_id=document_id,
                 text=text,
                 title=title,
                 source=source,
-                project_ids=resolved_ids if resolved_ids else None,
+                # Only the explicit list form propagates as a full-set replace.
+                # Singular project_name/project_id are handled non-destructively below.
+                project_ids=project_ids if project_ids is not None else None,
                 metadata=metadata,
                 author=author,
                 author_type=author_type,
             )
+            # Non-destructive add for singular project_name / project_id on update.
+            if project_ids is None and (project_id or project_name):
+                singular_resolved = self._resolve_project_ids(
+                    project_ids=None, project_id=project_id, project_name=project_name,
+                )
+                if singular_resolved:
+                    self._client.add_document_to_projects(document_id, singular_resolved)
+                    result.project_ids = self._client.get_document_project_ids(document_id)
             if not update_existing:
                 result.note = "document_id provided; update_if_exists flag was overridden"
             return result
@@ -167,17 +184,26 @@ class IngestionPipeline:
                     existing_doc["id"],
                     lookup_key,
                 )
-                resolved_ids = self._resolve_project_ids(project_ids, project_id, project_name)
-                return self.update_document(
+                # Same semantics as the document_id branch: explicit list = full set,
+                # singular project_name/project_id = non-destructive add (issue #38).
+                result = self.update_document(
                     document_id=existing_doc["id"],
                     text=text,
                     title=title,
                     source=source,
-                    project_ids=resolved_ids if resolved_ids else None,
+                    project_ids=project_ids if project_ids is not None else None,
                     metadata=metadata,
                     author=author,
                     author_type=author_type,
                 )
+                if project_ids is None and (project_id or project_name):
+                    singular_resolved = self._resolve_project_ids(
+                        project_ids=None, project_id=project_id, project_name=project_name,
+                    )
+                    if singular_resolved:
+                        self._client.add_document_to_projects(existing_doc["id"], singular_resolved)
+                        result.project_ids = self._client.get_document_project_ids(existing_doc["id"])
+                return result
             log.info("update_existing: no existing doc found — creating new document")
 
         # Resolve project_ids from the various caller styles.
