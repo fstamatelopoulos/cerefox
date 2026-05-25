@@ -39,6 +39,7 @@ def mock_client() -> MagicMock:
     client.get_or_create_project.return_value = {"id": "proj-001", "name": "work"}
     client.get_document_project_ids.return_value = []
     client.assign_document_projects.return_value = None
+    client.add_document_to_projects.return_value = None
     # By default no metadata keys registered (validation passthrough)
     client.list_metadata_keys.return_value = []
     # Snapshot version (used by update path via RPC now, but mock for direct calls)
@@ -792,6 +793,276 @@ class TestUpdateExisting:
 
         assert result.document_id == "doc-existing"
         mock_client.ingest_document_rpc.assert_called_once()
+
+
+# ── Issue #38: multi-project preservation on update ───────────────────────────
+
+
+class TestMultiProjectPreservationOnUpdate:
+    """Issue #38 — content updates via cerefox_ingest must not strip project
+    memberships added by the human via the web UI.
+
+    Contract recap (from pipeline.update_document docstring + the issue):
+      • ``project_ids`` (an explicit list, even one-element) on update = full-set
+        semantics. Destructive replace. Used by the web UI's explicit edit form.
+      • ``project_name`` / ``project_id`` (singular) on update = non-destructive
+        add. "Ensure this membership exists, leave others alone." This is the
+        path agents use via ``cerefox_ingest``.
+
+    The bug was that ``ingest_text`` resolved the singular ``project_name`` into
+    a one-element list and handed it to ``update_document`` as if it were a
+    full-set replace. This test class locks down the correct behaviour.
+    """
+
+    @pytest.fixture()
+    def existing_doc(self) -> dict:
+        return {
+            "id": "doc-multi",
+            "title": "Multi-Project Note",
+            "content_hash": "oldhash",
+            "metadata": {},
+            "chunk_count": 1,
+            "total_chars": 50,
+            "source_path": "multi.md",
+        }
+
+    # ── document_id branch (explicit ID update) ──────────────────────────────
+
+    def test_document_id_update_with_project_name_does_not_assign(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """Singular project_name on document_id-update: assign_document_projects MUST NOT fire."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = ["proj-a", "proj-b"]
+        mock_client.get_or_create_project.return_value = {"id": "proj-a", "name": "Cerefox"}
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nNew content.", title="Multi-Project Note",
+            document_id="doc-multi", project_name="Cerefox",
+        )
+
+        # The destructive primitive must not be called — that was the bug.
+        mock_client.assign_document_projects.assert_not_called()
+        # The non-destructive primitive should be called instead.
+        mock_client.add_document_to_projects.assert_called_once_with("doc-multi", ["proj-a"])
+
+    def test_document_id_update_with_project_name_preserves_other_memberships(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """The final result reports ALL memberships, not just the one passed in."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        # First call (inside update_document — but project_ids=None so unused);
+        # second call (after non-destructive add) returns the full set.
+        mock_client.get_document_project_ids.return_value = ["proj-a", "proj-b"]
+        mock_client.get_or_create_project.return_value = {"id": "proj-a", "name": "Cerefox"}
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        result = pipeline.ingest_text(
+            "# T\n\nNew content.", title="Multi-Project Note",
+            document_id="doc-multi", project_name="Cerefox",
+        )
+
+        # cfcf membership (proj-b) survived; both projects show in the result.
+        assert set(result.project_ids) == {"proj-a", "proj-b"}
+
+    def test_document_id_update_with_explicit_project_ids_list_is_destructive(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """Explicit project_ids list keeps destructive semantics — that's the web-UI contract."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = ["proj-a"]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nNew content.", title="Multi-Project Note",
+            document_id="doc-multi", project_ids=["proj-a"],
+        )
+
+        # Destructive: list form = full set semantics
+        mock_client.assign_document_projects.assert_called_once_with("doc-multi", ["proj-a"])
+        mock_client.add_document_to_projects.assert_not_called()
+
+    def test_document_id_update_with_no_project_info_calls_nothing(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """No project_name, no project_ids → neither primitive called; existing memberships untouched."""
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = ["proj-a", "proj-b"]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nNew content.", title="Multi-Project Note", document_id="doc-multi",
+        )
+
+        mock_client.assign_document_projects.assert_not_called()
+        mock_client.add_document_to_projects.assert_not_called()
+
+    # ── update_existing branch (title / source_path lookup) ──────────────────
+
+    def test_update_existing_with_project_name_does_not_assign(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """Same non-destructive contract on the update_existing branch."""
+        mock_client.find_document_by_source_path.return_value = None
+        mock_client.find_document_by_title.return_value = existing_doc
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = ["proj-a", "proj-b"]
+        mock_client.get_or_create_project.return_value = {"id": "proj-a", "name": "Cerefox"}
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nNew content.", title="Multi-Project Note",
+            update_existing=True, project_name="Cerefox",
+        )
+
+        mock_client.assign_document_projects.assert_not_called()
+        mock_client.add_document_to_projects.assert_called_once_with("doc-multi", ["proj-a"])
+
+    def test_update_existing_with_explicit_project_ids_list_is_destructive(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        """Explicit list on the update_existing branch: destructive replace, same as document_id branch."""
+        mock_client.find_document_by_source_path.return_value = None
+        mock_client.find_document_by_title.return_value = existing_doc
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = ["proj-a"]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nNew content.", title="Multi-Project Note",
+            update_existing=True, project_ids=["proj-a"],
+        )
+
+        mock_client.assign_document_projects.assert_called_once_with("doc-multi", ["proj-a"])
+        mock_client.add_document_to_projects.assert_not_called()
+
+    def test_update_existing_with_no_project_info_calls_nothing(
+        self, pipeline, mock_client, mock_embedder, existing_doc
+    ) -> None:
+        mock_client.find_document_by_source_path.return_value = None
+        mock_client.find_document_by_title.return_value = existing_doc
+        mock_client.get_document_by_id.return_value = existing_doc
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.update_document.return_value = existing_doc
+        mock_client.get_document_project_ids.return_value = ["proj-a", "proj-b"]
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nNew content.", title="Multi-Project Note", update_existing=True,
+        )
+
+        mock_client.assign_document_projects.assert_not_called()
+        mock_client.add_document_to_projects.assert_not_called()
+
+    # ── CREATE path: project_name still goes to assign (no existing memberships) ──
+
+    def test_create_path_with_project_name_still_uses_assign(
+        self, pipeline, mock_client, mock_embedder
+    ) -> None:
+        """Create path is unchanged — single project_name → assign_document_projects.
+
+        On a brand-new doc there are no existing memberships to preserve, so the
+        destructive primitive is harmless and we keep the create-path code path
+        as-is.
+        """
+        mock_client.get_document_by_hash.return_value = None
+        mock_client.find_document_by_source_path.return_value = None
+        mock_client.find_document_by_title.return_value = None
+        mock_client.get_or_create_project.return_value = {"id": "proj-new", "name": "Cerefox"}
+        mock_embedder.embed_batch.return_value = [[0.0] * 768]
+
+        pipeline.ingest_text(
+            "# T\n\nNew content.", title="Brand New",
+            project_name="Cerefox",
+        )
+
+        # Create path uses assign with the resolved single-id list — that's fine
+        # because there's nothing to preserve on a fresh document.
+        mock_client.assign_document_projects.assert_called_once_with("doc-001", ["proj-new"])
+        mock_client.add_document_to_projects.assert_not_called()
+
+
+# ── Issue #38: CerefoxClient.add_document_to_projects ─────────────────────────
+
+
+class TestAddDocumentToProjects:
+    """Unit tests for the new non-destructive primitive on the DB client."""
+
+    @pytest.fixture()
+    def client_with_table(self):
+        """Build a minimal CerefoxClient with a mocked supabase .table() chain.
+
+        The ``.client`` attribute is a lazy property backed by ``_client`` —
+        set the underlying field directly to bypass the Supabase init.
+        """
+        from cerefox.db.client import CerefoxClient
+
+        client = CerefoxClient.__new__(CerefoxClient)
+        client._client = MagicMock()
+        return client
+
+    def test_no_op_on_empty_list(self, client_with_table) -> None:
+        client_with_table.add_document_to_projects("doc-1", [])
+        client_with_table.client.table.assert_not_called()
+
+    def test_inserts_only_missing_memberships(self, client_with_table) -> None:
+        """If the doc is already in proj-a and we ask for [proj-a, proj-b], only proj-b is inserted."""
+        # First .table() call: get_document_project_ids → returns {proj-a}
+        select_chain = MagicMock()
+        select_chain.select.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"project_id": "proj-a"}]
+        )
+        # Second .table() call: insert
+        insert_chain = MagicMock()
+        insert_chain.insert.return_value.execute.return_value = MagicMock(data=[])
+        client_with_table.client.table.side_effect = [select_chain, insert_chain]
+
+        client_with_table.add_document_to_projects("doc-1", ["proj-a", "proj-b"])
+
+        # The insert call should only include proj-b (proj-a was already a member)
+        insert_chain.insert.assert_called_once_with(
+            [{"document_id": "doc-1", "project_id": "proj-b"}]
+        )
+
+    def test_no_insert_when_all_already_members(self, client_with_table) -> None:
+        """If everything requested is already a member, no insert call is made."""
+        select_chain = MagicMock()
+        select_chain.select.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"project_id": "proj-a"}, {"project_id": "proj-b"}]
+        )
+        client_with_table.client.table.return_value = select_chain
+
+        client_with_table.add_document_to_projects("doc-1", ["proj-a", "proj-b"])
+
+        # Only one .table() call — the SELECT. No INSERT.
+        assert client_with_table.client.table.call_count == 1
+
+    def test_empty_string_project_ids_filtered_out(self, client_with_table) -> None:
+        """Empty-string entries are stripped, same as assign_document_projects's contract."""
+        select_chain = MagicMock()
+        select_chain.select.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+        insert_chain = MagicMock()
+        insert_chain.insert.return_value.execute.return_value = MagicMock(data=[])
+        client_with_table.client.table.side_effect = [select_chain, insert_chain]
+
+        client_with_table.add_document_to_projects("doc-1", ["", "proj-a", ""])
+
+        insert_chain.insert.assert_called_once_with(
+            [{"document_id": "doc-1", "project_id": "proj-a"}]
+        )
 
 
 # ── Title boosting (17A) ──────────────────────────────────────────────────────

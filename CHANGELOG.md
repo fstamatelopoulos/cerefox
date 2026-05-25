@@ -9,14 +9,74 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap. No new code yet — the next batch of work is being scoped:
+### Fixed
+
+- **[cerefox#38](https://github.com/fstamatelopoulos/cerefox/issues/38) —
+  `cerefox_ingest` no longer strips multi-project memberships on content
+  update.** Previously, a content update through the local Python MCP
+  with `update_if_exists: true` (or via the document_id update path) and a
+  single `project_name` destructively replaced the document's project
+  associations with just that one project — silently wiping any extra
+  memberships an operator added via the web UI. The two TS paths (remote
+  MCP and `cerefox-ingest` Edge Function) had a related but different bug:
+  they silently *ignored* `project_name` on update, so agents could neither
+  destroy memberships nor add them.
+  - **New contract for `project_name` on update (all three paths)**:
+    non-destructive add — "ensure this membership exists, leave others
+    alone." Idempotent if the doc is already in that project.
+  - **`project_ids: [...]`** (the Python-API list form, used by the web UI's
+    explicit `POST /documents/{id}/edit` endpoint) keeps its existing
+    full-set / destructive-replace semantics. Only the agent-facing
+    single-`project_name` path changed.
+  - **Implementation**:
+    - New `CerefoxClient.add_document_to_projects(doc_id, [pid…])` — the
+      non-destructive primitive. Idempotent. Computes the diff against
+      existing memberships and only inserts missing rows.
+    - `IngestionPipeline.ingest_text` no longer collapses single
+      `project_name`/`project_id` into a `project_ids=[uuid]` list when
+      taking an update branch. On update it passes `project_ids=None`
+      (preserving) and then calls the new non-destructive helper for any
+      singular project hint.
+    - Both Edge Functions (`cerefox-ingest/index.ts` and
+      `cerefox-mcp/tools/ingest.ts`) gain a shared
+      `ensureDocumentInProject(supabase, docId, projectName)` helper that
+      resolves the project (creating if absent), checks for existing
+      membership, and inserts only when missing. Called from both update
+      branches (id-based and title-based) and from the create path
+      (refactored for consistency).
+  - **Not implemented in this PR — proposed for follow-up**:
+    - `project_names: string[]` on `cerefox_ingest` for explicit full-set
+      semantics from the MCP layer (today the only way to get full-set
+      semantics is via the Python `project_ids` list or the web UI edit
+      form).
+    - Dedicated metadata-only tool `cerefox_set_document_projects` /
+      `cerefox_add_project` / `cerefox_remove_project` so agents have
+      first-class project-membership write surface independent of content
+      updates. The audit log already enumerates `update-metadata` as a
+      distinct operation type, so the data model is ready.
+  - **Tests**: 12 new unit tests under
+    `tests/ingestion/test_pipeline.py::TestMultiProjectPreservationOnUpdate`
+    + `TestAddDocumentToProjects`. All 495 unit + 80 e2e tests pass against
+    the newly deployed Edge Functions. Live repro against the maintainer's
+    Cerefox instance confirmed: doc that started in two projects survives
+    a content update via `cerefox_ingest` with `project_name="Cerefox"`
+    intact — both project filters return the doc afterwards.
+  - **⚠️ Edge Function redeploy required to pick up the TS fixes** (the
+    Python-side fix takes effect on `git pull` + restarting the local MCP
+    server):
+    ```bash
+    npx supabase functions deploy cerefox-ingest
+    npx supabase functions deploy cerefox-mcp
+    ```
+
+### Filed (carried forward, no new code)
 
 - [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26) —
   Supabase Data API role-grants change. Time-bound to the 2026-10-30
   rollout for existing projects.
 - [cerefox#36](https://github.com/fstamatelopoulos/cerefox/issues/36) —
   Cerefox installer + interactive bootstrap (cfcf-style UX). Design at
-  [`docs/research/installer-design.md`](docs/research/installer-design.md)
+  [`docs/research/polish-and-distribution-design.md`](docs/research/polish-and-distribution-design.md)
   on branch `research/installer-design`.
 - Iteration 18 — document relations & lifecycle metadata. Design at
   `docs/research/iteration-18-design.md` on branch `feat/document-relations`.
