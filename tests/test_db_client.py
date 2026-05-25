@@ -619,6 +619,58 @@ class TestResolveLink:
         assert len(result) == 1
         assert result[0]["match_method"] == "title_match"
 
+    def test_tier3_slug_input_converts_dashes_to_spaces(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """Slug-style basenames (no spaces) get dashes → spaces conversion.
+
+        Regression: `[link](setup-supabase.md)` should match title
+        "Setup Supabase" via tier 3.
+        """
+        like_execute = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.return_value.order.return_value.limit.return_value.execute
+        like_execute.side_effect = [MagicMock(data=[])]
+        self._set_ilike_chain(
+            mock_supabase_client,
+            [{"id": "z", "title": "Setup Supabase", "source_path": None}],
+        )
+        cerefox_client.resolve_link("setup-supabase.md")
+        # Inspect the ilike() pattern actually used
+        ilike_calls = mock_supabase_client.table.return_value.select.return_value.is_.return_value.ilike.call_args_list
+        assert any(call.args == ("title", "%setup supabase%") for call in ilike_calls)
+
+    def test_tier3_human_title_input_used_literally(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """Human-typed titles (already contain spaces) are NOT mangled.
+
+        Regression: `[Opportunity Index](<Job Hunting - Opportunity Index>)`
+        must match title "Job Hunting - Opportunity Index" — the old code
+        replaced the `-` with another space, breaking the substring match
+        ("Job Hunting   Opportunity Index" with three spaces doesn't appear
+        in any title that uses single-space-dash-single-space separators).
+        """
+        like_execute = mock_supabase_client.table.return_value.select.return_value.is_.return_value.like.return_value.order.return_value.limit.return_value.execute
+        like_execute.side_effect = [MagicMock(data=[])]  # tier 1 empty (path == basename so tier 2 skipped)
+        self._set_ilike_chain(
+            mock_supabase_client,
+            [{
+                "id": "doc-job",
+                "title": "Job Hunting - Opportunity Index",
+                "source_path": None,
+            }],
+        )
+        result = cerefox_client.resolve_link("Job Hunting - Opportunity Index")
+        # Tier 3 must have been called with the literal stem, not a mangled
+        # version with multiple spaces.
+        ilike_calls = mock_supabase_client.table.return_value.select.return_value.is_.return_value.ilike.call_args_list
+        assert any(
+            call.args == ("title", "%Job Hunting - Opportunity Index%")
+            for call in ilike_calls
+        ), f"Expected literal title in ilike call, got: {ilike_calls}"
+        assert len(result) == 1
+        assert result[0]["id"] == "doc-job"
+        assert result[0]["match_method"] == "title_match"
+
     def test_no_match_returns_empty(
         self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
     ) -> None:

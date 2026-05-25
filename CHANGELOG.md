@@ -35,6 +35,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
     calling the resolver. Closes a bug where `<Title With Spaces>`-form
     links round-tripped through `URLSearchParams` and arrived at the
     server with literal `%20` strings, causing title matches to fail.
+  - **Tier-3 mangled-spaces fix**: the title-substring tier previously
+    converted *all* dashes to spaces unconditionally — meant to turn the
+    slug `setup-supabase` into the needle `setup supabase`, but it also
+    turned the human title `Job Hunting - Opportunity Index` into
+    `Job Hunting   Opportunity Index` (three spaces where ` - ` was),
+    which never substring-matched any real title. Fixed with a heuristic:
+    if the stem already contains whitespace it's treated as a human title
+    and used literally; otherwise it's treated as a slug and gets the
+    dash→space conversion. Both shapes now work; regression tests
+    `test_tier3_slug_input_converts_dashes_to_spaces` and
+    `test_tier3_human_title_input_used_literally` lock the behaviour.
   - New `CerefoxClient.resolve_link()` method.
   - New `MarkdownLink` React component, used as the `a` override on
     `react-markdown` in `MarkdownViewer`.

@@ -240,21 +240,32 @@ class CerefoxClient:
             except Exception as exc:
                 logger.warning("resolve_link tier 2 failed: %s", exc)
 
-        # ── Tier 3: title-slug match ───────────────────────────────────────
+        # ── Tier 3: title substring match ──────────────────────────────────
         # Strip extension, then case-insensitive substring against title.
-        # Slug equality (after slugifying both sides) is more precise but
-        # requires fetching candidates first; deferred until measured to
-        # matter at Cerefox's scale.
+        # Two input shapes to handle:
+        #   - Slug-style basename (e.g. "setup-supabase" from setup-supabase.md):
+        #     convert dashes/underscores to spaces so it matches the human
+        #     title "Setup Supabase".
+        #   - Already a human title (e.g. "Job Hunting - Opportunity Index"
+        #     from `<Job Hunting - Opportunity Index>` markdown syntax):
+        #     use literally. Naively replacing `-` would turn " - " into
+        #     "   " and break the match.
+        # Heuristic: if the stem contains any whitespace it's already
+        # human-typed; otherwise treat it as a slug.
         stem = basename.rsplit(".", 1)[0] if "." in basename else basename
-        stem = stem.replace("-", " ").replace("_", " ").strip()
-        if stem:
+        stem = stem.strip()
+        if " " in stem:
+            needle = stem
+        else:
+            needle = stem.replace("-", " ").replace("_", " ").strip()
+        if needle:
             try:
                 # Postgrest .ilike is wildcard-friendly; wrap in %...%
                 t3 = (
                     self.client.table("cerefox_documents")
                     .select(select_cols)
                     .is_("deleted_at", "null")
-                    .ilike("title", f"%{stem}%")
+                    .ilike("title", f"%{needle}%")
                     .order("updated_at", desc=True)
                     .limit(limit)
                     .execute()
