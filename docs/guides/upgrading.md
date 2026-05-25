@@ -90,9 +90,8 @@ half.
 token as a literal word and ANDs them together. It does **not** interpret
 phrase quotes (`"…"`), `OR`, or `-` as operators. If you or any scripts
 relied on Google-style search operators in `cerefox_search` queries, those
-queries now treat the operator characters as literal tokens. Rationale and
-revisit triggers in the Decision Log entry "2026-05-24 — Switch FTS query
-parser from websearch_to_tsquery to plainto_tsquery".
+queries now treat the operator characters as literal tokens. The architectural
+rationale lives in [`docs/solution-design.md` §5.2](../solution-design.md#52-title-boosting-search-quality).
 
 ### Upgrading to v0.1.14+ (from v0.1.13) -- Title Boosting
 

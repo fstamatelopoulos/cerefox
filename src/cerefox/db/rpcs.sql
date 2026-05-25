@@ -111,7 +111,8 @@ DECLARE
     -- a negation operator, which traps natural queries against dashed titles
     -- (e.g. `Job Hunting - Opportunity Index`). Agent queries don't use the
     -- websearch operators (phrase, OR, NOT); semantic ranking is the soft-match
-    -- layer for "broadly related". See Decision Log 2026-05-19 for context.
+    -- layer for "broadly related". If operator support is ever needed, gate it
+    -- behind an opt-in flag rather than changing the default.
     query_fts tsquery := plainto_tsquery('english', p_query_text);
     candidate_count INT := p_match_count * 5;
 BEGIN

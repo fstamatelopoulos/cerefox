@@ -127,9 +127,7 @@ Shipped via [PR #37](https://github.com/fstamatelopoulos/cerefox/pull/37).
     needed — the corpus side (`to_tsvector` in chunk `fts` column) is
     unchanged; only the query parser changed.
   - Verified end-to-end against live Supabase (all 80 e2e tests pass
-    after redeploy). Rationale recorded in the Decision Log entry
-    "2026-05-24 — Switch FTS query parser from websearch_to_tsquery to
-    plainto_tsquery"; brief architectural note added to
+    after redeploy). Brief architectural note added to
     [`docs/solution-design.md` §5.2](docs/solution-design.md#52-title-boosting-search-quality).
 
 ### Filed (carried forward)
