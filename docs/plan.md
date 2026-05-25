@@ -1746,6 +1746,7 @@ directory. Publishes `@cerefox/mcp-local` to npm.
 - `cerefox configure-agent` writes MCP configs invoking the new TS server
 - Both Bun and Node 20+ runtimes work
 - Migration guide: existing MCP configs pointing at `uv run cerefox mcp` continue to work
+- **New MCP tool: `cerefox_get_help(topic?)`** — Layer 3 of the MCP discoverability response (design doc §10d). Returns curated `AGENT_QUICK_REFERENCE.md` subset as a tool response so remote / hosted-MCP / Edge-Function-only agents can discover Cerefox conventions without filesystem access. Bundled at build time in both local TS MCP and `cerefox-mcp` Edge Function (shared via `_shared/`); CI verifies in-sync with the canonical `AGENT_QUICK_REFERENCE.md`. Tool count goes 8 → 9; update CLAUDE.md / AGENT_QUICK_REFERENCE.md to document the new tool
 
 ---
 
@@ -1772,6 +1773,9 @@ surface.
 - Web UI `/app/about` and `/app/settings` pages
 - Python CLI prints deprecation banner pointing at npm install
 - `docs/guides/installing.md` rewritten for npm-native install path
+- **`cerefox init` automatic self-doc ingest** — Layer 2 of the MCP discoverability response (design doc §10d). Unconditionally ingests bundled `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and curated `docs/guides/` under a dedicated `_cerefox-self-docs` project with metadata `{"type":"agent-guide","source":"cerefox-self-docs","version":"<release>"}`. User informed, not asked
+- **`cerefox sync-self-docs` command** — re-ingests bundled docs from the currently-installed version. Called automatically as the final step of `cerefox self-update`
+- **Web UI project filter** — hide `_`-prefixed projects (system) by default; `--include-system` flag for the curious
 
 ---
 

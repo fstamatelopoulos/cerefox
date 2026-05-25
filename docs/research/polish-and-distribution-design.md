@@ -483,6 +483,55 @@ User owns `cerefox.org`. When ready (post-v1.0), set up:
 
 Cost: $0 (domain is owned; GitHub Pages is free; mkdocs-material is free). Effort: ~1 iteration, deferred until after v1.0.
 
+### 10d. The MCP discoverability gap (and the three-pronged response)
+
+**The gap**: Agent-facing docs (`AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`) live in the repo. Today only agents with filesystem access can read them — Path A-Local (Claude Code, Codex CLI running locally on a Cerefox checkout) and Path C (Bash agents with the repo cloned). And even those agents only find the docs if `CLAUDE.md` / `AGENTS.md` points to them.
+
+**Agents connected via remote MCP, hosted MCP, or GPT Actions have no way to discover Cerefox's own usage conventions.** They call MCP tools using whatever conventions they were last trained on. When agent-trained conventions diverge from Cerefox's recommendations — e.g. writing `[Text](<Title With Spaces>)` instead of `[Text](document-uuid)` for cross-references — there's no discoverable correction path. The user finds out only when something breaks visibly.
+
+This is a real architectural gap, surfaced when an agent populated a Cerefox doc with title-based links that broke silently in the web UI (see the v0.1.19 agent-guidance refinement entry in `CHANGELOG.md`). The bug was easy to diagnose once observed, but the agent that wrote it had no way of knowing the convention.
+
+**The response is three-layered, defence in depth**:
+
+#### Layer 1 — Tactical / operational (today, zero code)
+
+The deployment owner ingests `AGENT_GUIDE.md` and `AGENT_QUICK_REFERENCE.md` into their own Cerefox under a dedicated project (e.g., `_cerefox-self-docs`) with conventional metadata (`{"type":"agent-guide","source":"cerefox-self-docs"}`). Any agent connected via MCP can then `cerefox_search "writing linkable content"` and find the guidance, same as any other doc. This costs nothing, requires no code change, and works today. Disadvantage: every deployment owner has to do this manually; new versions of the guidance don't auto-propagate.
+
+#### Layer 2 — Automatic self-doc ingest in `cerefox init` (v0.5.0)
+
+`cerefox init` already (in the design) offers to ingest Cerefox's own docs as one of the optional setup steps. **Promote this from optional to automatic and unconditional**: every `cerefox init` ingests the bundled `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and a curated subset of `docs/guides/` under a dedicated project `_cerefox-self-docs` with consistent metadata. The user is informed but not asked.
+
+Add `cerefox sync-self-docs` as a maintenance command: re-runs the ingest using the docs bundled with the currently-installed version. Called automatically as the final step of `cerefox self-update` so the docs stay in sync with the code.
+
+Project name starts with `_` so user-facing project listings can filter it out by default (with a `--include-system` flag for the curious). Metadata tag `{"type":"agent-guide","source":"cerefox-self-docs","version":"<release>"}` so agents can disambiguate "Cerefox's official guidance" from user-authored notes that happen to mention agent patterns.
+
+Advantage over Layer 1: every Cerefox deployment automatically has searchable agent guidance from day one. Updates flow through `self-update`. Cross-deployment-owner consistency.
+
+Disadvantage: requires the deployment owner to have run `cerefox init` (or its v0.5 equivalent). For Cerefox deployments where MCP is configured but `init` was never run — possible with `cerefox-mcp` Edge Function alone — Layer 2 doesn't help.
+
+#### Layer 3 — `cerefox_get_help` MCP tool (v0.4.0)
+
+A new MCP tool: `cerefox_get_help` (or `cerefox_about`) that returns a curated subset of `AGENT_QUICK_REFERENCE.md` content as a single tool response. Frozen at Edge Function deploy time; refreshed when the Edge Function is redeployed.
+
+| Aspect | Detail |
+|---|---|
+| Tool surface | `cerefox_get_help(topic?: string)` — optional topic ("links", "updates", "metadata", etc.) returns the relevant section; no topic returns the index |
+| Content source | Bundled at Edge Function build time from the canonical `AGENT_QUICK_REFERENCE.md` in the repo. CI step verifies it's in sync on every deploy |
+| Cognitive cost | One additional MCP tool in the agent's tool list. Justified because the tool name is itself the hint — agents see `cerefox_get_help` and may call it speculatively when uncertain |
+| Update path | Redeploy `cerefox-mcp` Edge Function on every release that changes agent guidance — same cadence as the underlying tool surface itself |
+
+**This is the answer for hosted / remote / Edge-Function-only deployments** where Layers 1 and 2 are unavailable. Always-available, always-current with the deployed Edge Function, zero deployment-owner setup.
+
+#### Why all three (not just one)
+
+| Layer | Effort | When does it help? |
+|---|---|---|
+| 1. Manual ingest | Zero code; ~1 minute operational | Now, this deployment, until v0.5 ships |
+| 2. Auto-ingest in init | v0.5 task | Every fresh deployment from v0.5 forward |
+| 3. `cerefox_get_help` MCP tool | v0.4 task | Every deployment with `cerefox-mcp` Edge Function deployed, regardless of CLI setup; survives "user never ran init" |
+
+Each layer covers a population the others miss. Together they ensure agent guidance is discoverable through every supported access path.
+
 ---
 
 ## 11. SemVer & deprecation policy
@@ -680,8 +729,9 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 | 6 | Update `cerefox configure-agent`: writes MCP configs that invoke `npx @cerefox/mcp-local` directly |
 | 7 | Documented "Bun is preferred runtime" path; Node 20+ fallback works |
 | 8 | Migration guide: existing MCP configs pointing at `uv run cerefox mcp` continue to work; users encouraged to migrate |
+| 9 | **New MCP tool: `cerefox_get_help(topic?)`** — returns a curated subset of `AGENT_QUICK_REFERENCE.md` as a tool response. Layer 3 of the MCP discoverability response (§10d). Bundled at Edge Function build time; CI verifies in-sync with `AGENT_QUICK_REFERENCE.md`. Added to both the local TS MCP server and `cerefox-mcp` Edge Function (shared via `_shared/`). Documented as the canonical agent self-help surface |
 
-**Tests / risk**: medium-high. New runtime; new package on npm; existing MCP users need a migration path that doesn't break their setup mid-flight. Both transports (existing Python + new TS) work in parallel during the transition.
+**Tests / risk**: medium-high. New runtime; new package on npm; existing MCP users need a migration path that doesn't break their setup mid-flight. Both transports (existing Python + new TS) work in parallel during the transition. The new help tool adds one to the MCP tool count (8 → 9); update CLAUDE.md and AGENT_QUICK_REFERENCE.md.
 
 ### v0.5.0 — "TS CLI" (~4-6 weeks)
 
@@ -701,8 +751,11 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 | 10 | Web UI `/app/about` and `/app/settings` pages |
 | 11 | Python CLI deprecated: prints a banner on every invocation pointing at `bun install -g @cerefox/memory` |
 | 12 | New `docs/guides/installing.md` (npm-native); old quickstart moved to CONTRIBUTING.md |
+| 13 | **`cerefox init` automatic self-doc ingest** (Layer 2 of the MCP discoverability response, §10d). `init` unconditionally ingests bundled `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and curated `docs/guides/` under a dedicated project `_cerefox-self-docs` with metadata `{"type":"agent-guide","source":"cerefox-self-docs","version":"<release>"}`. User is informed (not asked). Project name prefix `_` makes it filterable in user-facing project listings |
+| 14 | **`cerefox sync-self-docs` command** — re-runs the ingest with the docs from the currently-installed version. Called automatically as the final step of `cerefox self-update` so docs stay in sync with code on every upgrade |
+| 15 | Web UI project filter: hide `_`-prefixed projects by default; `--include-system` toggle for the curious |
 
-**Tests / risk**: high. Largest single migration; broadest surface area; visible to every user. Vitest test suite covers parity with the pytest suite.
+**Tests / risk**: high. Largest single migration; broadest surface area; visible to every user. Vitest test suite covers parity with the pytest suite. Self-doc ingest tested by snapshot — assert the expected set of documents lands under `_cerefox-self-docs` with correct metadata after `cerefox init` runs against a fresh KB.
 
 ### v0.6.0 — "TS Web Server" (~4 weeks)
 
