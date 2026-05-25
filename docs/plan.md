@@ -1623,57 +1623,221 @@ The search -> get -> update workflow is fully supported without title-matching f
 
 ---
 
-## Iteration 18: Unify Local MCP Server in TypeScript (Architectural)
+## Iteration 18: SUPERSEDED — see Iteration 19+ (Polish & Distribution arc)
 
-**Goal**: Rewrite the local MCP server from Python to TypeScript to share code with the
-`cerefox-mcp` Edge Function and eliminate the dual-implementation problem.
+The original Iteration 18 ("Unify Local MCP Server in TypeScript") has been **superseded
+and absorbed** into a broader Polish & Distribution arc that covers v0.2.0 through v1.0.0.
+The TypeScript port of the local MCP server is now scheduled as **Iteration 22 (v0.4.0)** —
+the first migration step of the broader Python → TypeScript strangler-fig migration.
 
-**Motivation**: Every feature added to the MCP tool handlers must be implemented twice --
-once in TypeScript (`cerefox-mcp/tools/*.ts`) and once in Python (`mcp_server.py`). This has
-caused repeated drift and bugs:
-- Missing document IDs in local MCP search results (fixed post-16A)
-- Requestor enforcement needed adding to both paths independently
-- Usage logging wired separately into both
-- Every new tool requires parallel implementation
+Design-of-record: [`docs/research/polish-and-distribution-design.md`](research/polish-and-distribution-design.md).
 
-**Scope**:
-- Rewrite `mcp_server.py` as a TypeScript stdio MCP server that imports from a shared
-  library with the Edge Function tool handlers
-- Create a `_shared/` directory (or npm workspace) for code shared between `cerefox-mcp`
-  (Edge Function) and the local MCP server
-- Shared code: tool handlers, validation, result formatting, requestor enforcement
-- Non-shared: transport layer (Edge Function uses HTTP, local uses stdio)
-- CLI and web app remain Python -- they have deep Python dependencies (ingestion pipeline,
-  embedders, file converters, FastAPI)
-- The local MCP server is the only piece that benefits from TypeScript because it's the only
-  piece with a parallel TypeScript implementation
+Rationale for the supersession: the original Iteration 18 motivation (dedup MCP tool
+handler drift between Python and TS) was correct but too narrow — it solved one symptom
+of a broader language-fit problem. The expanded scope ships the full migration
+incrementally (one component per minor version), each release shipping real user value
+while moving toward a polished, npm-distributed, TypeScript-native Cerefox.
 
-**User-facing change**: `cerefox mcp` command changes from launching a Python process to
-launching a Node.js process. Config files update from `uv run cerefox mcp` to
-`npx cerefox-mcp-local` (or similar). Existing functionality unchanged.
+Detailed phasing: see **Iterations 19 through 26** below.
 
-**Prerequisites**: Iteration 17 (title boosting + ID-based ingest) should be complete first
-so the shared code includes these features from the start.
+---
 
-**Estimated effort**: Medium-large. The tool handler logic already exists in TypeScript; the
-work is extracting it into a shared library and creating the stdio transport wrapper.
+## Iteration 19: v0.2.0 — "Real Release" (language-neutral foundations)
 
-Detailed task breakdown will be created when this iteration is started.
+**Goal**: Lay down version source-of-truth, project hygiene, and release-process discipline.
+No TS migration yet. Backward-compatible across the board.
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §13 v0.2.0](research/polish-and-distribution-design.md).
+
+**Estimated effort**: 1-2 weeks part-time.
+
+**Task breakdown**:
+
+| # | Task | Notes |
+|---|---|---|
+| 19.1 | Create `VERSION` file at repo root with content `0.2.0` | Single source of truth |
+| 19.2 | Update `pyproject.toml` to read version from `VERSION` (hatchling build hook or dynamic version) | Build-time injection |
+| 19.3 | Update `src/cerefox/__init__.py` `__version__` to read from `VERSION` (importlib.resources or read at module import) | Same source |
+| 19.4 | Verify `cerefox --version` returns `0.2.0` (currently returns `0.1.0`) | Test in CI |
+| 19.5 | Add `<VersionFooter>` React component to web UI, reads version from a new `/api/v1/version` endpoint | Small text in app footer, links to GitHub Release for that version |
+| 19.6 | Add `/api/v1/version` endpoint returning `{version, git_commit_short, build_date}` | Read from injected env at startup |
+| 19.7 | Write `scripts/cut_release.py` (Python; will be TS-ported in v0.5) | Bumps VERSION, updates CHANGELOG, tags, pushes |
+| 19.8 | Create `.github/ISSUE_TEMPLATE/` with: `bug.yml`, `feature.yml`, `install-problem.yml`, `question.yml` | Standard OSS templates |
+| 19.9 | Create `.github/pull_request_template.md` (mirrors current commit-message conventions) | One-time |
+| 19.10 | Create `SECURITY.md` (how to report security issues responsibly) | Standard |
+| 19.11 | Create `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1 boilerplate) | Standard |
+| 19.12 | Create empty `.github/FUNDING.yml` placeholder | Can be filled later |
+| 19.13 | Update `CONTRIBUTING.md` with SemVer + deprecation policy (see design doc §11) | Codifies the rules |
+| 19.14 | Update `README.md` "Project status" section to reference the new Polish & Distribution roadmap | Sets reader expectations |
+| 19.15 | Move `docs/research/polish-and-distribution-design.md` to `docs/specs/` (now "design-of-record" not "research") | Promotes status |
+| 19.16 | Decision Log entry: "v0.2.0 — Start of the polish-and-distribution arc; strategic shift to TS/Bun" | Internal memory |
+| 19.17 | Cut release v0.2.0 via `scripts/cut_release.py 0.2.0` | First test of the release script |
+
+**Deliverable**: `cerefox --version` shows `0.2.0` everywhere (CLI + web UI footer). Repo
+has full OSS hygiene. Release process is reproducible from `cut_release.py`. SemVer policy
+documented and committed.
+
+**Tests / risk**: minimal. Version reading is a 5-line change per surface. Hygiene files
+are templated. The cut-release script is the only new code worth careful testing.
+
+---
+
+## Iteration 20: v0.3.0 — "Install Anywhere" (config-state refactor)
+
+**Goal**: Make `cerefox` callable from any directory (today it requires `cd /path/to/repo`).
+Last big Python investment before the TS migration starts.
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §7 + §13 v0.3.0](research/polish-and-distribution-design.md).
+
+**Estimated effort**: 3-4 weeks part-time.
+
+**Detailed task breakdown will be created when this iteration is started.** Headline items:
+- `_resolve_config_dir()` precedence: `CEREFOX_CONFIG_DIR` env → `./.env` (dev mode) → `~/.cerefox/.env`
+- `~/.cerefox/` becomes user state root
+- `importlib.resources` for SQL files (schema deploy works from installed package)
+- Frontend `dist/` bundled into wheel via hatchling config
+- `cerefox docs` opens bundled docs in browser
+- Web UI `/app/help` page renders bundled docs (no Supabase dependency)
+- Schema-version-mismatch banner in web UI (catches the v0.1.19 redeploy footgun)
+
+---
+
+## Iteration 21: SUPERSEDED — was Iteration 18
+
+(Numbering bookkeeping: Iteration 18's content moved here for chronological consistency
+with the v0.X.0 mapping. See Iteration 22 below for the actual content.)
+
+---
+
+## Iteration 22: v0.4.0 — "TS MCP Server" (first migration component)
+
+**Goal**: Migrate the local `cerefox mcp` stdio MCP server from Python to TypeScript.
+Shares tool handlers with the existing `cerefox-mcp` Edge Function via a new `_shared/`
+directory. Publishes `@cerefox/mcp-local` to npm.
+
+**Supersedes**: the original Iteration 18.
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §4 + §13 v0.4.0](research/polish-and-distribution-design.md).
+
+**Estimated effort**: 3-4 weeks part-time.
+
+**Detailed task breakdown will be created when this iteration is started.** Headline items:
+- Set up `_shared/` npm workspace structure (tool handlers, validation schemas, response formatters)
+- Extract Edge Function `cerefox-mcp/tools/*.ts` into `_shared/mcp-tools/`
+- New `packages/mcp-local/` — TS stdio MCP server using `@modelcontextprotocol/sdk`
+- Publish `@cerefox/mcp-local` to npm
+- Python CLI's `cerefox mcp` shells out to `npx @cerefox/mcp-local` (transitional)
+- `cerefox configure-agent` writes MCP configs invoking the new TS server
+- Both Bun and Node 20+ runtimes work
+- Migration guide: existing MCP configs pointing at `uv run cerefox mcp` continue to work
+
+---
+
+## Iteration 23: v0.5.0 — "TS CLI" (the CLI itself moves to TS)
+
+**Goal**: Migrate the CLI from Python/Click to TS/commander. Ship `@cerefox/memory` to npm
+with the `cerefox` binary. Python CLI deprecated but functional.
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §13 v0.5.0](research/polish-and-distribution-design.md).
+
+**Estimated effort**: 4-6 weeks part-time. Largest single migration; broadest user-facing
+surface.
+
+**Detailed task breakdown will be created when this iteration is started.** Headline items:
+- New TS CLI in `packages/cli/` using commander.js, all 15+ subcommands ported
+- Shares `_shared/db-client/` with MCP server
+- New commands: `cerefox init`, `cerefox doctor`, `cerefox status`, `cerefox self-update`
+- Tab completion (bash, zsh, fish)
+- `--json` mode uniformly on all read commands
+- Documented exit codes
+- Progress bars on long ops
+- `@cerefox/memory` published to npm (includes CLI + MCP server, supersedes `@cerefox/mcp-local`)
+- `install.sh` one-liner published to GitHub Releases
+- Web UI `/app/about` and `/app/settings` pages
+- Python CLI prints deprecation banner pointing at npm install
+- `docs/guides/installing.md` rewritten for npm-native install path
+
+---
+
+## Iteration 24: v0.6.0 — "TS Web Server" (FastAPI → Hono)
+
+**Goal**: Migrate the local web server from Python/FastAPI to TS/Hono on Bun. Web UI
+unchanged (already TS).
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §13 v0.6.0](research/polish-and-distribution-design.md).
+
+**Estimated effort**: 4 weeks part-time.
+
+**Detailed task breakdown will be created when this iteration is started.** Headline items:
+- New TS web server in `packages/web-server/` using Hono
+- All `/api/v1/*` endpoints ported with response-shape parity
+- E2E test suite passes against the new server
+- `cerefox web` (TS) replaces `cerefox web` (Python)
+- First-run UX in web UI: empty-state getting-started panel
+
+---
+
+## Iteration 25: v0.7.0 — "TS Ingestion Pipeline" (last big Python component)
+
+**Goal**: Migrate chunking + embedding orchestration + version snapshotting to TS. PDF and
+DOCX support **dropped** (never used; not worth porting).
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §13 v0.7.0](research/polish-and-distribution-design.md).
+
+**Estimated effort**: 6 weeks part-time. Chunking parity is the critical test.
+
+**Detailed task breakdown will be created when this iteration is started.** Headline items:
+- New TS chunking module — port of `markdown.py` heading-aware splitter (snapshot-test parity)
+- New TS embedding orchestration using OpenAI Node SDK
+- New TS ingestion pipeline calling `cerefox_ingest_document` RPC
+- PDF/DOCX support **dropped**; CHANGELOG announces removal
+- `cerefox ingest` and `cerefox ingest-dir` use TS pipeline
+- All `scripts/*.py` ported to `scripts/*.ts`
+
+---
+
+## Iteration 26: v0.8.0 — "Deprecate Python" + v0.9.0 — "Python Removal"
+
+**Goal**: Two-step Python retirement.
+
+**v0.8.0** (~2 weeks): all Python entry points print prominent deprecation banner. Code
+moved to `python-legacy/` subdirectory. Install docs no longer mention Python.
+
+**v0.9.0** (~1 week): `python-legacy/` deleted. `pyproject.toml`, `uv.lock`, `.python-version`
+removed. Repo is pure TS + SQL + React.
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0](research/polish-and-distribution-design.md).
+
+---
+
+## Iteration 27: v1.0.0 — "Stability Commitment"
+
+**Goal**: Not a feature release. The contract release. Strict SemVer policy from §11 of the
+design doc becomes binding.
+
+**Trigger**: ~2-3 months of v0.9 in the wild without breaking changes + at least one outside
+user installing without help.
+
+**Design**: [`docs/research/polish-and-distribution-design.md` §13 v1.0.0](research/polish-and-distribution-design.md).
 
 ---
 
 ## Current Focus
 
-**Iteration 16 complete** (v0.1.10 through v0.1.13). Iteration 17 planned.
+**v0.1.19 released** (2026-05-18, updated 2026-05-24 with FTS query-parser fix). All
+Iteration 17 work shipped: title boosting, hyphenated-title search fix, web UI link
+resolver. 483 unit tests + 80 e2e tests pass.
 
-**Iteration 16 shipped:**
-- 16A: MCP consolidation -- cerefox-mcp calls RPCs directly (halves EF invocations)
-- 16B: Metadata search, project names, list_projects (resolves #9)
-- 16C: Usage tracking with opt-in config, requestor attribution
-- 16D: Analytics dashboard (8 Nivo charts, HEB visualizations)
-- Soft delete with trash bin, restore, purge (v0.1.11.1)
-- 405 SSE polling fix (v0.1.12) -- eliminates ~86K/day idle invocations
-- Configurable requestor enforcement (v0.1.13) -- PR #20 from tdebasis
-- 9 Edge Functions, 8 MCP tools, 471 tests (401 unit + 70 e2e)
+**Strategic shift in progress** (2026-05-24): pivoting from "Iteration 18 = narrow TS port
+of MCP server" to the broader **Polish & Distribution arc** covering v0.2.0 through v1.0.0
+via a Python → TypeScript strangler-fig migration. Design-of-record:
+[`docs/research/polish-and-distribution-design.md`](research/polish-and-distribution-design.md).
 
-**Next**: Iteration 17A -- search quality (title boosting)
+**Next**: Iteration 19 (v0.2.0 — "Real Release"). Smallest meaningful slice: VERSION file
++ `cerefox --version` truth + web UI version footer + OSS hygiene files + SemVer policy
+in CONTRIBUTING.md. Ships as v0.2.0. Pure prerequisite work; backward-compatible; gives
+every subsequent release a coherent version surface.
+
+**After Iteration 19**: Iteration 20 (v0.3.0 — config refactor, `~/.cerefox/`, last big
+Python investment) → Iteration 22 (v0.4.0 — TS MCP server, supersedes old Iteration 18) →
+Iterations 23-27 (TS CLI, web server, ingestion, Python removal, v1.0 commitment).
