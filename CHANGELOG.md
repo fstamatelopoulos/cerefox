@@ -9,6 +9,38 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap. No new code yet — the next batch of work is being scoped:
+
+- [cerefox#26](https://github.com/fstamatelopoulos/cerefox/issues/26) —
+  Supabase Data API role-grants change. Time-bound to the 2026-10-30
+  rollout for existing projects.
+- [cerefox#36](https://github.com/fstamatelopoulos/cerefox/issues/36) —
+  Cerefox installer + interactive bootstrap (cfcf-style UX). Design at
+  [`docs/research/installer-design.md`](docs/research/installer-design.md)
+  on branch `research/installer-design`.
+- Iteration 18 — document relations & lifecycle metadata. Design at
+  `docs/research/iteration-18-design.md` on branch `feat/document-relations`.
+
+Known small issues identified during testing of v0.1.19 link-resolver work
+that may warrant their own tickets:
+
+- Hyphenated-title search ranking: `[Search for…]` fallback button on
+  unresolved links returns no results when the title contains `-` (e.g.
+  "Job Hunting - Opportunity Index"). Postgres FTS tokenisation treats
+  the dash as a word separator. Investigation in progress.
+
+---
+
+## [v0.1.19] -- 2026-05-18
+
+Clickable markdown links in the web UI. Documents you ingested from a git
+repo (with relative `[link](path.md)` references), pasted as agent-created
+markdown, or wrote with explicit `[Text](doc-uuid)` cross-references now
+navigate cleanly when clicked in the Cerefox web UI — without any change
+to stored content or any new schema. Pure render-time resolution.
+
+Shipped via [PR #37](https://github.com/fstamatelopoulos/cerefox/pull/37).
+
 ### Added
 
 - **Web UI: clickable repo links in markdown content.** The document detail
