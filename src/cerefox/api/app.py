@@ -2,18 +2,49 @@
 
 from __future__ import annotations
 
+from importlib.resources import files as _pkg_files
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from cerefox import __version__ as _CEREFOX_VERSION
 from cerefox.api.routes_api import api_router
 
-# Resolve paths relative to this file so they work regardless of cwd.
-_PKG_ROOT = Path(__file__).parent.parent.parent.parent  # project root
-STATIC_DIR = _PKG_ROOT / "web" / "static"
-SPA_DIST_DIR = _PKG_ROOT / "frontend" / "dist"
+
+def _resolve_static_dir() -> Path | None:
+    """Locate the legacy `web/static/` assets (logo, favicon)."""
+    # Repo layout: <repo>/src/cerefox/api/app.py → <repo>/web/static.
+    here = Path(__file__).resolve()
+    repo_static = here.parents[3] / "web" / "static"
+    if repo_static.is_dir():
+        return repo_static
+    return None
+
+
+def _resolve_spa_dist() -> Path | None:
+    """Locate the React SPA build output.
+
+    Two locations, in order:
+      1. Bundled in the wheel at ``cerefox/_frontend_dist`` (production install).
+      2. ``<repo>/frontend/dist`` (dev mode — Vite output).
+
+    Returns ``None`` if neither exists (web UI is unreachable but the API
+    still works).
+    """
+    bundled = Path(str(_pkg_files("cerefox").joinpath("_frontend_dist")))
+    if bundled.is_dir():
+        return bundled
+    here = Path(__file__).resolve()
+    repo_dist = here.parents[3] / "frontend" / "dist"
+    if repo_dist.is_dir():
+        return repo_dist
+    return None
+
+
+STATIC_DIR = _resolve_static_dir()
+SPA_DIST_DIR = _resolve_spa_dist()
 
 
 def create_app() -> FastAPI:
@@ -21,11 +52,11 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Cerefox",
         description="Personal knowledge base for AI agents",
-        version="0.1.0",
+        version=_CEREFOX_VERSION,
     )
 
     # Mount static files (logo, favicon) if the directory exists.
-    if STATIC_DIR.exists():
+    if STATIC_DIR is not None and STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     # JSON API routes (consumed by the React SPA and external clients)
@@ -74,8 +105,8 @@ def create_app() -> FastAPI:
             status_code=200,
         )
 
-    # Serve the React SPA build output at /app/* (if built)
-    if SPA_DIST_DIR.exists():
+    # Serve the React SPA build output at /app/* (if built / bundled)
+    if SPA_DIST_DIR is not None and SPA_DIST_DIR.exists():
         # Vite puts hashed JS/CSS in assets/
         assets_dir = SPA_DIST_DIR / "assets"
         if assets_dir.exists():
