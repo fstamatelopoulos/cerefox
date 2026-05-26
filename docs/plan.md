@@ -1863,8 +1863,10 @@ a completely separate body of work that shares neither code nor schedule with it
 naming collision is historical — both got tagged "Iteration 18" at different points in
 2026 when each was the next thing planned.
 
-**Design**: [`docs/research/iteration-18-design.md`](research/iteration-18-design.md) —
-562-line technical brief originally drafted April 2026. Covers:
+**Design**: [`docs/research/document-relations-and-semantic-graph.md`](research/document-relations-and-semantic-graph.md) —
+562-line technical brief originally drafted April 2026 (filename changed
+2026-05-25 from `iteration-18-design.md` to match topic-based naming
+convention used by other docs in `docs/research/`). Covers:
 
 - New `cerefox_document_relations` table (M2M, typed edges) — junction with
   `relation_type` and an optional `bidirectional` flag. Junction-table soft-delete
