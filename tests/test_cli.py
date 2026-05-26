@@ -14,7 +14,6 @@ from click.testing import CliRunner
 from cerefox.cli import cli
 from cerefox.ingestion.pipeline import IngestResult
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -196,7 +195,7 @@ class TestDeleteDoc:
             patch("cerefox.cli.Settings"),
             patch("cerefox.cli._get_client", return_value=client_mock),
         ):
-            result = runner.invoke(cli, ["delete-doc", "doc-1"], input="n\n")
+            runner.invoke(cli, ["delete-doc", "doc-1"], input="n\n")
         # Aborted — delete should not be called
         client_mock.delete_document.assert_not_called()
 
@@ -1230,3 +1229,34 @@ class TestMcpParityFlagAliases:
             result = runner.invoke(cli, ["get-doc", "d-1", "--version", "v-1"])
         assert result.exit_code == 0
         assert client_mock.get_document_content.call_args.kwargs["version_id"] == "v-1"
+
+
+class TestDocsCommand:
+    """`cerefox docs` — open / list / print bundled documentation."""
+
+    def test_no_args_lists_available_docs(self, runner) -> None:
+        result = runner.invoke(cli, ["docs"])
+        assert result.exit_code == 0
+        assert "README.md" in result.output
+        assert "Open a topic with" in result.output
+
+    def test_unknown_topic_exits_nonzero(self, runner) -> None:
+        result = runner.invoke(cli, ["docs", "completely-unknown-topic-xyz"])
+        assert result.exit_code == 1
+        assert "No doc matches" in result.output
+
+    def test_print_flag_dumps_to_stdout(self, runner) -> None:
+        result = runner.invoke(cli, ["docs", "README", "--print"])
+        assert result.exit_code == 0
+        assert "Cerefox" in result.output
+
+    def test_basename_match_opens_doc(self, runner) -> None:
+        """`cerefox docs quickstart` should resolve to guides/quickstart.md."""
+        with patch("webbrowser.open") as mock_open:
+            result = runner.invoke(cli, ["docs", "quickstart"])
+        assert result.exit_code == 0
+        assert mock_open.called
+        # The argument is a file:// URI
+        url = mock_open.call_args.args[0]
+        assert url.startswith("file://")
+        assert "quickstart.md" in url

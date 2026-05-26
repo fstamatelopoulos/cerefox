@@ -5,6 +5,7 @@ import { AuditLogPage } from "./pages/AuditLogPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DocumentEditPage } from "./pages/DocumentEditPage";
 import { DocumentPage } from "./pages/DocumentPage";
+import { HelpPage } from "./pages/HelpPage";
 import { IngestPage } from "./pages/IngestPage";
 import { ProjectDocumentsPage } from "./pages/ProjectDocumentsPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -28,6 +29,8 @@ export function App() {
         <Route path="/audit-log" element={<AuditLogPage />} />
         <Route path="/trash" element={<TrashPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/help" element={<HelpPage />} />
+        <Route path="/help/*" element={<HelpPage />} />
       </Route>
     </Routes>
   );

@@ -70,6 +70,97 @@ def api_version() -> dict[str, Any]:
     return _VERSION_INFO
 
 
+# ── Bundled documentation ───────────────────────────────────────────────────
+
+
+@api_router.get("/docs")
+def api_list_docs() -> list[dict[str, str]]:
+    """Return the index of bundled user-facing docs."""
+    from cerefox.docs_resources import list_bundled_docs
+
+    return [
+        {"path": e.path, "title": e.title, "category": e.category}
+        for e in list_bundled_docs()
+    ]
+
+
+@api_router.get("/docs/{doc_path:path}")
+def api_get_doc(doc_path: str) -> Response:
+    """Return the raw markdown content of a bundled doc.
+
+    Path-traversal attempts return 404 rather than reaching the filesystem.
+    """
+    from cerefox.docs_resources import read_doc
+
+    content = read_doc(doc_path)
+    if content is None:
+        raise HTTPException(status_code=404, detail=f"Doc not found: {doc_path}")
+    return Response(content=content, media_type="text/markdown; charset=utf-8")
+
+
+# ── Schema version info ─────────────────────────────────────────────────────
+
+
+_SCHEMA_VERSION_RE = re.compile(r"^--\s*@version:\s*(\S+)", re.MULTILINE)
+
+
+def _bundled_schema_version() -> str | None:
+    """Read the `@version` marker from the bundled schema.sql header."""
+    try:
+        from importlib.resources import files as _files
+
+        sql = _files("cerefox.db").joinpath("schema.sql").read_text(encoding="utf-8")
+    except Exception:
+        return None
+    match = _SCHEMA_VERSION_RE.search(sql)
+    return match.group(1) if match else None
+
+
+@api_router.get("/schema-version")
+def api_schema_version(
+    client: CerefoxClient = Depends(get_client),
+) -> dict[str, Any]:
+    """Return bundled vs. deployed schema version markers.
+
+    Used by the web UI to surface a "your DB schema is out of date — run
+    `python scripts/db_deploy.py`" banner when the values diverge. Closes the
+    v0.1.19 redeploy footgun (where the RPC fix shipped in the repo but
+    several users forgot to redeploy and the bug persisted).
+
+    Returns ``{bundled, deployed, mismatch}``. Either value may be ``None``
+    when the corresponding source is unavailable; in that case ``mismatch``
+    is ``False`` and the banner stays hidden (we don't want to scare users
+    with a banner caused by an introspection failure).
+    """
+    bundled = _bundled_schema_version()
+    deployed: str | None = None
+    try:
+        result = client.client.rpc("cerefox_schema_version").execute()
+        if result.data:
+            # RPC returns a single TEXT — supabase-py shapes it as scalar or
+            # [{"cerefox_schema_version": "..."}] depending on version.
+            if isinstance(result.data, str):
+                deployed = result.data
+            elif isinstance(result.data, list) and result.data:
+                first = result.data[0]
+                if isinstance(first, dict):
+                    # Try common shapes
+                    for key in ("cerefox_schema_version", "version", "result"):
+                        if key in first and isinstance(first[key], str):
+                            deployed = first[key]
+                            break
+                elif isinstance(first, str):
+                    deployed = first
+    except Exception as exc:  # noqa: BLE001
+        # The RPC may not exist yet on legacy deployments — that's a state
+        # we want the UI to display gracefully ("deployed: unknown"), not an
+        # HTTP 500.
+        logger.info("cerefox_schema_version RPC unavailable: %s", exc)
+
+    mismatch = bool(bundled and deployed and bundled != deployed)
+    return {"bundled": bundled, "deployed": deployed, "mismatch": mismatch}
+
+
 # ── Response models ──────────────────────────────────────────────────────────
 
 

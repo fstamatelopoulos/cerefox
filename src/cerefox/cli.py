@@ -1200,3 +1200,85 @@ def web(host: str, port: int, reload: bool) -> None:
         port=port,
         reload=reload,
     )
+
+
+@cli.command("docs")
+@click.argument("topic", required=False)
+@click.option(
+    "--print",
+    "print_to_stdout",
+    is_flag=True,
+    default=False,
+    help="Print the doc's raw markdown to stdout instead of opening a browser.",
+)
+def docs_command(topic: str | None, print_to_stdout: bool) -> None:
+    """Open bundled documentation in your browser.
+
+    No argument: list every available doc by path and title.
+
+    With argument: fuzzy-match TOPIC against doc titles and paths, then open
+    the first hit. Examples: ``cerefox docs quickstart``,
+    ``cerefox docs guides/connect-agents.md``, ``cerefox docs AGENT_GUIDE``.
+
+    Docs are bundled inside the installed package — works offline and matches
+    the version of Cerefox you have installed.
+    """
+    import webbrowser  # noqa: PLC0415
+
+    from cerefox.docs_resources import (  # noqa: PLC0415
+        find_doc,
+        list_bundled_docs,
+        read_doc,
+        real_path,
+    )
+
+    if not topic:
+        entries = list_bundled_docs()
+        if not entries:
+            click.echo(
+                "❌  No bundled docs found. This usually means the package was "
+                "built without docs/guides/ bundled — see `pyproject.toml` "
+                "→ `[tool.hatch.build.targets.wheel.force-include]`.",
+                err=True,
+            )
+            sys.exit(2)
+
+        current_category = None
+        for entry in entries:
+            if entry.category != current_category:
+                # Section header per category
+                header = {
+                    "readme": "Project overview",
+                    "agent-guide": "Agent integration",
+                    "guide": "Guides",
+                }.get(entry.category, entry.category)
+                click.echo(f"\n── {header} ──")
+                current_category = entry.category
+            click.echo(f"  {entry.path:<40}  {entry.title}")
+        click.echo(
+            "\nOpen a topic with: cerefox docs <path-or-title>\n"
+            "Print to stdout with: cerefox docs <topic> --print"
+        )
+        return
+
+    entry = find_doc(topic)
+    if entry is None:
+        click.echo(f"❌  No doc matches '{topic}'.", err=True)
+        click.echo("    Run `cerefox docs` (no args) to see what's available.", err=True)
+        sys.exit(1)
+
+    if print_to_stdout:
+        content = read_doc(entry.path)
+        if content is None:
+            click.echo(f"❌  Could not read '{entry.path}'.", err=True)
+            sys.exit(2)
+        click.echo(content)
+        return
+
+    path = real_path(entry.path)
+    if path is None:
+        click.echo(f"❌  Could not locate '{entry.path}' on disk.", err=True)
+        sys.exit(2)
+    url = path.as_uri()
+    click.echo(f"Opening {entry.title} ({entry.path})  →  {url}")
+    webbrowser.open(url)

@@ -1656,3 +1656,23 @@ BEGIN
     RETURN v_result;
 END;
 $$;
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Schema version reporter
+-- ─────────────────────────────────────────────────────────────────────────
+-- Returns the schema version currently deployed in this database. The value
+-- must match the `@version` marker at the top of schema.sql.
+-- Bump both when schema.sql or rpcs.sql changes in a way that requires a
+-- redeploy. The web UI's /api/v1/schema-version endpoint compares the bundled
+-- and deployed values and surfaces a 'redeploy needed' banner on mismatch.
+
+CREATE OR REPLACE FUNCTION cerefox_schema_version()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+    SELECT '0.3.0'::TEXT;
+$$;
+

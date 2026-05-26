@@ -9,6 +9,7 @@ import {
 } from "@mantine/core";
 import { IconMoon, IconSun } from "@tabler/icons-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { SchemaVersionBanner } from "./SchemaVersionBanner";
 import { VersionFooter } from "./VersionFooter";
 
 const NAV_ITEMS = [
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { label: "Audit Log", path: "/audit-log" },
   { label: "Trash", path: "/trash" },
   { label: "Analytics", path: "/analytics" },
+  { label: "Help", path: "/help" },
 ];
 
 export function Layout() {
@@ -77,6 +79,7 @@ export function Layout() {
       </AppShell.Header>
 
       <AppShell.Main>
+        <SchemaVersionBanner />
         <Outlet />
         <VersionFooter />
       </AppShell.Main>
