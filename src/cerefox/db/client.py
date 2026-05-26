@@ -427,6 +427,36 @@ class CerefoxClient:
             logger.error("list_documents failed: %s", exc)
             raise RuntimeError(f"list_documents failed: {exc}") from exc
 
+    def count_documents_for_project(self, project_id: str) -> int:
+        """Count ACTIVE (not soft-deleted) documents assigned to a project.
+
+        Used by the paginated ``/projects/{id}/documents`` endpoint so the
+        frontend knows the total page count without fetching every row.
+        """
+        try:
+            # Resolve all document IDs in this project from the junction.
+            jp = (
+                self.client.table("cerefox_document_projects")
+                .select("document_id")
+                .eq("project_id", project_id)
+                .execute()
+            )
+            doc_ids = [r["document_id"] for r in (jp.data or [])]
+            if not doc_ids:
+                return 0
+            # PostgREST count via head-only request: fast, no row payload.
+            resp = (
+                self.client.table("cerefox_documents")
+                .select("id", count="exact", head=True)
+                .is_("deleted_at", "null")
+                .in_("id", doc_ids)
+                .execute()
+            )
+            return resp.count or 0
+        except Exception as exc:
+            logger.error("count_documents_for_project failed: %s", exc)
+            return 0
+
     def list_all_documents(self, batch_size: int = 200) -> list[dict[str, Any]]:
         """Return every document, paginating internally to avoid the default limit.
 
@@ -625,28 +655,47 @@ class CerefoxClient:
             logger.error("get_projects_for_documents failed: %s", exc)
         return result
 
-    def get_project_doc_counts(self, project_ids: list[str]) -> dict[str, int]:
-        """Return a {project_id: doc_count} map via a single junction-table query.
+    def get_project_doc_counts(
+        self, project_ids: list[str],
+    ) -> tuple[dict[str, int], dict[str, int]]:
+        """Return per-project active and deleted document counts.
+
+        Returns a tuple ``(active_counts, deleted_counts)`` keyed by project_id.
+        Both maps include every requested project_id (zero when no docs match).
+
+        Joins the M2M junction table with ``cerefox_documents`` so soft-deleted
+        documents are counted separately. Previously this method counted all
+        rows on the junction regardless of the linked document's ``deleted_at``,
+        which inflated the dashboard count after deletes.
 
         Degrades gracefully to all-zeros on error so the dashboard still renders.
         """
-        counts: dict[str, int] = {pid: 0 for pid in project_ids}
+        active: dict[str, int] = {pid: 0 for pid in project_ids}
+        deleted: dict[str, int] = {pid: 0 for pid in project_ids}
         if not project_ids:
-            return counts
+            return active, deleted
         try:
+            # PostgREST resource-embedding: get junction rows joined to docs so
+            # we can read each linked document's deleted_at in one round-trip.
             resp = (
                 self.client.table("cerefox_document_projects")
-                .select("project_id")
+                .select("project_id, cerefox_documents(deleted_at)")
                 .in_("project_id", project_ids)
                 .execute()
             )
             for row in (resp.data or []):
-                pid = row["project_id"]
-                if pid in counts:
-                    counts[pid] += 1
+                pid = row.get("project_id")
+                if pid not in active:
+                    continue
+                # The embedded resource is a dict; deleted_at is None for active docs.
+                doc = row.get("cerefox_documents") or {}
+                if doc.get("deleted_at") is None:
+                    active[pid] += 1
+                else:
+                    deleted[pid] += 1
         except Exception as exc:
             logger.error("get_project_doc_counts failed: %s", exc)
-        return counts
+        return active, deleted
 
     # ── Chunks ─────────────────────────────────────────────────────────────────
 

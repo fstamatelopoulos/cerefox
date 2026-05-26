@@ -4,17 +4,21 @@ import {
   Container,
   Group,
   Loader,
+  Pagination,
   Table,
   Text,
   Title,
 } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { apiFetch } from "../api/client";
-import type { DashboardDoc } from "../api/types";
+import type { ProjectDocumentsResponse } from "../api/types";
 import { useProjects } from "../hooks/useProjects";
 import { formatDate } from "../utils/dates";
+
+const PAGE_SIZE = 50;
 
 export function ProjectDocumentsPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,11 +28,26 @@ export function ProjectDocumentsPage() {
   const project = projects?.find((p) => p.id === id);
   const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
 
-  const { data: docs, isLoading } = useQuery({
-    queryKey: ["project-documents", id],
-    queryFn: () => apiFetch<DashboardDoc[]>(`/projects/${id}/documents`),
+  const [page, setPage] = useState(1);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["project-documents", id, page],
+    queryFn: () =>
+      apiFetch<ProjectDocumentsResponse>(
+        `/projects/${id}/documents?limit=${PAGE_SIZE}&offset=${offset}`,
+      ),
     enabled: !!id,
+    // Keep current data visible while the next page loads — avoids a
+    // full-page loader flicker on every page-link click.
+    placeholderData: keepPreviousData,
   });
+
+  const docs = data?.documents ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const firstOnPage = total === 0 ? 0 : offset + 1;
+  const lastOnPage = Math.min(offset + docs.length, total);
 
   return (
     <Container size="lg">
@@ -52,15 +71,20 @@ export function ProjectDocumentsPage() {
         <Group justify="center" mt="xl">
           <Loader />
         </Group>
-      ) : !docs || docs.length === 0 ? (
+      ) : total === 0 ? (
         <Text c="dimmed" ta="center" mt="xl">
           No documents in this project.
         </Text>
       ) : (
         <>
-          <Text size="sm" c="dimmed" mb="sm">
-            {docs.length} document{docs.length !== 1 ? "s" : ""}
-          </Text>
+          <Group justify="space-between" mb="sm">
+            <Text size="sm" c="dimmed">
+              {total === 1
+                ? "1 document"
+                : `${total} documents — showing ${firstOnPage}–${lastOnPage}`}
+            </Text>
+            {isFetching && !isLoading && <Loader size="xs" />}
+          </Group>
           <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
@@ -117,6 +141,17 @@ export function ProjectDocumentsPage() {
               ))}
             </Table.Tbody>
           </Table>
+          {totalPages > 1 && (
+            <Group justify="center" mt="md">
+              <Pagination
+                value={page}
+                onChange={setPage}
+                total={totalPages}
+                size="sm"
+                withEdges
+              />
+            </Group>
+          )}
         </>
       )}
     </Container>

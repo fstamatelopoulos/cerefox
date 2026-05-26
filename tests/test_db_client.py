@@ -337,19 +337,29 @@ class TestProjectMethods:
         result = cerefox_client.usage_summary()
         assert result == summary
 
-    def test_get_project_doc_counts_returns_counts(
+    def test_get_project_doc_counts_returns_active_and_deleted_counts(
         self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
     ) -> None:
-        rows = [{"project_id": "p1"}, {"project_id": "p1"}, {"project_id": "p2"}]
+        # Rows from the embedded join: each junction row has a nested
+        # cerefox_documents object with deleted_at. p1 has 2 active + 1 deleted;
+        # p2 has 1 deleted; p3 has nothing.
+        rows = [
+            {"project_id": "p1", "cerefox_documents": {"deleted_at": None}},
+            {"project_id": "p1", "cerefox_documents": {"deleted_at": None}},
+            {"project_id": "p1", "cerefox_documents": {"deleted_at": "2026-05-25T10:00:00Z"}},
+            {"project_id": "p2", "cerefox_documents": {"deleted_at": "2026-05-25T11:00:00Z"}},
+        ]
         mock_supabase_client.table.return_value.select.return_value.in_.return_value.execute.return_value.data = rows
-        result = cerefox_client.get_project_doc_counts(["p1", "p2", "p3"])
-        assert result == {"p1": 2, "p2": 1, "p3": 0}
+        active, deleted = cerefox_client.get_project_doc_counts(["p1", "p2", "p3"])
+        assert active == {"p1": 2, "p2": 0, "p3": 0}
+        assert deleted == {"p1": 1, "p2": 1, "p3": 0}
 
     def test_get_project_doc_counts_empty_list(
         self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
     ) -> None:
-        result = cerefox_client.get_project_doc_counts([])
-        assert result == {}
+        active, deleted = cerefox_client.get_project_doc_counts([])
+        assert active == {}
+        assert deleted == {}
         mock_supabase_client.table.assert_not_called()
 
     def test_get_project_doc_counts_degrades_on_error(
@@ -358,8 +368,64 @@ class TestProjectMethods:
         mock_supabase_client.table.return_value.select.return_value.in_.return_value.execute.side_effect = Exception(
             "DB error"
         )
-        result = cerefox_client.get_project_doc_counts(["p1", "p2"])
-        assert result == {"p1": 0, "p2": 0}
+        active, deleted = cerefox_client.get_project_doc_counts(["p1", "p2"])
+        assert active == {"p1": 0, "p2": 0}
+        assert deleted == {"p1": 0, "p2": 0}
+
+    def test_get_project_doc_counts_handles_missing_embedded_resource(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """Defensive: if the embedded join returns a null cerefox_documents (e.g.
+        orphan junction row), treat as not-deleted to avoid undercounting."""
+        rows = [
+            {"project_id": "p1", "cerefox_documents": None},
+            {"project_id": "p1", "cerefox_documents": {"deleted_at": None}},
+        ]
+        mock_supabase_client.table.return_value.select.return_value.in_.return_value.execute.return_value.data = rows
+        active, deleted = cerefox_client.get_project_doc_counts(["p1"])
+        # Both rows count as active (None deleted_at → active)
+        assert active == {"p1": 2}
+        assert deleted == {"p1": 0}
+
+    def test_count_documents_for_project_returns_active_count(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """count_documents_for_project resolves junction → docs and counts active."""
+        # First call: junction lookup returns 3 document IDs
+        junction_chain = MagicMock()
+        junction_chain.select.return_value.eq.return_value.execute.return_value.data = [
+            {"document_id": "d1"}, {"document_id": "d2"}, {"document_id": "d3"},
+        ]
+        # Second call: count head-only request returns count=2 (one was deleted)
+        count_chain = MagicMock()
+        count_resp = MagicMock()
+        count_resp.count = 2
+        count_chain.select.return_value.is_.return_value.in_.return_value.execute.return_value = count_resp
+        mock_supabase_client.table.side_effect = [junction_chain, count_chain]
+
+        result = cerefox_client.count_documents_for_project("proj-x")
+        assert result == 2
+
+    def test_count_documents_for_project_empty_project_returns_zero(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """If the junction is empty for the project, skip the count query."""
+        junction_chain = MagicMock()
+        junction_chain.select.return_value.eq.return_value.execute.return_value.data = []
+        mock_supabase_client.table.return_value = junction_chain
+
+        result = cerefox_client.count_documents_for_project("empty-proj")
+        assert result == 0
+        # Only one .table() call — the junction lookup
+        assert mock_supabase_client.table.call_count == 1
+
+    def test_count_documents_for_project_degrades_on_error(
+        self, cerefox_client: CerefoxClient, mock_supabase_client: MagicMock
+    ) -> None:
+        """Errors return 0 (UI shows "0 documents" rather than crashing)."""
+        mock_supabase_client.table.side_effect = Exception("DB error")
+        result = cerefox_client.count_documents_for_project("any")
+        assert result == 0
 
 
 class TestLookupMethods:

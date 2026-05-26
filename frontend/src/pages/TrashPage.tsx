@@ -14,9 +14,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fetchTrash, restoreDocument, purgeDocument, type DeletedDocument } from "../api/trash";
+import { useProjects } from "../hooks/useProjects";
 
 export function TrashPage() {
   const queryClient = useQueryClient();
+  const { data: projects } = useProjects();
+  // Resolve project_id → name for the chips on each deleted row.
+  // Junction rows are preserved across soft-delete, so the trash UI can
+  // still show which projects a deleted document belonged to.
+  const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
 
   const { data: docs, isLoading, error } = useQuery({
     queryKey: ["trash"],
@@ -70,6 +76,7 @@ export function TrashPage() {
             <TrashCard
               key={doc.id}
               doc={doc}
+              projectMap={projectMap}
               onRestore={() => restoreMut.mutate(doc.id)}
               onPurge={() => purgeMut.mutate(doc.id)}
               restoring={restoreMut.isPending}
@@ -84,18 +91,24 @@ export function TrashPage() {
 
 function TrashCard({
   doc,
+  projectMap,
   onRestore,
   onPurge,
   restoring,
   purging,
 }: {
   doc: DeletedDocument;
+  projectMap: Map<string, string>;
   onRestore: () => void;
   onPurge: () => void;
   restoring: boolean;
   purging: boolean;
 }) {
   const [confirmPurge, setConfirmPurge] = useState(false);
+  // project_ids may include IDs we can't resolve (e.g. a project deleted
+  // after the doc went to trash). Filter to known projects so we don't
+  // render orphan UUID-looking badges.
+  const knownProjects = doc.project_ids.filter((pid) => projectMap.has(pid));
 
   return (
     <Card withBorder p="sm">
@@ -104,10 +117,16 @@ function TrashCard({
           <Group gap="xs" mb={4}>
             <Text fw={600} size="sm">{doc.title}</Text>
             <Badge size="xs" color="red" variant="light">Deleted</Badge>
+            {knownProjects.map((pid) => (
+              <Badge key={pid} size="xs" variant="light" color="blue">
+                {projectMap.get(pid)}
+              </Badge>
+            ))}
           </Group>
           <Text size="xs" c="dimmed">
             {doc.total_chars.toLocaleString()} chars | {doc.chunk_count} chunks |
             deleted {doc.deleted_at?.slice(0, 10) ?? "?"}
+            {knownProjects.length === 0 && doc.project_ids.length === 0 && " | no project"}
           </Text>
         </div>
         <Group gap="xs">

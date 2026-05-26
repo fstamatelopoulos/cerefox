@@ -156,7 +156,18 @@ export interface DashboardResponse {
   project_count: number;
   recent_docs: DashboardDoc[];
   projects: Project[];
+  /** Active (non-deleted) doc counts per project. */
   project_doc_counts: Record<string, number>;
+  /** Soft-deleted (trash) doc counts per project. Zero or missing when none. */
+  project_deleted_doc_counts: Record<string, number>;
+}
+
+/** Paginated response for /projects/{id}/documents. */
+export interface ProjectDocumentsResponse {
+  documents: DashboardDoc[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 // -- Ingest --
