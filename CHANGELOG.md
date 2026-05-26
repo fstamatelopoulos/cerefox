@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.2.0] -- 2026-05-26
+
 **"Real Release"** — the first iteration of the Polish & Distribution arc
 ([design](docs/specs/polish-and-distribution-design.md)). Foundations and the
 project's first TypeScript artifact outside Edge Functions and the frontend.
