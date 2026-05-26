@@ -1729,15 +1729,15 @@ Make `Settings`-resolution location-independent. The single hard change is
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 20A.1 | Write `_resolve_config_dir()` in a new `src/cerefox/paths.py` module | Pending | Precedence: `CEREFOX_CONFIG_DIR` env var (expand `~`) → `./.env` exists in CWD (dev mode) → `~/.cerefox/`. Returns `Path`. Pure function — easy to unit-test. |
-| 20A.2 | Wire `Settings` to consume `_resolve_config_dir()` | Pending | `model_config = SettingsConfigDict(env_file=str(_resolve_config_dir() / ".env"), ...)`. Evaluated at class-load time. Add a `Settings._config_dir` classvar so call sites can read the resolved dir without re-computing. |
-| 20A.3 | Add `~/.cerefox/` auto-creation helper (`ensure_user_state_dir()`) | Pending | Called lazily — only when the resolver actually returns `~/.cerefox/` AND we're about to write into it. `mkdir(parents=True, exist_ok=True)`. Creates the subdir layout from design doc §7a: `backups/`, `logs/`, `cache/`, `docs/`. Sets `~/.cerefox/.env` to chmod 600 if it exists. |
-| 20A.4 | Change default `backup_dir` from `./backups` to `<config_dir>/backups` | Pending | Computed property on `Settings`, not a literal string default. Backward-compat: if user explicitly set `CEREFOX_BACKUP_DIR` it still wins. Dev mode default stays repo-local (because `_config_dir == cwd` in dev mode). |
-| 20A.5 | Update `scripts/db_deploy.py` and `scripts/db_migrate.py` to load SQL via `importlib.resources` | Pending | Replace `_SCHEMA_FILE = Path(__file__).parent.parent / "src" / "cerefox" / "db" / "schema.sql"` with `importlib.resources.files("cerefox.db").joinpath("schema.sql").read_text()`. Removes the `sys.path.insert(0, …)` hack. Migrations dir: iterate via `files("cerefox.db.migrations").iterdir()`. Validates the wheel-install path works (`importlib.resources` handles both editable + installed). |
-| 20A.6 | Add `src/cerefox/db/migrations/__init__.py` (empty) | Pending | `importlib.resources.files()` needs the directory to be an importable package. One-line file. |
-| 20A.7 | Frontend `dist/` bundled into wheel via hatchling | Pending | Add `[tool.hatch.build.targets.wheel] force-include = { "frontend/dist" = "cerefox/_frontend_dist" }`. Update `src/cerefox/api/app.py` to resolve the StaticFiles mount via `importlib.resources.files("cerefox").joinpath("_frontend_dist")` with a fallback to `frontend/dist` for dev mode. |
-| 20A.8 | Add unit tests in `tests/test_paths.py` for `_resolve_config_dir()` | Pending | Cover all three precedence branches with `monkeypatch.setenv`, `tmp_path`, and an explicit `CEREFOX_CONFIG_DIR`. Cover the dev-mode "repo-local .env present" branch. Add a regression test that asserts repo-root `.env` is the first hit when present (the existing `tests/test_config.py` setup relies on this). |
-| 20A.9 | Update `tests/test_config.py` for new resolver semantics | Pending | Tests that construct `Settings()` directly with `_env_file=None` continue working; tests that rely on `Settings()` reading the repo-root `.env` continue working in dev mode. |
+| 20A.1 | Write `resolve_config_dir()` in a new `src/cerefox/paths.py` module | Done | Pure function; exports `resolve_config_dir`, `resolve_env_file`, `user_state_dir`, `ensure_user_state_dir`, `is_dev_mode`, `default_backup_dir`. |
+| 20A.2 | Wire `Settings` to consume `resolve_env_file()` | Done | `model_config = SettingsConfigDict(env_file=str(resolve_env_file()), ...)`. Evaluated at class-load time. `Settings._config_dir` classvar deferred — the standalone `resolve_config_dir()` is callable directly and no caller has needed the cached value yet. |
+| 20A.3 | Add `~/.cerefox/` auto-creation helper (`ensure_user_state_dir()`) | Done | Creates the subdir layout from design doc §7a (`backups/`, `logs/`, `cache/`, `docs/`). Sets `~/.cerefox/.env` to chmod 600 if it exists. Best-effort on Windows (chmod no-op). |
+| 20A.4 | Change default `backup_dir` from `./backups` to `<config_dir>/backups` | Done | `backup_dir: str = Field(default_factory=lambda: str(default_backup_dir()))`. Dev mode → `./backups` (preserves pre-v0.3.0 behavior); user-state mode → `~/.cerefox/backups`. `CEREFOX_BACKUP_DIR` still overrides. |
+| 20A.5 | Update `scripts/db_deploy.py` and `scripts/db_migrate.py` to load SQL via `importlib.resources` | Done | Both scripts use `files("cerefox.db")` for schema/rpcs and `files("cerefox.db.migrations").iterdir()` for migration files. Works from any directory, in both editable and installed-wheel modes. |
+| 20A.6 | Add `src/cerefox/db/migrations/__init__.py` (empty) | Done | One-line docstring; makes the directory a package so `importlib.resources.files()` finds it. |
+| 20A.7 | Frontend `dist/` bundled into wheel via hatchling | Done | `force-include` block in `pyproject.toml` bundles `frontend/dist` → `cerefox/_frontend_dist`. `app.py` resolves via `_resolve_spa_dist()` with bundled-first / repo-fallback. Wheel inspection confirms `_frontend_dist/index.html`, JS, CSS all bundled. |
+| 20A.8 | Add unit tests in `tests/test_paths.py` for `resolve_config_dir()` | Done | 20 tests across `TestResolveConfigDir`, `TestResolveEnvFile`, `TestUserStateDir`, `TestEnsureUserStateDir`, `TestIsDevMode`, `TestDefaultBackupDir`, `TestRegression`. The regression test (`test_repo_root_is_dev_mode`) asserts the backward-compat invariant. |
+| 20A.9 | Verify `tests/test_config.py` for new resolver semantics | Done | No code change needed — existing tests already use `_env_file=None` for the isolation cases; the new resolver only kicks in for the default path which dev mode handles correctly. All 89 tests in `test_config.py` + `test_db_client.py` pass; full Python suite at 569. |
 
 ### 20B: Docs surfacing
 
@@ -1747,15 +1747,15 @@ Bundle docs into the package, expose two surfaces (`cerefox docs` CLI + web UI
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 20B.1 | Bundle `docs/guides/`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, `README.md` into the wheel | Pending | Add to the same `[tool.hatch.build.targets.wheel] force-include` block introduced in 20A.7 — bundled at `cerefox/_docs/<original-path>`. **Excluded**: `docs/research/`, `docs/specs/`, `docs/plan.md`, `docs/TODO.md`, `CLAUDE.md` (contributor-only per §10a). |
-| 20B.2 | Write `cerefox/docs_resources.py` helper module | Pending | `bundled_docs_root() -> Path` resolves the bundled `_docs` dir via `importlib.resources`. `list_bundled_docs() -> list[DocEntry]` walks it and returns `(path, title, category)` tuples — title parsed from the first H1 of each file. Single source of truth for both the CLI command and the web UI endpoint. |
-| 20B.3 | Add `cerefox docs [TOPIC]` CLI command | Pending | No arg: prints an indexed list (`docs/guides/quickstart.md — Quickstart`, …) and exits. With arg: fuzzy-matches against title and path, opens the bundled markdown file in the OS browser via `webbrowser.open(f"file://{path}")`. `--print` flag dumps content to stdout instead. |
-| 20B.4 | Add `GET /api/v1/docs` endpoint (list bundled docs) | Pending | Returns `[{path, title, category}]`. Reads from the same `docs_resources.list_bundled_docs()` helper. |
-| 20B.5 | Add `GET /api/v1/docs/{path:path}` endpoint (fetch bundled doc content) | Pending | Path-traverses the bundled `_docs` dir; refuses paths that escape it (security). Returns `text/markdown`. |
-| 20B.6 | Add React route + page `/app/help` | Pending | Sidebar nav over the bundled docs index, main pane renders the selected doc using the existing `<MarkdownViewer>`. Add a "Help" link to `Layout.tsx`'s top nav. URL-driven state: `/app/help/<encoded-doc-path>`. |
-| 20B.7 | Schema-version-mismatch banner in web UI | Pending | New `GET /api/v1/schema-version` endpoint returns `{bundled_version, deployed_version}` — `bundled_version` is read from `cerefox/db/schema.sql` (a new `-- @version: X.Y.Z` comment marker added to the file's header); `deployed_version` is queried from a new `cerefox_schema_version()` RPC or read off a new `cerefox_meta` row. Banner shows when they mismatch with a "Run `uv run python scripts/db_deploy.py`" prompt. Closes the v0.1.19 footgun. |
-| 20B.8 | Add the `@version:` marker convention to `src/cerefox/db/schema.sql` and document it | Pending | Bumped manually as part of any schema change; `cut_release.ts` will be extended in a future iteration to enforce it. For v0.3.0 the value is the current Cerefox version (`0.3.0`). |
-| 20B.9 | Tests: `tests/test_docs_resources.py` (bundled-docs helper) and `tests/test_api_docs.py` (the two new endpoints) | Pending | Verify the helper finds the bundled docs in both dev mode (repo-local docs/) and installed mode (`_docs` under the package). Verify the API endpoint rejects path-traversal attempts. |
+| 20B.1 | Bundle `docs/guides/`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, `README.md` into the wheel | Done | Added to the `force-include` block alongside the frontend dist. Bundled at `cerefox/_docs/<original-path>`. Wheel inspection shows all 14 guide files + 3 root-level docs are present. |
+| 20B.2 | Write `cerefox/docs_resources.py` helper module | Done | Exports `DocEntry` dataclass, `list_bundled_docs()`, `read_doc(rel_path)`, `real_path(rel_path)`, `find_doc(query)`. Resolves bundled-first / repo-fallback. Path-traversal guard on `read_doc` and `real_path`. |
+| 20B.3 | Add `cerefox docs [TOPIC]` CLI command | Done | No arg → category-grouped index. With arg → fuzzy-match by exact path, basename, title substring, or path substring. `--print` for stdout dump. Opens via `webbrowser.open(file://…)`. |
+| 20B.4 | Add `GET /api/v1/docs` endpoint (list bundled docs) | Done | Returns `[{path, title, category}]`. Delegates to `list_bundled_docs()`. |
+| 20B.5 | Add `GET /api/v1/docs/{path:path}` endpoint (fetch bundled doc content) | Done | Returns `text/markdown` content; 404 on missing or path-traversal attempt. |
+| 20B.6 | Add React route + page `/app/help` | Done | `HelpPage.tsx` with category-grouped Mantine `NavLink` sidebar and `<MarkdownViewer>` for content. Routes: `/help` (defaults to README) and `/help/*` (specific path). "Help" added to `Layout.tsx` top nav. |
+| 20B.7 | Schema-version-mismatch banner in web UI | Done | `GET /api/v1/schema-version` returns `{bundled, deployed, mismatch}`. `<SchemaVersionBanner>` in `Layout.tsx` polls every 60s and renders only on mismatch. Graceful for legacy deployments missing the RPC (deployed=null → no banner). |
+| 20B.8 | Add the `@version:` marker convention to `src/cerefox/db/schema.sql` and document it | Done | Header comment block in `schema.sql` includes `-- @version: 0.3.0` and a paragraph explaining when to bump. `cerefox_schema_version()` RPC at the bottom of `rpcs.sql` mirrors the value for the deployed side. |
+| 20B.9 | Tests: `tests/test_docs_resources.py` and `tests/api/test_docs_endpoints.py` | Done | 23 tests in `test_docs_resources.py` (listing, reading, path-traversal guards, find_doc fuzzy-match) + 10 tests in `test_docs_endpoints.py` (both docs endpoints + four `/api/v1/schema-version` response shapes + the existing `/api/v1/version` regression). Plus 4 CLI tests in `test_cli.py::TestDocsCommand`. |
 
 ### 20C: Script migrations to TypeScript
 
@@ -1767,30 +1767,30 @@ v0.4 (MCP server) → v0.5 (CLI) → v0.7 (ingestion).
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 20C.1 | Create `_shared/` directory at repo root with `package.json` | Pending | `"name": "@cerefox/_shared"`, `"type": "module"`, `"private": true`. Minimal — just enough for Bun and future npm workspaces to resolve imports. Add `tsconfig.json` (strict, ESNext modules). |
-| 20C.2 | Add `_shared/db-client/` — TS Supabase wrapper covering the read paths used by sync_docs and db_status | Pending | `@supabase/supabase-js` client factory + a thin `listProjects()`, `tableExists()`, `functionExists()`, `rowCount()` API. Zod schemas for project / migration / table-info responses. This is the seed of the shared DB client; will grow in v0.4. |
-| 20C.3 | Add `_shared/db-status/` — reusable schema-introspection module | Pending | `runDbStatusChecks(client) -> {tables, functions, indexes, migrations, version, schemaVersionMismatch}`. Imported by `scripts/db_status.ts` in this iteration and by `cerefox doctor` in v0.5. |
-| 20C.4 | Add `_shared/config/` — TS port of `_resolve_config_dir()` from 20A.1 | Pending | Same precedence: `CEREFOX_CONFIG_DIR` env → `./.env` in CWD → `~/.cerefox/`. Mirrors the Python module 1:1 so scripts behave the same as the CLI. Includes `loadEnv()` that respects the resolved dir. |
-| 20C.5 | Write `scripts/db_status.ts` (replaces `db_status.py`) | Pending | Imports `_shared/config/` for env loading and `_shared/db-status/` for the checks. Output format is byte-for-byte parity with `db_status.py` so screen-scraping doesn't break (no current tooling does, but the parity is a free guarantee). `--json` flag emits structured output. Refuses to run without `CEREFOX_SUPABASE_URL` / `CEREFOX_SUPABASE_KEY`. |
-| 20C.6 | Write `scripts/sync_docs.ts` (replaces `sync_docs.py`) | Pending | Imports `_shared/config/` and a new `_shared/ingest/` (TS minimal wrapper over the `cerefox-ingest` Edge Function — the simplest path that doesn't require porting the full ingestion pipeline yet). Extended for bundled-docs work: when invoked from inside an installed `@cerefox/memory` package (v0.4+), it knows how to find the bundled `_docs` instead of the repo. For v0.3.0 it always reads from the repo because no npm package exists yet. |
-| 20C.7 | Convert `scripts/db_status.py` and `scripts/sync_docs.py` to **deprecation shims** (graceful migration) | Pending | Each Python file is reduced to a short shim that prints a deprecation notice ("⚠ This script is deprecated as of v0.3.0. Use `bun scripts/<name>.ts` instead.") and exits non-zero. The shim does NOT silently forward to the TS version — explicit failure forces tooling / cron / doc-updates to migrate. Notice text includes the v0.4.0 hard-removal target. Adopted in place of hard-delete after the v0.3.0 design review (see Decision Log entry below). |
-| 20C.8 | Vitest test suite under `_shared/__tests__/` | Pending | Cover `_shared/config/` precedence (the TS mirror of 20A.8) and `_shared/db-client/` mocked-fetch tests. `bun test` runs them. CI not wired yet — that's v0.5 work. |
-| 20C.9 | Parity test: `bun scripts/sync_docs.ts --dry-run` lists the same files as the (now-deprecated) Python version did | Pending | Snapshot-test of the file list. Captured from the v0.2.0 `sync_docs.py` behavior before the shim conversion. Lives in `_shared/__tests__/sync_docs.test.ts`. |
-| 20C.10 | Update `docs/guides/ops-scripts.md` to document the new TS scripts | Pending | Two sections rewritten (`db_status.ts`, `sync_docs.ts`); intro paragraph notes that the remaining `.py` scripts (`db_deploy`, `db_migrate`, `backup_*`, `reindex_all`) port in v0.5 / v0.7. Add a "Running the TS scripts" preamble with the `bun scripts/<name>.ts` invocation. |
+| 20C.1 | Create `_shared/` directory at repo root with `package.json` | Done | `package.json` (name `@cerefox/_shared`, type module, private), `tsconfig.json` (strict, ESNext, bun-types). `_shared/README.md` documents the directory's purpose and future shape. `.gitignore` covers `_shared/node_modules` and `bun.lock`. |
+| 20C.2 | Add `_shared/db-client/` — TS Supabase wrapper | Done | `createClient(settings)` factory; surface: `listProjects`, `rpc`, `tableExists`, `functionExists`, `rowCount`. Zod schemas for project rows. `functionExists` routes through the new `cerefox_pg_function_exists()` introspection RPC with a legacy-fallback empty-call probe. |
+| 20C.3 | Add `_shared/db-status/` — reusable schema-introspection module | Done | `runDbStatusChecks(client, opts)` returns `{tables, functions, rowCounts, schemaVersion, allOk}`. `formatReport()` produces the human-readable output. Bundled-vs-deployed schema version compared via the `@version:` marker + `cerefox_schema_version()` RPC. |
+| 20C.4 | Add `_shared/config/` — TS port of `paths.py` | Done | Mirrors the Python resolver 1:1: `resolveConfigDir`, `resolveEnvFile`, `userStateDir`, `isDevMode`. Plus `loadEnv()` (idempotent dotenv loader; existing `process.env` always wins) and `loadSettings()` (typed read of the v0.3.0 settings subset). |
+| 20C.5 | Write `scripts/db_status.ts` (replaces `db_status.py`) | Done | Reads bundled `@version:` from `src/cerefox/db/schema.sql`; passes to `runDbStatusChecks`. `--json` flag emits structured output. Exit codes 0 / 1 / 2 (healthy / failures / config error). Smoke-tested against the maintainer's live Supabase. |
+| 20C.6 | Write `scripts/sync_docs.ts` (replaces `sync_docs.py`) | Done | Discovers `README.md` + `AGENT_GUIDE.md` + `AGENT_QUICK_REFERENCE.md` + every `docs/**/*.md`. Delegates to the `cerefox-ingest` Edge Function via `fetch` — server-side embedding, no local OpenAI key needed. `--dry-run` and `--project` flags preserved from the Python version. |
+| 20C.7 | Convert `scripts/db_status.py` and `scripts/sync_docs.py` to deprecation shims | Done | Each shim prints a ⚠ notice naming the TS replacement, the Bun install one-liner, and the v0.4.0 hard-removal target, then exits with code 2. Explicit failure (no silent forwarding) so migration is discoverable. Verified `python scripts/sync_docs.py` and `python scripts/db_status.py` both print the notice and exit 2. |
+| 20C.8 | Vitest test suite under `_shared/__tests__/` | Done | `paths.test.ts` covers all four resolver functions across 12 cases. Uses Bun's built-in `bun:test` runner (not Vitest — Bun's runner is API-compatible and is preferred per the design doc). All 14 tests pass under `bun test`. |
+| 20C.9 | Parity test: `sync_docs.ts` lists the same files as the (now-deprecated) Python version | Done | `sync_docs.test.ts` snapshots the file-discovery logic (root-level docs + recursive `docs/**/*.md`) and asserts non-empty + presence of well-known files + exclusion of contributor-only files. |
+| 20C.10 | Update `docs/guides/ops-scripts.md` | Done | New "Two languages, one directory" preamble with the TS/Python table; `db_status` and `sync_docs` sections rewritten for the TS form; new "TS scripts and `.env` resolution" subsection documents the precedence rule. |
 
 ### 20D: Cross-cutting — CONTRIBUTING, plan, decision log, cut_release.ts polish
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 20D.1 | Update `CONTRIBUTING.md` with the `_shared/` layout | Pending | New subsection under "Script-Language Policy" describing `_shared/db-client/`, `_shared/db-status/`, `_shared/config/`, and where future modules (`_shared/mcp-tools/`, `_shared/ingest/`) will land. The "shared TS module" concept is new to contributors. |
-| 20D.2 | Polish `cut_release.ts` UX: clarify the "current == new" case | Pending | When `currentVersion == newVersion`, print "Cutting release: 0.X.Y (current VERSION already at this value — pre-bumped, expected only for v0.2.0)" instead of "0.X.Y → 0.X.Y". Lifts the wart user observed cutting v0.2.0. |
-| 20D.3 | Add "Release workflow" subsection to `CONTRIBUTING.md` | Pending | Documents the normal flow: main sits at the last released version → PRs land without touching VERSION → `bun scripts/cut_release.ts X.Y.Z` does the bump. Calls out v0.2.0 as the one-off where VERSION was pre-bumped. |
-| 20D.4 | Update `.env.example` to mention `~/.cerefox/.env` as an option | Pending | Header comment block: "Either keep this `.env` at the repo root (dev mode) or move it to `~/.cerefox/.env` (production-style install)". No new env vars added — `CEREFOX_CONFIG_DIR` is an override, not the default. |
-| 20D.5 | Update `README.md` "Getting Started" with the new install paths | Pending | Add a brief note that `~/.cerefox/.env` is now an option for users who want a clean repo and centralized config. Keep dev-mode (repo-local `.env`) as the primary documented path until v0.4–v0.5 ship the npm install path. |
-| 20D.6 | Decision Log entry: "v0.3.0 — config-state refactor + first Python → TS script ports" | Pending | Captures: why `_resolve_config_dir()` precedence is "env var → repo-local → home" (dev-mode backward-compat); the choice of `importlib.resources` over `pkg_resources`; the choice to delete the Python scripts in the same commit as the TS replacements ship (rather than a parallel-maintenance period); the choice to seed `_shared/` with just `db-client` + `db-status` + `config` (deliberately *not* `ingest` — that'd pull in chunking + embedding orchestration, which is v0.7 work). |
-| 20D.7 | Mark all Iteration 20 tasks Done in plan.md | Pending | Final step before the release cut. |
-| 20D.8 | CHANGELOG `[Unreleased]` populated with v0.3.0 release notes | Pending | Following the Iteration 19 convention: `cut_release.ts` will promote it on cut. |
-| 20D.9 | Cut release v0.3.0 via `bun scripts/cut_release.ts 0.3.0` | Pending (post-merge) | Runs from `main` after the iter-20 PR merges. First test that the script handles a true `0.2.0 → 0.3.0` bump (v0.2.0 was the no-op "0.2.0 → 0.2.0" case). |
+| 20D.1 | Update `CONTRIBUTING.md` with the `_shared/` layout | Done | New "`_shared/` — cross-context TypeScript modules" subsection under Script-Language Policy with the directory layout, what each module is for, and where future `mcp-tools/` (v0.4) and `ingest/` (v0.7) modules will land. |
+| 20D.2 | Polish `cut_release.ts` UX: clarify the "current == new" case | Done | When `currentVersion == newVersion`, prints a one-line explanation ("VERSION already at this value — pre-bumped, normal workflow leaves VERSION at the prior release"). The v0.2.0 wart is lifted; v0.3.0 onward sees the normal arrow form. |
+| 20D.3 | Add "Release workflow" subsection to `CONTRIBUTING.md` | Done | Walks through the normal flow (PRs land without touching VERSION → cut_release.ts does the bump) and explicitly calls out v0.2.0 as the one-off pre-bumped release. Also re-iterates the force-move-tags rule. |
+| 20D.4 | Update `.env.example` to mention `~/.cerefox/.env` as an option | Done | Header comment documents the full three-tier precedence (CEREFOX_CONFIG_DIR > ./.env > ~/.cerefox/.env) and notes that dev mode is the typical contributor flow. |
+| 20D.5 | Update `README.md` "Getting Started" with the new install paths | Done | Project status roadmap table updated — v0.3.0 is now "this release" with the full feature list (~/.cerefox/, cerefox docs CLI, /app/help, schema-version banner, first TS script ports, _shared/ seeded). v0.2.0 dropped from "this release" to just shipped. The prereqs section + Node 20+ badge from the v0.2.0 fast-follow on main carry over. |
+| 20D.6 | Decision Log entry | Done | Prepended to *Cerefox Decision Log — 2026 Q2 (Part 2)* via `cerefox_ingest` with `document_id` (deterministic update, preserves every prior entry verbatim). Covers Decision 1 (dev-mode-wins precedence + v1.0 revisit), Decision 2 (shims vs hard-delete vs silent-forward), Decision 3 (`_shared/` seed scope), and Lesson 1 (PostgREST 42883 → add introspection RPC). |
+| 20D.7 | Mark all Iteration 20 tasks Done in plan.md | Done | This task. |
+| 20D.8 | CHANGELOG `[Unreleased]` populated with v0.3.0 release notes | Done | Full notes under `## [Unreleased]` in `CHANGELOG.md` — `cut_release.ts` will promote them to `[v0.3.0]` on cut. Same convention as Iteration 19. |
+| 20D.9 | Cut release v0.3.0 via `bun scripts/cut_release.ts 0.3.0` | Pending (post-merge) | Runs from `main` after the iter-20 PR merges. First true non-zero bump for the cut-release script (v0.2.0 was the pre-bumped dogfood case). |
 
 **Total**: 30 sub-tasks across four parts (9 + 9 + 10 + 9 minus 8 [20D.7 is meta]).
 
@@ -2001,42 +2001,44 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
 - **v0.1.21** (2026-05-25) — three small web-UI quality-of-life fixes: dashboard project
   counts no longer include trashed docs (now shows "5 (1 in trash)"); project documents
   page paginated; trash page shows project membership chips per row.
-- **v0.2.0** (cut from `main` post-merge of feat/v0.2.0-real-release) — "Real Release". Foundations + first TS artifact. VERSION
-  file as single source of truth; `cerefox --version` shows the real version (was stuck
-  on `0.1.0`); web UI footer with `<VersionFooter>` and `/api/v1/version` endpoint;
-  `scripts/cut_release.ts` (first TS file outside Edge Functions / frontend) implements
-  the full release ritual including the previously-missed `gh release create` step;
-  OSS hygiene files (issue templates, PR template, refreshed SECURITY.md,
-  CODE_OF_CONDUCT.md adopting Contributor Covenant 2.1 by reference, FUNDING.yml);
-  SemVer + script-language policies in CONTRIBUTING.md; Bun added as a contributor
+- **v0.2.0** (2026-05-26) — "Real Release". Foundations + first TS artifact.
+  VERSION file as single source of truth; `cerefox --version` shows the real
+  version (was stuck on `0.1.0`); web UI footer with `<VersionFooter>` and
+  `/api/v1/version` endpoint; `scripts/cut_release.ts` (first TS file outside
+  Edge Functions / frontend) implements the full release ritual including the
+  previously-missed `gh release create` step; OSS hygiene files; SemVer +
+  script-language policies in CONTRIBUTING.md; Bun added as a contributor
   prerequisite (end users unaffected). Design-of-record promoted from
   `docs/research/` to `docs/specs/`. **First-ever GitHub Release for Cerefox.**
+- **v0.3.0** (pending — cut post-merge of feat/v0.3.0-install-anywhere) —
+  "Install Anywhere". Config-state refactor with `~/.cerefox/` as the new
+  user-state root (backward-compat: repo-local `.env` still wins for dev mode);
+  bundled documentation surface (`cerefox docs [TOPIC]` CLI + `/app/help` web
+  UI page + `/api/v1/docs` endpoints); schema-version-mismatch banner that
+  closes the v0.1.19 redeploy footgun; first two Python → TS script ports
+  (`scripts/db_status.ts` + `scripts/sync_docs.ts`) per the §12f policy, with
+  the legacy `.py` files converted to **deprecation shims** (hard-removal in
+  v0.4.0). `_shared/` cross-context TS module seeded with `config/`,
+  `db-client/`, and `db-status/`. New introspection RPC
+  `cerefox_pg_function_exists()`. Frontend `dist/` bundled into the wheel via
+  hatchling `force-include`. End-user redeploy required:
+  `uv run python scripts/db_deploy.py` (two new RPCs ship in v0.3.0).
 
-**Test counts**: 512 unit tests + 80 e2e tests pass.
+**Test counts**: 569 Python unit tests + 14 Bun tests + 80 e2e tests pass.
 
 **Strategic shift codified** (2026-05-24): pivoting from "Iteration 18 = narrow TS port
 of MCP server" to the broader **Polish & Distribution arc** covering v0.2.0 through v1.0.0
 via a Python → TypeScript strangler-fig migration. Design-of-record:
 [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
 
-**Next**: Iteration 20 (v0.3.0 — "Install Anywhere"). Detailed task breakdown in
-the Iteration 20 section above — 30 sub-tasks across four parts:
+**Next**: Iteration 22 (v0.4.0 — "TS MCP Server", supersedes old Iteration 18).
+Local `cerefox mcp` stdio server moves from Python to TypeScript. First runtime
+component migrated. Publishes `@cerefox/mcp-local` to npm. Ships the
+`cerefox_get_help` MCP tool (Layer 3 of the MCP discoverability response) so
+remote/hosted-MCP/Edge-Function-only agents can discover Cerefox conventions
+without filesystem access. Hard-removes the `db_status.py` and `sync_docs.py`
+deprecation shims that v0.3.0 introduced. Detailed task breakdown to be filled
+in when iter-22 starts.
 
-- **20A** (9 tasks) — config-state refactor: `_resolve_config_dir()` precedence
-  (env override → repo-local `.env` → `~/.cerefox/.env`); `~/.cerefox/` becomes
-  user state root; SQL files load via `importlib.resources` so deploy scripts
-  work from any directory; frontend `dist/` bundled into the wheel.
-- **20B** (9 tasks) — docs surfacing: bundle guides into the package; new
-  `cerefox docs [TOPIC]` CLI command; web UI `/app/help` page; schema-version-
-  mismatch banner that closes the v0.1.19 redeploy footgun.
-- **20C** (10 tasks) — first TS script ports per §12f: `scripts/db_status.ts`
-  and `scripts/sync_docs.ts` replace their Python counterparts; seed
-  `_shared/` (config, db-client, db-status) — the cross-context TS module that
-  grows through v0.4–v0.7.
-- **20D** (9 tasks) — cross-cutting: `_shared/` documented in CONTRIBUTING.md;
-  cut_release.ts UX polish for the "current == new" case (lifts the v0.2.0
-  one-off wart); Decision Log entry; CHANGELOG; release cut.
-
-**After Iteration 20**: Iteration 22 (v0.4.0 — TS MCP server, supersedes old Iteration 18)
-→ Iterations 23-27 (TS CLI + remaining script ports, web server, ingestion, Python
-removal, v1.0 commitment).
+**After Iteration 22**: Iterations 23–27 (TS CLI + remaining script ports,
+web server, ingestion, Python removal, v1.0 commitment).
