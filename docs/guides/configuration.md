@@ -1,11 +1,28 @@
 # Cerefox Configuration Reference
 
-All settings use the `CEREFOX_` environment variable prefix and can be set in a `.env` file in the project root, or as actual environment variables.
+All settings use the `CEREFOX_` environment variable prefix and can be set in a `.env` file (location resolved per the rule below) or as actual environment variables.
 
 Copy `.env.example` to `.env` to get started:
 ```bash
 cp .env.example .env
 ```
+
+## Where Cerefox looks for `.env` (v0.3.0+)
+
+Resolved at process start, highest precedence wins:
+
+1. **`CEREFOX_CONFIG_DIR`** environment variable — explicit override; supports `~` expansion.
+2. **`./.env`** in the current working directory — dev mode. Wins for anyone running `cd /path/to/cerefox && uv run cerefox …`.
+3. **`~/.cerefox/.env`** — the user-state root; default for installed setups.
+
+For most contributors, option 2 (repo-local `.env`) wins automatically. For an installed CLI (no repo checkout), option 3 is the default. Use option 1 to point a single machine at multiple Cerefox knowledge bases:
+
+```bash
+CEREFOX_CONFIG_DIR=~/.cerefox-work cerefox search "…"
+CEREFOX_CONFIG_DIR=~/.cerefox-personal cerefox search "…"
+```
+
+Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../specs/polish-and-distribution-design.md).
 
 ---
 
@@ -202,7 +219,7 @@ uv run cerefox get-doc <document-id> --version <version-id>
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CEREFOX_BACKUP_DIR` | `./backups` | Local directory where file system backups are stored. Created automatically if it doesn't exist. |
+| `CEREFOX_BACKUP_DIR` | dev mode: `./backups` · user-state mode: `~/.cerefox/backups` (v0.3.0+) | Local directory where file system backups are stored. Created automatically if it doesn't exist. The default tracks the resolved config dir — dev users see no change. |
 | `CEREFOX_VERSION_RETENTION_HOURS` | `48` | How long to retain archived document versions (hours). The most recent version is always kept regardless of this setting. |
 
 ---

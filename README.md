@@ -80,8 +80,8 @@ already shipped (full history in [`CHANGELOG.md`](CHANGELOG.md)):
 
 | Release | Theme | Ships |
 |---|---|---|
-| **v0.2.0** (this release) | Foundations + first TS artifact | `VERSION` source-of-truth · OSS hygiene files · SemVer + script-language policies · `scripts/cut_release.ts` (first TS script outside Edge Functions and frontend) |
-| v0.3.0 | "Install anywhere" | `~/.cerefox/` user-state root · `cerefox docs` · first two Python scripts ported to TS |
+| v0.2.0 | Foundations + first TS artifact | `VERSION` source-of-truth · OSS hygiene files · SemVer + script-language policies · `scripts/cut_release.ts` (first TS script outside Edge Functions and frontend) |
+| **v0.3.0** (this release) | "Install anywhere" | `~/.cerefox/` user-state root · `cerefox docs` CLI + `/app/help` web UI · schema-version-mismatch banner · first two Python scripts ported to TS (`sync_docs.ts`, `db_status.ts`) · `_shared/` TS module seeded |
 | v0.4.0 | TS MCP server | Local `cerefox mcp` becomes a TS Bun process, published as `@cerefox/mcp-local` on npm |
 | v0.5.0 | TS CLI | `@cerefox/memory` on npm — `cerefox` callable from any directory, no Python install needed |
 | v0.6.0 – v0.7.0 | TS web server + ingestion pipeline | FastAPI → Hono · Python ingestion → TS |

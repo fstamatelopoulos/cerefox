@@ -1,172 +1,49 @@
 #!/usr/bin/env python3
-"""Sync Cerefox project documentation into the knowledge base.
+"""Deprecation shim for the v0.2.x Python sync_docs script.
 
-Ingests README.md and every Markdown file under docs/ (including docs/research/)
-into the specified project, updating existing documents in-place so their content
-stays current. Run this any time after editing documentation.
+As of v0.3.0, this script has been replaced by ``scripts/sync_docs.ts``
+(TypeScript, runs under Bun). The Python file remains as a deprecation
+notice so existing tooling, cron jobs, and docs that invoke
+``python scripts/sync_docs.py`` get a clear, actionable error pointing at
+the new location.
 
-Usage:
-    python scripts/sync_docs.py
-    python scripts/sync_docs.py --dry-run
-    python scripts/sync_docs.py --project "My Project"
+The shim deliberately exits non-zero rather than silently forwarding to the
+TS script — that way migration is explicit, not invisible. Hard-removal of
+this shim is scheduled for v0.4.0.
 
-Requires CEREFOX_SUPABASE_URL, CEREFOX_SUPABASE_KEY, and an embedding API key
-(OPENAI_API_KEY or CEREFOX_FIREWORKS_API_KEY) in your .env file.
+See:
+  docs/specs/polish-and-distribution-design.md  § 12f — Script-language policy
+  docs/plan.md                                  § Iteration 20 → 20C.7
 """
 
-import argparse
-import re
+from __future__ import annotations
+
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+DEPRECATION_MESSAGE = """\
+⚠  scripts/sync_docs.py is deprecated as of Cerefox v0.3.0.
 
-from cerefox.config import Settings
-from cerefox.db.client import CerefoxClient
-from cerefox.embeddings.cloud import CloudEmbedder
-from cerefox.ingestion.pipeline import IngestionPipeline
+   Use the TypeScript replacement instead:
 
-# Files / directories to sync, relative to the repo root.
-_TARGETS = [
-    "README.md",          # project overview
-    "AGENT_GUIDE.md",     # comprehensive agent reference for using Cerefox tools
-    "AGENT_QUICK_REFERENCE.md",   # minimal quick reference card for AI agents
-    "docs/",              # all guides, plans, specs, and research notes (recursively)
-]
+       bun scripts/sync_docs.ts          # same behavior
+       bun scripts/sync_docs.ts --help   # all flags
 
+   You need Bun installed:
+       curl -fsSL https://bun.sh/install | bash
 
-def _extract_title(content: str, fallback: str) -> str:
-    """Return the first H1 heading from content, or fallback if none found."""
-    for line in content.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("# "):
-            return stripped[2:].strip()
-    return fallback
+   Background: from v0.2.0 onward, all new scripts and CLI tooling are
+   written in TypeScript per the §12f script-language policy. Scripts
+   extended in a given iteration are ported then. sync_docs gained
+   bundled-docs awareness in v0.3.0, which triggered the port.
 
-
-def _collect_files(repo_root: Path) -> list[tuple[Path, str]]:
-    """Return (absolute_path, relative_source_path) pairs to sync."""
-    files: list[tuple[Path, str]] = []
-
-    # Root-level Markdown files
-    for root_file in ["README.md", "AGENT_GUIDE.md", "AGENT_QUICK_REFERENCE.md"]:
-        path = repo_root / root_file
-        if path.exists():
-            files.append((path, root_file))
-
-    docs_dir = repo_root / "docs"
-    if docs_dir.is_dir():
-        for md in sorted(docs_dir.rglob("*.md")):
-            rel = str(md.relative_to(repo_root))
-            files.append((md, rel))
-
-    return files
-
-
-def _make_embedder(settings: Settings) -> CloudEmbedder:
-    api_key = settings.get_embedder_api_key()
-    if not api_key:
-        provider = "OPENAI" if settings.embedder == "openai" else "FIREWORKS"
-        print(f"❌  Embedding API key not set. Set CEREFOX_{provider}_API_KEY in your .env file.")
-        sys.exit(1)
-    return CloudEmbedder(
-        api_key=api_key,
-        base_url=settings.get_embedder_base_url(),
-        model=settings.get_embedder_model(),
-        dimensions=settings.get_embedder_dimensions(),
-    )
+   This shim will be removed in v0.4.0. Please update any cron jobs,
+   make targets, or CI workflows that invoke this file.
+"""
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Sync project docs (README.md + docs/) into the Cerefox knowledge base.",
-    )
-    parser.add_argument(
-        "--project", "-p",
-        default="cerefox",
-        help='Project name to assign documents to (default: "cerefox").',
-    )
-    parser.add_argument(
-        "--dry-run", "-n",
-        action="store_true",
-        help="List files that would be synced without ingesting anything.",
-    )
-    args = parser.parse_args()
-
-    settings = Settings()
-    if not settings.is_supabase_configured():
-        print("❌  CEREFOX_SUPABASE_URL and CEREFOX_SUPABASE_KEY must be set.")
-        sys.exit(1)
-
-    client = CerefoxClient(settings)
-
-    # Resolve the project by name (case-insensitive).
-    projects = client.list_projects()
-    project = next((p for p in projects if p["name"].lower() == args.project.lower()), None)
-    if not project:
-        names = ", ".join(f'"{p["name"]}"' for p in projects) or "(none)"
-        print(f'❌  Project "{args.project}" not found.')
-        print(f'   Available projects: {names}')
-        print(f'   Create it first:    uv run cerefox create-project "{args.project}"')
-        sys.exit(1)
-
-    project_id = project["id"]
-    project_name = project["name"]
-
-    repo_root = Path(__file__).parent.parent
-    files = _collect_files(repo_root)
-
-    print(f'Syncing {len(files)} file(s) → project "{project_name}"')
-    if args.dry_run:
-        print("  (dry run — nothing will be ingested)\n")
-        for _, src in files:
-            print(f"  {src}")
-        return
-
-    embedder = _make_embedder(settings)
-    pipeline = IngestionPipeline(client, embedder, settings)
-
-    created = updated = skipped = errors = 0
-
-    for path, source_path in files:
-        try:
-            content = path.read_text(encoding="utf-8")
-        except Exception as exc:
-            print(f"  ✗  {source_path}: read error — {exc}")
-            errors += 1
-            continue
-
-        fallback = re.sub(r"[-_]", " ", path.stem).title()
-        title = _extract_title(content, fallback)
-
-        try:
-            result = pipeline.ingest_text(
-                content,
-                title,
-                source="file",
-                source_path=source_path,
-                project_ids=[project_id],
-                update_existing=True,
-            )
-        except Exception as exc:
-            print(f"  ✗  {source_path}: ingest error — {exc}")
-            errors += 1
-            continue
-
-        if result.action == "skipped":
-            skipped += 1
-            print(f"  =  {source_path}  ({title})")
-        elif result.action == "updated":
-            updated += 1
-            verb = "re-embedded" if result.reindexed else "metadata only"
-            print(f"  ↑  {source_path}  ({title}) [{verb}]")
-        else:
-            created += 1
-            print(f"  ✓  {source_path}  ({title}) [new — {result.chunk_count} chunks]")
-
-    print(f"\nDone. {created} new · {updated} updated · {skipped} unchanged · {errors} errors")
-    if errors:
-        sys.exit(1)
+    sys.stderr.write(DEPRECATION_MESSAGE)
+    sys.exit(2)
 
 
 if __name__ == "__main__":

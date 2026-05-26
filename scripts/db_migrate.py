@@ -23,15 +23,21 @@ Requires CEREFOX_DATABASE_URL in your .env file.
 
 import argparse
 import sys
+from importlib.resources import files
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
+# Make src/ importable when this script is run directly from a repo checkout.
+# No-op once `cerefox` is installed.
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import psycopg2
 
 from cerefox.config import Settings
 
-_MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "cerefox" / "db" / "migrations"
+# Migration files via importlib.resources so this script works from any
+# working directory and from both editable and installed-wheel modes.
+_MIGRATIONS_PKG = files("cerefox.db.migrations")
 
 # Ensure the tracking table exists. Safe to run even before db_deploy.py
 # has been called — this is the bootstrap step.
@@ -60,8 +66,11 @@ def _applied_migrations(cur: psycopg2.extensions.cursor) -> set[str]:
     return {row[0] for row in cur.fetchall()}
 
 
-def _all_migration_files() -> list[Path]:
-    return sorted(_MIGRATIONS_DIR.glob("*.sql"))
+def _all_migration_files() -> list[Traversable]:
+    return sorted(
+        (p for p in _MIGRATIONS_PKG.iterdir() if p.name.endswith(".sql")),
+        key=lambda p: p.name,
+    )
 
 
 def cmd_status(cur: psycopg2.extensions.cursor) -> None:
@@ -118,7 +127,7 @@ def cmd_migrate(
                 (f.name,),
             )
             conn.commit()
-            print(f"   ✓  Done")
+            print("   ✓  Done")
         except psycopg2.Error as exc:
             conn.rollback()
             print(f"\n❌  {f.name} failed: {exc}")

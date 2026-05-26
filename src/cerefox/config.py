@@ -1,7 +1,14 @@
 """Cerefox configuration via pydantic-settings.
 
-All settings are read from environment variables with the CEREFOX_ prefix,
-or from a .env file in the working directory. See .env.example for reference.
+Settings are read from environment variables with the ``CEREFOX_`` prefix,
+or from a ``.env`` file discovered via :func:`cerefox.paths.resolve_env_file`.
+
+Resolution precedence (see ``cerefox.paths`` for the full rule):
+  1. ``CEREFOX_CONFIG_DIR`` env var override.
+  2. Repo-local ``.env`` in the current working directory (dev mode).
+  3. ``~/.cerefox/.env`` (user-state root, the default for installed setups).
+
+See ``.env.example`` for the full list of supported settings.
 """
 
 from typing import Literal
@@ -9,11 +16,16 @@ from typing import Literal
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from cerefox.paths import default_backup_dir, resolve_env_file
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CEREFOX_",
-        env_file=".env",
+        # Resolved at class-import time. Dev users with a repo-local `.env`
+        # see the same behavior as pre-v0.3.0. Installed users (no repo-local
+        # `.env`) get `~/.cerefox/.env`.
+        env_file=str(resolve_env_file()),
         env_file_encoding="utf-8",
         env_ignore_empty=False,
         extra="ignore",
@@ -78,7 +90,12 @@ class Settings(BaseSettings):
     version_cleanup_enabled: bool = True
 
     # ── Storage ───────────────────────────────────────────────────────────────
-    backup_dir: str = "./backups"
+    # Resolved at Settings construction time. Dev mode (repo-local `.env`
+    # present) → `./backups` relative to CWD (preserves pre-v0.3.0 behavior).
+    # User-state mode → `~/.cerefox/backups`. Explicit `CEREFOX_BACKUP_DIR`
+    # env var always wins. See `cerefox.paths.default_backup_dir` for the
+    # full rule.
+    backup_dir: str = Field(default_factory=lambda: str(default_backup_dir()))
 
     # ── CLI caller identity ───────────────────────────────────────────────────
     # Default attribution for CLI invocations when --author / --author-type /

@@ -12,19 +12,22 @@ See docs/guides/setup-supabase.md for where to find this value.
 
 import argparse
 import sys
+from importlib.resources import files
 from pathlib import Path
 
-# Make src/ importable
+# Make src/ importable when this script is run directly from a repo checkout.
+# Once `cerefox` is installed (uv sync, pip install) this sys.path tweak is a
+# no-op — the resolved import wins.
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import psycopg2
 
 from cerefox.config import Settings
 
-# SQL files to apply, in order
-_SCHEMA_FILE = Path(__file__).parent.parent / "src" / "cerefox" / "db" / "schema.sql"
-_RPCS_FILE = Path(__file__).parent.parent / "src" / "cerefox" / "db" / "rpcs.sql"
-_MIGRATIONS_DIR = Path(__file__).parent.parent / "src" / "cerefox" / "db" / "migrations"
+# SQL files loaded via importlib.resources so this script works whether
+# `cerefox` is run from a repo checkout (editable install) or from an
+# installed wheel. No more "script reads from src/cerefox/db/" assumption.
+_DB_RESOURCES = files("cerefox.db")
 
 # Tables to drop in --reset mode (order matters for FK constraints)
 _RESET_SQL = """
@@ -93,8 +96,8 @@ def main() -> None:
         print("\nSet it in your .env file. See docs/guides/setup-supabase.md.")
         sys.exit(1)
 
-    schema_sql = _SCHEMA_FILE.read_text()
-    rpcs_sql = _RPCS_FILE.read_text()
+    schema_sql = _DB_RESOURCES.joinpath("schema.sql").read_text(encoding="utf-8")
+    rpcs_sql = _DB_RESOURCES.joinpath("rpcs.sql").read_text(encoding="utf-8")
 
     print("╔══════════════════════════════════════╗")
     print("║  Cerefox DB Deploy                   ║")
@@ -112,7 +115,7 @@ def main() -> None:
             print("Aborted.")
             sys.exit(0)
 
-    print(f"\nConnecting to database...")
+    print("\nConnecting to database...")
     conn = _connect(settings.database_url)
     cur = conn.cursor()
 
@@ -124,7 +127,10 @@ def main() -> None:
     # Build stamp SQL: mark all migration files as already applied.
     # These changes are incorporated in schema.sql/rpcs.sql, so db_migrate.py
     # must not re-apply them on an existing database.
-    migration_files = sorted(f.name for f in _MIGRATIONS_DIR.glob("*.sql"))
+    migrations_pkg = files("cerefox.db.migrations")
+    migration_files = sorted(
+        p.name for p in migrations_pkg.iterdir() if p.name.endswith(".sql")
+    )
     if migration_files:
         values = ", ".join(f"('{name}')" for name in migration_files)
         stamp_sql = (
@@ -147,7 +153,7 @@ def main() -> None:
         print(f"\n▶  {label}...")
         ok = _execute_sql(cur, sql, label, args.dry_run)
         if ok:
-            print(f"   ✓  Done")
+            print("   ✓  Done")
             success_count += 1
         else:
             print(f"\nDeployment stopped due to error in: {label}")

@@ -1,0 +1,15 @@
+{
+  "name": "@cerefox/_shared",
+  "version": "0.0.0-unreleased",
+  "description": "Shared TypeScript modules across Cerefox scripts, MCP server, and CLI. Internal — not published.",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/bun": "^1.1.0"
+  }
+}

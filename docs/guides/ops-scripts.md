@@ -1,8 +1,36 @@
 # Operations Scripts
 
-Reference guide for the operational scripts in `scripts/` (`db_deploy.py`, `db_migrate.py`, `db_status.py`, `backup_create.py`, `backup_restore.py`, `sync_docs.py`, `reindex_all.py`). Run these from the project root.
+Reference guide for the operational scripts in `scripts/`. Run these from the project root.
 
 > Looking for `cerefox <subcommand>` reference (ingest, search, get-doc, etc.)? See [`docs/guides/cli.md`](cli.md). This guide covers the `scripts/` directory only.
+
+## Two languages, one directory
+
+As of v0.3.0, Cerefox scripts come in two flavors:
+
+| Script | Language | Run with |
+|---|---|---|
+| `db_status.ts` | TypeScript (v0.3.0+) | `bun scripts/db_status.ts` |
+| `sync_docs.ts` | TypeScript (v0.3.0+) | `bun scripts/sync_docs.ts` |
+| `db_deploy.py` | Python | `uv run python scripts/db_deploy.py` |
+| `db_migrate.py` | Python | `uv run python scripts/db_migrate.py` |
+| `backup_create.py` | Python | `uv run python scripts/backup_create.py` |
+| `backup_restore.py` | Python | `uv run python scripts/backup_restore.py` |
+| `reindex_all.py` | Python | `uv run python scripts/reindex_all.py` |
+
+The TS scripts require [Bun](https://bun.sh) — install with `curl -fsSL https://bun.sh/install | bash`. They are functionally equivalent to their previous Python forms; **the legacy `db_status.py` and `sync_docs.py` are deprecation shims that exit with a pointer to the TS replacement**. Hard-removal of the shims is scheduled for v0.4.0.
+
+The remaining `.py` scripts stay Python until their scheduled port (v0.5 for `db_deploy` / `db_migrate`; v0.7 for `backup_*` / `reindex_all`) — per the §12f script-language policy in [`CONTRIBUTING.md`](../../CONTRIBUTING.md), Python scripts get ported when they're extended.
+
+### TS scripts and `.env` resolution
+
+`bun scripts/<name>.ts` reads the same `.env` the Python CLI does. Precedence:
+
+1. `CEREFOX_CONFIG_DIR` env var (explicit override; supports `~`).
+2. `./.env` in the current working directory (dev mode).
+3. `~/.cerefox/.env` (user-state root).
+
+See [`docs/specs/polish-and-distribution-design.md` §7b](../specs/polish-and-distribution-design.md) for the full rule.
 
 ---
 
@@ -32,22 +60,24 @@ CEREFOX_DATABASE_URL=postgresql://cerefox:cerefox@localhost:5432/cerefox \
 
 ---
 
-## db_status.py — Schema verification
+## db_status.ts — Schema verification
 
-Checks that the schema is correctly deployed and reports table statistics.
+**TypeScript (v0.3.0+).** Checks that the schema is correctly deployed and reports table statistics. Replaces the legacy `db_status.py`, which now prints a deprecation notice and exits non-zero.
 
 ```bash
-uv run python scripts/db_status.py
+bun scripts/db_status.ts          # human-readable report
+bun scripts/db_status.ts --json   # structured JSON output
 ```
 
 Reports:
-- pgvector extension status
-- Tables: cerefox_documents, cerefox_chunks, cerefox_document_versions, cerefox_projects
-- RPC functions: hybrid_search, fts_search, semantic_search, reconstruct_doc, save_note, search_docs, context_expand, snapshot_version, get_document, list_document_versions
-- Indexes: HNSW vector indexes (partial — current chunks only), FTS index, version index
+- Tables: `cerefox_documents`, `cerefox_chunks`, `cerefox_document_versions`, `cerefox_projects`, `cerefox_document_projects`, `cerefox_audit_log`, `cerefox_migrations`
+- RPC functions: hybrid_search, fts_search, semantic_search, reconstruct_doc, save_note, search_docs, context_expand, snapshot_version, get_document, list_document_versions, ingest_document, delete_document, create_audit_entry, list_audit_entries, list_metadata_keys, update_chunk_fts, **`cerefox_schema_version`** (new in v0.3.0), **`cerefox_pg_function_exists`** (new in v0.3.0)
 - Row counts per table
+- **Schema-version mismatch**: compares the `@version` marker in the bundled `schema.sql` against the deployed `cerefox_schema_version()` RPC. Non-zero exit if they differ (the same check powers the web UI's schema-mismatch banner).
 
-Exit code 0 if everything is healthy; non-zero if any check fails.
+Exit code 0 if everything is healthy; 1 if any check fails; 2 on configuration error.
+
+**Function-existence detection** routes through the `cerefox_pg_function_exists()` introspection RPC for reliability. Legacy deployments missing that RPC fall back to a naive "call with no args" probe — the legacy fallback will misreport RPCs that take required parameters as missing, which is itself a signal that the deployment needs `db_deploy.py`.
 
 ---
 
@@ -176,32 +206,26 @@ The backup directory (`./backup-data/` by default) is gitignored. Back up the ba
 
 ---
 
-## sync_docs.py — Sync project documentation into Cerefox
+## sync_docs.ts — Sync project documentation into Cerefox
 
-This optional script, ingests `README.md` and every Markdown file under `docs/` into your Cerefox knowledge
-base, updating existing documents in-place. Run this any time after editing documentation
-so that AI agents always have access to the current state of the project. This is only helpful if, like me, you keep the 
-Cerefox docs into your deployed Cerefox knowledge base.
+**TypeScript (v0.3.0+).** Ingests `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and every Markdown file under `docs/` into your Cerefox knowledge base, updating existing documents in-place. Run this any time after editing documentation so AI agents always have access to the current state of the project.
+
+Replaces the legacy `sync_docs.py`, which now prints a deprecation notice and exits non-zero.
 
 ```bash
-uv run python scripts/sync_docs.py [OPTIONS]
+bun scripts/sync_docs.ts [OPTIONS]
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--project NAME` | Project to assign documents to (default: `cerefox`) |
-| `--dry-run` | List files that would be synced without ingesting anything |
+| `--project NAME`, `-p NAME` | Project to assign documents to (default: `cerefox`) |
+| `--dry-run`, `-n` | List files that would be synced without ingesting anything |
 
-**Requires**: `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, and an embedding API key
-(`OPENAI_API_KEY` or `CEREFOX_FIREWORKS_API_KEY`). The target project must already exist
-(create it with `uv run cerefox create-project cerefox` if needed).
+**Requires**: `CEREFOX_SUPABASE_URL` and `CEREFOX_SUPABASE_ANON_KEY` (the legacy anon JWT — `eyJ…` — used to invoke Edge Functions). Embedding happens server-side inside the `cerefox-ingest` Edge Function, so you don't need an OpenAI / Fireworks key in your local env for the TS script.
 
-**What gets synced**: `README.md` + all `.md` files under `docs/` (including `docs/research/`).
-Research notes are included because Cerefox is a shared memory layer for multiple agents —
-exploratory notes, experiments, and decision rationale are exactly the kind of context
-agents benefit from. Files are matched to existing documents by their relative path
-(`source_path`), so re-running the script updates content in-place rather than creating
-duplicates.
+The target project must already exist (create it with `uv run cerefox create-project cerefox` if needed).
+
+**What gets synced**: `README.md` + `AGENT_GUIDE.md` + `AGENT_QUICK_REFERENCE.md` + all `.md` files under `docs/` (including `docs/research/` and `docs/specs/`). Research notes are included because Cerefox is a shared memory layer for multiple agents — exploratory notes, experiments, and decision rationale are exactly the kind of context agents benefit from. Files are matched to existing documents by their relative path (`source_path`), so re-running the script updates content in-place rather than creating duplicates.
 
 Example output:
 ```

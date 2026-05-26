@@ -49,9 +49,23 @@ pattern = "^(?P<version>\\S+)"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cerefox"]
-# Bundle the VERSION file inside the wheel so the runtime fallback in
-# `src/cerefox/__init__.py` works when imported from an installed wheel.
-force-include = { "VERSION" = "cerefox/_VERSION" }
+# Files that live outside src/cerefox/ but need to ship inside the wheel.
+# Bundled paths show up under cerefox/ at runtime and are read via
+# importlib.resources by the consuming modules.
+#
+#   VERSION              → consumed by src/cerefox/__init__.py for __version__
+#   frontend/dist        → consumed by src/cerefox/api/app.py for the SPA mount
+#   docs/guides/         → consumed by docs surfacing (cerefox docs, /app/help)
+#   AGENT_GUIDE.md       ↗
+#   AGENT_QUICK_REFERENCE.md ↗
+#   README.md            → bundled so users can read "what is this" without GitHub
+[tool.hatch.build.targets.wheel.force-include]
+"VERSION" = "cerefox/_VERSION"
+"frontend/dist" = "cerefox/_frontend_dist"
+"docs/guides" = "cerefox/_docs/guides"
+"AGENT_GUIDE.md" = "cerefox/_docs/AGENT_GUIDE.md"
+"AGENT_QUICK_REFERENCE.md" = "cerefox/_docs/AGENT_QUICK_REFERENCE.md"
+"README.md" = "cerefox/_docs/README.md"
 
 [tool.ruff]
 line-length = 100
