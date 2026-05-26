@@ -1,0 +1,10 @@
+{
+  "name": "cerefox-scripts",
+  "version": "0.0.0-unreleased",
+  "description": "Repo-root dependencies for scripts/*.ts. Internal — not published. Distinct from _shared/ (which owns shared-module deps like supabase-js + zod). At v0.4.0 this consolidates into a proper npm workspace covering _shared/, packages/mcp-local/, etc.",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ora": "^9.4.0"
+  }
+}

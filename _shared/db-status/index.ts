@@ -69,9 +69,26 @@ export interface DbStatusReport {
   allOk: boolean;
 }
 
+export type ProgressPhase = "tables" | "functions" | "rowCounts" | "schemaVersion";
+
+export interface ProgressEvent {
+  phase: ProgressPhase;
+  /** 1-indexed; ≤ total. */
+  index: number;
+  total: number;
+  /** The thing being checked right now (table / function / row-count target). */
+  current: string;
+}
+
 export interface RunChecksOptions {
   /** Pass the bundled schema version (read from schema.sql header) for mismatch detection. */
   bundledSchemaVersion?: string | null;
+  /**
+   * Optional callback fired before each individual probe. Lets the driver
+   * update a spinner / progress bar without `_shared/db-status/` taking
+   * on a `ora` dependency itself.
+   */
+  onProgress?: (event: ProgressEvent) => void;
 }
 
 export async function runDbStatusChecks(
@@ -81,8 +98,11 @@ export async function runDbStatusChecks(
   const tables: CheckResult[] = [];
   const functions: CheckResult[] = [];
   const rowCounts: Record<string, number | null> = {};
+  const onProgress = opts.onProgress;
 
-  for (const t of EXPECTED_TABLES) {
+  for (let i = 0; i < EXPECTED_TABLES.length; i++) {
+    const t = EXPECTED_TABLES[i];
+    onProgress?.({ phase: "tables", index: i + 1, total: EXPECTED_TABLES.length, current: t });
     try {
       const exists = await client.tableExists(t);
       tables.push({ name: t, status: exists ? "ok" : "missing" });
@@ -95,7 +115,14 @@ export async function runDbStatusChecks(
     }
   }
 
-  for (const f of EXPECTED_FUNCTIONS) {
+  for (let i = 0; i < EXPECTED_FUNCTIONS.length; i++) {
+    const f = EXPECTED_FUNCTIONS[i];
+    onProgress?.({
+      phase: "functions",
+      index: i + 1,
+      total: EXPECTED_FUNCTIONS.length,
+      current: f,
+    });
     try {
       const exists = await client.functionExists(f);
       functions.push({ name: f, status: exists ? "ok" : "missing" });
@@ -108,7 +135,14 @@ export async function runDbStatusChecks(
     }
   }
 
-  for (const t of ROW_COUNT_TABLES) {
+  for (let i = 0; i < ROW_COUNT_TABLES.length; i++) {
+    const t = ROW_COUNT_TABLES[i];
+    onProgress?.({
+      phase: "rowCounts",
+      index: i + 1,
+      total: ROW_COUNT_TABLES.length,
+      current: t,
+    });
     try {
       rowCounts[t] = await client.rowCount(t);
     } catch {
@@ -116,6 +150,7 @@ export async function runDbStatusChecks(
     }
   }
 
+  onProgress?.({ phase: "schemaVersion", index: 1, total: 1, current: "cerefox_schema_version" });
   let deployed: string | null = null;
   try {
     const result = await client.rpc<string | { cerefox_schema_version?: string } | unknown>(

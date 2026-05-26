@@ -9,6 +9,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **`db_status.ts` shows progress while it runs.** New `ora` spinner with
+  per-phase labels (`Checking tables [N/M]  cerefox_chunks` etc.) so the
+  4-5 second wait against Supabase Cloud has user-visible feedback. Spinner
+  is suppressed in `--json` mode and when stdout isn't a TTY (cron / CI),
+  so machine consumers stay clean. Implemented as an optional `onProgress`
+  callback on `runDbStatusChecks` — `_shared/db-status/` stays decoupled
+  from the spinner library; the driver script owns it.
+- **Repo-root `package.json`** for script-level TS deps (separate from
+  `_shared/package.json`, which owns shared-module deps). At v0.4.0 this
+  consolidates into a proper npm workspace.
+
 ### Changed
 
 - **Deprecation-shim policy walk-back** — the v0.3.0 release notes announced
@@ -20,6 +33,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   roadmap if/when the shims become a real maintenance burden. Touches
   `scripts/sync_docs.py`, `scripts/db_status.py`, `docs/guides/ops-scripts.md`,
   `docs/plan.md`.
+
+### Fixed
+
+- **Orphan zero-chunk document cleanup.** A single document row
+  (`id=459c954a-…`, title="Untitled", 0 chunks, 0 chars) that pre-existed
+  v0.3.0 was purged from the maintainer's instance. The underlying latent
+  bug — `cerefox_get_document` JOINs against `cerefox_chunks` and returns
+  empty for zero-chunk docs, while `list_documents` happily lists them —
+  is captured as a candidate for v0.4.0 (refuse zero-chunk creates at the
+  ingestion RPC).
 
 ---
 

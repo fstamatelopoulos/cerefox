@@ -231,3 +231,8 @@ frontend/.vite/
 _shared/node_modules/
 _shared/bun.lock
 _shared/bun.lockb
+
+# Repo-root TS script deps (Bun) — same story
+/node_modules/
+/bun.lock
+/bun.lockb

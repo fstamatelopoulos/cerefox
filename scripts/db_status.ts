@@ -21,11 +21,24 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exit } from "node:process";
+import { exit, stdout } from "node:process";
+
+import ora from "ora";
 
 import { loadSettings } from "../_shared/config/index.ts";
 import { createClient } from "../_shared/db-client/index.ts";
-import { formatReport, runDbStatusChecks } from "../_shared/db-status/index.ts";
+import {
+  formatReport,
+  runDbStatusChecks,
+  type ProgressEvent,
+} from "../_shared/db-status/index.ts";
+
+const PHASE_LABEL: Record<ProgressEvent["phase"], string> = {
+  tables: "Checking tables",
+  functions: "Checking RPCs",
+  rowCounts: "Counting rows",
+  schemaVersion: "Reading schema version",
+};
 
 const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -82,13 +95,32 @@ async function main(): Promise<void> {
   const client = createClient(settings);
   const bundled = readBundledSchemaVersion();
 
+  // Spinner only when writing to a TTY and not in --json mode. The JSON
+  // output goes to stdout; spinner writes to stderr (ora default), so the
+  // two never collide, but the JSON consumer probably also wants stderr
+  // clean. The TTY check skips the spinner under `| cat` / CI redirects.
+  const useSpinner = !args.json && stdout.isTTY;
+  const spinner = useSpinner
+    ? ora({ text: "Starting checks…", spinner: "dots" }).start()
+    : null;
+
   let report;
   try {
-    report = await runDbStatusChecks(client, { bundledSchemaVersion: bundled });
+    report = await runDbStatusChecks(client, {
+      bundledSchemaVersion: bundled,
+      onProgress: spinner
+        ? (ev) => {
+            const label = PHASE_LABEL[ev.phase];
+            spinner.text = `${label} [${ev.index}/${ev.total}]  ${ev.current}`;
+          }
+        : undefined,
+    });
   } catch (err) {
-    console.error(`❌  Could not run checks: ${(err as Error).message}`);
+    spinner?.fail(`Could not run checks: ${(err as Error).message}`);
     exit(2);
   }
+
+  spinner?.stop();
 
   if (args.json) {
     console.log(JSON.stringify(report, null, 2));
