@@ -1834,42 +1834,25 @@ existing `cerefox-mcp` Edge Function via a new `_shared/mcp-tools/` module. Publ
 
 **Estimated effort**: 3-4 weeks part-time.
 
-### Manual prerequisites (maintainer tasks around the v0.4.0 cut)
+### Release & publish — the OSS-relevant shape
 
-**Good news**: the `@cerefox` npm organization **already exists** (publishes
-`@cerefox/codefactory` for cfcf today). No org-creation step needed.
+**Publishes use npm OIDC trusted publishing**. The `.github/workflows/release.yml`
+workflow (added in this iteration — see 22F.1) declares `permissions: id-token: write`
+and runs `npm publish --access public --provenance` from `packages/memory/`.
+Every published tarball ships with a sigstore-signed attestation linking it to
+the exact GitHub Actions run that built it; the "Provenance" badge appears on
+the package's npmjs.com page.
 
-**One-time bootstrap at v0.4.0 cut time** (mirrors the cfcf 2026-05-01 npm-auth
-playbook captured in Cerefox under "cfcf Decisions & Lessons Log"). This is the
-recognised npm pattern for first-time publication — npm OIDC can't bind trust
-to a package that doesn't exist yet, so a temporary token bootstraps the first
-publish and OIDC takes over forever after.
+**The publish path is maintainer-only by design.** OIDC trust is bound to this
+specific repo + workflow path (`fstamatelopoulos/cerefox` / `release.yml`);
+contributors can propose changes via PR but can't trigger a publish. Releases
+are cut by running `cut_release.ts` from `main` with the `--npm-publish` flag
+(see 22F.2); the flag defaults to `false` so a bare `cut_release.ts X.Y.Z`
+produces tag + GitHub Release without npm publishing — useful for staging.
 
-Maintainer ritual at the v0.4.0 cut (executed in this order, on the day of the
-cut):
-
-1. **Create a granular npm access token** scoped to `@cerefox/memory*`
-   (covers the package + any future native-platform siblings), with
-   **bypass-2FA enabled** (required because CI can't satisfy 2FA-via-app).
-   Store in the `fstamatelopoulos/cerefox` repo's GitHub Secrets as
-   `NPM_TOKEN`.
-2. **Run the v0.4.0 cut** with `--npm-publish` (see 22F.3). The release
-   workflow does the first publish using `NPM_TOKEN`.
-3. **Revoke the token same day** on npmjs.com.
-4. **Register the OIDC Trusted Publisher** entry on npmjs.com for
-   `@cerefox/memory`, pointing at `fstamatelopoulos/cerefox` +
-   `.github/workflows/release.yml`. 5-minute UI step.
-5. **Tighten the package settings** on npmjs.com to "Require 2FA and
-   disallow tokens (recommended)" — strictest supply-chain posture npm
-   offers when combined with OIDC.
-
-From v0.4.1 onwards (and every release after), the workflow publishes via
-OIDC with no long-lived secret in the repo. `--provenance` flag attaches a
-sigstore-signed attestation to every tarball.
-
-Full background: `cerefox_search "npm publish auth OIDC trusted publishing"`
-(returns the cfcf 2026-05-01 decision-log entry verbatim — that work is
-directly applicable here and ingested into the maintainer's Cerefox).
+First-publish bootstrap (single-maintainer ritual, day of v0.4.0 cut) is
+intentionally not documented here. It's tracked in the maintainer's Cerefox
+Decision Log alongside the equivalent cfcf playbook.
 
 ### Refinements vs. the design-doc bullets
 
@@ -1921,22 +1904,15 @@ cfcf's existing npm-publish playbook (already ingested in Cerefox):
    same publish lineage. No rename, no orphaned npm package, no migration
    friction for early adopters. Mirrors cfcf's `@cerefox/codefactory` shape
    (one package, one-or-more bins).
-8. **Decouple `npm publish` from `cut_release.ts`.** Per cfcf's experience,
-   tag-cutting and npm-publishing are two distinct confirmation surfaces —
-   you sometimes want to ship a tag without immediately propagating to npm
-   (to spot a problem in the staging window and roll a patch). v0.4 adds
-   a `--npm-publish` flag (default `false`) to `cut_release.ts`. When set,
-   the script triggers a GitHub Actions workflow via `gh workflow run`
-   rather than calling `npm publish` directly. The workflow is the auditable
-   surface that actually publishes (with `--provenance` attestation and
-   OIDC trust).
-9. **Reuse the cfcf OIDC playbook for npm auth.** No fresh research; the
-   2026-05-01 cfcf decision-log entry (already in Cerefox; searchable via
-   `cerefox_search "npm publish auth OIDC trusted publishing"`) is the
-   step-by-step. Bootstrap with one-shot `NPM_TOKEN` at v0.4.0 cut, revoke
-   same day, register OIDC Trusted Publisher, tighten to "require 2FA,
-   disallow tokens". Same pattern, different repo (`fstamatelopoulos/cerefox`
-   instead of `/cfcf`); the `@cerefox` npm org already exists.
+8. **Decouple `npm publish` from `cut_release.ts`.** Tag-cutting and
+   npm-publishing are two distinct confirmation surfaces — you sometimes
+   want to ship a tag without immediately propagating to npm (to spot a
+   problem in the staging window and roll a patch before the world sees it).
+   v0.4 adds a `--npm-publish` flag (default `false`) to `cut_release.ts`.
+   When set, the script triggers a GitHub Actions workflow via
+   `gh workflow run` rather than calling `npm publish` directly. The
+   workflow (`.github/workflows/release.yml`) is the auditable surface
+   that actually publishes, with `--provenance` attestation and OIDC trust.
 
 ### Backward-compat invariant
 
@@ -2052,42 +2028,36 @@ users.
 | 22E.2 | Update `src/cerefox/mcp_server.py` with `cerefox_get_help` so the legacy fallback exposes 9 tools too | Pending | Symmetry — agents that hit the fallback see the same 9-tool surface. The Python implementation reads `AGENT_QUICK_REFERENCE.md` via `cerefox.docs_resources` (v0.3.0 helper) so it's also kept in sync. |
 | 22E.3 | Unit tests for the soft-wrapper logic | Pending | Mock `subprocess`/`os.execvp` to verify the probe → execvp / fallback decision. Two paths, one test each. |
 
-### 22F: Publishing — `@cerefox/memory` to npm via OIDC
+### 22F: Publishing — `@cerefox/memory` to npm
 
-**Package naming decision (post-design-doc refinement)**: ship the single
-package `@cerefox/memory` from v0.4.0, containing only the `cerefox-mcp`
-binary initially. v0.5.0 adds the `cerefox` CLI bin to the same package
-(same publish lineage). This supersedes the design doc's two-package plan
-(`@cerefox/mcp-local` in v0.4 then `@cerefox/memory` in v0.5) — no rename,
-no orphaned npm package, no migration friction for early adopters. Mirrors
-cfcf's `@cerefox/codefactory` shape (one package, one-or-more bins).
+**Package**: `@cerefox/memory`. v0.4.0 contains only the `cerefox-mcp` bin;
+v0.5.0 adds the `cerefox` CLI bin to the same package (same publish lineage).
+One install, growing surface. Mirrors cfcf's `@cerefox/codefactory` shape.
 
-**Release workflow**: GitHub Actions workflow at `.github/workflows/release.yml`,
-modeled directly on cfcf's. Triggered via `workflow_dispatch` with a
-`publish_to_npm` boolean input. The cut script triggers it (instead of
-calling `npm publish` directly), so the publish step is always an auditable
-GitHub Actions run with provenance attestation.
+**Workflow**: `.github/workflows/release.yml` (added in 22F.1) declares
+`permissions: id-token: write` and runs `npm publish --access public
+--provenance` from `packages/memory/`. Triggered via `workflow_dispatch`
+with a `publish_to_npm` boolean input.
 
-**`cut_release.ts` gains a `--npm-publish` flag, default `false`**. Two
-deliberate confirmation layers (the flag + the workflow_dispatch input)
-because the cfcf experience showed that staging a release tag without
-immediately publishing to npm is a real workflow (you can spot a problem
-post-tag-pre-publish and roll a patch before the world sees it).
+**`cut_release.ts --npm-publish` flag** (default `false`). When set, the
+cut script triggers the workflow via `gh workflow run` after the tag is
+pushed. Two confirmation layers — the flag on the cut + the
+`workflow_dispatch` input — let the maintainer cut a tag without
+immediately propagating to npm (useful for staging or for the
+spot-a-problem-post-tag case).
 
-| Flag combination | Behavior |
+| Flag | Behavior |
 |---|---|
-| `bun scripts/cut_release.ts 0.4.0` (default) | Cut tag + GitHub Release only. npm publish is a separate manual step (`gh workflow run release.yml -f publish_to_npm=true`). |
-| `bun scripts/cut_release.ts 0.4.0 --npm-publish` | Cut tag + GitHub Release, then trigger the release workflow with `publish_to_npm=true`. The "I'm confident, ship it" path. |
-| `bun scripts/cut_release.ts 0.4.0 --dry-run` | Same as before — preview everything, write nothing. |
+| `bun scripts/cut_release.ts 0.4.0` (default) | Cut tag + GitHub Release only. npm publish requires a separate `gh workflow run release.yml -f publish_to_npm=true`. |
+| `bun scripts/cut_release.ts 0.4.0 --npm-publish` | Cut tag + GitHub Release + trigger the workflow with `publish_to_npm=true`. |
+| `bun scripts/cut_release.ts 0.4.0 --dry-run` | Same as before — preview only. |
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 22F.1 | **MAINTAINER**: bootstrap one-shot `NPM_TOKEN` in GitHub Secrets | Pending (manual, day of cut) | See "Manual prerequisites" at the top of this iteration. Granular token scoped to `@cerefox/memory*`, bypass-2FA enabled, **revoked the same day**. |
-| 22F.2 | Write `.github/workflows/release.yml` | Pending | Modeled on cfcf's. Triggered by `workflow_dispatch` with `publish_to_npm` (boolean) input. Job 1 (always): build + test. Job 2 (gated on `publish_to_npm == true`): `npm publish --access public --provenance` from `packages/memory/`. v0.4.0 uses `NPM_TOKEN`; v0.4.1+ swaps to OIDC with `permissions: id-token: write`. |
-| 22F.3 | Extend `scripts/cut_release.ts` with `--npm-publish` flag (default `false`) | Pending | When set, after the GitHub Release is created, the script shells out to `gh workflow run release.yml -f publish_to_npm=true -f tag=vX.Y.Z`. Decoupled from the actual publish — the workflow does that. Default `false` so a bare `bun scripts/cut_release.ts X.Y.Z` is publish-free. |
-| 22F.4 | First publish: `@cerefox/memory@0.4.0` | Pending (during cut) | Bootstrap pattern: the v0.4.0 cut runs with `NPM_TOKEN`. Verify with `npx @cerefox/memory cerefox-mcp --version` from a fresh shell. |
-| 22F.5 | **MAINTAINER**: revoke the bootstrap `NPM_TOKEN`, register OIDC Trusted Publisher, tighten package settings | Pending (manual, same day) | 5-minute UI ritual on npmjs.com after the v0.4.0 publish succeeds. Register OIDC against `fstamatelopoulos/cerefox` + `.github/workflows/release.yml`. Set package to "Require 2FA and disallow tokens". v0.4.1+ workflows publish via OIDC with `--provenance`. |
-| 22F.6 | Document the install one-liner | Pending | `npm install -g @cerefox/memory` (or `bun install -g …`), then MCP configs invoke `cerefox-mcp` (the bin name inside the package). Goes in README + AGENT_GUIDE + `docs/guides/connect-agents.md` + new `docs/guides/migration-v0.4.md`. |
+| 22F.1 | Write `.github/workflows/release.yml` | Pending | OIDC-publish pattern modeled on cfcf's. Triggered by `workflow_dispatch` with `publish_to_npm` (boolean) input. Job 1 (always): build + test. Job 2 (gated on `publish_to_npm == true`): `npm publish --access public --provenance` from `packages/memory/`. `permissions: id-token: write` for OIDC trust. |
+| 22F.2 | Extend `scripts/cut_release.ts` with `--npm-publish` flag (default `false`) | Pending | When set, after the GitHub Release is created, the script shells out to `gh workflow run release.yml -f publish_to_npm=true -f tag=vX.Y.Z`. Decoupled from the actual publish — the workflow does that. Default `false` so a bare `bun scripts/cut_release.ts X.Y.Z` is publish-free. |
+| 22F.3 | First publish: `@cerefox/memory@0.4.0` | Pending (during cut) | Verify with `npx @cerefox/memory cerefox-mcp --version` from a fresh shell. Bootstrap procedure is the maintainer's responsibility (tracked in their private Decision Log). |
+| 22F.4 | Document the install one-liner | Pending | `npm install -g @cerefox/memory` (or `bun install -g …`), then MCP configs invoke `cerefox-mcp` (the bin name inside the package). Goes in README + AGENT_GUIDE + `docs/guides/connect-agents.md` + new `docs/guides/migration-v0.4.md`. |
 
 ### 22G: Documentation + cross-cutting
 
@@ -2116,7 +2086,7 @@ performance + freshness upgrade they can take when convenient.
 | 22G.9 | Mark all Iteration 22 tasks Done | Pending | Final step before PR. |
 | 22G.10 | Cut release v0.4.0 via `bun scripts/cut_release.ts 0.4.0 --npm-publish` | Pending (post-merge) | First-ever npm publication for Cerefox. Maintainer runs the bootstrap rituals (22F.1, 22F.5) on the same day. |
 
-**Total**: 44 sub-tasks across 7 parts (plus the manual npm-token bootstrap + OIDC-registration rituals at v0.4.0 cut time).
+**Total**: 42 sub-tasks across 7 parts. (Plus a maintainer-side bootstrap ritual at v0.4.0 cut time that intentionally lives in the maintainer's private Decision Log, not here.)
 
 **Tests / risk**: medium-high overall.
 
@@ -2355,13 +2325,12 @@ Detailed 39-task breakdown landed in the Iteration 22 section above — 7 parts:
   `npx @cerefox/memory cerefox-mcp`, falls back to the legacy Python impl
   with a stderr nudge if npm/Bun isn't available. No hard break of
   existing MCP configs. (Refinement vs. the design doc's "shells out to npx".)
-- **22F** (6 tasks) — first npm publication for Cerefox. Reuses cfcf's
-  proven OIDC bootstrap playbook (one-shot `NPM_TOKEN` → revoke same day →
-  register Trusted Publisher). `--npm-publish` flag on `cut_release.ts`
+- **22F** (4 tasks) — first npm publication for Cerefox. Adds the
+  `.github/workflows/release.yml` workflow (OIDC trusted publishing,
+  `--provenance` attestation). `--npm-publish` flag on `cut_release.ts`
   defaults to `false` so tag-cutting and publishing are two distinct
-  confirmation surfaces. **Maintainer rituals**: bootstrap token at cut
-  time, OIDC registration on npmjs.com same day. (The `@cerefox` org
-  already exists.)
+  confirmation surfaces. The maintainer-side bootstrap procedure is
+  tracked privately, not here.
 - **22G** (10 tasks) — docs (`migration-v0.4.md` for existing users,
   `connect-agents.md` updates for new users, agent guides, CLAUDE.md,
   CONTRIBUTING.md, setup-supabase note on OIDC), Decision Log, CHANGELOG,
