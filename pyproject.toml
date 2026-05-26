@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cerefox"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Personal second brain: cloud knowledge backend with MCP access for AI agents"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -41,8 +41,17 @@ dev = [
     "ruff>=0.4.0",
 ]
 
+[tool.hatch.version]
+# Single source of truth: the plain-text VERSION file at the repo root.
+# Bumped (and tagged) by `bun scripts/cut_release.ts`.
+path = "VERSION"
+pattern = "^(?P<version>\\S+)"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/cerefox"]
+# Bundle the VERSION file inside the wheel so the runtime fallback in
+# `src/cerefox/__init__.py` works when imported from an installed wheel.
+force-include = { "VERSION" = "cerefox/_VERSION" }
 
 [tool.ruff]
 line-length = 100

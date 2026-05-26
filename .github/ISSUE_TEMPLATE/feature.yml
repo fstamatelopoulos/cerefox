@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a new feature or capability for Cerefox.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing something! Before you write a lot, please skim
+        [`docs/research/vision.md`](../docs/research/vision.md) and the open issues
+        to see whether this is already on the radar.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: |
+        Describe the situation today and why it's painful — before describing the fix.
+        "What goes wrong" is usually more useful than "what I want".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: How would Cerefox behave if this feature existed? Concrete examples welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds exist today? Why are they insufficient?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which surface is affected?
+      multiple: true
+      options:
+        - CLI
+        - Local MCP server
+        - Remote MCP (Edge Function)
+        - Web UI
+        - Postgres schema / RPCs
+        - Python ingestion pipeline
+        - Documentation
+        - Other
+    validations:
+      required: true

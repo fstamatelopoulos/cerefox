@@ -9,9 +9,120 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap. Next batch of work is being scoped on the
-`research/installer-design` branch (polish & distribution design,
-v0.2.0 onward).
+**"Real Release"** — the first iteration of the Polish & Distribution arc
+([design](docs/specs/polish-and-distribution-design.md)). Foundations and the
+project's first TypeScript artifact outside Edge Functions and the frontend.
+**The first-ever GitHub Release for Cerefox** — `gh release list` was empty
+until this tag despite 24+ prior tags being pushed.
+
+End users are unaffected by this release. **Bun is now a contributor
+prerequisite**; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Added
+
+- **`VERSION` file at repo root** — plain-text single source of truth. Read by
+  `pyproject.toml` via hatchling dynamic version (`[tool.hatch.version]` with a
+  regex pattern on the file); read at runtime by `src/cerefox/__init__.py`
+  with a three-tier fallback (`cerefox/_VERSION` bundled in the wheel via
+  `force-include` → `<repo>/VERSION` in dev mode → `importlib.metadata`). The
+  result: `cerefox --version` reports the real installed version — it had been
+  stuck on `0.1.0` since the v0.1.0 tag, eight tags behind reality.
+- **Web UI version footer.** Small text at the bottom of every page, links to
+  the matching GitHub Release. New `<VersionFooter>` component
+  (`frontend/src/components/VersionFooter.tsx`) consumes a new
+  `GET /api/v1/version` endpoint that returns `{version, git_commit_short,
+  build_date}`. `git_commit_short` is resolved via `git rev-parse` in dev mode
+  or the `CEREFOX_GIT_COMMIT` env var in CI; `build_date` is read from
+  `CEREFOX_BUILD_DATE`. TanStack Query with `staleTime: Infinity` — fetched
+  once per session.
+- **`scripts/cut_release.ts`** — the project's first TypeScript artifact outside
+  Edge Functions and the frontend, and the trigger for the new Bun contributor
+  prerequisite. Bun-runnable. Implements the full 11-step release ritual from
+  [design doc §12b](docs/specs/polish-and-distribution-design.md):
+  preflight (clean working tree, on `main`, in sync with origin, target tag
+  doesn't exist) → CHANGELOG promote `[Unreleased]` to `[vX.Y.Z] -- <today>`
+  with a fresh empty `[Unreleased]` heading → commit `chore: cut vX.Y.Z` →
+  annotated tag with the CHANGELOG section as the tag message → push commit
+  and tag → `gh release create` with the CHANGELOG section as the notes file.
+  Modes: `--check` (report current + suggested next bump), `--dry-run`
+  (everything except file writes), `--yes` (skip the final push confirmation).
+  Refuses to overwrite an existing tag — enforces the "force-move tags only
+  on objective failure" rule from the 2026-05-25 Decision Log entry.
+- **`.github/ISSUE_TEMPLATE/`** — four YAML-form templates: `bug.yml`,
+  `feature.yml`, `install-problem.yml`, `question.yml`. Required fields,
+  dropdowns for access-path / surface, and pre-filled labels.
+- **`.github/pull_request_template.md`** with sections for Summary,
+  Architecture / SemVer, Test plan, Docs, and Related. Mirrors current commit
+  message conventions.
+- **`CODE_OF_CONDUCT.md`** — adopts Contributor Covenant 2.1 **by reference**
+  (link-out to the canonical URL at `contributor-covenant.org`) rather than
+  inlining the boilerplate. This is the form used by Kubernetes, Rust,
+  Microsoft VS Code, and many other large OSS projects; recognized by GitHub's
+  community-standards check. Reporting contact: `fotis@innovedi.com`.
+- **`.github/FUNDING.yml`** placeholder — all GitHub-supported sponsor keys
+  commented out; ready to be uncommented if sponsorship is enabled later.
+- **`CONTRIBUTING.md`** — three new sections:
+  - *Development Setup*: now lists Python+uv, Node 20+, and **Bun 1.x** with
+    their one-liner installs. Bun is needed for `scripts/*.ts`, starting with
+    `cut_release.ts` in this release.
+  - *SemVer & Deprecation Policy*: enumerates which surfaces are under
+    contract (CLI flags, env vars, MCP tool signatures, Postgres RPC
+    signatures, Edge Function HTTP shapes, `/api/v1/*` paths, DB schema) vs
+    free-to-change. Aspirational pre-v1.0, binding from v1.0.0. Codifies the
+    "force-move tags only on objective failure" rule from the 2026-05-25
+    Decision Log entry.
+  - *Script-Language Policy*: TypeScript becomes the preferred language for
+    all new scripts, CLI tooling, and installer pieces from v0.2.0. Existing
+    Python scripts migrate when they're extended. End users unaffected until
+    v0.4.0.
+
+### Changed
+
+- **`SECURITY.md`** rewritten and expanded — supported-versions matrix, scope
+  of in-scope vs out-of-scope security findings, threat model summary,
+  response expectations. Still uses GitHub's private vulnerability reporting
+  as the canonical channel.
+- **`README.md`** gains a "Project status" section between Features and
+  Getting Started. Roadmap table covers v0.2.0 → v1.0.0 (release themes and
+  what each ships). Sets reader expectations on maturity and direction.
+- **Design doc promoted from research to design-of-record**:
+  `docs/research/polish-and-distribution-design.md` →
+  `docs/specs/polish-and-distribution-design.md`. All references in
+  `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, and `docs/plan.md` updated
+  to the new path.
+- **`pyproject.toml`**: `[project] version = "0.1.0"` → `dynamic = ["version"]`;
+  new `[tool.hatch.version]` block reads the VERSION file; new
+  `[tool.hatch.build.targets.wheel]` `force-include` bundles VERSION as
+  `cerefox/_VERSION` inside the wheel so the runtime fallback works for
+  installed packages.
+
+### Decision Log
+
+- **2026-05-25 — v0.2.0 cut: foundations + first TS artifact, policy goes
+  from aspirational to enforced.** Captures the rationale for the v0.2.0
+  scope, the dogfood test (the cut-release script cuts its own release), the
+  consistency between the new tooling and the existing force-move-tags rule,
+  and what was deliberately deferred (Python script migration → v0.3.0; npm
+  publish → v0.4.0 / v0.5.0; `~/.cerefox/` user-state root → v0.3.0;
+  `cerefox doctor` → v0.5.0; release CI/CD → v0.5.0+). Stored in
+  *Cerefox Decision Log — 2026 Q2 (Part 2)*.
+
+### Upgrade notes
+
+For end users: nothing to do. The published install path is unchanged.
+
+For contributors:
+
+```bash
+# One-line Bun install (if you don't already have it)
+curl -fsSL https://bun.sh/install | bash
+
+# Verify
+bun --version
+```
+
+`uv sync` continues to work as before. `cerefox --version` will now report the
+real version after `uv sync` picks up the dynamic-version change.
 
 ---
 
@@ -176,8 +287,9 @@ Shipped via [PR #41](https://github.com/fstamatelopoulos/cerefox/pull/41).
   rollout for existing projects.
 - [cerefox#36](https://github.com/fstamatelopoulos/cerefox/issues/36) —
   Cerefox installer + interactive bootstrap (cfcf-style UX). Design at
-  [`docs/research/polish-and-distribution-design.md`](docs/research/polish-and-distribution-design.md)
-  on branch `research/installer-design`.
+  [`docs/specs/polish-and-distribution-design.md`](docs/specs/polish-and-distribution-design.md)
+  (originally drafted on branch `research/installer-design`, promoted from
+  `docs/research/` to `docs/specs/` in v0.2.0).
 - Iteration 18 — document relations & lifecycle metadata. Design at
   `docs/research/iteration-18-design.md` on branch `feat/document-relations`.
 

@@ -1,0 +1,74 @@
+name: Bug report
+description: Something Cerefox does isn't doing what you expected.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more detail you can give, the faster
+        we can isolate the cause.
+
+        If you suspect a security vulnerability, please use GitHub's private vulnerability
+        reporting instead of opening a public issue (see [SECURITY.md](../SECURITY.md)).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect to happen, and what actually happened?
+      placeholder: |
+        Steps to reproduce:
+        1. ...
+        2. ...
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: input
+    id: cerefox-version
+    attributes:
+      label: Cerefox version
+      description: Output of `cerefox --version`.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: access-path
+    attributes:
+      label: How were you using Cerefox when this happened?
+      multiple: true
+      options:
+        - CLI (`cerefox ...`)
+        - Local MCP server (`cerefox mcp`)
+        - Remote MCP (`cerefox-mcp` Edge Function)
+        - Web UI
+        - GPT Actions
+        - Direct HTTP to an Edge Function
+        - Python client (`CerefoxClient`)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, Node version (if relevant), Supabase setup (local / cloud).
+      placeholder: |
+        OS: macOS 15.5
+        Python: 3.13.0
+        Supabase: cloud (free tier)
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Any tracebacks, error messages, or relevant log lines. Use code fences.
+      render: shell
+    validations:
+      required: false

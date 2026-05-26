@@ -44,6 +44,16 @@ See `docs/solution-design.md` and `docs/research/vision.md` for the full archite
 
 ## Development Setup
 
+Cerefox is a Python + TypeScript project. As of v0.2.0, contributors need **three** runtimes installed locally:
+
+| Tool | Why | Install |
+|---|---|---|
+| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | Backend, CLI, MCP server, ingestion pipeline | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| **Node 20+** with `npm` | Frontend (React + Vite), Supabase Edge Functions | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
+| **[Bun](https://bun.sh) 1.x** | TypeScript scripts (`scripts/*.ts`, starting with `cut_release.ts` in v0.2.0) | `curl -fsSL https://bun.sh/install \| bash` |
+
+The Bun requirement is new in v0.2.0 — see [Script-language policy](#script-language-policy-effective-from-v020) below. **End users are unaffected**: the published install path stays Python-only until v0.4.0.
+
 ```bash
 # Clone and install
 git clone https://github.com/fstamatelopoulos/cerefox.git
@@ -60,7 +70,49 @@ uv run ruff check . && uv run ruff format .
 
 # Build frontend
 cd frontend && npm install && npm run build
+
+# Run a TypeScript script (Bun)
+bun scripts/cut_release.ts --check
 ```
+
+---
+
+## SemVer & Deprecation Policy
+
+Cerefox follows [Semantic Versioning](https://semver.org). Until **v1.0.0** the policy is aspirational; from v1.0.0 onward it is binding. The full rationale lives in [`docs/specs/polish-and-distribution-design.md` §11](docs/specs/polish-and-distribution-design.md).
+
+**Under contract** (breaking any of these requires a major version bump from v1.0 onward):
+
+- CLI commands, flags, and exit codes
+- CLI environment variables (`CEREFOX_*`)
+- MCP tool signatures (names, parameters, return shapes)
+- Postgres RPC signatures (`cerefox_*`)
+- Edge Function HTTP paths and request/response shapes
+- `/api/v1/*` web API paths and shapes
+- Database schema (table and column names, types)
+
+**Not under contract** (free to change at minor versions): internal module paths, helper functions, frontend component structure, log message formats, RPC bodies, build/test infrastructure.
+
+**Deprecation cycle**: renames get one minor-version deprecation cycle with both old and new names working; hard removals only at major versions; internal-only changes need no deprecation.
+
+**The "force-move tags only on objective failure" rule**: once a release tag (`vX.Y.Z`) is pushed to origin and a GitHub Release is published, the tag **never moves**. If anything needs fixing after publish — even if you noticed seconds later — ship a new patch version. The single exception is an objective failure of the release pipeline itself (e.g. CI failed mid-release, half the artifacts didn't publish). Reasoning: a moved tag silently invalidates anyone who already fetched it; a new patch version is honest about what changed.
+
+---
+
+## Script-Language Policy (effective from v0.2.0)
+
+Cerefox is in a Python → TypeScript strangler-fig migration that runs through the v0.2.0 → v1.0.0 polish-and-distribution arc. The policy:
+
+1. **All new scripts, CLI tools, and installer pieces are written in TypeScript.** Bun-runnable, Node 20+ compatible. New scripts go in `scripts/*.ts`.
+2. **Existing Python scripts get migrated when they're extended.** Trivial extension (add a flag, fix a small bug): port to TS first, then make the change. Complex extension (real new functionality): defer the port to its scheduled iteration; do the extension in Python.
+3. **Untouched Python scripts stay Python** until their scheduled port. Don't migrate for migration's sake.
+4. **Bun is a contributor prerequisite from v0.2.0**, but end users are unaffected (Python install path stays the same until v0.4.0).
+
+When in doubt, open an issue before starting work on a new script. We'll point you at the TS skeleton.
+
+The first concrete artifact under this policy is [`scripts/cut_release.ts`](scripts/cut_release.ts) — the release-cutting script, shipped with v0.2.0.
+
+Full reasoning in [`docs/specs/polish-and-distribution-design.md` §12f](docs/specs/polish-and-distribution-design.md).
 
 ---
 

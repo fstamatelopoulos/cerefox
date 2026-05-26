@@ -57,6 +57,44 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 
 ---
 
+## Project status
+
+Cerefox is a single-maintainer open-source project, currently at **v0.2.0** and in
+its **"Polish & Distribution" arc** — the work that takes it from "runnable from a
+git clone" to "installable like any other modern CLI". Highlights of what's
+already shipped (full history in [`CHANGELOG.md`](CHANGELOG.md)):
+
+- A complete Cerefox feature surface: hybrid search, metadata-filtered search,
+  small-to-big retrieval, implicit versioning with a per-document audit log,
+  soft-delete with a trash bin, multi-project membership.
+- Three integration paths for AI agents: local stdio MCP, remote MCP via
+  Supabase Edge Functions, and a Custom GPT via GPT Actions. Plus a CLI fallback
+  for local coding agents.
+- A React + Mantine web UI at `/app/` with full read/write coverage of the
+  knowledge base.
+
+**Where the project is headed** is captured in
+[`docs/specs/polish-and-distribution-design.md`](docs/specs/polish-and-distribution-design.md)
+(also tracked iteration-by-iteration in [`docs/plan.md`](docs/plan.md)):
+
+| Release | Theme | Ships |
+|---|---|---|
+| **v0.2.0** (this release) | Foundations + first TS artifact | `VERSION` source-of-truth · OSS hygiene files · SemVer + script-language policies · `scripts/cut_release.ts` (first TS script outside Edge Functions and frontend) |
+| v0.3.0 | "Install anywhere" | `~/.cerefox/` user-state root · `cerefox docs` · first two Python scripts ported to TS |
+| v0.4.0 | TS MCP server | Local `cerefox mcp` becomes a TS Bun process, published as `@cerefox/mcp-local` on npm |
+| v0.5.0 | TS CLI | `@cerefox/memory` on npm — `cerefox` callable from any directory, no Python install needed |
+| v0.6.0 – v0.7.0 | TS web server + ingestion pipeline | FastAPI → Hono · Python ingestion → TS |
+| v0.8.0 – v0.9.0 | Python retirement | Deprecation banners → removal |
+| **v1.0.0** | Stability commitment | Strict SemVer becomes binding; long-lived API contract |
+
+Until v1.0.0 the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
+aspirational — breaking changes can land in minor versions when there's a good
+reason. After v1.0.0 it's binding. **The headline near-term change is that Bun
+is a contributor prerequisite from v0.2.0** ([one-liner install](https://bun.sh));
+end users are unaffected until v0.4.0, when the npm install path opens.
+
+---
+
 ## Getting Started
 
 > **Full walkthrough**: `docs/guides/quickstart.md` -- zero to first ingested document and connected agent in 15 minutes.
