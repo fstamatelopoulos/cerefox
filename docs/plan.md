@@ -2168,37 +2168,50 @@ surface.
 ## Iteration 24: v0.6.0 — "TS Web Server" (FastAPI → Hono)
 
 **Goal**: Migrate the local web server from Python/FastAPI to TS/Hono on Bun. Web UI
-unchanged (already TS).
+unchanged (already TS). **Web server code lands in the existing `packages/memory/`** —
+no new npm package. The v0.5.0 `cerefox web` subcommand boots the in-process Hono
+server instead of shelling out to a Python FastAPI process.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.6.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.6.0](specs/polish-and-distribution-design.md)
+(the design doc's "`packages/web-server/`" naming is superseded — see the
+"Living design notes" callout at the top of that file for the consolidated
+single-package model).
 
 **Estimated effort**: 4 weeks part-time.
 
 **Detailed task breakdown will be created when this iteration is started.** Headline items:
-- New TS web server in `packages/web-server/` using Hono
-- All `/api/v1/*` endpoints ported with response-shape parity
-- E2E test suite passes against the new server
-- `cerefox web` (TS) replaces `cerefox web` (Python)
-- First-run UX in web UI: empty-state getting-started panel
+- New TS web server **inside `packages/memory/`** (`packages/memory/src/web/`) using Hono. No new npm package.
+- `packages/memory/package.json` `bin` block grows by zero — `cerefox web` is a subcommand of the existing `cerefox` binary, not a separate bin entry.
+- All `/api/v1/*` endpoints ported with response-shape parity.
+- Frontend `dist/` continues to ship inside `@cerefox/memory` (already there from v0.4.0's bundling). Hono serves it from the bundled location.
+- E2E test suite passes against the new server.
+- `cerefox web` (TS) replaces `cerefox web` (Python).
+- Python `api/app.py` + `api/routes_api.py` deprecated but kept around (same indefinite-shim policy as iter-20's other Python shims).
+- First-run UX in web UI: empty-state getting-started panel.
 
 ---
 
 ## Iteration 25: v0.7.0 — "TS Ingestion Pipeline" (last big Python component)
 
 **Goal**: Migrate chunking + embedding orchestration + version snapshotting to TS. PDF and
-DOCX support **dropped** (never used; not worth porting).
+DOCX support **dropped** (never used; not worth porting). **Ingestion code lands inside
+`packages/memory/`** (under `_shared/ingest/` since the same modules are also used by the
+Edge Functions). No new npm package.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.7.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.7.0](specs/polish-and-distribution-design.md)
+(see the "Living design notes" callout at the top of that file for the
+consolidated single-package model).
 
 **Estimated effort**: 6 weeks part-time. Chunking parity is the critical test.
 
 **Detailed task breakdown will be created when this iteration is started.** Headline items:
-- New TS chunking module — port of `markdown.py` heading-aware splitter (snapshot-test parity)
-- New TS embedding orchestration using OpenAI Node SDK
-- New TS ingestion pipeline calling `cerefox_ingest_document` RPC
-- PDF/DOCX support **dropped**; CHANGELOG announces removal
-- `cerefox ingest` and `cerefox ingest-dir` use TS pipeline
-- All `scripts/*.py` ported to `scripts/*.ts`
+- New TS chunking module under `_shared/ingest/` — port of `markdown.py` heading-aware splitter (snapshot-test parity).
+- New TS embedding orchestration using OpenAI Node SDK.
+- New TS ingestion pipeline calling `cerefox_ingest_document` RPC.
+- `cerefox ingest` and `cerefox ingest-dir` invoke the TS pipeline in-process (no shell-out).
+- The `cerefox-ingest` Edge Function (Deno) also imports the same `_shared/ingest/` modules — one chunking implementation, two consumers, like the v0.4 `_shared/mcp-tools/` pattern.
+- PDF/DOCX support **dropped**; CHANGELOG announces removal.
+- Remaining `scripts/*.py` ported to `scripts/*.ts` per the §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. All become TS scripts that consume `_shared/ingest/` and `_shared/db-client/`.
 
 ---
 
