@@ -1848,6 +1848,53 @@ user installing without help.
 
 ---
 
+## Iteration 28: Document Relations & Semantic Graph (post-v1.0, target v1.1+)
+
+**Goal**: Add explicit document-to-document relations (`related_to`, `references`,
+`supersedes`, etc.) on top of Cerefox's existing many-to-many `cerefox_documents` ↔
+`cerefox_projects` model. Enables semantic-graph traversal, "what links here" navigation,
+high-fan-in truncation, and explicit cross-document context propagation. The web-UI
+link-resolver shipped in v0.1.19 is a sister piece — same problem domain (cross-doc
+references) at the rendering layer; this iteration adds it at the data-model layer.
+
+**Status**: independent of the polish & migration arc (Iterations 19-27). The polish arc
+absorbed the OLD "Iteration 18 = narrow TS port of mcp_server.py" plan; this iteration is
+a completely separate body of work that shares neither code nor schedule with it. The
+naming collision is historical — both got tagged "Iteration 18" at different points in
+2026 when each was the next thing planned.
+
+**Design**: [`docs/research/iteration-18-design.md`](research/iteration-18-design.md) —
+562-line technical brief originally drafted April 2026. Covers:
+
+- New `cerefox_document_relations` table (M2M, typed edges) — junction with
+  `relation_type` and an optional `bidirectional` flag. Junction-table soft-delete
+  discipline applies (see Decision Log Q2 Part 2 entry, 2026-05-25).
+- Lifecycle metadata on documents (states: draft → review → published → archived;
+  `superseded_by` relation when content is replaced rather than updated).
+- Retrieve-then-traverse search pattern: Phase 1 = hybrid search; Phase 2 = graph
+  traversal from top-N hits.
+- Slack message modeling as a canonical sequential/threaded use case — channel as
+  a "container relation", thread as a "reply relation".
+- High fan-in truncation (`max_inbound_display` per relation type, day-one concern
+  to avoid e.g. a "tagged-with-meeting" relation overwhelming a doc's incoming list).
+- Obsidian wikilink → `related_to` relation sync (`[[Note Name]]` syntax extraction).
+- Implementation sketch for RPCs, Python client methods, MCP tools, Edge Functions,
+  REST API endpoints, and Web UI surfaces.
+
+**Why post-v1.0**: this iteration adds new data-model surface (a new junction table,
+new RPCs, new MCP tools, new web UI). Under strict SemVer, that's minor-version
+behavior for v1.x — perfectly fine. Doing it pre-v1.0 would either delay the
+stability commitment or risk landing the data-model addition under a still-evolving
+schema. Cleaner to ship v1.0 with a stable model and add relations as v1.1.
+
+**Estimated effort**: large. Probably 4-6 weeks part-time across multiple sub-iterations
+once started (RPC + table → Python client → MCP tools → web UI graph traversal → Obsidian
+sync). Worth breaking into 28a/28b/28c when scheduled.
+
+**Detailed task breakdown will be created when this iteration is started.**
+
+---
+
 ## Current Focus
 
 **Recent releases (May 2026)**:
