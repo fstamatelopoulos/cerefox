@@ -1642,10 +1642,14 @@ Detailed phasing: see **Iterations 19 through 26** below.
 
 ---
 
-## Iteration 19: v0.2.0 — "Real Release" (language-neutral foundations)
+## Iteration 19: v0.2.0 — "Real Release" (foundations + first TS artifact)
 
 **Goal**: Lay down version source-of-truth, project hygiene, and release-process discipline.
-No TS migration yet. Backward-compatible across the board.
+**First TypeScript artifact lands** — `scripts/cut_release.ts`, the release-cutting script,
+is born in TS per the §12f script-language policy. No migration of EXISTING Python code yet
+(that starts in v0.3.0 with the script ports of `sync_docs` and `db_status`). Bun becomes a
+contributor prerequisite from this release; end users are unaffected until v0.4.
+Backward-compatible at every user-facing surface.
 
 **Design**: [`docs/research/polish-and-distribution-design.md` §13 v0.2.0](research/polish-and-distribution-design.md).
 
@@ -1725,11 +1729,13 @@ with the v0.X.0 mapping. See Iteration 22 below for the actual content.)
 
 ---
 
-## Iteration 22: v0.4.0 — "TS MCP Server" (first migration component)
+## Iteration 22: v0.4.0 — "TS MCP Server" (first runtime component migrated)
 
-**Goal**: Migrate the local `cerefox mcp` stdio MCP server from Python to TypeScript.
-Shares tool handlers with the existing `cerefox-mcp` Edge Function via a new `_shared/`
-directory. Publishes `@cerefox/mcp-local` to npm.
+**Goal**: Migrate the local `cerefox mcp` stdio MCP server from Python to TypeScript —
+the first **runtime** component to move (scripts already ported earlier: `cut_release.ts`
+in v0.2.0; `sync_docs.ts` + `db_status.ts` in v0.3.0). Shares tool handlers with the
+existing `cerefox-mcp` Edge Function via a new `_shared/` directory. Publishes
+`@cerefox/mcp-local` to npm.
 
 **Supersedes**: the original Iteration 18.
 
@@ -1844,11 +1850,22 @@ user installing without help.
 
 ## Current Focus
 
-**v0.1.19 released** (2026-05-18, updated 2026-05-24 with FTS query-parser fix). All
-Iteration 17 work shipped: title boosting, hyphenated-title search fix, web UI link
-resolver. 483 unit tests + 80 e2e tests pass.
+**Recent releases (May 2026)**:
+- **v0.1.19** (2026-05-18, updated 2026-05-24) — web UI link resolver + FTS query-parser
+  fix (`websearch_to_tsquery` → `plainto_tsquery`) + agent-guidance refinement (doc-uuid
+  is the only recommended link form).
+- **v0.1.20** (2026-05-25) — issue #38 coordinated four-part fix: multi-project membership
+  preservation on content update. Non-destructive add for singular `project_name` on
+  update; new `project_names: string[]` parameter for explicit destructive replace; new
+  MCP tool `cerefox_set_document_projects` (tool count 8 → 9). All three paths (local
+  Python MCP, remote MCP, `cerefox-ingest` Edge Function) share one contract.
+- **v0.1.21** (2026-05-25) — three small web-UI quality-of-life fixes: dashboard project
+  counts no longer include trashed docs (now shows "5 (1 in trash)"); project documents
+  page paginated; trash page shows project membership chips per row.
 
-**Strategic shift in progress** (2026-05-24): pivoting from "Iteration 18 = narrow TS port
+**Test counts**: 512 unit tests + 80 e2e tests pass.
+
+**Strategic shift codified** (2026-05-24): pivoting from "Iteration 18 = narrow TS port
 of MCP server" to the broader **Polish & Distribution arc** covering v0.2.0 through v1.0.0
 via a Python → TypeScript strangler-fig migration. Design-of-record:
 [`docs/research/polish-and-distribution-design.md`](research/polish-and-distribution-design.md).
@@ -1857,10 +1874,10 @@ via a Python → TypeScript strangler-fig migration. Design-of-record:
 + `cerefox --version` truth + web UI version footer + OSS hygiene files + SemVer policy
 + **script-language policy (§12f of the design doc): TypeScript becomes the preferred
 language for all new scripts, CLI tooling, and installation surfaces from v0.2.0 onward**.
-First concrete application: `scripts/cut_release.ts` (TS, Bun-runnable) instead of a Python
-script. Contributors gain Bun as a prerequisite (one-line install); end users unaffected
-until v0.4. Ships as v0.2.0. Pure prerequisite work; backward-compatible; gives every
-subsequent release a coherent version surface.
+First concrete application: `scripts/cut_release.ts` (TS, Bun-runnable) — the project's
+first piece of TypeScript outside the existing TS surfaces (Edge Functions, frontend),
+and the trigger for adding Bun as a contributor prerequisite. Ships as v0.2.0. End users
+unaffected until v0.4. Backward-compatible across all user-facing surfaces.
 
 **After Iteration 19**: Iteration 20 (v0.3.0 — config refactor + `~/.cerefox/` + first
 two scripts ported to TS: `sync_docs.ts` and `db_status.ts`) → Iteration 22 (v0.4.0 — TS

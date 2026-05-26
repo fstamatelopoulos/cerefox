@@ -677,7 +677,7 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 
 ### v0.2.0 — "Real Release" (~1-2 weeks)
 
-**Theme**: language-neutral foundations. No TS migration yet. The release where every surface knows its version and the project gains real hygiene. Backward-compatible.
+**Theme**: foundations + first TS artifact. Version source-of-truth, OSS hygiene, and the project's first piece of TypeScript outside the existing TS surfaces — `scripts/cut_release.ts` (per §12f). Bun becomes a contributor prereq; end users unaffected (no install-path changes for them until v0.4). No migration of EXISTING Python code yet (that starts in v0.3 with the script ports). Backward-compatible at every user-facing surface.
 
 | # | Item |
 |---|---|
@@ -717,7 +717,7 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 
 ### v0.4.0 — "TS MCP Server" (~3-4 weeks) — supersedes old Iteration 18
 
-**Theme**: first TS migration component. The `cerefox mcp` local server becomes a TS Bun script. Shares tool handlers with the existing `cerefox-mcp` Edge Function via a new `_shared/` directory.
+**Theme**: first **runtime component** migrated from Python to TS. The `cerefox mcp` local server becomes a TS Bun script. (Scripts were ported earlier: `cut_release.ts` in v0.2.0; `sync_docs.ts` + `db_status.ts` in v0.3.0.) Shares tool handlers with the existing `cerefox-mcp` Edge Function via a new `_shared/` directory.
 
 | # | Item |
 |---|---|
