@@ -8,6 +8,7 @@
 
 [![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Node 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org)
 
 ---
 
@@ -101,6 +102,19 @@ end users are unaffected until v0.4.0, when the npm install path opens.
 >
 > **Upgrading?** If you are upgrading from a previous version, see the [Upgrading Guide](docs/guides/upgrading.md) for migration steps.
 
+### Prerequisites
+
+Before you start, make sure you have:
+
+| Tool | Why | Install |
+|---|---|---|
+| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | CLI, MCP server, web server backend, ingestion pipeline | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| **Node 20+** with `npm` | One-time `npm install && npm run build` to produce the React SPA bundle that `cerefox web` serves | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
+| A Supabase account | Database + pgvector + Edge Functions (free tier is enough) | [supabase.com](https://supabase.com/) |
+| An embedding API key | OpenAI `text-embedding-3-small` (default) or Fireworks AI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+
+**Contributors only**: you also need **[Bun](https://bun.sh) 1.x** for `scripts/*.ts` (TypeScript scripts under the v0.2.0+ script-language policy). End users don't need it. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor setup.
+
 ### 1. Clone and install
 
 ```bash
@@ -162,7 +176,20 @@ Set your OpenAI key as a Supabase secret (used by the functions at runtime):
 npx supabase secrets set OPENAI_API_KEY=sk-...your-key...
 ```
 
-### 6. Ingest a document and open the web UI
+### 6. Build the web UI
+
+The web UI is a React + Vite SPA. Build it once now (and re-run after any frontend change):
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+This produces `frontend/dist/`, which `uv run cerefox web` serves at `/app/`. Skipping this step is the most common "the web UI returns 404" cause.
+
+### 7. Ingest a document and open the web UI
 
 ```bash
 uv run cerefox ingest my-notes.md --title "My notes"
