@@ -226,3 +226,8 @@ backups/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+
+# Shared TS modules (Bun) — install artifacts are not checked in
+_shared/node_modules/
+_shared/bun.lock
+_shared/bun.lockb

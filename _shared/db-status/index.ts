@@ -1,0 +1,203 @@
+/**
+ * Reusable schema-introspection checks.
+ *
+ * Consumed by `scripts/db_status.ts` in v0.3.0 and by the upcoming
+ * `cerefox doctor` command in v0.5. Single source of truth for the expected
+ * shape of a healthy Cerefox database.
+ *
+ * The checks run against Supabase's PostgREST surface — no direct psycopg2-style
+ * connection needed. Function-existence probing relies on the fact that calling
+ * an unknown RPC returns a PostgreSQL 42883 error, which the db-client wrapper
+ * folds into `rpc()` → `null`.
+ */
+
+import type { CerefoxDbClient } from "../db-client/index.js";
+
+export const EXPECTED_TABLES = [
+  "cerefox_projects",
+  "cerefox_documents",
+  "cerefox_document_versions",
+  "cerefox_audit_log",
+  "cerefox_document_projects",
+  "cerefox_chunks",
+  "cerefox_migrations",
+] as const;
+
+export const EXPECTED_FUNCTIONS = [
+  "cerefox_set_updated_at",
+  "cerefox_hybrid_search",
+  "cerefox_fts_search",
+  "cerefox_semantic_search",
+  "cerefox_reconstruct_doc",
+  "cerefox_save_note",
+  "cerefox_search_docs",
+  "cerefox_context_expand",
+  "cerefox_list_metadata_keys",
+  "cerefox_snapshot_version",
+  "cerefox_get_document",
+  "cerefox_list_document_versions",
+  "cerefox_create_audit_entry",
+  "cerefox_list_audit_entries",
+  "cerefox_ingest_document",
+  "cerefox_delete_document",
+  "cerefox_update_chunk_fts",
+  "cerefox_schema_version",
+  "cerefox_pg_function_exists",
+] as const;
+
+export const ROW_COUNT_TABLES = [
+  "cerefox_projects",
+  "cerefox_documents",
+  "cerefox_document_versions",
+  "cerefox_document_projects",
+  "cerefox_chunks",
+] as const;
+
+export type CheckStatus = "ok" | "missing" | "error";
+
+export interface CheckResult {
+  name: string;
+  status: CheckStatus;
+  detail?: string;
+}
+
+export interface DbStatusReport {
+  tables: CheckResult[];
+  functions: CheckResult[];
+  rowCounts: Record<string, number | null>;
+  schemaVersion: { deployed: string | null; bundled?: string | null; mismatch: boolean };
+  allOk: boolean;
+}
+
+export interface RunChecksOptions {
+  /** Pass the bundled schema version (read from schema.sql header) for mismatch detection. */
+  bundledSchemaVersion?: string | null;
+}
+
+export async function runDbStatusChecks(
+  client: CerefoxDbClient,
+  opts: RunChecksOptions = {},
+): Promise<DbStatusReport> {
+  const tables: CheckResult[] = [];
+  const functions: CheckResult[] = [];
+  const rowCounts: Record<string, number | null> = {};
+
+  for (const t of EXPECTED_TABLES) {
+    try {
+      const exists = await client.tableExists(t);
+      tables.push({ name: t, status: exists ? "ok" : "missing" });
+    } catch (err) {
+      tables.push({
+        name: t,
+        status: "error",
+        detail: (err as Error).message,
+      });
+    }
+  }
+
+  for (const f of EXPECTED_FUNCTIONS) {
+    try {
+      const exists = await client.functionExists(f);
+      functions.push({ name: f, status: exists ? "ok" : "missing" });
+    } catch (err) {
+      functions.push({
+        name: f,
+        status: "error",
+        detail: (err as Error).message,
+      });
+    }
+  }
+
+  for (const t of ROW_COUNT_TABLES) {
+    try {
+      rowCounts[t] = await client.rowCount(t);
+    } catch {
+      rowCounts[t] = null;
+    }
+  }
+
+  let deployed: string | null = null;
+  try {
+    const result = await client.rpc<string | { cerefox_schema_version?: string } | unknown>(
+      "cerefox_schema_version",
+    );
+    if (typeof result === "string") {
+      deployed = result;
+    } else if (
+      result &&
+      typeof result === "object" &&
+      "cerefox_schema_version" in (result as object)
+    ) {
+      const v = (result as { cerefox_schema_version?: unknown }).cerefox_schema_version;
+      if (typeof v === "string") deployed = v;
+    }
+  } catch {
+    deployed = null;
+  }
+
+  const bundled = opts.bundledSchemaVersion ?? null;
+  const mismatch = !!(bundled && deployed && bundled !== deployed);
+
+  const allOk =
+    tables.every((t) => t.status === "ok") &&
+    functions.every((f) => f.status === "ok") &&
+    !mismatch;
+
+  return {
+    tables,
+    functions,
+    rowCounts,
+    schemaVersion: { deployed, bundled, mismatch },
+    allOk,
+  };
+}
+
+/** Pretty-print a report for the CLI. Returns the multi-line string. */
+export function formatReport(report: DbStatusReport): string {
+  const lines: string[] = [];
+  lines.push("╔══════════════════════════════════════╗");
+  lines.push("║  Cerefox DB Status                   ║");
+  lines.push("╚══════════════════════════════════════╝");
+  lines.push("");
+
+  lines.push("Tables:");
+  for (const t of report.tables) {
+    const mark = t.status === "ok" ? "✓" : t.status === "missing" ? "✗" : "!";
+    lines.push(`  ${mark}  ${t.name}${t.detail ? `  — ${t.detail}` : ""}`);
+  }
+
+  lines.push("");
+  lines.push("Functions / RPCs:");
+  for (const f of report.functions) {
+    const mark = f.status === "ok" ? "✓" : f.status === "missing" ? "✗" : "!";
+    lines.push(`  ${mark}  ${f.name}()${f.detail ? `  — ${f.detail}` : ""}`);
+  }
+
+  lines.push("");
+  lines.push("Row counts:");
+  for (const [t, c] of Object.entries(report.rowCounts)) {
+    if (c === null) {
+      lines.push(`  ?  ${t}: (table missing)`);
+    } else {
+      lines.push(`  ℹ  ${t}: ${c.toLocaleString()} rows`);
+    }
+  }
+
+  lines.push("");
+  lines.push("Schema version:");
+  lines.push(`  bundled : ${report.schemaVersion.bundled ?? "(unknown)"}`);
+  lines.push(`  deployed: ${report.schemaVersion.deployed ?? "(not reported)"}`);
+  if (report.schemaVersion.mismatch) {
+    lines.push("  ⚠️  bundled and deployed schema versions differ — run db_deploy.py");
+  }
+
+  lines.push("");
+  lines.push("─".repeat(42));
+  lines.push(
+    report.allOk
+      ? "✓  All checks passed. Schema looks healthy."
+      : "✗  Some checks failed. Run db_deploy.py to fix missing objects.",
+  );
+
+  return lines.join("\n");
+}

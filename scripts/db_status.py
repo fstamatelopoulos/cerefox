@@ -1,212 +1,51 @@
 #!/usr/bin/env python3
-"""Verify Cerefox schema health and report table statistics.
+"""Deprecation shim for the v0.2.x Python db_status script.
 
-Usage:
-    python scripts/db_status.py
+As of v0.3.0, this script has been replaced by ``scripts/db_status.ts``
+(TypeScript, runs under Bun). The Python file remains as a deprecation
+notice so existing tooling that invokes ``python scripts/db_status.py``
+gets a clear, actionable error pointing at the new location.
 
-Requires CEREFOX_DATABASE_URL in your .env file.
-Exits with code 0 if everything looks good, 1 if something is missing.
+The shim deliberately exits non-zero rather than silently forwarding to the
+TS script — that way migration is explicit, not invisible. Hard-removal of
+this shim is scheduled for v0.4.0.
+
+See:
+  docs/specs/polish-and-distribution-design.md  § 12f — Script-language policy
+  docs/plan.md                                  § Iteration 20 → 20C.7
 """
 
+from __future__ import annotations
+
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+DEPRECATION_MESSAGE = """\
+⚠  scripts/db_status.py is deprecated as of Cerefox v0.3.0.
 
-import psycopg2
+   Use the TypeScript replacement instead:
 
-from cerefox.config import Settings
+       bun scripts/db_status.ts          # same checks, prettier output
+       bun scripts/db_status.ts --json   # structured JSON
+       bun scripts/db_status.ts --help
 
-# Objects we expect to exist after a successful db_deploy.py run
-_EXPECTED_TABLES = [
-    "cerefox_projects",
-    "cerefox_documents",
-    "cerefox_document_versions",
-    "cerefox_audit_log",
-    "cerefox_document_projects",
-    "cerefox_chunks",
-    "cerefox_migrations",
-]
+   You need Bun installed:
+       curl -fsSL https://bun.sh/install | bash
 
-_EXPECTED_FUNCTIONS = [
-    "cerefox_set_updated_at",
-    "cerefox_hybrid_search",
-    "cerefox_fts_search",
-    "cerefox_semantic_search",
-    "cerefox_reconstruct_doc",
-    "cerefox_save_note",
-    "cerefox_search_docs",
-    "cerefox_context_expand",
-    "cerefox_list_metadata_keys",
-    "cerefox_snapshot_version",
-    "cerefox_get_document",
-    "cerefox_list_document_versions",
-    "cerefox_create_audit_entry",
-    "cerefox_list_audit_entries",
-    "cerefox_ingest_document",
-    "cerefox_delete_document",
-    "cerefox_update_chunk_fts",
-]
+   Background: from v0.2.0 onward, all new scripts and CLI tooling are
+   written in TypeScript per the §12f script-language policy. db_status
+   gained schema-version-mismatch detection in v0.3.0 (closes the v0.1.19
+   redeploy footgun), which triggered the port. The introspection logic
+   moved to _shared/db-status/ so the v0.5 `cerefox doctor` command can
+   import it.
 
-_EXPECTED_EXTENSIONS = ["uuid-ossp", "vector"]
-
-_EXPECTED_INDEXES = [
-    "idx_cerefox_chunks_fts",
-    "idx_cerefox_chunks_emb_primary",
-    "idx_cerefox_chunks_emb_upgrade",
-    "idx_cerefox_chunks_current_unique",
-    "idx_cerefox_chunks_version",
-    "idx_cerefox_docs_metadata",
-    "idx_cerefox_docs_hash",
-    "idx_cerefox_document_projects_doc",
-    "idx_cerefox_document_projects_project",
-    "idx_cerefox_document_versions_doc",
-]
-
-
-def _connect(database_url: str) -> psycopg2.extensions.connection:
-    try:
-        conn = psycopg2.connect(database_url)
-        conn.autocommit = True
-        return conn
-    except psycopg2.OperationalError as exc:
-        print(f"❌  Could not connect: {exc}")
-        sys.exit(1)
-
-
-def check_extensions(cur: psycopg2.extensions.cursor) -> list[str]:
-    cur.execute(
-        "SELECT extname FROM pg_extension WHERE extname = ANY(%s)",
-        (_EXPECTED_EXTENSIONS,),
-    )
-    return [row[0] for row in cur.fetchall()]
-
-
-def check_tables(cur: psycopg2.extensions.cursor) -> list[str]:
-    cur.execute(
-        """
-        SELECT tablename FROM pg_tables
-        WHERE schemaname = 'public'
-          AND tablename = ANY(%s)
-        """,
-        (_EXPECTED_TABLES,),
-    )
-    return [row[0] for row in cur.fetchall()]
-
-
-def check_functions(cur: psycopg2.extensions.cursor) -> list[str]:
-    cur.execute(
-        """
-        SELECT routine_name FROM information_schema.routines
-        WHERE routine_schema = 'public'
-          AND routine_name = ANY(%s)
-        """,
-        (_EXPECTED_FUNCTIONS,),
-    )
-    return [row[0] for row in cur.fetchall()]
-
-
-def check_indexes(cur: psycopg2.extensions.cursor) -> list[str]:
-    cur.execute(
-        """
-        SELECT indexname FROM pg_indexes
-        WHERE schemaname = 'public'
-          AND indexname = ANY(%s)
-        """,
-        (_EXPECTED_INDEXES,),
-    )
-    return [row[0] for row in cur.fetchall()]
-
-
-def get_row_counts(cur: psycopg2.extensions.cursor) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for table in (
-        "cerefox_projects",
-        "cerefox_documents",
-        "cerefox_document_versions",
-        "cerefox_document_projects",
-        "cerefox_chunks",
-    ):
-        try:
-            cur.execute(f"SELECT COUNT(*) FROM {table}")  # noqa: S608
-            counts[table] = cur.fetchone()[0]
-        except psycopg2.Error:
-            counts[table] = -1
-    return counts
+   This shim will be removed in v0.4.0. Please update any CI workflows or
+   make targets that invoke this file.
+"""
 
 
 def main() -> None:
-    settings = Settings()
-
-    if not settings.is_db_configured():
-        print("❌  CEREFOX_DATABASE_URL is not set in .env")
-        sys.exit(1)
-
-    print("╔══════════════════════════════════════╗")
-    print("║  Cerefox DB Status                   ║")
-    print("╚══════════════════════════════════════╝\n")
-
-    conn = _connect(settings.database_url)
-    cur = conn.cursor()
-
-    all_ok = True
-
-    # ── Extensions ─────────────────────────────────────────────────────────────
-    print("Extensions:")
-    found_exts = check_extensions(cur)
-    for ext in _EXPECTED_EXTENSIONS:
-        ok = ext in found_exts
-        print(f"  {'✓' if ok else '✗'}  {ext}")
-        if not ok:
-            all_ok = False
-
-    # ── Tables ─────────────────────────────────────────────────────────────────
-    print("\nTables:")
-    found_tables = check_tables(cur)
-    for table in _EXPECTED_TABLES:
-        ok = table in found_tables
-        print(f"  {'✓' if ok else '✗'}  {table}")
-        if not ok:
-            all_ok = False
-
-    # ── Functions / RPCs ───────────────────────────────────────────────────────
-    print("\nFunctions / RPCs:")
-    found_funcs = check_functions(cur)
-    for func in _EXPECTED_FUNCTIONS:
-        ok = func in found_funcs
-        print(f"  {'✓' if ok else '✗'}  {func}()")
-        if not ok:
-            all_ok = False
-
-    # ── Indexes ────────────────────────────────────────────────────────────────
-    print("\nIndexes:")
-    found_idxs = check_indexes(cur)
-    for idx in _EXPECTED_INDEXES:
-        ok = idx in found_idxs
-        print(f"  {'✓' if ok else '✗'}  {idx}")
-        if not ok:
-            all_ok = False
-
-    # ── Row counts ─────────────────────────────────────────────────────────────
-    print("\nRow counts:")
-    counts = get_row_counts(cur)
-    for table, count in counts.items():
-        if count == -1:
-            print(f"  ?  {table}: (table missing)")
-        else:
-            print(f"  ℹ  {table}: {count:,} rows")
-
-    cur.close()
-    conn.close()
-
-    print("\n" + "─" * 42)
-    if all_ok:
-        print("✓  All checks passed. Schema looks healthy.")
-    else:
-        print("✗  Some checks failed. Run db_deploy.py to fix missing objects.")
-        print("   See docs/guides/setup-supabase.md for help.")
-
-    sys.exit(0 if all_ok else 1)
+    sys.stderr.write(DEPRECATION_MESSAGE)
+    sys.exit(2)
 
 
 if __name__ == "__main__":
