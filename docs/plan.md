@@ -1710,6 +1710,16 @@ wins over `~/.cerefox/.env`. New users (no repo-local `.env`) get the
 `~/.cerefox/` flow; existing dev users are unaffected unless they explicitly
 migrate.
 
+**v1.0 revisit (planned)**: this precedence — repo-local `.env` winning over
+`~/.cerefox/.env` — is **defensive for the v0.x line**. At v1.0 (the strict-
+SemVer commitment release) we re-evaluate: the natural default for an
+npm-installed CLI is to prefer the user-state dir, with repo-local `.env`
+becoming an explicit opt-in (e.g. `CEREFOX_CONFIG_DIR=.`). The Decision Log
+v0.2.0 entry flags v1.0 as the moment "binding from v1.0" applies; the
+precedence flip is a candidate item to land in that release with a CHANGELOG
+migration note and the documented deprecation cycle. For v0.3.0 we explicitly
+do not flip it — that would break every existing dev install.
+
 ### 20A: Config-state refactor (Python)
 
 Make `Settings`-resolution location-independent. The single hard change is
@@ -1763,9 +1773,9 @@ v0.4 (MCP server) → v0.5 (CLI) → v0.7 (ingestion).
 | 20C.4 | Add `_shared/config/` — TS port of `_resolve_config_dir()` from 20A.1 | Pending | Same precedence: `CEREFOX_CONFIG_DIR` env → `./.env` in CWD → `~/.cerefox/`. Mirrors the Python module 1:1 so scripts behave the same as the CLI. Includes `loadEnv()` that respects the resolved dir. |
 | 20C.5 | Write `scripts/db_status.ts` (replaces `db_status.py`) | Pending | Imports `_shared/config/` for env loading and `_shared/db-status/` for the checks. Output format is byte-for-byte parity with `db_status.py` so screen-scraping doesn't break (no current tooling does, but the parity is a free guarantee). `--json` flag emits structured output. Refuses to run without `CEREFOX_SUPABASE_URL` / `CEREFOX_SUPABASE_KEY`. |
 | 20C.6 | Write `scripts/sync_docs.ts` (replaces `sync_docs.py`) | Pending | Imports `_shared/config/` and a new `_shared/ingest/` (TS minimal wrapper over the `cerefox-ingest` Edge Function — the simplest path that doesn't require porting the full ingestion pipeline yet). Extended for bundled-docs work: when invoked from inside an installed `@cerefox/memory` package (v0.4+), it knows how to find the bundled `_docs` instead of the repo. For v0.3.0 it always reads from the repo because no npm package exists yet. |
-| 20C.7 | Delete `scripts/db_status.py` and `scripts/sync_docs.py` | Pending | Same commit as 20C.5 / 20C.6 land. Per §12f rule 2, the Python versions are removed when the TS replacements ship — no parallel maintenance period. |
+| 20C.7 | Convert `scripts/db_status.py` and `scripts/sync_docs.py` to **deprecation shims** (graceful migration) | Pending | Each Python file is reduced to a short shim that prints a deprecation notice ("⚠ This script is deprecated as of v0.3.0. Use `bun scripts/<name>.ts` instead.") and exits non-zero. The shim does NOT silently forward to the TS version — explicit failure forces tooling / cron / doc-updates to migrate. Notice text includes the v0.4.0 hard-removal target. Adopted in place of hard-delete after the v0.3.0 design review (see Decision Log entry below). |
 | 20C.8 | Vitest test suite under `_shared/__tests__/` | Pending | Cover `_shared/config/` precedence (the TS mirror of 20A.8) and `_shared/db-client/` mocked-fetch tests. `bun test` runs them. CI not wired yet — that's v0.5 work. |
-| 20C.9 | Parity test: `bun scripts/sync_docs.ts --dry-run` lists the same files as the deleted Python version did | Pending | Snapshot-test against the file list captured before deletion. Lives in `_shared/__tests__/sync_docs.test.ts`. |
+| 20C.9 | Parity test: `bun scripts/sync_docs.ts --dry-run` lists the same files as the (now-deprecated) Python version did | Pending | Snapshot-test of the file list. Captured from the v0.2.0 `sync_docs.py` behavior before the shim conversion. Lives in `_shared/__tests__/sync_docs.test.ts`. |
 | 20C.10 | Update `docs/guides/ops-scripts.md` to document the new TS scripts | Pending | Two sections rewritten (`db_status.ts`, `sync_docs.ts`); intro paragraph notes that the remaining `.py` scripts (`db_deploy`, `db_migrate`, `backup_*`, `reindex_all`) port in v0.5 / v0.7. Add a "Running the TS scripts" preamble with the `bun scripts/<name>.ts` invocation. |
 
 ### 20D: Cross-cutting — CONTRIBUTING, plan, decision log, cut_release.ts polish
@@ -1793,10 +1803,12 @@ v0.4 (MCP server) → v0.5 (CLI) → v0.7 (ingestion).
 **Deferred to later iterations** (not in v0.3.0):
 
 - Porting `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py` to TS (§12f rule 3: stays Python until extended; deferred to v0.5 / v0.7 per the §12f migration table).
+- **Hard-removal of the `sync_docs.py` / `db_status.py` deprecation shims** — scheduled for v0.4.0 (next minor release). Until then the shims print a notice and exit non-zero, giving users one release to migrate their tooling / cron / docs.
 - `cerefox init` and `cerefox configure-agent` (v0.5 — these are CLI commands, and the CLI itself moves to TS in v0.5).
 - Layer 2 of MCP discoverability — `cerefox init` auto-ingests `AGENT_GUIDE.md` (v0.5; depends on `cerefox init` existing).
 - Layer 3 — `cerefox_get_help` MCP tool (v0.4; ships with the TS MCP server).
 - npm publishing (v0.4 ships `@cerefox/mcp-local`; v0.5 ships `@cerefox/memory`).
+- **Reconsider `_resolve_config_dir()` precedence at v1.0** — see 20A "v1.0 revisit" note above.
 
 ---
 
