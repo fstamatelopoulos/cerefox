@@ -13,10 +13,12 @@ import {
 } from "../db-status/index.ts";
 
 function makeFakeClient(overrides: Partial<CerefoxDbClient> = {}): CerefoxDbClient {
+  // `rpc` is generic (<T>(...) => Promise<T | null>); cast at the mock site so
+  // tests can return concrete shapes without re-implementing the generic.
   return {
     raw: {} as never,
     listProjects: mock(async () => []),
-    rpc: mock(async () => "0.3.0"),
+    rpc: mock(async () => "0.3.0") as unknown as CerefoxDbClient["rpc"],
     tableExists: mock(async () => true),
     functionExists: mock(async () => true),
     rowCount: mock(async () => 0),
@@ -45,7 +47,7 @@ describe("runDbStatusChecks", () => {
 
   test("reports schemaVersion.mismatch=true when bundled != deployed", async () => {
     const client = makeFakeClient({
-      rpc: mock(async () => "0.2.0"),
+      rpc: mock(async () => "0.2.0") as unknown as CerefoxDbClient["rpc"],
     });
     const report = await runDbStatusChecks(client, { bundledSchemaVersion: "0.3.0" });
     expect(report.schemaVersion.deployed).toBe("0.2.0");
@@ -55,7 +57,7 @@ describe("runDbStatusChecks", () => {
 
   test("handles legacy deployments where cerefox_schema_version RPC is missing", async () => {
     const client = makeFakeClient({
-      rpc: mock(async () => null),
+      rpc: mock(async () => null) as unknown as CerefoxDbClient["rpc"],
     });
     const report = await runDbStatusChecks(client, { bundledSchemaVersion: "0.3.0" });
     expect(report.schemaVersion.deployed).toBe(null);

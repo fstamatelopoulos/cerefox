@@ -1,0 +1,271 @@
+/**
+ * Tests for `_shared/mcp-tools/`. Focuses on:
+ * - Tool registration / index exports.
+ * - `cerefox_get_help` topic dispatch (the one tool that has non-trivial
+ *   logic independent of the DB).
+ * - Input-validation throws for the handlers that do their own validation.
+ *
+ * DB-shape tests would require a live Supabase mock per RPC; we get those
+ * for free from the Python e2e suite via the byte-parity test in 22D.4.
+ */
+
+import { describe, expect, mock, test } from "bun:test";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import {
+  ALL_TOOLS,
+  McpInvalidParams,
+  TOOLS_BY_NAME,
+  type ToolContext,
+} from "../mcp-tools/index.ts";
+
+const FAKE_CTX: ToolContext = { accessPath: "local-mcp" };
+
+// A minimal SupabaseClient stub that no-ops every method. Tools that don't
+// hit the DB during their input-validation phase can use this.
+function noopClient(): SupabaseClient {
+  return {
+    rpc: () => ({ data: null, error: null }),
+    from: () => ({
+      select: () => ({ data: null, error: null }),
+      insert: () => ({ data: null, error: null }),
+      delete: () => ({ data: null, error: null }),
+    }),
+  } as unknown as SupabaseClient;
+}
+
+describe("ALL_TOOLS registration", () => {
+  test("contains exactly 10 tools (9 existing + cerefox_get_help)", () => {
+    expect(ALL_TOOLS.length).toBe(10);
+  });
+
+  test("every tool name starts with cerefox_", () => {
+    for (const t of ALL_TOOLS) expect(t.name.startsWith("cerefox_")).toBe(true);
+  });
+
+  test("tool names are unique", () => {
+    const names = ALL_TOOLS.map((t) => t.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  test("TOOLS_BY_NAME contains every tool", () => {
+    for (const t of ALL_TOOLS) {
+      expect(TOOLS_BY_NAME[t.name]).toBe(t);
+    }
+  });
+
+  test("every tool has description, inputSchema, handler", () => {
+    for (const t of ALL_TOOLS) {
+      expect(typeof t.description).toBe("string");
+      expect(t.description.length).toBeGreaterThan(20);
+      expect(typeof t.inputSchema).toBe("object");
+      expect(typeof t.handler).toBe("function");
+    }
+  });
+
+  test("includes cerefox_get_help (v0.4.0 addition)", () => {
+    expect(TOOLS_BY_NAME["cerefox_get_help"]).toBeDefined();
+  });
+});
+
+describe("cerefox_get_help", () => {
+  const tool = TOOLS_BY_NAME["cerefox_get_help"];
+
+  test("no topic — returns full reference + section index", async () => {
+    const out = await tool.handler(noopClient(), {}, FAKE_CTX);
+    expect(out).toContain("Cerefox Knowledge Base");
+    expect(out).toContain("## Available topics");
+    expect(out).toContain("Essential Rules");
+  });
+
+  test("matching topic — returns matched section", async () => {
+    const out = await tool.handler(noopClient(), { topic: "essential rules" }, FAKE_CTX);
+    expect(out).toContain("## Essential Rules");
+    expect(out).not.toContain("## Available topics");
+  });
+
+  test("substring match is case-insensitive", async () => {
+    const out = await tool.handler(noopClient(), { topic: "TOOLS" }, FAKE_CTX);
+    expect(out).toContain("## Tools");
+  });
+
+  test("partial-word match works", async () => {
+    const out = await tool.handler(noopClient(), { topic: "update" }, FAKE_CTX);
+    // Matches both "Update Workflow" sections.
+    expect(out).toContain("Update Workflow");
+  });
+
+  test("no match — returns available topics list", async () => {
+    const out = await tool.handler(noopClient(), { topic: "nonexistent-xyz" }, FAKE_CTX);
+    expect(out).toContain('No help topic matched "nonexistent-xyz"');
+    expect(out).toContain("Available topics");
+  });
+});
+
+describe("input validation throws McpInvalidParams", () => {
+  test("cerefox_search rejects missing query", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_search"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), {}, { ...FAKE_CTX, openaiApiKey: "test" });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_ingest rejects missing title", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_ingest"];
+    let err: unknown;
+    try {
+      await tool.handler(
+        noopClient(),
+        { content: "hi" },
+        { ...FAKE_CTX, openaiApiKey: "test" },
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_ingest rejects missing content", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_ingest"];
+    let err: unknown;
+    try {
+      await tool.handler(
+        noopClient(),
+        { title: "hi" },
+        { ...FAKE_CTX, openaiApiKey: "test" },
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_ingest rejects non-array project_names", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_ingest"];
+    let err: unknown;
+    try {
+      await tool.handler(
+        noopClient(),
+        { title: "x", content: "y", project_names: "not an array" },
+        { ...FAKE_CTX, openaiApiKey: "test" },
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_get_document rejects missing document_id", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_get_document"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), {}, FAKE_CTX);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_list_versions rejects missing document_id", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_list_versions"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), {}, FAKE_CTX);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_metadata_search rejects missing metadata_filter", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_metadata_search"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), {}, FAKE_CTX);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_metadata_search rejects empty metadata_filter", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_metadata_search"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), { metadata_filter: {} }, FAKE_CTX);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_set_document_projects rejects missing document_id", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_set_document_projects"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), { project_names: [] }, FAKE_CTX);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+
+  test("cerefox_set_document_projects rejects non-array project_names", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_set_document_projects"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), { document_id: "x", project_names: "y" }, FAKE_CTX);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+});
+
+describe("chunker (used by ingest)", () => {
+  test("short content → 1 chunk", async () => {
+    const { chunkMarkdown } = await import("../mcp-tools/_chunker.ts");
+    const chunks = chunkMarkdown("hello world");
+    expect(chunks.length).toBe(1);
+    expect(chunks[0].content).toBe("hello world");
+  });
+
+  test("empty content → 0 chunks", async () => {
+    const { chunkMarkdown } = await import("../mcp-tools/_chunker.ts");
+    const chunks = chunkMarkdown("");
+    expect(chunks.length).toBe(0);
+  });
+
+  test("heading-based split for long content", async () => {
+    const { chunkMarkdown } = await import("../mcp-tools/_chunker.ts");
+    const longContent =
+      "# H1\n\n" +
+      "A".repeat(3000) +
+      "\n\n## H2\n\n" +
+      "B".repeat(3000) +
+      "\n\n## H3\n\n" +
+      "C".repeat(3000);
+    const chunks = chunkMarkdown(longContent);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(c.char_count).toBeLessThanOrEqual(4000);
+  });
+
+  test("sha256hex produces deterministic 64-char hex", async () => {
+    const { sha256hex, normalizeContent } = await import("../mcp-tools/_chunker.ts");
+    const h1 = await sha256hex(normalizeContent("hello"));
+    const h2 = await sha256hex(normalizeContent("hello"));
+    expect(h1).toBe(h2);
+    expect(h1.length).toBe(64);
+    expect(/^[0-9a-f]+$/.test(h1)).toBe(true);
+  });
+
+  test("CRLF and trailing whitespace normalize", async () => {
+    const { normalizeContent } = await import("../mcp-tools/_chunker.ts");
+    expect(normalizeContent("hi  \r\nworld")).toBe("hi  \nworld");
+    expect(normalizeContent("a\n\n\n\nb")).toBe("a\n\nb");
+  });
+});

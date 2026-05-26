@@ -1,0 +1,72 @@
+/**
+ * `cerefox_list_versions` — list a document's archived version history
+ * (newest first). Returns version_id (use with `cerefox_get_document`),
+ * version_number, source, chunk_count, total_chars, created_at.
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { logUsage } from "./_utils.js";
+import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
+
+async function handler(
+  supabase: SupabaseClient,
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<string> {
+  const document_id = args.document_id as string | undefined;
+  if (!document_id) throw new McpInvalidParams("document_id is required");
+
+  const { data, error } = await supabase.rpc("cerefox_list_document_versions", {
+    p_document_id: document_id,
+  });
+
+  if (error) throw new Error(`RPC error: ${error.message}`);
+
+  const versions = (data ?? []) as Array<{
+    version_id: string;
+    version_number: number;
+    source: string;
+    chunk_count: number;
+    total_chars: number;
+    created_at: string;
+  }>;
+
+  logUsage(supabase, {
+    operation: "list_versions",
+    accessPath: ctx.accessPath,
+    requestor: args.requestor as string | undefined,
+    document_id,
+    result_count: versions.length,
+  });
+
+  if (!versions.length) return "No archived versions found for this document.";
+
+  const lines = versions.map(
+    (v) =>
+      `v${v.version_number} | ${v.created_at.slice(0, 10)} | ${v.source} | ${v.chunk_count} chunks / ${v.total_chars.toLocaleString()} chars | id: ${v.version_id}`,
+  );
+  return `Archived versions (newest first):\n\n${lines.join("\n")}`;
+}
+
+export const listVersionsTool: ToolDefinition = {
+  name: "cerefox_list_versions",
+  description:
+    "List all archived versions of a document, newest first. Returns version_id (use with cerefox_get_document), version_number, source, chunk_count, total_chars, and created_at.",
+  inputSchema: {
+    type: "object",
+    required: ["document_id"],
+    properties: {
+      document_id: {
+        type: "string",
+        description: "UUID of the document whose version history to list",
+      },
+      requestor: {
+        type: "string",
+        description:
+          'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
+      },
+    },
+  },
+  handler,
+};

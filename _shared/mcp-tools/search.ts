@@ -1,0 +1,193 @@
+/**
+ * `cerefox_search` — hybrid (FTS + semantic) search over the knowledge base.
+ *
+ * Three modes:
+ * - `docs` (default) — document-level hybrid via `cerefox_search_docs`.
+ * - `hybrid` — chunk-level hybrid via `cerefox_hybrid_search`.
+ * - `fts` — FTS-only via `cerefox_fts_search` (no embedding needed).
+ *
+ * Embedding is computed for `docs` and `hybrid` modes via the shared
+ * embedder. Results respect a per-call `max_bytes` budget capped at
+ * `MAX_RESPONSE_BYTES`; whole rows are dropped to fit the budget.
+ *
+ * Mirrors `supabase/functions/cerefox-mcp/tools/search.ts` byte-for-byte
+ * in response shape so v0.4.0 can keep agents on the same on-the-wire
+ * format whether they go through the remote MCP or the new local TS one.
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { getEmbedding } from "../embeddings/index.js";
+import { applyByteBudget, logUsage, MAX_RESPONSE_BYTES } from "./_utils.js";
+import { lookupProjectId } from "./_projects.js";
+import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
+
+async function handler(
+  supabase: SupabaseClient,
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<string> {
+  const query = args.query as string;
+  const project_name = args.project_name as string | undefined;
+  const match_count = (args.match_count as number | undefined) ?? 5;
+  const mode = (args.mode as string | undefined) ?? "docs";
+  const alpha = (args.alpha as number | undefined) ?? 0.7;
+  const min_score = (args.min_score as number | undefined) ?? 0.5;
+  const metadata_filter =
+    (args.metadata_filter as Record<string, string> | null | undefined) ?? null;
+  const requested_max_bytes = args.max_bytes as number | undefined;
+
+  const max_bytes = Math.min(requested_max_bytes ?? MAX_RESPONSE_BYTES, MAX_RESPONSE_BYTES);
+
+  if (
+    metadata_filter !== null &&
+    metadata_filter !== undefined &&
+    (typeof metadata_filter !== "object" || Array.isArray(metadata_filter))
+  ) {
+    throw new McpInvalidParams("metadata_filter must be a JSON object or null");
+  }
+
+  if (!query?.trim()) throw new McpInvalidParams("query is required");
+
+  if (mode !== "fts" && !ctx.openaiApiKey) {
+    throw new Error(
+      "OpenAI API key not configured. Set OPENAI_API_KEY (Edge Function) or CEREFOX_OPENAI_API_KEY (.env, local).",
+    );
+  }
+
+  // Resolve project name to UUID if provided
+  let projectId: string | null = null;
+  if (project_name) {
+    projectId = await lookupProjectId(supabase, project_name);
+    if (!projectId) throw new Error(`Project not found: ${project_name}`);
+  }
+
+  // FTS mode doesn't need an embedding
+  let embedding: number[] | null = null;
+  if (mode !== "fts") {
+    embedding = await getEmbedding(query, ctx.openaiApiKey!);
+  }
+
+  const metaFilterParam =
+    metadata_filter && Object.keys(metadata_filter).length > 0
+      ? { p_metadata_filter: metadata_filter }
+      : {};
+
+  let rpcName: string;
+  let rpcParams: Record<string, unknown>;
+
+  if (mode === "fts") {
+    rpcName = "cerefox_fts_search";
+    rpcParams = {
+      p_query_text: query,
+      p_match_count: match_count,
+      p_project_id: projectId,
+      ...metaFilterParam,
+    };
+  } else if (mode === "hybrid") {
+    rpcName = "cerefox_hybrid_search";
+    rpcParams = {
+      p_query_text: query,
+      p_query_embedding: embedding,
+      p_match_count: match_count,
+      p_alpha: alpha,
+      p_use_upgrade: false,
+      p_project_id: projectId,
+      p_min_score: min_score,
+      ...metaFilterParam,
+    };
+  } else {
+    rpcName = "cerefox_search_docs";
+    rpcParams = {
+      p_query_text: query,
+      p_query_embedding: embedding,
+      p_match_count: match_count,
+      p_alpha: alpha,
+      p_project_id: projectId,
+      p_min_score: min_score,
+      ...metaFilterParam,
+    };
+  }
+
+  const { data, error } = await supabase.rpc(rpcName, rpcParams);
+
+  if (error) throw new Error(`RPC error: ${error.message}`);
+
+  const { accepted, truncated, usedBytes } = applyByteBudget(data ?? [], max_bytes);
+
+  logUsage(supabase, {
+    operation: "search",
+    accessPath: ctx.accessPath,
+    requestor: args.requestor as string | undefined,
+    query_text: query,
+    project_id: projectId,
+    result_count: accepted.length,
+  });
+
+  if (accepted.length === 0) return "No results found.";
+
+  const rows = accepted as Array<{
+    document_id?: string;
+    doc_title?: string;
+    full_content?: string;
+    best_score?: number;
+    is_partial?: boolean;
+    chunk_count?: number;
+    total_chars?: number;
+  }>;
+
+  const parts: string[] = rows.map((row) => {
+    const title = row.doc_title ?? "Untitled";
+    const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
+    const score = row.best_score != null ? ` (score: ${row.best_score.toFixed(3)})` : "";
+    const partial = row.is_partial
+      ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
+      : "";
+    return `## ${title}${docId}${score}${partial}\n\n${row.full_content ?? ""}`;
+  });
+
+  let output = parts.join("\n\n---\n\n");
+  if (truncated) {
+    output +=
+      `\n\n[Results truncated at ${usedBytes} bytes. Use a more specific query or a smaller match_count to see more.]`;
+  }
+  return output;
+}
+
+export const searchTool: ToolDefinition = {
+  name: "cerefox_search",
+  description:
+    "Search the Cerefox personal knowledge base. Returns complete documents ranked by hybrid (FTS + semantic) relevance.",
+  inputSchema: {
+    type: "object",
+    required: ["query"],
+    properties: {
+      query: { type: "string", description: "Natural-language search query" },
+      match_count: {
+        type: "integer",
+        description: "Maximum number of documents to return (default: 5)",
+      },
+      project_name: {
+        type: "string",
+        description: "Filter results to a specific project by name (optional)",
+      },
+      metadata_filter: {
+        type: "object",
+        description:
+          'Optional JSONB containment filter. Only documents whose metadata contains ALL specified key-value pairs are returned. Example: {"type": "decision", "status": "active"}. Call cerefox_list_metadata_keys first to discover available keys and values. Omit to search all documents.',
+        additionalProperties: { type: "string" },
+      },
+      max_bytes: {
+        type: "integer",
+        description:
+          "Optional response size budget in bytes. Results are dropped whole until the budget is satisfied; a truncated flag is set when results are dropped. Defaults to the server maximum (200000). Pass a smaller value if your context window is limited. Values above the server maximum are silently capped.",
+      },
+      requestor: {
+        type: "string",
+        description:
+          'Name of the agent or user making this request (e.g., "Claude Code", "archiver"). Recorded in the usage log for attribution. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
+      },
+    },
+  },
+  handler,
+};
