@@ -62,6 +62,23 @@ describe("runDbStatusChecks", () => {
     expect(report.schemaVersion.mismatch).toBe(false); // no false alarm
   });
 
+  test("renders functions as 'unknown' (not 'ok' or 'missing') when the introspection helper RPC returns null", async () => {
+    // This is the v0.3.1 fix: when cerefox_pg_function_exists isn't deployed,
+    // functionExists returns null. The report must NOT misclassify as "missing"
+    // (which would be a misleading false negative) and must NOT probe the
+    // target RPCs (which is what created the orphan doc in v0.3.0).
+    const client = makeFakeClient({
+      functionExists: mock(async () => null),
+    });
+    const report = await runDbStatusChecks(client, { bundledSchemaVersion: "0.3.0" });
+    expect(report.functions.every((f) => f.status === "unknown")).toBe(true);
+    expect(report.allOk).toBe(false);
+    // Each "unknown" row has a detail nudging the user toward db_deploy.py.
+    for (const f of report.functions) {
+      expect(f.detail).toMatch(/db_deploy/);
+    }
+  });
+
   test("invokes onProgress for every probe across all four phases", async () => {
     const events: ProgressEvent[] = [];
     const client = makeFakeClient();

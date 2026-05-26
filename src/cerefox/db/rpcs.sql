@@ -1079,6 +1079,25 @@ DECLARE
     v_snap          RECORD;
     v_status        TEXT;
 BEGIN
+    -- ── Zero-chunk guard (v0.3.1) ────────────────────────────────────────
+    -- Refuse to create or update a document with no chunks. Three reasons:
+    --   1. A zero-chunk document is meaningless on its own (no body, no
+    --      embeddings, can't be searched).
+    --   2. The SQL signature has DEFAULTs for every parameter, so calling
+    --      `SELECT cerefox_ingest_document()` with no args used to create
+    --      an orphan `Untitled` row. v0.3.0's db-client introspection
+    --      fallback hit this path; see the v0.3.1 Decision Log entry.
+    --   3. It papers over the asymmetry between `list_documents` (returns
+    --      0-chunk rows) and `cerefox_get_document` (404s on them).
+    --      Cheaper to refuse the write than to fix both queries.
+    -- If you actually need to clear a doc's content, soft-delete it.
+    IF p_chunks IS NULL OR jsonb_array_length(p_chunks) = 0 THEN
+        RAISE EXCEPTION
+            'cerefox_ingest_document: refusing to write a document with zero chunks (title=%, source=%). Supply at least one chunk, or use cerefox_delete_document to clear content.',
+            p_title, p_source
+            USING ERRCODE = '22023';  -- invalid_parameter_value
+    END IF;
+
     -- Validate review_status
     v_status := CASE WHEN p_review_status IN ('approved', 'pending_review')
                      THEN p_review_status ELSE 'approved' END;
@@ -1673,7 +1692,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
-    SELECT '0.3.0'::TEXT;
+    SELECT '0.3.1'::TEXT;
 $$;
 
 

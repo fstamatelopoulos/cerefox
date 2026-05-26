@@ -33,7 +33,15 @@ export interface CerefoxDbClient {
   listProjects: () => Promise<Project[]>;
   rpc: <T = unknown>(fn: string, params?: Record<string, unknown>) => Promise<T | null>;
   tableExists: (name: string) => Promise<boolean>;
-  functionExists: (name: string) => Promise<boolean>;
+  /**
+   * Returns `true` / `false` if the introspection helper RPC
+   * (`cerefox_pg_function_exists`) is deployed, `null` if the helper itself
+   * is missing — in which case the caller should render "unknown" rather
+   * than guess. **Never falls back to probing the target RPC with empty
+   * params** — doing so accidentally created an orphan document in v0.3.0
+   * (see v0.3.1 release notes / Decision Log).
+   */
+  functionExists: (name: string) => Promise<boolean | null>;
   rowCount: (table: string) => Promise<number | null>;
 }
 
@@ -85,22 +93,21 @@ export function createClient(settings: Settings): CerefoxDbClient {
     throw new Error(`tableExists(${name}) failed: ${error.message}`);
   };
 
-  const functionExists = async (name: string): Promise<boolean> => {
+  const functionExists = async (name: string): Promise<boolean | null> => {
     // Routes through cerefox_pg_function_exists() — a SECURITY DEFINER helper
-    // that queries pg_proc directly. We can't just call the target function
-    // with empty params because PostgREST returns 42883 ("function not found
-    // with this signature") even for functions that exist with required args.
+    // that queries pg_proc directly. We can't probe the target RPC with empty
+    // params because:
+    //   (a) PostgREST returns 42883 even for functions that exist with
+    //       required args (we can't distinguish "missing" from "wrong sig"),
+    //       AND
+    //   (b) any RPC whose params are ALL DEFAULTED will accept the probe and
+    //       run — `cerefox_ingest_document` does this and creates an orphan
+    //       document. This was the v0.3.0 bug fixed in v0.3.1.
     //
-    // Legacy deployments may not have cerefox_pg_function_exists yet (it ships
-    // in v0.3.0). In that case the helper itself returns null, and we fall
-    // back to the naive empty-call probe so v0.3.0 db_status can still
-    // distinguish "missing" from "exists with required args".
-    const result = await rpc<boolean>("cerefox_pg_function_exists", { p_name: name });
-    if (result !== null) return result;
-
-    // Legacy fallback — best-effort.
-    const naive = await rpc(name, {});
-    return naive !== null;
+    // If the helper RPC is missing (legacy deployment that hasn't run
+    // `db_deploy.py` against the v0.3.0+ rpcs.sql), we return `null` so the
+    // caller can render "unknown" — never silently fall back to probing.
+    return await rpc<boolean>("cerefox_pg_function_exists", { p_name: name });
   };
 
   const rowCount = async (table: string): Promise<number | null> => {
