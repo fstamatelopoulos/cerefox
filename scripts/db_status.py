@@ -7,8 +7,9 @@ notice so existing tooling that invokes ``python scripts/db_status.py``
 gets a clear, actionable error pointing at the new location.
 
 The shim deliberately exits non-zero rather than silently forwarding to the
-TS script — that way migration is explicit, not invisible. Hard-removal of
-this shim is scheduled for v0.4.0.
+TS script — that way migration is explicit, not invisible. The shim has no
+scheduled hard-removal date; it stays as long as it earns its keep as a
+migration aid.
 
 See:
   docs/specs/polish-and-distribution-design.md  § 12f — Script-language policy
@@ -38,8 +39,9 @@ DEPRECATION_MESSAGE = """\
    moved to _shared/db-status/ so the v0.5 `cerefox doctor` command can
    import it.
 
-   This shim will be removed in v0.4.0. Please update any CI workflows or
-   make targets that invoke this file.
+   This shim is kept indefinitely as a migration aid. There is no scheduled
+   removal date — please still update any CI workflows or make targets that
+   invoke this file, because the exit code will stay non-zero.
 """
 
 

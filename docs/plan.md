@@ -1773,7 +1773,7 @@ v0.4 (MCP server) → v0.5 (CLI) → v0.7 (ingestion).
 | 20C.4 | Add `_shared/config/` — TS port of `paths.py` | Done | Mirrors the Python resolver 1:1: `resolveConfigDir`, `resolveEnvFile`, `userStateDir`, `isDevMode`. Plus `loadEnv()` (idempotent dotenv loader; existing `process.env` always wins) and `loadSettings()` (typed read of the v0.3.0 settings subset). |
 | 20C.5 | Write `scripts/db_status.ts` (replaces `db_status.py`) | Done | Reads bundled `@version:` from `src/cerefox/db/schema.sql`; passes to `runDbStatusChecks`. `--json` flag emits structured output. Exit codes 0 / 1 / 2 (healthy / failures / config error). Smoke-tested against the maintainer's live Supabase. |
 | 20C.6 | Write `scripts/sync_docs.ts` (replaces `sync_docs.py`) | Done | Discovers `README.md` + `AGENT_GUIDE.md` + `AGENT_QUICK_REFERENCE.md` + every `docs/**/*.md`. Delegates to the `cerefox-ingest` Edge Function via `fetch` — server-side embedding, no local OpenAI key needed. `--dry-run` and `--project` flags preserved from the Python version. |
-| 20C.7 | Convert `scripts/db_status.py` and `scripts/sync_docs.py` to deprecation shims | Done | Each shim prints a ⚠ notice naming the TS replacement, the Bun install one-liner, and the v0.4.0 hard-removal target, then exits with code 2. Explicit failure (no silent forwarding) so migration is discoverable. Verified `python scripts/sync_docs.py` and `python scripts/db_status.py` both print the notice and exit 2. |
+| 20C.7 | Convert `scripts/db_status.py` and `scripts/sync_docs.py` to deprecation shims | Done | Each shim prints a ⚠ notice naming the TS replacement and the Bun install one-liner, then exits with code 2. Explicit failure (no silent forwarding) so migration is discoverable. Originally announced a v0.4.0 hard-removal date; **policy revised post-v0.3.0 — shims are kept indefinitely as a migration aid**. No scheduled removal; exit code stays non-zero so tooling that hasn't migrated keeps failing visibly. Verified `python scripts/sync_docs.py` and `python scripts/db_status.py` both print the notice and exit 2. |
 | 20C.8 | Vitest test suite under `_shared/__tests__/` | Done | `paths.test.ts` covers all four resolver functions across 12 cases. Uses Bun's built-in `bun:test` runner (not Vitest — Bun's runner is API-compatible and is preferred per the design doc). All 14 tests pass under `bun test`. |
 | 20C.9 | Parity test: `sync_docs.ts` lists the same files as the (now-deprecated) Python version | Done | `sync_docs.test.ts` snapshots the file-discovery logic (root-level docs + recursive `docs/**/*.md`) and asserts non-empty + presence of well-known files + exclusion of contributor-only files. |
 | 20C.10 | Update `docs/guides/ops-scripts.md` | Done | New "Two languages, one directory" preamble with the TS/Python table; `db_status` and `sync_docs` sections rewritten for the TS form; new "TS scripts and `.env` resolution" subsection documents the precedence rule. |
@@ -1803,7 +1803,7 @@ v0.4 (MCP server) → v0.5 (CLI) → v0.7 (ingestion).
 **Deferred to later iterations** (not in v0.3.0):
 
 - Porting `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py` to TS (§12f rule 3: stays Python until extended; deferred to v0.5 / v0.7 per the §12f migration table).
-- **Hard-removal of the `sync_docs.py` / `db_status.py` deprecation shims** — scheduled for v0.4.0 (next minor release). Until then the shims print a notice and exit non-zero, giving users one release to migrate their tooling / cron / docs.
+- **Hard-removal of the `sync_docs.py` / `db_status.py` deprecation shims** — **not scheduled** (policy revised post-v0.3.0; see 20C.7). The shims are kept indefinitely as a migration aid; their non-zero exit code keeps un-migrated tooling failing visibly. Revisit only if maintenance becomes a real burden.
 - `cerefox init` and `cerefox configure-agent` (v0.5 — these are CLI commands, and the CLI itself moves to TS in v0.5).
 - Layer 2 of MCP discoverability — `cerefox init` auto-ingests `AGENT_GUIDE.md` (v0.5; depends on `cerefox init` existing).
 - Layer 3 — `cerefox_get_help` MCP tool (v0.4; ships with the TS MCP server).
@@ -2017,8 +2017,8 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
   UI page + `/api/v1/docs` endpoints); schema-version-mismatch banner that
   closes the v0.1.19 redeploy footgun; first two Python → TS script ports
   (`scripts/db_status.ts` + `scripts/sync_docs.ts`) per the §12f policy, with
-  the legacy `.py` files converted to **deprecation shims** (hard-removal in
-  v0.4.0). `_shared/` cross-context TS module seeded with `config/`,
+  the legacy `.py` files converted to **deprecation shims** (kept indefinitely
+  as a migration aid; no scheduled removal). `_shared/` cross-context TS module seeded with `config/`,
   `db-client/`, and `db-status/`. New introspection RPC
   `cerefox_pg_function_exists()`. Frontend `dist/` bundled into the wheel via
   hatchling `force-include`. End-user redeploy required:
@@ -2036,9 +2036,11 @@ Local `cerefox mcp` stdio server moves from Python to TypeScript. First runtime
 component migrated. Publishes `@cerefox/mcp-local` to npm. Ships the
 `cerefox_get_help` MCP tool (Layer 3 of the MCP discoverability response) so
 remote/hosted-MCP/Edge-Function-only agents can discover Cerefox conventions
-without filesystem access. Hard-removes the `db_status.py` and `sync_docs.py`
-deprecation shims that v0.3.0 introduced. Detailed task breakdown to be filled
-in when iter-22 starts.
+without filesystem access. (Note: the `db_status.py` / `sync_docs.py`
+deprecation shims that v0.3.0 introduced **stay** in v0.4.0 — the v0.3.0
+release notes mentioned removing them, but that's been walked back. They're
+indefinite migration aids.) Detailed task breakdown to be filled in when
+iter-22 starts.
 
 **After Iteration 22**: Iterations 23–27 (TS CLI + remaining script ports,
 web server, ingestion, Python removal, v1.0 commitment).

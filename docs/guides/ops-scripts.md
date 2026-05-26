@@ -18,7 +18,7 @@ As of v0.3.0, Cerefox scripts come in two flavors:
 | `backup_restore.py` | Python | `uv run python scripts/backup_restore.py` |
 | `reindex_all.py` | Python | `uv run python scripts/reindex_all.py` |
 
-The TS scripts require [Bun](https://bun.sh) — install with `curl -fsSL https://bun.sh/install | bash`. They are functionally equivalent to their previous Python forms; **the legacy `db_status.py` and `sync_docs.py` are deprecation shims that exit with a pointer to the TS replacement**. Hard-removal of the shims is scheduled for v0.4.0.
+The TS scripts require [Bun](https://bun.sh) — install with `curl -fsSL https://bun.sh/install | bash`. They are functionally equivalent to their previous Python forms; **the legacy `db_status.py` and `sync_docs.py` are deprecation shims that exit non-zero with a pointer to the TS replacement**. The shims are kept indefinitely as a migration aid — there's no scheduled removal date, but the exit code stays non-zero, so update any cron jobs / CI / make targets that invoke them.
 
 The remaining `.py` scripts stay Python until their scheduled port (v0.5 for `db_deploy` / `db_migrate`; v0.7 for `backup_*` / `reindex_all`) — per the §12f script-language policy in [`CONTRIBUTING.md`](../../CONTRIBUTING.md), Python scripts get ported when they're extended.
 

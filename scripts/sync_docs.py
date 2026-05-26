@@ -8,8 +8,9 @@ notice so existing tooling, cron jobs, and docs that invoke
 the new location.
 
 The shim deliberately exits non-zero rather than silently forwarding to the
-TS script — that way migration is explicit, not invisible. Hard-removal of
-this shim is scheduled for v0.4.0.
+TS script — that way migration is explicit, not invisible. The shim has no
+scheduled hard-removal date; it stays as long as it earns its keep as a
+migration aid.
 
 See:
   docs/specs/polish-and-distribution-design.md  § 12f — Script-language policy
@@ -36,8 +37,9 @@ DEPRECATION_MESSAGE = """\
    extended in a given iteration are ported then. sync_docs gained
    bundled-docs awareness in v0.3.0, which triggered the port.
 
-   This shim will be removed in v0.4.0. Please update any cron jobs,
-   make targets, or CI workflows that invoke this file.
+   This shim is kept indefinitely as a migration aid. There is no scheduled
+   removal date — please still update any cron jobs, make targets, or CI
+   workflows that invoke this file, because the exit code will stay non-zero.
 """
 
 

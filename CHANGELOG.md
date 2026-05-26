@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **Deprecation-shim policy walk-back** — the v0.3.0 release notes announced
+  hard-removal of the `scripts/sync_docs.py` / `scripts/db_status.py` shims
+  in v0.4.0. **That schedule is dropped.** The shims now stay indefinitely
+  as migration aids — they continue to print the ⚠ pointer and exit with
+  code 2, so un-migrated tooling keeps failing visibly, but no scheduled
+  removal date exists. Maintainer can circle back outside the v0.4.0–v1.0.0
+  roadmap if/when the shims become a real maintenance burden. Touches
+  `scripts/sync_docs.py`, `scripts/db_status.py`, `docs/guides/ops-scripts.md`,
+  `docs/plan.md`.
 
 ---
 
@@ -103,7 +113,11 @@ mismatch banner that closes the v0.1.19 redeploy footgun.
   - The legacy `.py` versions are now **deprecation shims** that print a
     pointer to the TS replacement and exit with code 2. Explicit failure
     forces tooling, cron, and docs to migrate rather than silently
-    forwarding. Hard-removal of the shims is scheduled for v0.4.0.
+    forwarding. The shims are kept indefinitely as a migration aid — there
+    is no scheduled removal date, but the exit code stays non-zero so any
+    un-migrated invocation keeps failing visibly. (The v0.3.0 PR initially
+    announced a v0.4.0 hard-removal; that's been walked back to "indefinite"
+    based on maintainer feedback after the release shipped.)
 - **`cerefox_pg_function_exists(name TEXT) RETURNS BOOLEAN`** — new
   introspection RPC. PostgREST's 42883 error doesn't distinguish "function
   doesn't exist" from "function exists with required args"; this helper
