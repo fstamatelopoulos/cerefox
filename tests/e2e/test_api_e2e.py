@@ -1374,3 +1374,58 @@ class TestIdBasedIngest17B:
         assert result2.document_id == result1.document_id
         assert result2.action == "updated"
         assert result2.note == ""
+
+
+class TestZeroChunkGuard:
+    """v0.3.1 — cerefox_ingest_document refuses to write a 0-chunk document.
+
+    Closes the gap that produced the v0.3.0 orphan: an introspection probe
+    that called the RPC with zero arguments created a row with title="Untitled",
+    source="agent", 0 chunks. Defense in depth alongside the v0.3.1 db-client
+    fix that stops the probe from happening.
+    """
+
+    def test_zero_chunk_create_via_rpc_is_refused(self, e2e_client: CerefoxClient):
+        """Direct rpc({}) — the exact path that created the v0.3.0 orphan."""
+        with pytest.raises(Exception) as exc_info:
+            e2e_client.client.rpc("cerefox_ingest_document", {}).execute()
+        msg = str(exc_info.value).lower()
+        # The RAISE EXCEPTION message includes "zero chunks".
+        assert "zero chunks" in msg or "22023" in msg
+
+    def test_zero_chunk_create_with_title_still_refused(
+        self, e2e_client: CerefoxClient
+    ):
+        """Even with title + author supplied, 0 chunks must be refused."""
+        with pytest.raises(Exception) as exc_info:
+            e2e_client.client.rpc(
+                "cerefox_ingest_document",
+                {
+                    "p_title": "[E2E] should-not-be-created",
+                    "p_author": "test",
+                    "p_chunks": [],
+                },
+            ).execute()
+        msg = str(exc_info.value).lower()
+        assert "zero chunks" in msg or "22023" in msg
+
+    def test_zero_chunk_create_does_not_leave_orphan(
+        self, e2e_client: CerefoxClient
+    ):
+        """The refusal must be atomic — no document row created."""
+        title = "[E2E] orphan-test-marker-DO-NOT-SHIP"
+        try:
+            e2e_client.client.rpc(
+                "cerefox_ingest_document",
+                {"p_title": title, "p_chunks": []},
+            ).execute()
+        except Exception:
+            pass  # expected
+        # Verify nothing was inserted.
+        resp = (
+            e2e_client.client.table("cerefox_documents")
+            .select("id")
+            .eq("title", title)
+            .execute()
+        )
+        assert resp.data == []

@@ -9,40 +9,99 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-### Added
-
-- **`db_status.ts` shows progress while it runs.** New `ora` spinner with
-  per-phase labels (`Checking tables [N/M]  cerefox_chunks` etc.) so the
-  4-5 second wait against Supabase Cloud has user-visible feedback. Spinner
-  is suppressed in `--json` mode and when stdout isn't a TTY (cron / CI),
-  so machine consumers stay clean. Implemented as an optional `onProgress`
-  callback on `runDbStatusChecks` — `_shared/db-status/` stays decoupled
-  from the spinner library; the driver script owns it.
-- **Repo-root `package.json`** for script-level TS deps (separate from
-  `_shared/package.json`, which owns shared-module deps). At v0.4.0 this
-  consolidates into a proper npm workspace.
-
-### Changed
-
-- **Deprecation-shim policy walk-back** — the v0.3.0 release notes announced
-  hard-removal of the `scripts/sync_docs.py` / `scripts/db_status.py` shims
-  in v0.4.0. **That schedule is dropped.** The shims now stay indefinitely
-  as migration aids — they continue to print the ⚠ pointer and exit with
-  code 2, so un-migrated tooling keeps failing visibly, but no scheduled
-  removal date exists. Maintainer can circle back outside the v0.4.0–v1.0.0
-  roadmap if/when the shims become a real maintenance burden. Touches
-  `scripts/sync_docs.py`, `scripts/db_status.py`, `docs/guides/ops-scripts.md`,
-  `docs/plan.md`.
+**Bug-fix release.** Closes a v0.3.0 data-corruption regression introduced
+by `bun scripts/db_status.ts`'s introspection probe. Defense in depth at
+both the client and the RPC layer. **Requires `uv run python scripts/db_deploy.py`
+once after upgrading** to pick up the new RPC guard and the bumped schema
+version marker.
 
 ### Fixed
 
-- **Orphan zero-chunk document cleanup.** A single document row
-  (`id=459c954a-…`, title="Untitled", 0 chunks, 0 chars) that pre-existed
-  v0.3.0 was purged from the maintainer's instance. The underlying latent
-  bug — `cerefox_get_document` JOINs against `cerefox_chunks` and returns
-  empty for zero-chunk docs, while `list_documents` happily lists them —
-  is captured as a candidate for v0.4.0 (refuse zero-chunk creates at the
-  ingestion RPC).
+- **`bun scripts/db_status.ts` no longer creates an orphan "Untitled"
+  document on first run against a database that hasn't been redeployed
+  with v0.3.0 RPCs.** Root cause: the `functionExists()` check in
+  `_shared/db-client/` had a "legacy fallback" path that probed each
+  expected RPC by calling it with `{}` and treating non-42883 responses
+  as proof of existence. PostgreSQL's `cerefox_ingest_document` accepted
+  the empty-args call thanks to its all-defaults signature and inserted
+  a row with title="Untitled", source="agent", 0 chunks, 0 chars before
+  the probe returned. Fixed in two places:
+  1. **Client-side** (`_shared/db-client/index.ts`): `functionExists` now
+     returns `boolean | null`. Null means "the introspection helper RPC
+     (`cerefox_pg_function_exists`) isn't deployed". The dangerous
+     empty-call fallback is removed entirely. The db-status report
+     surfaces "unknown" rows with a clear "run `db_deploy.py`" nudge.
+  2. **Server-side** (`src/cerefox/db/rpcs.sql`):
+     `cerefox_ingest_document` now refuses (`RAISE EXCEPTION` with
+     SQLSTATE `22023`) any call that supplies zero chunks. Defense in
+     depth — no future code path can recreate the orphan, intentionally
+     or otherwise. This also closes the latent
+     `list_documents`-vs-`cerefox_get_document` asymmetry that surfaced
+     during the orphan investigation: if 0-chunk rows can't be created,
+     the dashboard-shows-but-detail-404s state can't happen.
+- **Orphan row in the maintainer's instance** (`id=459c954a-…`) was
+  manually soft-deleted and purged during the investigation (no change
+  in v0.3.1 itself; documented here for the timeline record).
+
+### Added
+
+- **`db_status.ts` shows progress while it runs.** New `ora` spinner
+  with per-phase labels (`Checking tables [N/M]  cerefox_chunks` etc.)
+  so the 4-5 second wait against Supabase Cloud has user-visible
+  feedback. Suppressed in `--json` mode and when stdout isn't a TTY
+  (cron / CI), so machine consumers stay clean. Implemented as an
+  optional `onProgress` callback on `runDbStatusChecks` —
+  `_shared/db-status/` stays decoupled from the spinner library.
+- **Repo-root `package.json`** for script-level TS deps (separate from
+  `_shared/package.json`, which owns shared-module deps). At v0.4.0
+  these consolidate into a proper npm workspace.
+- **`CheckStatus` extended with `"unknown"`** in `_shared/db-status/`,
+  rendered with a `?` marker and a per-row "introspection helper not
+  deployed" detail.
+
+### Changed
+
+- **Schema version**: `@version: 0.3.0` → `@version: 0.3.1` in
+  `schema.sql`; the `cerefox_schema_version()` RPC returns `'0.3.1'`.
+  Schema-version-mismatch banner in the web UI fires until you run
+  `db_deploy.py`.
+- **Deprecation-shim policy walk-back** (folded in from the
+  pre-v0.3.1 [Unreleased] section): the v0.3.0 release notes announced
+  hard-removal of the `sync_docs.py` / `db_status.py` shims in v0.4.0.
+  That schedule is dropped. The shims stay indefinitely as migration
+  aids — they continue to print the ⚠ pointer and exit with code 2,
+  but no scheduled removal date exists.
+
+### Tests
+
+- 1 new Bun test covering the `functionExists → null → "unknown"` path
+  in `db-status` (`_shared/__tests__/db_status.test.ts`).
+- 3 new Python e2e tests for the zero-chunk RPC guard
+  (`tests/e2e/test_api_e2e.py::TestZeroChunkGuard`). Gated behind
+  `pytest -m e2e`; require live Supabase with v0.3.1 RPCs deployed.
+
+### Upgrade notes
+
+```bash
+# Redeploy SQL to pick up the new zero-chunk guard + bumped schema version.
+uv run python scripts/db_deploy.py
+```
+
+End-user impact: zero behavior change for legitimate ingests (the chunker
+already produces ≥ 1 chunk for any real content). Empty-content ingests —
+which previously created orphan rows — now raise a clear `22023` error
+from the RPC.
+
+### Decision Log
+
+- **2026-05-26 — v0.3.1: never probe write-side RPCs for introspection;
+  refuse zero-chunk creates at the source.** Captures the root cause
+  (RPCs with all-defaults can be triggered by `{}` probes), the
+  two-layer fix rationale (client stops probing; RPC refuses regardless),
+  the alternative considered (whitelist read-only RPCs to probe), and
+  the general lesson: don't probe by side-effect; ask the database
+  directly via a typed introspection RPC. Stored in *Cerefox Decision
+  Log — 2026 Q2 (Part 2)*.
 
 ---
 

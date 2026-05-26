@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.3.0
+-- @version: 0.3.1
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql or rpcs.sql
 -- changes in a way that requires `python scripts/db_deploy.py` to be re-run.

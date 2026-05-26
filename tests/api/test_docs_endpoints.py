@@ -74,7 +74,7 @@ class TestSchemaVersion:
         # Mock the RPC to return a value matching the bundled version, so
         # no mismatch is reported.
         mock_client.client.rpc.return_value.execute.return_value = MagicMock(
-            data=[{"cerefox_schema_version": "0.3.0"}],
+            data=[{"cerefox_schema_version": "0.3.1"}],
         )
         response = client.get("/api/v1/schema-version")
         assert response.status_code == 200
@@ -82,7 +82,7 @@ class TestSchemaVersion:
         assert "bundled" in body
         assert "deployed" in body
         assert "mismatch" in body
-        assert body["bundled"] == "0.3.0"
+        assert body["bundled"] == "0.3.1"
 
     def test_reports_mismatch_when_deployed_differs(self) -> None:
         client, mock_client = _client_with_mock_db()
@@ -91,7 +91,7 @@ class TestSchemaVersion:
         )
         response = client.get("/api/v1/schema-version")
         body = response.json()
-        assert body["bundled"] == "0.3.0"
+        assert body["bundled"] == "0.3.1"
         assert body["deployed"] == "0.2.0"
         assert body["mismatch"] is True
 
@@ -109,11 +109,11 @@ class TestSchemaVersion:
         """Some supabase-py versions return the scalar directly, not as a list."""
         client, mock_client = _client_with_mock_db()
         mock_client.client.rpc.return_value.execute.return_value = MagicMock(
-            data="0.3.0",
+            data="0.3.1",
         )
         response = client.get("/api/v1/schema-version")
         body = response.json()
-        assert body["deployed"] == "0.3.0"
+        assert body["deployed"] == "0.3.1"
         assert body["mismatch"] is False
 
 

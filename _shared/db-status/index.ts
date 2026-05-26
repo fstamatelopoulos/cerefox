@@ -53,7 +53,7 @@ export const ROW_COUNT_TABLES = [
   "cerefox_chunks",
 ] as const;
 
-export type CheckStatus = "ok" | "missing" | "error";
+export type CheckStatus = "ok" | "missing" | "error" | "unknown";
 
 export interface CheckResult {
   name: string;
@@ -125,7 +125,16 @@ export async function runDbStatusChecks(
     });
     try {
       const exists = await client.functionExists(f);
-      functions.push({ name: f, status: exists ? "ok" : "missing" });
+      // exists can be true | false | null. null means the introspection
+      // helper RPC (cerefox_pg_function_exists) isn't deployed on this
+      // database — render as "unknown" rather than misreporting.
+      const status: CheckStatus =
+        exists === true ? "ok" : exists === false ? "missing" : "unknown";
+      const detail =
+        status === "unknown"
+          ? "introspection helper not deployed; run `python scripts/db_deploy.py`"
+          : undefined;
+      functions.push({ name: f, status, detail });
     } catch (err) {
       functions.push({
         name: f,
@@ -173,11 +182,15 @@ export async function runDbStatusChecks(
   const bundled = opts.bundledSchemaVersion ?? null;
   const mismatch = !!(bundled && deployed && bundled !== deployed);
 
+  // A report is "all OK" only when every check is explicitly OK. "unknown"
+  // and "error" both fail the gate so the user is nudged to redeploy.
   const allOk =
     tables.every((t) => t.status === "ok") &&
     functions.every((f) => f.status === "ok") &&
     !mismatch;
+  const anyUnknown = functions.some((f) => f.status === "unknown");
 
+  void anyUnknown; // formatReport reads it via the per-row detail field
   return {
     tables,
     functions,
@@ -203,8 +216,29 @@ export function formatReport(report: DbStatusReport): string {
 
   lines.push("");
   lines.push("Functions / RPCs:");
+  const anyUnknown = report.functions.some((f) => f.status === "unknown");
+  if (anyUnknown) {
+    lines.push(
+      "  ⚠️  Function introspection unavailable on this database. The");
+    lines.push(
+      "     `cerefox_pg_function_exists` helper RPC is missing (likely a");
+    lines.push(
+      "     legacy deployment that hasn't been redeployed since v0.3.0).");
+    lines.push(
+      "     Run `uv run python scripts/db_deploy.py` to install it, then");
+    lines.push(
+      "     re-run this script for a full report.");
+    lines.push("");
+  }
   for (const f of report.functions) {
-    const mark = f.status === "ok" ? "✓" : f.status === "missing" ? "✗" : "!";
+    const mark =
+      f.status === "ok"
+        ? "✓"
+        : f.status === "missing"
+        ? "✗"
+        : f.status === "unknown"
+        ? "?"
+        : "!";
     lines.push(`  ${mark}  ${f.name}()${f.detail ? `  — ${f.detail}` : ""}`);
   }
 
@@ -228,11 +262,14 @@ export function formatReport(report: DbStatusReport): string {
 
   lines.push("");
   lines.push("─".repeat(42));
-  lines.push(
-    report.allOk
-      ? "✓  All checks passed. Schema looks healthy."
-      : "✗  Some checks failed. Run db_deploy.py to fix missing objects.",
-  );
+  if (report.allOk) {
+    lines.push("✓  All checks passed. Schema looks healthy.");
+  } else if (anyUnknown) {
+    lines.push("?  Function checks unavailable. Run db_deploy.py to install");
+    lines.push("   the introspection helper RPC, then re-run.");
+  } else {
+    lines.push("✗  Some checks failed. Run db_deploy.py to fix missing objects.");
+  }
 
   return lines.join("\n");
 }
