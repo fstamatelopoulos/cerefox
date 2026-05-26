@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.3.1] -- 2026-05-26
+
 **Bug-fix release.** Closes a v0.3.0 data-corruption regression introduced
 by `bun scripts/db_status.ts`'s introspection probe. Defense in depth at
 both the client and the RPC layer. **Requires `uv run python scripts/db_deploy.py`
