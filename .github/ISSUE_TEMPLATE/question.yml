@@ -1,0 +1,29 @@
+name: Question
+description: Ask a question about using Cerefox, the architecture, or the roadmap.
+title: "[question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open-ended questions are welcome. Before filing, please check:
+
+        - The [`docs/guides/`](../docs/guides/) folder (especially `quickstart.md`, `connect-agents.md`, `cli.md`)
+        - [`AGENT_GUIDE.md`](../AGENT_GUIDE.md) if your question is about an AI agent using Cerefox
+        - [`docs/research/vision.md`](../docs/research/vision.md) for direction / roadmap questions
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: One question per issue is best. Provide enough context that someone unfamiliar with your setup can answer.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: How are you using Cerefox? What are you trying to accomplish? What have you already read or tried?
+    validations:
+      required: false

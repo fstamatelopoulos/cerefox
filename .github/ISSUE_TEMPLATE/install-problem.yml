@@ -1,0 +1,60 @@
+name: Install / setup problem
+description: Something went wrong getting Cerefox running on your machine.
+title: "[install] "
+labels: ["install"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please skim the relevant guide first — most install problems are covered there:
+
+        - [`docs/guides/quickstart.md`](../docs/guides/quickstart.md)
+        - [`docs/guides/setup-supabase.md`](../docs/guides/setup-supabase.md)
+        - [`docs/guides/setup-local.md`](../docs/guides/setup-local.md)
+        - [`docs/guides/upgrading.md`](../docs/guides/upgrading.md) (if upgrading from a prior version)
+
+  - type: input
+    id: cerefox-version
+    attributes:
+      label: Cerefox version
+      description: Tag or commit SHA you're trying to install. (`git log -1 --oneline` if from source.)
+    validations:
+      required: true
+
+  - type: input
+    id: install-path
+    attributes:
+      label: Which install path?
+      placeholder: "uv sync from source / docker-compose / Cloud Run / ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, Node version, Bun version (if contributor setup), Docker / Supabase.
+      placeholder: |
+        OS: macOS 15.5 (arm64)
+        Python: 3.13.0 (uv-managed)
+        Node: v20.18.0
+        Bun: 1.3.13
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What command did you run? What error did you get?
+      description: Paste the exact command line and the full output, including any traceback. Use code fences.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried?
+      description: Did you re-run `uv sync`? Reinstall the schema? Restart your terminal?
+    validations:
+      required: false

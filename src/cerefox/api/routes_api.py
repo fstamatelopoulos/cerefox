@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from cerefox import __version__ as CEREFOX_VERSION
 from cerefox.api.deps import get_client, get_embedder, get_settings
 from cerefox.config import Settings
 from cerefox.db.client import CerefoxClient
@@ -26,6 +27,47 @@ from cerefox.retrieval.search import DocResult, DocSearchResponse, SearchClient
 
 logger = logging.getLogger(__name__)
 api_router = APIRouter(prefix="/api/v1", tags=["api"])
+
+
+# Resolved once at process start. `git_commit_short` is best-effort:
+# - In dev: read from `git rev-parse --short HEAD` on first access.
+# - In a built/packaged install: read from CEREFOX_GIT_COMMIT env var if set
+#   (CI can inject this), otherwise None.
+# `build_date` is read from CEREFOX_BUILD_DATE env var (CI injects ISO 8601),
+# otherwise None.
+
+
+def _resolve_git_commit_short() -> str | None:
+    env = os.environ.get("CEREFOX_GIT_COMMIT")
+    if env:
+        return env[:7]
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+_VERSION_INFO = {
+    "version": CEREFOX_VERSION,
+    "git_commit_short": _resolve_git_commit_short(),
+    "build_date": os.environ.get("CEREFOX_BUILD_DATE"),
+}
+
+
+@api_router.get("/version")
+def api_version() -> dict[str, Any]:
+    return _VERSION_INFO
 
 
 # ── Response models ──────────────────────────────────────────────────────────

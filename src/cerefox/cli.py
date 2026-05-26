@@ -19,14 +19,14 @@ import sys
 
 import click
 
+from cerefox import __version__
 from cerefox.config import Settings
-
 
 # ── Root group ────────────────────────────────────────────────────────────────
 
 
 @click.group()
-@click.version_option()
+@click.version_option(version=__version__, prog_name="cerefox")
 def cli() -> None:
     """Cerefox — personal second brain knowledge backend."""
 
