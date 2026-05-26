@@ -181,6 +181,7 @@ export function DashboardPage() {
             <Table.Tbody>
               {data.projects.map((p) => {
                 const docCount = data.project_doc_counts[p.id] ?? 0;
+                const deletedCount = data.project_deleted_doc_counts?.[p.id] ?? 0;
                 return (
                   <Table.Tr key={p.id}>
                     <Table.Td>
@@ -196,6 +197,11 @@ export function DashboardPage() {
                     <Table.Td>
                       <Group gap="xs">
                         <Text size="sm">{docCount}</Text>
+                        {deletedCount > 0 && (
+                          <Text size="xs" c="dimmed">
+                            ({deletedCount} in trash)
+                          </Text>
+                        )}
                         {docCount > 0 && (
                           <Button
                             variant="subtle"

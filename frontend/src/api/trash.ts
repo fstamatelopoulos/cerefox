@@ -9,6 +9,8 @@ export interface DeletedDocument {
   review_status: string;
   deleted_at: string;
   updated_at: string | null;
+  /** Projects the document belonged to before deletion (junction is preserved). */
+  project_ids: string[];
 }
 
 export async function fetchTrash(limit = 50): Promise<DeletedDocument[]> {

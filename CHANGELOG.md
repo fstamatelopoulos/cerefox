@@ -9,9 +9,44 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap. Next batch of work is being scoped on the
-`research/installer-design` branch (polish & distribution design,
-v0.2.0 onward).
+### Fixed
+
+- **Dashboard project doc count includes soft-deleted documents.** The
+  Projects table on the dashboard showed the *junction-row count*, which
+  preserves rows across soft-delete. So a project with 5 active + 1
+  trashed document showed "6". Now shows the active count, with an
+  optional "(N in trash)" annotation next to the count when any
+  documents are in the trash. Backend: `get_project_doc_counts` joins
+  with `cerefox_documents` via PostgREST resource embedding to read
+  each linked document's `deleted_at` in one round-trip. Returns a
+  tuple of `(active_counts, deleted_counts)` instead of a single map.
+  Dashboard API response gains `project_deleted_doc_counts: dict[str,int]`
+  alongside the existing `project_doc_counts`.
+
+### Changed
+
+- **Project documents page (`/projects/{id}/documents`) is now paginated.**
+  Previously capped silently at 50 documents per project; larger projects
+  surfaced only the first 50 with no indication. Backend endpoint now
+  accepts `limit` (default 50, max 200) and `offset` query params and
+  returns a `{documents, total, limit, offset}` envelope. Frontend renders
+  Mantine `<Pagination>` with edge buttons; header now shows
+  "N documents — showing X–Y" so the slice is unambiguous. Uses
+  `keepPreviousData` from TanStack Query so page-link clicks don't
+  full-page-loader-flicker. Added `count_documents_for_project` on
+  the DB client (PostgREST `count="exact"` head-only request, fast).
+
+### Added
+
+- **Trash page shows project memberships per document.** Junction rows
+  are preserved across soft-delete, so the trash UI now renders a blue
+  badge for each project the deleted document belonged to. Helps you
+  decide whether to restore (still relevant to project X) or purge.
+  Backend `/documents/trash` endpoint enriches the response with
+  `project_ids` per row using the same `get_projects_for_documents`
+  helper used by the dashboard and project-doc list. Orphan IDs
+  (projects deleted after the doc went to trash) are silently filtered
+  out client-side.
 
 ---
 

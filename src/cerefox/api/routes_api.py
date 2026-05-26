@@ -379,7 +379,12 @@ class DashboardResponse(BaseModel):
     project_count: int
     recent_docs: list[DashboardDocResponse]
     projects: list[ProjectResponse]
+    # Per-project counts. ``project_doc_counts`` is the count of ACTIVE
+    # documents (excludes soft-deleted). ``project_deleted_doc_counts`` is
+    # the count of soft-deleted documents still in the trash for that
+    # project. Frontend renders e.g. "5" or "5 (1 deleted)".
     project_doc_counts: dict[str, int] = {}
+    project_deleted_doc_counts: dict[str, int] = {}
 
 
 @api_router.get("/dashboard")
@@ -394,7 +399,7 @@ def api_dashboard(
     doc_projects_map = client.get_projects_for_documents(
         [d["id"] for d in recent_docs], projects
     )
-    project_doc_counts = client.get_project_doc_counts(project_ids)
+    project_doc_counts, project_deleted_doc_counts = client.get_project_doc_counts(project_ids)
 
     docs_response = []
     for d in recent_docs:
@@ -424,21 +429,44 @@ def api_dashboard(
         recent_docs=docs_response,
         projects=projects_response,
         project_doc_counts=project_doc_counts,
+        project_deleted_doc_counts=project_deleted_doc_counts,
     )
+
+
+class ProjectDocumentsResponse(BaseModel):
+    """Paginated documents-for-a-project response.
+
+    ``documents`` is the slice for the current page; ``total`` is the count
+    of ACTIVE (not soft-deleted) documents in the project so the frontend
+    can render pagination controls.
+    """
+    documents: list[DashboardDocResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 @api_router.get("/projects/{project_id}/documents")
 def api_project_documents(
     project_id: str,
+    limit: int = Query(50, ge=1, le=200, description="Page size (default 50, max 200)"),
+    offset: int = Query(0, ge=0, description="Row offset for pagination (default 0)"),
     client: CerefoxClient = Depends(get_client),
-) -> list[DashboardDocResponse]:
-    """List all documents assigned to a project."""
-    docs = client.list_documents(project_id=project_id)
+) -> ProjectDocumentsResponse:
+    """List documents assigned to a project, paginated.
+
+    Soft-deleted documents are excluded. Pass ``limit`` and ``offset`` to
+    page through the project's documents; the response includes ``total``
+    for total active count so the UI can show "Page X of Y" without a
+    second request.
+    """
+    docs = client.list_documents(project_id=project_id, limit=limit, offset=offset)
+    total = client.count_documents_for_project(project_id)
     projects = client.list_projects()
     doc_projects_map = client.get_projects_for_documents(
         [d["id"] for d in docs], projects
     )
-    return [
+    items = [
         DashboardDocResponse(
             id=d["id"],
             title=d.get("title") or "",
@@ -451,6 +479,9 @@ def api_project_documents(
         )
         for d in docs
     ]
+    return ProjectDocumentsResponse(
+        documents=items, total=total, limit=limit, offset=offset,
+    )
 
 
 # ── Documents ────────────────────────────────────────────────────────────────
@@ -520,8 +551,22 @@ def api_list_trash(
     limit: int = 50,
     client: CerefoxClient = Depends(get_client),
 ) -> list[dict[str, Any]]:
-    """List soft-deleted documents (trash bin)."""
-    return client.list_deleted_documents(limit=limit)
+    """List soft-deleted documents (trash bin), enriched with project memberships.
+
+    Includes ``project_ids`` per row so the UI can show which projects the
+    deleted document belonged to (junction rows are preserved across soft
+    delete, so they remain available for restore decisions).
+    """
+    docs = client.list_deleted_documents(limit=limit)
+    if not docs:
+        return []
+    projects = client.list_projects()
+    doc_projects_map = client.get_projects_for_documents(
+        [d["id"] for d in docs], projects,
+    )
+    for d in docs:
+        d["project_ids"] = [p["id"] for p in doc_projects_map.get(d["id"], [])]
+    return docs
 
 
 @api_router.get("/resolve-link")
