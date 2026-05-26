@@ -9,6 +9,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap. Next batch of work is being scoped on the
+`research/installer-design` branch (polish & distribution design,
+v0.2.0 onward).
+
+---
+
+## [v0.1.21] -- 2026-05-25
+
+Three small web-UI quality-of-life fixes from real usage feedback.
+Backend code change only — no Edge Function redeploy, no RPC redeploy,
+no schema migration. Frontend `dist/` needs a rebuild on deploy:
+
+```bash
+cd frontend && npm install && npm run build && cd ..
+```
+
+Shipped via [PR #41](https://github.com/fstamatelopoulos/cerefox/pull/41).
+
 ### Fixed
 
 - **Dashboard project doc count includes soft-deleted documents.** The
@@ -35,6 +53,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   `keepPreviousData` from TanStack Query so page-link clicks don't
   full-page-loader-flicker. Added `count_documents_for_project` on
   the DB client (PostgREST `count="exact"` head-only request, fast).
+  - **Minor breaking API shape**: `GET /projects/{id}/documents`
+    response went from a bare list to `{documents, total, limit, offset}`.
+    Only the in-repo frontend consumed this endpoint; updated in the
+    same PR. Pre-v1.0 web API per `docs/solution-design.md` so this
+    is not a SemVer event.
 
 ### Added
 
