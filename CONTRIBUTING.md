@@ -110,9 +110,40 @@ Cerefox is in a Python → TypeScript strangler-fig migration that runs through 
 
 When in doubt, open an issue before starting work on a new script. We'll point you at the TS skeleton.
 
-The first concrete artifact under this policy is [`scripts/cut_release.ts`](scripts/cut_release.ts) — the release-cutting script, shipped with v0.2.0.
+The first concrete artifact under this policy is [`scripts/cut_release.ts`](scripts/cut_release.ts) — the release-cutting script, shipped with v0.2.0. v0.3.0 ports `scripts/sync_docs.ts` and `scripts/db_status.ts` (both extended in that release).
 
 Full reasoning in [`docs/specs/polish-and-distribution-design.md` §12f](docs/specs/polish-and-distribution-design.md).
+
+### `_shared/` — cross-context TypeScript modules
+
+Starting in v0.3.0, TS code that's consumed by more than one entry point (scripts, the upcoming TS MCP server in v0.4.0, the TS CLI in v0.5.0) lives in [`_shared/`](_shared/) at the repo root:
+
+```
+_shared/
+  config/      env resolver, dotenv loader (TS mirror of src/cerefox/paths.py)
+  db-client/   thin @supabase/supabase-js wrapper with zod-typed responses
+  db-status/   reusable schema-introspection (used by db_status.ts; v0.5's
+               `cerefox doctor` will import the same module)
+  __tests__/   Bun tests — run `cd _shared && bun test`
+```
+
+It's at the repo root (not under `src/`) so it doesn't tangle with hatchling's Python wheel build or pytest discovery. In v0.4.0 it becomes part of an npm workspace; for v0.3.0 it's just plain Bun-runnable TS files. The directory will grow with `mcp-tools/` (v0.4) and `ingest/` (v0.7).
+
+### Release workflow
+
+The normal release flow for v0.3.0+ is:
+
+1. PRs land on `main` without touching `VERSION`. `VERSION` sits at the last released value (e.g. `0.2.0`) while you accumulate changes.
+2. When ready to cut, fill in the `## [Unreleased]` section of `CHANGELOG.md` with the release notes.
+3. From `main`, on a clean tree:
+   ```bash
+   bun scripts/cut_release.ts 0.3.0
+   ```
+   The script bumps `VERSION` as part of the `chore: cut v0.3.0` commit, promotes `[Unreleased]` to `[v0.3.0]`, tags, pushes, and creates the GitHub Release.
+
+**Exception**: v0.2.0 itself pre-bumped `VERSION` on the feature branch because the VERSION-file mechanism was the v0.2.0 deliverable — there was no other way to demonstrate that `cerefox --version` worked. From v0.3.0 onward, leave `VERSION` alone in feature branches.
+
+If something needs fixing after a tag is published, **cut a new patch version**. `cut_release.ts` refuses to overwrite an existing tag — see the SemVer & Deprecation Policy section above and Cerefox Decision Log Q2 Part 2.
 
 ---
 

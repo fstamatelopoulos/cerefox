@@ -316,7 +316,22 @@ async function main(): Promise<void> {
 
   const newVersion = args.version;
   const currentVersion = readVersion();
-  info(`Cutting release: ${currentVersion} → ${newVersion}`);
+
+  if (currentVersion === newVersion) {
+    // First seen during the v0.2.0 dogfood cut where VERSION had been
+    // pre-bumped on the feature branch (since VERSION-as-truth was itself
+    // the v0.2.0 deliverable). Outside that one-off, this almost always
+    // means "I forgot to bump VERSION on the release-cutting PR" — the
+    // normal workflow is to leave VERSION at the LAST released value and
+    // let this script bump it. Print a clarifying note rather than the
+    // confusing "X.Y.Z → X.Y.Z" message.
+    info(
+      `Cutting release ${newVersion} — VERSION already at this value (pre-bumped). ` +
+        `Normal workflow leaves VERSION at the prior release and lets this script bump it.`,
+    );
+  } else {
+    info(`Cutting release: ${currentVersion} → ${newVersion}`);
+  }
   if (args.dryRun) warn("--dry-run: no file or git changes will be made.");
 
   // 1. Preflight: working tree, branch, sync, tag

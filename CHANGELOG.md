@@ -9,7 +9,164 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**"Install Anywhere"** — second iteration of the Polish & Distribution arc
+([design](docs/specs/polish-and-distribution-design.md)). Config-state refactor,
+bundled docs, first Python → TypeScript script ports, and the schema-version-
+mismatch banner that closes the v0.1.19 redeploy footgun.
+
+**Backward-compatible at every user-facing surface.** Existing
+`cd /path/to/cerefox && uv run cerefox …` workflows keep working unchanged
+(dev mode wins). End-user install path is otherwise the same as v0.2.0.
+
+### Added
+
+- **`_resolve_config_dir()` precedence and `~/.cerefox/` user-state root.** New
+  `src/cerefox/paths.py` module is the single source of truth for "where does
+  Cerefox look for `.env`?" Precedence (highest wins):
+  1. `CEREFOX_CONFIG_DIR` environment variable (explicit override; supports `~`).
+  2. Repo-local `.env` in the current working directory (dev mode).
+  3. `~/.cerefox/.env` (user-state root, the new default for installed setups).
+  Subdirectory layout under `~/.cerefox/`: `backups/`, `logs/`, `cache/`, `docs/`.
+  `Settings.backup_dir` now defaults to `<config_dir>/backups` via a
+  `default_factory` callable — dev mode preserves the pre-v0.3.0 `./backups`
+  default; user-state installs route to `~/.cerefox/backups`. Explicit
+  `CEREFOX_BACKUP_DIR` env var always wins.
+- **`importlib.resources` for SQL files.** `scripts/db_deploy.py` and
+  `scripts/db_migrate.py` now load `schema.sql`, `rpcs.sql`, and the
+  `migrations/*.sql` files through `importlib.resources.files("cerefox.db")`.
+  Works from any directory and from both editable installs and installed wheels.
+  New empty `src/cerefox/db/migrations/__init__.py` makes the migrations
+  directory an importable package.
+- **Wheel-bundled assets.** New `[tool.hatch.build.targets.wheel.force-include]`
+  block bundles:
+  - `frontend/dist/` → `cerefox/_frontend_dist/` (the SPA assets — picked up
+    by `cerefox.api.app._resolve_spa_dist()` with a repo-local fallback for
+    dev mode).
+  - `docs/guides/`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, `README.md`
+    → `cerefox/_docs/` (consumed by the bundled-docs surface below).
+  - `VERSION` → `cerefox/_VERSION` (already shipped in v0.2.0).
+- **Bundled documentation surface** (three entry points sharing one helper
+  module, `src/cerefox/docs_resources.py`):
+  - **`cerefox docs [TOPIC]` CLI command.** No arg → indexed list of bundled
+    docs grouped by category. With arg → fuzzy-match by title/basename/path
+    and open in the OS browser via `webbrowser.open(file://…)`. `--print`
+    dumps the markdown to stdout instead.
+  - **`GET /api/v1/docs`** — JSON index of bundled docs (`path`, `title`,
+    `category`).
+  - **`GET /api/v1/docs/{path:path}`** — raw markdown content with
+    path-traversal guard (`..` segments and absolute paths return 404).
+  - **`/app/help` web UI page** (React + Mantine) with category-grouped
+    sidebar (Project overview / Agent integration / Guides) and a Markdown
+    viewer for the selected doc. URL-driven via `/app/help/<encoded-path>`.
+    New "Help" link in the web UI top nav.
+  - Contributor-only docs (`CLAUDE.md`, `docs/research/*`, `docs/specs/*`,
+    `docs/plan.md`, `docs/TODO.md`) are deliberately excluded from the
+    bundled surface.
+- **Schema-version-mismatch banner** (closes the v0.1.19 "forgot to redeploy
+  RPCs" footgun):
+  - `schema.sql` gains a `@version: <X.Y.Z>` marker in its header.
+  - `rpcs.sql` gains `cerefox_schema_version()` returning the deployed value.
+  - `GET /api/v1/schema-version` returns `{bundled, deployed, mismatch}`.
+    Gracefully handles legacy deployments missing the RPC
+    (`deployed=null`, `mismatch=false`, no banner).
+  - New `<SchemaVersionBanner>` React component renders a yellow alert at
+    the top of every web UI page when `mismatch=true`, with a prompt to run
+    `uv run python scripts/db_deploy.py`. Polls every 60s so a successful
+    redeploy clears the banner without a reload.
+- **`_shared/` cross-context TypeScript modules** (new directory at the repo
+  root, internal-only `@cerefox/_shared` workspace):
+  - `_shared/config/` — TS port of `src/cerefox/paths.py` + a tiny dotenv
+    loader. Mirrors the Python resolver 1:1 so `bun scripts/<name>.ts`
+    finds the same `.env` the Python CLI does.
+  - `_shared/db-client/` — `@supabase/supabase-js` wrapper with zod-typed
+    responses. Surface includes `listProjects`, `rpc`, `tableExists`,
+    `functionExists`, `rowCount`.
+  - `_shared/db-status/` — pure schema-introspection module
+    (`runDbStatusChecks`, `formatReport`). Imported by `scripts/db_status.ts`
+    in this release and by the upcoming `cerefox doctor` command in v0.5.0.
+  - 14 Bun tests under `_shared/__tests__/` cover the resolver and the
+    sync_docs file-discovery snapshot.
+- **First Python → TypeScript script ports**, per the §12f script-language
+  policy (both scripts were extended in this iteration, so they port now):
+  - **`scripts/db_status.ts`** replaces `scripts/db_status.py`. Routes through
+    `_shared/db-status/`; adds `--json` for structured output; adds
+    schema-version-mismatch detection.
+  - **`scripts/sync_docs.ts`** replaces `scripts/sync_docs.py`. Delegates to
+    the `cerefox-ingest` Edge Function (server-side embedding — no local
+    OpenAI key needed for the TS script).
+  - The legacy `.py` versions are now **deprecation shims** that print a
+    pointer to the TS replacement and exit with code 2. Explicit failure
+    forces tooling, cron, and docs to migrate rather than silently
+    forwarding. Hard-removal of the shims is scheduled for v0.4.0.
+- **`cerefox_pg_function_exists(name TEXT) RETURNS BOOLEAN`** — new
+  introspection RPC. PostgREST's 42883 error doesn't distinguish "function
+  doesn't exist" from "function exists with required args"; this helper
+  queries `pg_proc` directly so `db_status.ts`'s `functionExists()` check is
+  reliable. Legacy deployments missing this RPC fall back to the naive
+  empty-call probe.
+
+### Changed
+
+- **`pyproject.toml`** gains the wheel-bundling block described above and a
+  new `[tool.hatch.version]` regex pattern on the VERSION file.
+- **`Settings`** now reads `.env` from the resolved config dir (via
+  `cerefox.paths.resolve_env_file()`) instead of a hardcoded `.env`.
+  `Settings.backup_dir` is now a `default_factory`-computed value.
+- **`cerefox.api.app`** picks the SPA dist via `_resolve_spa_dist()` — the
+  wheel-bundled `cerefox/_frontend_dist/` wins, with `frontend/dist/` as a
+  dev-mode fallback. Same pattern for `web/static/`. FastAPI's `version=`
+  now reads from `cerefox.__version__` instead of a hardcoded string.
+- **`scripts/cut_release.ts`** UX polish: when `current == new` (the v0.2.0
+  pre-bumped case), prints a clarifying note explaining the normal workflow
+  rather than the confusing `0.X.Y → 0.X.Y` arrow.
+- **`docs/guides/ops-scripts.md`** reorganized: new "Two languages, one
+  directory" preamble lists which scripts are TS vs Python and what runs
+  each; `db_status` and `sync_docs` sections rewritten for the TS form and
+  note the .py form is a deprecation shim.
+- **`.env.example`** header documents the three-tier `.env` resolution and
+  links to the design doc §7.
+- **`CONTRIBUTING.md`** gains two new subsections: "`_shared/` —
+  cross-context TypeScript modules" documenting the new directory layout,
+  and "Release workflow" documenting the normal `VERSION` flow and calling
+  out v0.2.0 as the one-off where VERSION was pre-bumped.
+
+### Decision Log
+
+- **2026-05-26 — v0.3.0: config-state refactor + first Python → TS script
+  ports.** Captures: the dev-mode-wins precedence as a defensive v0.x
+  choice with a planned v1.0 revisit; the choice of deprecation shims
+  over hard-delete for the Python scripts (forces visible migration
+  without silent forwarding); the deliberate `_shared/` scope (config,
+  db-client, db-status — explicitly *not* ingest, which lands in v0.7);
+  why the introspection RPC was needed for reliable function-existence
+  detection. Stored in *Cerefox Decision Log — 2026 Q2 (Part 2)*.
+
+### Upgrade notes
+
+For end users: **run `uv run python scripts/db_deploy.py` once** after
+upgrading. v0.3.0 ships two new RPCs (`cerefox_schema_version` and
+`cerefox_pg_function_exists`); without the redeploy, the web UI's
+schema-version banner will show "deployed: (not reported)" — the banner
+correctly hides itself rather than alarming (legacy-RPC-absent path), but
+`db_status.ts` will report mismatches.
+
+For contributors:
+
+```bash
+# If you don't already have Bun (added v0.2.0):
+curl -fsSL https://bun.sh/install | bash
+
+# Install the new _shared/ TS dependencies:
+cd _shared && bun install && cd ..
+
+# Run the new TS scripts:
+bun scripts/db_status.ts
+bun scripts/sync_docs.ts --dry-run
+
+# Old Python scripts now print a deprecation pointer:
+uv run python scripts/db_status.py   # exits 2 with migration notice
+uv run python scripts/sync_docs.py   # exits 2 with migration notice
+```
 
 ---
 
