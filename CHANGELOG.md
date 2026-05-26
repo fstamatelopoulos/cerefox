@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.3.0] -- 2026-05-26
+
 **"Install Anywhere"** — second iteration of the Polish & Distribution arc
 ([design](docs/specs/polish-and-distribution-design.md)). Config-state refactor,
 bundled docs, first Python → TypeScript script ports, and the schema-version-
