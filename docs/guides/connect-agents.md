@@ -112,19 +112,22 @@ The local Cerefox MCP server runs on your machine and exposes the same 10 tools 
 Edge Function, communicating with clients over stdio.
 
 As of **v0.4.0** the local server ships as an npm package — **[`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)** — built with the official `@modelcontextprotocol/sdk`.
-The bin entry is `cerefox` (run as `cerefox mcp`). The recommended client config is `npx -y --package=@cerefox/memory cerefox mcp`.
+The bin entry is `cerefox` (run as `cerefox mcp`). The recommended client config is `npx -y --package=@cerefox/memory cerefox mcp`, or if you've installed the package globally, just `cerefox mcp`.
 
-The legacy `uv run cerefox mcp` invocation **still works** and is preserved as a soft
-wrapper: it tries `npx --no-install @cerefox/memory cerefox mcp` first and falls back to the
-Python MCP server if npm is unavailable or `@cerefox/memory` isn't installed. New users
-should prefer the npm-native config; existing users don't have to change anything.
+The Python `uv run cerefox mcp` invocation **still works** and remains the right choice if
+you've installed Cerefox from a source checkout. v0.4 through v0.5.1 advertised a
+"soft wrapper" that tried to auto-delegate to the npm package, but the probe was unreliable
+under MCP-client launch environments — v0.5.2 removed it. The two paths (Python via
+`uv run`, TS via `cerefox mcp` on PATH or via `npx`) are now **fully independent**.
+Pick one explicitly in your MCP client config.
 
 - Embeddings are computed locally using your `.env` key (no extra credentials)
 - Works offline except for the OpenAI embedding API call per query
 - One setup, all compatible local clients (Claude Desktop, Cursor, Claude Code, Codex CLI, …)
 
-See [`docs/guides/migration-v0.4.md`](migration-v0.4.md) for before/after config snippets
-per client.
+See [`docs/guides/migration-v0.5.md`](migration-v0.5.md) for the per-client config
+snippets, the v0.5.2 soft-wrapper removal explainer, and the v0.5.3 `.env` location
+change.
 
 > **Why not `mcp-server-fetch`?** The generic fetch MCP only supports GET requests and cannot
 > make authenticated POST calls to the Edge Functions. The built-in local server is

@@ -1,6 +1,23 @@
-# Migrating to Cerefox v0.4.0
+# Migrating to Cerefox v0.4.0 (historical)
 
-**TL;DR**: nothing urgent. Your existing `cerefox mcp` configs keep
+> ## ⚠ Historical document — do not use the snippets in this file
+>
+> This guide documents the **v0.4.0 → v0.4.3 migration window** (May 2026).
+> The `cerefox-mcp` bin name referenced throughout was dropped in **v0.5.1**;
+> the soft-wrapper described in some sections was removed in **v0.5.2**.
+> The per-client config snippets below **will not work on @cerefox/memory v0.5+**.
+>
+> **If you're upgrading today, use the current guide instead:**
+> → [`migration-v0.5.md`](migration-v0.5.md) — covers Python `cerefox` → v0.5.x
+>   AND v0.4.x → v0.5.x in a single document, with the v0.5.0/v0.5.1/v0.5.2/v0.5.3
+>   transitions all explained.
+>
+> This file is preserved so historical CHANGELOG entries that reference it
+> still resolve. It's not maintained.
+
+---
+
+**Original TL;DR (preserved verbatim)**: nothing urgent. Your existing `cerefox mcp` configs keep
 working unchanged. The Python `cerefox mcp` command is now a soft
 wrapper that transparently uses the new TypeScript MCP server if it's
 installed, falling back to the legacy Python implementation otherwise.

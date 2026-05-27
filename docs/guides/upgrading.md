@@ -1,8 +1,27 @@
 # Upgrading Cerefox
 
-This guide covers upgrading an existing Cerefox installation to the latest version. All steps are idempotent and safe to re-run.
+This guide covers upgrading an existing Cerefox installation. All steps are idempotent and safe to re-run.
 
-## Standard Upgrade Checklist
+## Pick your path
+
+Cerefox has two install paths since v0.4.0 (npm) and v0.5.0 (TS CLI). The right
+upgrade procedure depends on how you installed Cerefox:
+
+| You installed via | Upgrade with |
+|---|---|
+| **npm / Bun** (`@cerefox/memory` global) | `bun update -g @cerefox/memory` (or `npm update -g @cerefox/memory`), then read [`migration-v0.5.md`](migration-v0.5.md) for any breaking-change notes per version. **`cerefox doctor`** verifies the install. |
+| **Source checkout** (`git clone` + `uv sync`) | The "Standard Upgrade Checklist" below — Python deps, schema migrations, Edge Functions, frontend build, the works. |
+| **Both** (you contribute AND have the npm bin globally) | Both flows. The two paths share the same Supabase + `.env`; just keep them updated in lockstep. |
+
+> If you're upgrading from Python `cerefox` to the npm-installed TS CLI for the first
+> time, [`migration-v0.5.md`](migration-v0.5.md) is the canonical guide — it covers
+> `cerefox init`'s coexistence flow (`[c]opy` your existing `.env` to `~/.cerefox/.env`),
+> the v0.5.2 soft-wrapper removal, and the v0.5.3 paths precedence change.
+
+The rest of this document covers the **source checkout** path (Python + frontend + Edge
+Functions). If you're an npm-installed user, you've already got everything you need.
+
+## Standard Upgrade Checklist (source-checkout users)
 
 Run these steps every time you pull a new version:
 
@@ -60,6 +79,30 @@ open http://localhost:8000/app/
 ## Version-Specific Notes
 
 Most upgrades require no special steps beyond the standard checklist above. Notes below only apply when upgrading across specific version boundaries.
+
+### Upgrading to v0.5.x (from any v0.4.x or earlier)
+
+The v0.4 → v0.5 transition is a milestone — the CLI itself moved from Python
+to TypeScript. The full migration guide is [`migration-v0.5.md`](migration-v0.5.md);
+the short version for source-checkout users is:
+
+- The Python `cerefox` CLI **still works** through v0.7.x — `uv sync` is enough
+  to pull it. It prints a one-line ⚠ deprecation banner on every invocation.
+- The new npm CLI lives alongside: `bun install -g @cerefox/memory` (or
+  `npm install -g @cerefox/memory`). `cerefox doctor` from any directory will
+  verify it.
+- **v0.5.2** stripped the Python `cerefox mcp` soft-wrapper. If your MCP
+  client config uses `uv run --directory /path/to/cerefox cerefox mcp`,
+  nothing changes — that path runs the Python MCP server directly. If you
+  want the TS server instead, point your client at `cerefox mcp`
+  (npm-installed) or `npx -y --package=@cerefox/memory cerefox mcp`.
+- **v0.5.3** changed the TS CLI's `.env` precedence: `~/.cerefox/.env` now
+  wins over `<repo>/.env` when both exist. Your existing `<repo>/.env` keeps
+  working until you run `cerefox init` and pick the `[c]opy` migration
+  option. Python `paths.py` is unchanged.
+
+No schema migration, no Edge Function redeploy, no chunk reindex required
+for the v0.4 → v0.5.3 arc.
 
 ### Upgrading to v0.1.20 (from v0.1.19) -- Multi-Project Preservation Fix
 

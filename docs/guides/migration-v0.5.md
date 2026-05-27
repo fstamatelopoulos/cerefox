@@ -1,4 +1,22 @@
-# Migrating to Cerefox v0.5.0
+# Migrating to Cerefox v0.5.x
+
+**This is the canonical upgrade guide for any user landing on Cerefox v0.5+.**
+It covers the v0.4 → v0.5 transition, the v0.5.x patch trail (v0.5.1, v0.5.2,
+v0.5.3), and the Python `cerefox` → TS `cerefox` migration path.
+
+## Where to start
+
+| Coming from | Read |
+|---|---|
+| Never used Cerefox before | [`quickstart.md`](quickstart.md) first, then come back here only if you hit a `.env` / config question |
+| Python `cerefox` (any version through v0.5.x) | "What changed" → "Install paths" → "v0.5.3 migrated `.env`" sections below |
+| `@cerefox/memory` v0.4.x (npm) | "Upgrading an existing MCP client config" → "v0.5.2 fixed the soft wrapper" → "v0.5.3 migrated `.env`" |
+| `@cerefox/memory` v0.5.0 or v0.5.1 (npm) | "v0.5.2 fixed the soft wrapper" + "v0.5.3 migrated `.env`" |
+| `@cerefox/memory` v0.5.2 (npm) | "v0.5.3 migrated `.env`" — the rest is unchanged |
+
+> Looking for `migration-v0.4.md`? It's been demoted to a historical
+> record (the bin names it documents no longer exist). Everything you
+> need to know about the v0.4 → v0.5 transition lives in this file.
 
 **TL;DR:** the Cerefox CLI is now a TypeScript binary published to npm.
 You can keep using the Python CLI through v0.7.x (it just prints a
