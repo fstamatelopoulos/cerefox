@@ -15,16 +15,26 @@ It is not a message bus -- it is curated, versioned, searchable memory backed by
 
 You'll be using **one** of these — whichever your user (or the harness) has configured:
 
-1. **MCP tools (default)** — eight named tools (`cerefox_search`, `cerefox_ingest`, …) exposed by either a local MCP server (`cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 8 Tools** below. This is the recommended path for purpose-built agent clients.
+1. **MCP tools (default)** — ten named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, or `cerefox mcp` as a soft wrapper) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 10 Tools** below. This is the recommended path for purpose-built agent clients.
 2. **Shell CLI (Bash tool)** — the same operations exposed as a local `uv run cerefox …` command, invoked via your Bash tool. Used when your user prefers not to install/configure an MCP server. The semantics are identical; only the surface differs. See **Using Cerefox via the CLI** near the bottom of this guide for the MCP-tool → CLI-command mapping and the small list of behavioural differences.
 
 If you're not sure which mode you're in: check whether `cerefox_search` shows up in your tool list. If yes, use MCP. If no, ask your user where the Cerefox checkout lives — they'll have told you, typically in `CLAUDE.md`, `AGENTS.md`, or an equivalent project memory file.
 
 The rest of this guide is written around the MCP tool names, since those are stable across both modes. The CLI section maps each tool name to its CLI command.
 
+### Self-help via MCP
+
+If you have MCP access and you're uncertain about any convention in this guide, call **`cerefox_get_help`** — it returns the contents of `AGENT_QUICK_REFERENCE.md` (the same conventions, rules, and workflow snippets) as MCP-native text, no file-system reads required.
+
+- No arguments → full reference + an index of `## H2` topics.
+- `topic: "tools"` (or any case-insensitive H2 substring) → just that section.
+- `topic: "made-up-name"` → an "unknown topic" message plus the available-topics list.
+
+The tool is intentionally MCP-only so an agent that has been dropped into Cerefox without filesystem access (e.g. a remote MCP client) can still bootstrap its own conventions. Treat it as a fallback: this guide and `AGENT_QUICK_REFERENCE.md` are the canonical surface; `cerefox_get_help` is the in-band escape hatch.
+
 ---
 
-## The 9 Tools
+## The 10 Tools
 
 ### cerefox_search
 
@@ -198,6 +208,24 @@ Query the immutable audit log of all write operations.
 | `since` | No | ISO timestamp lower bound. |
 | `limit` | No | Max entries (default 50, max 200). |
 | `requestor` | No | Your agent name. |
+
+---
+
+### cerefox_get_help
+
+Retrieve Cerefox conventions and quick reference content over MCP — the same content as `AGENT_QUICK_REFERENCE.md` in the repo. Designed for agents who lack filesystem access (remote MCP) or just want an in-band refresher.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `topic` | No | Case-insensitive substring match against `## H2` section titles. Omit to get the full reference plus a section index. |
+| `requestor` | No | Your agent name (recorded with `access_path = "remote-mcp"` or `"local-mcp"`). |
+
+**Behaviour:**
+- No `topic` → full quick-reference markdown + an `## Available topics` index.
+- `topic: "tools"` → just the `## Tools` section (no index footer).
+- `topic` matches nothing → `No help topic matched "<topic>"` + available-topics list.
+
+Cheap and idempotent. Call it any time you're uncertain about a convention (link forms, project-membership semantics, identity flags, etc.).
 
 ---
 
