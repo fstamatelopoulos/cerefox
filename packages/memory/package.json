@@ -1,0 +1,58 @@
+{
+  "name": "@cerefox/memory",
+  "version": "0.4.0",
+  "description": "Cerefox — user-owned shared memory for AI agents. The local TypeScript runtime: stdio MCP server in v0.4; CLI binary added in v0.5; in-process web server in v0.6; ingestion pipeline in v0.7.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/fstamatelopoulos/cerefox",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fstamatelopoulos/cerefox.git",
+    "directory": "packages/memory"
+  },
+  "bugs": "https://github.com/fstamatelopoulos/cerefox/issues",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "anthropic",
+    "claude",
+    "agents",
+    "knowledge-base",
+    "supabase",
+    "pgvector",
+    "rag"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=20",
+    "bun": ">=1.0.0"
+  },
+  "bin": {
+    "cerefox-mcp": "./dist/bin/cerefox-mcp.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/node": "^20.0.0",
+    "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "build": "bun build src/bin/cerefox-mcp.ts --outdir dist/bin --target node --format esm",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run clean && bun run build",
+    "smoke": "node dist/bin/cerefox-mcp.js --help"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -12,7 +12,7 @@
  * removes its copies.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MCPSupabaseClient } from "./types.js";
 
 /** Server-enforced response-size ceiling for MCP results. Agents can request
  *  smaller budgets via `max_bytes`; values above this are capped. */
@@ -55,7 +55,7 @@ export interface LogUsageParams {
  *  Differs from the EF's `logUsage` only in that `accessPath` is a required
  *  parameter (was hardcoded to `"remote-mcp"` in the EF) so the local TS
  *  MCP server can pass `"local-mcp"` for the same call site. */
-export function logUsage(supabase: SupabaseClient, params: LogUsageParams): void {
+export function logUsage(supabase: MCPSupabaseClient, params: LogUsageParams): void {
   Promise.resolve(
     supabase.rpc("cerefox_log_usage", {
       p_operation: params.operation,

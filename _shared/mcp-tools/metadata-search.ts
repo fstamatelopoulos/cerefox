@@ -5,14 +5,14 @@
  * inclusion with a byte budget.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MCPSupabaseClient } from "./types.js";
 
 import { applyByteBudget, logUsage, MAX_RESPONSE_BYTES } from "./_utils.js";
 import { lookupProjectId } from "./_projects.js";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
 
 async function handler(
-  supabase: SupabaseClient,
+  supabase: MCPSupabaseClient,
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {

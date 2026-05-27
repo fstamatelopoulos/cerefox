@@ -21,13 +21,13 @@
  * prevents drift.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MCPSupabaseClient } from "./types.js";
 
 /** Ensure `(documentId, project)` exists. Resolves project by name
  *  (case-insensitive); creates the project if missing. Idempotent.
  *  Returns the resolved project_id, or `null` if creation failed. */
 export async function ensureDocumentInProject(
-  supabase: SupabaseClient,
+  supabase: MCPSupabaseClient,
   documentId: string,
   projectName: string,
 ): Promise<string | null> {
@@ -70,7 +70,7 @@ export async function ensureDocumentInProject(
  *  Empty `projectNames` clears all memberships. Returns the resolved
  *  project_ids in input order. */
 export async function setDocumentProjectsByName(
-  supabase: SupabaseClient,
+  supabase: MCPSupabaseClient,
   documentId: string,
   projectNames: string[],
 ): Promise<string[]> {
@@ -108,7 +108,7 @@ export async function setDocumentProjectsByName(
  *  not found. Does NOT create. Used by search / metadata-search to translate
  *  `project_name` parameters to UUIDs. */
 export async function lookupProjectId(
-  supabase: SupabaseClient,
+  supabase: MCPSupabaseClient,
   projectName: string,
 ): Promise<string | null> {
   const { data, error } = await supabase

@@ -1,10 +1,22 @@
 {
-  "name": "cerefox-scripts",
+  "name": "cerefox-workspace",
   "version": "0.0.0-unreleased",
-  "description": "Repo-root dependencies for scripts/*.ts. Internal — not published. Distinct from _shared/ (which owns shared-module deps like supabase-js + zod). At v0.4.0 this consolidates into a proper npm workspace covering _shared/, packages/mcp-local/, etc.",
+  "description": "Repo-root npm workspace covering all Cerefox TypeScript surfaces — published packages (packages/*), shared internal modules (_shared), the React web UI (frontend), and ad-hoc TS scripts (scripts/*.ts). The package itself is not published; the workspace pattern lets `bun install` at the repo root hoist deps for every member.",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "_shared",
+    "packages/*",
+    "frontend"
+  ],
   "dependencies": {
     "ora": "^9.4.0"
+  },
+  "scripts": {
+    "test": "cd _shared && bun test",
+    "typecheck": "cd _shared && npx tsc --noEmit",
+    "bundle:help": "bun scripts/bundle_help.ts",
+    "check:help": "bun scripts/check_help_bundle.ts",
+    "build:memory": "cd packages/memory && bun run build"
   }
 }

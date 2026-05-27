@@ -15,7 +15,7 @@
  * the full file plus an index of section headings.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MCPSupabaseClient } from "./types.js";
 
 import { logUsage } from "./_utils.js";
 import {
@@ -26,7 +26,7 @@ import {
 import type { ToolContext, ToolDefinition } from "./types.js";
 
 async function handler(
-  supabase: SupabaseClient,
+  supabase: MCPSupabaseClient,
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {

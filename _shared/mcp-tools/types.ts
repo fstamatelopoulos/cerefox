@@ -16,7 +16,24 @@
  * each consumer; the handlers themselves are runtime-agnostic.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+/** Structural type for the Supabase client surface the handlers actually
+ *  use (`.rpc()` + `.from()`). We deliberately don't `import { SupabaseClient }
+ *  from "@supabase/supabase-js"` here because Bun workspaces install a
+ *  separate copy of supabase-js into each workspace member, and TypeScript
+ *  then sees two distinct (but structurally identical) `SupabaseClient`
+ *  classes. Decoupling the shared module with a minimal structural type
+ *  side-steps the duplicate-class problem and keeps the shared modules
+ *  truly runtime-neutral. */
+// deno-lint-ignore no-explicit-any
+type AnyChain = any;
+
+export interface MCPSupabaseClient {
+  rpc<T = unknown>(fn: string, params?: Record<string, unknown>): AnyChain;
+  from(table: string): AnyChain;
+}
+
+/** Re-export an alias name so callers can use the descriptive name. */
+export type SupabaseClient = MCPSupabaseClient;
 
 /** JSON Schema fragment for tool inputs. We use a permissive `unknown` value
  *  type rather than a strict JSON-Schema TS type to avoid forcing every tool
@@ -42,7 +59,7 @@ export interface ToolDefinition {
    *  `-32603` (internal error) responses, or `-32602` (invalid params)
    *  when the thrown error is `McpInvalidParams`. */
   handler: (
-    supabase: SupabaseClient,
+    supabase: MCPSupabaseClient,
     args: Record<string, unknown>,
     ctx: ToolContext,
   ) => Promise<string>;

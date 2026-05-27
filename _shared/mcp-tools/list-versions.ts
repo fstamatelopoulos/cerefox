@@ -4,13 +4,13 @@
  * version_number, source, chunk_count, total_chars, created_at.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MCPSupabaseClient } from "./types.js";
 
 import { logUsage } from "./_utils.js";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
 
 async function handler(
-  supabase: SupabaseClient,
+  supabase: MCPSupabaseClient,
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {
