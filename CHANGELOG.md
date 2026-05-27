@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.4.0] -- 2026-05-27
+
 **First TypeScript MCP server release.** The local MCP server is now an npm
 package — [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) —
 built with the official `@modelcontextprotocol/sdk`. The Python `cerefox mcp`
