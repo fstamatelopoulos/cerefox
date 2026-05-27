@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.4.2] -- 2026-05-27
+
 **Patch release** following the failed v0.4.1 publish. `cut_release.ts`
 forgot to sync `packages/memory/package.json`'s version field with the
 repo-root `VERSION` file, so when the v0.4.1 publish workflow ran it
