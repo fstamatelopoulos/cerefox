@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.5.1] -- 2026-05-27
+
 **Patch release** that drops the standalone `cerefox-mcp` bin from
 `@cerefox/memory`. The bin was a v0.4 design choice that became
 redundant when v0.5 added `cerefox mcp` as a subcommand of the main
