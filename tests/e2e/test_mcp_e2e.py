@@ -86,7 +86,7 @@ class TestMCPHealthAndProtocol:
         assert result["serverInfo"]["name"] == "cerefox"
 
     def test_tools_list(self, e2e_mcp: MCPClient | None) -> None:
-        """MCP-3: tools/list returns all 9 tools with correct names and inputSchemas."""
+        """MCP-3: tools/list returns all 10 tools with correct names and inputSchemas."""
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
         resp = e2e_mcp.call("tools/list")
@@ -103,6 +103,7 @@ class TestMCPHealthAndProtocol:
             "cerefox_list_projects",
             "cerefox_metadata_search",
             "cerefox_set_document_projects",  # v0.1.20: Part 4 of issue #38 fix
+            "cerefox_get_help",  # v0.4.0: MCP self-help (AGENT_QUICK_REFERENCE.md)
         }
         assert tool_names == expected
         for tool in tools:
@@ -316,21 +317,28 @@ class TestMCPToolCalls:
         assert text == "No metadata keys found across documents." or text.startswith("[")
 
     def test_missing_required_param_returns_error(self, e2e_mcp: MCPClient | None) -> None:
-        """MCP-13: Missing required param propagates as JSON-RPC error."""
+        """MCP-13: Missing required param propagates as JSON-RPC error.
+
+        v0.4.0 returns -32602 (Invalid params) — the JSON-RPC-spec-correct code
+        for parameter validation failures. Pre-v0.4 returned -32603 (Internal
+        error) which conflated input validation with handler crashes; the
+        `_shared/mcp-tools/` extraction tightened the contract to match the
+        spec via `McpInvalidParams`.
+        """
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
         # cerefox_search requires "query"
         resp = e2e_mcp.tool("cerefox_search", {})
         assert "error" in resp
-        assert resp["error"]["code"] == -32603
+        assert resp["error"]["code"] == -32602
 
     def test_ingest_missing_content_returns_error(self, e2e_mcp: MCPClient | None) -> None:
-        """cerefox_ingest with missing content returns JSON-RPC error."""
+        """cerefox_ingest with missing content returns JSON-RPC -32602 (Invalid params)."""
         if e2e_mcp is None:
             pytest.skip("No anon key -- skipping MCP e2e tests")
         resp = e2e_mcp.tool("cerefox_ingest", {"title": "No Content"})
         assert "error" in resp
-        assert resp["error"]["code"] == -32603
+        assert resp["error"]["code"] == -32602
 
 
 # ── 16B: New tool tests ──────────────────────────────────────────────────────

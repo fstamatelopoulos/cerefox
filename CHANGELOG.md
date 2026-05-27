@@ -78,6 +78,13 @@ Migration guide: [`docs/guides/migration-v0.4.md`](docs/guides/migration-v0.4.md
 - **Repo-root `package.json` upgraded to an npm workspace declaration**
   covering `_shared/`, `packages/memory/`, and `frontend/`. Bun honours the
   same workspaces.
+- **MCP JSON-RPC error code tightening.** Tools that reject missing/invalid
+  parameters now return `-32602` (Invalid params) instead of `-32603`
+  (Internal error). `-32602` is the JSON-RPC-spec-correct code for input
+  validation failures; pre-v0.4 conflated it with handler crashes. Clients
+  pattern-matching specifically on `-32603` for argument validation need to
+  switch to `-32602`. Two e2e tests (`test_missing_required_param_returns_error`,
+  `test_ingest_missing_content_returns_error`) updated accordingly.
 - **`AGENT_QUICK_REFERENCE.md` / `AGENT_GUIDE.md`** updated to advertise
   10 tools and the new `cerefox_get_help` self-help hatch.
 - **`docs/guides/connect-agents.md`** Path A-Local section restructured
