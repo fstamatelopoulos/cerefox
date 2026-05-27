@@ -9,7 +9,33 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Patch release** following the failed v0.4.1 publish. `cut_release.ts`
+forgot to sync `packages/memory/package.json`'s version field with the
+repo-root `VERSION` file, so when the v0.4.1 publish workflow ran it
+checked out the v0.4.1 tag, read `version: "0.4.0"` from the package's
+own manifest, and tried to publish 0.4.0 again — `npm` correctly
+rejected with "cannot publish over previously published version".
+
+### Fixed
+
+- **`cut_release.ts` now bumps every npm package's `package.json`
+  version in lockstep with `VERSION`.** New `NPM_PACKAGE_FILES`
+  constant lists the published package manifests
+  (`packages/memory/package.json` today; more as v0.5+ adds bins);
+  each one is rewritten and `git add`-ed alongside `VERSION` and
+  `CHANGELOG.md`. Tested via `--dry-run`: shows the planned bump per
+  package and the corresponding `git add` line. Adding a new
+  published package in the future is one append to `NPM_PACKAGE_FILES`.
+
+### Note on v0.4.1
+
+The v0.4.1 git tag and GitHub Release exist but never produced an npm
+artifact — the publish job failed before reaching npm because of the
+version-sync bug fixed above. The v0.4.1 content (bin field fix, npx
+`--package=` invocation, OIDC-only workflow) carries forward into
+v0.4.2's tag, and the npm artifact named `0.4.1` does not exist. Don't
+try to install `@cerefox/memory@0.4.1` from npm — install `0.4.2+` or
+omit the version specifier to get `latest`.
 
 ---
 

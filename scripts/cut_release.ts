@@ -36,7 +36,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { exit } from "node:process";
 
 // ── paths ────────────────────────────────────────────────────────────────
@@ -45,6 +45,13 @@ const REPO_ROOT = join(import.meta.dir, "..");
 const VERSION_FILE = join(REPO_ROOT, "VERSION");
 const CHANGELOG_FILE = join(REPO_ROOT, "CHANGELOG.md");
 const PYPROJECT_FILE = join(REPO_ROOT, "pyproject.toml");
+
+// Npm packages whose `package.json` version field must stay in lockstep
+// with the repo-root VERSION file. Each is bumped + git-added on cut.
+// Adding a new published package? Append its package.json path here.
+const NPM_PACKAGE_FILES = [
+  join(REPO_ROOT, "packages", "memory", "package.json"),
+];
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[.-][A-Za-z0-9.-]+)?$/;
 
@@ -221,6 +228,34 @@ function buildNewChangelog(parts: ChangelogParts, version: string): {
   return { newText, releaseNotes };
 }
 
+// ── npm package.json version sync ────────────────────────────────────────
+
+/** Read a package.json's current `version` field (or die with context). */
+function readPackageJsonVersion(path: string): string {
+  if (!existsSync(path)) die(`package.json not found at ${path}`);
+  const text = readFileSync(path, "utf8");
+  const m = text.match(/^\s*"version":\s*"([^"]+)"\s*,?\s*$/m);
+  if (!m) die(`Could not find "version" field in ${path}`);
+  return m[1];
+}
+
+/**
+ * Rewrite a package.json's `version` field to `newVersion`. Preserves all
+ * other content / formatting (we touch a single line by regex rather than
+ * round-tripping through JSON.stringify, which would re-format the file).
+ */
+function writePackageJsonVersion(path: string, newVersion: string): void {
+  const text = readFileSync(path, "utf8");
+  const updated = text.replace(
+    /^(\s*"version":\s*")[^"]+("\s*,?\s*)$/m,
+    `$1${newVersion}$2`,
+  );
+  if (updated === text) {
+    die(`Failed to rewrite "version" in ${path} — line not found`);
+  }
+  writeFileSync(path, updated, "utf8");
+}
+
 // ── pyproject.toml sync ──────────────────────────────────────────────────
 
 function checkPyprojectVersionStanza(): void {
@@ -384,23 +419,40 @@ async function main(): Promise<void> {
     console.log(
       ansi.dim(releaseNotes.split("\n").map((l) => "  " + l).join("\n")),
     );
+    for (const pkgPath of NPM_PACKAGE_FILES) {
+      const current = readPackageJsonVersion(pkgPath);
+      info(
+        `DRY-RUN: would bump ${relative(REPO_ROOT, pkgPath)} version: ${current} → ${newVersion}`,
+      );
+    }
   } else {
     writeFileSync(VERSION_FILE, `${newVersion}\n`, "utf8");
     ok(`Wrote VERSION = ${newVersion}`);
     writeFileSync(CHANGELOG_FILE, newChangelog, "utf8");
     ok("Updated CHANGELOG.md.");
+    // Keep every published npm package's package.json version in lockstep
+    // with VERSION. Forgetting this caused v0.4.1's publish to attempt
+    // re-publishing 0.4.0 from a stale @cerefox/memory/package.json.
+    for (const pkgPath of NPM_PACKAGE_FILES) {
+      const before = readPackageJsonVersion(pkgPath);
+      writePackageJsonVersion(pkgPath, newVersion);
+      ok(`Bumped ${relative(REPO_ROOT, pkgPath)}: ${before} → ${newVersion}`);
+    }
   }
 
   // 4. Git commit + tag
   const tag = `v${newVersion}`;
   const commitMessage = `chore: cut ${tag}`;
+  const stagedFiles = ["VERSION", "CHANGELOG.md", ...NPM_PACKAGE_FILES.map(
+    (p) => relative(REPO_ROOT, p),
+  )];
 
   if (args.dryRun) {
-    info(`DRY-RUN: would 'git add VERSION CHANGELOG.md'`);
+    info(`DRY-RUN: would 'git add ${stagedFiles.join(" ")}'`);
     info(`DRY-RUN: would commit: ${commitMessage}`);
     info(`DRY-RUN: would create annotated tag ${tag} with CHANGELOG section as body`);
   } else {
-    runOrDie("git", ["add", "VERSION", "CHANGELOG.md"]);
+    runOrDie("git", ["add", ...stagedFiles]);
     runOrDie("git", ["commit", "-m", commitMessage]);
     ok(`Committed: ${commitMessage}`);
 
