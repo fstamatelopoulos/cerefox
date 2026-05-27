@@ -2218,7 +2218,7 @@ Major risk vectors:
    release. Tracked as **23I.10**.
 8. **Test coverage**: more aggressive than iter-22. Build tests per command as the
    implementation lands. Maintain a manual test plan doc at
-   `docs/research/v0.5-manual-test-plan.md` covering happy paths, error paths, and
+   `docs/research/v0.7-manual-test-plan.md` covering happy paths, error paths, and
    the clean-macOS-install scenario. Tracked as **23J.7**.
 9. **`configure-agent` Phase 1** = Claude Code + Claude Desktop only. Cursor, Codex,
    Gemini ship later in v0.5.x or v0.6. Confirmed.
@@ -2388,8 +2388,8 @@ The closing iteration step. Mirrors iter-22 Part G.
 | 23J.3 | Mark all Iteration 23 sub-tasks with final status | Done | Every row across 23A-23J shows Done / Deferred-post-merge / Skipped with a one-line outcome note. |
 | 23J.4 | Open PR for v0.5.0 | Done | Single PR per maintainer's direction (single-PR with phased commits, not split). Branch `feat/v0.5.0-ts-cli`, ~12 commits, ~60 sub-tasks landed. PR URL recorded in the closeout commit message. |
 | 23J.5 | Post-merge: cut v0.5.0 | Pending (post-merge maintainer task) | `bun scripts/cut_release.ts 0.5.0 --npm-publish`. Pre-flight checks per Decision Log Q2 Part 3 procedure: `git grep -F "0.4.3" packages/ scripts/ _shared/` should be empty (or only intentional historical refs); `cd packages/memory && bun run bundle-docs && npm pack --dry-run` should emit no `bin[*]` warnings; CHANGELOG `[Unreleased]` should have real content (verified by `cut_release.ts`); `install.sh` should auto-attach to the GitHub Release. |
-| 23J.6 | Post-publish verification (3-way) | Pending (post-merge maintainer task) | From `/tmp`: registry HEAD 200, `jq .bin/.version` shows both `cerefox` + `cerefox-mcp` bins + version 0.5.0, `npx -y --package=@cerefox/memory@0.5.0 cerefox --version` prints 0.5.0. Run `cerefox doctor` against a fresh install to confirm all green. Optional but recommended: walk the manual test plan (`docs/research/v0.5-manual-test-plan.md`) on the clean macOS box. |
-| 23J.7 | Write `docs/research/v0.5-manual-test-plan.md` | Done | 11-section living checklist: install paths, read/write/server/ops commands, lifecycle, self-doc ingest, tab completion, polish, Python deprecation, three-way post-publish verification, edge cases. Each section has a Status line + checkboxes; marks "(automated)" for items covered by the TS test suite. Maintained per release. |
+| 23J.6 | Post-publish verification (3-way) | Pending (post-merge maintainer task) | From `/tmp`: registry HEAD 200, `jq .bin/.version` shows both `cerefox` + `cerefox-mcp` bins + version 0.5.0, `npx -y --package=@cerefox/memory@0.5.0 cerefox --version` prints 0.5.0. Run `cerefox doctor` against a fresh install to confirm all green. Optional but recommended: walk the manual test plan (`docs/research/v0.7-manual-test-plan.md`) on the clean macOS box. |
+| 23J.7 | Write `docs/research/v0.7-manual-test-plan.md` | Done | 11-section living checklist: install paths, read/write/server/ops commands, lifecycle, self-doc ingest, tab completion, polish, Python deprecation, three-way post-publish verification, edge cases. Each section has a Status line + checkboxes; marks "(automated)" for items covered by the TS test suite. Maintained per release. |
 
 **Total**: ~60 sub-tasks across 10 parts.
 
@@ -2424,15 +2424,126 @@ single-package model).
 
 **Estimated effort**: 4 weeks part-time.
 
-**Detailed task breakdown will be created when this iteration is started.** Headline items:
+**Headline items**:
+- **v0.6.0 is an internal milestone, NOT a public release.** Tag in git; no GH Release page; no npm publish. The npm registry stays at v0.5.4 until v0.7.0 ships. Rationale: shipping a release where documented endpoints return "feature lands later" is awkward UX even with the Python fallback. See "Locked design decisions" → "v0.6.0 release strategy" below. **`scripts/cut_release.ts` gains a `--tag-only` flag** to support this cut (Part 24L).
 - New TS web server **inside `packages/memory/`** (`packages/memory/src/web/`) using Hono. No new npm package.
 - `packages/memory/package.json` `bin` block grows by zero — `cerefox web` is a subcommand of the existing `cerefox` binary, not a separate bin entry.
-- All `/api/v1/*` endpoints ported with response-shape parity.
-- Frontend `dist/` continues to ship inside `@cerefox/memory` (already there from v0.4.0's bundling). Hono serves it from the bundled location.
-- E2E test suite passes against the new server.
-- `cerefox web` (TS) replaces `cerefox web` (Python).
-- Python `api/app.py` + `api/routes_api.py` deprecated but kept around (same indefinite-shim policy as iter-20's other Python shims).
-- First-run UX in web UI: empty-state getting-started panel.
+- **32 of 35 `/api/v1/*` endpoints** ported with response-shape parity (zod schemas + narrow snapshot tests). 3 ingestion endpoints (`/ingest`, `/ingest/file`, `/documents/{id}/upload`) return **503 stubs** until v0.7 lands the TS ingestion pipeline — decision locked 2026-05-27 (see Cerefox Decision Log v0.6 entry).
+- Frontend `dist/` **gets bundled into `@cerefox/memory` for the first time** (the v0.4.0 bundling was Python-wheel only; npm package previously had no frontend). New build step in `packages/memory/package.json`'s `prepublishOnly`.
+- E2E test suite (TS port of `tests/e2e/test_api_e2e.py`) passes against the new server, probe-and-skip pattern when Supabase unreachable.
+- `cerefox web` (TS) ships in v0.6 code on main but **does NOT become "the default" yet** — no Python web-specific deprecation banner. Rationale: with 503 ingestion stubs, the TS web is not yet a complete replacement; we cannot nudge users away from the fully-working Python web until v0.7's in-process ingestion lands. The existing v0.5.0 generic Python CLI deprecation banner (which points to `npm install -g @cerefox/memory` without specifically routing `cerefox web` to TS) is **unchanged** — it's safe because v0.5.4 npm's `cerefox web` itself sends users back to `uv run cerefox web`. **The Python web-specific deprecation banner is deferred to v0.7's Part 25L**, where it lands together with the in-process ingestion swap.
+- Python `api/app.py` + `api/routes_api.py` kept around through v0.7.x; deprecation banner added in v0.7.0 (Part 25L); prominent in v0.8, deleted in v0.9.
+- First-run UX in web UI: empty-state getting-started panel + graceful "v0.7 feature" handling when ingestion 503s.
+- **Configure-agent Phase 2**: add Cursor, Codex CLI, Gemini CLI writers + the round-trip smoke test that was missing in v0.5.0–v0.5.4 (the one that would have caught the v0.5.3 wrong-path bug).
+- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.6.0 section covering: `cerefox web` boot smoke, Hono response-shape parity against FastAPI snapshots, web UI loads served from the bundled `frontend/dist/`, deprecation messaging when the Python web server is invoked, configure-agent round-trip verification.
+- **Add v0.6 entry to Cerefox Decision Log** (Part 4 or Part 5 — check size before writing) capturing the FastAPI → Hono port decisions, zod-schemas-as-contract pattern, ingestion 503 deferral rationale, frontend bundling pattern, and any platform gotchas surfaced during the cut.
+
+**Locked design decisions (2026-05-27, before iteration kickoff)**:
+
+| Decision | Resolution | Rationale |
+|---|---|---|
+| **v0.6.0 release strategy** | **Internal milestone, NOT a public release.** Tag `v0.6.0` in git (versions bumped in lockstep across `VERSION` + `package.json` + `meta.ts` + CHANGELOG); **no GitHub Release page, no npm publish**. The npm registry stays at the latest fully-working version (v0.5.4) until v0.7.0 ships. When v0.7.0 lands, IT is the first public release containing both the TS web server AND the TS ingestion pipeline — combined release-note story. Rationale: shipping a release where a documented endpoint returns "feature lands later" is awkward UX, even with the Python fallback. Maintainer call 2026-05-27. | Users never see a broken state; the v0.5.4 → v0.7.0 jump is one clean upgrade. |
+| **Ingestion endpoints in v0.6** | Return **503** with a clear `{"error": "Ingestion lands in v0.7", "see": "<migration-guide-url>"}` body. Frontend detects 503 and shows a "v0.7 feature" toast instead of "ingestion failed". | TS pipeline scheduled for v0.7; pulling forward would add ~6 weeks. EF-delegation alternative rejected to keep the v0.6 → v0.7 transition clean — when v0.7 ships, those three handlers swap from 503 to in-process pipeline calls. |
+| **Schema deploy port** | **Stays in v0.7** (with the other `scripts/*.py` ports). | `db_deploy.py` is closer to the ingestion pipeline (writes to DB, needs direct Postgres). Decoupling from v0.6 keeps web-server work focused. |
+| **Response parity test approach** | **Zod schemas in `_shared/schemas/` as the contract** (consumed by both server and frontend) + **narrow byte-snapshot tests** for ~5 critical endpoints (`/search`, `/dashboard`, `/documents/{id}`, `/audit-log`, `/version`). | Matches the v0.4.0 Decision Log §6 rule: byte-snapshot only where shape really matters. Zod gives runtime + compile-time safety; snapshots catch wire-level regressions on the endpoints the frontend depends on most strongly. |
+| **Iteration size** | **Single iter-24, 12 Parts, one PR, one cut.** Same discipline as iter-23. | Atomic switchover from Python web to TS web. Avoids the awkward middle state where some routes are TS and some are still Python. |
+| **Routing structure** | One file per endpoint group under `packages/memory/src/web/routes/` — 8 files for 35 endpoints. Mirrors `_shared/mcp-tools/` shape. | Easy to navigate, easy to PR-review. |
+| **Hono `serveStatic`** | Used for `/app/*` (SPA bundle) and `/static/*` (logo/favicon). SPA catch-all returns `index.html`. Root `/` returns the existing HTML redirect page. | Built-in, runtime-neutral. |
+| **Auth model** | 127.0.0.1 binding by default, no auth on `/api/v1/*`. Same as Python. | Local-only by design — Cerefox web is a personal tool, not a multi-tenant service. |
+| **Dev mode** | New `--watch` flag (Bun's `--hot`). Existing `--reload` stub renamed to `--watch`. | Convention. |
+| **Python web deprecation banner** | **Deferred from v0.6 to v0.7 (Part 25L)**. v0.6 does NOT add a Python web-specific deprecation banner — that would nudge users away from the fully-working Python web while the TS web still has 503 stubs. The existing v0.5.0 generic Python CLI deprecation banner (points users at `npm install -g`, doesn't specifically route `cerefox web` to TS) stays unchanged through v0.6. v0.7's Part 25L adds the Python web-specific banner at the same moment the in-process ingestion swap lands — TS web is then a complete replacement. Python `api/app.py` + `api/routes_api.py` code stays through v0.7.x, prominent deprecation in v0.8, deleted in v0.9. | Maintainer call 2026-05-27: "we cannot block users from using the Python web until the full app is fully tested." Banner timing tied to TS web being functionally complete. |
+| **Configure-agent Phase 2** | Adds Cursor (direct-write to `~/.cursor/mcp.json`), Codex CLI (direct-write to `~/.codex/config.toml` — TOML, not JSON), Gemini CLI (direct-write to `~/.gemini/settings.json`). All `kind: "direct-write"` per the v0.5.4 ConfigWriter interface. | Phase 2 of the v0.5.0 design (deferred to v0.6 per iter-23 closing). |
+| **Configure-agent round-trip smoke test** | Gated on `command -v claude` (skip if not installed). Spawns `claude mcp list` after `configure-agent --tool claude-code` and asserts `cerefox` appears. Needs sandboxing so it doesn't pollute the contributor's actual `~/.claude.json` — use a temp `$HOME` override via env var. | Closes the gap that let the v0.5.3 wrong-path bug ship to npm for four releases. |
+| **`.env` resolution tightening (v0.5.3 leftover)** | Level-3 (legacy dev-mode) fallback in `_shared/config/paths.ts` should only match CWD `.env` files containing at least one `CEREFOX_*` key — protects against the user who runs `cerefox` from an unrelated Node project with its own `.env`. Small inline change. | Flagged in v0.5.3 decisions; v0.6 design discussion confirmed the heuristic is safe. |
+| **`bundle_package_docs.ts` migration-v0.4.md removal** | Drop `migration-v0.4.md` from the bundled-docs list. By v0.6, anyone reading docs in the npm package is way past v0.4; the historical reference in git is sufficient. | Reduces noise in `cerefox docs --list`. |
+
+**Out of scope (deferred)**:
+
+| Item | Where it lands |
+|---|---|
+| `IngestionPipeline` port (3 web endpoints become functional) | v0.7 (iter-25) |
+| `db_deploy.py` port (eliminates the residual Python step in `cerefox init`) | v0.7 (iter-25) |
+| Standalone binaries (`pkg`/`bun build --compile`) | Phase 2 of design doc §6d — post-v0.6 |
+| Full `cerefox docs` web UI integration | If demand surfaces — not in v0.6 |
+
+**Estimated effort**: 5-6 weeks part-time (revised from design doc's "~4 weeks" — 35 endpoints is more surface than the original estimate; the configure-agent Phase 2 work is bundled in too).
+
+**Detailed Parts breakdown** (each Part = one commit in the iter-24 PR):
+
+| Part | Goal | Acceptance |
+|---|---|---|
+| **24A — Hono scaffolding + `cerefox web` wire-up + dev-mode paths** | Minimal Hono app boots via `cerefox web`; `/api/v1/version` returns 200 with the version JSON. **Source-mode testing**: maintainer runs `bun packages/memory/src/bin/cerefox.ts web` from the repo and the server boots without `npm install -g`. **Frontend fallback**: when `packages/memory/dist/frontend/` doesn't exist (source-mode), Hono falls back to `<repo>/frontend/dist/` — same pattern Python uses (`_resolve_spa_dist` in `api/app.py`). The maintainer can `cd frontend && npm run build` once at the start of testing, then iterate on the Hono server from source without rebuilding the package. | `cerefox web` listens on 127.0.0.1:8000, `curl /api/v1/version` returns `{"version": "0.6.0", …}`. New `packages/memory/test/web-smoke.test.ts` passes (probe-and-skip pattern). Maintainer can boot the server from source via `bun packages/memory/src/bin/cerefox.ts web` and load the web UI at `http://127.0.0.1:8000/app/`. |
+| **24B — Frontend bundle pipeline** | `frontend/dist/` lands inside `packages/memory/dist/frontend/` at build time. Hono serves it at `/app/*` with SPA catch-all. | `packages/memory/package.json` `prepublishOnly` runs `cd ../../frontend && npm install && npm run build && cp -R frontend/dist <package>/dist/frontend`. `npm pack --dry-run` includes `dist/frontend/index.html`. Visiting `http://127.0.0.1:8000/app/` loads the React SPA. |
+| **24C — Meta + search + discovery endpoints (12 endpoints)** | `/version`, `/docs`, `/docs/{path}`, `/schema-version`, `/search`, `/projects`, `/metadata-keys`, `/dashboard`, `/projects/{id}/documents`, `/documents/trash`, `/documents/metadata-search`, `/resolve-link`. New `_shared/schemas/` module with zod schemas. | Each endpoint matches FastAPI response shape (verified by zod parse + snapshot test for `/search` and `/dashboard`). |
+| **24D — Document read endpoints (5 endpoints)** | `/documents/{id}`, `/{id}/chunks`, `/{id}/versions`, `/{id}/download`, `/check-filename`. | Each endpoint passes a zod-parse test against captured FastAPI response. Snapshot test for `/documents/{id}` (most complex shape). |
+| **24E — Document write endpoints (6 endpoints)** | `/edit`, DELETE, `/restore`, `/purge`, `/review-status`, `/versions/{vid}/archive`. | Each endpoint mutates the DB correctly via RPC; audit-log entries created where the Python version creates them. |
+| **24F — Project CRUD + Config CRUD (5 endpoints)** | POST/PUT/DELETE `/projects`, GET/PUT `/config/{key}`. | Project create-update-delete round-trip works in the web UI. Config get/set round-trip works. |
+| **24G — Audit + usage log (4 endpoints)** | `/audit-log`, `/usage-log`, `/usage-log/export.csv`, `/usage-log/summary`. CSV streaming response. | CSV download in the web UI produces a file identical to the Python version (snapshot test). |
+| **24H — Ingestion 503 stubs (3 endpoints)** | `/ingest`, `/ingest/file`, `/documents/{id}/upload` return 503 with `{"error": "Ingestion lands in v0.7", "see": "<url>"}`. | curl gets the 503 with the right body. Frontend detects this and shows a "v0.7 feature" toast in the web UI (no crash). |
+| **24I — Parity test harness + e2e port** | Capture Python responses for the 5 critical endpoints (pre-port via the maintainer's live Supabase). Add as snapshot fixtures. Port `tests/e2e/test_api_e2e.py` to a TS e2e suite under `packages/memory/test/`. | TS e2e suite passes against the new TS server (`bun test`, probe-and-skip when Supabase unreachable). All 5 snapshot tests pass. |
+| **24J — First-run UX panel + frontend 503 handling** | New empty-state component in the React SPA shown when KB has zero documents. Ingest 503 detection shows a user-facing toast. | Visiting `/app/` on an empty KB shows the empty-state panel. Triggering ingest in the UI shows "Ingestion lands in v0.7" toast (not a crash). |
+| **24K — Configure-agent Phase 2 + round-trip smoke test** | Cursor + Codex + Gemini writers added (direct-write kind). `--tool claude-code` smoke test (gated on `command -v claude`) — spawn `claude mcp list` after configure-agent + assert `cerefox` appears. Use `HOME` override / temp dir to avoid polluting contributor state. Also: tighten level-3 `.env` heuristic + drop `migration-v0.4.md` from `bundle_package_docs.ts`. | `cerefox configure-agent --tool cursor` writes the expected JSON. Round-trip test passes when Claude Code is installed. |
+| **24L — Closeout (internal-milestone cut, no deprecation banner)** | Update `CHANGELOG.md` (v0.6.0 entry marked "internal milestone — not released to npm"), `v0.7-manual-test-plan.md` (v0.6 section), README (no user-facing changes needed). Decision Log v0.6 entry. **Add `--tag-only` flag to `scripts/cut_release.ts`** that bumps versions + commits + tags but skips both the GitHub Release creation and the npm publish trigger. Cut v0.6.0 with `--tag-only`. **No `migration-v0.5.md` v0.6 section** — users don't migrate to v0.6. **No Python web deprecation banner** — that's deferred to v0.7 Part 25L per the locked decision. | PR ready for review; CI green; CHANGELOG complete; Decision Log entry ingested; `v0.6.0` git tag present; npm registry unchanged at v0.5.4. Python `cerefox web` unchanged from v0.5.x users' perspective. |
+
+**Local testing during the build (no `npm install` needed)**:
+
+The maintainer can iterate on the v0.6 code without going through the npm install
+path. Three modes:
+
+```bash
+# Mode 1 — Source mode (recommended for active iteration)
+# Run the bin directly from source via Bun. No build step needed; Bun TS-loads
+# the source. Hot reload available with --watch (Bun's --hot).
+bun packages/memory/src/bin/cerefox.ts web --port 8000
+bun packages/memory/src/bin/cerefox.ts web --watch    # hot-reload on file changes
+
+# Mode 2 — Built mode (catches packaging-stage issues)
+# Build first, then run the bundled output via Node. Mirrors what npm-installed
+# users see.
+cd packages/memory && bun run build
+node packages/memory/dist/bin/cerefox.js web --port 8000
+
+# Mode 3 — Mixed (server from source, frontend from built dist)
+# Build the frontend once, then iterate on the Hono server from source. Hono's
+# static-file fallback (see Part 24A acceptance) finds <repo>/frontend/dist/
+# when packages/memory/dist/frontend/ doesn't exist.
+cd frontend && npm install && npm run build && cd ..
+bun packages/memory/src/bin/cerefox.ts web   # picks up <repo>/frontend/dist/
+```
+
+For E2E tests during the build: `cd packages/memory && bun test web-smoke.test.ts`
+(probe-and-skip when Supabase unreachable, same pattern as `stdio-smoke.test.ts`).
+
+**Critical files / directories created in iter-24**:
+- `packages/memory/src/web/` — new directory housing the Hono server
+  - `web/server.ts` — Hono app factory `buildWebServer({ port, host })`
+  - `web/static.ts` — `serveStatic` middleware + SPA catch-all
+  - `web/routes/meta.ts`
+  - `web/routes/search.ts`
+  - `web/routes/documents-read.ts`
+  - `web/routes/documents-write.ts`
+  - `web/routes/ingest.ts` (503 stubs)
+  - `web/routes/projects.ts` (CRUD)
+  - `web/routes/audit-usage.ts`
+  - `web/routes/config.ts`
+- `_shared/schemas/` — new directory
+  - `_shared/schemas/index.ts`
+  - One file per response group, mirroring the routes structure
+- `packages/memory/test/web-smoke.test.ts` — boot + first-route smoke
+- `packages/memory/test/e2e/` — port of `tests/e2e/test_api_e2e.py`
+- `packages/memory/dist/frontend/` — built React SPA (gitignored; built by `prepublishOnly`)
+
+**Files modified**:
+- `packages/memory/package.json` — add `hono` dep; update `scripts.build` and `prepublishOnly`; add `dist/frontend` to `files`
+- `packages/memory/src/cli/commands/web.ts` — replace v0.5 stub with `import { buildWebServer } from '../../web/server.ts'` etc.
+- `packages/memory/src/cli/util/mcp-config-writers.ts` — add Cursor / Codex / Gemini writers (Phase 2)
+- `_shared/config/paths.ts` — level-3 heuristic: only match CWD `.env` containing `CEREFOX_*`
+- `src/cerefox/cli.py` — add `cerefox web` deprecation banner
+- `scripts/bundle_package_docs.ts` — drop `migration-v0.4.md`
+- `frontend/src/api/*.ts` — import response types from `_shared/schemas/` instead of duplicating
+- `frontend/src/components/EmptyState.tsx` — new
+
+**For a fresh-session pickup**: this iter-24 design is self-contained. Read this section + the v0.5.3/v0.5.4 Decision Log entries in Q2 Part 3 and Part 4 + the design doc `docs/specs/polish-and-distribution-design.md` §13 v0.6.0 (which is the abstract framing). All open decisions are documented above; nothing needs re-deciding.
 
 ---
 
@@ -2450,6 +2561,9 @@ consolidated single-package model).
 **Estimated effort**: 6 weeks part-time. Chunking parity is the critical test.
 
 **Detailed task breakdown will be created when this iteration is started.** Headline items:
+- **First public release containing the TS web server** (v0.6.0 is internal-milestone only — see iter-24 above). v0.5.4 → v0.7.0 is a one-step user upgrade: Python web → TS web, in lockstep with Python ingestion → TS ingestion. The 3 ingestion endpoints that returned 503 in v0.6 are swapped to in-process pipeline calls during Part 25L (closeout) — same wire shape, no frontend changes.
+- **migration-v0.5.md gets a single v0.7 section**, not separate v0.6 + v0.7 sections (since users never saw v0.6).
+- **Python web-specific deprecation banner lands here, NOT in v0.6** — deferred from iter-24 per maintainer call 2026-05-27 ("we cannot block users from using the Python web until the full app is fully tested"). Part 25L adds the banner at the same moment the in-process ingestion swap completes, so the TS web is functionally complete the instant the banner directs users to it. The existing v0.5.0 generic Python CLI deprecation banner stays unchanged.
 - New TS chunking module under `_shared/ingest/` — port of `markdown.py` heading-aware splitter (snapshot-test parity).
 - New TS embedding orchestration using OpenAI Node SDK.
 - New TS ingestion pipeline calling `cerefox_ingest_document` RPC.
@@ -2457,6 +2571,8 @@ consolidated single-package model).
 - The `cerefox-ingest` Edge Function (Deno) also imports the same `_shared/ingest/` modules — one chunking implementation, two consumers, like the v0.4 `_shared/mcp-tools/` pattern.
 - PDF/DOCX support **dropped**; CHANGELOG announces removal.
 - Remaining `scripts/*.py` ported to `scripts/*.ts` per the §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. All become TS scripts that consume `_shared/ingest/` and `_shared/db-client/`.
+- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.7.0 section covering: chunking byte-parity vs the Python pipeline (deterministic input → identical chunk boundaries), embedding round-trip + cosine-similarity sanity check against the same content embedded by v0.6, `cerefox ingest` end-to-end on a real repo, schema-deploy via the new TS script. This is the final tick on the rolling plan — sections that no longer apply (Python-only flows) get marked superseded rather than removed, preserving the audit trail.
+- **Add v0.7 entry to the Cerefox Decision Log** capturing the chunking-parity decision (byte-identical vs. semantically-equivalent), the PDF/DOCX drop rationale, and the TS-port-of-scripts/* policy decisions surfaced during the cut.
 
 ---
 
