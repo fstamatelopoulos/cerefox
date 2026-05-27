@@ -785,7 +785,7 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 
 **Tests / risk**: high. Largest single migration; broadest surface area; visible to every user. Vitest test suite covers parity with the pytest suite. Self-doc ingest tested by snapshot — assert the expected set of documents lands under `_cerefox-self-docs` with correct metadata after `cerefox init` runs against a fresh KB.
 
-### v0.6.0 — "TS Web Server" (~5-6 weeks)
+### v0.6.0 — "TS Web Server" (~5-6 weeks, internal milestone only)
 
 **Theme**: The local web server (currently FastAPI) becomes TS. Web UI unchanged (already TS). `cerefox web` launches a Bun-based Hono server.
 
@@ -794,6 +794,16 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 > "Locked design decisions" table). Effort revised from "~4 weeks" to
 > "~5-6 weeks" — 35 endpoints (was estimated 30+), zod schemas + parity
 > tests, configure-agent Phase 2 bundled in.
+>
+> **Release strategy: internal milestone, not a public release.** v0.6.0
+> is tagged in git but **not published to npm and not released on GitHub**.
+> Three ingestion endpoints return 503 stubs (the TS pipeline lands in
+> v0.7), so the user-facing experience of v0.6 alone would be a regression
+> on the TS web path. The npm registry stays at v0.5.4 until v0.7.0 ships
+> as the first public release containing both the TS web server and the
+> TS ingestion pipeline. `scripts/cut_release.ts` gains a `--tag-only`
+> flag (lockstep version bumps + commit + git tag, no GH Release, no npm
+> publish) to support this cut.
 
 | # | Item |
 |---|---|
@@ -809,9 +819,19 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 
 **Tests / risk**: medium. Web API is well-tested via e2e suite; port maintains JSON shape contracts via zod. Highest-risk areas: frontend bundling (new build step), ingestion-503 UX (must be friendly, not crashy), configure-agent round-trip sandboxing (don't pollute contributor `~/.claude.json`).
 
-### v0.7.0 — "TS Ingestion Pipeline" (~6 weeks)
+### v0.7.0 — "TS Ingestion Pipeline + first public release of TS web" (~6 weeks)
 
 **Theme**: The last and largest Python component — chunking, embedding orchestration, version snapshotting — moves to TS. PDF and DOCX support **dropped** (never used; out of scope for TS port).
+
+> **2026-05-27 update**: per the v0.6.0 internal-milestone decision (see
+> §13 v0.6.0 above), v0.7.0 is the **first public release containing the
+> TS web server**. The v0.5.4 → v0.7.0 upgrade jumps users from "Python
+> web works fully" to "TS web works fully" in one step — no intermediate
+> v0.6 state where some endpoints 503. v0.7.0's release notes combine the
+> v0.6 + v0.7 story; migration-v0.5.md grows a single v0.7 section, not
+> separate v0.6 + v0.7 sections. v0.7.0's Part 25L (closeout) replaces
+> the 503 stubs with in-process ingestion-pipeline calls — same wire
+> shape, no frontend changes.
 
 | # | Item |
 |---|---|
