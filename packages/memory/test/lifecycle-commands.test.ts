@@ -51,7 +51,10 @@ describe("configure-agent (local-only)", () => {
     expect(stderr).toContain("Unknown --tool");
   });
 
-  test("--dry-run prints without writing", () => {
+  test("--dry-run with --config-path prints without writing (direct-write override)", () => {
+    // --config-path forces direct-write even for delegated writers (claude-code),
+    // which is the test-friendly path. Without --config-path, claude-code would
+    // shell out to `claude mcp add` (covered separately below).
     expect(existsSync(tmpConfig)).toBe(false);
     const { stdout, status } = run([
       "configure-agent",
@@ -78,7 +81,7 @@ describe("configure-agent (local-only)", () => {
     });
   });
 
-  test("real run creates the file with the cerefox entry", () => {
+  test("--config-path direct-write creates the file with the cerefox entry", () => {
     const { status } = run([
       "configure-agent",
       "--tool",
@@ -95,7 +98,7 @@ describe("configure-agent (local-only)", () => {
     expect(parsed.mcpServers.cerefox.args).toContain("--package=@cerefox/memory");
   });
 
-  test("second run preserves other servers and backs up the original", () => {
+  test("second --config-path run preserves other servers and backs up the original", () => {
     // Pre-seed with another server entry.
     writeFileSync(
       tmpConfig,
@@ -116,6 +119,56 @@ describe("configure-agent (local-only)", () => {
     expect(parsed.mcpServers.other).toBeDefined();
     expect(parsed.mcpServers.cerefox).toBeDefined();
     expect(existsSync(backupPath)).toBe(true);
+  });
+
+  test("v0.5.4: claude-code default (no --config-path) is delegated to `claude mcp add`", () => {
+    // Without --config-path, claude-code is now a delegated writer. We use
+    // --dry-run to assert the right command WOULD be invoked, without
+    // actually requiring the `claude` CLI to be installed in the test env.
+    const { stdout, status } = run([
+      "configure-agent",
+      "--tool",
+      "claude-code",
+      "--dry-run",
+      "--json",
+    ]);
+    expect(status).toBe(0);
+    const parsed = JSON.parse(stdout) as {
+      configPath: string;
+      action: string;
+      serverEntry: { command: string; args: string[] };
+      delegatedCommand?: string;
+    };
+    expect(parsed.action).toBe("delegated");
+    expect(parsed.delegatedCommand).toBeDefined();
+    // Must invoke `claude mcp add cerefox --scope user -- npx ...`.
+    expect(parsed.delegatedCommand).toContain("claude mcp add cerefox");
+    expect(parsed.delegatedCommand).toContain("--scope user");
+    expect(parsed.delegatedCommand).toContain("--package=@cerefox/memory");
+    // configPath should be ~/.claude.json (the canonical user-scope path),
+    // not the legacy ~/.claude/mcp.json from v0.5.0–v0.5.3.
+    expect(parsed.configPath).toMatch(/\.claude\.json$/);
+    expect(parsed.configPath).not.toMatch(/\.claude\/mcp\.json$/);
+  });
+
+  test("v0.5.4: claude-desktop stays direct-write (no delegation)", () => {
+    // Claude Desktop has no CLI helper, so its writer remains direct-write.
+    const cdConfig = join(tmpdir(), `cerefox-cd-test-${Date.now()}.json`);
+    const { stdout, status } = run([
+      "configure-agent",
+      "--tool",
+      "claude-desktop",
+      "--config-path",
+      cdConfig,
+      "--dry-run",
+      "--json",
+    ]);
+    rmSync(cdConfig, { force: true });
+    expect(status).toBe(0);
+    const parsed = JSON.parse(stdout) as { action: string; delegatedCommand?: string };
+    // Direct-write paths produce "created" / "merged" / "replaced".
+    expect(parsed.action).toBe("created");
+    expect(parsed.delegatedCommand).toBeUndefined();
   });
 });
 

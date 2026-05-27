@@ -49,6 +49,9 @@ function action(options: ConfigureAgentOptions): void {
     println(c.dim(`  backup: ${result.backupPath}`));
   }
   println(c.dim(`  action: ${result.action}`));
+  if (result.delegatedCommand) {
+    println(c.dim(`  invoked: ${result.delegatedCommand}`));
+  }
   println("");
   println(c.bold("Server entry written:"));
   println(JSON.stringify(result.serverEntry, null, 2));
@@ -58,7 +61,8 @@ function action(options: ConfigureAgentOptions): void {
       c.dim(
         writer.id === "claude-desktop"
           ? "Restart Claude Desktop fully (Cmd+Q on macOS) to pick up the new server."
-          : "Reload your Claude Code session to pick up the new server.",
+          : "Start a new Claude Code session to pick up the new server " +
+              "(running sessions cache MCP server lists at startup).",
       ),
     );
   }

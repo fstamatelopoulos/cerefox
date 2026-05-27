@@ -9,7 +9,59 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.5.4 fixes `cerefox configure-agent --tool claude-code`** — the writer in
+v0.5.0–v0.5.3 wrote to `~/.claude/mcp.json`, a path Claude Code never reads.
+The bug shipped silently to npm because doctor scanned the same wrong path.
+Anyone who ran `configure-agent --tool claude-code` on a v0.5.x release prior
+to v0.5.4 needs to upgrade and re-run. See `docs/guides/migration-v0.5.md` §
+"v0.5.4 fixed cerefox configure-agent --tool claude-code" for the exact
+remediation.
+
+### Fixed
+
+- **`configure-agent --tool claude-code`** now shells out to
+  `claude mcp add --scope user --` to register the server with Claude Code.
+  Claude Code's user-scope MCP servers live in `~/.claude.json` (a dot-file
+  in `$HOME`) under `.mcpServers`, not in `~/.claude/mcp.json`. Delegating to
+  Claude Code's own CLI is future-proof (the target client knows its own
+  schema) and avoids any risk of corrupting the user's 48 KB config file.
+  Requires `claude` on PATH; errors gracefully with an install pointer if
+  not. Defensive backup of `~/.claude.json` to `~/.claude.json.pre-cerefox.bak`
+  is taken before invoking the delegated CLI.
+
+- **`cerefox doctor` "mcp clients" check** now scans `~/.claude.json`'s
+  `.mcpServers.cerefox` key (the right place) instead of `~/.claude/mcp.json`
+  (the wrong place). Also tightens the success criteria to "a cerefox entry
+  is registered" rather than "any file exists at the path", so doctor no
+  longer reports green for an unrelated MCP config that happens to be on disk.
+
+- **Quickstart `docs/guides/quickstart.md`** now opens with a "Two install
+  paths" split (Path A — npm install for end users; Path B — source checkout
+  for contributors). Previously the quickstart only documented the source
+  checkout path despite v0.4's npm release.
+
+- **`install.sh`** end-of-install message rephrased: lists both
+  `configure-agent --tool claude-code` and `--tool claude-desktop`, drops the
+  "Migration from v0.4" wording in favor of the more general "Upgrading from
+  an earlier version?" pointer.
+
+### Architecture
+
+- **`ConfigWriter` interface** gains a `kind: "direct-write" | "delegated"`
+  field. Direct-write writers (Claude Desktop) manage a JSON file themselves;
+  delegated writers (Claude Code) shell out to the target client's CLI.
+  Adding a future client (Cursor, Codex, Gemini) means picking the
+  appropriate kind. The `--config-path FILE` override always forces direct-
+  write — preserves the v0.5.0–v0.5.3 test surface and gives power users an
+  escape hatch.
+
+### Tests
+
+- New tests in `packages/memory/test/lifecycle-commands.test.ts`: assert
+  that `configure-agent --tool claude-code` (with no `--config-path`) is
+  `action: "delegated"` and the planned command line is
+  `claude mcp add cerefox --scope user -- npx ...`. Separate assertion that
+  `--tool claude-desktop` stays `action: "created"` with no delegation.
 
 ---
 

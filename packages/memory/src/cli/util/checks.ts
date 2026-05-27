@@ -13,7 +13,7 @@
  * v0.6). The check stub reports "skipped (v0.6)".
  */
 
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -276,35 +276,57 @@ export async function checkSchemaVersion(): Promise<CheckResult> {
   }
 }
 
+/**
+ * Read `mcpServers.cerefox` from a JSON file, if present. Returns null
+ * when the file is missing, malformed, or doesn't have a cerefox entry.
+ */
+function hasCerefoxInJsonFile(path: string): boolean {
+  if (!existsSync(path)) return false;
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const mcpServers = parsed.mcpServers as Record<string, unknown> | undefined;
+    return Boolean(mcpServers && typeof mcpServers === "object" && "cerefox" in mcpServers);
+  } catch {
+    return false;
+  }
+}
+
 export function checkMcpConfigs(): CheckResult {
-  // Walk known MCP client config locations and report what's there.
+  // Walk known MCP client config locations and report which ones have
+  // a `cerefox` server entry registered.
+  //
+  // v0.5.4 fix: Claude Code's user-scope MCP servers live in
+  // `~/.claude.json` (the dot-file in $HOME) under the `.mcpServers`
+  // key, not in `~/.claude/mcp.json`. The latter was scanned through
+  // v0.5.3 — a stale file written by the v0.5.0–v0.5.3 configure-agent
+  // bug. We now scan the right place.
   const home = homedir();
-  const candidates: Array<{ label: string; path: string }> = [
-    { label: "Claude Code (user)", path: join(home, ".claude", "mcp.json") },
-    { label: "Claude Code (proj)", path: join(process.cwd(), ".mcp.json") },
-    {
-      label: "Claude Desktop",
-      path:
-        process.platform === "darwin"
-          ? join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")
-          : process.platform === "win32"
-            ? join(process.env.APPDATA ?? "", "Claude", "claude_desktop_config.json")
-            : join(home, ".config", "Claude", "claude_desktop_config.json"),
-    },
-  ];
-  const found = candidates.filter((c) => existsSync(c.path));
+  const claudeCodeUser = join(home, ".claude.json");
+  const claudeCodeProj = join(process.cwd(), ".mcp.json");
+  const claudeDesktop =
+    process.platform === "darwin"
+      ? join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")
+      : process.platform === "win32"
+        ? join(process.env.APPDATA ?? "", "Claude", "claude_desktop_config.json")
+        : join(home, ".config", "Claude", "claude_desktop_config.json");
+
+  const found: string[] = [];
+  if (hasCerefoxInJsonFile(claudeCodeUser)) found.push("Claude Code (user)");
+  if (hasCerefoxInJsonFile(claudeCodeProj)) found.push("Claude Code (proj)");
+  if (hasCerefoxInJsonFile(claudeDesktop)) found.push("Claude Desktop");
+
   if (found.length === 0) {
     return {
       name: "mcp clients",
       status: "warn",
-      detail: "No MCP client configs detected.",
-      hint: "Run `cerefox configure-agent --tool claude-code` to wire up Claude Code.",
+      detail: "No MCP client configs reference Cerefox.",
+      hint: "Run `cerefox configure-agent --tool claude-code` (or `--tool claude-desktop`) to wire up a client.",
     };
   }
   return {
     name: "mcp clients",
     status: "ok",
-    detail: found.map((f) => f.label).join(", "),
+    detail: found.join(", "),
   };
 }
 
