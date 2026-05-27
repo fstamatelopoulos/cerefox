@@ -1,6 +1,12 @@
 /**
- * stdio integration smoke test: spawn the built `cerefox-mcp` bin and
- * verify it speaks MCP over stdio — initialize, tools/list, then close.
+ * stdio integration smoke test: spawn `cerefox mcp` (the v0.5.1+
+ * canonical MCP entry point) and verify it speaks MCP over stdio —
+ * initialize, tools/list, then close.
+ *
+ * v0.5.0 had a dedicated `cerefox-mcp` bin; v0.5.1 dropped it in favour
+ * of the `cerefox mcp` subcommand of the main `cerefox` bin. Same
+ * `buildServer()` factory under the hood; this test now exercises the
+ * full commander → subcommand → server boot path.
  *
  * Runs the actual built bundle (after `bun run build`) so we exercise
  * the exact artifact shipped to npm. Requires `.env` configured (uses
@@ -15,7 +21,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BIN = join(PKG_ROOT, "dist", "bin", "cerefox-mcp.js");
+const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
+const MCP_ARGS = [BIN, "mcp"];
 
 describe("stdio MCP server smoke", () => {
   test("bin exists after build", () => {
@@ -34,7 +41,7 @@ describe("stdio MCP server smoke", () => {
     // The server resolves .env from CWD per _shared/config/. Run from the
     // repo root so the maintainer's .env is picked up.
     const REPO_ROOT = join(PKG_ROOT, "..", "..");
-    const child = spawn("node", [BIN], {
+    const child = spawn("node", MCP_ARGS, {
       cwd: REPO_ROOT,
       env: { ...process.env },
       stdio: ["pipe", "pipe", "pipe"],

@@ -33,11 +33,18 @@ export interface ConfigWriter {
   buildServerEntry: () => Record<string, unknown>;
 }
 
-/** Cerefox MCP server entry. Same shape for both Claude Code and Desktop. */
+/**
+ * Cerefox MCP server entry. Same shape for both Claude Code and Desktop.
+ *
+ * v0.5.1: switched from invoking the legacy `cerefox-mcp` bin (dropped
+ * in v0.5.1) to invoking the canonical `cerefox` bin with the `mcp`
+ * subcommand. The third positional arg `mcp` is passed to the bin as
+ * argv[1] — same MCP server, one bin to maintain.
+ */
 function defaultCerefoxEntry(): Record<string, unknown> {
   return {
     command: "npx",
-    args: ["-y", "--package=@cerefox/memory", "cerefox-mcp"],
+    args: ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
   };
 }
 

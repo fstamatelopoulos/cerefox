@@ -70,9 +70,11 @@ describe("configure-agent (local-only)", () => {
       serverEntry: Record<string, unknown>;
     };
     expect(parsed.action).toBe("created");
+    // v0.5.1: server entry invokes `cerefox mcp` (the canonical form
+    // after the `cerefox-mcp` bin was dropped).
     expect(parsed.serverEntry).toEqual({
       command: "npx",
-      args: ["-y", "--package=@cerefox/memory", "cerefox-mcp"],
+      args: ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
     });
   });
 

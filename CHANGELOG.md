@@ -9,7 +9,59 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Patch release** that drops the standalone `cerefox-mcp` bin from
+`@cerefox/memory`. The bin was a v0.4 design choice that became
+redundant when v0.5 added `cerefox mcp` as a subcommand of the main
+CLI. Same `buildServer()` factory under the hood; one bin, one entry
+point, easier to reason about.
+
+### Removed (breaking change for v0.4 → v0.5.0 MCP configs)
+
+- **`cerefox-mcp` bin removed from `@cerefox/memory`.** It was a thin
+  bin entry that called `buildServer()` directly, duplicating what
+  `cerefox mcp` already does. Anyone whose MCP client config invokes
+  `npx -y --package=@cerefox/memory cerefox-mcp` will see a "bin not
+  found" error on v0.5.1; the one-line fix is to update `args` to
+  `["-y", "--package=@cerefox/memory", "cerefox", "mcp"]`. See
+  [`docs/guides/migration-v0.5.md`](docs/guides/migration-v0.5.md#upgrading-an-existing-mcp-client-config)
+  for the exact diff.
+
+### Changed
+
+- **`cerefox configure-agent` now writes the canonical
+  `cerefox mcp` invocation** in the server entry. Rerun on existing
+  installs to get the updated config (the writer is non-destructive —
+  it backs up to `<file>.pre-cerefox.bak` and merges).
+- **Python `cerefox mcp` soft wrapper** probes via
+  `npx --package=@cerefox/memory cerefox --version` (canonical form);
+  on success it execvp's `npx --package=@cerefox/memory cerefox mcp`.
+- **`packages/memory/package.json`**: `bin` block has one entry
+  (`cerefox`). The `build:mcp` / `build:cli` partial-build scripts
+  collapsed into a single `build`.
+- **`stdio-smoke.test.ts`** now spawns `cerefox mcp` instead of the
+  removed standalone bin.
+
+### Why this happened so soon after v0.5.0
+
+The standalone `cerefox-mcp` bin was kept in v0.5.0 for backward
+compatibility with the v0.4 install base. On maintainer review the
+day after v0.5.0 shipped, we concluded the redundancy isn't worth
+preserving — npm install base for v0.5.0 was ~zero, and one-bin-with-
+subcommands is the long-term vision in the design doc anyway. v0.5.1
+ships the cleanup while migration friction is minimal.
+
+### Migration in one line
+
+Old config (v0.4 → v0.5.0):
+```json
+"args": ["-y", "--package=@cerefox/memory", "cerefox-mcp"]
+```
+New config (v0.5.1+):
+```json
+"args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]
+```
+
+Or just rerun `cerefox configure-agent --tool <claude-code|claude-desktop>`.
 
 ---
 

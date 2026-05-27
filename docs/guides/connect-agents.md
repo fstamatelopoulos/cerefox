@@ -68,7 +68,7 @@ Three top-level paths plus a few special cases:
 - Some content ingested (`cerefox ingest my-notes.md`)
 
 **For Path A-Local only:**
-- **Recommended (v0.4.0+):** [Node.js ≥20](https://nodejs.org) (for `npx --package=@cerefox/memory cerefox-mcp`)
+- **Recommended (v0.4.0+):** [Node.js ≥20](https://nodejs.org) (for `npx --package=@cerefox/memory cerefox mcp`)
   + `.env` file in the working directory the client launches the server from (see "env block"
   in the per-client configs below if your client can't see the file)
 - **Alternative:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) installed on your machine + Cerefox repository cloned locally (e.g. `/Users/yourname/src/cerefox`)
@@ -112,10 +112,10 @@ The local Cerefox MCP server runs on your machine and exposes the same 10 tools 
 Edge Function, communicating with clients over stdio.
 
 As of **v0.4.0** the local server ships as an npm package — **[`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)** — built with the official `@modelcontextprotocol/sdk`.
-The bin entry is `cerefox-mcp`. The recommended client config is `npx -y --package=@cerefox/memory cerefox-mcp`.
+The bin entry is `cerefox` (run as `cerefox mcp`). The recommended client config is `npx -y --package=@cerefox/memory cerefox mcp`.
 
 The legacy `uv run cerefox mcp` invocation **still works** and is preserved as a soft
-wrapper: it tries `npx --no-install @cerefox/memory cerefox-mcp` first and falls back to the
+wrapper: it tries `npx --no-install @cerefox/memory cerefox mcp` first and falls back to the
 Python MCP server if npm is unavailable or `@cerefox/memory` isn't installed. New users
 should prefer the npm-native config; existing users don't have to change anything.
 
@@ -199,7 +199,7 @@ After setup, ask your client:
   "mcpServers": {
     "cerefox": {
       "command": "npx",
-      "args": ["-y", "--package=@cerefox/memory", "cerefox-mcp"],
+      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
       "env": {
         "CEREFOX_SUPABASE_URL": "https://<your-project-ref>.supabase.co",
         "CEREFOX_SUPABASE_KEY": "<your-service-role-or-sb_secret-key>",
@@ -228,7 +228,7 @@ server can find — the server resolves `.env` from the current working director
 
 Replace `/path/to/cerefox` with the absolute path to your Cerefox checkout
 (e.g. `/Users/yourname/src/cerefox` on macOS, `C:\Users\yourname\src\cerefox` on Windows).
-This invocation soft-wraps `npx --package=@cerefox/memory cerefox-mcp` when available; otherwise the
+This invocation soft-wraps `npx --package=@cerefox/memory cerefox mcp` when available; otherwise the
 legacy Python MCP server takes over.
 
 **Important:**
@@ -262,7 +262,7 @@ legacy Python MCP server takes over.
   "mcpServers": {
     "cerefox": {
       "command": "npx",
-      "args": ["-y", "--package=@cerefox/memory", "cerefox-mcp"],
+      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
       "env": {
         "CEREFOX_SUPABASE_URL": "https://<your-project-ref>.supabase.co",
         "CEREFOX_SUPABASE_KEY": "<your-service-role-or-sb_secret-key>",
@@ -302,7 +302,7 @@ separate from `claude_desktop_config.json`. Changes made in one do not affect th
 
 ```bash
 claude mcp add --scope user cerefox \
-  npx -- -y --package=@cerefox/memory cerefox-mcp
+  npx -- -y --package=@cerefox/memory cerefox mcp
 ```
 
 - `--scope user` makes the server available in every project (stored in `~/.claude/mcp.json`).
@@ -324,7 +324,7 @@ claude mcp add --scope user cerefox \
   uv -- --directory /path/to/cerefox run cerefox mcp
 ```
 
-This soft-wraps `npx --package=@cerefox/memory cerefox-mcp` when available; otherwise falls back to
+This soft-wraps `npx --package=@cerefox/memory cerefox mcp` when available; otherwise falls back to
 the legacy Python MCP server.
 
 **Option 3: `.mcp.json` in project root (project-scoped, committable)**
@@ -336,7 +336,7 @@ Create `.mcp.json` in the root of the repo you work in:
   "mcpServers": {
     "cerefox": {
       "command": "npx",
-      "args": ["-y", "--package=@cerefox/memory", "cerefox-mcp"]
+      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]
     }
   }
 }
