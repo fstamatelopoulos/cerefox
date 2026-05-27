@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.5.3] -- 2026-05-27
+
 **v0.5.3 brings forward the v1.0 `.env` precedence flip for the TS CLI.**
 
 ### Changed
