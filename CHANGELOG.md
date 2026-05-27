@@ -9,7 +9,103 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**TypeScript CLI release.** The Python `cerefox` CLI is now joined by a
+TypeScript `cerefox` bin published inside the same `@cerefox/memory`
+npm package as the v0.4 `cerefox-mcp` bin. End users on a fresh machine
+can `npm install -g @cerefox/memory` (or use the one-line install
+script) and have a working `cerefox` callable from any directory — no
+Python install, no clone required.
+
+The Python CLI keeps working (deprecated banner, removal v0.8/v0.9).
+
+Migration guide: [`docs/guides/migration-v0.5.md`](docs/guides/migration-v0.5.md).
+
+### Added
+
+- **`cerefox` bin** in `@cerefox/memory` — 28 subcommands ported from
+  the Python CLI plus 6 new lifecycle commands:
+  - `cerefox init` — interactive 5-step bootstrap (Supabase URL, key,
+    OpenAI key, optional Postgres URL, identity). Validates credentials
+    before writing `~/.cerefox/.env` (chmod 0600). Optional `--config
+    <file>.json` mode for CI / scripted setup. Calls `sync-self-docs`
+    automatically.
+  - `cerefox doctor` — 9 diagnostic checks (binary, runtime, version,
+    config, supabase, openai, schema, postgres, mcp clients) with
+    `--json` output mode.
+  - `cerefox status` — fast 3-check subset of doctor (< 500ms).
+  - `cerefox configure-agent --tool <claude-code|claude-desktop>` —
+    writes the MCP server config for the named client, backing up
+    existing config to `<file>.pre-cerefox.bak`. v0.5 Phase 1 supports
+    Claude Code + Claude Desktop; Cursor / Codex / Gemini ship later.
+  - `cerefox self-update` (+ first-class `cerefox upgrade` alias) —
+    detects the installer (bun / npm / yarn / pnpm) and wraps the
+    corresponding global-install command. Refreshes the bundled-docs
+    ingest after a successful update.
+  - `cerefox sync-self-docs` — Layer 2 of MCP discoverability per
+    design doc §10d. Ingests bundled `AGENT_GUIDE.md`,
+    `AGENT_QUICK_REFERENCE.md`, and curated `docs/guides/*.md` under
+    a dedicated `_cerefox-self-docs` project so any agent connected
+    via MCP can `cerefox_search "writing linkable content"`.
+- **Tab completion** for bash, zsh, fish via
+  `cerefox completion <shell>`. Generates a per-shell script that
+  completes subcommand names + long-form flags.
+- **Help-text command groups** in `cerefox --help`: READS / WRITES /
+  SERVERS / LIFECYCLE / OPS. Also documents the exit-code table
+  (0 ok / 1 user error / 2 system error / 3 not found) inline.
+- **Bare `cerefox`** (no args) shows a state-aware welcome banner:
+  detects whether config exists and suggests `cerefox init` (if not)
+  or `cerefox doctor` (if so).
+- **`install.sh`** — one-line install: `curl … | sh`. Bun-first with
+  npm fallback. Attached to every GitHub Release as a stable asset
+  (`releases/latest/download/install.sh`).
+- **`packages/memory/README.md`** — npm landing card with two-bin
+  overview, install paths, first-run flow, common commands.
+
+### Changed
+
+- **`@cerefox/memory`'s bin block now lists two bins**: `cerefox-mcp`
+  (from v0.4) and `cerefox` (new in v0.5). Same package, growing
+  surface — no rename, no separate publish.
+- **Python `cerefox` CLI prints a one-line deprecation banner**
+  pointing at the npm install path. Suppressed for `--version` /
+  `--help` / `--json` / the `mcp` subcommand / when
+  `CEREFOX_NO_DEPRECATION_BANNER=1` is set. The Python CLI remains
+  fully functional through v0.7; removal lands in v0.8 / v0.9.
+- **Web UI** (`frontend/src/hooks/useProjects.ts`) now filters
+  `_`-prefixed system projects (`_cerefox-self-docs`, `_e2e-*`, …)
+  from default listings via a new `isSystemProject(name)` predicate.
+  Pass `includeSystem: true` to opt in.
+- **`cut_release.ts`**: now tracks one `VERSION_LITERAL_FILE`
+  (`packages/memory/src/meta.ts`) instead of the two from v0.4.3 —
+  both bins read from the shared `PKG_VERSION` constant.
+- **`prepublishOnly`** runs `scripts/bundle_package_docs.ts` to
+  copy 14 curated docs/guides + the two agent docs into the
+  package tree before `npm pack`. Bundled copies are gitignored.
+
+### Deferred to v0.6 / v0.7
+
+- **`cerefox web`** — TS web server ships in v0.6. The npm-installed
+  bin prints a "use `uv run cerefox web` for now" message + exit 0.
+- **`cerefox reindex`** — depends on the v0.7 TS ingestion pipeline.
+  Same "use uv" message + exit 0.
+- **Schema deploy in `cerefox init`** — needs Postgres direct
+  connection. v0.5 prints `uv run python scripts/db_deploy.py` at
+  the right moment; v0.6 ports the deploy step.
+- **`configure-agent` Phase 2** — Cursor / Codex / Gemini land in
+  v0.5.x or v0.6.
+
+### Testing
+
+105 TypeScript tests:
+- 66 in `_shared/__tests__/` (cli-core, mcp-tools, db-status,
+  paths, sync_docs).
+- 39 in `packages/memory/test/` (stdio smoke, CLI smoke,
+  read-commands live, write-commands live, lifecycle live).
+- Plus the new `tests/test_python_cli_deprecation_banner.py` (9
+  Python tests for the banner-suppression cases).
+
+Manual test plan tracked at
+[`docs/research/v0.5-manual-test-plan.md`](docs/research/v0.5-manual-test-plan.md).
 
 ---
 
