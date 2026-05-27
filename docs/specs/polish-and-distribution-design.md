@@ -785,20 +785,29 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 
 **Tests / risk**: high. Largest single migration; broadest surface area; visible to every user. Vitest test suite covers parity with the pytest suite. Self-doc ingest tested by snapshot — assert the expected set of documents lands under `_cerefox-self-docs` with correct metadata after `cerefox init` runs against a fresh KB.
 
-### v0.6.0 — "TS Web Server" (~4 weeks)
+### v0.6.0 — "TS Web Server" (~5-6 weeks)
 
 **Theme**: The local web server (currently FastAPI) becomes TS. Web UI unchanged (already TS). `cerefox web` launches a Bun-based Hono server.
 
+> **2026-05-27 update**: detailed design + Parts breakdown in `docs/plan.md`
+> § Iteration 24. Decisions locked before iteration kickoff (see plan.md
+> "Locked design decisions" table). Effort revised from "~4 weeks" to
+> "~5-6 weeks" — 35 endpoints (was estimated 30+), zod schemas + parity
+> tests, configure-agent Phase 2 bundled in.
+
 | # | Item |
 |---|---|
-| 1 | New TS web server in `packages/web-server/` using Hono |
-| 2 | All `/api/v1/*` endpoints ported with response-shape parity |
-| 3 | E2E tests against the new server pass the same suite |
-| 4 | `cerefox web` (TS) replaces `cerefox web` (Python) |
-| 5 | Web UI footer now shows TS-server version (was Python-server version) |
-| 6 | First-run UX in web UI: empty-state getting-started panel |
+| 1 | New TS web server **inside `packages/memory/src/web/`** (Hono on Bun). Per the "Living design notes" at the top of this doc, web code lives inside the single `@cerefox/memory` package, NOT a separate `packages/web-server/`. |
+| 2 | **32 of 35** `/api/v1/*` endpoints ported with response-shape parity (zod schemas in `_shared/schemas/` + narrow snapshot tests for 5 critical endpoints) |
+| 3 | **3 ingestion endpoints** (`/ingest`, `/ingest/file`, `/documents/{id}/upload`) return **503 stubs** with a `"see migration-v0.5.md"` body until v0.7 lands the TS ingestion pipeline. Frontend detects 503 and shows a "v0.7 feature" toast. |
+| 4 | E2E test suite (TS port of `tests/e2e/test_api_e2e.py`) passes against the new server, probe-and-skip when Supabase unreachable |
+| 5 | `cerefox web` (TS) is the new default; Python `cerefox web` (still works via `uv run`) gains a deprecation banner — same pattern as v0.5.0 CLI deprecation |
+| 6 | Web UI footer shows TS-server version (was Python-server version) |
+| 7 | First-run UX in web UI: empty-state getting-started panel |
+| 8 | **Frontend `dist/` bundled into `@cerefox/memory` for the first time** (the v0.4.0 bundling was Python-wheel only; npm package previously had no frontend) |
+| 9 | **Configure-agent Phase 2**: Cursor, Codex CLI, Gemini CLI writers + the round-trip smoke test missing in v0.5.0–v0.5.4 |
 
-**Tests / risk**: medium. Web API is well-tested via e2e suite; port maintains JSON shape contracts.
+**Tests / risk**: medium. Web API is well-tested via e2e suite; port maintains JSON shape contracts via zod. Highest-risk areas: frontend bundling (new build step), ingestion-503 UX (must be friendly, not crashy), configure-agent round-trip sandboxing (don't pollute contributor `~/.claude.json`).
 
 ### v0.7.0 — "TS Ingestion Pipeline" (~6 weeks)
 
