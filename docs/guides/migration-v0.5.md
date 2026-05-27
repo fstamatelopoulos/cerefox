@@ -196,6 +196,64 @@ explicit instead of "magic delegation".
 
 ---
 
+## v0.5.3 migrated `.env` from `<repo>/.env` to `~/.cerefox/.env`
+
+If you've been using the Python `cerefox` CLI, your `.env` lives in your
+repo root (`/path/to/cerefox/.env`). The TS CLI v0.5.2 also read that
+file, via a "CWD `.env` wins" precedence inherited from Python. v0.5.3
+flips that precedence: **once `~/.cerefox/.env` exists, the TS CLI reads
+from there**; the repo file becomes a legacy fallback for Python's
+`uv run cerefox …` workflows.
+
+**You see zero behavior change until you run `cerefox init`.** If your
+home dir doesn't have `~/.cerefox/.env`, the TS CLI keeps reading your
+existing repo `.env` (legacy dev-mode precedence). No action required.
+
+When you do run `cerefox init` with a repo `.env` already in place, the
+TS CLI offers a three-choice menu:
+
+```
+⚠ Found existing config at /path/to/cerefox/.env.
+
+  [c] Copy to /Users/you/.cerefox/.env  (recommended)
+      • TS reads the new home from now on
+      • Python keeps reading /path/to/cerefox/.env (backward compat)
+      • Edit ~/.cerefox/.env going forward; the repo .env is legacy
+
+  [u] Use /path/to/cerefox/.env as-is, skip writing anything
+      • Both TS and Python keep reading the existing file
+      • Defer the migration
+
+  [f] Fresh start — interactive prompts, write to /Users/you/.cerefox/.env
+      • Use if the existing file is stale or wrong
+```
+
+Pick **[c]** for the typical Python → TS upgrade. The TS CLI starts
+reading `~/.cerefox/.env`; your remaining Python `uv run cerefox …`
+commands keep reading the unchanged repo file. The two files diverge
+only if you start editing one of them — keep them in sync (or just edit
+`~/.cerefox/.env` and accept that Python uses a frozen snapshot until
+v0.9).
+
+After v0.9 (Python CLI removed), `cerefox doctor` will say "ok" if you
+delete the repo file. Until then, `doctor` reports it as
+`legacy env … (shadowed by ~/.cerefox/.env)` so you know it's harmless.
+
+### Python paths.py precedence (unchanged)
+
+`src/cerefox/paths.py` keeps the v0.5.2 precedence (CWD `.env` wins).
+Your existing `uv run cerefox …` invocations from inside the repo
+continue to read the repo file regardless of what's in `~/.cerefox/`.
+When this module goes away in v0.9+, the divergence resolves naturally.
+
+### `CEREFOX_CONFIG_DIR` is unchanged
+
+If you have `CEREFOX_CONFIG_DIR` set (e.g. for a non-standard install),
+it still wins over both home and repo `.env` files. Init writes there
+and skips the migration prompt.
+
+---
+
 ## Known gotchas
 
 ### `npx` from inside an npm workspace

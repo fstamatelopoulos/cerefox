@@ -117,7 +117,12 @@ npm install -g @cerefox/memory      # Node ≥ 20
 
 cerefox init                         # interactive 5-step setup
 cerefox doctor                       # verify the install
-cerefox configure-agent --tool claude-code   # wire up Claude Code
+
+# Wire up your MCP client(s) — run the ones that apply to your setup:
+cerefox configure-agent --tool claude-code      # Claude Code (~/.claude/mcp.json)
+cerefox configure-agent --tool claude-desktop   # Claude Desktop config
+# (Cursor / Codex / Gemini land in a future v0.5.x; see migration-v0.5.md
+#  for the manual config snippets in the meantime.)
 ```
 
 That's the path for end users who don't need to hack on Cerefox itself. For

@@ -9,7 +9,62 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.5.3 brings forward the v1.0 `.env` precedence flip for the TS CLI.**
+
+### Changed
+
+- **`_shared/config/paths.ts` precedence inverted**: when `~/.cerefox/.env`
+  exists, it now wins over the repo-local `<cwd>/.env` (the v0.5.2
+  precedence was the opposite). Existing users see **zero behavior change**
+  until they run `cerefox init` and create the home file — the legacy
+  dev-mode fallback (level 3 in the new ordering) catches that case
+  unchanged. After `init`, the TS CLI reads from `~/.cerefox/.env` and the
+  repo file becomes a Python-only fallback. Tests updated in
+  `_shared/__tests__/paths.test.ts`. New helper `hasLegacyCwdEnv()` powers
+  the doctor shadow-detection below. **Python `src/cerefox/paths.py` is
+  deliberately unchanged** (CWD still wins there) so existing
+  `uv run cerefox …` workflows keep reading the repo `.env` through the
+  v0.5–v0.7 migration window.
+
+- **`cerefox init` is migration-aware.** When the home file doesn't exist
+  but `<cwd>/.env` does, init now offers a three-choice prompt instead of
+  a binary overwrite:
+
+  | Choice | What happens | Best for |
+  |---|---|---|
+  | `[c]` Copy to `~/.cerefox/.env` *(default)* | Copies the repo file, chmods 0600, validates against Supabase + OpenAI. Repo file untouched. | Typical Python → TS upgrade. TS uses the new home; Python keeps the repo file. |
+  | `[u]` Use repo `.env` as-is | Validates the existing file. No copy, no write. | "I just want to verify the install works against my current config." |
+  | `[f]` Fresh start | Ignores the existing file, prompts interactively, writes a brand-new `~/.cerefox/.env`. | Stale or wrong existing config. |
+
+  Fresh installs (no `.env` anywhere) are unchanged — standard 5-step
+  interactive flow writes `~/.cerefox/.env`. Reconfigure (home file
+  already exists) is unchanged — standard overwrite confirmation.
+  `CEREFOX_CONFIG_DIR` overrides still win and skip the migration prompt.
+
+- **`cerefox doctor` reports shadowed legacy `.env`.** When both
+  `~/.cerefox/.env` and `<cwd>/.env` exist (and they're not the same file
+  via symlink), doctor adds an informational line:
+
+  ```
+  ℹ legacy env   /path/to/cerefox/.env (shadowed by ~/.cerefox/.env)
+      → Python `uv run cerefox …` still reads this during the v0.5–v0.7
+        migration window. Safe to delete in v0.9+.
+  ```
+
+  Doesn't fail doctor; just surfaces what's there.
+
+### Docs
+
+- `docs/guides/migration-v0.5.md` — new section "v0.5.3 migrated `.env`
+  from `<repo>/.env` to `~/.cerefox/.env`" with the three-choice menu
+  and the Python coexistence model.
+- `packages/memory/README.md` — "Upgrading from the Python `cerefox` CLI?"
+  callout pointing at the `[c]` copy flow.
+- `README.md` (root) — `configure-agent --tool claude-desktop` line added
+  alongside `--tool claude-code` (already shipped in v0.5.2; consolidated
+  framing here).
+- `src/cerefox/paths.py` docstring updated to cross-reference the v0.5.3
+  TS change.
 
 ---
 

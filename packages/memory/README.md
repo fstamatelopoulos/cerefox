@@ -79,11 +79,19 @@ already provisioned (see "Before you install").
 > the deploy logic is ported to the TS CLI. For now, the setup-supabase
 > guide walks through it.
 
+> **Upgrading from the Python `cerefox` CLI?** If you have a working
+> `.env` in your repo clone, init detects it and offers to **copy** it to
+> `~/.cerefox/.env` so the TS CLI uses the new home while Python keeps
+> reading the repo file unchanged. See the migration-v0.5 guide for the
+> three-choice prompt. Existing users with no `~/.cerefox/.env` see zero
+> behavior change until they opt in.
+
 ---
 
 ## Connect an AI agent
 
 ```bash
+# Run the configure-agent commands that apply to your setup:
 cerefox configure-agent --tool claude-code          # writes ~/.claude/mcp.json
 cerefox configure-agent --tool claude-desktop       # writes Claude Desktop config
 ```

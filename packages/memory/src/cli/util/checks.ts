@@ -13,13 +13,17 @@
  * v0.6). The check stub reports "skipped (v0.6)".
  */
 
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { PKG_VERSION } from "../../meta.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
-import { resolveConfigDir, resolveEnvFile } from "../../../../../_shared/config/index.ts";
+import {
+  resolveConfigDir,
+  resolveEnvFile,
+  USER_STATE_DIR_NAME,
+} from "../../../../../_shared/config/index.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 
@@ -304,6 +308,36 @@ export function checkMcpConfigs(): CheckResult {
   };
 }
 
+/**
+ * v0.5.3: when `~/.cerefox/.env` exists AND a different `<cwd>/.env` exists,
+ * report the CWD file as a shadowed legacy config. The TS CLI reads the
+ * home file (new precedence), but Python's `uv run cerefox …` still reads
+ * the CWD file during the migration window — safe to delete in v0.9+.
+ *
+ * Returns `null` when there's nothing interesting to report (no shadowing,
+ * or the two paths resolve to the same physical file via symlink).
+ */
+export function checkLegacyShadowEnv(): CheckResult | null {
+  const home = homedir();
+  const homeEnv = join(home, USER_STATE_DIR_NAME, ".env");
+  const cwdEnv = join(process.cwd(), ".env");
+  if (!existsSync(homeEnv) || !existsSync(cwdEnv)) return null;
+  // Same file via symlink? Skip.
+  try {
+    if (realpathSync(homeEnv) === realpathSync(cwdEnv)) return null;
+  } catch {
+    // realpath failed on one of them — fall through to reporting.
+  }
+  return {
+    name: "legacy env",
+    status: "skipped",
+    detail: `${cwdEnv} (shadowed by ~/.cerefox/.env)`,
+    hint:
+      "Python `uv run cerefox …` still reads this file during the v0.5–v0.7 migration window. " +
+      "Safe to delete once Python support is removed (v0.9+).",
+  };
+}
+
 export function checkPostgres(): CheckResult {
   // v0.5: not yet ported. The Python CLI uses CEREFOX_DATABASE_URL for
   // DDL operations (schema deploy + migrations). For npm-installed users
@@ -327,11 +361,13 @@ export function checkPostgres(): CheckResult {
 
 /** Full diagnostic — what `cerefox doctor` runs. */
 export async function runAllChecks(): Promise<CheckResult[]> {
+  const legacy = checkLegacyShadowEnv();
   return [
     checkBinary(),
     checkRuntime(),
     checkVersion(),
     checkConfig(),
+    ...(legacy ? [legacy] : []),
     await checkSupabase(),
     await checkOpenAI(),
     await checkSchemaVersion(),

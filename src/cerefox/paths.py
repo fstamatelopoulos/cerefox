@@ -14,10 +14,21 @@ The dev-mode branch (#2) makes existing ``cd /path/to/cerefox && uv run cerefox 
 workflows keep working unchanged. New users with no repo-local ``.env`` get the
 ``~/.cerefox/`` flow.
 
-**v1.0 revisit (planned)**: the dev-mode-wins precedence is defensive for the
-v0.x line. At v1.0 the natural default flips to ``~/.cerefox/`` first, with
-repo-local ``.env`` becoming an explicit opt-in (e.g. ``CEREFOX_CONFIG_DIR=.``).
-See ``docs/plan.md`` § Iteration 20 → "v1.0 revisit" for the rationale.
+**v0.5.3**: the TypeScript ``_shared/config/paths.ts`` brought the v1.0 flip
+forward — when ``~/.cerefox/.env`` exists, it wins over the CWD ``.env``.
+**This Python module deliberately stayed on the v0.5.2 precedence** (CWD
+wins) so existing ``uv run cerefox …`` workflows keep reading their repo
+``.env`` unchanged. The two precedences diverge until Python is fully
+retired in v0.9+, when this module goes with it. Users who run
+``cerefox init`` (TS) get a [c]opy path that writes ``~/.cerefox/.env``
+while leaving the repo file in place — TS reads the new home, Python
+keeps reading the repo. See the Cerefox Decision Log entry
+"2026-05-27 — v0.5.3 paths precedence inversion" for the full rationale.
+
+**v1.0 (still relevant)**: the dev-mode-wins precedence is defensive for the
+v0.x Python line. When this module is removed (v0.9+), there's nothing
+left to flip — TS already runs on the new rule. See ``docs/plan.md`` §
+Iteration 20 → "v1.0 revisit" for the original framing.
 """
 
 from __future__ import annotations
