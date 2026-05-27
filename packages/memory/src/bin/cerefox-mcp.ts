@@ -8,9 +8,8 @@
  * shell-completion tooling can probe without DB credentials.
  */
 
+import { PKG_VERSION as VERSION } from "../meta.ts";
 import { buildServer } from "../server.ts";
-
-const VERSION = "0.4.3";
 
 const HELP = `Cerefox MCP server (@cerefox/memory v${VERSION})
 

@@ -52,7 +52,7 @@ Cerefox is a Python + TypeScript project. As of v0.2.0, contributors need **thre
 | **Node 20+** with `npm` | Frontend (React + Vite), Supabase Edge Functions | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
 | **[Bun](https://bun.sh) 1.x** | TypeScript scripts (`scripts/*.ts`, starting with `cut_release.ts` in v0.2.0) | `curl -fsSL https://bun.sh/install \| bash` |
 
-The Bun requirement is new in v0.2.0 — see [Script-language policy](#script-language-policy-effective-from-v020) below. From v0.4.0 the local MCP server ships as the npm package [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory); end users who use it install via `npx`/`bunx` and don't need uv or a clone. Contributors still need all three runtimes (Python for the CLI/web/API, Node for the frontend + npm publish, Bun for TS scripts and `_shared/`/`packages/memory/` tests).
+The Bun requirement is new in v0.2.0 — see [Script-language policy](#script-language-policy-effective-from-v020) below. From v0.5.0 the local MCP server **and** the main CLI both ship as bins inside the npm package [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory); end users install via `npm`/`bun install -g` and don't need uv or a clone. Contributors still need all three runtimes (Python for the schema deploy + web server + ingestion pipeline until v0.6/v0.7, Node for the frontend + npm publish, Bun for TS scripts and `_shared/`/`packages/memory/` tests).
 
 ```bash
 # Clone and install
@@ -140,18 +140,33 @@ It's at the repo root (not under `src/`) so it doesn't tangle with hatchling's P
 
 ### `packages/memory/` — the `@cerefox/memory` npm package
 
-The local MCP server bin (and, in future iterations, the TS CLI + web/API server) lives in [`packages/memory/`](packages/memory/):
+The local MCP server bin **and** (from v0.5+) the main `cerefox` CLI bin both live in [`packages/memory/`](packages/memory/). Same npm package, two bins, growing surface:
 
 ```
 packages/memory/
   src/
-    server.ts            buildServer() factory — wires _shared/mcp-tools/ into the MCP SDK
-    bin/cerefox-mcp.ts   shebang entry point; --version / --help short-circuits
-  test/stdio-smoke.test.ts spawns the built bin and walks an MCP handshake
-  package.json           name: @cerefox/memory, bin: cerefox-mcp, type: module
+    meta.ts                       PKG_VERSION constant — single source of truth in the bundle
+    server.ts                     buildServer() factory — wires _shared/mcp-tools/ into the MCP SDK
+    bin/cerefox-mcp.ts            stdio MCP server bin
+    bin/cerefox.ts                main CLI bin (v0.5+) — top-level error handler + commander dispatch
+    cli/
+      program.ts                  commander program assembly; one registerXyz() per subcommand
+      commands/                   28 subcommand files
+      util/                       checks (doctor/status), mcp-config-writers, bundled-docs, client, embed
+  test/
+    stdio-smoke.test.ts           spawn the built bin and walk an MCP handshake
+    cli-smoke.test.ts             --version / --help / --help-grouping / bare entry
+    read-commands.test.ts         live tests (skip if Supabase unreachable)
+    write-commands.test.ts        live tests (creates + cleans up [E2E v0.5-test] docs)
+    lifecycle-commands.test.ts    doctor / status / configure-agent / self-update
+  README.md                       npm landing card — refreshed each release
+  package.json                    name: @cerefox/memory, bin: {cerefox-mcp, cerefox}, type: module
 ```
 
-Build: `bun run build` (from `packages/memory/`) → `dist/bin/cerefox-mcp.js` (single ESM file).
+Build: `bun run build` (from `packages/memory/`) → both `dist/bin/cerefox-mcp.js` and `dist/bin/cerefox.js` (single-file ESM each).
+
+Doc bundling: `scripts/bundle_package_docs.ts` (invoked by `prepublishOnly`) copies the curated `docs/guides/`, `AGENT_GUIDE.md`, and `AGENT_QUICK_REFERENCE.md` into the package tree before `npm publish`. The bundled copies are gitignored — source of truth stays at the repo root.
+
 Publish is driven by `.github/workflows/release.yml` with OIDC trusted publishing; the maintainer triggers it via `bun scripts/cut_release.ts X.Y.Z --npm-publish`.
 
 Because `_shared/mcp-tools/*.ts` is imported by both Edge Functions (Deno) and this package (Node/Bun), the shared modules use structural typing rather than concrete `SupabaseClient` types — same logic, two runtimes, one source.

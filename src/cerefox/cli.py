@@ -25,10 +25,62 @@ from cerefox.config import Settings
 # ── Root group ────────────────────────────────────────────────────────────────
 
 
+def _emit_deprecation_banner(argv: list[str] | None = None) -> None:
+    """Print a one-line deprecation notice on stderr.
+
+    `argv` is the list of args AFTER the program name (i.e. what
+    `click.Context` sees). Pass `None` to default to `sys.argv[1:]` —
+    useful when the function is called from outside a Click context
+    (e.g. unit tests).
+
+    Suppressed when:
+      - `CEREFOX_NO_DEPRECATION_BANNER` env var is set (escape hatch).
+      - argv is empty (bare invocation).
+      - argv contains `--json` (don't contaminate JSON consumers).
+      - argv contains `--version` / `-V` / `--help` / `-h` (informational).
+      - First argv element is `mcp` (stdio MCP server — stderr noise
+        becomes log spam in MCP clients).
+    """
+    import os  # noqa: PLC0415
+
+    if "CEREFOX_NO_DEPRECATION_BANNER" in os.environ:
+        return
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
+        return
+    if "--json" in argv:
+        return
+    if any(a in {"--version", "-V", "--help", "-h"} for a in argv):
+        return
+    if argv[0] == "mcp":
+        return
+    click.echo(
+        "⚠  The Python `cerefox` CLI is deprecated as of v0.5.0. "
+        "Install the TypeScript CLI with `npm install -g @cerefox/memory` "
+        "(or `bun install -g @cerefox/memory`) and use `cerefox` from any "
+        "directory. Migration guide: "
+        "https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-v0.5.md\n"
+        "   Suppress this banner with CEREFOX_NO_DEPRECATION_BANNER=1.",
+        err=True,
+    )
+
+
 @click.group()
 @click.version_option(version=__version__, prog_name="cerefox")
 def cli() -> None:
-    """Cerefox — personal second brain knowledge backend."""
+    """Cerefox — personal second brain knowledge backend.
+
+    .. deprecated:: 0.5.0
+       The Python CLI is deprecated in favour of the TypeScript CLI shipped
+       as `@cerefox/memory` on npm. The Python CLI remains functional through
+       v0.7.x; removal lands in v0.8 / v0.9. See
+       `docs/guides/migration-v0.5.md` for the upgrade path.
+    """
+    # Print the deprecation banner — `_emit_deprecation_banner` inspects
+    # `sys.argv` and suppresses the banner for `--version`, `--help`,
+    # `--json`, `mcp`, and when `CEREFOX_NO_DEPRECATION_BANNER` is set.
+    _emit_deprecation_banner()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

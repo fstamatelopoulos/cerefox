@@ -29,6 +29,7 @@ import {
   TOOLS_BY_NAME,
   type ToolContext,
 } from "../../../_shared/mcp-tools/index.ts";
+import { PKG_VERSION } from "./meta.ts";
 
 // Bun workspaces install a separate copy of @supabase/supabase-js into each
 // member's node_modules. The runtime instances are structurally identical
@@ -41,7 +42,6 @@ type SharedSupabaseClient = Parameters<
 >[0];
 
 /** Resolved at module-load time so `--version` works without DB. */
-const PKG_VERSION = "0.4.3";
 const SERVER_NAME = "cerefox";
 
 export interface ServerHandle {

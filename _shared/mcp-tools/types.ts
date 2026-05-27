@@ -40,6 +40,22 @@ export type SupabaseClient = MCPSupabaseClient;
  *  to maintain a type-perfect schema literal. */
 export type JsonSchema = Record<string, unknown>;
 
+/**
+ * Logical channel through which a Cerefox operation reached the backend.
+ * Recorded in `cerefox_usage_log.access_path` so the analytics dashboard
+ * can attribute load to each surface.
+ *
+ * Values:
+ *   - `remote-mcp`  — `cerefox-mcp` Edge Function (HTTP MCP transport).
+ *   - `local-mcp`   — `@cerefox/memory`'s `cerefox-mcp` stdio bin.
+ *   - `cli`         — the `cerefox` CLI bin (v0.5+). Mirrors the
+ *                     Python CLI's `access_path = "cli"`.
+ *
+ * Adding a new channel here also requires updating
+ * `cerefox_usage_log.access_path`'s domain (Postgres CHECK constraint).
+ */
+export type AccessPath = "remote-mcp" | "local-mcp" | "cli";
+
 export interface ToolContext {
   /** OpenAI/Fireworks API key for tools that need to embed (search, ingest).
    *  Resolved by the consumer (EF: `Deno.env.get("OPENAI_API_KEY")`;
@@ -47,7 +63,7 @@ export interface ToolContext {
   openaiApiKey?: string;
   /** Identifies the wire path the call came in on. Recorded in
    *  `cerefox_usage_log.access_path`. */
-  accessPath: "remote-mcp" | "local-mcp";
+  accessPath: AccessPath;
 }
 
 export interface ToolDefinition {

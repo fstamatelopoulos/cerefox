@@ -73,14 +73,12 @@ interface VersionLiteralFile {
   suffix: string;
 }
 const VERSION_LITERAL_FILES: VersionLiteralFile[] = [
+  // packages/memory/src/meta.ts exports PKG_VERSION; both bins
+  // (`cerefox` and `cerefox-mcp`) and `server.ts` import from there.
+  // Single source of truth inside the bundle.
   {
-    path: join(REPO_ROOT, "packages", "memory", "src", "server.ts"),
+    path: join(REPO_ROOT, "packages", "memory", "src", "meta.ts"),
     prefix: 'const PKG_VERSION = "',
-    suffix: '";',
-  },
-  {
-    path: join(REPO_ROOT, "packages", "memory", "src", "bin", "cerefox-mcp.ts"),
-    prefix: 'const VERSION = "',
     suffix: '";',
   },
 ];
@@ -603,6 +601,21 @@ async function main(): Promise<void> {
     run("rm", ["-f", tmpNotesFile]);
   }
   ok(`GitHub Release ${tag} created.`);
+
+  // Attach install.sh as a release asset so the `latest/download/install.sh`
+  // URL always serves the most recent one. Stable URL:
+  //   https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh
+  // Best-effort: skip if install.sh doesn't exist (very early v0.x cuts).
+  const installSh = join(REPO_ROOT, "install.sh");
+  if (existsSync(installSh)) {
+    info("Attaching install.sh to the GitHub Release…");
+    const upload = run("gh", ["release", "upload", tag, installSh, "--clobber"]);
+    if (upload.status === 0) {
+      ok("install.sh uploaded to the release.");
+    } else {
+      warn(`Could not upload install.sh: ${upload.stderr.trim() || "unknown error"}. Upload manually with: gh release upload ${tag} install.sh`);
+    }
+  }
 
   if (args.npmPublish) {
     info("Triggering release.yml workflow with publish_to_npm=true…");

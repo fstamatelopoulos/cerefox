@@ -39,9 +39,11 @@ export function applyByteBudget(
   return { accepted, truncated, usedBytes };
 }
 
+import type { AccessPath } from "./types.ts";
+
 export interface LogUsageParams {
   operation: string;
-  accessPath: "remote-mcp" | "local-mcp";
+  accessPath: AccessPath;
   query_text?: string | null;
   document_id?: string | null;
   project_id?: string | null;
