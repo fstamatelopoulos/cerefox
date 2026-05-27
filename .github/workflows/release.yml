@@ -76,9 +76,12 @@ jobs:
         working-directory: packages/memory
 
       - name: Verify built bin runs
+        # v0.5.1 dropped the standalone cerefox-mcp bin; cerefox is now
+        # the package's single bin and `cerefox mcp` is the MCP entry.
         run: |
-          node packages/memory/dist/bin/cerefox-mcp.js --version
-          node packages/memory/dist/bin/cerefox-mcp.js --help | head -5
+          node packages/memory/dist/bin/cerefox.js --version
+          node packages/memory/dist/bin/cerefox.js --help | head -5
+          node packages/memory/dist/bin/cerefox.js mcp --help | head -5
 
   publish:
     name: Publish to npm
