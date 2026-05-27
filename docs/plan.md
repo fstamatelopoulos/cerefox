@@ -2198,28 +2198,32 @@ Major risk vectors:
   client. **Phase 1 = Claude Code + Claude Desktop only**; Cursor + Codex + Gemini
   ship later in v0.5.x.
 
-### Open questions (discuss before execution)
+### Decisions taken before execution (2026-05-27 plan review)
 
-1. **Single PR or multiple?** This iteration is ~3x larger than v0.4. Options:
-   - **One giant PR** (iter-22 style): high review burden, single rollback point.
-   - **3 PRs**: foundation+reads+writes / servers+lifecycle / polish+self-docs+publish.
-   - **5 PRs**: one per Part A/B/C, then merged groups for D-J.
-   Three PRs feels right. Discuss.
-2. **`cerefox web` UX in the npm-installed case**: print "use the clone for now"? or
-   shell out to `uv run` if `uv` is on PATH? My recommendation is the explicit message
-   (see refinement #1 above) but it's a UX call worth confirming.
-3. **`reindex` deferred to v0.7** — acceptable to the maintainer? The Python `reindex`
-   keeps working in the meantime via `uv run cerefox reindex`.
-4. **`cerefox init` — interactive vs flag-driven?** Design doc shows a fully interactive
-   prompt-driven flow. For agent-friendly CI / scripted setup, also support a `--config`
-   flag taking a JSON file path with all the answers pre-filled. Minor surface area;
-   worth doing. Easy yes from me; confirm.
-5. **install.sh — Bun-first or npm-first?** Design says Bun-first (faster, native TS).
-   But Bun's macOS install requires Xcode CLT on some versions; npm is universally
-   available. My recommendation: try `bun install -g` first, fall back to `npm install -g`
-   if Bun unavailable. Same as Cerefox itself does for runtime detection.
-6. **Should we add a `cerefox upgrade` alias for `cerefox self-update`?** Some users
-   default to `upgrade` (homebrew muscle memory). Cheap to add as a hidden alias.
+1. **Single PR target.** All ~60 sub-tasks land on `feat/v0.5.0-ts-cli` as a stream of
+   phased commits, opened as a single PR for review. Same shape as iter-22.
+2. **`cerefox web` UX**: simplest possible — print a "use `uv run cerefox web` from a
+   clone for now; native TS server lands in v0.6" message and exit 0. No subprocess
+   detection, no Python prereq inheritance. The v0.5→v0.6 gap is intentionally short
+   (days, not weeks).
+3. **`reindex` deferred to v0.7** — confirmed. Same explicit-message pattern as `web`.
+4. **`cerefox init` ships both modes**: interactive (primary) + `--config <file>.json`
+   (convenience for CI / scripted setup). Same validation pipeline.
+5. **install.sh: Bun-first with npm fallback** — confirmed.
+6. **`cerefox upgrade` is a first-class alias** for `cerefox self-update` (both
+   documented as equivalent in `--help` and in the docs). Removes the "homebrew muscle
+   memory" friction.
+7. **NEW: `packages/memory/README.md`** — npmjs.com warns about packages without a
+   README. Ships in v0.5; light overview + link back to the repo. Refreshed each
+   release. Tracked as **23I.10**.
+8. **Test coverage**: more aggressive than iter-22. Build tests per command as the
+   implementation lands. Maintain a manual test plan doc at
+   `docs/research/v0.5-manual-test-plan.md` covering happy paths, error paths, and
+   the clean-macOS-install scenario. Tracked as **23J.7**.
+9. **`configure-agent` Phase 1** = Claude Code + Claude Desktop only. Cursor, Codex,
+   Gemini ship later in v0.5.x or v0.6. Confirmed.
+10. **`/app/settings` deferred to v0.5.x or v0.6**. Confirmed (bigger design surface,
+    benefits from its own scoping).
 
 ### Iteration shape — 10 parts, ~50 sub-tasks
 
@@ -2369,6 +2373,7 @@ collectively define the v0.5 UX.
 | 23I.7 | Update `CLAUDE.md` Project Structure | Pending | `packages/memory/src/cli/` and `packages/memory/src/bin/cerefox.ts` added. `_shared/cli-core/` added. Bin count 1 → 2 (`cerefox`, `cerefox-mcp`). |
 | 23I.8 | Update `CONTRIBUTING.md` Development Setup | Pending | Add `bun run cli -- <args>` invocation for running the CLI against the source tree. Note: `bun install` from repo root now bootstraps both bins. |
 | 23I.9 | Update `AGENT_GUIDE.md` and `AGENT_QUICK_REFERENCE.md` | Pending | CLI fallback section: switch from `uv run cerefox` to `npx --package=@cerefox/memory cerefox` (or globally-installed `cerefox`). Tool-vs-CLI mapping section updated with the new bin name. |
+| 23I.10 | Write `packages/memory/README.md` (npm package README) | Pending | npm warns about missing READMEs. Light overview (what is Cerefox, what's in this package, install one-liner, link to full docs on GitHub). Refreshed each release — owner is `cut_release.ts` indirectly (it bumps version literals; the README content tracks the package state but isn't auto-rewritten). |
 
 ### 23J: Documentation + Decision Log + CHANGELOG + plan markup + release
 
@@ -2382,6 +2387,7 @@ The closing iteration step. Mirrors iter-22 Part G.
 | 23J.4 | Open PR(s) for v0.5.0 | Pending | Per open question 1, likely 3 PRs (23A+B+C / 23D+E / 23F+G+H+I) merged sequentially. Final PR includes 23J. |
 | 23J.5 | Post-merge: cut v0.5.0 | Pending (post-merge maintainer task) | `bun scripts/cut_release.ts 0.5.0 --npm-publish`. Pre-flight checks per Decision Log Q2 Part 3 procedure: `git grep -F "0.4.3" packages/ scripts/ _shared/` should be empty (or only intentional historical refs); `cd packages/memory && npm pack --dry-run` should emit no `bin[*]` warnings; CHANGELOG `[Unreleased]` should have real content. |
 | 23J.6 | Post-publish verification (3-way) | Pending (post-merge maintainer task) | From `/tmp`: registry HEAD 200, `jq .bin/.version` matches, `npx -y --package=@cerefox/memory@0.5.0 cerefox --version` prints 0.5.0. Run `cerefox doctor` against a fresh install to confirm all green. |
+| 23J.7 | Write `docs/research/v0.5-manual-test-plan.md` | Pending | Comprehensive manual test plan: every command with happy path + at least one error path, full `init` walkthrough on a fresh machine, `doctor` red-path scenarios, `configure-agent` per supported client (Phase 1: Claude Code + Claude Desktop), `self-update` + `upgrade` alias parity, install.sh on a clean macOS box. Maintained as a living checklist for v0.5+ releases. |
 
 **Total**: ~60 sub-tasks across 10 parts.
 
