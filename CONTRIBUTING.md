@@ -52,7 +52,7 @@ Cerefox is a Python + TypeScript project. As of v0.2.0, contributors need **thre
 | **Node 20+** with `npm` | Frontend (React + Vite), Supabase Edge Functions | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
 | **[Bun](https://bun.sh) 1.x** | TypeScript scripts (`scripts/*.ts`, starting with `cut_release.ts` in v0.2.0) | `curl -fsSL https://bun.sh/install \| bash` |
 
-The Bun requirement is new in v0.2.0 — see [Script-language policy](#script-language-policy-effective-from-v020) below. **End users are unaffected**: the published install path stays Python-only until v0.4.0.
+The Bun requirement is new in v0.2.0 — see [Script-language policy](#script-language-policy-effective-from-v020) below. From v0.4.0 the local MCP server ships as the npm package [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory); end users who use it install via `npx`/`bunx` and don't need uv or a clone. Contributors still need all three runtimes (Python for the CLI/web/API, Node for the frontend + npm publish, Bun for TS scripts and `_shared/`/`packages/memory/` tests).
 
 ```bash
 # Clone and install
@@ -73,6 +73,12 @@ cd frontend && npm install && npm run build
 
 # Run a TypeScript script (Bun)
 bun scripts/cut_release.ts --check
+
+# TS unit tests (_shared/mcp-tools, _shared/db-status, etc.)
+cd _shared && bun test
+
+# Build and smoke-test the local MCP server (npm package)
+cd packages/memory && bun run build && bun test
 ```
 
 ---
@@ -116,7 +122,7 @@ Full reasoning in [`docs/specs/polish-and-distribution-design.md` §12f](docs/sp
 
 ### `_shared/` — cross-context TypeScript modules
 
-Starting in v0.3.0, TS code that's consumed by more than one entry point (scripts, the upcoming TS MCP server in v0.4.0, the TS CLI in v0.5.0) lives in [`_shared/`](_shared/) at the repo root:
+Starting in v0.3.0, TS code that's consumed by more than one entry point (scripts, the local TS MCP server, the upcoming TS CLI in v0.5.0) lives in [`_shared/`](_shared/) at the repo root:
 
 ```
 _shared/
@@ -124,10 +130,31 @@ _shared/
   db-client/   thin @supabase/supabase-js wrapper with zod-typed responses
   db-status/   reusable schema-introspection (used by db_status.ts; v0.5's
                `cerefox doctor` will import the same module)
+  embeddings/  OpenAI / Fireworks embedding helpers (extracted from EFs)
+  mcp-tools/   the 10 MCP tool handlers, shared by the remote Edge Function
+               and the local @cerefox/memory server
   __tests__/   Bun tests — run `cd _shared && bun test`
 ```
 
-It's at the repo root (not under `src/`) so it doesn't tangle with hatchling's Python wheel build or pytest discovery. In v0.4.0 it becomes part of an npm workspace; for v0.3.0 it's just plain Bun-runnable TS files. The directory will grow with `mcp-tools/` (v0.4) and `ingest/` (v0.7).
+It's at the repo root (not under `src/`) so it doesn't tangle with hatchling's Python wheel build or pytest discovery. As of v0.4.0 it is part of an npm workspace alongside `packages/memory/`. The directory will grow with `ingest/` (v0.7+).
+
+### `packages/memory/` — the `@cerefox/memory` npm package
+
+The local MCP server bin (and, in future iterations, the TS CLI + web/API server) lives in [`packages/memory/`](packages/memory/):
+
+```
+packages/memory/
+  src/
+    server.ts            buildServer() factory — wires _shared/mcp-tools/ into the MCP SDK
+    bin/cerefox-mcp.ts   shebang entry point; --version / --help short-circuits
+  test/stdio-smoke.test.ts spawns the built bin and walks an MCP handshake
+  package.json           name: @cerefox/memory, bin: cerefox-mcp, type: module
+```
+
+Build: `bun run build` (from `packages/memory/`) → `dist/bin/cerefox-mcp.js` (single ESM file).
+Publish is driven by `.github/workflows/release.yml` with OIDC trusted publishing; the maintainer triggers it via `bun scripts/cut_release.ts X.Y.Z --npm-publish`.
+
+Because `_shared/mcp-tools/*.ts` is imported by both Edge Functions (Deno) and this package (Node/Bun), the shared modules use structural typing rather than concrete `SupabaseClient` types — same logic, two runtimes, one source.
 
 ### Release workflow
 

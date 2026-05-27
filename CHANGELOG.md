@@ -9,7 +9,100 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**First TypeScript MCP server release.** The local MCP server is now an npm
+package — [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) —
+built with the official `@modelcontextprotocol/sdk`. The Python `cerefox mcp`
+command becomes a soft wrapper that delegates to the npm bin when available
+and falls back to the legacy Python MCP server otherwise. Existing setups
+keep working; new setups should use `npx -y @cerefox/memory cerefox-mcp`.
+
+Migration guide: [`docs/guides/migration-v0.4.md`](docs/guides/migration-v0.4.md).
+
+### Added
+
+- **`@cerefox/memory` npm package.** Local stdio MCP server published to npm.
+  Single artifact (`packages/memory/`) that will grow in future iterations to
+  host the TS CLI (v0.5) and web/API server (v0.6) as well; for v0.4 it
+  ships the MCP server bin only. Built with Bun (`bun run build` produces a
+  single ESM bundle in `dist/bin/cerefox-mcp.js`). Node ≥20 / Bun ≥1.0 at
+  runtime.
+- **Tenth MCP tool — `cerefox_get_help`.** Returns the contents of
+  `AGENT_QUICK_REFERENCE.md` as MCP-native text, with optional case-insensitive
+  H2 substring matching via the `topic` parameter. Lets agents bootstrap their
+  own conventions without filesystem access. Available on both the remote
+  `cerefox-mcp` Edge Function and the local `@cerefox/memory` server.
+- **Shared MCP tool handlers in [`_shared/mcp-tools/`](_shared/mcp-tools/).**
+  The 10 tool handlers are now a single source of truth: both the remote
+  Edge Function and the local TS server import the same modules. Edge
+  Function shrinks from 9 per-tool TypeScript files to a thin transport
+  shim around `ALL_TOOLS`. Structural typing (`MCPSupabaseClient` interface)
+  avoids Deno-vs-Node import-map gymnastics.
+- **Shared embeddings helper in
+  [`_shared/embeddings/`](_shared/embeddings/).** Extracted from the
+  Edge Functions so the local server reuses the exact same OpenAI /
+  Fireworks query-embedding path.
+- **`scripts/bundle_help.ts`, `scripts/check_help_bundle.ts`,
+  `scripts/check_ef_parity.ts`.** Bundle `AGENT_QUICK_REFERENCE.md` into
+  `_shared/mcp-tools/get-help-content.ts` (so the npm package needs no
+  filesystem access at runtime), and CI-verify both the help-bundle and the
+  EF↔local tool-list parity stay in sync.
+- **`packages/memory/test/stdio-smoke.test.ts`.** Spawns the built bin,
+  performs a full `initialize → notifications/initialized → tools/list`
+  handshake, and asserts the server reports 10 tools by name. Catches
+  bundling regressions on every PR.
+- **`tests/test_mcp_soft_wrapper.py`** (9 unit tests). Covers the npx-detect
+  + fallback paths in `_run_mcp()` and verifies `_handle_get_help()` returns
+  identical output to the TS handler (same input/output contract — only the
+  transport differs).
+- **`.github/workflows/release.yml`.** Manual-dispatch publish workflow that
+  builds + tests the built bin, then optionally publishes to npm via OIDC
+  trusted publishing (no long-lived NPM_TOKEN after the v0.4.0 bootstrap).
+- **`scripts/cut_release.ts --npm-publish` flag.** Triggers the release
+  workflow with `publish_to_npm=true` after pushing the tag. Default is
+  off — npm publishes are explicit, never automatic.
+
+### Changed
+
+- **`cerefox mcp` is now a soft wrapper.** Tries `npx --no-install
+  @cerefox/memory cerefox-mcp` first; falls back to the legacy Python MCP
+  server with a stderr nudge if npx is missing or the package isn't
+  installed. No breaking change — existing client configs keep working —
+  but the recommended new-setup config switches to `npx -y @cerefox/memory
+  cerefox-mcp` (see migration guide).
+- **`supabase/functions/cerefox-mcp/` refactored.** Deleted nine per-tool
+  TS files (one per MCP tool) plus `embeddings.ts`; the function now
+  imports `ALL_TOOLS` from `_shared/mcp-tools/` and serves them through a
+  thin Streamable HTTP shim. The MCP server version string is bumped to
+  `0.4.0`. Identity-enforcement wrapper preserved. **Operationally
+  invisible** — same 10 tools, same RPCs, same URL.
+- **Repo-root `package.json` upgraded to an npm workspace declaration**
+  covering `_shared/`, `packages/memory/`, and `frontend/`. Bun honours the
+  same workspaces.
+- **MCP JSON-RPC error code tightening.** Tools that reject missing/invalid
+  parameters now return `-32602` (Invalid params) instead of `-32603`
+  (Internal error). `-32602` is the JSON-RPC-spec-correct code for input
+  validation failures; pre-v0.4 conflated it with handler crashes. Clients
+  pattern-matching specifically on `-32603` for argument validation need to
+  switch to `-32602`. Two e2e tests (`test_missing_required_param_returns_error`,
+  `test_ingest_missing_content_returns_error`) updated accordingly.
+- **`AGENT_QUICK_REFERENCE.md` / `AGENT_GUIDE.md`** updated to advertise
+  10 tools and the new `cerefox_get_help` self-help hatch.
+- **`docs/guides/connect-agents.md`** Path A-Local section restructured
+  around the recommended `npx @cerefox/memory cerefox-mcp` config, with the
+  legacy `uv run cerefox mcp` invocation preserved as the alternative.
+
+### Migration notes
+
+- Existing `uv run cerefox mcp` setups: nothing to do. The same command
+  now soft-wraps the npm bin when available — same behaviour, slightly
+  better cold-start.
+- Want the new path? Replace your client's `command`/`args` with
+  `npx -y @cerefox/memory cerefox-mcp`. Make sure your `.env` is in the
+  CWD the client launches the server from (or pass credentials inline via
+  the config's `env` block).
+- See [`docs/guides/migration-v0.4.md`](docs/guides/migration-v0.4.md) for
+  per-client (Claude Code, Cursor, Claude Desktop, Codex CLI) before/after
+  snippets.
 
 ---
 

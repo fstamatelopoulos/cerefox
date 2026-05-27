@@ -1,6 +1,34 @@
 # Cerefox: Polish & Distribution Design
 
-**Status**: research / proposal — design-of-record on the `research/installer-design` branch. Iterate here before scheduling implementation. When sections are locked, the implementation breakdown goes into `docs/plan.md` as numbered iterations.
+**Status**: design-of-record. **Aspirational** snapshot from 2026-05-24, kept verbatim as the architectural record. As the arc is executed iteration-by-iteration, individual decisions get refined based on what we learn. **For the current, executed design, read `docs/plan.md`** — its per-iteration sections are the live source of truth.
+
+---
+
+## Living design notes — refinements vs. this doc
+
+Captured here so a reader who arrives at this doc cold isn't misled by an
+outdated bullet. Each item links to the plan.md section that holds the
+current definitive version. The body of this design doc is **not edited**
+to apply these refinements; they're tracked here at the top, the way an
+errata sheet sits at the front of a printed book.
+
+| Refinement | Original design says | Current plan says | Where to read more |
+|---|---|---|---|
+| **Single npm package vs. multi-package workspace** | "Open Question 2" (§17) flagged this as an open question, with a recommendation to start single-package in v0.4 and evaluate workspaces in v0.6 | **Locked: single package, `@cerefox/memory`, contains everything (CLI + MCP server + web server + ingestion).** §13's per-iteration entries referencing `packages/cli/`, `packages/web-server/`, `packages/ingestion/` are all replaced by directories *inside* `packages/memory/src/`. Internal layout, single npm publish unit, single `cerefox` binary with subcommands. Mirrors cfcf's `@cerefox/codefactory` shape. | `docs/plan.md` § Iteration 22 (refinement #7), § Iteration 23 (v0.5.0), § Iteration 24 (v0.6.0), § Iteration 25 (v0.7.0) |
+| **First npm publish naming** | v0.4 ships `@cerefox/mcp-local`; v0.5 introduces `@cerefox/memory` "superseding" it (rename + abandoned package on npm) | v0.4 ships `@cerefox/memory` directly with only the `cerefox-mcp` bin. v0.5 adds the `cerefox` CLI bin to the same package. No rename, no orphan. | `docs/plan.md` § Iteration 22 refinement #7 |
+| **`cut_release.ts` + npm publish coupling** | Implied integrated ("CI picks up tag → builds → publishes to npm") | Decoupled. `--npm-publish` flag (default `false`) triggers a separate GitHub Actions workflow via `gh workflow run`. Two confirmation surfaces. | `docs/plan.md` § Iteration 22 refinement #8 + 22F |
+| **Python `cerefox mcp` after v0.4** | "shells out to `npx @cerefox/mcp-local` (transitional)" — hard shell-out | Soft wrapper: tries `npx @cerefox/memory cerefox-mcp`, falls back to legacy Python `mcp_server.py` with a stderr nudge if npm/Bun isn't installed. No hard break of existing configs. | `docs/plan.md` § Iteration 22 refinement #1, 22E |
+| **`cerefox configure-agent` in v0.4** | Listed as a v0.4 task | Deferred to v0.5 (the command doesn't exist yet; it's CLI work). v0.4 ships `docs/guides/migration-v0.4.md` instead. | `docs/plan.md` § Iteration 22 refinement #2 |
+| **`cerefox_get_help` content shape** | Curated subset of `AGENT_QUICK_REFERENCE.md` | Inline the whole file (73 lines — small enough). Topic param filters by H2 heading. | `docs/plan.md` § Iteration 22 refinement #3 |
+| **Hard-removal of `mcp_server.py`** | Implicit ("Python deprecated v0.8, removed v0.9") | The shim policy that emerged in v0.3.0 applies here too: kept indefinitely as a fallback. No "to be removed in v0.X.0" promises. | `docs/plan.md` § Iteration 22 refinement #6 |
+| **Hard-removal of `sync_docs.py` / `db_status.py` shims** | v0.4.0 in v0.3.0's CHANGELOG | **Not scheduled.** Walked back to "indefinite migration aid". | `docs/plan.md` § Iteration 20 → 20C.7 + Deferred section |
+| **`.env` resolution precedence** | Implicit (every section assumes `~/.cerefox/.env`) | **Defensive for v0.x line**: `CEREFOX_CONFIG_DIR` env → `./.env` (dev mode wins) → `~/.cerefox/.env`. v1.0 revisit committed to flip toward installed-CLI-default. | `docs/plan.md` § Iteration 20 → "v1.0 revisit" + Decision Log Q2 Part 2 |
+| **`@cerefox` npm org creation** | Listed as a v0.4 prereq | Org already exists (publishes `@cerefox/codefactory` for cfcf) — no creation step needed. | `docs/plan.md` § Iteration 22 "Manual prerequisites" |
+| **PostgREST RPC introspection** | Not in design | Helper RPC `cerefox_pg_function_exists` (v0.3.0). v0.3.1 hardened: never probe write-side RPCs by side-effect; introspection-only. | Decision Log entries: 2026-05-26 v0.3.0 "Lesson 1"; 2026-05-26 v0.3.1 "never probe write-side RPCs" |
+
+When a section of this doc is contradicted by `docs/plan.md`, **plan.md wins**.
+
+---
 
 **Last updated**: 2026-05-24 — major revision: strategic shift to a full TypeScript/Bun migration of the local Python components via a strangler-fig pattern, collapsing the existing Iteration 18 (TS port of just the MCP server) into a larger migration arc that ships as v0.2.0 through v1.0.0.
 

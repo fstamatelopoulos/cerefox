@@ -448,6 +448,40 @@ async def list_tools() -> list[types.Tool]:
                 },
             },
         ),
+        types.Tool(
+            name="cerefox_get_help",
+            description=(
+                "Retrieve Cerefox's own agent-usage guidance (the "
+                "AGENT_QUICK_REFERENCE.md content). Call with no arguments to get "
+                "the full reference + a section index. Call with `topic` to get "
+                "a single section (case-insensitive substring match against H2 "
+                "headings). Use this whenever you're uncertain about Cerefox "
+                "conventions — link forms, project-membership semantics, "
+                "update workflows, etc. Layer 3 of the MCP discoverability "
+                "response — see docs/specs/polish-and-distribution-design.md "
+                "§10d."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": (
+                            'Optional. Case-insensitive substring against H2 '
+                            'headings (e.g. "links", "update", "metadata"). '
+                            "Omit for the full reference."
+                        ),
+                    },
+                    "requestor": {
+                        "type": "string",
+                        "description": (
+                            'Name of the agent/user. Recorded in the usage log. '
+                            'Defaults to "mcp-agent".'
+                        ),
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -526,6 +560,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return await _handle_list_projects(client, arguments)
     elif name == "cerefox_metadata_search":
         return await _handle_metadata_search(client, settings, arguments)
+    elif name == "cerefox_get_help":
+        return await _handle_get_help(client, arguments)
     else:
         raise ValueError(f"Unknown tool: {name}")
 
@@ -905,6 +941,80 @@ async def _handle_metadata_search(
             parts.append(header)
 
     return [types.TextContent(type="text", text="\n\n---\n\n".join(parts))]
+
+
+async def _handle_get_help(client: Any, arguments: dict) -> list[types.TextContent]:
+    """Return curated agent guidance from the bundled AGENT_QUICK_REFERENCE.md.
+
+    Symmetry with the TS implementation in ``_shared/mcp-tools/get-help.ts``:
+    same `topic` parameter, same case-insensitive substring matching against
+    H2 headings, same content. The Python fallback reads
+    ``AGENT_QUICK_REFERENCE.md`` via :mod:`cerefox.docs_resources` (introduced
+    in v0.3.0) so it stays in sync with the bundled-docs surface — agents
+    that hit the legacy fallback see the same content as the TS path.
+    """
+    import re  # noqa: PLC0415
+
+    from cerefox.docs_resources import read_doc  # noqa: PLC0415
+
+    topic = (arguments.get("topic") or "").strip()
+    requestor = arguments.get("requestor") or "mcp-agent"
+
+    # Best-effort usage log; never blocks the response.
+    try:
+        client.log_usage(
+            operation="get_help",
+            access_path="local-mcp",
+            requestor=requestor,
+            query_text=topic or None,
+            result_count=1,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    content = read_doc("AGENT_QUICK_REFERENCE.md") or ""
+    # Parse H2 sections so the topic filter matches the TS implementation.
+    sections: list[tuple[str, str]] = []
+    current_heading: str | None = None
+    current_lines: list[str] = []
+    for line in content.split("\n"):
+        m = re.match(r"^## (.+)", line)
+        if m:
+            if current_heading is not None:
+                sections.append((current_heading, "\n".join(current_lines).strip()))
+            current_heading = m.group(1).strip()
+            current_lines = [line]
+        elif current_heading is not None:
+            current_lines.append(line)
+    if current_heading is not None:
+        sections.append((current_heading, "\n".join(current_lines).strip()))
+
+    if not topic:
+        idx = "\n".join(f"  - {h}" for h, _ in sections)
+        return [types.TextContent(
+            type="text",
+            text=(
+                content
+                + "\n\n---\n\n## Available topics\n\n"
+                + 'Call `cerefox_get_help(topic: "<heading>")` to retrieve a single section.\n\n'
+                + idx
+                + "\n\n(Topic match is case-insensitive substring on the headings above.)"
+            ),
+        )]
+
+    t = topic.lower()
+    matched = [body for h, body in sections if t in h.lower()]
+    if not matched:
+        headings_list = "\n".join(f"  - {h}" for h, _ in sections)
+        return [types.TextContent(
+            type="text",
+            text=(
+                f'No help topic matched "{topic}".\n\n'
+                f"Available topics:\n{headings_list}\n\n"
+                "Call `cerefox_get_help()` with no topic for the full document."
+            ),
+        )]
+    return [types.TextContent(type="text", text="\n\n---\n\n".join(matched))]
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

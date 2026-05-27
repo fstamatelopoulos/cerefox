@@ -75,8 +75,8 @@ class TestListTools:
     @pytest.mark.asyncio
     async def test_returns_all_tools(self) -> None:
         tools = await list_tools()
-        # v0.1.20 adds cerefox_set_document_projects (Part 4 of issue #38 fix) → 9
-        assert len(tools) == 9
+        # v0.4.0 adds cerefox_get_help (Layer 3 of MCP discoverability) → 10
+        assert len(tools) == 10
 
     @pytest.mark.asyncio
     async def test_tool_names(self) -> None:
@@ -92,6 +92,7 @@ class TestListTools:
             "cerefox_list_projects",
             "cerefox_metadata_search",
             "cerefox_set_document_projects",
+            "cerefox_get_help",
         }
 
     @pytest.mark.asyncio

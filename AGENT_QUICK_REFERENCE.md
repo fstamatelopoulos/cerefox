@@ -1,7 +1,6 @@
 # Cerefox Knowledge Base -- Agent Quick Reference
 
-Cerefox is a persistent, shared knowledge base. You have 9 MCP tools (or, if MCP isn't configured, the same 9 operations via the local CLI — see CLI section at the bottom).
-For the full guide, search Cerefox for "How AI Agents Use Cerefox".
+Cerefox is a persistent, shared knowledge base. You have **10 MCP tools** (9 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
 
 ## Tools
 
@@ -16,6 +15,7 @@ For the full guide, search Cerefox for "How AI Agents Use Cerefox".
 | `cerefox_list_projects` | List all projects | (none required) |
 | `cerefox_set_document_projects` | Set doc's project memberships to exactly the given list (destructive replace; metadata-only, no content change) | `document_id`, `project_names` (required) |
 | `cerefox_get_audit_log` | Query write operation history | `document_id`, `author`, `operation`, `since` |
+| `cerefox_get_help` | Retrieve Cerefox conventions (this reference) over MCP. **Call this whenever uncertain.** | `topic` (optional, case-insensitive H2 substring match) |
 
 ## Essential Rules
 

@@ -7,12 +7,11 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["bun"]
+    "types": ["bun", "node"]
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*.ts", "../../_shared/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

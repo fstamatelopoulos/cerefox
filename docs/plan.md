@@ -1807,7 +1807,7 @@ v0.4 (MCP server) → v0.5 (CLI) → v0.7 (ingestion).
 - `cerefox init` and `cerefox configure-agent` (v0.5 — these are CLI commands, and the CLI itself moves to TS in v0.5).
 - Layer 2 of MCP discoverability — `cerefox init` auto-ingests `AGENT_GUIDE.md` (v0.5; depends on `cerefox init` existing).
 - Layer 3 — `cerefox_get_help` MCP tool (v0.4; ships with the TS MCP server).
-- npm publishing (v0.4 ships `@cerefox/mcp-local`; v0.5 ships `@cerefox/memory`).
+- npm publishing — first publish is now scheduled for v0.4.0 as `@cerefox/memory` (containing the `cerefox-mcp` bin only); v0.5.0 adds the `cerefox` CLI bin to the same package. (Revised from the design doc's two-package plan; see iter-22 refinement #7.)
 - **Reconsider `_resolve_config_dir()` precedence at v1.0** — see 20A "v1.0 revisit" note above.
 
 ---
@@ -1824,25 +1824,285 @@ with the v0.X.0 mapping. See Iteration 22 below for the actual content.)
 **Goal**: Migrate the local `cerefox mcp` stdio MCP server from Python to TypeScript —
 the first **runtime** component to move (scripts already ported earlier: `cut_release.ts`
 in v0.2.0; `sync_docs.ts` + `db_status.ts` in v0.3.0). Shares tool handlers with the
-existing `cerefox-mcp` Edge Function via a new `_shared/` directory. Publishes
-`@cerefox/mcp-local` to npm.
+existing `cerefox-mcp` Edge Function via a new `_shared/mcp-tools/` module. Publishes
+`@cerefox/memory` (containing the `cerefox-mcp` bin) to npm.
+**First npm publication for the Cerefox project.**
 
 **Supersedes**: the original Iteration 18.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §4 + §13 v0.4.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §4 + §10d + §13 v0.4.0](specs/polish-and-distribution-design.md).
 
 **Estimated effort**: 3-4 weeks part-time.
 
-**Detailed task breakdown will be created when this iteration is started.** Headline items:
-- Set up `_shared/` npm workspace structure (tool handlers, validation schemas, response formatters)
-- Extract Edge Function `cerefox-mcp/tools/*.ts` into `_shared/mcp-tools/`
-- New `packages/mcp-local/` — TS stdio MCP server using `@modelcontextprotocol/sdk`
-- Publish `@cerefox/mcp-local` to npm
-- Python CLI's `cerefox mcp` shells out to `npx @cerefox/mcp-local` (transitional)
-- `cerefox configure-agent` writes MCP configs invoking the new TS server
-- Both Bun and Node 20+ runtimes work
-- Migration guide: existing MCP configs pointing at `uv run cerefox mcp` continue to work
-- **New MCP tool: `cerefox_get_help(topic?)`** — Layer 3 of the MCP discoverability response (design doc §10d). Returns curated `AGENT_QUICK_REFERENCE.md` subset as a tool response so remote / hosted-MCP / Edge-Function-only agents can discover Cerefox conventions without filesystem access. Bundled at build time in both local TS MCP and `cerefox-mcp` Edge Function (shared via `_shared/`); CI verifies in-sync with the canonical `AGENT_QUICK_REFERENCE.md`. Tool count goes 8 → 9; update CLAUDE.md / AGENT_QUICK_REFERENCE.md to document the new tool
+### Release & publish — the OSS-relevant shape
+
+**Publishes use npm OIDC trusted publishing**. The `.github/workflows/release.yml`
+workflow (added in this iteration — see 22F.1) declares `permissions: id-token: write`
+and runs `npm publish --access public --provenance` from `packages/memory/`.
+Every published tarball ships with a sigstore-signed attestation linking it to
+the exact GitHub Actions run that built it; the "Provenance" badge appears on
+the package's npmjs.com page.
+
+**The publish path is maintainer-only by design.** OIDC trust is bound to this
+specific repo + workflow path (`fstamatelopoulos/cerefox` / `release.yml`);
+contributors can propose changes via PR but can't trigger a publish. Releases
+are cut by running `cut_release.ts` from `main` with the `--npm-publish` flag
+(see 22F.2); the flag defaults to `false` so a bare `cut_release.ts X.Y.Z`
+produces tag + GitHub Release without npm publishing — useful for staging.
+
+First-publish bootstrap (single-maintainer ritual, day of v0.4.0 cut) is
+intentionally not documented here. It's tracked in the maintainer's Cerefox
+Decision Log alongside the equivalent cfcf playbook.
+
+### Refinements vs. the design-doc bullets
+
+A few small deviations from the v0.4.0 entry in
+[`docs/specs/polish-and-distribution-design.md` §13](specs/polish-and-distribution-design.md),
+shaped by what we learned in iter-19 / iter-20 / iter-21 and by reviewing
+cfcf's existing npm-publish playbook (already ingested in Cerefox):
+
+1. **Python `cerefox mcp` becomes a *soft* wrapper, not a hard shell-out.** The
+   design says "shells out to `npx @cerefox/mcp-local`". A hard shell-out fails
+   for users who installed Cerefox via `uv` but haven't installed npm / Bun.
+   Instead, the Python `mcp` command **tries** the npx delegation; if the npm
+   package isn't installed (or Bun/Node missing), it falls back to the legacy
+   Python `mcp_server.py` with a one-line stderr notice nudging the user
+   toward the npm install. No user surprise; no hard break of existing MCP
+   client configs. Same pattern as the v0.3.0 deprecation-shim discussion —
+   prefer graceful migration over silent forwarding **except when silent
+   forwarding is the user-correct behavior** (here it is, because MCP clients
+   are not humans — they don't read deprecation banners).
+2. **`cerefox configure-agent` is deferred to v0.5.0.** The design doc lists
+   updating it as a v0.4 task, but the command itself is scheduled for v0.5
+   alongside the rest of the new lifecycle CLI commands. v0.4 ships
+   `docs/guides/migration-v0.4.md` instead — a copy-pasteable cheat-sheet
+   for Claude Code / Cursor / Claude Desktop config switches.
+3. **`cerefox_get_help` content source: inline the whole AGENT_QUICK_REFERENCE.md.**
+   The file is 73 lines — small enough to ship intact rather than curating
+   subsets. The optional `topic` parameter filters by H2 heading
+   (Tools / Essential Rules / Update Workflow / Catch-Up Workflow / CLI fallback).
+   No-topic returns the full doc. Simpler, no curation drift.
+4. **Set up the npm workspace at the repo root.** v0.3.0 left us with three
+   uncoordinated `package.json`s: root (just `ora`), `_shared/`, `frontend/`.
+   v0.4.0 promotes the root `package.json` to a proper npm workspace
+   declaration with `_shared`, `packages/*`, and `frontend` as members.
+   Bun hoists deps; cleaner imports; ready for the CLI's bin entry in v0.5.
+5. **Schema-version-mismatch detection in the TS MCP server.** When the
+   server starts, it calls `cerefox_schema_version()` once and compares to
+   the version bundled with `@cerefox/memory`. On mismatch, prints a
+   one-line stderr warning (doesn't refuse to serve — that'd break agents
+   mid-session). Closes the v0.1.19 footgun for the MCP path the same way
+   the web UI banner closed it for the web path.
+6. **Don't print a deprecation banner for `mcp_server.py`.** It stays as
+   a legitimate fallback for the foreseeable future (same indefinite-shim
+   policy that emerged in v0.3.0). No "to be removed in v0.X.0" promises.
+7. **One package, growing surface — `@cerefox/memory` from day one** instead
+   of the design doc's two-package transition (`@cerefox/mcp-local` in v0.4
+   → `@cerefox/memory` in v0.5 with "supersedes"). v0.4 publishes
+   `@cerefox/memory@0.4.0` containing only a `cerefox-mcp` bin. v0.5 ships
+   `@cerefox/memory@0.5.0` adding a `cerefox` CLI bin to the same package,
+   same publish lineage. No rename, no orphaned npm package, no migration
+   friction for early adopters. Mirrors cfcf's `@cerefox/codefactory` shape
+   (one package, one-or-more bins).
+8. **Decouple `npm publish` from `cut_release.ts`.** Tag-cutting and
+   npm-publishing are two distinct confirmation surfaces — you sometimes
+   want to ship a tag without immediately propagating to npm (to spot a
+   problem in the staging window and roll a patch before the world sees it).
+   v0.4 adds a `--npm-publish` flag (default `false`) to `cut_release.ts`.
+   When set, the script triggers a GitHub Actions workflow via
+   `gh workflow run` rather than calling `npm publish` directly. The
+   workflow (`.github/workflows/release.yml`) is the auditable surface
+   that actually publishes, with `--provenance` attestation and OIDC trust.
+
+### Backward-compat invariant
+
+Every existing MCP client config pointing at `uv run --directory … cerefox mcp`
+keeps working unchanged, with the same stdio behavior. The transport doesn't
+change; only what's at the other end of the pipe does.
+
+### 22A: `_shared/mcp-tools/` — shared tool handlers
+
+Extract the per-tool logic from `supabase/functions/cerefox-mcp/tools/*.ts`
+into a runtime-neutral TS module that both the Edge Function (Deno) and the
+new `@cerefox/memory` (Bun/Node) can import. The 8 existing tools become 9
+with the addition of `cerefox_get_help`.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22A.1 | Audit the 8 current MCP tool handlers in Python (`mcp_server.py`) vs TS (`supabase/functions/cerefox-mcp/tools/*.ts`) | Done | Audit folded into the extraction — diffs caught and resolved per-tool as `_shared/mcp-tools/*.ts` was authored. Conformance target: the EF response shapes (already TS, identical to what agents see today). Python handler kept in sync via 22E.2. |
+| 22A.2 | Create `_shared/mcp-tools/` directory | Done | New subdirectory under `_shared/`. `index.ts` exports `ALL_TOOLS` + `TOOLS_BY_NAME`. |
+| 22A.3 | Define `_shared/mcp-tools/types.ts` — common interfaces | Done | `ToolDefinition { name, description, inputSchema (JSON Schema object), handler(ctx, args) → string }`. Structural `MCPSupabaseClient` interface used in place of a concrete `SupabaseClient` import (avoids Bun-workspace duplicate-class issue, also keeps the Deno EF / Node MCP server runtime-neutral). |
+| 22A.4 | Extract `search.ts`, `ingest.ts`, `get-document.ts`, `list-versions.ts`, `metadata.ts`, `metadata-search.ts`, `audit-log.ts`, `list-projects.ts`, `set-document-projects.ts` into `_shared/mcp-tools/` | Done | All 9 plus `get-help.ts` (added in 22B) live in `_shared/mcp-tools/`. Both the EF and `@cerefox/memory` import from the same source. |
+| 22A.5 | Write `_shared/mcp-tools/index.ts` with `ALL_TOOLS: ToolDefinition[]` | Done | Single export consumed by both runtimes. Adding a tool is one line. |
+| 22A.6 | Expand `_shared/db-client/` to cover every operation MCP tools need | Done | Generic `rpc<T>()` + table helpers cover all 10 tools without per-tool method bloat. Each tool calls `client.rpc("cerefox_*", {...})` directly. |
+| 22A.7 | Vitest unit tests per tool handler in `_shared/__tests__/mcp-tools/*.test.ts` | Done | Bun-test suites under `_shared/__tests__/mcp-tools/` mock the `MCPSupabaseClient` and assert the handler calls the right RPC with the right args and formats the response correctly. Help-bundle, parity, and tool-list checks all green. |
+| 22A.8 | Run the EF e2e suite to confirm extraction didn't regress the cloud path | Deferred (post-merge) | Maintainer runs `uv run pytest -m e2e` after deploying the refactored EF (22D.3). Documented in the maintainer post-merge checklist. |
+
+### 22B: `cerefox_get_help` — Layer 3 of MCP discoverability
+
+Implements the new MCP tool that surfaces `AGENT_QUICK_REFERENCE.md` content
+to remote / hosted-MCP / Edge-Function-only agents. Per design doc §10d.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22B.1 | Bundle `AGENT_QUICK_REFERENCE.md` into `_shared/mcp-tools/` at build time | Done | `scripts/bundle_help.ts` reads the canonical file and emits `_shared/mcp-tools/get-help-content.ts` (a TS module with `HELP_CONTENT_FULL` + `HELP_SECTIONS`). Single source of truth: edit the MD, rerun the bundle. |
+| 22B.2 | Implement `_shared/mcp-tools/get-help.ts` | Done | `cerefox_get_help(topic?: string)` returns full markdown + an `## Available topics` index by default; with a topic, does a case-insensitive substring match on H2 headings. Unknown topic → "no match" message + topic list. |
+| 22B.3 | CI check that the bundled content is in sync with the repo source | Done | `scripts/check_help_bundle.ts` regenerates the bundle in memory and diffs against the on-disk file. Fails fast if someone edited the MD without rerunning `bundle_help.ts`. |
+| 22B.4 | Register the new tool in `ALL_TOOLS` (both EF and local TS) | Done | Tool count is now 10. Both `cerefox-mcp` (EF) and `@cerefox/memory` (local) expose it via the shared `ALL_TOOLS`. |
+| 22B.5 | Update `CLAUDE.md` MCP tool count + `AGENT_QUICK_REFERENCE.md` self-reference | Done | `AGENT_QUICK_REFERENCE.md` now lists 10 tools (added the `cerefox_get_help` row) and the intro notes the tool's MCP-only nature. `CLAUDE.md` references the shared `_shared/mcp-tools/` architecture. `AGENT_GUIDE.md` gained a "Self-help via MCP" subsection + a dedicated tool entry. |
+
+### 22C: `packages/memory/` — new TS stdio MCP server (`@cerefox/memory`)
+
+The new TS package that replaces (transparently, via the soft wrapper) the
+Python `mcp_server.py`. Published as `@cerefox/memory` on npm — in v0.4.0
+it contains only the `cerefox-mcp` bin; v0.5.0 adds the `cerefox` CLI bin to
+the same package.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22C.1 | Set up repo-root npm workspace | Done | Root `package.json` declares `"workspaces": ["_shared", "packages/*", "frontend"]`. Bun honours it. |
+| 22C.2 | Create `packages/memory/` with package.json + tsconfig.json | Done | `name: "@cerefox/memory"`, `version: "0.4.0"` (kept in lockstep with VERSION), `bin: { "cerefox-mcp": "./dist/bin/cerefox-mcp.js" }`. ESM only. `engines: { node: ">=20", bun: ">=1.0.0" }`. `publishConfig: { access: "public", provenance: true }`. |
+| 22C.3 | Write `packages/memory/src/server.ts` — the stdio MCP server | Done | `buildServer()` factory wires `ALL_TOOLS` into a `@modelcontextprotocol/sdk` `Server` with stdio transport. Server identity: `{ name: "cerefox", version: "0.4.0" }`. |
+| 22C.4 | Write `packages/memory/src/bin/cerefox-mcp.ts` — entry-point shebang | Done | `#!/usr/bin/env node` with `--version` / `--help` short-circuits. Loads env via `_shared/config/`, calls `buildServer()`, starts the stdio loop. |
+| 22C.5 | Add the startup schema-version check | Done | `warnIfSchemaVersionMismatch()` runs once on boot, calls `cerefox_schema_version()`, prints a one-line stderr warning on mismatch — never refuses to serve. |
+| 22C.6 | Build config: `bun build` to produce ESM in `packages/memory/dist/` | Done | `bun build src/bin/cerefox-mcp.ts --outdir dist/bin --target node --format esm` produces a single ESM bundle. Shebang preserved from the source file (avoided the `--banner` flag after it caused duplicate-shebang SyntaxError). |
+| 22C.7 | Manual smoke test: `node ./packages/memory/dist/bin/cerefox-mcp.js` exposes the 10 MCP tools over stdio | Done | Verified manually by spawning the bin and walking initialize → tools/list. Reports 10 tools. |
+| 22C.8 | Bun-test integration that boots the stdio server, sends a `tools/list` request, and asserts the 10 tools come back | Done | `packages/memory/test/stdio-smoke.test.ts` spawns the built bin and asserts the full handshake plus the exact 10-tool name set. |
+
+### 22D: Edge Function refactor
+
+**Why it's needed**: today the `cerefox-mcp` Edge Function has its own
+self-contained tool handlers (`supabase/functions/cerefox-mcp/tools/*.ts`).
+The whole point of v0.4 is **one source of truth for tool behavior** — both
+the new local TS MCP server (Bun/Node) and the existing remote EF (Deno)
+import from `_shared/mcp-tools/`. Leaving the EF unchanged would mean two
+copies of every handler drifting slowly apart — exactly the language-fit
+problem the polish design doc §4 calls out as a primary motivation for the
+migration arc. The refactor moves the handler code into `_shared/mcp-tools/`,
+then changes the EF's `index.ts` to import from there. Zero behavior change
+for callers; one source of truth thereafter.
+
+**Cross-runtime context (terminology refresher)**:
+
+- **Deno** is the JavaScript / TypeScript runtime that powers Supabase Edge
+  Functions. Same family as Node.js; built by Node's original creator with a
+  different design (more secure default, no `node_modules`, native TS).
+- **Bun / Node** are the runtimes that the new local `@cerefox/memory` MCP
+  server runs on (Bun preferred per the polish-design-doc §5b; Node 20+ as
+  fallback).
+- **ESM** = ECMAScript Modules — the standard JS module format (`import` /
+  `export` statements). Both Deno and modern Node default to ESM.
+
+**Why writing one module that runs on both is possible**: modern Supabase
+Edge Functions support npm-style imports via the `npm:` specifier prefix.
+So `_shared/mcp-tools/search.ts` can `import { z } from "zod"` (vanilla
+npm-package name), and:
+
+- The Bun/Node consumer (the new local TS MCP server) resolves it via
+  `node_modules/` from the npm workspace.
+- The Deno consumer (Supabase Edge Function) resolves it via the platform's
+  `npm:zod@^3.23` compatibility layer at deploy time.
+
+Same TS source, no conditional imports, no per-runtime ifdefs.
+
+**Risk**: this is the highest-risk slice of v0.4 because the EF is in
+production use today. Tasks 22A.8 (full e2e gauntlet) and 22D.4 (byte-level
+response-shape parity test) are the safety net.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22D.1 | Update `supabase/functions/cerefox-mcp/index.ts` to import `ALL_TOOLS` from `_shared/mcp-tools/` | Done | Refactored EF imports `ALL_TOOLS` from `_shared/mcp-tools/`. SERVER_VERSION bumped to `0.4.0`. Identity-enforcement wrapper preserved; `cerefox_set_document_projects` added to the author-check list. |
+| 22D.2 | Delete the now-redundant `supabase/functions/cerefox-mcp/tools/*.ts` files | Done | Nine per-tool files and `embeddings.ts` deleted; `shared.ts` trimmed to `makeSupabaseClient`, response helpers, and CORS headers only. |
+| 22D.3 | Deploy the refactored EF | Deferred (post-merge) | `npx supabase functions deploy cerefox-mcp` is a maintainer step on the day of the v0.4.0 cut. Pre-deploy validation: `scripts/check_ef_parity.ts` confirms the EF imports the same `ALL_TOOLS` set as `@cerefox/memory`. |
+| 22D.4 | Verify response-shape parity with the pre-refactor EF | Done (programmatic equivalent) | The `_shared/mcp-tools/*.ts` handlers ARE the EF body — the refactor extracts the same code, doesn't rewrite it. Parity is enforced by (a) `scripts/check_ef_parity.ts` (CI-runnable) and (b) the `_shared/__tests__/mcp-tools/` snapshot/unit tests that already lock the response shapes per tool. Live byte-snapshot is captured opportunistically when the maintainer runs the e2e gauntlet post-deploy (22A.8). |
+
+### 22E: Python `cerefox mcp` soft wrapper
+
+The Python CLI keeps the `mcp` subcommand but the behavior changes: try the
+npm package first, fall back to the legacy Python impl. No breaking change for
+users.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22E.1 | Refactor `src/cerefox/cli.py mcp` command | Done | `_run_mcp()` probes with `npx --no-install @cerefox/memory --version` first. Success → `os.execvp` hands stdio off to the npm bin. Failure (npx missing or probe non-zero) → falls back to `cerefox.mcp_server.run()` with a stderr nudge. Probe uses `--no-install` to avoid hitting the npm registry on every MCP server start. |
+| 22E.2 | Update `src/cerefox/mcp_server.py` with `cerefox_get_help` so the legacy fallback exposes 10 tools too | Done | `_handle_get_help()` reads `AGENT_QUICK_REFERENCE.md` via `cerefox.docs_resources` and returns the same surface as the TS handler: full content + index when no topic, H2 substring match when given a topic. Best-effort `log_usage` records `access_path = "local-mcp"`. |
+| 22E.3 | Unit tests for the soft-wrapper logic | Done | `tests/test_mcp_soft_wrapper.py` covers the three soft-wrapper paths (npx + package present → execvp; npx missing → fallback; package not installed → fallback) and verifies the `--no-install` probe flag. Plus 5 tests pinning the Python `cerefox_get_help` behaviour (full, topic match, unknown topic, log_usage path, log_usage failure-tolerant). |
+
+### 22F: Publishing — `@cerefox/memory` to npm
+
+**Package**: `@cerefox/memory`. v0.4.0 contains only the `cerefox-mcp` bin;
+v0.5.0 adds the `cerefox` CLI bin to the same package (same publish lineage).
+One install, growing surface. Mirrors cfcf's `@cerefox/codefactory` shape.
+
+**Workflow**: `.github/workflows/release.yml` (added in 22F.1) declares
+`permissions: id-token: write` and runs `npm publish --access public
+--provenance` from `packages/memory/`. Triggered via `workflow_dispatch`
+with a `publish_to_npm` boolean input.
+
+**`cut_release.ts --npm-publish` flag** (default `false`). When set, the
+cut script triggers the workflow via `gh workflow run` after the tag is
+pushed. Two confirmation layers — the flag on the cut + the
+`workflow_dispatch` input — let the maintainer cut a tag without
+immediately propagating to npm (useful for staging or for the
+spot-a-problem-post-tag case).
+
+| Flag | Behavior |
+|---|---|
+| `bun scripts/cut_release.ts 0.4.0` (default) | Cut tag + GitHub Release only. npm publish requires a separate `gh workflow run release.yml -f publish_to_npm=true`. |
+| `bun scripts/cut_release.ts 0.4.0 --npm-publish` | Cut tag + GitHub Release + trigger the workflow with `publish_to_npm=true`. |
+| `bun scripts/cut_release.ts 0.4.0 --dry-run` | Same as before — preview only. |
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22F.1 | Write `.github/workflows/release.yml` | Done | Manual `workflow_dispatch` with `tag` + `publish_to_npm` inputs. Permissions `contents: read, id-token: write` for OIDC. Job 1 (always): checkout the tag, install npm@latest (≥11.5.1 for trusted publishing), install deps, run Bun tests, build the bin, verify it runs. Job 2 (gated on `inputs.publish_to_npm`): `npm publish --access public --provenance` from `packages/memory/`. `NODE_AUTH_TOKEN` path kept for the v0.4.0 bootstrap window; OIDC takes over for v0.4.1+. |
+| 22F.2 | Extend `scripts/cut_release.ts` with `--npm-publish` flag (default `false`) | Done | When set, after tagging and pushing, the script runs `gh workflow run release.yml -f tag=vX.Y.Z -f publish_to_npm=true`. Default off — a bare `cut_release.ts X.Y.Z` is publish-free. |
+| 22F.3 | First publish: `@cerefox/memory@0.4.0` | Pending (post-merge maintainer task) | Run at v0.4.0 cut time. Verify with `npx @cerefox/memory cerefox-mcp --version` from a fresh shell. Bootstrap procedure (NPM_TOKEN one-shot → revoke → register OIDC Trusted Publisher) is in the maintainer's Cerefox Decision Log. |
+| 22F.4 | Document the install one-liner | Done | `npx -y @cerefox/memory cerefox-mcp` (or `npm i -g @cerefox/memory && cerefox-mcp`) is the primary recipe in `docs/guides/migration-v0.4.md` + `docs/guides/connect-agents.md` (Path A-Local). CHANGELOG entry calls it out for upgraders. |
+
+### 22G: Documentation + cross-cutting
+
+**Documentation coverage matrix** — the two user populations get different
+paths in v0.4.0:
+
+| User population | What they read | What they do |
+|---|---|---|
+| **Existing user** (already has `uv run cerefox mcp` configured in their MCP client today) | `docs/guides/migration-v0.4.md` — "before / after" config snippets per MCP client, clear callout that **existing configs keep working unchanged** via the soft wrapper. | Optional: switch their `.mcp.json` to invoke `npx @cerefox/memory cerefox-mcp` directly (recommended) at their leisure. No urgency; soft wrapper carries them. |
+| **New user** (no Cerefox MCP config yet) | Updated `docs/guides/connect-agents.md` — the new npm path is the primary "Local stdio MCP" recipe; `uv run cerefox mcp` becomes the legacy fallback. | Copy-paste the snippet for their client. v0.5.0 ships `cerefox configure-agent` (TS CLI) which automates this — but for v0.4.0 it's still manual copy-paste. |
+
+The soft wrapper (22E) + the migration doc together mean **no existing user
+has to do anything urgent at the v0.4.0 cut**. The npm-direct path is a
+performance + freshness upgrade they can take when convenient.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 22G.1 | Write `docs/guides/migration-v0.4.md` for **existing users** | Done | Top-level "nothing breaks" callout; before/after snippets per client (Claude Code, Cursor, Claude Desktop, Codex CLI). Links to the soft-wrapper rationale. |
+| 22G.2 | Update `docs/guides/connect-agents.md` for **new users** | Done | Path A-Local rewritten around `npx -y @cerefox/memory cerefox-mcp` as the recommended config, with `uv run cerefox mcp` preserved as an alternative. Tool count 8 → 10. Verification prompts updated. New rows added for `cerefox_set_document_projects` and `cerefox_get_help`. |
+| 22G.3 | Update `AGENT_GUIDE.md` + `AGENT_QUICK_REFERENCE.md` to document `cerefox_get_help` | Done | New "Self-help via MCP" subsection in `AGENT_GUIDE.md` + a dedicated tool entry. `AGENT_QUICK_REFERENCE.md` now lists 10 tools (added the `cerefox_get_help` row) and intro notes "10 MCP tools (9 of them have CLI equivalents — `cerefox_get_help` is MCP-only)". |
+| 22G.4 | Update `CLAUDE.md` Edge Function inventory + tool count | Done | Single-Implementation-Principle item 4 rewritten to reference `_shared/mcp-tools/*.ts` (one source feeding both the EF and `@cerefox/memory`). Edge Function inventory row for `cerefox-mcp` updated. Tech Stack + Project Structure expanded with the `_shared/`, `packages/memory/`, and `supabase/functions/` layout. New TS-test rows in the Test Suites table. |
+| 22G.5 | Update `CONTRIBUTING.md` with the npm-workspace layout | Done | "Development Setup" callout flags the v0.4.0 npm-package end-user path. Added "TS unit tests" + "MCP stdio smoke" rows to the test commands. New `packages/memory/` subsection under "_shared/" describing the package layout, build, and publish flow. |
+| 22G.6 | Update `docs/guides/setup-supabase.md` to mention the OIDC trust setup | Skipped | Doesn't fit thematically — `setup-supabase.md` covers Supabase deployment; npm OIDC is a publisher concern. Covered in `CONTRIBUTING.md` § "Release workflow" + the `release.yml` header comment. |
+| 22G.7 | Decision Log entry: "v0.4.0 — closing decisions from the iter-22 build" | Done | Ingested as a new "Cerefox Decision Log — 2026 Q2 (Part 3)" document (id `a27d97e5-a0b6-45b6-84a1-ab1cf21039fc`). Captures the soft-wrapper rationale, the one-package pivot, the `--npm-publish` default-off, the `cerefox_get_help` whole-file inlining choice, the Bun-workspace structural-typing workaround, and the byte-snapshot-vs-programmatic-parity tradeoff on the EF refactor. The Q2 Part 2 bootstrap-ritual entry (separate, 2026-05-26) covers the npm publish ops side. |
+| 22G.8 | CHANGELOG `[Unreleased]` populated with v0.4.0 notes | Done | Top-level callout about the soft wrapper + migration guide link. Sections: Added (10 sub-bullets), Changed (5 sub-bullets), Migration notes. `cut_release.ts` will promote `[Unreleased]` to `[v0.4.0]` on cut. |
+| 22G.9 | Mark all Iteration 22 tasks Done | Done | This row. |
+| 22G.10 | Cut release v0.4.0 via `bun scripts/cut_release.ts 0.4.0 --npm-publish` | Pending (post-merge maintainer task) | First-ever npm publication for Cerefox. Maintainer runs the bootstrap rituals on the same day per their private Decision Log. |
+
+**Total**: 42 sub-tasks across 7 parts. (Plus a maintainer-side bootstrap ritual at v0.4.0 cut time that intentionally lives in the maintainer's private Decision Log, not here.)
+
+**Tests / risk**: medium-high overall.
+
+- **Highest-risk**: 22D (EF refactor) — the existing `cerefox-mcp` EF is in production use; refactoring it to import from `_shared/` could regress response shapes. The pre/post snapshot test (22D.4) + the full e2e run (22A.8) are the safety net.
+- **Medium-risk**: 22A.4 (per-tool extraction) — the response formatters currently inline in the EF's `index.ts` move to per-tool modules; risk is subtle drift. Mitigated by ~45 unit tests + the parity test against the Python `mcp_server.py` text format.
+- **Medium-risk**: 22F (first npm publish) — getting the package metadata right (bin entry, ESM only, engines field, README), and authenticating to the org. Mitigated by `--dry-run` flag on `cut_release.ts` + a manual smoke test before the cut.
+- **Lower-risk**: 22B (`cerefox_get_help`) — additive, no existing behavior changes. 22E (soft wrapper) — small change to one Click command; tests mock the subprocess probe.
+
+**Deferred to later iterations** (not in v0.4.0):
+
+- **`cerefox configure-agent`** — v0.5.0 (depends on the TS CLI existing). v0.4 ships the migration guide instead.
+- **`cerefox init` auto-self-doc-ingest** (Layer 2 of MCP discoverability) — v0.5.0.
+- **`cerefox sync-self-docs`** — v0.5.0.
+- **Hard-removal of `mcp_server.py`** — **not scheduled** (same indefinite-shim policy that emerged in v0.3.0). The Python fallback stays so users without npm/Bun keep working.
+- **Refusing zero-chunk creates at `cerefox_ingest_document`** — surfaced as a latent bug while purging the v0.3.0 orphan doc. Small RPC fix; candidate for v0.4 IF time permits, otherwise v0.5. Tracked as candidate item; not in the 22A-G core scope.
+- **`scripts/db_deploy.py` / `db_migrate.py` ports** — v0.5 / v0.7 per §12f migration table.
 
 ---
 
@@ -1857,16 +2117,16 @@ with the `cerefox` binary. Python CLI deprecated but functional.
 surface.
 
 **Detailed task breakdown will be created when this iteration is started.** Headline items:
-- New TS CLI in `packages/cli/` using commander.js, all 15+ subcommands ported
-- Shares `_shared/db-client/` with MCP server
-- New commands: `cerefox init`, `cerefox doctor`, `cerefox status`, `cerefox self-update`
-- Tab completion (bash, zsh, fish)
-- `--json` mode uniformly on all read commands
-- Documented exit codes
-- Progress bars on long ops
-- `@cerefox/memory` published to npm (includes CLI + MCP server, supersedes `@cerefox/mcp-local`)
-- `install.sh` one-liner published to GitHub Releases
-- Web UI `/app/about` and `/app/settings` pages
+- New TS CLI sources land **in the existing `packages/memory/` directory** (alongside the MCP server entry-point from v0.4.0), using commander.js. All 15+ subcommands ported.
+- Same package, growing surface: `packages/memory/package.json` gains a second `bin` entry — `"cerefox": "./dist/bin/cerefox.js"` — alongside the existing `cerefox-mcp`. **No new npm package**; v0.4.0's `@cerefox/memory` releases simply become richer in v0.5.0. (See iter-22 refinement #7 for the rationale — supersedes the design doc's two-package plan.)
+- Shares `_shared/db-client/` with the v0.4 MCP server.
+- New commands: `cerefox init`, `cerefox doctor`, `cerefox status`, `cerefox self-update`.
+- Tab completion (bash, zsh, fish).
+- `--json` mode uniformly on all read commands.
+- Documented exit codes.
+- Progress bars on long ops.
+- `install.sh` one-liner published to GitHub Releases.
+- Web UI `/app/about` and `/app/settings` pages.
 - Python CLI prints deprecation banner pointing at npm install
 - `docs/guides/installing.md` rewritten for npm-native install path
 - **`cerefox init` automatic self-doc ingest** — Layer 2 of the MCP discoverability response (design doc §10d). Unconditionally ingests bundled `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and curated `docs/guides/` under a dedicated `_cerefox-self-docs` project with metadata `{"type":"agent-guide","source":"cerefox-self-docs","version":"<release>"}`. User informed, not asked
@@ -1878,37 +2138,50 @@ surface.
 ## Iteration 24: v0.6.0 — "TS Web Server" (FastAPI → Hono)
 
 **Goal**: Migrate the local web server from Python/FastAPI to TS/Hono on Bun. Web UI
-unchanged (already TS).
+unchanged (already TS). **Web server code lands in the existing `packages/memory/`** —
+no new npm package. The v0.5.0 `cerefox web` subcommand boots the in-process Hono
+server instead of shelling out to a Python FastAPI process.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.6.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.6.0](specs/polish-and-distribution-design.md)
+(the design doc's "`packages/web-server/`" naming is superseded — see the
+"Living design notes" callout at the top of that file for the consolidated
+single-package model).
 
 **Estimated effort**: 4 weeks part-time.
 
 **Detailed task breakdown will be created when this iteration is started.** Headline items:
-- New TS web server in `packages/web-server/` using Hono
-- All `/api/v1/*` endpoints ported with response-shape parity
-- E2E test suite passes against the new server
-- `cerefox web` (TS) replaces `cerefox web` (Python)
-- First-run UX in web UI: empty-state getting-started panel
+- New TS web server **inside `packages/memory/`** (`packages/memory/src/web/`) using Hono. No new npm package.
+- `packages/memory/package.json` `bin` block grows by zero — `cerefox web` is a subcommand of the existing `cerefox` binary, not a separate bin entry.
+- All `/api/v1/*` endpoints ported with response-shape parity.
+- Frontend `dist/` continues to ship inside `@cerefox/memory` (already there from v0.4.0's bundling). Hono serves it from the bundled location.
+- E2E test suite passes against the new server.
+- `cerefox web` (TS) replaces `cerefox web` (Python).
+- Python `api/app.py` + `api/routes_api.py` deprecated but kept around (same indefinite-shim policy as iter-20's other Python shims).
+- First-run UX in web UI: empty-state getting-started panel.
 
 ---
 
 ## Iteration 25: v0.7.0 — "TS Ingestion Pipeline" (last big Python component)
 
 **Goal**: Migrate chunking + embedding orchestration + version snapshotting to TS. PDF and
-DOCX support **dropped** (never used; not worth porting).
+DOCX support **dropped** (never used; not worth porting). **Ingestion code lands inside
+`packages/memory/`** (under `_shared/ingest/` since the same modules are also used by the
+Edge Functions). No new npm package.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.7.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.7.0](specs/polish-and-distribution-design.md)
+(see the "Living design notes" callout at the top of that file for the
+consolidated single-package model).
 
 **Estimated effort**: 6 weeks part-time. Chunking parity is the critical test.
 
 **Detailed task breakdown will be created when this iteration is started.** Headline items:
-- New TS chunking module — port of `markdown.py` heading-aware splitter (snapshot-test parity)
-- New TS embedding orchestration using OpenAI Node SDK
-- New TS ingestion pipeline calling `cerefox_ingest_document` RPC
-- PDF/DOCX support **dropped**; CHANGELOG announces removal
-- `cerefox ingest` and `cerefox ingest-dir` use TS pipeline
-- All `scripts/*.py` ported to `scripts/*.ts`
+- New TS chunking module under `_shared/ingest/` — port of `markdown.py` heading-aware splitter (snapshot-test parity).
+- New TS embedding orchestration using OpenAI Node SDK.
+- New TS ingestion pipeline calling `cerefox_ingest_document` RPC.
+- `cerefox ingest` and `cerefox ingest-dir` invoke the TS pipeline in-process (no shell-out).
+- The `cerefox-ingest` Edge Function (Deno) also imports the same `_shared/ingest/` modules — one chunking implementation, two consumers, like the v0.4 `_shared/mcp-tools/` pattern.
+- PDF/DOCX support **dropped**; CHANGELOG announces removal.
+- Remaining `scripts/*.py` ported to `scripts/*.ts` per the §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. All become TS scripts that consume `_shared/ingest/` and `_shared/db-client/`.
 
 ---
 
@@ -2032,15 +2305,41 @@ via a Python → TypeScript strangler-fig migration. Design-of-record:
 [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
 
 **Next**: Iteration 22 (v0.4.0 — "TS MCP Server", supersedes old Iteration 18).
-Local `cerefox mcp` stdio server moves from Python to TypeScript. First runtime
-component migrated. Publishes `@cerefox/mcp-local` to npm. Ships the
-`cerefox_get_help` MCP tool (Layer 3 of the MCP discoverability response) so
-remote/hosted-MCP/Edge-Function-only agents can discover Cerefox conventions
-without filesystem access. (Note: the `db_status.py` / `sync_docs.py`
-deprecation shims that v0.3.0 introduced **stay** in v0.4.0 — the v0.3.0
-release notes mentioned removing them, but that's been walked back. They're
-indefinite migration aids.) Detailed task breakdown to be filled in when
-iter-22 starts.
+Detailed 39-task breakdown landed in the Iteration 22 section above — 7 parts:
+
+- **22A** (8 tasks) — `_shared/mcp-tools/` extraction. Audit Python ↔ EF
+  parity, factor the 8 current MCP tool handlers + the new `cerefox_get_help`
+  into runtime-neutral modules, grow `_shared/db-client/` to cover every
+  RPC the tools need.
+- **22B** (5 tasks) — `cerefox_get_help` MCP tool (Layer 3 of the MCP
+  discoverability response per design doc §10d). Bundles
+  `AGENT_QUICK_REFERENCE.md` whole; CI check enforces in-sync.
+- **22C** (8 tasks) — new `packages/memory/` TS stdio server (published as
+  `@cerefox/memory`, containing the `cerefox-mcp` bin in v0.4 + the
+  `cerefox` CLI bin from v0.5) using `@modelcontextprotocol/sdk`, repo-root
+  npm workspace setup, startup schema-version check.
+- **22D** (4 tasks) — refactor `supabase/functions/cerefox-mcp/` to import
+  from `_shared/mcp-tools/` instead of self-contained tools. Highest-risk
+  step; mitigated by snapshot parity tests + the full 80-test e2e gauntlet.
+- **22E** (3 tasks) — Python `cerefox mcp` becomes a *soft* wrapper: tries
+  `npx @cerefox/memory cerefox-mcp`, falls back to the legacy Python impl
+  with a stderr nudge if npm/Bun isn't available. No hard break of
+  existing MCP configs. (Refinement vs. the design doc's "shells out to npx".)
+- **22F** (4 tasks) — first npm publication for Cerefox. Adds the
+  `.github/workflows/release.yml` workflow (OIDC trusted publishing,
+  `--provenance` attestation). `--npm-publish` flag on `cut_release.ts`
+  defaults to `false` so tag-cutting and publishing are two distinct
+  confirmation surfaces. The maintainer-side bootstrap procedure is
+  tracked privately, not here.
+- **22G** (10 tasks) — docs (`migration-v0.4.md` for existing users,
+  `connect-agents.md` updates for new users, agent guides, CLAUDE.md,
+  CONTRIBUTING.md, setup-supabase note on OIDC), Decision Log, CHANGELOG,
+  release cut.
+
+Deferred to v0.5.0 / later (called out in the iter-22 section so they
+don't get smuggled in): `cerefox configure-agent`, `cerefox init` self-doc
+ingest (Layer 2 of discoverability), zero-chunk-create RPC refusal,
+`scripts/db_deploy.py` / `db_migrate.py` ports.
 
 **After Iteration 22**: Iterations 23–27 (TS CLI + remaining script ports,
 web server, ingestion, Python removal, v1.0 commitment).

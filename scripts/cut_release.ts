@@ -244,26 +244,39 @@ interface Args {
   dryRun: boolean;
   check: boolean;
   yes: boolean;
+  npmPublish: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const out: Args = { version: null, dryRun: false, check: false, yes: false };
+  const out: Args = {
+    version: null,
+    dryRun: false,
+    check: false,
+    yes: false,
+    npmPublish: false,
+  };
   for (const a of argv) {
     if (a === "--dry-run") out.dryRun = true;
     else if (a === "--check") out.check = true;
     else if (a === "--yes" || a === "-y") out.yes = true;
+    else if (a === "--npm-publish") out.npmPublish = true;
     else if (a === "--help" || a === "-h") {
       console.log(
         [
           "Usage:",
-          "  bun scripts/cut_release.ts <version>             cut a release",
-          "  bun scripts/cut_release.ts <version> --dry-run   show actions only",
-          "  bun scripts/cut_release.ts --check               report current version",
+          "  bun scripts/cut_release.ts <version>                       cut tag + GitHub Release",
+          "  bun scripts/cut_release.ts <version> --npm-publish         + trigger npm publish workflow",
+          "  bun scripts/cut_release.ts <version> --dry-run             show actions only",
+          "  bun scripts/cut_release.ts --check                         report current version",
           "",
           "Flags:",
-          "  --dry-run   Print every action; touch nothing.",
-          "  --yes, -y   Skip the confirmation prompt before push + GitHub Release.",
-          "  --check     Report the current VERSION; suggest the next obvious bump.",
+          "  --dry-run        Print every action; touch nothing.",
+          "  --yes, -y        Skip the confirmation prompt before push + GitHub Release.",
+          "  --npm-publish    After the tag + GitHub Release, trigger the release.yml",
+          "                   workflow with publish_to_npm=true so it ships to npm.",
+          "                   Default off — cut a tag without immediately publishing",
+          "                   (lets you spot a problem in the staging window).",
+          "  --check          Report the current VERSION; suggest the next obvious bump.",
         ].join("\n"),
       );
       exit(0);
@@ -422,6 +435,11 @@ async function main(): Promise<void> {
     info(`DRY-RUN: would 'git push origin main'`);
     info(`DRY-RUN: would 'git push origin ${tag}'`);
     info(`DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>'`);
+    if (args.npmPublish) {
+      info(`DRY-RUN: would 'gh workflow run release.yml -f tag=${tag} -f publish_to_npm=true'`);
+    } else {
+      info("DRY-RUN: --npm-publish not set; tag-only cut. npm publish is a separate manual step.");
+    }
     ok("DRY-RUN complete.");
     return;
   }
@@ -448,6 +466,32 @@ async function main(): Promise<void> {
     run("rm", ["-f", tmpNotesFile]);
   }
   ok(`GitHub Release ${tag} created.`);
+
+  if (args.npmPublish) {
+    info("Triggering release.yml workflow with publish_to_npm=true…");
+    // `gh workflow run` queues the workflow; we don't block on its completion
+    // here (the workflow has its own build + test pipeline; the user follows
+    // it on GitHub). Per iter-22 refinement #8, this is the second
+    // confirmation layer — the workflow's `workflow_dispatch` input gates
+    // the actual npm publish job.
+    runOrDie("gh", [
+      "workflow",
+      "run",
+      "release.yml",
+      "-f",
+      `tag=${tag}`,
+      "-f",
+      "publish_to_npm=true",
+    ]);
+    ok(`Workflow triggered. Watch at: gh run list --workflow=release.yml`);
+  } else {
+    info(
+      "--npm-publish not set; tag + GitHub Release done, no npm publish triggered.\n" +
+        "  When ready: gh workflow run release.yml -f tag=" +
+        tag +
+        " -f publish_to_npm=true",
+    );
+  }
 
   console.log("");
   ok(ansi.bold(`🎉 Released ${tag}.`));

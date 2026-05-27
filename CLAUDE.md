@@ -10,15 +10,17 @@ Single-user, open-source (Apache 2.0), designed to be cheap/free to operate. See
 
 ## Tech Stack
 
-- **Language**: Python 3.11+
+- **Language**: Python 3.11+ (CLI, web/API, Python MCP fallback); TypeScript via Bun (local MCP server, build/release scripts, Edge Functions)
 - **Database**: PostgreSQL 16+ with pgvector (Supabase free tier or local Docker)
 - **Embeddings**: OpenAI `text-embedding-3-small` (768-dim, cloud API); Fireworks AI as alternative; Edge Functions handle embedding server-side for agents
 - **Web framework**: FastAPI (JSON API backend)
 - **Web UI**: React + TypeScript SPA (Mantine UI, TanStack Query, Vite); served at `/app/`
-- **CLI**: Click
-- **Package management**: uv (pyproject.toml)
-- **Testing**: pytest
-- **Linting**: ruff
+- **CLI**: Click (Python); long-term TS ports land under `scripts/*.ts` via strangler-fig
+- **Local MCP server**: `@cerefox/memory` npm package (Node ≥20 / Bun ≥1.0); single artifact growing to host CLI + web server + ingestion in future iterations
+- **Shared TS modules**: `_shared/{config,db-client,db-status,embeddings,mcp-tools}/` — imported by both Edge Functions (Deno) and local server (Node/Bun) via structural typing
+- **Package management**: uv (pyproject.toml) for Python; bun workspaces for TS
+- **Testing**: pytest (Python), `bun test` (TS)
+- **Linting**: ruff (Python)
 
 ## Project Structure
 
@@ -55,8 +57,21 @@ cerefox/
 │       │   ├── app.py             # FastAPI application factory
 │       │   ├── routes_api.py      # JSON API endpoints (/api/v1/)
 │       │   └── deps.py            # Shared dependency injection
-│       ├── mcp_server.py          # MCP stdio server (cerefox mcp)
+│       ├── mcp_server.py          # Python MCP fallback (cerefox mcp wraps @cerefox/memory)
 │       └── cli.py                 # CLI entry point
+├── _shared/                       # TS modules imported by both EFs (Deno) and local server (Node/Bun)
+│   ├── config/                    # paths, env loading
+│   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
+│   ├── db-status/                 # Schema-version-mismatch banner, status checks
+│   ├── embeddings/                # OpenAI/Fireworks embedding helpers
+│   └── mcp-tools/                 # 10 MCP tool handlers shared by remote + local
+├── packages/
+│   └── memory/                    # @cerefox/memory npm package (local MCP server bin)
+│       ├── src/                   # buildServer factory + bin entry
+│       ├── test/                  # stdio smoke test
+│       └── package.json
+├── supabase/functions/            # Edge Functions (Deno)
+│   └── cerefox-mcp/               # Remote MCP server; imports _shared/mcp-tools/
 ├── frontend/                      # React + TypeScript SPA
 │   ├── src/                       # Components, pages, hooks, API client
 │   ├── vite.config.ts             # Vite build config (base: /app/)
@@ -67,7 +82,10 @@ cerefox/
 │   ├── db_deploy.py           # Deploy schema to Supabase/Postgres
 │   ├── db_migrate.py          # Apply schema migrations
 │   ├── backup_create.py       # Take a local backup of the knowledge base
-│   └── backup_restore.py      # Restore from a backup
+│   ├── backup_restore.py      # Restore from a backup
+│   ├── cut_release.ts         # Cut/tag a release; optional --npm-publish
+│   ├── bundle_help.ts         # Bundle AGENT_QUICK_REFERENCE.md into _shared/mcp-tools/get-help-content.ts
+│   └── *.ts                   # TS strangler-fig ports of legacy Python scripts
 ├── tests/
 │   ├── chunking/
 │   ├── embeddings/
@@ -116,10 +134,12 @@ cerefox/
 
 | Suite | Command | What it does |
 |-------|---------|-------------|
-| Unit tests | `uv run pytest` | Fast, mocked, no network (default) |
+| Python unit tests | `uv run pytest` | Fast, mocked, no network (default) |
+| TS unit tests (`_shared/`) | `cd _shared && bun test` | Fast, mocked, no network |
+| MCP stdio smoke (built bin) | `cd packages/memory && bun run build && bun test` | Spawns the built `cerefox-mcp.js`, performs initialize + tools/list handshake; needs `.env` |
 | API e2e | `uv run pytest -m e2e` | Hits live Supabase (REST API + Edge Functions) |
 | UI e2e | `uv run pytest -m ui` | Playwright browser tests against local web app |
-| All e2e | `uv run pytest -m "e2e or ui"` | Both API and UI e2e |
+| All Python e2e | `uv run pytest -m "e2e or ui"` | Both API and UI e2e |
 
 - **API e2e** (`tests/e2e/test_api_e2e.py`): Uses credentials from `.env`. Edge Function tests need `CEREFOX_SUPABASE_ANON_KEY` (JWT). Cleans up `[E2E]`-prefixed test data automatically.
 - **UI e2e** (`tests/e2e/test_ui_e2e.py`): Requires web app running at `http://127.0.0.1:8000/`. Uses Playwright + Chromium. Install browsers: `uv run playwright install chromium`.
@@ -216,9 +236,9 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 1. Add or modify the RPC in `src/cerefox/db/rpcs.sql`
 2. The Python client (`db/client.py`) calls the RPC via `supabase.rpc()`
 3. The dedicated primitive Edge Function calls the same RPC via `supabase.rpc()`
-4. The corresponding `cerefox-mcp` tool handler in `tools/*.ts` calls the same RPC directly
+4. The MCP tool handler in `_shared/mcp-tools/*.ts` calls the same RPC directly. Both the remote `cerefox-mcp` Edge Function and the local `@cerefox/memory` TS server import the same handlers from `_shared/mcp-tools/`, so a tool's behaviour is identical regardless of which transport an agent uses.
 
-**Do NOT** add business logic directly in Edge Function TypeScript, Python routes, or `cerefox-mcp`. The only logic in Edge Functions is input validation, RPC call, and JSON response formatting.
+**Do NOT** add business logic directly in Edge Function TypeScript, Python routes, or in the MCP server bin. The only logic in transport-layer code is input validation, RPC call, and JSON response formatting.
 
 **Ingestion**: The ingestion pipeline has two steps: (1) chunking + embedding (requires external HTTP calls, runs in Python or TypeScript), and (2) database writes (insert document, insert chunks, snapshot version, set review_status, create audit entry). Step 2 is handled entirely by the `cerefox_ingest_document` RPC -- a single atomic transaction. Both the Python `IngestionPipeline` and the `cerefox-ingest` Edge Function call this RPC after completing step 1. This ensures all write logic, review_status transitions, and audit entry creation happen in one place.
 
@@ -238,7 +258,9 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | GPT Actions, direct HTTP |
 | `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search | GPT Actions, direct HTTP |
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
-| `cerefox-mcp` | MCP Streamable HTTP server; calls RPCs directly via `tools/*.ts` | Claude Code, Cursor, Claude Desktop (via supergateway) |
+| `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/` | Claude Code, Cursor, Claude Desktop (via supergateway) |
+
+The local `@cerefox/memory` npm package (entry point `cerefox-mcp` bin) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx @cerefox/memory cerefox-mcp` and point their MCP client at it. See `docs/guides/connect-agents.md` and `docs/guides/migration-v0.4.md`.
 
 ### Edge Function Model Config
 

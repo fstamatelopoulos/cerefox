@@ -1,4 +1,17 @@
-// ── OpenAI embedding constants ────────────────────────────────────────────────
+/**
+ * Shared OpenAI-compatible embedding client.
+ *
+ * Used by `_shared/mcp-tools/search.ts` (query embedding) and
+ * `_shared/mcp-tools/ingest.ts` (chunk embeddings). Both the Edge Function
+ * and the local TS MCP server use this module via `_shared/mcp-tools/`.
+ *
+ * Runtime-neutral: uses only `fetch` and `setTimeout`. No Deno- or Bun-
+ * specific APIs. The OpenAI API key is always passed in by the caller —
+ * the module never reads env vars directly.
+ *
+ * Mirrors `supabase/functions/cerefox-mcp/embeddings.ts` exactly for v0.4.0
+ * (extraction commit; no behaviour change). Future tweaks live here.
+ */
 
 export const OPENAI_EMBEDDING_URL = "https://api.openai.com/v1/embeddings";
 export const OPENAI_MODEL = "text-embedding-3-small";
@@ -7,8 +20,7 @@ export const EMBEDDING_DIMENSIONS = 768;
 const EMBEDDING_MAX_RETRIES = 3;
 const EMBEDDING_INITIAL_BACKOFF_MS = 500; // 500ms → 1s → 2s
 
-// ── Single-text embedding (used by search tool for query vector) ──────────────
-
+/** Embed a single string. Used for the query vector in `cerefox_search`. */
 export async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
   let lastError: Error | null = null;
 
@@ -30,6 +42,7 @@ export async function getEmbedding(text: string, apiKey: string): Promise<number
       if (!response.ok) {
         const err = await response.text();
         if (response.status < 500) {
+          // 4xx — don't retry; throw immediately.
           throw new Error(`OpenAI embedding error ${response.status}: ${err}`);
         }
         lastError = new Error(`OpenAI embedding error ${response.status}: ${err}`);
@@ -58,8 +71,9 @@ export async function getEmbedding(text: string, apiKey: string): Promise<number
   throw lastError ?? new Error(`Embedding API failed after ${EMBEDDING_MAX_RETRIES} attempts`);
 }
 
-// ── Batch embedding (used by ingest tool for chunk embeddings) ────────────────
-
+/** Embed multiple strings in one API call. Used for chunk embeddings during
+ *  `cerefox_ingest`. Results are returned in input order (the API may return
+ *  them out of order; we re-sort by `index`). */
 export async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> {
   let lastError: Error | null = null;
 
