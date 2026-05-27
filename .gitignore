@@ -245,3 +245,10 @@ packages/*/node_modules/
 packages/*/dist/
 packages/*/bun.lock
 packages/*/bun.lockb
+
+# Bundled-at-publish-time docs in @cerefox/memory. Source of truth is
+# the repo root; `scripts/bundle_package_docs.ts` copies into the
+# package at `prepublishOnly` time. Don't track copies.
+packages/memory/docs/
+packages/memory/AGENT_GUIDE.md
+packages/memory/AGENT_QUICK_REFERENCE.md

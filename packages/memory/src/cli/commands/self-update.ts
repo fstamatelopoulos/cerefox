@@ -143,7 +143,22 @@ async function action(options: SelfUpdateOptions): Promise<void> {
 
   println("");
   println(c.green(`✓ Upgraded to ${target}.`));
-  println(c.dim("Run `cerefox sync-self-docs` to refresh bundled-docs in your KB."));
+
+  // Refresh the bundled-docs ingest so the KB stays in lockstep.
+  // Best-effort: if the user has no config yet (e.g. self-update before
+  // init), the sync is skipped with a clear message.
+  println("");
+  println(c.dim("Refreshing bundled-docs ingest…"));
+  try {
+    const { runSyncSelfDocs } = await import("./sync-self-docs.ts");
+    await runSyncSelfDocs({});
+  } catch (err) {
+    println(
+      cErr.yellow("⚠ ") +
+        `Could not refresh self-docs: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    println(c.dim("  Run `cerefox sync-self-docs` manually after a successful `cerefox init`."));
+  }
 }
 
 export function registerSelfUpdate(program: Command): void {

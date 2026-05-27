@@ -295,12 +295,19 @@ async function action(options: InitOptions): Promise<void> {
     println("");
   }
 
-  // Self-doc ingest (Part 23F).
+  // Self-doc ingest (Layer 2 of MCP discoverability, Part 23F).
   if (!options.skipSelfDocs) {
     println(c.bold("Self-doc ingest"));
-    println(c.dim("  Ingests bundled Cerefox docs under the `_cerefox-self-docs` project."));
-    println(c.dim("  Wait until Part 23F lands — for now, this step is a no-op."));
-    // TODO(23F): import { run as syncSelfDocs } from "./sync-self-docs.ts";
+    println(c.dim("  Ingesting bundled Cerefox docs into the `_cerefox-self-docs` project…"));
+    println("");
+    try {
+      const { runSyncSelfDocs } = await import("./sync-self-docs.ts");
+      await runSyncSelfDocs({});
+    } catch (err) {
+      warn(
+        `Self-doc ingest failed: ${err instanceof Error ? err.message : String(err)}. Run \`cerefox sync-self-docs\` manually after init.`,
+      );
+    }
     println("");
   }
 
