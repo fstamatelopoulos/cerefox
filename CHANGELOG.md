@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.5.2] -- 2026-05-27
+
 **Hotfix.** Strips the `cerefox mcp` (Python CLI) soft wrapper. Reported
 in the field: Claude Desktop fails to attach to the MCP server after
 restart when the config uses `uv run --directory /path/to/cerefox cerefox mcp`
