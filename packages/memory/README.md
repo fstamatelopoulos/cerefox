@@ -2,8 +2,15 @@
 
 **User-owned shared memory for AI agents.** The local TypeScript runtime for
 [Cerefox](https://github.com/fstamatelopoulos/cerefox) — a persistent,
-curated knowledge layer that multiple AI tools can read and write, backed by
-Postgres + pgvector.
+curated knowledge layer that multiple AI tools can read and write.
+
+> **Cerefox is BYO-storage.** This package is the *client* — the CLI + local
+> MCP server. The knowledge base itself lives in **your own Supabase project**
+> (Postgres + pgvector; free tier works). Installing this npm package does
+> **not** give you a working KB on its own; you also need a Supabase project +
+> an embedding API key. The first-run `cerefox init` wires everything together
+> in ~2 minutes once you have those in hand. **See "Before you install"
+> below.**
 
 This package contains a single binary, **`cerefox`**:
 
@@ -18,37 +25,59 @@ This package contains a single binary, **`cerefox`**:
 
 ---
 
+## Before you install
+
+Cerefox is a self-hosted memory layer. To use it you need three things, none
+of which this npm package brings with it:
+
+| Prerequisite | Why | How |
+|---|---|---|
+| A **Supabase project** | The knowledge base (documents + chunks + embeddings) lives in your Supabase project's Postgres database, with pgvector for semantic search. Free tier is enough for most personal use. | Sign up at [supabase.com](https://supabase.com), create a project, then follow the [Supabase setup guide](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-supabase.md) — deploy the Cerefox schema (one script), then deploy the Edge Functions (one command). Estimate: 10–15 minutes the first time. |
+| An **embedding API key** | Cerefox embeds your documents for semantic search. OpenAI's `text-embedding-3-small` is the default; Fireworks AI is an alternative. | Get an [OpenAI API key](https://platform.openai.com/api-keys) — costs are pennies/month for typical personal use (see [operational-cost.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/operational-cost.md)). |
+| **Node ≥ 20** or **Bun ≥ 1.0** | Runtime for the `cerefox` bin (and the bundled `cerefox mcp` server). | [nodejs.org](https://nodejs.org) or [bun.sh](https://bun.sh). The one-line installer below bootstraps Bun for you if neither is present. |
+
+If you don't yet have Supabase + an OpenAI key, the [Cerefox
+quickstart](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/quickstart.md)
+walks through the whole setup in one place.
+
+---
+
 ## Install
 
+Once you have the prerequisites above in hand:
+
 ```bash
-# One-line install (recommended on a fresh machine):
+# One-line install (recommended on a fresh machine; bootstraps Bun if needed):
 curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh | sh
 
-# Direct (any of these):
+# Or direct (any of these):
 bun install -g @cerefox/memory
 npm install -g @cerefox/memory
 pnpm add -g @cerefox/memory
 yarn global add @cerefox/memory
 ```
 
-Runtime requirements: **Node ≥ 20** or **Bun ≥ 1.0**.
-
 ---
 
 ## First-run setup
 
 ```bash
-cerefox init        # 5-step interactive bootstrap (Supabase, OpenAI, identity)
+cerefox init        # 5-step interactive bootstrap (asks for Supabase URL,
+                    # Supabase key, OpenAI key, optional Postgres URL, identity)
 cerefox doctor      # verify everything reaches
 ```
 
-Cerefox needs:
+`cerefox init` prompts for the credentials you collected above, validates them
+against the live services, writes `~/.cerefox/.env` (chmod 0600), and
+optionally wires up an MCP client. **It does not create the Supabase project
+for you** — you'll be asked for the URL + key, so make sure those are
+already provisioned (see "Before you install").
 
-- A **Supabase project** (free tier works) — see
-  [`docs/guides/setup-supabase.md`](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-supabase.md).
-- An **OpenAI API key** for embeddings (or Fireworks AI as an alternative).
-
-`cerefox init` walks you through both.
+> **Schema deploy (v0.5):** if your Supabase project is fresh, `cerefox init`
+> tells you to run `uv run python scripts/db_deploy.py` from a Cerefox repo
+> clone to install the schema. This last manual step goes away in v0.6 when
+> the deploy logic is ported to the TS CLI. For now, the setup-supabase
+> guide walks through it.
 
 ---
 
