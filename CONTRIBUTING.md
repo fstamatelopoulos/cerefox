@@ -174,7 +174,7 @@ Because `_shared/mcp-tools/*.ts` is imported by both Edge Functions (Deno) and t
 
 The normal release flow for v0.3.0+ is:
 
-1. PRs land on `main` without touching `VERSION`. `VERSION` sits at the last released value (e.g. `0.2.0`) while you accumulate changes.
+1. PRs land on `main` without touching `VERSION`. `VERSION` sits at the last released value (e.g. `0.5.1` at the time of writing) while you accumulate changes.
 2. When ready to cut, fill in the `## [Unreleased]` section of `CHANGELOG.md` with the release notes.
 3. From `main`, on a clean tree:
    ```bash

@@ -149,6 +149,53 @@ cerefox configure-agent --tool claude-code              # apply
 
 ---
 
+## v0.5.2 fixed the soft wrapper
+
+v0.4.0 through v0.5.1 advertised that `cerefox mcp` (the Python CLI's
+subcommand, used by configs of the form `uv run --directory /path/to/cerefox cerefox mcp`)
+was a "soft wrapper": it would try to delegate to the npm package's
+TS MCP server via `npx --no-install --package=@cerefox/memory cerefox`
+and fall back to the in-tree Python server otherwise.
+
+**The probe was unreliable under `uv run`-launched MCP-client contexts.**
+`uv run` puts the project's `.venv/bin/` first on PATH. When the npm
+cache only has v0.4.x (which doesn't ship a `cerefox` bin name), npx
+falls back to PATH and finds `.venv/bin/cerefox` — the Python CLI
+itself — making the probe report success. The execvp then PATH-falls
+back to the same `.venv/bin/cerefox`, which calls `_run_mcp()` again
+→ infinite recursion → MCP client times out with "Could not attach
+to MCP server cerefox."
+
+**v0.5.2 stripped the wrapper.** `cerefox mcp` always starts the
+in-tree Python MCP server. To use the TS MCP server, configure your
+client to invoke it explicitly:
+
+```json
+"command": "npx",
+"args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]
+```
+
+or, if you have `@cerefox/memory` installed globally:
+
+```json
+"command": "cerefox",
+"args": ["mcp"]
+```
+
+The two paths (Python via `uv run`, TS via `cerefox mcp` on PATH or
+via `npx`) are functionally equivalent — same 10 MCP tools, same wire
+shapes. Pick whichever fits your environment, but the choice is now
+explicit instead of "magic delegation".
+
+> **Affected configs**: if your Claude Desktop / Claude Code / Cursor
+> config invokes `uv run … cerefox mcp` AND you saw "Could not attach
+> to MCP server cerefox" after restarting your client on
+> @cerefox/memory v0.5.1 or earlier, this is the bug. Upgrade to
+> v0.5.2+ (pull `main` and `uv sync`) — the Python MCP server boots
+> directly and your existing config works again.
+
+---
+
 ## Known gotchas
 
 ### `npx` from inside an npm workspace

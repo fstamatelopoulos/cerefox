@@ -24,9 +24,14 @@ the canonical configuration recipe per MCP client.
   3 of MCP discoverability — agents can now retrieve
   `AGENT_QUICK_REFERENCE.md` content over MCP without filesystem
   access.
-- **`cerefox mcp` (Python CLI) is a soft wrapper**: tries to delegate
-  to `npx --package=@cerefox/memory cerefox-mcp` first; falls back to the legacy
-  Python implementation if npm/Bun isn't available.
+- **`cerefox mcp` (Python CLI)** starts the in-tree Python MCP server.
+  (v0.4–v0.5.1 advertised a "soft wrapper" that tried to delegate to the
+  npm package's TS MCP server via npx, but the probe was unreliable
+  under `uv run`-launched MCP-client contexts and caused infinite
+  recursion. v0.5.2 stripped the wrapper; the Python path is now
+  always the Python server, and the npm/TS path is configured
+  explicitly. See `docs/guides/migration-v0.5.md` § "v0.5.2 fixed the
+  soft wrapper" for the migration story.)
 
 ## The optional one-time upgrade
 
@@ -38,11 +43,18 @@ npm install -g @cerefox/memory
 bun install -g @cerefox/memory
 ```
 
-After this, your existing `cerefox mcp` configs automatically use the
-TS server (the soft wrapper detects the package and delegates).
+After this, the npm `cerefox` is on your PATH. To actually have your
+MCP client use the TS server, you need to **update your MCP client
+config explicitly** — v0.5.2 removed the auto-delegation. The
+canonical config invokes the npm bin directly; see the next section.
 
-You can also point your MCP client directly at `cerefox-mcp` (the bin
-shipped by the package) and bypass the Python wrapper entirely:
+(v0.4–v0.5.1 *thought* it had auto-delegation, but the soft wrapper
+was unreliable under `uv run`-launched contexts and caused infinite
+recursion when the MCP client launched it. v0.5.2 took the simpler
+"each path is explicit" stance.)
+
+You can also point your MCP client directly at `cerefox mcp` (the
+TS-CLI subcommand) and bypass the Python path entirely:
 
 ### Claude Code
 

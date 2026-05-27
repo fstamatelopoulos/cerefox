@@ -1,11 +1,24 @@
-"""Tests for the `cerefox mcp` soft wrapper (iter-22 Part E).
+"""Tests for the `cerefox mcp` command.
 
-The wrapper tries `npx @cerefox/memory cerefox-mcp` first; falls back to
-the legacy Python server with a stderr nudge if npx is missing or the
-package isn't installed.
+v0.4.0–v0.5.1 had a "soft wrapper" here that probed for the npm
+`@cerefox/memory` package via npx and delegated via execvp when found,
+falling back to the in-tree Python MCP server otherwise. The probe was
+fundamentally unreliable in `uv run`-launched contexts (which Claude
+Desktop and other MCP clients use): PATH starts with `.venv/bin/` and
+the Python `cerefox` console_script there satisfies npx's PATH-fallback
+lookup, making the probe report success even when @cerefox/memory has
+no `cerefox` bin in its cached version. The execvp then PATH-falls-back
+again to the Python `cerefox`, recursing into `_run_mcp()` forever
+until the MCP client times out.
 
-We mock `shutil.which`, `subprocess.run`, and `os.execvp` so the tests
-never actually spawn a process.
+v0.5.2 stripped the wrapper. `_run_mcp()` now directly starts the
+in-tree Python MCP server, period. Users who want the TS MCP server
+configure their client to invoke `cerefox mcp` (npm-installed) or
+`npx -y --package=@cerefox/memory cerefox mcp` directly. The two
+paths are no longer linked.
+
+These tests verify the post-strip contract: no subprocess probing,
+no execvp, just a direct call to `cerefox.mcp_server.run()`.
 """
 
 from __future__ import annotations
@@ -17,93 +30,40 @@ import pytest
 
 @pytest.fixture
 def mock_legacy_run():
-    """Pin `cerefox.mcp_server.run` so the fallback path is observable
+    """Pin `cerefox.mcp_server.run` so we can verify it was called
     without actually starting an MCP server."""
     with patch("cerefox.mcp_server.run") as m:
         yield m
 
 
-class TestSoftWrapper:
-    def test_uses_npx_when_package_is_installed(self, mock_legacy_run):
-        """Happy path: npx + @cerefox/memory both present → execvp delegates,
-        legacy fallback never runs."""
+class TestRunMcp:
+    def test_run_mcp_starts_python_mcp_server(self, mock_legacy_run):
+        """`_run_mcp()` must directly invoke the in-tree Python MCP
+        server — no npx delegation, no execvp."""
         from cerefox.cli import _run_mcp
 
+        # Probes / execvp must NEVER be called now — the soft wrapper is
+        # gone. If a future commit re-introduces them, this guard fails.
         with (
-            patch("shutil.which", return_value="/opt/homebrew/bin/npx"),
-            patch("subprocess.run") as mock_run,
-            patch("os.execvp") as mock_execvp,
-        ):
-            mock_run.return_value = MagicMock(returncode=0, stdout="0.4.0", stderr="")
-            _run_mcp()
-
-        mock_execvp.assert_called_once()
-        args = mock_execvp.call_args.args
-        assert args[0] == "/opt/homebrew/bin/npx"
-        # v0.5.1: canonical npx invocation is
-        # `npx --package=@cerefox/memory cerefox mcp` (the legacy
-        # `cerefox-mcp` bin was dropped in v0.5.1).
-        assert "--package=@cerefox/memory" in args[1]
-        assert "cerefox" in args[1]
-        assert "mcp" in args[1]
-        # Legacy path NOT called.
-        mock_legacy_run.assert_not_called()
-
-    def test_falls_back_when_npx_missing(self, mock_legacy_run, capsys):
-        """No npx in PATH → falls back to legacy Python MCP server."""
-        from cerefox.cli import _run_mcp
-
-        with (
-            patch("shutil.which", return_value=None),
+            patch("subprocess.run") as mock_subprocess_run,
             patch("os.execvp") as mock_execvp,
         ):
             _run_mcp()
 
-        mock_execvp.assert_not_called()
         mock_legacy_run.assert_called_once()
-        stderr = capsys.readouterr().err
-        assert "npx not found" in stderr
-        assert "@cerefox/memory" in stderr
-
-    def test_falls_back_when_package_not_installed(self, mock_legacy_run, capsys):
-        """npx present but @cerefox/memory not installed → fallback with nudge."""
-        from cerefox.cli import _run_mcp
-
-        with (
-            patch("shutil.which", return_value="/usr/bin/npx"),
-            patch("subprocess.run") as mock_run,
-            patch("os.execvp") as mock_execvp,
-        ):
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
-            _run_mcp()
-
+        mock_subprocess_run.assert_not_called()
         mock_execvp.assert_not_called()
-        mock_legacy_run.assert_called_once()
-        stderr = capsys.readouterr().err
-        assert "@cerefox/memory not installed" in stderr
 
-    def test_probe_uses_no_install_flag(self, mock_legacy_run):
-        """The probe must include --no-install so it doesn't hit the registry
-        on every server start (multi-second delay + hidden network dep)."""
+    def test_run_mcp_does_not_inspect_path(self, mock_legacy_run):
+        """`_run_mcp()` must not call `shutil.which("npx")` or any
+        equivalent PATH probe. That was the bug class in v0.4-v0.5.1."""
         from cerefox.cli import _run_mcp
 
-        with (
-            patch("shutil.which", return_value="/usr/bin/npx"),
-            patch("subprocess.run") as mock_run,
-            patch("os.execvp"),
-        ):
-            mock_run.return_value = MagicMock(returncode=0, stdout="0.4.0", stderr="")
+        with patch("shutil.which") as mock_which:
             _run_mcp()
 
-        # Asserts on the first (and only) subprocess.run call: the probe.
-        probe_args = mock_run.call_args.args[0]
-        assert "--no-install" in probe_args
-        assert "--version" in probe_args
-        # v0.5.1: probe targets the `cerefox` bin (with --package= form
-        # so npx resolves @cerefox/memory). v0.4.1 / v0.5.0 used the
-        # `cerefox-mcp` bin name; that bin was dropped in v0.5.1.
-        assert "--package=@cerefox/memory" in probe_args
-        assert "cerefox" in probe_args
+        mock_legacy_run.assert_called_once()
+        mock_which.assert_not_called()
 
 
 class TestPythonGetHelp:
