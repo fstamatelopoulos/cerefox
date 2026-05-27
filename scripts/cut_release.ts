@@ -53,6 +53,38 @@ const NPM_PACKAGE_FILES = [
   join(REPO_ROOT, "packages", "memory", "package.json"),
 ];
 
+/**
+ * Hardcoded version-string literals in TypeScript source that must also
+ * stay in lockstep with VERSION. Surfaced as a v0.4.2 bug:
+ * `cerefox-mcp --version` printed `0.4.0` because the binary's TS source
+ * embedded a literal that the per-package package.json bump didn't touch.
+ *
+ * Each entry locates the literal by an exact `prefix` (the text up to and
+ * including the opening quote) + `suffix` (closing quote + semicolon).
+ * Both must be unique within the file. Adding a new file with a version
+ * constant? Append an entry here.
+ */
+interface VersionLiteralFile {
+  /** Absolute path to the TS file. */
+  path: string;
+  /** Exact text immediately before the version literal (e.g. `const VERSION = "`). */
+  prefix: string;
+  /** Exact text immediately after (e.g. `";`). */
+  suffix: string;
+}
+const VERSION_LITERAL_FILES: VersionLiteralFile[] = [
+  {
+    path: join(REPO_ROOT, "packages", "memory", "src", "server.ts"),
+    prefix: 'const PKG_VERSION = "',
+    suffix: '";',
+  },
+  {
+    path: join(REPO_ROOT, "packages", "memory", "src", "bin", "cerefox-mcp.ts"),
+    prefix: 'const VERSION = "',
+    suffix: '";',
+  },
+];
+
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[.-][A-Za-z0-9.-]+)?$/;
 
 // ── tiny shell helper ────────────────────────────────────────────────────
@@ -256,6 +288,41 @@ function writePackageJsonVersion(path: string, newVersion: string): void {
   writeFileSync(path, updated, "utf8");
 }
 
+// ── TS source version-literal sync ───────────────────────────────────────
+
+/** Read the current version literal from a TS source file (or die). */
+function readVersionLiteral(lit: VersionLiteralFile): string {
+  if (!existsSync(lit.path)) die(`Version-literal file not found: ${lit.path}`);
+  const text = readFileSync(lit.path, "utf8");
+  const start = text.indexOf(lit.prefix);
+  if (start < 0) {
+    die(`Prefix not found in ${lit.path}:\n  ${lit.prefix}`);
+  }
+  // Guard against ambiguous prefixes.
+  const secondStart = text.indexOf(lit.prefix, start + lit.prefix.length);
+  if (secondStart >= 0) {
+    die(`Prefix appears more than once in ${lit.path}; tighten the marker.`);
+  }
+  const versionStart = start + lit.prefix.length;
+  const end = text.indexOf(lit.suffix, versionStart);
+  if (end < 0) {
+    die(`Suffix not found after prefix in ${lit.path}:\n  ${lit.suffix}`);
+  }
+  return text.slice(versionStart, end);
+}
+
+/** Rewrite the version literal in `lit.path` to `newVersion`. */
+function writeVersionLiteral(lit: VersionLiteralFile, newVersion: string): void {
+  // Validates prefix/suffix and uniqueness as a side effect.
+  readVersionLiteral(lit);
+  const text = readFileSync(lit.path, "utf8");
+  const start = text.indexOf(lit.prefix);
+  const versionStart = start + lit.prefix.length;
+  const end = text.indexOf(lit.suffix, versionStart);
+  const updated = text.slice(0, versionStart) + newVersion + text.slice(end);
+  writeFileSync(lit.path, updated, "utf8");
+}
+
 // ── pyproject.toml sync ──────────────────────────────────────────────────
 
 function checkPyprojectVersionStanza(): void {
@@ -425,6 +492,12 @@ async function main(): Promise<void> {
         `DRY-RUN: would bump ${relative(REPO_ROOT, pkgPath)} version: ${current} → ${newVersion}`,
       );
     }
+    for (const lit of VERSION_LITERAL_FILES) {
+      const current = readVersionLiteral(lit);
+      info(
+        `DRY-RUN: would bump ${relative(REPO_ROOT, lit.path)} \`${lit.prefix}…\`: ${current} → ${newVersion}`,
+      );
+    }
   } else {
     writeFileSync(VERSION_FILE, `${newVersion}\n`, "utf8");
     ok(`Wrote VERSION = ${newVersion}`);
@@ -438,14 +511,26 @@ async function main(): Promise<void> {
       writePackageJsonVersion(pkgPath, newVersion);
       ok(`Bumped ${relative(REPO_ROOT, pkgPath)}: ${before} → ${newVersion}`);
     }
+    // Keep hardcoded version-string literals in TS source in lockstep with
+    // VERSION too. Forgetting this caused v0.4.2's bin to print "0.4.0"
+    // when run as v0.4.2 (server.ts PKG_VERSION + cerefox-mcp.ts VERSION
+    // were both still hardcoded to the bootstrap version).
+    for (const lit of VERSION_LITERAL_FILES) {
+      const before = readVersionLiteral(lit);
+      writeVersionLiteral(lit, newVersion);
+      ok(`Bumped ${relative(REPO_ROOT, lit.path)}: ${before} → ${newVersion}`);
+    }
   }
 
   // 4. Git commit + tag
   const tag = `v${newVersion}`;
   const commitMessage = `chore: cut ${tag}`;
-  const stagedFiles = ["VERSION", "CHANGELOG.md", ...NPM_PACKAGE_FILES.map(
-    (p) => relative(REPO_ROOT, p),
-  )];
+  const stagedFiles = [
+    "VERSION",
+    "CHANGELOG.md",
+    ...NPM_PACKAGE_FILES.map((p) => relative(REPO_ROOT, p)),
+    ...VERSION_LITERAL_FILES.map((l) => relative(REPO_ROOT, l.path)),
+  ];
 
   if (args.dryRun) {
     info(`DRY-RUN: would 'git add ${stagedFiles.join(" ")}'`);

@@ -9,21 +9,77 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Patch release.** Keeps the npm package's reported version in lockstep
+with the published artifact, and tightens `cut_release.ts` so that
+particular drift can't recur. Also documents an `npx`-inside-a-monorepo
+quirk that surfaced during v0.4.2 verification.
+
+### Fixed
+
+- **`cerefox-mcp --version` now reports the actual published version.**
+  v0.4.2's bin printed `0.4.0` because two version-string literals were
+  hardcoded in TypeScript source —
+  `packages/memory/src/server.ts` (`PKG_VERSION`) and
+  `src/bin/cerefox-mcp.ts` (`VERSION`) — and only the npm package.json
+  reflected the bump. `cut_release.ts` now rewrites both literals in
+  lockstep with VERSION + package.json via a new
+  `VERSION_LITERAL_FILES` list (prefix/suffix marker pattern, same shape
+  as `NPM_PACKAGE_FILES`). Adding a new TS file with a version literal
+  in the future is one append to that list.
+
+### Note
+
+- **`npx` from inside an npm workspace can misbehave.** Running
+  `npx -y --package=@cerefox/memory cerefox-mcp` from the root of a
+  surrounding npm workspace monorepo may surface `command not found`
+  because npx confuses itself with the workspace's bin resolution
+  context. Workarounds: run from outside any monorepo (e.g. `/tmp`),
+  use `bunx` (works inside workspaces), or
+  `npm install -g @cerefox/memory` + invoke `cerefox-mcp` from PATH.
+  Captured in `docs/guides/migration-v0.4.md` under "Known gotchas".
 
 ---
 
 ## [v0.4.2] -- 2026-05-27
 
-**Patch release** following the failed v0.4.1 publish. `cut_release.ts`
-forgot to sync `packages/memory/package.json`'s version field with the
-repo-root `VERSION` file, so when the v0.4.1 publish workflow ran it
-checked out the v0.4.1 tag, read `version: "0.4.0"` from the package's
-own manifest, and tried to publish 0.4.0 again — `npm` correctly
-rejected with "cannot publish over previously published version".
+**First working npm release.** v0.4.0 published the package and
+established the OIDC trusted-publisher binding on npmjs.com but shipped
+without a usable `bin` field (npm ≥ 11.5 silently strips bin paths with
+a `./` prefix as "invalid script name"). v0.4.2 fixes the package
+manifest, the documented invocation, the publish workflow, and the
+release-cutting script — all of which had to be right at once for an
+end-to-end `npx … cerefox-mcp` to succeed.
+
+> v0.4.1 was cut on the same day but never produced an npm artifact: the
+> release-cutting script forgot to bump `packages/memory/package.json`'s
+> own `version` field, so the publish job tried to push `0.4.0` over
+> the existing release and was correctly rejected. The v0.4.1 git tag
+> + GitHub Release have since been deleted; the npm version line goes
+> directly from `0.4.0` (bootstrap; deprecated) to `0.4.2` (working).
 
 ### Fixed
 
+- **`@cerefox/memory`'s `bin` entry is now actually published.** The
+  v0.4.0 `package.json` declared
+  `"bin": { "cerefox-mcp": "./dist/bin/cerefox-mcp.js" }` (leading
+  `./`). npm ≥ 11.5 silently strips bin entries with a leading `./` as
+  "invalid script name" — the warning is non-fatal so v0.4.0 published
+  successfully, but the shipped tarball had NO executable bins, so
+  `npx … cerefox-mcp` always failed with "command not found"
+  regardless of how the invocation was framed. Fix: drop the leading
+  `./` in the bin path. v0.4.2's shipped tarball includes the
+  `cerefox-mcp` bin properly (verified via
+  `tar -xzOf cerefox-memory-0.4.2.tgz package/package.json`).
+- **`npx` invocation gains `--package=@cerefox/memory`.** Even with
+  the bin restored, the docs and the Python soft-wrapper in
+  `src/cerefox/cli.py` previously used the bare form
+  `npx -y @cerefox/memory cerefox-mcp`. The `--package=` form is the
+  explicit, unambiguous spelling required when the package name
+  (`@cerefox/memory`) differs from the bin name (`cerefox-mcp`) — it
+  works on every npx version and doesn't rely on the heuristic that
+  interprets the second positional arg as a bin name. Two unit tests
+  in `tests/test_mcp_soft_wrapper.py` pin the new probe + execvp
+  argument lists.
 - **`cut_release.ts` now bumps every npm package's `package.json`
   version in lockstep with `VERSION`.** New `NPM_PACKAGE_FILES`
   constant lists the published package manifests
@@ -31,56 +87,15 @@ rejected with "cannot publish over previously published version".
   each one is rewritten and `git add`-ed alongside `VERSION` and
   `CHANGELOG.md`. Tested via `--dry-run`: shows the planned bump per
   package and the corresponding `git add` line. Adding a new
-  published package in the future is one append to `NPM_PACKAGE_FILES`.
-
-### Note on v0.4.1
-
-The v0.4.1 git tag and GitHub Release exist but never produced an npm
-artifact — the publish job failed before reaching npm because of the
-version-sync bug fixed above. The v0.4.1 content (bin field fix, npx
-`--package=` invocation, OIDC-only workflow) carries forward into
-v0.4.2's tag, and the npm artifact named `0.4.1` does not exist. Don't
-try to install `@cerefox/memory@0.4.1` from npm — install `0.4.2+` or
-omit the version specifier to get `latest`.
-
----
-
-## [v0.4.1] -- 2026-05-27
-
-**Patch release** following the v0.4.0 first npm publish. Three corrections
-all stemming from observed-in-the-wild behaviour of the v0.4.0 bootstrap:
-the `bin` field in `@cerefox/memory`'s `package.json` is restored, the
-documented `npx` invocation gains `--package=`, and the publish workflow
-switches to OIDC-only auth now that the bootstrap is complete.
-
-### Fixed
-
-- **`@cerefox/memory`'s `bin` entry is now actually published.** The
-  v0.4.0 `package.json` declared `"bin": { "cerefox-mcp":
-  "./dist/bin/cerefox-mcp.js" }` (leading `./`). npm ≥ 11.5 silently
-  strips bin entries with leading `./` as "invalid script name" — the
-  warning is non-fatal so v0.4.0 published successfully, but the
-  shipped tarball had NO executable bins, so `npx … cerefox-mcp`
-  always failed with "command not found" regardless of how the
-  invocation was framed. Fix: drop the leading `./` in the bin path.
-  v0.4.1's shipped tarball includes the `cerefox-mcp` bin properly.
-- **`npx` invocation gains `--package=@cerefox/memory`.** Even with
-  the bin restored, the docs and the Python soft-wrapper in
-  `src/cerefox/cli.py` previously used the bare form `npx -y
-  @cerefox/memory cerefox-mcp`. The `--package=` form is the explicit,
-  unambiguous spelling required when the package name
-  (`@cerefox/memory`) differs from the bin name (`cerefox-mcp`) —
-  it works on every npx version and doesn't rely on the heuristic
-  that interprets the second positional arg as a bin name. Two unit
-  tests in `tests/test_mcp_soft_wrapper.py` pin the new probe +
-  execvp argument lists.
+  published package in the future is one append to
+  `NPM_PACKAGE_FILES`.
 
 ### Changed
 
 - **`release.yml` is OIDC-only.** With the v0.4.0 bootstrap publish
   complete and the package's Trusted Publisher entry registered on
   npmjs.com, the `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` fallback
-  is removed. Every publish from v0.4.1 onward is signed by a
+  is removed. Every publish from v0.4.2 onward is signed by a
   short-lived OIDC token bound to this repo + workflow file, with
   sigstore provenance attached. The `NPM_TOKEN` secret can (and
   should) be removed from the repo's Actions secrets.

@@ -193,6 +193,30 @@ will gain a second binary (`cerefox`) for the full CLI surface
 configure-agent` command that writes the right MCP config for each
 client automatically. For now, the manual recipes above are the way.
 
+## Known gotchas
+
+- **`npx` from inside an npm workspace can fail with "command not
+  found"** even when the package is correctly published. Running
+  `npx -y --package=@cerefox/memory cerefox-mcp` from the root of a
+  surrounding npm-workspace monorepo (your own project) confuses npx's
+  bin-resolution path. Symptoms: `sh: cerefox-mcp: command not found`
+  even though the published package has the bin entry. Workarounds —
+  any one of these works:
+  - Use `bunx` instead: `bunx --package @cerefox/memory cerefox-mcp` —
+    cleanly handles workspace contexts.
+  - Run from a non-workspace directory (e.g. `cd /tmp` first).
+  - Install globally and invoke from PATH:
+    `npm install -g @cerefox/memory` then `cerefox-mcp`.
+  - When configuring an MCP client (Claude Code, Cursor, Claude
+    Desktop, Codex CLI), the launched process inherits the client's
+    own working directory rather than your shell's, so this gotcha
+    usually doesn't bite real MCP usage — only manual `npx` smoke
+    tests run from a project root.
+
+- **The minimum npm version for OIDC publish is 11.5.1.** The shipped
+  `release.yml` workflow already pins this; only relevant if you're
+  forking the project for your own publish target.
+
 ## What didn't change
 
 - The Edge Function (remote MCP) URL and auth: unchanged. Same
