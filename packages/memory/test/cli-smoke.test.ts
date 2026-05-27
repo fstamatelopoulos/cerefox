@@ -101,15 +101,34 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(status).toBe(1);
   });
 
-  test("stub command (completion) exits 2 (system error) with not-yet-implemented hint", () => {
-    // `completion` lands in Part 23G.1 (tab completion). Pick a command
-    // we know stays a stub longer than the surrounding parts so this
-    // assertion doesn't break as the migration proceeds. Once 23G ships,
-    // either swap to a still-stubbed command or remove this test.
-    const { stderr, status } = run(["completion", "bash"]);
-    expect(status).toBe(2);
-    expect(stderr).toContain("not yet implemented");
-    expect(stderr).toContain("23G.1");
+  test("completion command emits a shell-specific script", () => {
+    const { stdout, status } = run(["completion", "bash"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("_cerefox_completion()");
+    expect(stdout).toContain("complete -F _cerefox_completion cerefox");
+  });
+
+  test("completion: unknown shell → exit 1", () => {
+    const { status, stderr } = run(["completion", "csh"]);
+    expect(status).toBe(1);
+    expect(stderr).toContain("Unknown shell");
+  });
+
+  test("bare invocation shows state-aware friendly entry (exit 0)", () => {
+    const { stdout, status } = run([]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("Cerefox v");
+    // Either "No config detected" or "Config detected" depending on env,
+    // but always one of the two.
+    expect(stdout).toMatch(/config detected/i);
+  });
+
+  test("--help footer lists command groups + exit codes", () => {
+    const { stdout, status } = run(["--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("READS");
+    expect(stdout).toContain("WRITES");
+    expect(stdout).toContain("Exit codes:");
   });
 
   test("`cerefox web` prints v0.5-deferred message and exits 0", () => {

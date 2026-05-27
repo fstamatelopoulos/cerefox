@@ -64,7 +64,24 @@ export function buildProgram(): Command {
       ).hideHelp(),
     )
     .showHelpAfterError("(run `cerefox --help` for usage)")
-    .enablePositionalOptions();
+    .enablePositionalOptions()
+    .addHelpText(
+      "after",
+      "\nCommand groups (each row in the list above falls into one):\n" +
+        "  READS      search · get-doc · list-docs · list-versions · list-projects\n" +
+        "             · list-metadata-keys · metadata-search · get-audit-log\n" +
+        "  WRITES     ingest · ingest-dir · delete-doc\n" +
+        "  SERVERS    mcp · web\n" +
+        "  LIFECYCLE  init · doctor · status · configure-agent · self-update · upgrade · sync-self-docs\n" +
+        "  OPS        backup · restore · sync-docs · docs · reindex · config-get · config-set · completion\n" +
+        "\nExit codes:\n" +
+        "  0  success            2  system error (unreachable Supabase, RPC failure, …)\n" +
+        "  1  user error         3  not found (document / version / project)\n" +
+        "\nLearn more:\n" +
+        "  cerefox docs --list                     # bundled docs (offline)\n" +
+        "  cerefox doctor                          # diagnose your install\n" +
+        "  https://github.com/fstamatelopoulos/cerefox\n",
+    );
 
   // ── READS ───────────────────────────────────────────────────────────────
   registerSearch(program);
