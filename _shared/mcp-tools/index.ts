@@ -43,4 +43,25 @@ export const TOOLS_BY_NAME: Record<string, ToolDefinition> = Object.fromEntries(
 );
 
 export { McpInvalidParams } from "./types.ts";
-export type { JsonSchema, ToolContext, ToolDefinition } from "./types.ts";
+export type {
+  AccessPath,
+  JsonSchema,
+  ToolContext,
+  ToolDefinition,
+} from "./types.ts";
+
+// Re-export individual tools so non-MCP consumers (e.g. the v0.5 CLI's
+// `ingest` / `delete-doc` commands) can call a specific handler directly
+// without going through ALL_TOOLS dispatch.
+export {
+  auditLogTool,
+  getDocumentTool,
+  getHelpTool,
+  ingestTool,
+  listMetadataKeysTool,
+  listProjectsTool,
+  listVersionsTool,
+  metadataSearchTool,
+  searchTool,
+  setDocumentProjectsTool,
+};
