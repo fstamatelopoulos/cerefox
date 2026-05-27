@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.4.1] -- 2026-05-27
+
 **Patch release** following the v0.4.0 first npm publish. Two corrections:
 the documented `npx` invocation is fixed to use `--package=` (required
 because the bin name `cerefox-mcp` doesn't match the package name
