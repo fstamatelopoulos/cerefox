@@ -15,12 +15,12 @@
  * format whether they go through the remote MCP or the new local TS one.
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
-import { getEmbedding } from "../embeddings/index.js";
-import { applyByteBudget, logUsage, MAX_RESPONSE_BYTES } from "./_utils.js";
-import { lookupProjectId } from "./_projects.js";
-import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
+import { getEmbedding } from "../embeddings/index.ts";
+import { applyByteBudget, logUsage, MAX_RESPONSE_BYTES } from "./_utils.ts";
+import { lookupProjectId } from "./_projects.ts";
+import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,

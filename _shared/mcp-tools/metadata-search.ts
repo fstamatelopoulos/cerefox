@@ -5,11 +5,11 @@
  * inclusion with a byte budget.
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
-import { applyByteBudget, logUsage, MAX_RESPONSE_BYTES } from "./_utils.js";
-import { lookupProjectId } from "./_projects.js";
-import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
+import { applyByteBudget, logUsage, MAX_RESPONSE_BYTES } from "./_utils.ts";
+import { lookupProjectId } from "./_projects.ts";
+import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,

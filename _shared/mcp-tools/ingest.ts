@@ -15,13 +15,13 @@
  * extraction (no behaviour change).
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
-import { chunkMarkdown, normalizeContent, sha256hex } from "./_chunker.js";
-import { embedBatch, OPENAI_MODEL } from "../embeddings/index.js";
-import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.js";
-import { logUsage } from "./_utils.js";
-import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
+import { chunkMarkdown, normalizeContent, sha256hex } from "./_chunker.ts";
+import { embedBatch, OPENAI_MODEL } from "../embeddings/index.ts";
+import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
+import { logUsage } from "./_utils.ts";
+import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,

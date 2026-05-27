@@ -4,10 +4,10 @@
  * version; omit for the current version.
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.js";
-import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.js";
+import { logUsage } from "./_utils.ts";
+import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,

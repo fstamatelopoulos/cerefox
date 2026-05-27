@@ -12,7 +12,7 @@
  * removes its copies.
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
 /** Server-enforced response-size ceiling for MCP results. Agents can request
  *  smaller budgets via `max_bytes`; values above this are capped. */

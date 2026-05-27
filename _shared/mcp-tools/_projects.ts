@@ -21,7 +21,7 @@
  * prevents drift.
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
 /** Ensure `(documentId, project)` exists. Resolves project by name
  *  (case-insensitive); creates the project if missing. Idempotent.

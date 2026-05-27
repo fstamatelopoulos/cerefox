@@ -3,10 +3,10 @@
  * (document, author, operation, time range, limit).
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.js";
-import type { ToolContext, ToolDefinition } from "./types.js";
+import { logUsage } from "./_utils.ts";
+import type { ToolContext, ToolDefinition } from "./types.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,

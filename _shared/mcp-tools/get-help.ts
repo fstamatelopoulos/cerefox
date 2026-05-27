@@ -15,15 +15,15 @@
  * the full file plus an index of section headings.
  */
 
-import type { MCPSupabaseClient } from "./types.js";
+import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.js";
+import { logUsage } from "./_utils.ts";
 import {
   HELP_FULL,
   HELP_SECTION_HEADINGS,
   HELP_SECTIONS,
-} from "./get-help-content.js";
-import type { ToolContext, ToolDefinition } from "./types.js";
+} from "./get-help-content.ts";
+import type { ToolContext, ToolDefinition } from "./types.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
