@@ -73,14 +73,12 @@ interface VersionLiteralFile {
   suffix: string;
 }
 const VERSION_LITERAL_FILES: VersionLiteralFile[] = [
+  // packages/memory/src/meta.ts exports PKG_VERSION; both bins
+  // (`cerefox` and `cerefox-mcp`) and `server.ts` import from there.
+  // Single source of truth inside the bundle.
   {
-    path: join(REPO_ROOT, "packages", "memory", "src", "server.ts"),
+    path: join(REPO_ROOT, "packages", "memory", "src", "meta.ts"),
     prefix: 'const PKG_VERSION = "',
-    suffix: '";',
-  },
-  {
-    path: join(REPO_ROOT, "packages", "memory", "src", "bin", "cerefox-mcp.ts"),
-    prefix: 'const VERSION = "',
     suffix: '";',
   },
 ];

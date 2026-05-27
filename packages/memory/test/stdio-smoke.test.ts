@@ -111,7 +111,11 @@ describe("stdio MCP server smoke", () => {
       result?: { serverInfo?: { name?: string; version?: string } };
     };
     expect(init.result?.serverInfo?.name).toBe("cerefox");
-    expect(init.result?.serverInfo?.version).toBe("0.4.0");
+    // Assert a semver shape rather than a literal — `meta.ts` is bumped
+    // by cut_release.ts on every cut, and we don't want this test to
+    // become release-day busywork. The literal-sync itself is verified
+    // by the per-bin --version check in `cli-smoke.test.ts`.
+    expect(init.result?.serverInfo?.version).toMatch(/^\d+\.\d+\.\d+/);
 
     const tools = responses.find((r) => (r as { id?: number }).id === 2) as {
       result?: { tools?: Array<{ name: string }> };
