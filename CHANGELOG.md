@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.4.3] -- 2026-05-27
+
 **Patch release.** Keeps the npm package's reported version in lockstep
 with the published artifact, and tightens `cut_release.ts` so that
 particular drift can't recur. Also documents an `npx`-inside-a-monorepo

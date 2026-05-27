@@ -10,7 +10,7 @@
 
 import { buildServer } from "../server.ts";
 
-const VERSION = "0.4.0";
+const VERSION = "0.4.3";
 
 const HELP = `Cerefox MCP server (@cerefox/memory v${VERSION})
 

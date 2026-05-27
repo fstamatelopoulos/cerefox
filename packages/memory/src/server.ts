@@ -41,7 +41,7 @@ type SharedSupabaseClient = Parameters<
 >[0];
 
 /** Resolved at module-load time so `--version` works without DB. */
-const PKG_VERSION = "0.4.0";
+const PKG_VERSION = "0.4.3";
 const SERVER_NAME = "cerefox";
 
 export interface ServerHandle {
