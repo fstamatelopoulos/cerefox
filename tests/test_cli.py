@@ -18,7 +18,14 @@ from cerefox.ingestion.pipeline import IngestResult
 
 
 @pytest.fixture()
-def runner() -> CliRunner:
+def runner(monkeypatch: pytest.MonkeyPatch) -> CliRunner:
+    # Suppress the v0.5 Python CLI deprecation banner during CLI tests.
+    # The banner goes to stderr in real use, but CliRunner (in some Click
+    # versions) merges stdout + stderr into `result.output`. Tests that
+    # assert on exact stdout content shouldn't be brittle to the banner.
+    # The banner's own behaviour is verified in
+    # `test_python_cli_deprecation_banner.py`.
+    monkeypatch.setenv("CEREFOX_NO_DEPRECATION_BANNER", "1")
     return CliRunner()
 
 

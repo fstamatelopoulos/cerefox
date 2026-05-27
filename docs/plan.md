@@ -2358,9 +2358,9 @@ collectively define the v0.5 UX.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 23H.1 | Add deprecation banner to `src/cerefox/cli.py` `cli()` group | Pending | Single-line ⚠ to stderr on every invocation: "Cerefox CLI has moved to TypeScript. Install via `npx -y --package=@cerefox/memory cerefox` or see https://github.com/.../migration-v0.5.md. The Python CLI remains functional through v0.7.x." Click decorator catches all subcommands. Suppress in `--json` mode (don't pollute JSON output). |
-| 23H.2 | Update `src/cerefox/mcp_server.py` (legacy fallback) | Pending | The fallback's existence is unchanged. Just verify no banner / no behavior change. Tests pin this. |
-| 23H.3 | Audit Python entry points in `pyproject.toml` | Pending | Ensure `cerefox` console_script still exists for fallback users; no removal in v0.5. |
+| 23H.1 | Add deprecation banner to `src/cerefox/cli.py` `cli()` group | Done | New `_emit_deprecation_banner()` helper inspects `sys.argv` and suppresses the banner for `--json`/`--help`/`--version`/`mcp` subcommand and when `CEREFOX_NO_DEPRECATION_BANNER` is set. Click group callback calls it once per invocation. **9 unit tests** in `tests/test_python_cli_deprecation_banner.py` cover every suppression case + happy path. |
+| 23H.2 | Update `src/cerefox/mcp_server.py` (legacy fallback) | Done (no change) | The Python MCP fallback (`mcp_server.py`) is unchanged. The `mcp` subcommand suppresses the deprecation banner (so stdio MCP clients don't see ⚠ in their logs), and `_run_mcp()` already nudges the user to install `@cerefox/memory` when falling back. |
+| 23H.3 | Audit Python entry points in `pyproject.toml` | Done | `cerefox` console_script still present and functional. v0.5 only deprecates; v0.8/v0.9 removes. `tests/test_cli.py`'s `runner` fixture suppresses the banner via `CEREFOX_NO_DEPRECATION_BANNER` so the broader 587 Python tests aren't impacted by the new stderr output. |
 
 ### 23I: install.sh + docs
 
