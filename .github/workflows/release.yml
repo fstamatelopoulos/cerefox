@@ -1,0 +1,121 @@
+name: Release
+
+# Manual trigger only. Cut_release.ts calls this via `gh workflow run`
+# when invoked with --npm-publish. The maintainer can also trigger it
+# directly from the GitHub Actions UI if they want to ship a tag's npm
+# publish that was deferred.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.4.0). Must already exist on origin.'
+        type: string
+        required: true
+      publish_to_npm:
+        description: 'Publish @cerefox/memory to npm (uses OIDC; provenance attached)?'
+        type: boolean
+        default: false
+
+# Required for OIDC trusted publishing to npm. id-token: write lets the
+# job mint a short-lived OIDC token bound to this specific workflow run;
+# npm's Trusted Publisher entry on the package validates that the token
+# came from `fstamatelopoulos/cerefox` + this file before allowing
+# publish. No long-lived NPM_TOKEN sits in the repo (except during the
+# v0.4.0 bootstrap; see the maintainer's Decision Log for the procedure).
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-test:
+    name: Build + test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm@latest
+        # Bun's setup-node still bundles npm 10.x; trusted publishing needs
+        # npm >= 11.5.1. Pinning latest covers any future bumps.
+        run: npm install -g npm@latest
+
+      - name: Verify npm version
+        run: |
+          v=$(npm --version)
+          major=$(echo "$v" | cut -d. -f1)
+          minor=$(echo "$v" | cut -d. -f2)
+          if [ "$major" -lt 11 ] || { [ "$major" -eq 11 ] && [ "$minor" -lt 5 ]; }; then
+            echo "❌  npm $v is below the 11.5.1 minimum required by trusted publishing"
+            exit 1
+          fi
+          echo "✓  npm $v"
+
+      - name: Install workspace deps
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Bun tests (_shared)
+        run: bun test
+        working-directory: _shared
+
+      - name: Build packages/memory
+        run: bun run build
+        working-directory: packages/memory
+
+      - name: Verify built bin runs
+        run: |
+          node packages/memory/dist/bin/cerefox-mcp.js --version
+          node packages/memory/dist/bin/cerefox-mcp.js --help | head -5
+
+  publish:
+    name: Publish to npm
+    needs: build-and-test
+    if: inputs.publish_to_npm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm@latest
+        run: npm install -g npm@latest
+
+      - name: Install workspace deps
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Build packages/memory
+        run: bun run build
+        working-directory: packages/memory
+
+      - name: Publish @cerefox/memory
+        working-directory: packages/memory
+        env:
+          # Bootstrap window only — set as a repo secret for the v0.4.0
+          # first publish, then revoke the token same day. v0.4.1+ uses
+          # OIDC trusted publishing (no token needed); the maintainer's
+          # Decision Log captures the procedure. Both paths are supported
+          # here so the migration is non-disruptive.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
