@@ -977,22 +977,77 @@ def reindex(batch: int, reindex_all: bool, dry_run: bool) -> None:
 
 @cli.command("mcp")
 def mcp_server() -> None:
-    """Start the Cerefox MCP server (stdio transport, legacy fallback).
+    """Start the Cerefox MCP server (stdio transport).
 
-    Add to Claude Desktop's claude_desktop_config.json:
+    Soft wrapper as of v0.4.0: tries the new TypeScript implementation
+    (@cerefox/memory on npm) first; falls back to the legacy Python
+    server if Bun/Node + the npm package aren't available.
 
-    \b
-    {
-      "mcpServers": {
-        "cerefox": {
-          "command": "uv",
-          "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
-        }
-      }
-    }
+    The new TS server has 10 tools (the 9 Cerefox tools + cerefox_get_help);
+    the legacy Python fallback also exposes all 10 so MCP clients see the
+    same surface regardless of which path serves them.
 
-    Exposes two tools: cerefox_search and cerefox_ingest.
+    Existing MCP configs pointing at `uv run cerefox mcp` keep working —
+    transport is stdio either way, agents see the same tools.
+
+    To upgrade to the TS path (faster boot, fewer Python deps):
+
+        bun install -g @cerefox/memory        # or: npm install -g @cerefox/memory
+
+    Then this command transparently forwards to it.
     """
+    _run_mcp()
+
+
+def _run_mcp() -> None:
+    """Soft-wrapper logic — try npx, fall back to legacy Python.
+
+    Pulled out for unit testing (we patch subprocess + os.execvp without
+    bringing in Click's invocation machinery).
+    """
+    import os  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    npx = shutil.which("npx")
+    if npx is not None:
+        # Probe whether @cerefox/memory is already installed (globally or in
+        # npx's local cache). We don't want `npx` to silently pull from the
+        # registry on every server start — that adds a multi-second delay on
+        # first run and a hidden network dependency.
+        probe = subprocess.run(
+            [npx, "--no-install", "@cerefox/memory", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if probe.returncode == 0:
+            # Forward stdio cleanly; replace the current process so the MCP
+            # client's stdio pipes connect directly to the TS server.
+            os.execvp(npx, [npx, "--no-install", "@cerefox/memory", "cerefox-mcp"])
+            # `execvp` doesn't return on success. The `return` below is
+            # defensive — tests sometimes mock execvp so it returns
+            # normally, and we don't want the legacy fallback to kick in
+            # then. If execvp ever fails for real (e.g. the bin file was
+            # deleted between the probe and the exec), it raises OSError,
+            # which propagates out and crashes the server — the user fixes
+            # their install.
+            return
+
+        click.echo(
+            "ℹ  @cerefox/memory not installed; falling back to legacy Python MCP server.\n"
+            "   Run `npm install -g @cerefox/memory` (or `bun install -g …`) for the new TS version.",
+            err=True,
+        )
+    else:
+        click.echo(
+            "ℹ  npx not found; falling back to legacy Python MCP server.\n"
+            "   Install Node 20+ and `npm install -g @cerefox/memory` for the new TS version.",
+            err=True,
+        )
+
+    # Legacy fallback — the existing Python MCP server.
     from cerefox.mcp_server import run  # noqa: PLC0415
 
     run()
