@@ -15,24 +15,33 @@ Open roadmap.
 
 ## [v0.4.1] -- 2026-05-27
 
-**Patch release** following the v0.4.0 first npm publish. Two corrections:
-the documented `npx` invocation is fixed to use `--package=` (required
-because the bin name `cerefox-mcp` doesn't match the package name
-`@cerefox/memory`), and the publish workflow switches to OIDC-only auth
-now that the bootstrap is complete.
+**Patch release** following the v0.4.0 first npm publish. Three corrections
+all stemming from observed-in-the-wild behaviour of the v0.4.0 bootstrap:
+the `bin` field in `@cerefox/memory`'s `package.json` is restored, the
+documented `npx` invocation gains `--package=`, and the publish workflow
+switches to OIDC-only auth now that the bootstrap is complete.
 
 ### Fixed
 
-- **`npx` invocation gains `--package=@cerefox/memory`.** Both the docs
-  (`docs/guides/migration-v0.4.md`, `docs/guides/connect-agents.md`,
-  `AGENT_GUIDE.md`, `CLAUDE.md`, `CONTRIBUTING.md`, CHANGELOG entries) and
-  the Python soft-wrapper in `src/cerefox/cli.py` previously used the
-  bare form `npx -y @cerefox/memory cerefox-mcp`, which npx ≥ 7 rejects
-  with `sh: cerefox-mcp: command not found` because the bin name doesn't
-  match the package's last path segment (`memory`). The corrected form
-  `npx -y --package=@cerefox/memory cerefox-mcp` works regardless of
-  npx version. Two unit tests in `tests/test_mcp_soft_wrapper.py` pin
-  the new probe + execvp argument lists.
+- **`@cerefox/memory`'s `bin` entry is now actually published.** The
+  v0.4.0 `package.json` declared `"bin": { "cerefox-mcp":
+  "./dist/bin/cerefox-mcp.js" }` (leading `./`). npm ≥ 11.5 silently
+  strips bin entries with leading `./` as "invalid script name" — the
+  warning is non-fatal so v0.4.0 published successfully, but the
+  shipped tarball had NO executable bins, so `npx … cerefox-mcp`
+  always failed with "command not found" regardless of how the
+  invocation was framed. Fix: drop the leading `./` in the bin path.
+  v0.4.1's shipped tarball includes the `cerefox-mcp` bin properly.
+- **`npx` invocation gains `--package=@cerefox/memory`.** Even with
+  the bin restored, the docs and the Python soft-wrapper in
+  `src/cerefox/cli.py` previously used the bare form `npx -y
+  @cerefox/memory cerefox-mcp`. The `--package=` form is the explicit,
+  unambiguous spelling required when the package name
+  (`@cerefox/memory`) differs from the bin name (`cerefox-mcp`) —
+  it works on every npx version and doesn't rely on the heuristic
+  that interprets the second positional arg as a bin name. Two unit
+  tests in `tests/test_mcp_soft_wrapper.py` pin the new probe +
+  execvp argument lists.
 
 ### Changed
 

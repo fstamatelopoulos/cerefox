@@ -27,7 +27,7 @@
     "bun": ">=1.0.0"
   },
   "bin": {
-    "cerefox-mcp": "./dist/bin/cerefox-mcp.js"
+    "cerefox-mcp": "dist/bin/cerefox-mcp.js"
   },
   "files": [
     "dist",
