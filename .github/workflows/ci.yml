@@ -1,0 +1,146 @@
+name: CI
+
+# Pre-release checks. Runs on every PR targeting main and on every push
+# to main (so anything that lands directly to main still gets validated).
+#
+# Three independent jobs so total wall-clock stays under ~90 seconds:
+#
+#   python      — ruff lint + format check + pytest -q (unit tests only;
+#                 e2e tests need live Supabase + are maintainer-only).
+#   ts-shared   — bun test inside _shared/.
+#   ts-memory   — bun install at the repo root, then build packages/memory/,
+#                 verify both bin invocations (`cerefox --version`,
+#                 `cerefox --help`, `cerefox mcp --help`), run the package's
+#                 tests, and verify the cerefox_get_help bundle is in sync
+#                 with AGENT_QUICK_REFERENCE.md.
+#
+# What's intentionally NOT here:
+#   - Live e2e tests (`pytest -m e2e`, `scripts/check_ef_parity.ts`) —
+#     they need Supabase credentials. Forks don't get the secret; the
+#     maintainer runs them manually before each cut and as part of
+#     docs/research/v0.5-manual-test-plan.md walks.
+#   - Schema-deploy / npm-publish dry runs — covered by release.yml at
+#     cut time.
+#
+# Designed so a future PR from a fork (no secrets) still passes every
+# check — the package's live test suite auto-skips when Supabase isn't
+# reachable.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-flight CI runs when a new commit is pushed to the same PR.
+# Keeps the queue tight; we don't care about the older run's result.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python — lint + unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv (Python toolchain)
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python (via uv)
+        run: uv python install 3.11
+
+      - name: Install Python deps
+        run: uv sync --frozen || uv sync
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format (check only)
+        run: uv run ruff format --check .
+
+      - name: Pytest (unit suite — no e2e)
+        # Default pytest config deselects @pytest.mark.e2e + @pytest.mark.ui;
+        # those need live Supabase / a running web app. We rely on that
+        # default here.
+        run: uv run pytest -q
+
+  ts-shared:
+    name: TS — _shared/ unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install workspace deps
+        # bun install at the repo root sets up all workspaces
+        # (`_shared`, `packages/memory`, `frontend`) per the
+        # `workspaces` declaration in the root package.json.
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Bun tests in _shared/
+        working-directory: _shared
+        run: bun test
+
+  ts-memory:
+    name: TS — @cerefox/memory build + smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Set up Node (for `node dist/bin/cerefox.js` smoke runs)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install workspace deps
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Build packages/memory
+        working-directory: packages/memory
+        run: bun run build
+
+      - name: Verify built bin runs
+        # Same shape as release.yml's pre-publish check — catches the
+        # class of regression that surfaced when v0.5.1 dropped the
+        # cerefox-mcp bin but the release workflow still referenced it.
+        run: |
+          node packages/memory/dist/bin/cerefox.js --version
+          node packages/memory/dist/bin/cerefox.js --help | head -5
+          node packages/memory/dist/bin/cerefox.js mcp --help | head -5
+
+      - name: cerefox_get_help bundle in sync
+        # `bundle_help.ts` produces `_shared/mcp-tools/get-help-content.ts`
+        # from `AGENT_QUICK_REFERENCE.md`. The check script regenerates
+        # the bundle in memory and diffs against the committed file. Fails
+        # fast if someone edited the MD but forgot to rerun the bundler.
+        run: bun scripts/check_help_bundle.ts
+
+      - name: TS unit + smoke tests
+        # `packages/memory/test/` has:
+        #   - cli-smoke (always runs; no DB needed)
+        #   - stdio-smoke (spawns the built bin and walks an MCP handshake)
+        #   - read-commands / write-commands / lifecycle-commands (live;
+        #     auto-skip via a probe when Supabase isn't reachable)
+        # On fork PRs without secrets the live ones skip; smoke + unit
+        # always run.
+        working-directory: packages/memory
+        run: bun test

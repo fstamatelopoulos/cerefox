@@ -186,6 +186,18 @@ The normal release flow for v0.3.0+ is:
 
 If something needs fixing after a tag is published, **cut a new patch version**. `cut_release.ts` refuses to overwrite an existing tag — see the SemVer & Deprecation Policy section above and Cerefox Decision Log Q2 Part 2.
 
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every PR targeting `main` and on every direct push to `main`. Three parallel jobs:
+
+| Job | What runs |
+|---|---|
+| **Python — lint + unit tests** | `uv run ruff check .` + `uv run ruff format --check .` + `uv run pytest -q` (unit only; `-m e2e`/`-m ui` markers are deselected by default). |
+| **TS — `_shared/` unit tests** | `bun install` from the repo root (hoists workspace deps), then `cd _shared && bun test`. |
+| **TS — `@cerefox/memory` build + smoke** | Builds `dist/bin/cerefox.js`, verifies the three smoke invocations (`--version`, `--help`, `mcp --help`), checks the `cerefox_get_help` bundle stays in sync with `AGENT_QUICK_REFERENCE.md`, runs the package's tests (cli-smoke + stdio-smoke always; live read/write/lifecycle tests auto-skip when Supabase isn't reachable — same probe pattern they use locally). |
+
+PRs must pass all three jobs before merge. Cold-cache wall clock is ~60-90 seconds. Live e2e tests (`pytest -m e2e`, `scripts/check_ef_parity.ts`) need Supabase credentials and are run manually by the maintainer before each cut — see `docs/research/v0.5-manual-test-plan.md`.
+
 ---
 
 ## Git Workflow
