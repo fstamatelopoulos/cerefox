@@ -1,10 +1,28 @@
 /**
  * `cerefox init` — interactive first-run bootstrap.
  *
- * Five-step flow that produces a working `~/.cerefox/.env` (or the
- * `CEREFOX_CONFIG_DIR`-pointed file), validates each entry against the
- * live service, and optionally ingests the bundled self-docs + wires up
- * an MCP client.
+ * Default target: `~/.cerefox/.env`. The CLI's path-resolution precedence
+ * (`_shared/config/paths.ts`) prefers this location once it exists, so
+ * writing here makes `~/.cerefox/.env` the canonical config from then on.
+ *
+ * Three resolution scenarios init handles:
+ *
+ *   1. **Fresh install** — neither `~/.cerefox/.env` nor `<cwd>/.env`
+ *      exists. Standard 5-step interactive flow, writes the home file.
+ *
+ *   2. **Migrating from Python** — `<cwd>/.env` exists but `~/.cerefox/.env`
+ *      doesn't. Init detects this and offers three choices:
+ *      `[c]` copy the existing file to `~/.cerefox/.env` (recommended —
+ *      TS reads the new home, Python keeps reading the repo file for
+ *      backward compat); `[u]` use the repo file as-is, skip writing
+ *      anything (defer the migration); `[f]` fresh start (ignore the
+ *      existing file, prompt for new answers, write to the home).
+ *
+ *   3. **Reconfiguring** — `~/.cerefox/.env` already exists. Standard
+ *      overwrite confirmation as before.
+ *
+ * `CEREFOX_CONFIG_DIR` honors the explicit override: when set, init writes
+ * there and skips the migration prompt entirely.
  *
  * Modes:
  *   - Interactive (default): prompts for each field with sensible
@@ -32,12 +50,14 @@
 import type { Command } from "commander";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 import {
   ask,
@@ -49,7 +69,10 @@ import {
   validators,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
-import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
+import {
+  resolveEnvFile,
+  USER_STATE_DIR_NAME,
+} from "../../../../../_shared/config/index.ts";
 import { WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
 
 interface InitOptions {
@@ -98,6 +121,54 @@ async function readConfigFile(path: string): Promise<ConfigAnswers> {
     CEREFOX_DATABASE_URL: typeof obj.CEREFOX_DATABASE_URL === "string" ? obj.CEREFOX_DATABASE_URL : undefined,
     CEREFOX_AUTHOR_NAME: typeof obj.CEREFOX_AUTHOR_NAME === "string" ? obj.CEREFOX_AUTHOR_NAME : undefined,
     CEREFOX_AUTHOR_TYPE: typeof obj.CEREFOX_AUTHOR_TYPE === "string" ? obj.CEREFOX_AUTHOR_TYPE : undefined,
+  };
+}
+
+/**
+ * Tiny `KEY=VALUE` parser used to validate an existing `.env` (during
+ * the [c] copy or [u] use-as-is paths) without polluting `process.env`.
+ * Existing dotenv libraries set `process.env` as a side effect, which
+ * would shadow values from a subsequent re-read.
+ */
+function parseDotEnvFile(content: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eqIdx = line.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = line.slice(0, eqIdx).trim();
+    let value = line.slice(eqIdx + 1).trim();
+    // Strip surrounding quotes if balanced.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    map[key] = value;
+  }
+  return map;
+}
+
+function answersFromEnvFile(path: string): ConfigAnswers {
+  const parsed = parseDotEnvFile(readFileSync(path, "utf8"));
+  const required = ["CEREFOX_SUPABASE_URL", "CEREFOX_SUPABASE_KEY", "OPENAI_API_KEY"] as const;
+  for (const key of required) {
+    if (!parsed[key] || parsed[key].trim() === "") {
+      throw userError(
+        `Existing .env at ${path} is missing required key "${key}".`,
+        `Fix it manually or run \`cerefox init --force\` to start fresh.`,
+      );
+    }
+  }
+  return {
+    CEREFOX_SUPABASE_URL: parsed.CEREFOX_SUPABASE_URL,
+    CEREFOX_SUPABASE_KEY: parsed.CEREFOX_SUPABASE_KEY,
+    OPENAI_API_KEY: parsed.OPENAI_API_KEY,
+    CEREFOX_DATABASE_URL: parsed.CEREFOX_DATABASE_URL,
+    CEREFOX_AUTHOR_NAME: parsed.CEREFOX_AUTHOR_NAME,
+    CEREFOX_AUTHOR_TYPE: parsed.CEREFOX_AUTHOR_TYPE,
   };
 }
 
@@ -240,47 +311,43 @@ async function validateOpenAI(key: string): Promise<void> {
   }
 }
 
-async function action(options: InitOptions): Promise<void> {
-  const envPath = resolveEnvFile();
-
-  if (existsSync(envPath) && !options.force) {
-    println(
-      c.yellow(`⚠ Config already exists at ${envPath}.`),
-    );
-    const ok = await confirm("Overwrite?", true);
-    if (!ok) {
-      println(c.dim("Aborted. Use `--force` to skip this prompt next time."));
-      return;
-    }
-  }
-
-  const answers = options.config
-    ? await readConfigFile(options.config)
-    : await promptForAnswers();
-
+/** Print the [c]/[u]/[f] migration menu once. */
+function printMigrationMenu(cwdEnv: string, homeEnv: string): void {
   println("");
-  println(c.bold("Validating credentials…"));
-
-  await validateSupabase(answers.CEREFOX_SUPABASE_URL, answers.CEREFOX_SUPABASE_KEY);
-  println(c.green("  ✓ Supabase reachable"));
-  await validateOpenAI(answers.OPENAI_API_KEY);
-  println(c.green("  ✓ OpenAI key valid (test embedding succeeded)"));
-
-  // Write the .env (chmod 600).
-  mkdirSync(dirname(envPath), { recursive: true });
-  writeFileSync(envPath, buildEnvFile(answers), "utf8");
-  if (process.platform !== "win32") {
-    try {
-      chmodSync(envPath, 0o600);
-    } catch {
-      // Couldn't chmod — surface as warning, don't block.
-      warn(`Could not chmod 0600 ${envPath}.`);
-    }
-  }
+  println(c.yellow(`⚠ Found existing config at ${cwdEnv}.`));
   println("");
-  println(c.green(`✓ Wrote ${envPath}`));
+  println("This may be from a previous Python install. The TS CLI can use the");
+  println("same .env — env-var names are identical, no rewrite needed.");
   println("");
+  println("  " + c.bold("[c]") + " Copy to " + homeEnv + "  " + c.green("(recommended)"));
+  println(c.dim("      • TS reads the new home from now on"));
+  println(c.dim("      • Python keeps reading " + cwdEnv + " (backward compat)"));
+  println(c.dim("      • Edit ~/.cerefox/.env going forward; the repo .env is legacy"));
+  println("");
+  println("  " + c.bold("[u]") + " Use " + cwdEnv + " as-is, skip writing anything");
+  println(c.dim("      • Both TS and Python keep reading the existing file"));
+  println(c.dim("      • Defer the migration"));
+  println("");
+  println("  " + c.bold("[f]") + " Fresh start — interactive prompts, write to " + homeEnv);
+  println(c.dim("      • Use if the existing file is stale or wrong"));
+  println("");
+}
 
+async function promptMigrationChoice(): Promise<"c" | "u" | "f"> {
+  const choice = await ask({
+    type: "text",
+    name: "choice",
+    message: "Choice (c/u/f) [c]",
+    initial: "c",
+    validate: (v) => /^[cuf]?$/i.test(v.trim()) || "Expected c, u, or f.",
+  });
+  const ch = (choice.trim().toLowerCase() || "c") as "c" | "u" | "f";
+  return ch;
+}
+
+/** Continue the lifecycle steps (self-docs + MCP wiring) after the .env
+ * is in place. Shared by all three branches. */
+async function postWriteLifecycle(envPath: string, options: InitOptions): Promise<void> {
   // Schema deploy: v0.5 deferred.
   if (!options.skipSchema) {
     println(c.bold("Schema deploy"));
@@ -340,6 +407,155 @@ async function action(options: InitOptions): Promise<void> {
   println(c.dim("  cerefox doctor              # verify everything"));
   println(c.dim("  cerefox search \"…\"          # search the KB"));
   println(c.dim("  cerefox ingest <file>       # add a doc"));
+  // Help users locate the file we just touched.
+  println("");
+  println(c.dim(`  Config in effect: ${envPath}`));
+}
+
+function writeAnswersTo(target: string, answers: ConfigAnswers): void {
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, buildEnvFile(answers), "utf8");
+  if (process.platform !== "win32") {
+    try {
+      chmodSync(target, 0o600);
+    } catch {
+      warn(`Could not chmod 0600 ${target}.`);
+    }
+  }
+}
+
+async function action(options: InitOptions): Promise<void> {
+  const homeEnv = join(homedir(), USER_STATE_DIR_NAME, ".env");
+  const cwdEnv = join(process.cwd(), ".env");
+  const explicitDir = (process.env.CEREFOX_CONFIG_DIR ?? "").trim();
+
+  // ─── Path A: CEREFOX_CONFIG_DIR override ──────────────────────────────
+  // Advanced users with an explicit override skip the migration prompt
+  // entirely. resolveEnvFile() honors the override.
+  if (explicitDir) {
+    const target = resolveEnvFile();
+    if (existsSync(target) && !options.force) {
+      println(c.yellow(`⚠ Config already exists at ${target}.`));
+      const ok = await confirm("Overwrite?", true);
+      if (!ok) {
+        println(c.dim("Aborted. Use `--force` to skip this prompt next time."));
+        return;
+      }
+    }
+    const answers = options.config
+      ? await readConfigFile(options.config)
+      : await promptForAnswers();
+    println("");
+    println(c.bold("Validating credentials…"));
+    await validateSupabase(answers.CEREFOX_SUPABASE_URL, answers.CEREFOX_SUPABASE_KEY);
+    println(c.green("  ✓ Supabase reachable"));
+    await validateOpenAI(answers.OPENAI_API_KEY);
+    println(c.green("  ✓ OpenAI key valid (test embedding succeeded)"));
+    writeAnswersTo(target, answers);
+    println("");
+    println(c.green(`✓ Wrote ${target}`));
+    println("");
+    await postWriteLifecycle(target, options);
+    return;
+  }
+
+  // ─── Path B: ~/.cerefox/.env already exists (reconfigure) ─────────────
+  if (existsSync(homeEnv) && !options.force) {
+    println(c.yellow(`⚠ Config already exists at ${homeEnv}.`));
+    const ok = await confirm("Overwrite?", true);
+    if (!ok) {
+      println(c.dim("Aborted. Use `--force` to skip this prompt next time."));
+      return;
+    }
+    const answers = options.config
+      ? await readConfigFile(options.config)
+      : await promptForAnswers();
+    println("");
+    println(c.bold("Validating credentials…"));
+    await validateSupabase(answers.CEREFOX_SUPABASE_URL, answers.CEREFOX_SUPABASE_KEY);
+    println(c.green("  ✓ Supabase reachable"));
+    await validateOpenAI(answers.OPENAI_API_KEY);
+    println(c.green("  ✓ OpenAI key valid (test embedding succeeded)"));
+    writeAnswersTo(homeEnv, answers);
+    println("");
+    println(c.green(`✓ Wrote ${homeEnv}`));
+    println("");
+    await postWriteLifecycle(homeEnv, options);
+    return;
+  }
+
+  // ─── Path C: legacy <cwd>/.env exists, ~/.cerefox/.env doesn't ────────
+  // Migration scenario. Offer [c]opy / [u]se-as-is / [f]resh.
+  if (existsSync(cwdEnv) && !options.force && !options.config) {
+    printMigrationMenu(cwdEnv, homeEnv);
+    const ch = await promptMigrationChoice();
+    println("");
+
+    if (ch === "c") {
+      // Copy + validate + lifecycle.
+      mkdirSync(dirname(homeEnv), { recursive: true });
+      copyFileSync(cwdEnv, homeEnv);
+      if (process.platform !== "win32") {
+        try {
+          chmodSync(homeEnv, 0o600);
+        } catch {
+          warn(`Could not chmod 0600 ${homeEnv}.`);
+        }
+      }
+      println(c.green(`✓ Copied ${cwdEnv} → ${homeEnv}`));
+      println(c.dim(`  Repo file unchanged — Python still reads it during migration.`));
+      println("");
+
+      // Validate the copied config against live services.
+      const answers = answersFromEnvFile(homeEnv);
+      println(c.bold("Validating credentials…"));
+      await validateSupabase(answers.CEREFOX_SUPABASE_URL, answers.CEREFOX_SUPABASE_KEY);
+      println(c.green("  ✓ Supabase reachable"));
+      await validateOpenAI(answers.OPENAI_API_KEY);
+      println(c.green("  ✓ OpenAI key valid (test embedding succeeded)"));
+      println("");
+      await postWriteLifecycle(homeEnv, options);
+      return;
+    }
+
+    if (ch === "u") {
+      // Use-as-is — validate the existing file, skip the write entirely.
+      const answers = answersFromEnvFile(cwdEnv);
+      println(c.bold("Validating existing config…"));
+      await validateSupabase(answers.CEREFOX_SUPABASE_URL, answers.CEREFOX_SUPABASE_KEY);
+      println(c.green("  ✓ Supabase reachable"));
+      await validateOpenAI(answers.OPENAI_API_KEY);
+      println(c.green("  ✓ OpenAI key valid (test embedding succeeded)"));
+      println("");
+      println(c.green(`✓ Using existing config at ${cwdEnv}`));
+      println(c.dim(`  TS reads it via the legacy dev-mode fallback (~/.cerefox/.env not present).`));
+      println(c.dim(`  Run \`cerefox init\` again later to migrate to the new home.`));
+      println("");
+      await postWriteLifecycle(cwdEnv, options);
+      return;
+    }
+
+    // ch === "f" — fall through to fresh prompts targeting the home file.
+    println(c.dim(`Fresh start. Ignoring ${cwdEnv}; writing a new config to ${homeEnv}.`));
+    println("");
+  }
+
+  // ─── Path D: fresh install (no config anywhere) OR [f] fresh-start ───
+  const target = homeEnv;
+  const answers = options.config
+    ? await readConfigFile(options.config)
+    : await promptForAnswers();
+  println("");
+  println(c.bold("Validating credentials…"));
+  await validateSupabase(answers.CEREFOX_SUPABASE_URL, answers.CEREFOX_SUPABASE_KEY);
+  println(c.green("  ✓ Supabase reachable"));
+  await validateOpenAI(answers.OPENAI_API_KEY);
+  println(c.green("  ✓ OpenAI key valid (test embedding succeeded)"));
+  writeAnswersTo(target, answers);
+  println("");
+  println(c.green(`✓ Wrote ${target}`));
+  println("");
+  await postWriteLifecycle(target, options);
 }
 
 export function registerInit(program: Command): void {
