@@ -2269,15 +2269,15 @@ Common parity-test infrastructure (per command):
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 23B.1 | Port `cerefox search` | Pending | `--match-count`, `--project-name`, `--metadata-filter`, `--mode`, `--alpha`, `--min-score`, `--max-bytes`, `--requestor`, `--json`. Calls `cerefox-search` Edge Function (same path as Python). |
-| 23B.2 | Port `cerefox get-doc <document-id>` | Pending | `--version-id`, `--requestor`, `--json`. Calls `cerefox_get_document` RPC via the Data API. |
-| 23B.3 | Port `cerefox list-docs` | Pending | `--project`, `--limit`, `--json`. Pure Data API; no embedding step. |
-| 23B.4 | Port `cerefox list-versions <document-id>` | Pending | `--requestor`, `--json`. Calls `cerefox_list_document_versions` RPC. |
-| 23B.5 | Port `cerefox list-projects` | Pending | `--requestor`, `--json`. Calls `cerefox_list_projects` RPC. |
-| 23B.6 | Port `cerefox list-metadata-keys` | Pending | `--requestor`, `--json`. Calls `cerefox_list_metadata_keys` RPC. |
-| 23B.7 | Port `cerefox metadata-search` | Pending | `--metadata-filter` (JSON), `--project-name`, `--updated-since`, `--include-content`, `--limit`, `--requestor`, `--json`. Calls `cerefox-metadata-search` Edge Function. |
-| 23B.8 | Port `cerefox get-audit-log` | Pending | `--document-id`, `--author`, `--operation`, `--since`, `--until`, `--limit`, `--json`, `--requestor`. Calls `cerefox_list_audit_entries` RPC. |
-| 23B.9 | Parity test suite for all 8 read commands | Pending | One test per command × 3 input shapes = ~24 tests under `packages/memory/test/parity/read.test.ts`. Skipped by default; run via `bun test --filter parity` after each command port. Pinned by snapshot. |
+| 23B.1 | Port `cerefox search` | Done | Embeds the query client-side via `_shared/embeddings/getEmbedding()` (same path as MCP `cerefox_search`); calls `cerefox_search_docs` / `cerefox_hybrid_search` / `cerefox_fts_search` based on `--mode`. All flags ported: `--match-count`, `--project-name`, `--metadata-filter`, `--mode`, `--alpha`, `--min-score`, `--max-bytes`, `--requestor`, `--json`. **Refinement vs original plan**: direct RPC, not the EF — keeps the CLI's "talk to the DB directly" identity consistent with the rest of the commands, and matches the Python CLI's pattern. The EF path stays available for GPT Actions etc. |
+| 23B.2 | Port `cerefox get-doc <document-id>` | Done | Calls `cerefox_get_document(p_document_id, p_version_id)` via the Data API. Maps RPC empty-result to exit 3 (not found). Human-readable output matches the Python CLI's `# Title` / dim metadata line / blank / content layout. |
+| 23B.3 | Port `cerefox list-docs` | Done | Direct PostgREST query against `cerefox_documents` (filters out `deleted_at IS NULL`, orders by `updated_at` desc). `--project` resolves project name → ID then filters via the `cerefox_document_projects` junction. **Caught and fixed during build**: `metadata` is the actual column name (not `doc_metadata` — my initial type was wrong). |
+| 23B.4 | Port `cerefox list-versions <document-id>` | Done | Calls `cerefox_list_document_versions(p_document_id)`. Distinguishes "doc has no versions yet" (empty result, doc exists) from "doc not found" (empty result, doc missing) — falls back to a `cerefox_documents.id` lookup in the empty case and raises exit 3 if the doc is genuinely missing. |
+| 23B.5 | Port `cerefox list-projects` | Done | Direct `cerefox_projects` query, ordered by name. Best-effort `cerefox_log_usage` RPC fire-and-forget for the usage log (same pattern reused across all read commands). |
+| 23B.6 | Port `cerefox list-metadata-keys` | Done | Calls `cerefox_list_metadata_keys` RPC, prints {key, doc_count, example_values[0..3]}. |
+| 23B.7 | Port `cerefox metadata-search` | Done | Calls `cerefox_metadata_search` RPC directly. All flags ported including `--include-content` + `--max-bytes`. Required-option enforcement via commander's `requiredOption`; empty-object filter detected and rejected (exit 1, matches the MCP tool's `McpInvalidParams` semantics). |
+| 23B.8 | Port `cerefox get-audit-log` | Done | Calls `cerefox_list_audit_entries` with all 6 optional filters. `--limit` clamped to 200 server-side; CLI passes through. Defensive null-handling on `created_at` / `doc_title` / `document_id` after smoke-test surfaced a real audit row with null `doc_title` from a previously-deleted document. |
+| 23B.9 | Read-commands test suite | Done | `packages/memory/test/read-commands.test.ts` — **12 live tests** against the maintainer's Supabase: JSON shape validation, `--limit` enforcement, error paths (bogus project → exit 1, bogus UUID → exit 3, missing required option → exit 1, invalid JSON → exit 1, empty filter → exit 1, empty query → exit 1, fts mode works without embedding). Auto-skipped when Supabase isn't reachable (probes `list-projects --json` at module load). |
 
 ### 23C: Write commands ported + ingestion via EF
 

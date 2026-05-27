@@ -101,11 +101,15 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(status).toBe(1);
   });
 
-  test("stub command (search) exits 2 (system error) with not-yet-implemented hint", () => {
-    const { stderr, status } = run(["search", "anything"]);
+  test("stub command (init) exits 2 (system error) with not-yet-implemented hint", () => {
+    // `init` lands in Part 23E.1. Pick a command we know stays a stub
+    // longer than the surrounding parts so this assertion doesn't break
+    // as the migration proceeds. Once 23E lands, swap to a still-stubbed
+    // command (e.g. `configure-agent`) or remove this test entirely.
+    const { stderr, status } = run(["init"]);
     expect(status).toBe(2);
     expect(stderr).toContain("not yet implemented");
-    expect(stderr).toContain("23B.1");
+    expect(stderr).toContain("23E.1");
   });
 
   test("`cerefox web` prints v0.5-deferred message and exits 0", () => {

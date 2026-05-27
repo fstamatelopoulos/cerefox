@@ -236,3 +236,12 @@ _shared/bun.lockb
 /node_modules/
 /bun.lock
 /bun.lockb
+
+# Per-package Bun/npm workspace install artifacts. The `packages/*/node_modules/`
+# pattern matches `@cerefox/memory`'s and any future sibling packages' install
+# dirs. (The v0.4.0 merge accidentally tracked these as symlinks — see iter-22
+# Decision Log for the cleanup story.)
+packages/*/node_modules/
+packages/*/dist/
+packages/*/bun.lock
+packages/*/bun.lockb
