@@ -2218,7 +2218,7 @@ Major risk vectors:
    release. Tracked as **23I.10**.
 8. **Test coverage**: more aggressive than iter-22. Build tests per command as the
    implementation lands. Maintain a manual test plan doc at
-   `docs/research/v0.5-manual-test-plan.md` covering happy paths, error paths, and
+   `docs/research/v0.7-manual-test-plan.md` covering happy paths, error paths, and
    the clean-macOS-install scenario. Tracked as **23J.7**.
 9. **`configure-agent` Phase 1** = Claude Code + Claude Desktop only. Cursor, Codex,
    Gemini ship later in v0.5.x or v0.6. Confirmed.
@@ -2388,8 +2388,8 @@ The closing iteration step. Mirrors iter-22 Part G.
 | 23J.3 | Mark all Iteration 23 sub-tasks with final status | Done | Every row across 23A-23J shows Done / Deferred-post-merge / Skipped with a one-line outcome note. |
 | 23J.4 | Open PR for v0.5.0 | Done | Single PR per maintainer's direction (single-PR with phased commits, not split). Branch `feat/v0.5.0-ts-cli`, ~12 commits, ~60 sub-tasks landed. PR URL recorded in the closeout commit message. |
 | 23J.5 | Post-merge: cut v0.5.0 | Pending (post-merge maintainer task) | `bun scripts/cut_release.ts 0.5.0 --npm-publish`. Pre-flight checks per Decision Log Q2 Part 3 procedure: `git grep -F "0.4.3" packages/ scripts/ _shared/` should be empty (or only intentional historical refs); `cd packages/memory && bun run bundle-docs && npm pack --dry-run` should emit no `bin[*]` warnings; CHANGELOG `[Unreleased]` should have real content (verified by `cut_release.ts`); `install.sh` should auto-attach to the GitHub Release. |
-| 23J.6 | Post-publish verification (3-way) | Pending (post-merge maintainer task) | From `/tmp`: registry HEAD 200, `jq .bin/.version` shows both `cerefox` + `cerefox-mcp` bins + version 0.5.0, `npx -y --package=@cerefox/memory@0.5.0 cerefox --version` prints 0.5.0. Run `cerefox doctor` against a fresh install to confirm all green. Optional but recommended: walk the manual test plan (`docs/research/v0.5-manual-test-plan.md`) on the clean macOS box. |
-| 23J.7 | Write `docs/research/v0.5-manual-test-plan.md` | Done | 11-section living checklist: install paths, read/write/server/ops commands, lifecycle, self-doc ingest, tab completion, polish, Python deprecation, three-way post-publish verification, edge cases. Each section has a Status line + checkboxes; marks "(automated)" for items covered by the TS test suite. Maintained per release. |
+| 23J.6 | Post-publish verification (3-way) | Pending (post-merge maintainer task) | From `/tmp`: registry HEAD 200, `jq .bin/.version` shows both `cerefox` + `cerefox-mcp` bins + version 0.5.0, `npx -y --package=@cerefox/memory@0.5.0 cerefox --version` prints 0.5.0. Run `cerefox doctor` against a fresh install to confirm all green. Optional but recommended: walk the manual test plan (`docs/research/v0.7-manual-test-plan.md`) on the clean macOS box. |
+| 23J.7 | Write `docs/research/v0.7-manual-test-plan.md` | Done | 11-section living checklist: install paths, read/write/server/ops commands, lifecycle, self-doc ingest, tab completion, polish, Python deprecation, three-way post-publish verification, edge cases. Each section has a Status line + checkboxes; marks "(automated)" for items covered by the TS test suite. Maintained per release. |
 
 **Total**: ~60 sub-tasks across 10 parts.
 
@@ -2433,6 +2433,8 @@ single-package model).
 - `cerefox web` (TS) replaces `cerefox web` (Python).
 - Python `api/app.py` + `api/routes_api.py` deprecated but kept around (same indefinite-shim policy as iter-20's other Python shims).
 - First-run UX in web UI: empty-state getting-started panel.
+- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.6.0 section covering: `cerefox web` boot smoke, Hono response-shape parity against FastAPI snapshots, web UI loads served from the bundled `frontend/dist/`, deprecation messaging when the Python web server is invoked.
+- **Add v0.6 entry to Cerefox Decision Log Q2 Part 4** (or a new Part 5 if Part 4 has crossed 50K chars) capturing the FastAPI → Hono port decisions, parity strategy, and any platform gotchas surfaced during the cut.
 
 ---
 
@@ -2457,6 +2459,8 @@ consolidated single-package model).
 - The `cerefox-ingest` Edge Function (Deno) also imports the same `_shared/ingest/` modules — one chunking implementation, two consumers, like the v0.4 `_shared/mcp-tools/` pattern.
 - PDF/DOCX support **dropped**; CHANGELOG announces removal.
 - Remaining `scripts/*.py` ported to `scripts/*.ts` per the §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. All become TS scripts that consume `_shared/ingest/` and `_shared/db-client/`.
+- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.7.0 section covering: chunking byte-parity vs the Python pipeline (deterministic input → identical chunk boundaries), embedding round-trip + cosine-similarity sanity check against the same content embedded by v0.6, `cerefox ingest` end-to-end on a real repo, schema-deploy via the new TS script. This is the final tick on the rolling plan — sections that no longer apply (Python-only flows) get marked superseded rather than removed, preserving the audit trail.
+- **Add v0.7 entry to the Cerefox Decision Log** capturing the chunking-parity decision (byte-identical vs. semantically-equivalent), the PDF/DOCX drop rationale, and the TS-port-of-scripts/* policy decisions surfaced during the cut.
 
 ---
 

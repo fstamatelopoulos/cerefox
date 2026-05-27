@@ -352,7 +352,7 @@ Migration guide: [`docs/guides/migration-v0.5.md`](docs/guides/migration-v0.5.md
   Python tests for the banner-suppression cases).
 
 Manual test plan tracked at
-[`docs/research/v0.5-manual-test-plan.md`](docs/research/v0.5-manual-test-plan.md).
+[`docs/research/v0.7-manual-test-plan.md`](docs/research/v0.7-manual-test-plan.md).
 
 ---
 
