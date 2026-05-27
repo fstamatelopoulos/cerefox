@@ -1,55 +1,101 @@
 /**
  * MCP client config writers.
  *
- * Each supported client has its own config-file location and JSON
- * shape, but the contract is the same: read the existing file (if any),
- * back it up to `<file>.pre-cerefox.bak`, merge the Cerefox server
- * config into the `mcpServers` block, write back.
+ * Two implementation kinds, per client:
  *
- * The merge is non-destructive: existing server entries are preserved;
- * only the `cerefox` key is overwritten (or added).
+ *   - **direct-write**: the writer manages a JSON config file directly
+ *     (read existing → back up to `<file>.pre-cerefox.bak` → merge the
+ *     Cerefox server entry into `mcpServers` → write back). Used for
+ *     **Claude Desktop**, which has no dedicated CLI helper for editing
+ *     its config.
+ *
+ *   - **delegated**: the writer shells out to the target client's own
+ *     CLI to register the server (e.g. `claude mcp add --scope user`).
+ *     The target CLI knows its own config schema and stable storage
+ *     location, so delegating is future-proof and avoids the risk of
+ *     corrupting a large user-config file. Used for **Claude Code**.
+ *     A defensive backup of the canonical user-config (`~/.claude.json`)
+ *     is taken before invoking the delegated CLI.
+ *
+ * v0.5.0–v0.5.3 history: the Claude Code writer was direct-write to
+ * `~/.claude/mcp.json` — but that's not a path Claude Code reads. The
+ * canonical Claude Code user-scope config is `~/.claude.json` (a
+ * dot-file in `$HOME`) under the `mcpServers` key. v0.5.4 switches the
+ * Claude Code writer to delegated (`claude mcp add --scope user`) so
+ * the target client manages its own config. See the Cerefox Decision
+ * Log entry "2026-05-27 — v0.5.4 claude-code writer shell-out" for the
+ * rationale.
  *
  * Phase 1 (v0.5): Claude Code + Claude Desktop. Cursor + Codex + Gemini
  * ship in v0.5.x or v0.6 — adding one means adding a `Writer` entry to
  * `WRITERS` below.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
+import { spawnSync } from "node:child_process";
+
+export type WriterKind = "direct-write" | "delegated";
 
 export interface ConfigWriter {
   /** Stable client identifier used as the --tool flag value. */
   id: "claude-code" | "claude-desktop";
   /** Human-readable label for log lines. */
   label: string;
-  /** Resolved absolute path to the config file the writer manages. */
+  /**
+   * "direct-write": this writer manages the config file itself.
+   * "delegated": this writer shells out to the target client's CLI.
+   */
+  kind: WriterKind;
+  /**
+   * For direct-write: absolute path the writer manages.
+   * For delegated: the canonical path that the delegated CLI typically
+   * updates (used for the defensive backup and for the doctor check).
+   */
   configPath: string;
   /**
-   * Build the JSON the writer needs to set under
-   * `mcpServers.cerefox` (or equivalent path). Returns the value, not
-   * a partial — the merge code installs it under the right key.
+   * The MCP server JSON entry — `{ command, args }`. Same shape for both
+   * kinds; the dispatcher decides how to install it.
    */
-  buildServerEntry: () => Record<string, unknown>;
+  buildServerEntry: () => { command: string; args: string[] };
+  /**
+   * For delegated writers: the external command + args used to register
+   * the server. The first element is the executable; remaining elements
+   * are its arguments. Resolved into a full command line at run time.
+   */
+  delegated?: () => { cmd: string; args: string[] };
 }
 
 /**
- * Cerefox MCP server entry. Same shape for both Claude Code and Desktop.
+ * Cerefox MCP server entry.
  *
  * v0.5.1: switched from invoking the legacy `cerefox-mcp` bin (dropped
  * in v0.5.1) to invoking the canonical `cerefox` bin with the `mcp`
- * subcommand. The third positional arg `mcp` is passed to the bin as
- * argv[1] — same MCP server, one bin to maintain.
+ * subcommand.
+ *
+ * Uses the npx form (rather than direct `cerefox mcp`) so the MCP client
+ * doesn't need cerefox on its launch PATH — npx resolves from the npm
+ * cache regardless of shell PATH augmentations.
  */
-function defaultCerefoxEntry(): Record<string, unknown> {
+function defaultCerefoxEntry(): { command: string; args: string[] } {
   return {
     command: "npx",
     args: ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
   };
 }
 
-function claudeCodeConfigPath(): string {
-  return join(homedir(), ".claude", "mcp.json");
+function claudeCodeUserConfigPath(): string {
+  // Claude Code's user-scope config — the single dot-file in $HOME.
+  // `~/.claude/` is a directory for Claude Code's caches and history,
+  // NOT for MCP servers.
+  return join(homedir(), ".claude.json");
 }
 
 function claudeDesktopConfigPath(): string {
@@ -63,16 +109,29 @@ function claudeDesktopConfigPath(): string {
   return join(home, ".config", "Claude", "claude_desktop_config.json");
 }
 
+/** Build the `claude mcp add ...` argv for the Claude Code delegation. */
+function claudeCodeDelegated(): { cmd: string; args: string[] } {
+  const entry = defaultCerefoxEntry();
+  // `claude mcp add <name> --scope user -- <cmd> [args...]`
+  return {
+    cmd: "claude",
+    args: ["mcp", "add", "cerefox", "--scope", "user", "--", entry.command, ...entry.args],
+  };
+}
+
 export const WRITERS: Record<string, ConfigWriter> = {
   "claude-code": {
     id: "claude-code",
     label: "Claude Code",
-    configPath: claudeCodeConfigPath(),
+    kind: "delegated",
+    configPath: claudeCodeUserConfigPath(),
     buildServerEntry: defaultCerefoxEntry,
+    delegated: claudeCodeDelegated,
   },
   "claude-desktop": {
     id: "claude-desktop",
     label: "Claude Desktop",
+    kind: "direct-write",
     configPath: claudeDesktopConfigPath(),
     buildServerEntry: defaultCerefoxEntry,
   },
@@ -81,29 +140,43 @@ export const WRITERS: Record<string, ConfigWriter> = {
 export interface WriteResult {
   configPath: string;
   backupPath: string | null;
-  action: "created" | "merged" | "replaced";
-  serverEntry: Record<string, unknown>;
+  action: "created" | "merged" | "replaced" | "delegated";
+  serverEntry: { command: string; args: string[] };
+  /** For delegated writers: the command line we invoked (for logging). */
+  delegatedCommand?: string;
 }
 
 /**
- * Merge a Cerefox server entry into the target client's config file.
+ * Merge a Cerefox server entry into the target client's config.
  *
- * - If the file doesn't exist: create it with `mcpServers.cerefox = entry`.
- * - If it exists: back it up to `<file>.pre-cerefox.bak` (unless
- *   `noBackup`), merge into `mcpServers`, write back. Preserves all
- *   other content.
- *
- * `customPath` overrides the writer's default location (used by tests
- * + the `--config-path` flag).
+ * `customPath` overrides the writer's default file location (used by
+ * tests + the `--config-path` flag). When `customPath` is provided AND
+ * the writer is `delegated`, this falls back to a direct write at
+ * `customPath` — the override is treated as "write here, skip the
+ * delegated CLI". This keeps the legacy test path working.
  */
 export function writeMcpConfig(
   writer: ConfigWriter,
   opts: { customPath?: string; noBackup?: boolean; dryRun?: boolean } = {},
 ): WriteResult {
-  const configPath = opts.customPath ?? writer.configPath;
+  // --config-path always wins. If the writer is delegated but the user
+  // (or a test) asked for a specific file, do a direct write there.
+  if (opts.customPath) {
+    return directWrite({ ...writer, kind: "direct-write" }, opts.customPath, opts);
+  }
+  if (writer.kind === "delegated") {
+    return delegatedWrite(writer, opts);
+  }
+  return directWrite(writer, writer.configPath, opts);
+}
+
+function directWrite(
+  writer: ConfigWriter,
+  configPath: string,
+  opts: { noBackup?: boolean; dryRun?: boolean },
+): WriteResult {
   const entry = writer.buildServerEntry();
 
-  // Ensure parent dir exists (Claude Desktop ones can be missing).
   if (!opts.dryRun) mkdirSync(dirname(configPath), { recursive: true });
 
   let existing: Record<string, unknown> = {};
@@ -139,4 +212,73 @@ export function writeMcpConfig(
   }
 
   return { configPath, backupPath, action, serverEntry: entry };
+}
+
+/**
+ * Shell out to the target client's CLI (e.g. `claude mcp add ...`).
+ *
+ * Takes a defensive backup of the writer's canonical configPath BEFORE
+ * invoking the delegated CLI, so the user has a recovery point if the
+ * external CLI behaves unexpectedly.
+ *
+ * Throws if the delegated CLI isn't on PATH or returns a non-zero exit.
+ */
+function delegatedWrite(
+  writer: ConfigWriter,
+  opts: { noBackup?: boolean; dryRun?: boolean },
+): WriteResult {
+  if (!writer.delegated) {
+    throw new Error(`${writer.label}: kind=delegated but no delegated() factory`);
+  }
+  const { cmd, args } = writer.delegated();
+  const entry = writer.buildServerEntry();
+  const delegatedCommand = `${cmd} ${args.join(" ")}`;
+
+  if (opts.dryRun) {
+    return {
+      configPath: writer.configPath,
+      backupPath: null,
+      action: "delegated",
+      serverEntry: entry,
+      delegatedCommand,
+    };
+  }
+
+  // Defensive backup of the canonical user-config — the delegated CLI
+  // typically updates this file. Even if it writes elsewhere, having a
+  // pre-cerefox snapshot of $HOME/.claude.json is cheap insurance.
+  let backupPath: string | null = null;
+  if (!opts.noBackup && existsSync(writer.configPath)) {
+    backupPath = writer.configPath + ".pre-cerefox.bak";
+    copyFileSync(writer.configPath, backupPath);
+  }
+
+  // Invoke the delegated CLI synchronously, inheriting stdio so the user
+  // sees its messages directly.
+  const result = spawnSync(cmd, args, { stdio: "inherit" });
+  if (result.error) {
+    const err = result.error as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") {
+      throw new Error(
+        `${writer.label}: \`${cmd}\` not found on PATH. ` +
+          `Install ${writer.label} (https://docs.claude.com/en/docs/claude-code) ` +
+          `and re-run \`cerefox configure-agent --tool ${writer.id}\`.`,
+      );
+    }
+    throw new Error(`${writer.label}: failed to spawn \`${cmd}\`: ${err.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `${writer.label}: \`${delegatedCommand}\` exited with status ${result.status ?? "unknown"}. ` +
+        `Check the output above; you may need to update or re-authenticate ${writer.label}.`,
+    );
+  }
+
+  return {
+    configPath: writer.configPath,
+    backupPath,
+    action: "delegated",
+    serverEntry: entry,
+    delegatedCommand,
+  };
 }

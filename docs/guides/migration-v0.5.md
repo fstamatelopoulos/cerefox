@@ -11,8 +11,9 @@ v0.5.3), and the Python `cerefox` → TS `cerefox` migration path.
 | Never used Cerefox before | [`quickstart.md`](quickstart.md) first, then come back here only if you hit a `.env` / config question |
 | Python `cerefox` (any version through v0.5.x) | "What changed" → "Install paths" → "v0.5.3 migrated `.env`" sections below |
 | `@cerefox/memory` v0.4.x (npm) | "Upgrading an existing MCP client config" → "v0.5.2 fixed the soft wrapper" → "v0.5.3 migrated `.env`" |
-| `@cerefox/memory` v0.5.0 or v0.5.1 (npm) | "v0.5.2 fixed the soft wrapper" + "v0.5.3 migrated `.env`" |
-| `@cerefox/memory` v0.5.2 (npm) | "v0.5.3 migrated `.env`" — the rest is unchanged |
+| `@cerefox/memory` v0.5.0 or v0.5.1 (npm) | "v0.5.2 fixed the soft wrapper" + "v0.5.3 migrated `.env`" + "v0.5.4 fixed configure-agent claude-code" |
+| `@cerefox/memory` v0.5.2 (npm) | "v0.5.3 migrated `.env`" + "v0.5.4 fixed configure-agent claude-code" |
+| `@cerefox/memory` v0.5.3 (npm) | **"v0.5.4 fixed configure-agent claude-code"** — re-run configure-agent |
 
 > Looking for `migration-v0.4.md`? It's been demoted to a historical
 > record (the bin names it documents no longer exist). Everything you
@@ -269,6 +270,64 @@ When this module goes away in v0.9+, the divergence resolves naturally.
 If you have `CEREFOX_CONFIG_DIR` set (e.g. for a non-standard install),
 it still wins over both home and repo `.env` files. Init writes there
 and skips the migration prompt.
+
+---
+
+## v0.5.4 fixed `cerefox configure-agent --tool claude-code`
+
+**If you ran `cerefox configure-agent --tool claude-code` on any version
+from v0.5.0 through v0.5.3, Claude Code did not actually pick up the
+config.** The writer wrote to `~/.claude/mcp.json` — a path Claude Code
+doesn't read. Claude Code's user-scope MCP servers live in
+**`~/.claude.json`** (a dot-file in `$HOME`) under the `.mcpServers` key.
+
+The bug went unnoticed because `cerefox doctor` was scanning the same
+wrong path — both surfaces were consistently lying.
+
+### What v0.5.4 changed
+
+- **`configure-agent --tool claude-code`** now shells out to Claude Code's
+  own `claude mcp add --scope user` CLI. Claude Code manages its own
+  config schema; delegating is future-proof. Requires the `claude` CLI
+  on PATH (fair assumption — you're configuring it).
+- Before invoking the delegated CLI, the writer takes a defensive backup
+  of `~/.claude.json` to `~/.claude.json.pre-cerefox.bak`.
+- **`cerefox doctor`** now scans `~/.claude.json` for a `mcpServers.cerefox`
+  entry (not the orphaned `~/.claude/mcp.json` from the bug window).
+- **`--tool claude-desktop` is unchanged** — Claude Desktop has no CLI
+  helper, so its writer remains direct-file-write.
+
+### What you need to do
+
+Anyone who ran `configure-agent --tool claude-code` on v0.5.0–v0.5.3:
+
+```bash
+# 1. Upgrade
+bun update -g @cerefox/memory      # or: npm update -g @cerefox/memory
+
+# 2. (Optional) Remove the orphaned file the buggy versions wrote.
+#    It does nothing — Claude Code never read it. Safe to delete.
+rm -f ~/.claude/mcp.json
+
+# 3. Re-run configure-agent to write the config at the correct path.
+cerefox configure-agent --tool claude-code
+
+# 4. Verify
+claude mcp list                    # should now show 'cerefox'
+cerefox doctor                     # 'mcp clients' should list 'Claude Code (user)'
+
+# 5. Start a fresh Claude Code session — the cerefox tools appear.
+```
+
+Running sessions cache the MCP server list at startup, so an
+**already-open Claude Code session won't pick up the new server**.
+Open a new session.
+
+### `--config-path FILE` override (advanced)
+
+If you pass `--config-path FILE` explicitly, configure-agent does a
+direct-write to FILE instead of shelling out — preserves the v0.5.0–v0.5.3
+test path and works for power users who want a specific file location.
 
 ---
 
