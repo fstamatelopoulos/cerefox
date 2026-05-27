@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.5.4] -- 2026-05-27
+
 **v0.5.4 fixes `cerefox configure-agent --tool claude-code`** — the writer in
 v0.5.0–v0.5.3 wrote to `~/.claude/mcp.json`, a path Claude Code never reads.
 The bug shipped silently to npm because doctor scanned the same wrong path.
