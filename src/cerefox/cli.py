@@ -1015,8 +1015,13 @@ def _run_mcp() -> None:
         # npx's local cache). We don't want `npx` to silently pull from the
         # registry on every server start — that adds a multi-second delay on
         # first run and a hidden network dependency.
+        #
+        # `--package=@cerefox/memory` is required because the package name
+        # (`@cerefox/memory`) doesn't match the bin name (`cerefox-mcp`).
+        # Without it, npx looks for a `memory` bin and falls through to
+        # "cerefox-mcp: command not found".
         probe = subprocess.run(
-            [npx, "--no-install", "@cerefox/memory", "--version"],
+            [npx, "--no-install", "--package=@cerefox/memory", "cerefox-mcp", "--version"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -1025,7 +1030,10 @@ def _run_mcp() -> None:
         if probe.returncode == 0:
             # Forward stdio cleanly; replace the current process so the MCP
             # client's stdio pipes connect directly to the TS server.
-            os.execvp(npx, [npx, "--no-install", "@cerefox/memory", "cerefox-mcp"])
+            os.execvp(
+                npx,
+                [npx, "--no-install", "--package=@cerefox/memory", "cerefox-mcp"],
+            )
             # `execvp` doesn't return on success. The `return` below is
             # defensive — tests sometimes mock execvp so it returns
             # normally, and we don't want the legacy fallback to kick in

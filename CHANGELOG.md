@@ -9,7 +9,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Patch release** following the v0.4.0 first npm publish. Two corrections:
+the documented `npx` invocation is fixed to use `--package=` (required
+because the bin name `cerefox-mcp` doesn't match the package name
+`@cerefox/memory`), and the publish workflow switches to OIDC-only auth
+now that the bootstrap is complete.
+
+### Fixed
+
+- **`npx` invocation gains `--package=@cerefox/memory`.** Both the docs
+  (`docs/guides/migration-v0.4.md`, `docs/guides/connect-agents.md`,
+  `AGENT_GUIDE.md`, `CLAUDE.md`, `CONTRIBUTING.md`, CHANGELOG entries) and
+  the Python soft-wrapper in `src/cerefox/cli.py` previously used the
+  bare form `npx -y @cerefox/memory cerefox-mcp`, which npx ≥ 7 rejects
+  with `sh: cerefox-mcp: command not found` because the bin name doesn't
+  match the package's last path segment (`memory`). The corrected form
+  `npx -y --package=@cerefox/memory cerefox-mcp` works regardless of
+  npx version. Two unit tests in `tests/test_mcp_soft_wrapper.py` pin
+  the new probe + execvp argument lists.
+
+### Changed
+
+- **`release.yml` is OIDC-only.** With the v0.4.0 bootstrap publish
+  complete and the package's Trusted Publisher entry registered on
+  npmjs.com, the `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` fallback
+  is removed. Every publish from v0.4.1 onward is signed by a
+  short-lived OIDC token bound to this repo + workflow file, with
+  sigstore provenance attached. The `NPM_TOKEN` secret can (and
+  should) be removed from the repo's Actions secrets.
 
 ---
 
@@ -20,7 +47,7 @@ package — [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) �
 built with the official `@modelcontextprotocol/sdk`. The Python `cerefox mcp`
 command becomes a soft wrapper that delegates to the npm bin when available
 and falls back to the legacy Python MCP server otherwise. Existing setups
-keep working; new setups should use `npx -y @cerefox/memory cerefox-mcp`.
+keep working; new setups should use `npx -y --package=@cerefox/memory cerefox-mcp`.
 
 Migration guide: [`docs/guides/migration-v0.4.md`](docs/guides/migration-v0.4.md).
 
@@ -94,7 +121,7 @@ Migration guide: [`docs/guides/migration-v0.4.md`](docs/guides/migration-v0.4.md
 - **`AGENT_QUICK_REFERENCE.md` / `AGENT_GUIDE.md`** updated to advertise
   10 tools and the new `cerefox_get_help` self-help hatch.
 - **`docs/guides/connect-agents.md`** Path A-Local section restructured
-  around the recommended `npx @cerefox/memory cerefox-mcp` config, with the
+  around the recommended `npx --package=@cerefox/memory cerefox-mcp` config, with the
   legacy `uv run cerefox mcp` invocation preserved as the alternative.
 
 ### Migration notes
@@ -103,7 +130,7 @@ Migration guide: [`docs/guides/migration-v0.4.md`](docs/guides/migration-v0.4.md
   now soft-wraps the npm bin when available — same behaviour, slightly
   better cold-start.
 - Want the new path? Replace your client's `command`/`args` with
-  `npx -y @cerefox/memory cerefox-mcp`. Make sure your `.env` is in the
+  `npx -y --package=@cerefox/memory cerefox-mcp`. Make sure your `.env` is in the
   CWD the client launches the server from (or pass credentials inline via
   the config's `env` block).
 - See [`docs/guides/migration-v0.4.md`](docs/guides/migration-v0.4.md) for

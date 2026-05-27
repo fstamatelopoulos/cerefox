@@ -25,7 +25,7 @@ the canonical configuration recipe per MCP client.
   `AGENT_QUICK_REFERENCE.md` content over MCP without filesystem
   access.
 - **`cerefox mcp` (Python CLI) is a soft wrapper**: tries to delegate
-  to `npx @cerefox/memory cerefox-mcp` first; falls back to the legacy
+  to `npx --package=@cerefox/memory cerefox-mcp` first; falls back to the legacy
   Python implementation if npm/Bun isn't available.
 
 ## The optional one-time upgrade
@@ -55,7 +55,7 @@ claude mcp add cerefox -- uv run --directory /path/to/cerefox cerefox mcp
 **New (optional):**
 
 ```bash
-claude mcp add cerefox -- npx -y @cerefox/memory cerefox-mcp
+claude mcp add cerefox -- npx -y --package=@cerefox/memory cerefox-mcp
 ```
 
 ### Cursor
@@ -80,7 +80,7 @@ claude mcp add cerefox -- npx -y @cerefox/memory cerefox-mcp
   "mcpServers": {
     "cerefox": {
       "command": "npx",
-      "args": ["-y", "@cerefox/memory", "cerefox-mcp"]
+      "args": ["-y", "--package=@cerefox/memory", "cerefox-mcp"]
     }
   }
 }
@@ -108,7 +108,7 @@ claude mcp add cerefox -- npx -y @cerefox/memory cerefox-mcp
   "mcpServers": {
     "cerefox": {
       "command": "npx",
-      "args": ["-y", "@cerefox/memory", "cerefox-mcp"]
+      "args": ["-y", "--package=@cerefox/memory", "cerefox-mcp"]
     }
   }
 }
@@ -129,7 +129,7 @@ args = ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
 ```toml
 [mcp_servers.cerefox]
 command = "npx"
-args = ["-y", "@cerefox/memory", "cerefox-mcp"]
+args = ["-y", "--package=@cerefox/memory", "cerefox-mcp"]
 ```
 
 ## Environment
@@ -145,7 +145,7 @@ For most users with an existing Cerefox install, your `.env` is already
 where it needs to be. If you want to verify:
 
 ```bash
-npx @cerefox/memory cerefox-mcp --help
+npx --package=@cerefox/memory cerefox-mcp --help
 ```
 
 (That's the help text, not a server start — safe to run anywhere.)

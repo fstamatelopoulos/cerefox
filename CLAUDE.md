@@ -260,7 +260,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
 | `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/` | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
-The local `@cerefox/memory` npm package (entry point `cerefox-mcp` bin) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx @cerefox/memory cerefox-mcp` and point their MCP client at it. See `docs/guides/connect-agents.md` and `docs/guides/migration-v0.4.md`.
+The local `@cerefox/memory` npm package (entry point `cerefox-mcp` bin) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox-mcp` and point their MCP client at it. See `docs/guides/connect-agents.md` and `docs/guides/migration-v0.4.md`.
 
 ### Edge Function Model Config
 

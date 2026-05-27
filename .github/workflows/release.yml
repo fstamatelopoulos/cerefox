@@ -20,8 +20,10 @@ on:
 # job mint a short-lived OIDC token bound to this specific workflow run;
 # npm's Trusted Publisher entry on the package validates that the token
 # came from `fstamatelopoulos/cerefox` + this file before allowing
-# publish. No long-lived NPM_TOKEN sits in the repo (except during the
-# v0.4.0 bootstrap; see the maintainer's Decision Log for the procedure).
+# publish. No long-lived NPM_TOKEN sits in the repo — OIDC is the only
+# auth path from v0.4.1 onward. (The v0.4.0 first-publish used a
+# bootstrap token; see the maintainer's Decision Log Q2 Part 2 for the
+# procedure that bound OIDC trust against the resulting package.)
 permissions:
   contents: read
   id-token: write
@@ -111,11 +113,13 @@ jobs:
 
       - name: Publish @cerefox/memory
         working-directory: packages/memory
-        env:
-          # Bootstrap window only — set as a repo secret for the v0.4.0
-          # first publish, then revoke the token same day. v0.4.1+ uses
-          # OIDC trusted publishing (no token needed); the maintainer's
-          # Decision Log captures the procedure. Both paths are supported
-          # here so the migration is non-disruptive.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # OIDC trusted publishing — no token. The job-level
+        # `permissions: id-token: write` mints a short-lived OIDC token
+        # that npm validates against the Trusted Publisher entry on
+        # @cerefox/memory (publisher: GitHub Actions, repo:
+        # fstamatelopoulos/cerefox, workflow: release.yml). Both
+        # `--provenance` (sigstore attestation) and `--access public`
+        # are belt-and-suspenders — the Trusted Publisher entry
+        # enforces both, but explicit flags survive future npm-CLI
+        # default changes.
         run: npm publish --access public --provenance
