@@ -5,12 +5,12 @@
 curated knowledge layer that multiple AI tools can read and write, backed by
 Postgres + pgvector.
 
-This package contains two binaries:
+This package contains a single binary, **`cerefox`**:
 
-| Bin | What it does |
+| Subcommand | What it does |
 |---|---|
-| **`cerefox`** | Main CLI — search, ingest, list, version-history, audit-log, lifecycle (`init`, `doctor`, `configure-agent`, `self-update`). Callable from any directory. |
-| **`cerefox-mcp`** | Local stdio MCP server. Drop-in for Claude Code, Cursor, Claude Desktop, Codex CLI, Gemini CLI. Exposes the same 10 MCP tools as the remote `cerefox-mcp` Edge Function. |
+| `cerefox <command>` | CLI — search, ingest, list, version-history, audit-log, lifecycle (`init`, `doctor`, `configure-agent`, `self-update`). Callable from any directory. |
+| `cerefox mcp` | Local stdio MCP server. Drop-in for Claude Code, Cursor, Claude Desktop, Codex CLI, Gemini CLI. Exposes the same 10 MCP tools as the remote `cerefox-mcp` Edge Function. |
 
 > **What this package isn't:** the source of truth for Cerefox's architecture
 > or docs. Those live in the [GitHub repo](https://github.com/fstamatelopoulos/cerefox).
@@ -68,7 +68,7 @@ is:
   "mcpServers": {
     "cerefox": {
       "command": "npx",
-      "args": ["-y", "--package=@cerefox/memory", "cerefox-mcp"]
+      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]
     }
   }
 }
@@ -101,8 +101,9 @@ by category).
 
 ## Why install the CLI when I already have MCP wired up?
 
-You don't have to. `cerefox-mcp` works standalone — wire it into any MCP
-client and your AI agent has full access. The `cerefox` CLI is useful for:
+You don't have to. `cerefox mcp` (started as a stdio subprocess by any
+MCP client) gives your AI agent full access to the knowledge base on
+its own. The rest of the `cerefox` CLI is useful for:
 
 - **One-off shell operations**: search, ingest, list, audit-log.
 - **Power-user workflows**: `cerefox ingest-dir ./meeting-notes`,

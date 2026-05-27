@@ -6,10 +6,10 @@ one-line ⚠ banner now), but the npm path is faster, doesn't need a
 local clone, and adds new lifecycle commands (`init`, `doctor`,
 `configure-agent`, `self-update`).
 
-> **Existing v0.4.x users:** your MCP client configs keep working.
-> v0.4.0 already shipped the `cerefox-mcp` bin on npm; v0.5 adds the
-> `cerefox` CLI bin **inside the same `@cerefox/memory` package**. One
-> install, both bins.
+> **Existing v0.4.x users:** your MCP client configs need a one-line
+> update (the `cerefox-mcp` bin from v0.4 → v0.5.0 was removed in
+> v0.5.1 — it's redundant with `cerefox mcp`). See the
+> ["Upgrading an existing MCP client config"](#upgrading-an-existing-mcp-client-config) section below for the exact diff.
 
 ---
 
@@ -106,7 +106,7 @@ If your usage hits any of these, keep your Python install around for now.
 
 ## Upgrading an existing MCP client config
 
-The v0.4.x config you may have written looked like:
+The v0.4.x → v0.5.0 config you may have written looked like:
 
 ```json
 {
@@ -119,12 +119,27 @@ The v0.4.x config you may have written looked like:
 }
 ```
 
-**That keeps working.** v0.5 ships the **same** `cerefox-mcp` bin in
-the **same** npm package. No change required.
+**In v0.5.1 this breaks.** The standalone `cerefox-mcp` bin was removed
+in v0.5.1 — it duplicated `cerefox mcp` for no functional gain. Update
+the `args` array to invoke the `mcp` subcommand of the main bin
+instead:
 
-If you want the v0.5 `cerefox configure-agent` to (re)write the config
-for you, the command is non-destructive: it backs up the existing file
-to `<file>.pre-cerefox.bak` and merges. Existing `mcpServers` entries
+```diff
+   "args": [
+     "-y",
+     "--package=@cerefox/memory",
+-    "cerefox-mcp"
++    "cerefox",
++    "mcp"
+   ]
+```
+
+The behaviour is identical — same `buildServer()` factory, same 10
+MCP tools, same stdio transport. Only the bin name changes.
+
+If you want `cerefox configure-agent` to rewrite the config for you,
+the command is non-destructive: it backs up the existing file to
+`<file>.pre-cerefox.bak` and merges. Existing `mcpServers` entries
 are preserved.
 
 ```bash
@@ -139,7 +154,7 @@ cerefox configure-agent --tool claude-code              # apply
 ### `npx` from inside an npm workspace
 
 The v0.4 gotcha still applies: running `npx -y --package=@cerefox/memory
-cerefox-mcp` from inside another npm workspace can fail with "command
+cerefox mcp` from inside another npm workspace can fail with "command
 not found." Use `bunx` instead, run from outside any workspace, or
 `npm install -g`.
 

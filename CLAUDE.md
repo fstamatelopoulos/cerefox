@@ -69,12 +69,11 @@ cerefox/
 ├── packages/
 │   └── memory/                    # @cerefox/memory npm package — both bins (v0.5+)
 │       ├── src/
-│       │   ├── bin/cerefox-mcp.ts  # stdio MCP server bin (v0.4+)
-│       │   ├── bin/cerefox.ts      # main CLI bin (v0.5+)
+│       │   ├── bin/cerefox.ts      # single bin (v0.5.1+); commander dispatch + error handler
 │       │   ├── cli/                # commander program + 28 subcommand files
-│       │   │   ├── commands/       # one file per subcommand
+│       │   │   ├── commands/       # one file per subcommand (including `mcp` which runs buildServer())
 │       │   │   └── util/           # checks, mcp-config-writers, bundled-docs
-│       │   ├── server.ts           # buildServer() factory (used by both bins)
+│       │   ├── server.ts           # buildServer() factory (called by the `mcp` subcommand)
 │       │   └── meta.ts             # PKG_VERSION — bumped by cut_release.ts
 │       ├── test/                   # stdio smoke + CLI smoke + read/write/lifecycle tests
 │       ├── README.md               # npm landing card (refreshed each release)
@@ -145,7 +144,7 @@ cerefox/
 |-------|---------|-------------|
 | Python unit tests | `uv run pytest` | Fast, mocked, no network (default) |
 | TS unit tests (`_shared/`) | `cd _shared && bun test` | Fast, mocked, no network |
-| MCP stdio smoke (built bin) | `cd packages/memory && bun run build && bun test` | Spawns the built `cerefox-mcp.js`, performs initialize + tools/list handshake; needs `.env` |
+| MCP stdio smoke (built bin) | `cd packages/memory && bun run build && bun test` | Spawns `cerefox mcp` against the built bin, performs initialize + tools/list handshake; needs `.env` |
 | API e2e | `uv run pytest -m e2e` | Hits live Supabase (REST API + Edge Functions) |
 | UI e2e | `uv run pytest -m ui` | Playwright browser tests against local web app |
 | All Python e2e | `uv run pytest -m "e2e or ui"` | Both API and UI e2e |
@@ -269,7 +268,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
 | `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/` | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
-The local `@cerefox/memory` npm package (entry point `cerefox-mcp` bin) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox-mcp` and point their MCP client at it. See `docs/guides/connect-agents.md` and `docs/guides/migration-v0.4.md`.
+The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md` and `docs/guides/migration-v0.5.md`.
 
 ### Edge Function Model Config
 

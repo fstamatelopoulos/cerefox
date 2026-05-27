@@ -91,10 +91,11 @@ already shipped (full history in [`CHANGELOG.md`](CHANGELOG.md)):
 Until v1.0.0 the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
 aspirational — breaking changes can land in minor versions when there's a good
 reason. After v1.0.0 it's binding. **The npm install path is now open** as of
-v0.4.0: end users can run `npx -y --package=@cerefox/memory cerefox-mcp` for the
-local MCP server (no Python required). The Python CLI + web UI + ingestion
+v0.4.0: end users can run `npx -y --package=@cerefox/memory cerefox mcp` for
+the local MCP server (no Python required). The Python CLI + web UI + ingestion
 pipeline still need a clone + `uv` install; that changes through v0.5–v0.7 as
-the remaining components migrate.
+the remaining components migrate. (v0.4–v0.5.0 also shipped a dedicated
+`cerefox-mcp` bin; dropped in v0.5.1 as redundant with `cerefox mcp`.)
 
 ---
 
@@ -127,7 +128,7 @@ source" section below (Python is still the path for those in v0.5).
 
 | Tool | Why | Install |
 |---|---|---|
-| **Node 20+** or **Bun 1.0+** | Runtime for the `cerefox` and `cerefox-mcp` bins | [nodejs.org](https://nodejs.org/) · [bun.sh](https://bun.sh) |
+| **Node 20+** or **Bun 1.0+** | Runtime for the `cerefox` bin (includes `cerefox mcp` subcommand for MCP clients) | [nodejs.org](https://nodejs.org/) · [bun.sh](https://bun.sh) |
 | A Supabase account | Database + pgvector + Edge Functions (free tier is enough) | [supabase.com](https://supabase.com/) |
 | An embedding API key | OpenAI `text-embedding-3-small` (default) or Fireworks AI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 

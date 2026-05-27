@@ -147,23 +147,22 @@ packages/memory/
   src/
     meta.ts                       PKG_VERSION constant — single source of truth in the bundle
     server.ts                     buildServer() factory — wires _shared/mcp-tools/ into the MCP SDK
-    bin/cerefox-mcp.ts            stdio MCP server bin
-    bin/cerefox.ts                main CLI bin (v0.5+) — top-level error handler + commander dispatch
+    bin/cerefox.ts                the package's bin — top-level error handler + commander dispatch
     cli/
       program.ts                  commander program assembly; one registerXyz() per subcommand
-      commands/                   28 subcommand files
+      commands/                   28 subcommand files (including `mcp` which runs buildServer())
       util/                       checks (doctor/status), mcp-config-writers, bundled-docs, client, embed
   test/
-    stdio-smoke.test.ts           spawn the built bin and walk an MCP handshake
+    stdio-smoke.test.ts           spawn `cerefox mcp` and walk an MCP handshake
     cli-smoke.test.ts             --version / --help / --help-grouping / bare entry
     read-commands.test.ts         live tests (skip if Supabase unreachable)
     write-commands.test.ts        live tests (creates + cleans up [E2E v0.5-test] docs)
     lifecycle-commands.test.ts    doctor / status / configure-agent / self-update
   README.md                       npm landing card — refreshed each release
-  package.json                    name: @cerefox/memory, bin: {cerefox-mcp, cerefox}, type: module
+  package.json                    name: @cerefox/memory, bin: {cerefox}, type: module
 ```
 
-Build: `bun run build` (from `packages/memory/`) → both `dist/bin/cerefox-mcp.js` and `dist/bin/cerefox.js` (single-file ESM each).
+Build: `bun run build` (from `packages/memory/`) → `dist/bin/cerefox.js` (single-file ESM). The MCP server is `cerefox mcp`; v0.4–v0.5.0 shipped a separate `cerefox-mcp` bin, dropped in v0.5.1 as redundant.
 
 Doc bundling: `scripts/bundle_package_docs.ts` (invoked by `prepublishOnly`) copies the curated `docs/guides/`, `AGENT_GUIDE.md`, and `AGENT_QUICK_REFERENCE.md` into the package tree before `npm publish`. The bundled copies are gitignored — source of truth stays at the repo root.
 

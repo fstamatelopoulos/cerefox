@@ -40,10 +40,12 @@ class TestSoftWrapper:
         mock_execvp.assert_called_once()
         args = mock_execvp.call_args.args
         assert args[0] == "/opt/homebrew/bin/npx"
-        # npx invocation uses --package=@cerefox/memory because the bin
-        # name (cerefox-mcp) doesn't match the package name. v0.4.1 fix.
+        # v0.5.1: canonical npx invocation is
+        # `npx --package=@cerefox/memory cerefox mcp` (the legacy
+        # `cerefox-mcp` bin was dropped in v0.5.1).
         assert "--package=@cerefox/memory" in args[1]
-        assert "cerefox-mcp" in args[1]
+        assert "cerefox" in args[1]
+        assert "mcp" in args[1]
         # Legacy path NOT called.
         mock_legacy_run.assert_not_called()
 
@@ -97,9 +99,11 @@ class TestSoftWrapper:
         probe_args = mock_run.call_args.args[0]
         assert "--no-install" in probe_args
         assert "--version" in probe_args
-        # v0.4.1: probe must use --package= form so npx can find the
-        # `cerefox-mcp` bin (mismatched-name package).
+        # v0.5.1: probe targets the `cerefox` bin (with --package= form
+        # so npx resolves @cerefox/memory). v0.4.1 / v0.5.0 used the
+        # `cerefox-mcp` bin name; that bin was dropped in v0.5.1.
         assert "--package=@cerefox/memory" in probe_args
+        assert "cerefox" in probe_args
 
 
 class TestPythonGetHelp:

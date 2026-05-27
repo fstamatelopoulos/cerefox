@@ -27,7 +27,6 @@
     "bun": ">=1.0.0"
   },
   "bin": {
-    "cerefox-mcp": "dist/bin/cerefox-mcp.js",
     "cerefox": "dist/bin/cerefox.js"
   },
   "files": [
@@ -56,13 +55,11 @@
     "typescript": "^6.0.3"
   },
   "scripts": {
-    "build": "bun build src/bin/cerefox-mcp.ts src/bin/cerefox.ts --outdir dist/bin --target node --format esm",
-    "build:mcp": "bun build src/bin/cerefox-mcp.ts --outdir dist/bin --target node --format esm",
-    "build:cli": "bun build src/bin/cerefox.ts --outdir dist/bin --target node --format esm",
+    "build": "bun build src/bin/cerefox.ts --outdir dist/bin --target node --format esm",
     "clean": "rm -rf dist docs AGENT_GUIDE.md AGENT_QUICK_REFERENCE.md",
     "bundle-docs": "bun run ../../scripts/bundle_package_docs.ts",
     "prepublishOnly": "bun run clean && bun run bundle-docs && bun run build",
-    "smoke": "node dist/bin/cerefox-mcp.js --help && node dist/bin/cerefox.js --help"
+    "smoke": "node dist/bin/cerefox.js --help && node dist/bin/cerefox.js mcp --help"
   },
   "publishConfig": {
     "access": "public",
