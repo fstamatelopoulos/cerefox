@@ -2109,29 +2109,296 @@ performance + freshness upgrade they can take when convenient.
 ## Iteration 23: v0.5.0 — "TS CLI" (the CLI itself moves to TS)
 
 **Goal**: Migrate the CLI from Python/Click to TS/commander. Ship `@cerefox/memory` to npm
-with the `cerefox` binary. Python CLI deprecated but functional.
+with both `cerefox` and `cerefox-mcp` bins. Python CLI deprecated but functional. New
+lifecycle commands (`init`, `doctor`, `self-update`, `configure-agent`, `sync-self-docs`)
+land. Self-docs ingestion (Layer 2 of MCP discoverability) ships.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.5.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.5.0](specs/polish-and-distribution-design.md),
+plus §3 (target UX), §6 (distribution), §8 (CLI polish), §10d (MCP discoverability layers).
 
-**Estimated effort**: 4-6 weeks part-time. Largest single migration; broadest user-facing
-surface.
+**Estimated effort**: 4-6 weeks part-time. **Largest single migration in the polish arc**;
+broadest user-facing surface; first iteration where the npm install path becomes the
+primary recommendation for new users.
 
-**Detailed task breakdown will be created when this iteration is started.** Headline items:
-- New TS CLI sources land **in the existing `packages/memory/` directory** (alongside the MCP server entry-point from v0.4.0), using commander.js. All 15+ subcommands ported.
-- Same package, growing surface: `packages/memory/package.json` gains a second `bin` entry — `"cerefox": "./dist/bin/cerefox.js"` — alongside the existing `cerefox-mcp`. **No new npm package**; v0.4.0's `@cerefox/memory` releases simply become richer in v0.5.0. (See iter-22 refinement #7 for the rationale — supersedes the design doc's two-package plan.)
-- Shares `_shared/db-client/` with the v0.4 MCP server.
-- New commands: `cerefox init`, `cerefox doctor`, `cerefox status`, `cerefox self-update`.
-- Tab completion (bash, zsh, fish).
-- `--json` mode uniformly on all read commands.
-- Documented exit codes.
-- Progress bars on long ops.
-- `install.sh` one-liner published to GitHub Releases.
-- Web UI `/app/about` and `/app/settings` pages.
-- Python CLI prints deprecation banner pointing at npm install
-- `docs/guides/installing.md` rewritten for npm-native install path
-- **`cerefox init` automatic self-doc ingest** — Layer 2 of the MCP discoverability response (design doc §10d). Unconditionally ingests bundled `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and curated `docs/guides/` under a dedicated `_cerefox-self-docs` project with metadata `{"type":"agent-guide","source":"cerefox-self-docs","version":"<release>"}`. User informed, not asked
-- **`cerefox sync-self-docs` command** — re-ingests bundled docs from the currently-installed version. Called automatically as the final step of `cerefox self-update`
-- **Web UI project filter** — hide `_`-prefixed projects (system) by default; `--include-system` flag for the curious
+### Refinements vs. the design-doc bullets
+
+A few small deviations from the v0.5.0 entry in
+[`docs/specs/polish-and-distribution-design.md` §13](specs/polish-and-distribution-design.md),
+shaped by what we learned shipping iter-22:
+
+1. **`cerefox web` stays Python-only for v0.5.** The TS web server is a v0.6 deliverable.
+   For v0.5, `cerefox web` (npm-installed) prints a clear "not yet — install uv + clone the
+   repo, or wait for v0.6" message. The alternative (shelling out to a Python subprocess
+   from the npm CLI) would re-introduce the Python prerequisite that the npm install was
+   supposed to eliminate, which defeats the whole point of v0.5. Documented in
+   `docs/guides/migration-v0.5.md`.
+2. **`cerefox ingest` / `ingest-dir` / `reindex` go through the `cerefox-ingest` Edge
+   Function**, not the Python ingestion pipeline. v0.7 is when the TS ingestion pipeline
+   lands; for v0.5 the EF is the canonical write path (already used by `sync_docs.ts`
+   from iter-20). Same path GPT Actions use today. Single hop, no Python dep.
+   `reindex` is **deferred to v0.7** because re-embedding existing chunks needs server-side
+   logic that doesn't yet exist as an EF (it's currently in the Python pipeline). The TS
+   `reindex` becomes a thin client over the new `cerefox-reindex` EF added in v0.7.
+3. **`backup` / `restore` get ported in v0.5**, not deferred. They're pure JSON-snapshot
+   operations against the Data API; mechanical port; users want CLI completeness.
+4. **`cerefox mcp` (subcommand of the new TS CLI) calls `buildServer()` in-process**, not
+   `os.execvp`. Same code path as the standalone `cerefox-mcp` bin. The two bins share
+   the server factory; no subprocess hop.
+5. **Use `commander` (not `oclif`).** oclif is "framework-y" (plugins, topics, command
+   discovery via filesystem) — overkill for a 23-command CLI with no third-party plugin
+   ambitions. commander is ~10KB, has typed argument parsing, supports tab completion
+   via a one-line export, and matches the cfcf reference. Decision is reversible if oclif
+   becomes attractive later.
+6. **Tab completion via `commander-completer` (or hand-rolled).** commander itself doesn't
+   ship completion out of the box; we generate scripts for bash/zsh/fish either via a
+   small helper library or ~50 lines of TS that walk the command tree. Hand-rolled is fine
+   for our surface.
+7. **Self-doc ingest is its own Part (G), not folded into `init`.** Both `init` and
+   `self-update` call into it. Separating cleanly lets the same logic feed both.
+8. **First-publish gauntlet pre-flight checks** (from Decision Log Q2 Part 3) baked into
+   the v0.5 release procedure: `git grep -F "<old-version>" packages/` after cut,
+   `npm pack --dry-run` warning grep, post-publish 3-way verification (registry HEAD +
+   bin field + npx run). Documented inline in 23J.
+9. **The Python deprecation banner is gentle for v0.5.** Single-line ⚠ notice on every
+   Python `cerefox` invocation with a link to the migration guide. The Python CLI keeps
+   working with zero behavior change; removal lands in v0.8 / v0.9 per the strangler-fig
+   plan.
+10. **Web UI `/app/about` ships in v0.5; `/app/settings` deferred to v0.5.x or v0.6.**
+    `/app/about` is small (~30 LOC; version + build SHA + doc count). Settings UI is a
+    bigger design surface (which knobs? where do they persist? what's the per-knob UX?)
+    that benefits from being scoped separately rather than rushed in.
+
+### Backward-compat invariant
+
+Every existing Python CLI invocation keeps working. The TS CLI is a parity port at the
+user-facing layer — same command names, same flag names, same env vars, same exit codes,
+same output formats. We add new commands and new flags; we don't remove or rename
+existing ones. The Python CLI shims a deprecation banner but otherwise behaves identically
+to v0.4.x. Both CLIs coexist for the entire v0.5–v0.7 arc; removal of Python is v0.8/v0.9.
+
+### Risk surface
+
+This iteration is **~3x the size of iter-22** by lines-touched and user-surface affected.
+Major risk vectors:
+
+- **Parity drift**: 17 existing CLI commands × many flags each. Easy to silently miss a
+  flag or change an output format. Mitigation: per-command parity test that runs the
+  Python and TS versions side-by-side against the same inputs and diffs outputs.
+- **Ingestion path via Edge Function**: introduces a hard dependency on `cerefox-ingest`
+  being deployed and reachable. Today the Python CLI can talk straight to the DB;
+  npm-installed users lose that fallback. Mitigation: `cerefox doctor` checks EF
+  reachability explicitly; clear error if EF down.
+- **Auto-install dance in `cerefox self-update`**: detecting bun vs npm vs yarn vs pnpm
+  and wrapping each one. Tested on each runtime. Mitigation: opaque error if detection
+  fails; print the manual `<runtime> install -g @cerefox/memory` command for the user
+  to run themselves.
+- **`configure-agent`'s per-client config writers**: each agent (Claude Code, Claude
+  Desktop, Cursor, Codex, Gemini) has a different config file location and format.
+  Backup-before-merge required; never replace wholesale. Tested with golden files per
+  client. **Phase 1 = Claude Code + Claude Desktop only**; Cursor + Codex + Gemini
+  ship later in v0.5.x.
+
+### Open questions (discuss before execution)
+
+1. **Single PR or multiple?** This iteration is ~3x larger than v0.4. Options:
+   - **One giant PR** (iter-22 style): high review burden, single rollback point.
+   - **3 PRs**: foundation+reads+writes / servers+lifecycle / polish+self-docs+publish.
+   - **5 PRs**: one per Part A/B/C, then merged groups for D-J.
+   Three PRs feels right. Discuss.
+2. **`cerefox web` UX in the npm-installed case**: print "use the clone for now"? or
+   shell out to `uv run` if `uv` is on PATH? My recommendation is the explicit message
+   (see refinement #1 above) but it's a UX call worth confirming.
+3. **`reindex` deferred to v0.7** — acceptable to the maintainer? The Python `reindex`
+   keeps working in the meantime via `uv run cerefox reindex`.
+4. **`cerefox init` — interactive vs flag-driven?** Design doc shows a fully interactive
+   prompt-driven flow. For agent-friendly CI / scripted setup, also support a `--config`
+   flag taking a JSON file path with all the answers pre-filled. Minor surface area;
+   worth doing. Easy yes from me; confirm.
+5. **install.sh — Bun-first or npm-first?** Design says Bun-first (faster, native TS).
+   But Bun's macOS install requires Xcode CLT on some versions; npm is universally
+   available. My recommendation: try `bun install -g` first, fall back to `npm install -g`
+   if Bun unavailable. Same as Cerefox itself does for runtime detection.
+6. **Should we add a `cerefox upgrade` alias for `cerefox self-update`?** Some users
+   default to `upgrade` (homebrew muscle memory). Cheap to add as a hidden alias.
+
+### Iteration shape — 10 parts, ~50 sub-tasks
+
+- **23A**: TS CLI scaffolding inside `packages/memory/`
+- **23B**: Read commands ported (8 commands)
+- **23C**: Write commands ported (3 commands) + ingestion via EF
+- **23D**: Server + ops commands (mcp, web, backup, restore, docs, sync-docs)
+- **23E**: New lifecycle commands (init, doctor, status, self-update, configure-agent)
+- **23F**: Self-doc ingest (Layer 2 of MCP discoverability) — sync-self-docs + wiring
+- **23G**: CLI polish (tab completion, --json, exit codes, error messages, bare-cerefox)
+- **23H**: Python CLI deprecation banner + soft-wrapper review
+- **23I**: install.sh + docs (migration-v0.5.md, installing.md, connect-agents.md, README)
+- **23J**: Documentation + Decision Log + CHANGELOG + plan markup + release
+
+### 23A: TS CLI scaffolding
+
+The CLI bin entry, command framework, and shared infrastructure that every other
+command will hang off. Same `packages/memory/` package as v0.4 — the v0.4 MCP server's
+`buildServer()` factory becomes one of many imports.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23A.1 | Add `commander` (~3MB transitive) + `chalk`/`picocolors` + `prompts` (interactive prompts for `init`) to `packages/memory/package.json` dependencies | Pending | Pin minor versions. Verify the `dist/bin/cerefox.js` bundle stays under 2MB. |
+| 23A.2 | Create `packages/memory/src/bin/cerefox.ts` — bin shebang + command registry | Pending | `#!/usr/bin/env node`, `--version` / `--help` short-circuits, command tree assembly via commander's chainable API. Commands lazily load their handlers so `--help` and `--version` are sub-100ms. |
+| 23A.3 | Add `"cerefox": "dist/bin/cerefox.js"` to `packages/memory/package.json` bin block | Pending | Sibling of `cerefox-mcp`. Both bins ship from the same npm package — single artifact, growing surface. |
+| 23A.4 | Update `prepublishOnly` build to produce both bin bundles | Pending | `bun build src/bin/cerefox.ts src/bin/cerefox-mcp.ts --outdir dist/bin --target node --format esm`. Verify no duplicate-class warnings and both shebangs preserved. |
+| 23A.5 | Create `_shared/cli-core/` — runtime-neutral CLI helpers | Pending | `argv.ts` (project / metadata-filter JSON / requestor / author resolution from CLI flags + env vars), `output.ts` (table + JSON + error formatters), `exit.ts` (typed exit codes), `prompts.ts` (interactive wrappers). Each helper is unit-tested under `_shared/__tests__/cli-core/`. |
+| 23A.6 | Decide `commander` config: command grouping, subcommand registration pattern | Pending | One TS file per command in `packages/memory/src/cli/commands/<name>.ts`, exporting `register(program)`. Bin entry imports each and calls `register`. Adding a command = one new file + one import line. |
+| 23A.7 | Wire `_shared/cli-core/exit.ts` exit codes (0 / 1 user error / 2 system error / 3 not found) into commander's error handler | Pending | Override commander's default `program.exitOverride()` to map argv-parse errors to exit 1, RPC errors to exit 2, "document not found" to exit 3, success to exit 0. |
+| 23A.8 | `cerefox --version` and `cerefox --help` smoke test | Pending | Add to `packages/memory/test/cli-smoke.test.ts`: spawn the built bin, assert `--version` prints the package version (which the v0.4.3 cut_release.ts now keeps in lockstep), assert `--help` lists at least 17 commands. |
+
+### 23B: Read commands ported
+
+The 8 read-side commands. All gain `--json` mode and consistent `--requestor` plumbing.
+Each command's parity is verified against the Python output for a fixed set of inputs.
+
+Common parity-test infrastructure (per command):
+- Set up a fixed test DB state via fixtures.
+- Run `uv run cerefox <cmd> <flags>` → capture stdout.
+- Run `node ./packages/memory/dist/bin/cerefox.js <cmd> <flags>` → capture stdout.
+- Assert byte-identical for the default output mode and structurally-equivalent JSON for
+  `--json` mode (Python emits JSON via the same `--json` flag where supported).
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23B.1 | Port `cerefox search` | Pending | `--match-count`, `--project-name`, `--metadata-filter`, `--mode`, `--alpha`, `--min-score`, `--max-bytes`, `--requestor`, `--json`. Calls `cerefox-search` Edge Function (same path as Python). |
+| 23B.2 | Port `cerefox get-doc <document-id>` | Pending | `--version-id`, `--requestor`, `--json`. Calls `cerefox_get_document` RPC via the Data API. |
+| 23B.3 | Port `cerefox list-docs` | Pending | `--project`, `--limit`, `--json`. Pure Data API; no embedding step. |
+| 23B.4 | Port `cerefox list-versions <document-id>` | Pending | `--requestor`, `--json`. Calls `cerefox_list_document_versions` RPC. |
+| 23B.5 | Port `cerefox list-projects` | Pending | `--requestor`, `--json`. Calls `cerefox_list_projects` RPC. |
+| 23B.6 | Port `cerefox list-metadata-keys` | Pending | `--requestor`, `--json`. Calls `cerefox_list_metadata_keys` RPC. |
+| 23B.7 | Port `cerefox metadata-search` | Pending | `--metadata-filter` (JSON), `--project-name`, `--updated-since`, `--include-content`, `--limit`, `--requestor`, `--json`. Calls `cerefox-metadata-search` Edge Function. |
+| 23B.8 | Port `cerefox get-audit-log` | Pending | `--document-id`, `--author`, `--operation`, `--since`, `--until`, `--limit`, `--json`, `--requestor`. Calls `cerefox_list_audit_entries` RPC. |
+| 23B.9 | Parity test suite for all 8 read commands | Pending | One test per command × 3 input shapes = ~24 tests under `packages/memory/test/parity/read.test.ts`. Skipped by default; run via `bun test --filter parity` after each command port. Pinned by snapshot. |
+
+### 23C: Write commands ported + ingestion via EF
+
+Write side is smaller (3 commands) but more dangerous — every command produces a real
+write to the user's KB. Ingestion goes through the `cerefox-ingest` Edge Function
+(not the Python pipeline), so the TS CLI doesn't pull the chunking/embedding logic
+forward.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23C.1 | Port `cerefox ingest <path>` (file mode) | Pending | `--title`, `--project-name`, `--metadata` (JSON), `--update-if-exists`, `--document-id`, `--source`, `--author`, `--author-type`. Reads file from disk, POSTs to `cerefox-ingest` EF. Identity-flag resolution shared with v0.4 MCP server. |
+| 23C.2 | Port `cerefox ingest --paste` (stdin mode) | Pending | Reads stdin to body bytes, requires `--title`. All flags from 23C.1 supported. |
+| 23C.3 | Port `cerefox ingest-dir <dir>` (batch) | Pending | Recursive directory walk, file-extension filter (`.md`, `.txt`), `cli-progress`-based progress bar showing N/M files + the current path, retries on transient EF errors, summary table at end. Continues on partial failure (prints failed files). |
+| 23C.4 | Port `cerefox delete-doc <document-id>` | Pending | `--reason`, `--author`, `--author-type`. Soft-delete only (matches Python). Confirms by printing the doc title + ID before the soft-delete. |
+| 23C.5 | E2E parity test for write commands | Pending | One write test per command against a scratch project; verify result by reading back. Cleanup via the same `delete-doc` command tested. |
+
+### 23D: Server + ops commands
+
+The four "neither read nor write" commands. Most are thin shims today.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23D.1 | Port `cerefox mcp` subcommand | Pending | Imports `buildServer()` from `../server.ts` (same factory used by `cerefox-mcp` bin), runs in-process. No subprocess hop. The Python `cerefox mcp` soft-wrapper from v0.4 keeps working unchanged for users on the legacy `uv run cerefox` path. |
+| 23D.2 | `cerefox web` — explicit "not-yet" message in v0.5 | Pending | Prints: "The TS web server lands in v0.6. For now: `uv run cerefox web` from a clone, or wait. See [`migration-v0.5.md`](docs/guides/migration-v0.5.md#web-ui-in-v05)." Exit code 0 (it's a feature signal, not an error). |
+| 23D.3 | Port `cerefox backup` (JSON snapshot) | Pending | `--output-dir`, `--include-versions`. Reads all docs via Data API, writes JSON files; optional `--git` flag to `git add && git commit` in the output dir. Parity-tested against the Python output. |
+| 23D.4 | Port `cerefox restore <snapshot-dir>` | Pending | Inverse of backup. Re-uses `cerefox-ingest` EF for the write path. `--dry-run` flag shows what would be restored without writing. |
+| 23D.5 | Port `cerefox sync-docs` | Pending | Today this is `scripts/sync_docs.ts`; v0.5 wires it as a first-class subcommand. Logic stays in `scripts/`; the subcommand is a thin shim that calls into it. |
+| 23D.6 | Port `cerefox docs [topic]` | Pending | Today serves bundled markdown via `cerefox docs`; TS version reads from the npm package's bundled `docs/` directory (which 23F bundles). Opens in `$BROWSER` or prints to stdout if `--print` is set. |
+| 23D.7 | `cerefox reindex` — defer to v0.7 message | Pending | Prints: "Reindex is part of the v0.7 ingestion pipeline migration. For now: `uv run cerefox reindex` from a clone. See migration-v0.5.md." Exit 0. |
+| 23D.8 | `cerefox config-get <key>` / `cerefox config-set <key> <value>` ports | Pending | Read/write `cerefox_config` table via the Data API. Same surface as Python: keys like `usage_tracking_enabled`. |
+
+### 23E: New lifecycle commands
+
+The six brand-new commands. `init` is the headline. `doctor` is the second-most-visible.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23E.1 | `cerefox init` — interactive bootstrap | Pending | Five `prompts.ts`-driven steps (Supabase URL, Supabase key, OpenAI key, Postgres URL, identity). Writes `~/.cerefox/.env` (or `CEREFOX_CONFIG_DIR`). Validates Supabase + OpenAI before writing. Then **deploys schema** (DDL via the Postgres URL) and **ingests bundled self-docs** (calls into 23F's `sync-self-docs`). Optional final step: wire MCP for Claude Code via 23E.5. |
+| 23E.2 | `cerefox init --config <file>.json` non-interactive mode | Pending | Reads all 5 answers from a JSON file. For CI / scripted setup. Same validations as interactive. |
+| 23E.3 | `cerefox doctor` — diagnostic | Pending | 8 checks: binary path, Bun/Node runtime, `~/.cerefox/.env` exists + mode 0600, Supabase Data API reachable, OpenAI test embedding, Postgres connection (DDL-capable), schema version match, MCP client configs detected. Each check returns `{name, status, detail, hint}`. Exit 0 all green, 1 if any error. |
+| 23E.4 | `cerefox status` — quick sanity (faster `doctor`) | Pending | Subset of `doctor`'s checks: config present, Supabase reachable, schema version match. Designed to run in < 500ms for shell prompt integration / pre-commit hooks. |
+| 23E.5 | `cerefox configure-agent --tool <claude-code\|claude-desktop>` | Pending | Phase 1 supports Claude Code (writes `~/.claude/mcp.json` or merges) + Claude Desktop (platform-specific config). Backs up existing config to `<file>.pre-cerefox.bak` before writing. Generates the `npx --package=@cerefox/memory cerefox-mcp` invocation form (the v0.4.1 canonical spelling). Phase 2 (Cursor, Codex, Gemini) ships in v0.5.x or v0.6. |
+| 23E.6 | `cerefox self-update` | Pending | Detect installer (which `bun`/`npm`/`yarn`/`pnpm` actually installed `@cerefox/memory` — inspect global install dirs), wrap the corresponding update command, print version transition. Final step: call 23F's `sync-self-docs` to refresh bundled-docs ingest. `--check` for read-only "what's new", `--yes` for non-interactive, `--version X.Y.Z` to pin. |
+
+### 23F: Self-doc ingest (Layer 2 of MCP discoverability)
+
+Per design doc §10d, Layer 2: every Cerefox install gets the agent guidance ingested
+automatically as part of `cerefox init`. v0.4 already shipped Layer 3
+(`cerefox_get_help` MCP tool); v0.5 closes Layer 2.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23F.1 | Bundle `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and a curated `docs/guides/` subset into the npm package | Pending | Add to `packages/memory/package.json` `files` array. Verify they ship via `npm pack --dry-run`. Bundled docs are read at runtime via `import.meta.dir`-relative path. |
+| 23F.2 | Implement `cerefox sync-self-docs` | Pending | Walks the bundled docs directory, ingests each via `cerefox-ingest` EF (same path as user-content ingest), assigns project `_cerefox-self-docs` (created on demand), metadata `{"type":"agent-guide","source":"cerefox-self-docs","version":"<from-package-json>"}`. Idempotent via `update_if_exists: true` keyed by title. Prints summary table at end. |
+| 23F.3 | Wire `sync-self-docs` into `cerefox init` final step | Pending | After config + schema deploy, call into `sync-self-docs`'s exported `run()` function. Informational, not a prompt. |
+| 23F.4 | Wire `sync-self-docs` into `cerefox self-update` final step | Pending | After the package update succeeds, call `sync-self-docs` automatically so docs stay in lockstep with code. |
+| 23F.5 | Web UI: hide `_`-prefixed projects from default listings | Pending | Frontend change in `frontend/src/`. Project picker filters out `_*` names unless an `--include-system` toggle is set. Audit log + version history still show `_cerefox-self-docs` activity normally (since it's a real project). |
+| 23F.6 | Self-doc ingest snapshot test | Pending | After a `sync-self-docs` against a fresh KB, assert the expected set of documents (by title) lands under `_cerefox-self-docs` with the right metadata version. Sensitive to bundled-doc changes; ratchet on intentional updates. |
+
+### 23G: CLI polish
+
+The "make it feel like a real CLI" layer. Most of these are small individually but
+collectively define the v0.5 UX.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23G.1 | Tab completion generators (bash / zsh / fish) | Pending | `cerefox completion bash > /etc/bash_completion.d/cerefox` (or `~/.bashrc` source line). One script per shell — generated by walking the commander tree. Tested by sourcing the script and confirming `cerefox <TAB>` lists subcommands. |
+| 23G.2 | `--json` mode uniformly on all read commands | Pending | Already required per-command in 23B; this task is the cross-command audit confirming every read command supports `--json` and the JSON shape is stable / documented in `--help`. |
+| 23G.3 | Subcommand grouping in `--help` | Pending | commander supports help-text customisation; group commands by section: "READS", "WRITES", "SERVERS", "LIFECYCLE", "OPS". Replaces today's flat alphabetical list. |
+| 23G.4 | Documented exit codes | Pending | Document `0/1/2/3` in CONTRIBUTING.md + `cerefox --help` output. Every error path in the CLI core uses `process.exit(code)` via the typed wrapper from 23A.7. |
+| 23G.5 | Better error messages with hints | Pending | Every error message ends with "Try `cerefox <X>`" or a doc link. Common cases: Supabase unreachable → `cerefox doctor`; auth failed → `cerefox config-get` + key check; rpc not found → `db_deploy.py` nudge. |
+| 23G.6 | Bare `cerefox` (no args) — friendly entry point | Pending | If args.length === 0: detect state. Config missing → "Run `cerefox init`". Config present + KB empty → "Try `cerefox ingest <path>` or `cerefox search <query>`". Else: show `--help`. |
+| 23G.7 | Hidden `cerefox upgrade` alias for `cerefox self-update` | Pending | Per open question 6. One-line commander alias. Doesn't appear in `--help` but works as expected. |
+
+### 23H: Python CLI deprecation
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23H.1 | Add deprecation banner to `src/cerefox/cli.py` `cli()` group | Pending | Single-line ⚠ to stderr on every invocation: "Cerefox CLI has moved to TypeScript. Install via `npx -y --package=@cerefox/memory cerefox` or see https://github.com/.../migration-v0.5.md. The Python CLI remains functional through v0.7.x." Click decorator catches all subcommands. Suppress in `--json` mode (don't pollute JSON output). |
+| 23H.2 | Update `src/cerefox/mcp_server.py` (legacy fallback) | Pending | The fallback's existence is unchanged. Just verify no banner / no behavior change. Tests pin this. |
+| 23H.3 | Audit Python entry points in `pyproject.toml` | Pending | Ensure `cerefox` console_script still exists for fallback users; no removal in v0.5. |
+
+### 23I: install.sh + docs
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23I.1 | Write `install.sh` | Pending | ~50 lines of POSIX sh. Detects shell, detects bun (via `which`), if absent runs `curl -fsSL https://bun.sh/install \| bash`, then `bun install -g @cerefox/memory` (fallback to `npm install -g` if bun install fails). Prints a "next steps" banner pointing at `cerefox init`. |
+| 23I.2 | Attach `install.sh` to GitHub Releases | Pending | New step in `release.yml` (or `cut_release.ts`) — `gh release upload v0.5.0 install.sh` after the GitHub Release is created. URL stable: `https://github.com/.../releases/latest/download/install.sh`. |
+| 23I.3 | Write `docs/guides/migration-v0.5.md` for existing v0.4.x users | Pending | What changes (CLI is npm-installable; Python CLI deprecated banner), what stays (Python CLI still works; existing MCP configs work via `cerefox-mcp` bin from v0.4), how to switch (one `bun install -g @cerefox/memory` + restart MCP clients). Includes the v0.5-specific notes: `web` is Python-only for now, `reindex` is Python-only for now. |
+| 23I.4 | Rewrite `docs/guides/installing.md` (or merge into `quickstart.md`) | Pending | npm-native install is the primary path; Python install moved to a "From source" subsection at the bottom. Includes the `cerefox init` walkthrough. |
+| 23I.5 | Update `docs/guides/connect-agents.md` for `cerefox configure-agent` | Pending | New "Automatic configuration" section makes `cerefox configure-agent --tool <client>` the recommended path. Manual MCP config snippets demoted to "Manual configuration" subsections per client. |
+| 23I.6 | Update `README.md` for v0.5 | Pending | Project status → v0.5.0. Release table marks v0.5.0 as current. Prerequisites table flips: npm/bun installs are primary; uv + clone is "From source" / contributor path. |
+| 23I.7 | Update `CLAUDE.md` Project Structure | Pending | `packages/memory/src/cli/` and `packages/memory/src/bin/cerefox.ts` added. `_shared/cli-core/` added. Bin count 1 → 2 (`cerefox`, `cerefox-mcp`). |
+| 23I.8 | Update `CONTRIBUTING.md` Development Setup | Pending | Add `bun run cli -- <args>` invocation for running the CLI against the source tree. Note: `bun install` from repo root now bootstraps both bins. |
+| 23I.9 | Update `AGENT_GUIDE.md` and `AGENT_QUICK_REFERENCE.md` | Pending | CLI fallback section: switch from `uv run cerefox` to `npx --package=@cerefox/memory cerefox` (or globally-installed `cerefox`). Tool-vs-CLI mapping section updated with the new bin name. |
+
+### 23J: Documentation + Decision Log + CHANGELOG + plan markup + release
+
+The closing iteration step. Mirrors iter-22 Part G.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 23J.1 | CHANGELOG `[Unreleased]` populated with v0.5.0 release notes | Pending | Same structure as v0.4.x entries. `cut_release.ts` promotes on cut. |
+| 23J.2 | Decision Log Q2 Part 3 (or Part 4 if Part 3 hits ~50K) entry: "v0.5.0 — TS CLI" | Pending | Capture: the commander-vs-oclif choice, the `web`/`reindex` deferral rationale, the ingestion-via-EF decision, the per-PR-grouping decision, the `configure-agent` Phase-1-only scope, the Python deprecation timing (banner now, removal v0.8/v0.9), and any new gotchas discovered during build. |
+| 23J.3 | Mark all Iteration 23 sub-tasks with final status | Pending | Same shape as iter-22 — every row gets Done / Deferred / Skipped + a one-line outcome note. |
+| 23J.4 | Open PR(s) for v0.5.0 | Pending | Per open question 1, likely 3 PRs (23A+B+C / 23D+E / 23F+G+H+I) merged sequentially. Final PR includes 23J. |
+| 23J.5 | Post-merge: cut v0.5.0 | Pending (post-merge maintainer task) | `bun scripts/cut_release.ts 0.5.0 --npm-publish`. Pre-flight checks per Decision Log Q2 Part 3 procedure: `git grep -F "0.4.3" packages/ scripts/ _shared/` should be empty (or only intentional historical refs); `cd packages/memory && npm pack --dry-run` should emit no `bin[*]` warnings; CHANGELOG `[Unreleased]` should have real content. |
+| 23J.6 | Post-publish verification (3-way) | Pending (post-merge maintainer task) | From `/tmp`: registry HEAD 200, `jq .bin/.version` matches, `npx -y --package=@cerefox/memory@0.5.0 cerefox --version` prints 0.5.0. Run `cerefox doctor` against a fresh install to confirm all green. |
+
+**Total**: ~60 sub-tasks across 10 parts.
+
+**Tests / risk**: High overall (largest single migration in the arc).
+
+- **Highest risk**: 23B + 23C parity drift across 11 ported commands. Mitigated by the parity test infrastructure (23B.9 + 23C.5) running side-by-side outputs.
+- **High risk**: 23E.1 (`cerefox init`) — interactive flow with side effects (writes ~/.cerefox/.env, deploys schema, ingests docs, wires MCP). Test via the `--config` non-interactive mode (23E.2) which has the same code path minus prompts.
+- **Medium risk**: 23F (self-doc ingest) — bundling docs into the npm package; sensitive to file-path resolution at runtime. Snapshot test (23F.6) catches drift.
+- **Medium risk**: 23J.5 first cut via the v0.4.3-hardened cut_release.ts — should be smooth, but it's the first time we publish a package with a new bin entry. Pre-flight grep + dry-run pack.
+- **Lower risk**: 23H (Python deprecation banner) — additive, no behavior change. 23I (docs).
+
+**Deferred to later iterations** (not in v0.5.0):
+- **`cerefox web` as a native TS server** — v0.6.0.
+- **`cerefox reindex` via TS** — v0.7.0 (depends on TS ingestion pipeline).
+- **`cerefox configure-agent` Phase 2** (Cursor, Codex, Gemini) — v0.5.x or v0.6.
+- **`/app/settings` page** — v0.5.x or v0.6.
+- **Hard-removal of Python CLI** — v0.8/v0.9.
 
 ---
 
