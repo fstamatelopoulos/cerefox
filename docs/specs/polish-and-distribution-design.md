@@ -811,7 +811,7 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 | 2 | **32 of 35** `/api/v1/*` endpoints ported with response-shape parity (zod schemas in `_shared/schemas/` + narrow snapshot tests for 5 critical endpoints) |
 | 3 | **3 ingestion endpoints** (`/ingest`, `/ingest/file`, `/documents/{id}/upload`) return **503 stubs** with a `"see migration-v0.5.md"` body until v0.7 lands the TS ingestion pipeline. Frontend detects 503 and shows a "v0.7 feature" toast. |
 | 4 | E2E test suite (TS port of `tests/e2e/test_api_e2e.py`) passes against the new server, probe-and-skip when Supabase unreachable |
-| 5 | `cerefox web` (TS) is the new default; Python `cerefox web` (still works via `uv run`) gains a deprecation banner — same pattern as v0.5.0 CLI deprecation |
+| 5 | `cerefox web` (TS) ships in v0.6 code; **no Python web-specific deprecation banner yet** (deferred to v0.7's Part 25L, when the TS web is a complete replacement). The v0.5.0 generic Python CLI deprecation banner stays unchanged. |
 | 6 | Web UI footer shows TS-server version (was Python-server version) |
 | 7 | First-run UX in web UI: empty-state getting-started panel |
 | 8 | **Frontend `dist/` bundled into `@cerefox/memory` for the first time** (the v0.4.0 bundling was Python-wheel only; npm package previously had no frontend) |
