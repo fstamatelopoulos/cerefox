@@ -15,14 +15,32 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = join(PKG_ROOT, "..", "..");
 const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
 const MCP_ARGS = [BIN, "mcp"];
+
+// Match the probe-and-skip pattern from read/write/lifecycle live tests:
+// spawn `cerefox list-projects --json` from REPO_ROOT (so `.env` is
+// resolved exactly as the MCP server would resolve it on a real boot).
+// Non-zero exit = no config / Supabase unreachable; skip the test.
+// CI without secrets (and a fresh dev box that hasn't run `cerefox init`
+// yet) both land here cleanly instead of timing out at 5s.
+function probeSupabase(): boolean {
+  if (!existsSync(BIN)) return false;
+  const result = spawnSync("node", [BIN, "list-projects", "--json"], {
+    cwd: REPO_ROOT,
+    env: { ...process.env },
+    timeout: 5_000,
+  });
+  return result.status === 0;
+}
+const LIVE_OK = probeSupabase();
 
 describe("stdio MCP server smoke", () => {
   test("bin exists after build", () => {
@@ -37,10 +55,16 @@ describe("stdio MCP server smoke", () => {
     if (!existsSync(BIN)) {
       throw new Error(`run \`bun run build\` first`);
     }
+    if (!LIVE_OK) {
+      console.log(
+        "(skipped: Supabase config / connectivity probe failed — same auto-skip the live read/write/lifecycle tests use)",
+      );
+      return;
+    }
 
     // The server resolves .env from CWD per _shared/config/. Run from the
-    // repo root so the maintainer's .env is picked up.
-    const REPO_ROOT = join(PKG_ROOT, "..", "..");
+    // repo root so the maintainer's .env is picked up. REPO_ROOT is the
+    // module-level constant set above.
     const child = spawn("node", MCP_ARGS, {
       cwd: REPO_ROOT,
       env: { ...process.env },
