@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.5.0] -- 2026-05-27
+
 **TypeScript CLI release.** The Python `cerefox` CLI is now joined by a
 TypeScript `cerefox` bin published inside the same `@cerefox/memory`
 npm package as the v0.4 `cerefox-mcp` bin. End users on a fresh machine
