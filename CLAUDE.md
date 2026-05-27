@@ -64,11 +64,20 @@ cerefox/
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
 │   ├── db-status/                 # Schema-version-mismatch banner, status checks
 │   ├── embeddings/                # OpenAI/Fireworks embedding helpers
-│   └── mcp-tools/                 # 10 MCP tool handlers shared by remote + local
+│   ├── mcp-tools/                 # 10 MCP tool handlers shared by remote + local
+│   └── cli-core/                  # CLI helpers (exit, output, argv, prompts)
 ├── packages/
-│   └── memory/                    # @cerefox/memory npm package (local MCP server bin)
-│       ├── src/                   # buildServer factory + bin entry
-│       ├── test/                  # stdio smoke test
+│   └── memory/                    # @cerefox/memory npm package — both bins (v0.5+)
+│       ├── src/
+│       │   ├── bin/cerefox-mcp.ts  # stdio MCP server bin (v0.4+)
+│       │   ├── bin/cerefox.ts      # main CLI bin (v0.5+)
+│       │   ├── cli/                # commander program + 28 subcommand files
+│       │   │   ├── commands/       # one file per subcommand
+│       │   │   └── util/           # checks, mcp-config-writers, bundled-docs
+│       │   ├── server.ts           # buildServer() factory (used by both bins)
+│       │   └── meta.ts             # PKG_VERSION — bumped by cut_release.ts
+│       ├── test/                   # stdio smoke + CLI smoke + read/write/lifecycle tests
+│       ├── README.md               # npm landing card (refreshed each release)
 │       └── package.json
 ├── supabase/functions/            # Edge Functions (Deno)
 │   └── cerefox-mcp/               # Remote MCP server; imports _shared/mcp-tools/

@@ -602,6 +602,21 @@ async function main(): Promise<void> {
   }
   ok(`GitHub Release ${tag} created.`);
 
+  // Attach install.sh as a release asset so the `latest/download/install.sh`
+  // URL always serves the most recent one. Stable URL:
+  //   https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh
+  // Best-effort: skip if install.sh doesn't exist (very early v0.x cuts).
+  const installSh = join(REPO_ROOT, "install.sh");
+  if (existsSync(installSh)) {
+    info("Attaching install.sh to the GitHub Release…");
+    const upload = run("gh", ["release", "upload", tag, installSh, "--clobber"]);
+    if (upload.status === 0) {
+      ok("install.sh uploaded to the release.");
+    } else {
+      warn(`Could not upload install.sh: ${upload.stderr.trim() || "unknown error"}. Upload manually with: gh release upload ${tag} install.sh`);
+    }
+  }
+
   if (args.npmPublish) {
     info("Triggering release.yml workflow with publish_to_npm=true…");
     // `gh workflow run` queues the workflow; we don't block on its completion
