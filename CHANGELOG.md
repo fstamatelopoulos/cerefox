@@ -9,7 +9,65 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Hotfix.** Strips the `cerefox mcp` (Python CLI) soft wrapper. Reported
+in the field: Claude Desktop fails to attach to the MCP server after
+restart when the config uses `uv run --directory /path/to/cerefox cerefox mcp`
+— "Could not attach to MCP server cerefox."
+
+### Fixed
+
+- **`cerefox mcp` (Python) no longer probes / execvp's via npx.** The
+  v0.4–v0.5.1 soft wrapper tried to delegate to the npm package's TS
+  MCP server when `@cerefox/memory` was installed, falling back to the
+  in-tree Python server otherwise. The probe — `npx --no-install
+  --package=@cerefox/memory cerefox --version` — was fundamentally
+  unreliable under `uv run`-launched contexts. `uv run` prepends
+  `.venv/bin/` to PATH; npx's PATH-fallback finds the venv's Python
+  `cerefox` console_script when the cached @cerefox/memory version
+  doesn't ship a `cerefox` bin (true for v0.4.x — only `cerefox-mcp`
+  existed there). Probe reports success; execvp PATH-falls-back to
+  the same Python `cerefox`; `_run_mcp()` recurses until the MCP
+  client times out. Fix: strip the wrapper. `cerefox mcp` (Python)
+  now directly starts the Python MCP server, period.
+
+- **Two paths to the MCP server, both explicit:**
+
+  | Path | Config form |
+  |---|---|
+  | Python in-tree MCP server | `"command": "/path/to/uv", "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]` |
+  | TS MCP server (npm-installed globally) | `"command": "cerefox", "args": ["mcp"]` |
+  | TS MCP server (npx ad-hoc) | `"command": "npx", "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]` |
+
+  All three are functionally equivalent (same 10 tools, same wire
+  shapes). Pick whichever fits your environment.
+
+### Changed
+
+- **`tests/test_mcp_soft_wrapper.py`** rewritten — old tests asserted
+  on probe args / execvp args / fallback stderr messages; new tests
+  guard against re-introducing the bug class by asserting `_run_mcp()`
+  doesn't call `subprocess.run` or `os.execvp` or `shutil.which`.
+
+- **`docs/guides/migration-v0.5.md`** gains a "v0.5.2 fixed the soft
+  wrapper" section explaining the recursion bug + the explicit config
+  forms.
+
+- **`docs/guides/migration-v0.4.md`** updated to drop the "auto-delegation"
+  wording. Existing v0.4 configs still work — they just start the
+  Python server (which they always actually did when the probe
+  succeeded under uv-launched contexts, via the PATH-fallback path
+  through `.venv/bin/cerefox`, accidentally).
+
+### Migration
+
+No user-visible config change required. Anyone whose Claude Desktop
+was broken by this on v0.5.1 needs to pull the latest `main` and
+`uv sync` (or wait for v0.5.2 to land on PyPI — there is no PyPI
+publish for the Python CLI yet; it's installed from the repo today,
+so a `git pull && uv sync` is the upgrade path).
+
+The npm package `@cerefox/memory@0.5.1` is unaffected — the bug was
+entirely in the Python wrapper.
 
 ---
 

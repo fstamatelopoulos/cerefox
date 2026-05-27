@@ -1029,88 +1029,47 @@ def reindex(batch: int, reindex_all: bool, dry_run: bool) -> None:
 
 @cli.command("mcp")
 def mcp_server() -> None:
-    """Start the Cerefox MCP server (stdio transport).
+    """Start the Cerefox MCP server (Python; stdio transport).
 
-    Soft wrapper as of v0.4.0: tries the new TypeScript implementation
-    (@cerefox/memory on npm) first; falls back to the legacy Python
-    server if Bun/Node + the npm package aren't available.
+    This command always starts the in-tree Python MCP server.
+    Functionally identical to the TS MCP server in `@cerefox/memory`
+    (same 10 tools, same wire shapes), so MCP clients see the same
+    surface regardless of which path they're configured to use.
 
-    The new TS server has 10 tools (the 9 Cerefox tools + cerefox_get_help);
-    the legacy Python fallback also exposes all 10 so MCP clients see the
-    same surface regardless of which path serves them.
+    .. note::
+       v0.4.0–v0.5.1 had a "soft wrapper" here that tried `npx`-delegation
+       to the npm package's TS MCP server before falling back to the
+       Python server. The probe was fundamentally unreliable: under
+       `uv run`-launched contexts (which Claude Desktop and other MCP
+       clients use), `npx --no-install --package=@cerefox/memory cerefox`
+       falls back to the venv's Python `cerefox` console_script when the
+       cached npm package doesn't ship a `cerefox` bin (true for v0.4.x).
+       That made the probe report success, then execvp'd into the same
+       PATH-fallback path, recursing until Claude Desktop timed out
+       and showed "Could not attach to MCP server cerefox."
 
-    Existing MCP configs pointing at `uv run cerefox mcp` keep working —
-    transport is stdio either way, agents see the same tools.
+       v0.5.2 stripped the wrapper. To use the TS MCP server, configure
+       your client to invoke it explicitly:
 
-    To upgrade to the TS path (faster boot, fewer Python deps):
+           "command": "npx",
+           "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]
 
-        bun install -g @cerefox/memory        # or: npm install -g @cerefox/memory
-
-    Then this command transparently forwards to it.
+       The Python path (this command) stays as the offline / no-npm
+       option. The two are no longer linked.
     """
     _run_mcp()
 
 
 def _run_mcp() -> None:
-    """Soft-wrapper logic — try npx, fall back to legacy Python.
+    """Start the in-tree Python MCP server.
 
-    Pulled out for unit testing (we patch subprocess + os.execvp without
-    bringing in Click's invocation machinery).
+    Pulled out as a separate function so unit tests can verify the entry
+    point without going through Click's invocation machinery.
+
+    v0.5.2: this is now a direct call to the legacy MCP server — no
+    npx probing, no execvp magic. See the docstring on `mcp_server`
+    for why the soft wrapper was removed.
     """
-    import os  # noqa: PLC0415
-    import shutil  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
-
-    npx = shutil.which("npx")
-    if npx is not None:
-        # Probe whether @cerefox/memory is already installed (globally or in
-        # npx's local cache). We don't want `npx` to silently pull from the
-        # registry on every server start — that adds a multi-second delay on
-        # first run and a hidden network dependency.
-        #
-        # `--package=@cerefox/memory cerefox` is the canonical npx invocation
-        # for the @cerefox/memory bin. v0.5.0 also shipped a `cerefox-mcp`
-        # bin as a v0.4 backward-compat shim; v0.5.1 removed it. Probe the
-        # current canonical form; users on v0.5.0 (briefly published with
-        # both bins) keep working because `cerefox` is in both v0.5.x lines.
-        probe = subprocess.run(
-            [npx, "--no-install", "--package=@cerefox/memory", "cerefox", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if probe.returncode == 0:
-            # Forward stdio cleanly; replace the current process so the MCP
-            # client's stdio pipes connect directly to the TS server. The
-            # `mcp` arg invokes the MCP subcommand inside the `cerefox` bin
-            # (which then calls buildServer() in-process).
-            os.execvp(
-                npx,
-                [npx, "--no-install", "--package=@cerefox/memory", "cerefox", "mcp"],
-            )
-            # `execvp` doesn't return on success. The `return` below is
-            # defensive — tests sometimes mock execvp so it returns
-            # normally, and we don't want the legacy fallback to kick in
-            # then. If execvp ever fails for real (e.g. the bin file was
-            # deleted between the probe and the exec), it raises OSError,
-            # which propagates out and crashes the server — the user fixes
-            # their install.
-            return
-
-        click.echo(
-            "ℹ  @cerefox/memory not installed; falling back to legacy Python MCP server.\n"
-            "   Run `npm install -g @cerefox/memory` (or `bun install -g …`) for the new TS version.",
-            err=True,
-        )
-    else:
-        click.echo(
-            "ℹ  npx not found; falling back to legacy Python MCP server.\n"
-            "   Install Node 20+ and `npm install -g @cerefox/memory` for the new TS version.",
-            err=True,
-        )
-
-    # Legacy fallback — the existing Python MCP server.
     from cerefox.mcp_server import run  # noqa: PLC0415
 
     run()
