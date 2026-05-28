@@ -60,7 +60,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 
 ## Project status
 
-Cerefox is a single-maintainer open-source project, currently at **v0.5.0** and in
+Cerefox is a single-maintainer open-source project, currently at **v0.7.0** and in
 its **"Polish & Distribution" arc** — the work that takes it from "runnable from a
 git clone" to "installable like any other modern CLI". Highlights of what's
 already shipped (full history in [`CHANGELOG.md`](CHANGELOG.md)):
@@ -83,18 +83,22 @@ already shipped (full history in [`CHANGELOG.md`](CHANGELOG.md)):
 | v0.2.0 | Foundations + first TS artifact | `VERSION` source-of-truth · OSS hygiene files · SemVer + script-language policies · `scripts/cut_release.ts` (first TS script outside Edge Functions and frontend) |
 | v0.3.0 | "Install anywhere" | `~/.cerefox/` user-state root · `cerefox docs` CLI + `/app/help` web UI · schema-version-mismatch banner · first two Python scripts ported to TS (`sync_docs.ts`, `db_status.ts`) · `_shared/` TS module seeded |
 | v0.4.x | TS MCP server | Local `cerefox mcp` becomes a TypeScript Bun/Node process, published as [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) on npm · 10th MCP tool `cerefox_get_help` · `_shared/mcp-tools/` shared by remote EF + local server · OIDC trusted publishing |
-| **v0.5.0** (current) | TS CLI | `cerefox` binary added to `@cerefox/memory` (same package, growing surface) — callable from any directory, no Python install needed · 6 new lifecycle commands (`init`, `doctor`, `status`, `configure-agent`, `self-update`, `sync-self-docs`) · automatic self-doc ingest (Layer 2 of MCP discoverability) · tab completion for bash/zsh/fish · documented exit codes · Python CLI deprecated (functional through v0.7) |
-| v0.6.0 – v0.7.0 | TS web server + ingestion pipeline | FastAPI → Hono · Python ingestion → TS · all inside `@cerefox/memory` (single npm package, growing surface) |
-| v0.8.0 – v0.9.0 | Python retirement | Deprecation banners → removal |
+| v0.5.0 | TS CLI | `cerefox` binary added to `@cerefox/memory` (same package, growing surface) — callable from any directory, no Python install needed · 6 new lifecycle commands (`init`, `doctor`, `status`, `configure-agent`, `self-update`, `sync-self-docs`) · automatic self-doc ingest (Layer 2 of MCP discoverability) · tab completion for bash/zsh/fish · documented exit codes · Python CLI deprecated (functional through v0.7) |
+| v0.6.0 | TS web server | FastAPI → Hono on Bun · all `/api/v1/*` endpoints + bundled SPA served by `cerefox web` from the same `@cerefox/memory` package · `configure-agent` adds Cursor + Codex + Gemini writers |
+| **v0.7.0** (current) | TS ingestion pipeline | Chunking + embedding orchestration + version snapshotting move to TS · `cerefox ingest` / `ingest-dir` / `reindex` use the in-process pipeline (no Edge Function round-trip) · PDF/DOCX support dropped · `scripts/db_deploy.ts` + `db_migrate.ts` ported · Python web prints a deprecation banner at startup; Python MCP server unchanged |
+| v0.8.0 – v0.9.0 | Python retirement | Deprecation banners → removal (MCP server + CLI husks survive through v0.9; pytest as a test runner retires) |
 | **v1.0.0** | Stability commitment | Strict SemVer becomes binding; long-lived API contract |
 
 Until v1.0.0 the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
 aspirational — breaking changes can land in minor versions when there's a good
-reason. After v1.0.0 it's binding. **The npm install path is now open** as of
-v0.4.0: end users can run `npx -y --package=@cerefox/memory cerefox mcp` for
-the local MCP server (no Python required). The Python CLI + web UI + ingestion
-pipeline still need a clone + `uv` install; that changes through v0.5–v0.7 as
-the remaining components migrate. (v0.4–v0.5.0 also shipped a dedicated
+reason. After v1.0.0 it's binding.
+
+**The npm install path is now complete** as of v0.7.0: the entire runtime
+surface (CLI, MCP, web server, ingestion pipeline) ships in `@cerefox/memory`
+with no Python required. End users install via the one-liner below or
+`npm install -g @cerefox/memory`. Schema deploy / migrations / backup
+restore still use the Bun-run `scripts/*.ts` from a repo clone — those are
+ops scripts, not part of the runtime. (v0.4–v0.5.0 also shipped a dedicated
 `cerefox-mcp` bin; dropped in v0.5.1 as redundant with `cerefox mcp`.)
 
 ---
@@ -103,9 +107,9 @@ the remaining components migrate. (v0.4–v0.5.0 also shipped a dedicated
 
 > **Full walkthrough**: `docs/guides/quickstart.md` -- zero to first ingested document and connected agent in 15 minutes.
 >
-> **Upgrading from v0.4.x?** See [`docs/guides/migration-v0.5.md`](docs/guides/migration-v0.5.md) — your existing MCP configs keep working; the new `cerefox` CLI is opt-in.
+> **Upgrading from v0.4.x?** See [`docs/guides/migration-v0.5.md`](docs/guides/migration-v0.5.md) — it now covers v0.5 → v0.7. Your existing MCP configs keep working; the npm-installed `cerefox` CLI is opt-in.
 
-### Quickstart (npm path — recommended as of v0.5.0)
+### Quickstart (npm path — recommended)
 
 ```bash
 # One-line install (detects Bun or installs it, falls back to npm):
@@ -119,15 +123,17 @@ cerefox init                         # interactive 5-step setup
 cerefox doctor                       # verify the install
 
 # Wire up your MCP client(s) — run the ones that apply to your setup:
-cerefox configure-agent --tool claude-code      # Claude Code (~/.claude/mcp.json)
+cerefox configure-agent --tool claude-code      # Claude Code (~/.claude.json via `claude mcp add`)
 cerefox configure-agent --tool claude-desktop   # Claude Desktop config
-# (Cursor / Codex / Gemini land in a future v0.5.x; see migration-v0.5.md
-#  for the manual config snippets in the meantime.)
+cerefox configure-agent --tool cursor           # Cursor (~/.cursor/mcp.json)
+cerefox configure-agent --tool codex            # OpenAI Codex CLI (~/.codex/config.toml)
+cerefox configure-agent --tool gemini           # Gemini CLI (~/.gemini/settings.json)
 ```
 
-That's the path for end users who don't need to hack on Cerefox itself. For
-the schema deploy + web UI + ingestion pipeline, see the "Building from
-source" section below (Python is still the path for those in v0.5).
+That's the path for end users who don't need to hack on Cerefox itself. The
+entire runtime surface (CLI, MCP, web server, ingestion pipeline) is in this
+single npm package as of v0.7.0. The schema deploy and migration scripts
+under `scripts/` still need a repo clone — see "Building from source" below.
 
 ### Prerequisites for the npm install path
 
@@ -139,14 +145,13 @@ source" section below (Python is still the path for those in v0.5).
 
 ### Building from source / Contributors
 
-For the schema deploy, the web UI, the ingestion pipeline, or contributing
-to Cerefox itself:
+For schema deploy + migrations, or contributing to Cerefox itself:
 
 | Tool | Why | Install |
 |---|---|---|
-| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | Schema deploy (`scripts/db_deploy.py`), web server (until v0.6), ingestion pipeline (until v0.7) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| **Node 20+** with `npm` | One-time `npm install && npm run build` to produce the React SPA bundle the web UI serves | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
-| **[Bun](https://bun.sh) 1.x** | TypeScript scripts (`scripts/*.ts`), `_shared/` tests, `@cerefox/memory` build | `curl -fsSL https://bun.sh/install \| bash` |
+| **[Bun](https://bun.sh) 1.x** | TypeScript scripts (`scripts/db_deploy.ts`, `db_migrate.ts`, `sync_docs.ts`, `db_status.ts`), `_shared/` + `packages/memory/` tests, `@cerefox/memory` build, frontend build | `curl -fsSL https://bun.sh/install \| bash` |
+| **Node 20+** | Alternative runtime for the same `cerefox` bin (CI uses Node) | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
+| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | Legacy `uv run cerefox mcp` (Python MCP server, kept through v0.9); `pytest` suites that haven't ported yet | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | A Supabase account + embedding API key | Same as above | (same links) |
 
 Full contributor setup in [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -156,7 +161,8 @@ Full contributor setup in [CONTRIBUTING.md](CONTRIBUTING.md).
 ```bash
 git clone https://github.com/fstamatelopoulos/cerefox.git
 cd cerefox
-uv sync
+bun install              # workspace deps (root + packages/memory + frontend)
+uv sync                  # only if you need the Python MCP server / pytest
 ```
 
 ### 2. Set up Supabase (free)
@@ -193,7 +199,8 @@ Open `.env` and fill in these values:
 ### 4. Deploy the schema
 
 ```bash
-uv run python scripts/db_deploy.py
+bun scripts/db_deploy.ts            # full schema + RPCs (`--dry-run` to preview, `--reset` to drop first)
+# bun scripts/db_migrate.ts         # apply incremental migrations on an already-deployed instance
 ```
 
 ### 5. Deploy the Edge Functions
@@ -212,41 +219,44 @@ Set your OpenAI key as a Supabase secret (used by the functions at runtime):
 npx supabase secrets set OPENAI_API_KEY=sk-...your-key...
 ```
 
-### 6. Build the web UI
+### 6. Build the web UI (only when working from a repo clone)
 
-The web UI is a React + Vite SPA. Build it once now (and re-run after any frontend change):
+The web UI is a React + Vite SPA. The bundled `@cerefox/memory` npm package
+already includes the built SPA — you only need to build it yourself if you
+cloned the repo and are running `cerefox web` from source or have edited
+`frontend/` files:
 
 ```bash
 cd frontend
-npm install
-npm run build
+bun install
+bun run build
 cd ..
 ```
 
-This produces `frontend/dist/`, which `uv run cerefox web` serves at `/app/`. Skipping this step is the most common "the web UI returns 404" cause.
+This produces `frontend/dist/`, which `cerefox web` serves at `/app/`.
 
 ### 7. Ingest a document and open the web UI
 
 ```bash
-uv run cerefox ingest my-notes.md --title "My notes"
-uv run cerefox web                # → http://localhost:8000
+cerefox ingest my-notes.md --title "My notes"
+cerefox web                       # → http://localhost:8000
 ```
 
 **Optional**: ingest the Cerefox docs themselves so AI agents can look up project details:
 
 ```bash
 # Create a "cerefox" project first, then sync README + all docs/ into it.
-uv run cerefox create-project cerefox
-uv run python scripts/sync_docs.py
+cerefox create-project cerefox
+bun scripts/sync_docs.ts
 ```
 
-Re-run `sync_docs.py` any time after updating documentation to keep the knowledge base current.
+Re-run `sync_docs.ts` any time after updating documentation to keep the knowledge base current.
 
 **Try with sample data**: the `test-data/` directory contains six diverse markdown documents
 you can ingest to experiment with search before adding your own content:
 
 ```bash
-uv run cerefox ingest-dir test-data/ --recursive
+cerefox ingest-dir test-data/ --recursive
 ```
 
 ---
@@ -309,18 +319,20 @@ Create a Custom GPT and add an Action pointing at the Supabase Edge Functions �
 install, no MCP config, works from both ChatGPT web and desktop. Uses the Supabase anon key
 as Bearer auth.
 
-**Option 3 — Local stdio MCP (legacy fallback)** — requires Python + uv + local repo clone:
+**Option 3 — Local stdio MCP** — runs the same 10 tools in-process; no Edge Function billing per call. Install once with `npm install -g @cerefox/memory`, then either run `cerefox configure-agent --tool <client>` (see Option 1's command list) or hand-write the config:
 
 ```json
 {
   "mcpServers": {
     "cerefox": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
+      "command": "cerefox",
+      "args": ["mcp"]
     }
   }
 }
 ```
+
+If you'd rather not install globally, `npx --package=@cerefox/memory cerefox mcp` works as a one-off. A clone-and-`uv run cerefox mcp` Python fallback also still works for repo contributors through v0.9.
 
 **Option 4 — Shell CLI for local coding agents** — no MCP setup at all:
 

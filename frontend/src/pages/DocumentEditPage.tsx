@@ -1,16 +1,16 @@
 import {
+  ActionIcon,
+  Autocomplete,
   Button,
   Container,
   Group,
   MultiSelect,
   SegmentedControl,
   Stack,
+  Text,
   TextInput,
   Textarea,
   Title,
-  Text,
-  ActionIcon,
-  Select,
 } from "@mantine/core";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -151,16 +151,15 @@ export function DocumentEditPage() {
             <Stack gap="xs">
               {metaPairs.map((pair, idx) => (
                 <Group key={idx} gap="xs">
-                  <Select
+                  <Autocomplete
                     placeholder="Key"
                     data={keyOptions}
                     value={pair.key}
                     onChange={(v) => {
                       const updated = [...metaPairs];
-                      updated[idx] = { ...pair, key: v || "" };
+                      updated[idx] = { ...pair, key: v };
                       setMetaPairs(updated);
                     }}
-                    searchable
                     w={200}
                     size="sm"
                   />

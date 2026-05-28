@@ -6,6 +6,7 @@
  */
 
 import type { Command } from "commander";
+import ora from "ora";
 
 import {
   cErr,
@@ -29,7 +30,25 @@ function symbol(status: CheckStatus): string {
 }
 
 async function action(options: { json?: boolean }): Promise<void> {
-  const results = await runAllChecks();
+  // Spinner only when writing to a TTY and not in --json mode. Matches the
+  // pattern from `scripts/db_status.ts`: spinner writes to stderr (ora
+  // default), JSON output goes to stdout — so the two never collide, and
+  // CI / non-interactive runs ( `| cat`, GH Actions) skip the spinner via
+  // the TTY check.
+  const useSpinner = !options.json && process.stderr.isTTY;
+  const spinner = useSpinner
+    ? ora({ text: "Starting checks…", spinner: "dots", stream: process.stderr }).start()
+    : null;
+
+  const results = await runAllChecks({
+    onProgress: spinner
+      ? (ev) => {
+          spinner.text = `${ev.phase} [${ev.index}/${ev.total}]`;
+        }
+      : undefined,
+  });
+
+  spinner?.stop();
 
   if (options.json) {
     printJson(results);
