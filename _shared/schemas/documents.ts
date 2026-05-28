@@ -60,3 +60,30 @@ export const FilenameCheckResponse = z.object({
   updated_at: z.string().nullable().optional(),
 });
 export type FilenameCheckResponse = z.infer<typeof FilenameCheckResponse>;
+
+// Write-endpoint request/response shapes (Part 24E).
+
+export const EditRequest = z.object({
+  title: z.string(),
+  content: z.string(),
+  project_ids: z.array(z.string()).default([]),
+  metadata: z.record(z.string(), z.string()).default({}),
+});
+export type EditRequest = z.infer<typeof EditRequest>;
+
+export const EditResponse = z.object({
+  success: z.boolean(),
+  reindexed: z.boolean().default(false),
+  error: z.string().nullable().optional(),
+});
+export type EditResponse = z.infer<typeof EditResponse>;
+
+export const ReviewStatusRequest = z.object({
+  status: z.enum(["approved", "pending_review"]),
+});
+export type ReviewStatusRequest = z.infer<typeof ReviewStatusRequest>;
+
+export const VersionArchiveRequest = z.object({
+  archived: z.boolean(),
+});
+export type VersionArchiveRequest = z.infer<typeof VersionArchiveRequest>;
