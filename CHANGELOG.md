@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.7.0] -- 2026-05-28
+
 **v0.7.0 — "TS Ingestion Pipeline" (last big Python component).** The
 chunking + embedding orchestration + version snapshotting move to TS.
 Completes the v0.6 TS web by swapping the 3 ingestion endpoints' 503
