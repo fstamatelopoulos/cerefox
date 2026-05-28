@@ -964,7 +964,87 @@ Cloud embeddings only today. Out of scope; revisit if a strong privacy-first use
 
 ---
 
-## 19. References
+## 19. Test migration policy
+
+**Added 2026-05-28 during the iter-24 / v0.6.0 cut**, in response to the
+realisation that `tests/e2e/test_api_e2e.py` doesn't actually exercise
+the `/api/v1/*` HTTP boundary (it talks directly to Supabase via
+`CerefoxClient`) — so the locked iter-24 plan of "pytest covers parity
+at the HTTP boundary" was based on a misread of the existing test
+coverage. The policy below makes test migration explicit so future
+iterations don't repeat the same misunderstanding.
+
+**Tests follow code.** When code migrates from Python to TS, its tests
+migrate too. By v0.9, no `.py` remains in `tests/` — same as
+`pyproject.toml`, `uv.lock`, and `.python-version`. Keeping pytest as a
+test runner past the Python-removal commitment is a contradiction; we
+take a hard line.
+
+### 20a. Test layers and where they live
+
+| Test layer | From v0.6 onward | Migrated by | Lives in |
+|---|---|---|---|
+| Unit tests for Python modules | Stay in `tests/` until their underlying module is deleted | v0.7 (chunking, embedding, ingestion, retrieval), v0.8 (CLI deprecation wrapper, paths) | `tests/*.py` → `packages/memory/test/*.test.ts` or `_shared/__tests__/*.test.ts` per ownership |
+| HTTP-boundary tests for `/api/v1/*` | **TS from v0.6.0 onward** | v0.6.0 (`tests/api/test_docs_endpoints.py`) | `packages/memory/test/web-integration/*.test.ts` |
+| EF + MCP integration tests | Stay in Python through v0.8 | v0.8 ("Deprecate Python") batch port | `tests/e2e/test_edge_functions_e2e.py`, `tests/e2e/test_mcp_e2e.py` → `packages/memory/test/edge-functions/`, `packages/memory/test/mcp-remote/` |
+| UI tests (Playwright) | Stay in Python through v0.8 | v0.8 batch port (`@playwright/test`) | `tests/e2e/test_ui_e2e.py` → `frontend/tests/e2e/*.spec.ts` |
+| DB-layer tests for `CerefoxClient` | Stay in Python until v0.7 deletes the client | v0.7 (alongside `CerefoxClient` deletion) | `tests/test_db_client.py` + `tests/db/*` → equivalent TS suite covering the same RPC contracts |
+
+### 20b. Rules
+
+1. **Test coverage doesn't drop on port.** Before deleting a Python
+   module, its test file is ported to TS or its coverage is verifiably
+   absorbed by an existing TS test. The porter proves this — typically
+   by running `pytest --collect-only tests/<module>` and listing each
+   case against the TS test names. No "we'll backfill later."
+
+2. **HTTP-boundary tests for `/api/v1/*` are TS-only from v0.6 onward.**
+   Each iteration that adds web routes adds at least one
+   HTTP-roundtrip test per destructive operation. Convention:
+   `packages/memory/test/web-integration/*.test.ts`, probe-and-skip
+   pattern when Supabase is unreachable, `[E2E web-...]` prefix on
+   any test data created, self-cleaning via final purge.
+
+3. **Parity-snapshot pattern for deterministic logic.** When porting
+   deterministic code (chunker output, response shapes, etc.), capture
+   the Python output as a fixture under
+   `packages/memory/test/fixtures/python-parity/` and assert
+   byte-identical (or normalised-identical) TS output. This is how
+   v0.6 verified its 5 critical wire shapes; v0.7's chunker port
+   needs the same pattern over `tests/chunking/fixtures/`.
+
+4. **v0.8 is the test-runner cutover pass.** The Python e2e tests
+   covering still-live Deno EFs and the React UI port to TS during
+   v0.8, alongside the Python deprecation banner. After v0.8, the
+   only `.py` left in `tests/` should be helper infrastructure
+   slated for v0.9 removal.
+
+5. **v0.9 deletes `tests/*.py` along with the rest of the Python
+   stack** (`pyproject.toml`, `uv.lock`, `.python-version`).
+   Period. By this point every test layer has a TS equivalent and
+   nothing should remain to delete except orphan `__pycache__`.
+
+### 20c. What "HTTP-roundtrip test per destructive operation" looks like
+
+A destructive endpoint test should:
+- Spawn the built `cerefox web` bin on a random port (probe-and-skip
+  if Supabase unreachable).
+- Create test state via the deployed `cerefox-ingest` Edge Function
+  (since v0.6's web `/ingest` is a 503 stub until v0.7). Use an
+  `[E2E web-<scope>]` title prefix.
+- Exercise the endpoint via `fetch` (no SDK; tests the wire shape
+  directly).
+- Verify side-effects via subsequent `GET` calls (e.g. DELETE → GET
+  trash includes the doc; restore → GET trash doesn't).
+- Final purge for cleanup; `afterAll` should swallow errors so a
+  partial-failure path still cleans up.
+
+See `packages/memory/test/web-integration/destructive.test.ts` for the
+shape of record.
+
+---
+
+## 20. References
 
 - cfcf installer pattern: `/Users/fotis/src/cfcf/docs/guides/installing.md`, README, `scripts/local-install.sh`.
 - Bun: <https://bun.sh>.

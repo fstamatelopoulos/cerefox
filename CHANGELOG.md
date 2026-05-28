@@ -58,6 +58,25 @@ they did before.
   (`packages/memory/test/fixtures/python-parity/`) zod-parse cleanly
   against the matching schemas in `_shared/schemas/`. Runs in CI
   without Supabase.
+- **HTTP-boundary test suite** at
+  `packages/memory/test/web-integration/`: end-to-end coverage for
+  the 5 destructive endpoints (DELETE / restore / purge /
+  review-status / version-archive) plus meta endpoints (/version,
+  /docs, /docs/{path}, /schema-version). Spawns the bin on a random
+  port; probe-and-skip when Supabase is unreachable; self-cleans via
+  `[E2E web-...]` title prefix and a final purge. Migrates
+  `tests/api/test_docs_endpoints.py` to TS per the new test migration
+  policy.
+- **Unit tests for `web/docs.ts`** at
+  `packages/memory/test/web-docs.test.ts`: listBundledDocs + readDoc
+  resolver + path-traversal coverage.
+- **Test migration policy** in
+  `docs/specs/polish-and-distribution-design.md` §19. Codifies "tests
+  follow code"; HTTP-boundary tests are TS-only from v0.6 onward;
+  v0.7 ports the chunking/embedding/ingestion/retrieval test suites
+  with their code; v0.8 batches the remaining EF/MCP/UI test port to
+  TS; v0.9 deletes any `tests/*.py` that remains alongside the
+  Python stack itself.
 
 ### Changed
 
@@ -72,6 +91,10 @@ they did before.
   `scripts/bundle_package_docs.ts`. The historical guide stays in
   git; anyone reading docs in `@cerefox/memory` at this point is
   way past v0.4.
+- `tests/api/test_docs_endpoints.py` removed — its HTTP-boundary
+  coverage migrated to TS at
+  `packages/memory/test/web-integration/meta.test.ts` per the new
+  test migration policy.
 
 ### Deferred to v0.7
 
