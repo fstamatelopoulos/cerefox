@@ -114,7 +114,12 @@ export function isDevMode(opts: ResolverOptions = {}): boolean {
   if ((env.CEREFOX_CONFIG_DIR ?? "").trim()) return false;
   if (existsSync(join(userStateDirAbs(opts), ".env"))) return false;
   const here = opts.cwd ?? processCwd();
-  return existsSync(join(here, ".env"));
+  const cwdEnv = join(here, ".env");
+  // Mirrors resolveConfigDir's tightened heuristic (iter-24K): a CWD
+  // `.env` only counts as "Cerefox dev-mode" when it actually has a
+  // CEREFOX_* key. An unrelated Node project's .env doesn't trip
+  // dev-mode detection.
+  return existsSync(cwdEnv) && cwdEnvHasCerefoxKey(cwdEnv);
 }
 
 /**

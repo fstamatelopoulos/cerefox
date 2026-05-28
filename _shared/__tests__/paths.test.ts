@@ -101,7 +101,7 @@ describe("resolveConfigDir — v0.5.3 precedence", () => {
 
 describe("resolveEnvFile", () => {
   test("returns ~/.cerefox/.env when home file exists (v0.5.3)", () => {
-    writeFileSync(join(tmpDir, ".env"), "X=1\n");
+    writeFileSync(join(tmpDir, ".env"), "CEREFOX_FOO=1\n");
     writeHomeEnv();
     expect(resolveEnvFile({ cwd: tmpDir, home: fakeHome })).toBe(
       join(fakeHome, USER_STATE_DIR_NAME, ".env"),
@@ -109,8 +109,22 @@ describe("resolveEnvFile", () => {
   });
 
   test("returns CWD .env in legacy dev-mode", () => {
-    writeFileSync(join(tmpDir, ".env"), "X=1\n");
+    // Tightened in iter-24K: legacy fallback requires the CWD .env to
+    // contain at least one CEREFOX_* key. An unrelated Node project's
+    // .env (no Cerefox keys) doesn't trip the fallback.
+    writeFileSync(join(tmpDir, ".env"), "CEREFOX_FOO=cwd\n");
     expect(resolveEnvFile({ cwd: tmpDir, home: fakeHome })).toBe(join(tmpDir, ".env"));
+  });
+
+  test("ignores unrelated CWD .env without any CEREFOX_* keys (iter-24K)", () => {
+    // Protects users who run `cerefox` from an unrelated Node project:
+    // its DATABASE_URL=… / OPENAI_API_KEY=… would otherwise silently
+    // bleed into Cerefox's config resolution. Now falls back to
+    // ~/.cerefox/.env (the materialise-on-init path).
+    writeFileSync(join(tmpDir, ".env"), "DATABASE_URL=postgres://elsewhere\nFOO=bar\n");
+    expect(resolveEnvFile({ cwd: tmpDir, home: fakeHome })).toBe(
+      join(fakeHome, USER_STATE_DIR_NAME, ".env"),
+    );
   });
 
   test("returns ~/.cerefox/.env when nothing exists (caller materialises)", () => {
@@ -132,12 +146,12 @@ describe("userStateDir", () => {
 
 describe("isDevMode (v0.5.3 — reflects actual behavior)", () => {
   test("true when CWD .env exists and home env doesn't", () => {
-    writeFileSync(join(tmpDir, ".env"), "X=1\n");
+    writeFileSync(join(tmpDir, ".env"), "CEREFOX_FOO=1\n");
     expect(isDevMode({ cwd: tmpDir, home: fakeHome })).toBe(true);
   });
 
   test("false when both CWD .env AND home env exist (home wins)", () => {
-    writeFileSync(join(tmpDir, ".env"), "X=1\n");
+    writeFileSync(join(tmpDir, ".env"), "CEREFOX_FOO=1\n");
     writeHomeEnv();
     expect(isDevMode({ cwd: tmpDir, home: fakeHome })).toBe(false);
   });
@@ -147,7 +161,7 @@ describe("isDevMode (v0.5.3 — reflects actual behavior)", () => {
   });
 
   test("false when env override set", () => {
-    writeFileSync(join(tmpDir, ".env"), "X=1\n");
+    writeFileSync(join(tmpDir, ".env"), "CEREFOX_FOO=1\n");
     const explicit = mkdtempSync(join(tmpdir(), "cerefox-explicit-"));
     try {
       process.env.CEREFOX_CONFIG_DIR = explicit;
@@ -160,7 +174,7 @@ describe("isDevMode (v0.5.3 — reflects actual behavior)", () => {
 
 describe("hasLegacyCwdEnv (v0.5.3 — for doctor shadow detection)", () => {
   test("true when CWD .env exists, regardless of home env", () => {
-    writeFileSync(join(tmpDir, ".env"), "X=1\n");
+    writeFileSync(join(tmpDir, ".env"), "CEREFOX_FOO=1\n");
     writeHomeEnv();
     // Even though home wins for resolution, the legacy file still exists.
     expect(hasLegacyCwdEnv({ cwd: tmpDir, home: fakeHome })).toBe(true);
