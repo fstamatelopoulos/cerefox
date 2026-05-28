@@ -331,6 +331,77 @@ test path and works for power users who want a specific file location.
 
 ---
 
+## v0.6.0 moved the web server to TypeScript
+
+**TL;DR**: `cerefox web` from the npm package now boots an in-process
+Hono server (TypeScript on Bun) instead of pointing you at
+`uv run cerefox web`. Three ingestion endpoints temporarily return
+503; the web UI shows a friendly toast pointing at the working CLI
+fallback. Full ingestion support lands in v0.7.
+
+### What's new
+
+- **`cerefox web` works from npm.** No clone, no `uv`. `npm install
+  -g @cerefox/memory` followed by `cerefox web` boots the local web
+  UI + JSON API on `http://127.0.0.1:8000/`.
+- **React SPA bundled** into `@cerefox/memory`. The web UI is part
+  of the npm tarball; you get the same UI Python's `uv run cerefox
+  web` serves, no extra install.
+- **Configure-agent grew Phase 2 writers**: `cerefox configure-agent
+  --tool cursor` / `--tool codex` / `--tool gemini` join the existing
+  `--tool claude-code` / `--tool claude-desktop`. Codex's config is
+  TOML (`~/.codex/config.toml`); the rest are JSON.
+
+### The 503-ingestion-stubs window
+
+Three endpoints return 503 with `{error: "Ingestion lands in v0.7",
+see: <url>, note: …}`:
+
+- `POST /api/v1/ingest` (paste)
+- `POST /api/v1/ingest/file` (file upload)
+- `POST /api/v1/documents/{id}/upload` (replace)
+
+The web UI detects this and shows a yellow Mantine toast — no scary
+error banner. `/documents/{id}/edit` also returns 503 if you try to
+change content (it compares SHA-256 hashes against the stored
+`content_hash` — title / metadata / project changes work fine).
+
+### Working fallbacks during the v0.6 window
+
+Both fully functional, no behaviour change:
+
+```bash
+# Option A — npm-installed CLI hits the deployed Edge Function.
+cerefox ingest my-notes.md
+cerefox ingest-dir docs/
+
+# Option B — keep using the Python web for ingestion until v0.7.
+uv run cerefox web
+```
+
+v0.7 swaps the 503 stubs for in-process pipeline calls. The toast
+just stops firing — no frontend changes, no config changes, no
+re-install.
+
+### Should I upgrade from v0.5.4 to v0.6.0?
+
+| Workflow | Recommendation |
+|---|---|
+| MCP client only (Claude Code, Cursor, etc.) | Yes — Phase 2 writers + faster install matter. No risk. |
+| `cerefox` CLI for ingest / search | Yes — same CLI, no API changes. Ingest still works via the Edge Function. |
+| Web UI to ingest documents | Optional — wait a few days for v0.7 if ingestion-via-web is your main flow. Or upgrade and use the CLI for ingest until v0.7. |
+| `uv run cerefox web` | Keep using it through v0.7; the Python web is unchanged. The deprecation banner lands in v0.7 once the TS web is feature-complete. |
+
+### Python web kept through v0.7.x
+
+`src/cerefox/api/app.py` and `routes_api.py` ship unchanged in v0.6.
+The Python web-specific deprecation banner is **deferred to v0.7's
+Part 25L** — we won't nudge users away from a fully-working Python
+web while the TS web's 3 ingest endpoints are still 503. v0.8 makes
+the banner prominent; v0.9 deletes the Python web code.
+
+---
+
 ## Known gotchas
 
 ### `npx` from inside an npm workspace
