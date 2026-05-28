@@ -131,12 +131,15 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(stdout).toContain("Exit codes:");
   });
 
-  test("`cerefox web` prints v0.5-deferred message and exits 0", () => {
-    const { stdout, stderr, status } = run(["web"]);
+  test("`cerefox web --help` advertises the in-process server options", () => {
+    // v0.6 wires the Hono server in-process — the v0.5 deferred-message
+    // stub is gone. Boot-and-bind behaviour lives in web-smoke.test.ts;
+    // here we just check the CLI surface advertises the right flags.
+    const { stdout, status } = run(["web", "--help"]);
     expect(status).toBe(0);
-    const all = stdout + stderr;
-    expect(all).toContain("v0.6");
-    expect(all).toContain("uv run cerefox web");
+    expect(stdout).toContain("--host");
+    expect(stdout).toContain("--port");
+    expect(stdout).toContain("--watch");
   });
 
   test("`cerefox reindex` prints v0.7-deferred message and exits 0", () => {
