@@ -1,37 +1,39 @@
 /**
- * TS port of `src/cerefox/ingestion/pipeline.py` (iter-25 Parts 25C-25E).
+ * TS port of `src/cerefox/ingestion/pipeline.py`.
  *
- * Orchestrates the full parse → chunk → embed → store flow:
+ * Orchestrates the full parse → chunk → embed → store flow.
  *
- *   1. Hash the input (content_hash) using the shared `normalizeForHash`
- *      from `_shared/ingest/`.
- *   2. Dedup: if a doc with the same content_hash exists, return
- *      `action: "skipped"` early.
- *   3. Chunk: `_shared/ingest/chunkMarkdown` (byte-identical to Python).
- *   4. Embed: `_shared/embeddings/embedBatch` (96-chunk batching).
- *      Each chunk's embedding input is `"# {title}\n{c.content}"` for
- *      title-boosted FTS / semantic search recall (matches Python's
- *      contextual-enrichment pattern).
- *   5. Atomic write: `cerefox_ingest_document` RPC inserts the document
- *      + chunks + audit entry in one transaction.
- *   6. Project M2M: post-write `assignDocumentProjects` (full-set) or
- *      `addDocumentToProjects` (non-destructive).
- *
- * Public API matches Python's `IngestionPipeline`:
+ * Public API mirrors Python's `IngestionPipeline`:
  *   - `ingestText(opts)` → IngestResult
  *   - `updateDocument(opts)` → IngestResult
  *   - `ingestFile(path, opts)` → IngestResult (thin wrapper)
  *
- * Part 25C ships the constructor + types + stubs that throw
- * "not yet implemented". Part 25D implements `ingestText`'s
- * create-and-dedup path; Part 25E implements `updateDocument` and the
- * `/edit` content-change swap; Part 25F wires the 3 web ingest
- * endpoints to use this pipeline.
+ * Project semantics (issue #38):
+ *   - List form (`projectIds` or `projectNames`): full-set destructive
+ *     replace on update.
+ *   - Singular form (`projectId` or `projectName`): non-destructive add
+ *     on update.
+ *
+ * Review status routing:
+ *   - `authorType: "agent"` + write → `pending_review`
+ *   - `authorType: "user"` + write → `approved`
  */
 
+import { readFileSync } from "node:fs";
+import { basename, extname, resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { IngestionDbBridge } from "./client-bridge.ts";
+import {
+  chunkMarkdown,
+  contentHash,
+  deriveSourcePath,
+  resolveProjectIds,
+} from "../../../../_shared/ingest/index.ts";
+import { embedBatch } from "../../../../_shared/embeddings/index.ts";
+import {
+  IngestionDbBridge,
+  type ChunkInsertRow,
+} from "./client-bridge.ts";
 import {
   DEFAULT_PIPELINE_SETTINGS,
   type IngestResult,
@@ -66,31 +68,252 @@ export class IngestionPipeline {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  // Implementations land in Part 25D and 25E. Stubs preserve the
-  // constructor + module surface so consumers can import without
-  // breaking compilation.
+  /**
+   * Ingest raw markdown. Mirrors Python's `ingest_text`.
+   *
+   * Outcomes:
+   *   - `documentId` provided → routes to `updateDocument` (returns
+   *     `action: "updated"`).
+   *   - `updateExisting && existing-by-source-path-or-title` → routes
+   *     to `updateDocument` (returns `action: "updated"`).
+   *   - Content-hash collision with an existing doc → returns
+   *     `action: "skipped"`.
+   *   - Otherwise → chunks + embeds + RPC; returns `action: "created"`.
+   */
+  async ingestText(opts: IngestTextOptions): Promise<IngestResult> {
+    const {
+      text,
+      title,
+      source = "paste",
+      sourcePath: sourcePathOpt,
+      projectName,
+      projectId,
+      projectIds,
+      projectNames,
+      metadata,
+      updateExisting = false,
+      documentId,
+      author = "unknown",
+      authorType = "user",
+    } = opts;
 
-  async ingestText(_opts: IngestTextOptions): Promise<IngestResult> {
-    throw new Error(
-      "IngestionPipeline.ingestText: not yet implemented (lands in Part 25D)",
+    const listFormProvided =
+      (projectIds !== undefined && projectIds !== null) ||
+      (projectNames !== undefined && projectNames !== null);
+    const getOrCreate = (name: string) => this.db.getOrCreateProject(name);
+
+    // ── (1) ID-based update ──────────────────────────────────────────────
+    if (documentId) {
+      const existing = await this.db.getDocumentById(documentId);
+      if (!existing) {
+        throw new Error(`Document not found: ${documentId}`);
+      }
+      let fullSetResolved: string[] | null = null;
+      if (listFormProvided) {
+        fullSetResolved = await resolveProjectIds(
+          { projectIds, projectNames },
+          getOrCreate,
+        );
+      }
+      const result = await this.updateDocument({
+        documentId,
+        text,
+        title,
+        source,
+        projectIds: fullSetResolved,
+        metadata,
+        author,
+        authorType,
+      });
+      if (!listFormProvided && (projectId || projectName)) {
+        const singular = await resolveProjectIds(
+          { projectId, projectName },
+          getOrCreate,
+        );
+        if (singular.length > 0) {
+          await this.db.addDocumentToProjects(documentId, singular);
+          result.projectIds = await this.db.getDocumentProjectIds(documentId);
+        }
+      }
+      if (!updateExisting) {
+        result.note =
+          "document_id provided; update_if_exists flag was overridden";
+      }
+      return result;
+    }
+
+    // ── (2) update-existing shortcut ────────────────────────────────────
+    if (updateExisting) {
+      let existingDoc = null;
+      if (sourcePathOpt) {
+        existingDoc = await this.db.findDocumentBySourcePath(sourcePathOpt);
+      }
+      if (!existingDoc) {
+        existingDoc = await this.db.findDocumentByTitle(title);
+      }
+      if (existingDoc) {
+        let fullSetResolved: string[] | null = null;
+        if (listFormProvided) {
+          fullSetResolved = await resolveProjectIds(
+            { projectIds, projectNames },
+            getOrCreate,
+          );
+        }
+        const result = await this.updateDocument({
+          documentId: existingDoc.id,
+          text,
+          title,
+          source,
+          projectIds: fullSetResolved,
+          metadata,
+          author,
+          authorType,
+        });
+        if (!listFormProvided && (projectId || projectName)) {
+          const singular = await resolveProjectIds(
+            { projectId, projectName },
+            getOrCreate,
+          );
+          if (singular.length > 0) {
+            await this.db.addDocumentToProjects(existingDoc.id, singular);
+            result.projectIds = await this.db.getDocumentProjectIds(
+              existingDoc.id,
+            );
+          }
+        }
+        return result;
+      }
+      // No match found — fall through to create.
+    }
+
+    // ── (3) Resolve projects for the create path ─────────────────────────
+    const resolvedIds = await resolveProjectIds(
+      { projectIds, projectId, projectName, projectNames },
+      getOrCreate,
     );
+
+    const validatedMeta = metadata ?? {};
+
+    // ── (4) Hash + dedup ─────────────────────────────────────────────────
+    const hash = contentHash(text);
+    const existingByHash = await this.db.getDocumentByHash(hash);
+    if (existingByHash) {
+      const existingProjectIds = await this.db.getDocumentProjectIds(
+        existingByHash.id,
+      );
+      return {
+        documentId: existingByHash.id,
+        title: existingByHash.title ?? title,
+        chunkCount: existingByHash.chunk_count ?? 0,
+        totalChars: existingByHash.total_chars ?? 0,
+        action: "skipped",
+        reindexed: false,
+        projectIds: existingProjectIds,
+        note: "",
+      };
+    }
+
+    // ── (5) Chunk ────────────────────────────────────────────────────────
+    const chunks = chunkMarkdown(
+      text,
+      this.settings.maxChunkChars,
+      this.settings.minChunkChars,
+    );
+    const totalChars = chunks.reduce((acc, c) => acc + c.char_count, 0);
+
+    // ── (6) Derive source_path if missing ────────────────────────────────
+    const sourcePath = sourcePathOpt ?? deriveSourcePath(title);
+
+    // ── (7) Embed chunks (title-boosted) ─────────────────────────────────
+    let chunkRows: ChunkInsertRow[] = [];
+    if (chunks.length > 0) {
+      const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+      const embeddings = await embedBatch(texts, this.apiKey);
+      chunkRows = chunks.map((c, i) => ({
+        chunk_index: c.chunk_index,
+        heading_path: c.heading_path,
+        heading_level: c.heading_level,
+        title: c.title,
+        content: c.content,
+        char_count: c.char_count,
+        embedding: embeddings[i],
+        embedder: this.embedderModel,
+      }));
+    }
+
+    // ── (8) Atomic RPC write ─────────────────────────────────────────────
+    const reviewStatus =
+      authorType === "agent" ? "pending_review" : "approved";
+    const rpcResult = await this.db.ingestDocumentRpc({
+      documentId: null,
+      title,
+      source,
+      sourcePath,
+      contentHash: hash,
+      metadata: validatedMeta,
+      reviewStatus,
+      chunks: chunkRows,
+      author,
+      authorType,
+    });
+    const newDocumentId = rpcResult.document_id;
+
+    // ── (9) Project M2M ──────────────────────────────────────────────────
+    if (resolvedIds.length > 0) {
+      await this.db.assignDocumentProjects(newDocumentId, resolvedIds);
+    }
+
+    return {
+      documentId: newDocumentId,
+      title,
+      chunkCount: chunks.length,
+      totalChars,
+      action: "created",
+      reindexed: false,
+      projectIds: resolvedIds,
+      note: "",
+    };
   }
 
+  /**
+   * Re-ingest an existing document in place. Lands in Part 25E.
+   * Currently stubbed — `ingestText` delegates here for the
+   * `documentId` and `updateExisting` branches; both paths throw with
+   * a clear message until 25E.
+   */
   async updateDocument(_opts: UpdateDocumentOptions): Promise<IngestResult> {
     throw new Error(
-      "IngestionPipeline.updateDocument: not yet implemented (lands in Part 25E)",
+      "IngestionPipeline.updateDocument: lands in Part 25E. For v0.7 Part 25D, " +
+        "ingestText's create + dedup paths are functional; update branches " +
+        "(documentId / updateExisting on existing doc) are not yet wired.",
     );
   }
 
+  /**
+   * Read a markdown file from disk and ingest it. Thin wrapper around
+   * `ingestText`. Mirrors Python's `ingest_file`.
+   *
+   * - `title` defaults to the filename stem.
+   * - `source` defaults to `"file"`.
+   * - `sourcePath` is the resolved absolute path of the input.
+   */
   async ingestFile(
-    _path: string,
-    _opts: Omit<IngestTextOptions, "text" | "title"> & {
+    path: string,
+    opts: Omit<IngestTextOptions, "text" | "title" | "sourcePath" | "source"> & {
       title?: string;
+      source?: string;
     } = {},
   ): Promise<IngestResult> {
-    throw new Error(
-      "IngestionPipeline.ingestFile: not yet implemented (lands in Part 25D)",
-    );
+    const text = readFileSync(path, "utf8");
+    const absPath = resolve(path);
+    const stem = basename(absPath, extname(absPath));
+    return this.ingestText({
+      ...opts,
+      text,
+      title: opts.title ?? stem,
+      source: opts.source ?? "file",
+      sourcePath: absPath,
+    });
   }
 }
 

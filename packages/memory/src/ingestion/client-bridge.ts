@@ -60,6 +60,11 @@ export interface ChunkRowForUpdate {
 /**
  * Shape of the chunk payload passed to `cerefox_ingest_document` RPC.
  * Embedding is the 768-dim float vector.
+ *
+ * Field names match the RPC's `c->>'embedding'` / `c->>'embedder'`
+ * lookups in `rpcs.sql:1169-1170`. Python's client method translates
+ * its `embedding_primary` / `embedder_primary` to these names before
+ * sending; the TS bridge writes them directly.
  */
 export interface ChunkInsertRow {
   chunk_index: number;
@@ -68,8 +73,8 @@ export interface ChunkInsertRow {
   title: string;
   content: string;
   char_count: number;
-  embedding_primary: number[];
-  embedder_primary: string;
+  embedding: number[];
+  embedder: string;
 }
 
 export interface IngestDocumentRpcResult {
