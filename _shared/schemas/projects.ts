@@ -21,3 +21,11 @@ export type ProjectResponse = z.infer<typeof ProjectResponse>;
 
 export const ProjectList = z.array(ProjectResponse);
 export type ProjectList = z.infer<typeof ProjectList>;
+
+// CRUD request bodies (Part 24F).
+
+export const CreateProjectRequest = z.object({
+  name: z.string(),
+  description: z.string().default(""),
+});
+export type CreateProjectRequest = z.infer<typeof CreateProjectRequest>;

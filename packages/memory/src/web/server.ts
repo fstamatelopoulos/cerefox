@@ -32,6 +32,7 @@ import { join } from "node:path";
 import { Hono } from "hono";
 
 import { buildWebContext, type WebContext } from "./context.ts";
+import { registerConfigRoutes } from "./routes/config.ts";
 import { registerDiscoveryRoutes } from "./routes/discovery.ts";
 import { registerDocumentReadRoutes } from "./routes/documents-read.ts";
 import { registerDocumentWriteRoutes } from "./routes/documents-write.ts";
@@ -64,6 +65,7 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
     registerDocumentReadRoutes(app, ctx);
     registerDocumentWriteRoutes(app, ctx);
     registerProjectsRoutes(app, ctx);
+    registerConfigRoutes(app, ctx);
   } else {
     // Stub DB-touching endpoints with 503 so the frontend gets a clear
     // signal during dev / CI runs without .env.

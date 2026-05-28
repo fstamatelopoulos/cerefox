@@ -18,3 +18,4 @@ export * from "./meta.js";
 export * from "./discovery.js";
 export * from "./documents.js";
 export * from "./projects.js";
+export * from "./config.js";
