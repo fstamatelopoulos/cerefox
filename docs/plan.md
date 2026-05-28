@@ -2445,7 +2445,7 @@ single-package model).
 | **v0.6.0 release strategy** | **Normal public release.** Standard `cut_release.ts --npm-publish` flow. The 3 ingest endpoints return 503 with a friendly toast; the toast UX is the contract with users — explicit, points at v0.7. Decision revised 2026-05-27 after the maintainer pointed out that an "internal milestone" cut added more complexity (special cut flow, source-vs-npm UX divergence during the build, migration-v0.5.md gymnastics) than the marginal benefit of avoiding the 503 window. v0.7 follows quickly on iter-24's heels and swaps the stubs for in-process calls. | Standard release flow; no special script changes. Users see the 503 toast for ~days, not weeks. |
 | **Ingestion endpoints in v0.6** | Return **503** with a clear `{"error": "Ingestion lands in v0.7", "see": "<migration-guide-url>"}` body. Frontend detects 503 and shows a "v0.7 feature" toast instead of "ingestion failed". | TS pipeline scheduled for v0.7; pulling forward would add ~6 weeks. EF-delegation alternative rejected to keep the v0.6 → v0.7 transition clean — when v0.7 ships, those three handlers swap from 503 to in-process pipeline calls. |
 | **Schema deploy port** | **Stays in v0.7** (with the other `scripts/*.py` ports). | `db_deploy.py` is closer to the ingestion pipeline (writes to DB, needs direct Postgres). Decoupling from v0.6 keeps web-server work focused. |
-| **Response parity test approach** | **Zod schemas in `_shared/schemas/` as the contract** (consumed by both server and frontend) + **narrow byte-snapshot tests** for ~5 critical endpoints (`/search`, `/dashboard`, `/documents/{id}`, `/audit-log`, `/version`). | Matches the v0.4.0 Decision Log §6 rule: byte-snapshot only where shape really matters. Zod gives runtime + compile-time safety; snapshots catch wire-level regressions on the endpoints the frontend depends on most strongly. |
+| **Response parity test approach** | **Zod schemas in `_shared/schemas/` as the contract** (consumed by both server and frontend) + **narrow byte-snapshot tests** for ~5 critical endpoints (`/search`, `/dashboard`, `/documents/{id}`, `/audit-log`, `/version`). **HTTP-boundary tests in TS from v0.6 onward** under `packages/memory/test/web-integration/` — see design doc §19 "Test migration policy". | Matches the v0.4.0 Decision Log §6 rule: byte-snapshot only where shape really matters. Zod gives runtime + compile-time safety; snapshots catch wire-level regressions on the endpoints the frontend depends on most strongly. **Correction (2026-05-28, post-merge)**: the original framing "Python `pytest -m e2e` covers parity at the `/api/v1/*` HTTP boundary" was wrong — `tests/e2e/test_api_e2e.py` talks to Supabase directly via `CerefoxClient` and never exercises Hono routes. The v0.6 follow-up commit ports `tests/api/test_docs_endpoints.py` to `packages/memory/test/web-integration/meta.test.ts` and adds `destructive.test.ts` for the 5 mutation endpoints Part 24E shipped without HTTP-level coverage. |
 | **Iteration size** | **Single iter-24, 12 Parts, one PR, one cut.** Same discipline as iter-23. | Atomic switchover from Python web to TS web. Avoids the awkward middle state where some routes are TS and some are still Python. |
 | **Routing structure** | One file per endpoint group under `packages/memory/src/web/routes/` — 8 files for 35 endpoints. Mirrors `_shared/mcp-tools/` shape. | Easy to navigate, easy to PR-review. |
 | **Hono `serveStatic`** | Used for `/app/*` (SPA bundle) and `/static/*` (logo/favicon). SPA catch-all returns `index.html`. Root `/` returns the existing HTML redirect page. | Built-in, runtime-neutral. |
@@ -2593,22 +2593,50 @@ consolidated single-package model).
 - The `cerefox-ingest` Edge Function (Deno) also imports the same `_shared/ingest/` modules — one chunking implementation, two consumers, like the v0.4 `_shared/mcp-tools/` pattern.
 - PDF/DOCX support **dropped**; CHANGELOG announces removal.
 - Remaining `scripts/*.py` ported to `scripts/*.ts` per the §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. All become TS scripts that consume `_shared/ingest/` and `_shared/db-client/`.
+- **Unit-test migration alongside the code ports** (per design doc §19 "Test migration policy"). Each Python module that gets ported brings its test file with it:
+  - `tests/chunking/test_markdown.py` (484 lines) + `test_converters.py` (357 lines) → `_shared/__tests__/chunking-*.test.ts` or `packages/memory/test/chunking-*.test.ts`. Includes the parity-snapshot pattern (`packages/memory/test/fixtures/python-parity/chunking/`) for deterministic chunk-boundary verification.
+  - `tests/embeddings/test_embedders.py` (250 lines) → TS equivalent against the OpenAI Node SDK.
+  - `tests/ingestion/test_pipeline.py` (1666 lines) + `test_backup.py` (177 lines) → TS equivalents. The pipeline tests are the largest delta in v0.7's test work.
+  - `tests/retrieval/test_search.py` (825 lines) → TS equivalent. Search-side small-to-big assembly, response-bytes budget, and hybrid-fusion paths all migrate.
+  - `tests/test_db_client.py` (769 lines) + `tests/db/test_versioning.py` + `tests/db/test_audit_and_governance.py` → TS equivalents at whatever layer replaces `CerefoxClient` (likely direct `@supabase/supabase-js` calls + RPC-contract assertions).
+  - **Delete** the corresponding Python files only after the TS suite proves coverage parity (`pytest --collect-only` listed against TS test names).
+- **HTTP-boundary tests added with the 3 new endpoints**. The Part 25 commits that swap `/ingest`, `/ingest/file`, `/documents/{id}/upload` from 503-stubs to functional handlers each add an HTTP-roundtrip test under `packages/memory/test/web-integration/ingest.test.ts`. Same probe-and-skip + self-cleaning shape as the v0.6 destructive tests.
 - **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.7.0 section covering: chunking byte-parity vs the Python pipeline (deterministic input → identical chunk boundaries), embedding round-trip + cosine-similarity sanity check against the same content embedded by v0.6, `cerefox ingest` end-to-end on a real repo, schema-deploy via the new TS script. This is the final tick on the rolling plan — sections that no longer apply (Python-only flows) get marked superseded rather than removed, preserving the audit trail.
 - **Add v0.7 entry to the Cerefox Decision Log** capturing the chunking-parity decision (byte-identical vs. semantically-equivalent), the PDF/DOCX drop rationale, and the TS-port-of-scripts/* policy decisions surfaced during the cut.
 
 ---
 
-## Iteration 26: v0.8.0 — "Deprecate Python" + v0.9.0 — "Python Removal"
+## Iteration 26: v0.8.0 — "Deprecate Python CLI/Web" + v0.9.0 — "Python Minimization"
 
-**Goal**: Two-step Python retirement.
+**Goal**: Two-step Python retirement — **but Python is NOT wiped out**.
+The Python MCP server (`src/cerefox/mcp_server.py`) stays functional
+forever (repo-clone users run `uv run cerefox mcp` as a fallback path
+when they don't want the npm install). The Python CLI subcommands
+become husks that print a "use the TS CLI" message and exit. Per
+maintainer call 2026-05-28: "we should not completely wipe python
+out. We want to keep the python mcp in place since current users
+check out the repo and run the mcp server via the repo, and we will
+also keep the python cli commands as husks."
 
-**v0.8.0** (~2 weeks): all Python entry points print prominent deprecation banner. Code
-moved to `python-legacy/` subdirectory. Install docs no longer mention Python.
+**v0.8.0** (T-shirt: M): prominent deprecation banner on every Python
+CLI subcommand. Install docs (`installing.md`, `quickstart.md`) no
+longer mention Python as the recommended path. **First half of the
+test-runner cutover pass** (per design doc §19 "Test migration
+policy"):
+- `tests/e2e/test_edge_functions_e2e.py` (489 lines) → `packages/memory/test/edge-functions/*.test.ts`. The EFs themselves stay live (Deno-on-Supabase); only the test harness moves.
+- `tests/e2e/test_mcp_e2e.py` (560 lines) → `packages/memory/test/mcp-remote/*.test.ts`. Same shape: the remote `cerefox-mcp` EF stays; tests migrate.
+- `tests/e2e/test_ui_e2e.py` (247 lines) → `frontend/tests/e2e/*.spec.ts` using `@playwright/test`. Playwright bindings exist in both languages so the port is mechanical.
+- After v0.8: the only `.py` left in `tests/` covers genuinely-Python code that stays through v0.9+ (the MCP server + CLI husks).
 
-**v0.9.0** (~1 week): `python-legacy/` deleted. `pyproject.toml`, `uv.lock`, `.python-version`
-removed. Repo is pure TS + SQL + React.
+**v0.9.0** (T-shirt: M): **Python minimization, not removal**.
+- Python CLI subcommands become husks: each one prints "Cerefox CLI moved to TypeScript: install with `npm install -g @cerefox/memory` and re-run as `cerefox <subcommand>`" and exits 0 (or non-zero for unimplemented-by-design — TBD).
+- Python MCP server (`src/cerefox/mcp_server.py`) **stays fully functional**. Repo-clone users keep their `uv run cerefox mcp` workflow.
+- Python web (`src/cerefox/api/*`) — **likely also becomes a husk** at this point (the TS web shipped in v0.6 is the canonical implementation; the Python web's role after v0.7's TS ingestion swap is unclear). Final call lives in iter-25's design pass — flag in iter-26's pre-kickoff design discussion.
+- **Second half of the test-runner cutover pass**: tests for surviving Python (`tests/test_mcp_server.py`, `tests/test_python_cli_deprecation_banner.py`, new husk-CLI tests) port to TS via subprocess pattern under `packages/memory/test/python-runtime/`. TS test spawns `uv run cerefox X` and asserts behavior at the process boundary — same shape `cli-smoke.test.ts` uses for the TS CLI.
+- **`pyproject.toml`, `uv.lock`, `.python-version` STAY** because the Python runtime stays. Pytest as a test runner goes away.
+- End state after v0.9: zero `.py` in `tests/`; one test runner (`bun test`); Python runtime minimised to MCP server + CLI husks (+ maybe web husk).
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0 + §19 test migration policy](specs/polish-and-distribution-design.md).
 
 ---
 
