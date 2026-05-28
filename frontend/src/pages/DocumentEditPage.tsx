@@ -20,7 +20,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { editDocument, fetchDocument } from "../api/documents";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
-import { showSuccess, showError } from "../utils/notifications";
+import { showSuccess, showError, showV07DeferredToast } from "../utils/notifications";
 
 export function DocumentEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -84,7 +84,11 @@ export function DocumentEditPage() {
         showError("Save failed", result.error);
       }
     },
-    onError: (err) => showError("Save failed", String(err)),
+    onError: (err) => {
+      if (!showV07DeferredToast(err)) {
+        showError("Save failed", err instanceof Error ? err.message : String(err));
+      }
+    },
   });
 
   const projectOptions =
