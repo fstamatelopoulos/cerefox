@@ -61,7 +61,7 @@
     "build": "bun build src/bin/cerefox.ts --outdir dist/bin --target node --format esm",
     "clean": "rm -rf dist docs AGENT_GUIDE.md AGENT_QUICK_REFERENCE.md",
     "bundle-docs": "bun run ../../scripts/bundle_package_docs.ts",
-    "build-frontend": "cd ../../frontend && npm install && npm run build",
+    "build-frontend": "cd ../../frontend && bun install && bun run build",
     "bundle-frontend": "rm -rf dist/frontend && mkdir -p dist/frontend && cp -R ../../frontend/dist/. dist/frontend/",
     "prepublishOnly": "bun run clean && bun run bundle-docs && bun run build-frontend && bun run bundle-frontend && bun run build",
     "smoke": "node dist/bin/cerefox.js --help && node dist/bin/cerefox.js mcp --help"
