@@ -2580,29 +2580,155 @@ Edge Functions). No new npm package.
 (see the "Living design notes" callout at the top of that file for the
 consolidated single-package model).
 
-**Size**: **XL** (T-shirt). Chunking parity is the critical test — must produce byte-identical chunks for the same input as the Python pipeline (or document any intentional changes).
+**Size**: **XL** (T-shirt). Chunking byte-parity is the critical risk — must produce byte-identical chunks for the same input as the Python pipeline (locked) so existing corpus stays valid without re-embed.
 
-**Detailed task breakdown will be created when this iteration is started.** Headline items:
-- **Completes the v0.6 TS web** by swapping the 3 ingest endpoints' 503 stubs for in-process pipeline calls. Same wire shape; no frontend changes required (the toast just stops firing because no more 503s). v0.5.4 → v0.6.0 → v0.7.0 is the normal upgrade arc; v0.6 stayed releaseable thanks to the toast UX + working CLI/Python fallbacks for ingest.
-- **migration-v0.5.md gets a v0.7 section** explaining the swap + the deprecation banner timing. (v0.6 section, written in iter-24 Part 24L, stays in place.)
-- **Python web-specific deprecation banner lands here, NOT in v0.6** — deferred from iter-24 per maintainer call 2026-05-27 ("we cannot block users from using the Python web until the full app is fully tested"). Part 25L adds the banner at the same moment the in-process ingestion swap completes, so the TS web is functionally complete the instant the banner directs users to it. The existing v0.5.0 generic Python CLI deprecation banner stays unchanged.
-- New TS chunking module under `_shared/ingest/` — port of `markdown.py` heading-aware splitter (snapshot-test parity).
-- New TS embedding orchestration using OpenAI Node SDK.
-- New TS ingestion pipeline calling `cerefox_ingest_document` RPC.
-- `cerefox ingest` and `cerefox ingest-dir` invoke the TS pipeline in-process (no shell-out).
-- The `cerefox-ingest` Edge Function (Deno) also imports the same `_shared/ingest/` modules — one chunking implementation, two consumers, like the v0.4 `_shared/mcp-tools/` pattern.
-- PDF/DOCX support **dropped**; CHANGELOG announces removal.
-- Remaining `scripts/*.py` ported to `scripts/*.ts` per the §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. All become TS scripts that consume `_shared/ingest/` and `_shared/db-client/`.
-- **Unit-test migration alongside the code ports** (per design doc §19 "Test migration policy"). Each Python module that gets ported brings its test file with it:
-  - `tests/chunking/test_markdown.py` (484 lines) + `test_converters.py` (357 lines) → `_shared/__tests__/chunking-*.test.ts` or `packages/memory/test/chunking-*.test.ts`. Includes the parity-snapshot pattern (`packages/memory/test/fixtures/python-parity/chunking/`) for deterministic chunk-boundary verification.
-  - `tests/embeddings/test_embedders.py` (250 lines) → TS equivalent against the OpenAI Node SDK.
-  - `tests/ingestion/test_pipeline.py` (1666 lines) + `test_backup.py` (177 lines) → TS equivalents. The pipeline tests are the largest delta in v0.7's test work.
-  - `tests/retrieval/test_search.py` (825 lines) → TS equivalent. Search-side small-to-big assembly, response-bytes budget, and hybrid-fusion paths all migrate.
-  - `tests/test_db_client.py` (769 lines) + `tests/db/test_versioning.py` + `tests/db/test_audit_and_governance.py` → TS equivalents at whatever layer replaces `CerefoxClient` (likely direct `@supabase/supabase-js` calls + RPC-contract assertions).
-  - **Delete** the corresponding Python files only after the TS suite proves coverage parity (`pytest --collect-only` listed against TS test names).
-- **HTTP-boundary tests added with the 3 new endpoints**. The Part 25 commits that swap `/ingest`, `/ingest/file`, `/documents/{id}/upload` from 503-stubs to functional handlers each add an HTTP-roundtrip test under `packages/memory/test/web-integration/ingest.test.ts`. Same probe-and-skip + self-cleaning shape as the v0.6 destructive tests.
-- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.7.0 section covering: chunking byte-parity vs the Python pipeline (deterministic input → identical chunk boundaries), embedding round-trip + cosine-similarity sanity check against the same content embedded by v0.6, `cerefox ingest` end-to-end on a real repo, schema-deploy via the new TS script. This is the final tick on the rolling plan — sections that no longer apply (Python-only flows) get marked superseded rather than removed, preserving the audit trail.
-- **Add v0.7 entry to the Cerefox Decision Log** capturing the chunking-parity decision (byte-identical vs. semantically-equivalent), the PDF/DOCX drop rationale, and the TS-port-of-scripts/* policy decisions surfaced during the cut.
+**Headline items**:
+- **Completes the v0.6 TS web** by swapping the 3 ingest endpoints' 503 stubs for in-process pipeline calls. Same wire shape; no frontend changes (the `V07IngestionDeferredError` toast just stops firing because no more 503s — detector code stays as a no-op).
+- **`migration-v0.5.md` gets a v0.7 section** explaining the ingestion-swap + the deprecation-banner timing.
+- **Python web-specific deprecation banner** lands in v0.7's Part 25L (deferred from iter-24 per maintainer call 2026-05-27). Banner appears at the same commit that completes the in-process ingestion swap, so TS web is functionally complete the moment users see "switch to npm." The v0.5.0 generic Python CLI deprecation banner stays unchanged.
+- **New `_shared/ingest/` directory**: `chunker.ts`, `embedder.ts` (or extended `_shared/embeddings/`), `pipeline-helpers.ts` (normalize + hash + project-id resolver). Consumed by `packages/memory/src/ingestion/pipeline.ts` (the TS port of the Python pipeline). **NOT consumed by the `cerefox-ingest` Edge Function** — Deno Edge Runtime can't import from the monorepo's `_shared/`; the EF keeps its own chunker copy. Cross-runtime parity enforced by shared fixture tests at the EF / TS-CLI / Python level (locked decision below).
+- **New TS ingestion pipeline** at `packages/memory/src/ingestion/pipeline.ts` calling `cerefox_ingest_document` RPC. Implements the same 4 public methods as Python (`ingestText`, `updateDocument`, `ingestFile`, `ingestDir`) with byte-parity for content hashing + chunk boundaries.
+- **`cerefox ingest` and `cerefox ingest-dir`** invoke the TS pipeline in-process (no shell-out, no EF round-trip).
+- **PDF/DOCX support dropped**: `src/cerefox/chunking/converters.py` + `tests/chunking/test_converters.py` deleted; CHANGELOG announces removal.
+- **Remaining `scripts/*.py` ported** per §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. Python originals become 1-line husks pointing at the TS equivalents (matches v0.5's `cerefox`-CLI deprecation pattern).
+- **Unit-test migration** (per design doc §19): port `tests/chunking/`, `tests/embeddings/`, `tests/ingestion/`, `tests/retrieval/`, `tests/db/test_versioning.py`, `tests/db/test_audit_and_governance.py` alongside their code. **`tests/test_db_client.py` STAYS in pytest** — `CerefoxClient` itself stays in Python through v0.9+ for the Python MCP server (per the 2026-05-28 Python-minimization policy clarification). Coverage matrix produced in the iter-25 design pass confirms MCP-only ↔ ingestion-only methods don't overlap.
+- **HTTP-boundary tests for the 3 unblocked ingest endpoints** at `packages/memory/test/web-integration/ingest.test.ts`. Probe-and-skip + self-cleaning shape, same as the v0.6 `destructive.test.ts`.
+- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.7.0 § 13 covering: chunking byte-parity vs Python pipeline, embedding round-trip + cosine-similarity sanity, `cerefox ingest` end-to-end on a real repo, schema-deploy via the new `db_deploy.ts`, EF-vs-TS-CLI chunker parity smoke (any random markdown ingested via both paths produces the same content_hash + chunk boundaries).
+- **v0.7 entry in Cerefox Decision Log** capturing the chunking-parity strategy, EF-divergence acceptance, Postgres client choice, scripts-as-husks pattern, any platform gotchas surfaced during the cut.
+
+**Locked design decisions (2026-05-28, pre-iter-25 design pass)**:
+
+| Decision | Resolution | Rationale |
+|---|---|---|
+| **`_shared/ingest/` structure** | New dir under `_shared/` with `chunker.ts` + `embedder.ts` (extends existing `_shared/embeddings/`) + `pipeline-helpers.ts` (normalize / hash / resolveProjectIds) + `types.ts`. Pipeline itself at `packages/memory/src/ingestion/pipeline.ts`. | Chunker + embedder reusable across TS surfaces (web, CLI, future MCP write-path). Pipeline is consumer-specific. |
+| **`cerefox-ingest` EF chunker** | EF keeps its own chunker copy. Deno Edge Runtime can't import from the monorepo's `_shared/`. Refactor to shared-via-import-maps is overkill for v0.7 scope. | Per iter-25 design pass investigation: EF's `index.ts` has no `_shared/` imports today; the chunker is copy-pasted from Python's. Accept divergence + enforce parity via tests. |
+| **Chunking parity strategy** | **Byte-identical** chunks across Python + TS + EF for the same input. Verified by cross-runtime fixture tests (Python output → captured fixture → TS chunker + EF chunker both assert structural equality). | Existing corpus was chunked by Python; any drift requires re-embed (cost + time). Byte-identical preserves the existing chunk rows. |
+| **`content_hash` algorithm** | Same `normalize` (CRLF→LF + strip + collapse `\n{3,}`) + SHA-256 across all three runtimes. Promote v0.6's inline `normalizeForHash` (in `documents-write.ts`) into `_shared/ingest/pipeline-helpers.ts` so there's one source of truth. | Already in production for v0.6's `/edit` short-circuit; dedup parity demands identical hashing. |
+| **Embedding batch size** | TS port adopts Python's 96-chunks-per-API-call limit. Extend `_shared/embeddings/embedBatch()` with a `batchSize` param (default 96) and chunk-then-flatten the input. | OpenAI accepts 2048; 96 is the Python contract; bulk ingest of large docs would otherwise blow per-request limits. |
+| **Postgres client for TS scripts** | `postgres` (Porsager) — small, well-typed, no native deps, runs on Node + Bun. Used by `db_deploy.ts` + `db_migrate.ts`. Rejected: `bun:sql` (Bun-only, locks scripts to Bun); `pg` (heavier, native deps). | Cross-runtime, small footprint, active maintenance. |
+| **`scripts/*.py` keep-or-remove** | Each Python script becomes a husk: prints "Use `bun scripts/<name>.ts`" + exits 0. Mirrors v0.5.0's `cerefox-CLI` deprecation pattern. | Existing users with muscle memory get a clear pointer; no silent breakage. Eventual deletion: v0.9 per the Python-minimization policy. |
+| **Python `IngestionPipeline` retention** | `src/cerefox/ingestion/pipeline.py` stays through v0.7.x as a callable module (Python MCP doesn't use it — see coverage matrix below — but `routes_api.py`'s `/edit` and `/upload` still do during the husk phase). v0.8 deprecation banner + husk; v0.9 deleted. | Python MCP↔pipeline overlap is **zero** per the iter-25 coverage matrix; pipeline can disappear before MCP does. |
+| **Python web (`api/`) retention** | `api/app.py` + `api/routes_api.py` stay through v0.7. Deprecation banner lands in Part 25L. v0.8 → husk (each route returns 503 + "use `cerefox web` from npm"). v0.9 → keep husk or delete (TBD by iter-26 design pass). | Pre-locked in iter-24 design pass. |
+| **Test migration scope (v0.7)** | Port: `tests/chunking/`, `tests/embeddings/`, `tests/ingestion/`, `tests/retrieval/`, `tests/db/test_versioning.py`, `tests/db/test_audit_and_governance.py`. NEW: `packages/memory/test/web-integration/ingest.test.ts`. **Don't port `tests/test_db_client.py`** — CerefoxClient stays in Python (MCP needs it); tests stay in pytest until v0.9. | Per design doc §19 "Test migration policy": tests follow code; if code stays, tests stay. |
+| **PDF/DOCX support** | Dropped. `chunking/converters.py` + `tests/chunking/test_converters.py` deleted. CLI / web / EF all reject non-markdown inputs going forward. | Locked in iter-24 headlines; never used in practice; conversion adds dependencies for a feature no one asked for. |
+| **`/ingest` endpoint cutover** | **Atomic in Part 25F**: all 3 endpoints (`/ingest`, `/ingest/file`, `/documents/{id}/upload`) swap from 503 stub to real handler in the same commit. The `/edit` content-change branch (also 503 in v0.6) swaps in 25E alongside the pipeline's `updateDocument` path. Frontend's `V07IngestionDeferredError` toast detector stays in place; just stops firing. | No partial state where 1 endpoint works and 2 don't. Detector stays = no frontend churn = easier rollback if needed. |
+| **Audit entry on metadata-only updates** | TS pipeline creates the `update-metadata` audit entry **client-side** (after the DB update), matching Python's `update_document()` path. The `cerefox_ingest_document` RPC only emits `create` / `update-content` entries. Easy to forget in the TS port — explicit in 25E acceptance. | Per Python coverage; missing the entry means `update-metadata` operations silently disappear from audit log. |
+| **Pre-iter step** | Capture Python chunker output for 8-10 diverse markdown fixtures + Python embedder output for a known input. Save under `packages/memory/test/fixtures/python-parity/chunking/` (and `embedding/`). Parts 25A and 25B assert byte-identical (and cosine-equivalent, within 1e-6) TS output. | Mirrors iter-24's pre-iter Python-parity capture pattern. ~10 minutes of `uv run python -c "..."` + `jq`. |
+
+**Out of scope (deferred)**:
+
+| Item | Where it lands |
+|---|---|
+| Python MCP server port to TS | v0.9 (subprocess-pattern tests for the surviving Python MCP) |
+| Python `CerefoxClient` removal | v0.9 (or post-v1.0 — its MCP-only methods stay as long as the Python MCP does) |
+| EF chunker shared-module refactor | post-v0.7 (would require import-maps + Supabase function changes; not worth it for one EF) |
+| `tests/test_cli.py` + `tests/test_mcp_server.py` migration | v0.9 (subprocess pattern; per design doc §19 row 6) |
+| Standalone binaries (`bun build --compile`) | post-v0.7 per design doc §6d |
+
+**Detailed Parts breakdown** (each Part = one commit in the iter-25 PR):
+
+> **Pre-iter step (do BEFORE Part 25A starts)**: capture Python chunker output for ~10 diverse markdown fixtures (varied: short / long / heavy-headings / no-headings / oversized-section / CRLF endings / unicode / empty / single-paragraph / heading-only) and a single Python embedder output for a known reference text. Save under `packages/memory/test/fixtures/python-parity/chunking/*.json` + `embedding/<seed>.json`. Without these, Parts 25A and 25B have no baseline to assert byte-parity against. Cost: ~15 minutes of `uv run python -c …`.
+
+| Part | Goal | Acceptance |
+|---|---|---|
+| **25A** | `_shared/ingest/chunker.ts` — TS port of `chunking/markdown.py`. Cross-runtime parity tests against the captured fixtures (Python → TS) and against the EF chunker (TS → EF). | TS chunker produces byte-identical chunks (same indexes, content, heading_path, heading_level, char_count) to Python for every fixture. EF chunker fixture parity recorded for monitoring (no enforcement; EF stays independent). |
+| **25B** | `_shared/ingest/embedder.ts` — extend `_shared/embeddings/embedBatch()` with 96-chunk batching. Verify cosine match against the captured Python embedding fixture (within 1e-6). | Batch limit at 96; cosine similarity assertions pass against the fixture. Existing v0.4 embedding tests still pass. |
+| **25C** | `packages/memory/src/ingestion/pipeline.ts` — IngestionPipeline class scaffolding: constructor, types (`IngestResult`, `IngestOptions`), helpers (`normalize`, `hash`, `resolveProjectIds`). No live RPC calls yet. `_shared/ingest/pipeline-helpers.ts` holds the cross-consumer helpers; `documents-write.ts` switches to import from there. | Pipeline file compiles; helpers exported; v0.6's `/edit` SHA short-circuit migrates to the shared helper (no behavior change). |
+| **25D** | Pipeline `ingestText` path: create + skip-by-content-hash + project assignment (singular non-destructive + list full-set semantics per issue #38). Live tests cover all three outcomes. | `cerefox ingest <new-file>` creates a doc; ingesting same content again returns skipped=true; ingesting with `--project-name` / `--project-names` produces the expected M2M state. |
+| **25E** | Pipeline `updateDocument` path: 3 sub-paths (content unchanged + title change → re-embed; content changed → snapshot + re-chunk; metadata-only → no chunk work + `update-metadata` audit entry). Wire `/edit` content-change branch from 503 to in-process. | Live tests for all 3 sub-paths; `/edit` with new content now succeeds (no more 503); audit log entries match Python's shape (`update-content` from RPC; `update-metadata` client-side). |
+| **25F** | Swap the 3 web ingest endpoints' 503 stubs for real handlers calling `pipeline.ingestText` / `updateDocument` / file-upload-then-`updateDocument`. Update `packages/memory/test/web-integration/ingest.test.ts` (new file) with end-to-end smokes. | curl POST `/ingest` creates a real doc; `/ingest/file` parses multipart upload; `/documents/{id}/upload` replaces content. Frontend Mantine toast (`V07IngestionDeferredError`) stops firing — code stays in place as dead branch. |
+| **25G** | TS port of `cerefox ingest` + `cerefox ingest-dir` CLI commands. Invoke the in-process pipeline (no shell-out to EF, no shell-out to Python). Python `cli.py` ingest commands stay live but get a `⚠ This command runs in-process via the npm package; from a checkout, prefer `cerefox ingest …` (TS)` deprecation hint (matches v0.5 deprecation banner pattern). | `cerefox ingest <file>` works on an npm-installed Cerefox without internet round-trip to the EF. `cli-smoke.test.ts` updated. |
+| **25H** | `scripts/db_deploy.ts` + `scripts/db_migrate.ts` — Postgres client via `postgres` (Porsager); load `src/cerefox/db/schema.sql` + `rpcs.sql` + `migrations/*.sql` via filesystem (the SQL files stay where they are). `--dry-run`, `--reset`, `--status` flags preserved. Python originals → 1-line husks. | `bun scripts/db_deploy.ts --dry-run` prints the planned SQL; `--reset` prompts then deploys; `bun scripts/db_migrate.ts --status` lists pending. End-to-end run on a fresh test Supabase project succeeds. |
+| **25I** | `scripts/backup_create.ts` + `scripts/backup_restore.ts` + `scripts/reindex_all.ts`. `_shared/db-client/` grows the methods needed (`list_all_documents_basic`, `list_all_chunks`, etc.). Python originals → husks. | Round-trip: `backup_create` → modify DB → `backup_restore` → state matches. `reindex_all` re-embeds chunks via the new TS pipeline (or delegates to the v0.7-ported `cerefox reindex` if that's where the logic lives — TBD in 25I). |
+| **25J** | Test migration: port the 6 Python test files listed in the policy table. Delete the corresponding `tests/*.py` files. Add `packages/memory/test/web-integration/ingest.test.ts`. Run both suites in CI; pytest collection drops to ~470 tests (down from 575). | All ported tests pass in `bun test`. `pytest --collect-only` confirms only the surviving Python test files remain. CI green on both runners. |
+| **25K** | Python web deprecation banner: `api/app.py` adds a startup banner ("`uv run cerefox web` is deprecated; the canonical web is `cerefox web` from `@cerefox/memory`. This Python web becomes a husk in v0.8 and may be removed in v0.9 — see `docs/guides/migration-v0.5.md` § v0.7"). Also PDF/DOCX removal: delete `chunking/converters.py` + `tests/chunking/test_converters.py`; CHANGELOG bullet announces removal. | `uv run cerefox web` boots and prints the banner once. PDF/DOCX paths return 400 with a clear message ("Markdown only; convert client-side"). |
+| **25L** | Closeout: CHANGELOG v0.7.0 entry; `migration-v0.5.md` v0.7 section (covers ingestion-swap + Python web deprecation banner + scripts husk pattern); `v0.7-manual-test-plan.md` § 13 added; Decision Log v0.7 entry ingested; cut release with `bun scripts/cut_release.ts v0.7.0 --npm-publish`. | PR ready for review; CI green; CHANGELOG complete; Decision Log entry ingested; v0.7.0 tag pushed; npm registry shows v0.7.0; manual test plan walked. |
+
+**Local testing during the build (mirror iter-24)**:
+
+```bash
+# Mode 1 — Source mode (recommended for active pipeline iteration)
+bun packages/memory/src/bin/cerefox.ts ingest some-file.md
+bun packages/memory/src/bin/cerefox.ts ingest-dir docs/guides
+
+# Mode 2 — Built mode (catches packaging-stage issues)
+cd packages/memory && bun run build
+node packages/memory/dist/bin/cerefox.js ingest some-file.md
+
+# Mode 3 — Web ingestion (manual UI test)
+bun packages/memory/src/bin/cerefox.ts web   # browse :8000/app/, ingest via paste / upload / replace
+
+# Mode 4 — Cross-runtime chunker parity (run during 25A iteration)
+uv run python -c "from cerefox.chunking.markdown import chunk_markdown; print(chunk_markdown(open('fixture.md').read()))" > /tmp/py-chunks.json
+bun packages/memory/test/fixtures/scripts/run-ts-chunker.ts fixture.md > /tmp/ts-chunks.json
+diff /tmp/py-chunks.json /tmp/ts-chunks.json   # must be empty
+```
+
+**Critical files / directories created in iter-25**:
+
+```
+_shared/ingest/                              # NEW
+├── chunker.ts                               # port of chunking/markdown.py
+├── embedder.ts                              # 96-chunk batching wrapper around _shared/embeddings/
+├── pipeline-helpers.ts                      # normalize + hash + resolveProjectIds
+└── types.ts                                 # ChunkData, IngestOptions, IngestResult
+
+packages/memory/src/ingestion/               # NEW
+├── pipeline.ts                              # IngestionPipeline class
+└── client-bridge.ts                         # subset of CerefoxClient methods called by the pipeline (direct supabase.rpc() / .from() calls; not a full Python-CerefoxClient port)
+
+packages/memory/test/ingestion/              # NEW
+├── pipeline.test.ts                         # migrated from tests/ingestion/test_pipeline.py
+├── chunker.test.ts                          # migrated from tests/chunking/test_markdown.py
+├── embedder.test.ts                         # migrated from tests/embeddings/test_embedders.py
+└── retrieval.test.ts                        # migrated from tests/retrieval/test_search.py
+
+packages/memory/test/web-integration/ingest.test.ts   # NEW — HTTP roundtrip for the 3 ingest endpoints
+
+packages/memory/test/fixtures/python-parity/chunking/  # NEW (pre-iter)
+└── *.json                                   # 8-10 markdown fixture chunk outputs
+packages/memory/test/fixtures/python-parity/embedding/  # NEW (pre-iter)
+└── reference.json                           # cosine similarity baseline
+
+scripts/db_deploy.ts                         # NEW
+scripts/db_migrate.ts                        # NEW
+scripts/backup_create.ts                     # NEW
+scripts/backup_restore.ts                    # NEW
+scripts/reindex_all.ts                       # NEW
+```
+
+**Files modified**:
+
+- `packages/memory/package.json` — add `postgres` (Porsager) dep
+- `packages/memory/src/web/routes/ingest.ts` — 3 endpoints SWAPPED from 503 stubs → real handlers (Part 25F)
+- `packages/memory/src/web/routes/documents-write.ts` — `/edit` content-change branch SWAPPED from 503 → in-process pipeline call (Part 25E); inline `normalizeForHash` → import from `_shared/ingest/pipeline-helpers.ts`
+- `packages/memory/src/cli/commands/ingest.ts` + `ingest-dir.ts` — replace EF-shell-out (current) with in-process pipeline call (Part 25G)
+- `src/cerefox/api/app.py` — add Python web deprecation banner (Part 25K)
+- `src/cerefox/chunking/converters.py` — DELETED (Part 25K)
+- `tests/chunking/test_converters.py` — DELETED (Part 25K)
+- `tests/chunking/test_markdown.py`, `tests/embeddings/test_embedders.py`, `tests/ingestion/test_pipeline.py`, `tests/ingestion/test_backup.py`, `tests/retrieval/test_search.py`, `tests/db/test_versioning.py`, `tests/db/test_audit_and_governance.py` — DELETED in Part 25J after TS ports land
+- `scripts/db_deploy.py`, `scripts/db_migrate.py`, `scripts/backup_create.py`, `scripts/backup_restore.py`, `scripts/reindex_all.py` — each becomes a 1-line husk pointing at the `.ts` equivalent (Parts 25H + 25I)
+- `docs/guides/migration-v0.5.md` — v0.7 section (Part 25L)
+- `docs/research/v0.7-manual-test-plan.md` — § 13 added (Part 25L)
+- `CHANGELOG.md` — v0.7.0 entry under `[Unreleased]` (Part 25L)
+
+**Known risks / questions that need resolution DURING the build** (raised in the iter-25 design pass on 2026-05-28):
+
+| # | Risk / open question | Resolves in | Default plan |
+|---|---|---|---|
+| R1 | **Chunking byte-parity across 3 runtimes** (Python + TS + EF). Subtle differences (regex semantics, trim behaviour, line-ending normalisation) could produce 1-character chunk-boundary differences → re-embed cost for the entire corpus. | Part 25A | Cross-runtime fixture tests with the captured Python outputs as ground truth. TS chunker iterated until byte-identical. EF chunker fixture parity recorded as informational (no test failure — EF stays independent), and any drift gets called out in 25K's notes. |
+| R2 | **`_shared/embeddings/` lacks batch-size limiting**. Bulk-ingesting a 100-chunk doc would blow OpenAI's per-request limit (which is 2048 input items but degrades earlier in practice). | Part 25B | Add `batchSize` param (default 96) to `embedBatch()`. Internally `chunk-then-flatten` over the batches. Python pipeline tests cover this; TS tests must too. |
+| R3 | **`content_hash` algorithm duplicated across 3 runtimes**. Drift = dedup breaks. v0.6's `/edit` short-circuit already uses the algorithm inline in `documents-write.ts`. | Part 25C | Promote v0.6's inline `normalizeForHash` into `_shared/ingest/pipeline-helpers.ts`. Single source of truth for TS web + TS CLI pipeline. EF keeps its own implementation; fixture-tested. |
+| R4 | **Postgres SSL / connection-string handling** for `db_deploy.ts` + `db_migrate.ts`. `CEREFOX_DATABASE_URL` may include `?sslmode=require` or similar. | Part 25H | Use `postgres` (Porsager) lib's URL parser; honor `sslmode`; fall back to `{ ssl: 'require' }` for Supabase URLs. Test against actual `CEREFOX_DATABASE_URL` early in 25H. |
+| R5 | **Schema deploy idempotency**. `db_deploy.ts` should refuse to re-deploy unless `--reset` is passed (matches Python). | Part 25H | Detect existing `cerefox_*` tables before applying schema; refuse with clear error message if found; `--reset` prompts then drops + redeploys. |
+| R6 | **Project M2M atomicity**. Python pipeline does `ingest_document_rpc` + `assign_document_projects` as two separate operations; second failure leaves doc with wrong project state. | Part 25D | Match Python's behaviour exactly (two operations, second-step failure logged but non-blocking). Pushing M2M into the RPC is a separate concern, post-v0.7. |
+| R7 | **Title-change re-embedding**. When metadata-only update changes the title, TS pipeline must re-embed ALL chunks (title-boosted FTS / embeddings). Easy to miss. | Part 25E | Port the exact branch from Python; explicit test in 25E (update title only → assert all chunks' embeddings changed). |
+| R8 | **Review-status auto-transition**. `author_type='agent'` + content change → RPC's `p_review_status='pending_review'`; `author_type='user'` → `'approved'`. | Parts 25D + 25E | Mirror Python's flag construction; test both author types in the test suite for 25D and 25E. |
+| R9 | **`audit-and-governance` test port complexity**. `tests/db/test_audit_and_governance.py` (396 lines, 24 tests) exercises `set_review_status` + `set_version_archived` + audit-entry queries — all logic that's now in the Hono routes (v0.6) PLUS in MCP (Python, stays). | Part 25J | Port the parts that test the v0.6 Hono routes (move to `packages/memory/test/web-integration/governance.test.ts`); leave the MCP-side coverage in pytest under `tests/test_mcp_server.py` (or a focused new file) since Python MCP keeps that surface. |
+| R10 | **`reindex_all.ts` dependency on the TS pipeline**. Python's `reindex_all.py` shells out to `uv run cerefox reindex` which does the actual work via the pipeline. The TS port needs `cerefox reindex` to also work in TS — which requires the pipeline's chunk-update + embedder code paths to be reachable via the CLI. | Part 25I | Verify in Part 25I whether `cerefox reindex` (TS) already exists or needs to be added. If needed, add it as a thin CLI command calling the pipeline. |
+| R11 | **`postgres` lib's behaviour on huge SQL files** (`schema.sql` is ~500 lines; `rpcs.sql` is larger). Multi-statement SQL has historically been tricky in Node Postgres clients. | Part 25H | Test early with the full schema.sql. If multi-statement support is flaky, split into individual statements before sending (the SQL files are statically structured — easy to parse `;` boundaries). |
+
+**For a fresh-session pickup**: this iter-25 design is self-contained. Read this section + the v0.6.0 closing entry in Cerefox Decision Log Q2 Part 4 + the v0.6 post-cut follow-up entry (test migration policy) + design doc §13 v0.7.0 + design doc §19 (test migration policy). All locked decisions are documented above; R1-R11 risks have default plans for each. No pre-implementation re-deciding needed; nothing should block on day 1.
 
 ---
 
@@ -2620,9 +2746,29 @@ also keep the python cli commands as husks."
 
 **v0.8.0** (T-shirt: M): prominent deprecation banner on every Python
 CLI subcommand. Install docs (`installing.md`, `quickstart.md`) no
-longer mention Python as the recommended path. **First half of the
-test-runner cutover pass** (per design doc §19 "Test migration
-policy"):
+longer mention Python as the recommended path. **`cerefox web`
+lifecycle commands for fire-and-forget end-user usage** (decided
+2026-05-28; maintainer use case is "production usage, not dev work —
+start at login, browser-bookmark UX, same as cfcf"). Shape B from
+the 2026-05-28 daemon-mode design discussion:
+- `cerefox web --daemon` — spawns the server detached; idempotent
+  (already-running → prints "running on :8000 (pid N)" + exits 0).
+  Port collision → clear error with conflicting pid.
+- `cerefox web --stop` — reads pidfile, signals, polls for exit.
+- `cerefox web --status` — pidfile + process liveness + port
+  reachability check.
+- Pidfile at `~/.cerefox/web.pid` (matches the `~/.cerefox/` config
+  dir pattern).
+- Logfile at `~/.cerefox/web.log` — append by default; no Cerefox-
+  side rotation. System-level rotation when user installs as
+  launchd / systemd; manual `> ~/.cerefox/web.log` truncation
+  otherwise.
+- Foreground `cerefox web` keeps working unchanged for active dev.
+- Reference shape: cfcf's `server.ts` (282 lines) + `server-spawn.ts`
+  (70 lines), but flag-based not subcommand-based — ~half the LOC.
+
+**First half of the test-runner cutover pass** (per design doc §19
+"Test migration policy"):
 - `tests/e2e/test_edge_functions_e2e.py` (489 lines) → `packages/memory/test/edge-functions/*.test.ts`. The EFs themselves stay live (Deno-on-Supabase); only the test harness moves.
 - `tests/e2e/test_mcp_e2e.py` (560 lines) → `packages/memory/test/mcp-remote/*.test.ts`. Same shape: the remote `cerefox-mcp` EF stays; tests migrate.
 - `tests/e2e/test_ui_e2e.py` (247 lines) → `frontend/tests/e2e/*.spec.ts` using `@playwright/test`. Playwright bindings exist in both languages so the port is mechanical.
