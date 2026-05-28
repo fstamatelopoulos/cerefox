@@ -33,6 +33,7 @@ import { Hono } from "hono";
 
 import { buildWebContext, type WebContext } from "./context.ts";
 import { registerDiscoveryRoutes } from "./routes/discovery.ts";
+import { registerDocumentReadRoutes } from "./routes/documents-read.ts";
 import { registerMetaRoutes } from "./routes/meta.ts";
 import { registerProjectsRoutes } from "./routes/projects.ts";
 import {
@@ -59,6 +60,7 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   registerMetaRoutes(app, ctx);
   if (ctx) {
     registerDiscoveryRoutes(app, ctx);
+    registerDocumentReadRoutes(app, ctx);
     registerProjectsRoutes(app, ctx);
   } else {
     // Stub DB-touching endpoints with 503 so the frontend gets a clear
