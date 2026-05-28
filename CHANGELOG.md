@@ -17,6 +17,14 @@ without running them — so a release that shipped a new migration never applied
 it. `deploy-server` is now the catch-all for both standing up *and updating*
 the server side.
 
+### Added
+
+- `cerefox delete-project <name-or-id>` — new CLI subcommand. Looks up by
+  UUID or exact name; refuses if documents are still linked unless `--force`;
+  `--yes` skips the prompt for scripts. Symmetric to the existing Projects page
+  DELETE action in the web UI. Used by `write-commands.test.ts` to reap the
+  `_e2e-v0.5` test project so prior runs don't leave stray projects behind.
+
 ### Changed
 
 - **`cerefox deploy-server` detects fresh vs. existing databases.** On a fresh

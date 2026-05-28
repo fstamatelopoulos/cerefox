@@ -70,6 +70,7 @@ describe("cerefox CLI smoke (built bin)", () => {
       "ingest",
       "ingest-dir",
       "delete-doc",
+      "delete-project",
       // Servers
       "mcp",
       "web",
@@ -154,5 +155,13 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(stdout).toContain("--batch");
     expect(stdout).toContain("--dry-run");
     expect(stdout).toContain("--document-id");
+  });
+
+  test("`cerefox delete-project --help` advertises name-or-id + safety flags", () => {
+    const { stdout, status } = run(["delete-project", "--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("name-or-id");
+    expect(stdout).toContain("--yes");
+    expect(stdout).toContain("--force");
   });
 });

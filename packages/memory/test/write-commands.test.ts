@@ -104,6 +104,10 @@ describe("cerefox write commands (live)", () => {
 
   afterAll(async () => {
     await hardPurgeE2eDocs();
+    // hardPurgeE2eDocs only removes documents; reap the `_e2e-v0.5` project
+    // row too so it doesn't leak across runs. `--force` deletes even if a
+    // doc link lingers (the project row goes; doc rows stay).
+    run(["delete-project", "_e2e-v0.5", "--yes", "--force"]);
   });
 
   test("ingest --paste: title required", () => {
