@@ -2422,7 +2422,7 @@ server instead of shelling out to a Python FastAPI process.
 "Living design notes" callout at the top of that file for the consolidated
 single-package model).
 
-**Estimated effort**: 4 weeks part-time.
+**Estimated effort**: 5-6 weeks part-time (see "Locked design decisions" → "Iteration size" for the revised estimate; the design doc's original "~4 weeks" predated the locked-decisions pass).
 
 **Headline items**:
 - **v0.6.0 is an internal milestone, NOT a public release.** Tag in git; no GH Release page; no npm publish. The npm registry stays at v0.5.4 until v0.7.0 ships. Rationale: shipping a release where documented endpoints return "feature lands later" is awkward UX even with the Python fallback. See "Locked design decisions" → "v0.6.0 release strategy" below. **`scripts/cut_release.ts` gains a `--tag-only` flag** to support this cut (Part 24L).
@@ -2435,7 +2435,7 @@ single-package model).
 - Python `api/app.py` + `api/routes_api.py` kept around through v0.7.x; deprecation banner added in v0.7.0 (Part 25L); prominent in v0.8, deleted in v0.9.
 - First-run UX in web UI: empty-state getting-started panel + graceful "v0.7 feature" handling when ingestion 503s.
 - **Configure-agent Phase 2**: add Cursor, Codex CLI, Gemini CLI writers + the round-trip smoke test that was missing in v0.5.0–v0.5.4 (the one that would have caught the v0.5.3 wrong-path bug).
-- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.6.0 section covering: `cerefox web` boot smoke, Hono response-shape parity against FastAPI snapshots, web UI loads served from the bundled `frontend/dist/`, deprecation messaging when the Python web server is invoked, configure-agent round-trip verification.
+- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.6.0 section covering: `cerefox web` boot smoke (both Mode 1 / Mode 2 / Mode 3 of "Local testing" below), Hono response-shape parity against FastAPI snapshots, web UI loads served from the bundled `frontend/dist/`, frontend 503 toast on ingestion endpoints, configure-agent round-trip verification. **Python web deprecation messaging is NOT in v0.6's test plan** — moves to v0.7's section per the deferred-banner decision.
 - **Add v0.6 entry to Cerefox Decision Log** (Part 4 or Part 5 — check size before writing) capturing the FastAPI → Hono port decisions, zod-schemas-as-contract pattern, ingestion 503 deferral rationale, frontend bundling pattern, and any platform gotchas surfaced during the cut.
 
 **Locked design decisions (2026-05-27, before iteration kickoff)**:
@@ -2466,9 +2466,17 @@ single-package model).
 | Standalone binaries (`pkg`/`bun build --compile`) | Phase 2 of design doc §6d — post-v0.6 |
 | Full `cerefox docs` web UI integration | If demand surfaces — not in v0.6 |
 
-**Estimated effort**: 5-6 weeks part-time (revised from design doc's "~4 weeks" — 35 endpoints is more surface than the original estimate; the configure-agent Phase 2 work is bundled in too).
-
 **Detailed Parts breakdown** (each Part = one commit in the iter-24 PR):
+
+> **Pre-iter step (do BEFORE Part 24A starts)**: capture Python response
+> snapshots for the 5 critical endpoints (`/search`, `/dashboard`,
+> `/documents/{id}`, `/audit-log`, `/version`) against the maintainer's
+> live Python web + Supabase. Save as fixture files under
+> `packages/memory/test/fixtures/python-parity/` (gitignored or
+> committed — committed is fine; they're small). Parts 24C–24G assert
+> their TS responses match these. Without this step, the parity test
+> in Part 24I has nothing to compare against. Cost: ~10 minutes of
+> `curl + jq` against the running Python server.
 
 | Part | Goal | Acceptance |
 |---|---|---|
@@ -2482,7 +2490,7 @@ single-package model).
 | **24H — Ingestion 503 stubs (3 endpoints)** | `/ingest`, `/ingest/file`, `/documents/{id}/upload` return 503 with `{"error": "Ingestion lands in v0.7", "see": "<url>"}`. | curl gets the 503 with the right body. Frontend detects this and shows a "v0.7 feature" toast in the web UI (no crash). |
 | **24I — Parity test harness + e2e port** | Capture Python responses for the 5 critical endpoints (pre-port via the maintainer's live Supabase). Add as snapshot fixtures. Port `tests/e2e/test_api_e2e.py` to a TS e2e suite under `packages/memory/test/`. | TS e2e suite passes against the new TS server (`bun test`, probe-and-skip when Supabase unreachable). All 5 snapshot tests pass. |
 | **24J — First-run UX panel + frontend 503 handling** | New empty-state component in the React SPA shown when KB has zero documents. Ingest 503 detection shows a user-facing toast. | Visiting `/app/` on an empty KB shows the empty-state panel. Triggering ingest in the UI shows "Ingestion lands in v0.7" toast (not a crash). |
-| **24K — Configure-agent Phase 2 + round-trip smoke test** | Cursor + Codex + Gemini writers added (direct-write kind). `--tool claude-code` smoke test (gated on `command -v claude`) — spawn `claude mcp list` after configure-agent + assert `cerefox` appears. Use `HOME` override / temp dir to avoid polluting contributor state. Also: tighten level-3 `.env` heuristic + drop `migration-v0.4.md` from `bundle_package_docs.ts`. | `cerefox configure-agent --tool cursor` writes the expected JSON. Round-trip test passes when Claude Code is installed. |
+| **24K — Configure-agent Phase 2 + round-trip smoke test** | Cursor (JSON) + Codex (**TOML — extends ConfigWriter to support file format per risk R1**) + Gemini (JSON) writers added. `--tool claude-code` round-trip smoke test (gated on `command -v claude`) — spawn `claude mcp list` after configure-agent + assert `cerefox` appears. **Verify `$HOME` override actually sandboxes `claude mcp add` per risk R2** before committing the test; fall back to "local-only, manual test plan only" if sandboxing isn't reliable. Also: tighten level-3 `.env` heuristic to require `CEREFOX_*` keys + drop `migration-v0.4.md` from `bundle_package_docs.ts`. | `cerefox configure-agent --tool cursor` writes the expected JSON. `--tool codex` writes the expected TOML (verified by parsing back). `--tool gemini` writes the expected JSON. Round-trip test passes when Claude Code is installed (CI: skips). |
 | **24L — Closeout (internal-milestone cut, no deprecation banner)** | Update `CHANGELOG.md` (v0.6.0 entry marked "internal milestone — not released to npm"), `v0.7-manual-test-plan.md` (v0.6 section), README (no user-facing changes needed). Decision Log v0.6 entry. **Add `--tag-only` flag to `scripts/cut_release.ts`** that bumps versions + commits + tags but skips both the GitHub Release creation and the npm publish trigger. Cut v0.6.0 with `--tag-only`. **No `migration-v0.5.md` v0.6 section** — users don't migrate to v0.6. **No Python web deprecation banner** — that's deferred to v0.7 Part 25L per the locked decision. | PR ready for review; CI green; CHANGELOG complete; Decision Log entry ingested; `v0.6.0` git tag present; npm registry unchanged at v0.5.4. Python `cerefox web` unchanged from v0.5.x users' perspective. |
 
 **Local testing during the build (no `npm install` needed)**:
@@ -2518,14 +2526,15 @@ For E2E tests during the build: `cd packages/memory && bun test web-smoke.test.t
 - `packages/memory/src/web/` — new directory housing the Hono server
   - `web/server.ts` — Hono app factory `buildWebServer({ port, host })`
   - `web/static.ts` — `serveStatic` middleware + SPA catch-all
-  - `web/routes/meta.ts`
-  - `web/routes/search.ts`
-  - `web/routes/documents-read.ts`
-  - `web/routes/documents-write.ts`
-  - `web/routes/ingest.ts` (503 stubs)
-  - `web/routes/projects.ts` (CRUD)
-  - `web/routes/audit-usage.ts`
-  - `web/routes/config.ts`
+  - `web/routes/meta.ts` (4 endpoints: `/version`, `/docs`, `/docs/{path}`, `/schema-version`)
+  - `web/routes/discovery.ts` (6 endpoints: `/search`, `/metadata-keys`, `/dashboard`, `/documents/trash`, `/documents/metadata-search`, `/resolve-link` — search-as-discovery is intentional naming so the file has a single coherent purpose)
+  - `web/routes/documents-read.ts` (5 endpoints: `/documents/{id}`, `/chunks`, `/versions`, `/download`, `/check-filename`)
+  - `web/routes/documents-write.ts` (6 endpoints: `/edit`, DELETE, `/restore`, `/purge`, `/review-status`, `/versions/{vid}/archive`)
+  - `web/routes/ingest.ts` (3 endpoints — 503 stubs)
+  - `web/routes/projects.ts` (5 endpoints: GET (list), GET `/{id}/documents`, POST, PUT, DELETE — read + CRUD together)
+  - `web/routes/audit-usage.ts` (4 endpoints: `/audit-log`, `/usage-log`, `/usage-log/export.csv`, `/usage-log/summary`)
+  - `web/routes/config.ts` (2 endpoints: GET / PUT `/config/{key}`)
+  - **Total: 35 endpoints across 8 files** — confirmed sum
 - `_shared/schemas/` — new directory
   - `_shared/schemas/index.ts`
   - One file per response group, mirroring the routes structure
@@ -2538,12 +2547,26 @@ For E2E tests during the build: `cd packages/memory && bun test web-smoke.test.t
 - `packages/memory/src/cli/commands/web.ts` — replace v0.5 stub with `import { buildWebServer } from '../../web/server.ts'` etc.
 - `packages/memory/src/cli/util/mcp-config-writers.ts` — add Cursor / Codex / Gemini writers (Phase 2)
 - `_shared/config/paths.ts` — level-3 heuristic: only match CWD `.env` containing `CEREFOX_*`
-- `src/cerefox/cli.py` — add `cerefox web` deprecation banner
 - `scripts/bundle_package_docs.ts` — drop `migration-v0.4.md`
+- `scripts/cut_release.ts` — add `--tag-only` flag (Part 24L); ~30 LOC; must skip BOTH the GH Release creation step (`gh release create`) AND the `gh workflow run release.yml` trigger that the `--npm-publish` path uses
 - `frontend/src/api/*.ts` — import response types from `_shared/schemas/` instead of duplicating
 - `frontend/src/components/EmptyState.tsx` — new
 
-**For a fresh-session pickup**: this iter-24 design is self-contained. Read this section + the v0.5.3/v0.5.4 Decision Log entries in Q2 Part 3 and Part 4 + the design doc `docs/specs/polish-and-distribution-design.md` §13 v0.6.0 (which is the abstract framing). All open decisions are documented above; nothing needs re-deciding.
+**Known risks / questions that need resolution DURING the build** (raised in the pre-kickoff review pass on 2026-05-27; resolve in the Part where they bite):
+
+| # | Risk / open question | Resolves in | Default plan |
+|---|---|---|---|
+| R1 | **Codex CLI config is TOML, not JSON.** The locked decision says "all `kind: direct-write` per v0.5.4 ConfigWriter", but that interface assumes JSON parse/serialize. | Part 24K | Add a TOML dep (`smol-toml` or `@iarna/toml`) and extend `ConfigWriter` to know its file format (`format: "json" \| "toml"`). +30 LOC + 1 dep. **Verify in Part 24K** whether OpenAI's Codex CLI has a `codex mcp add` command (would let us delegate like Claude Code); if yes, prefer delegation. |
+| R2 | **Configure-agent round-trip smoke test sandboxing isn't verified.** Plan says "use `$HOME` override via env var", but `claude mcp add` may not respect `$HOME`. | Part 24K | Verify $HOME respect FIRST. If it doesn't respect: fall back to "test runs locally only, skip in CI; explicit step in the manual test plan". Do NOT pollute the contributor's real `~/.claude.json`. |
+| R3 | **`_shared/schemas/` consumption by frontend.** Vite (frontend's bundler) needs to resolve imports from a sibling workspace. | Part 24C | Add a `resolve.alias` entry in `frontend/vite.config.ts` pointing `@cerefox/schemas` → `../_shared/schemas/`. Verify TS+Vite agree on the path. |
+| R4 | **CSV streaming response in Hono on Bun.** `/usage-log/export.csv` uses FastAPI `StreamingResponse`. Hono + Bun should support `c.body(ReadableStream)`, but not exercised in our codebase yet. | Part 24G | Smoke test early in Part 24G with a small CSV (10 rows). If streaming doesn't work, buffer the whole CSV in memory — fine at personal-KB scale. |
+| R5 | **SPA catch-all route ordering.** Hono middleware order matters; `/app/*` catch-all must NOT shadow `/app/assets/*` static. | Part 24A | Document the order explicitly in `web/server.ts`: (1) `/api/v1/*` → routes, (2) `/static/*` → serveStatic, (3) `/app/assets/*` → serveStatic Vite hashed assets, (4) `/app/*` → catch-all returns `index.html`, (5) `/` → HTML redirect page. Test by curling `/app/assets/index-abc123.js` and asserting Content-Type is `application/javascript` not `text/html`. |
+| R6 | **`release.yml` trigger semantics.** If `release.yml` auto-fires on tag push (not just `workflow_dispatch`), pushing `v0.6.0` tag could trigger npm publish — defeating the internal-milestone decision. | Part 24L | Read `release.yml` at the start of Part 24L; confirm it's `workflow_dispatch` only. If not, fix it to be `workflow_dispatch` only AND have the maintainer set `publish_to_npm: false` (or never fire it) for v0.6.0. |
+| R7 | **Zod schema enforcement level.** Are we adding runtime `.parse()` at endpoint exit (slower but stricter) or just using zod for compile-time types (faster but drift-prone)? | Part 24C | Default: parse in dev mode (`NODE_ENV !== 'production'`), skip in production. ~1-2ms per request in dev, near-zero in prod. |
+| R8 | **First-run empty-state panel scope.** Plan says "empty-state getting-started panel" but doesn't specify content. Minimal text vs. richer interactive walkthrough? | Part 24J | Default: minimal text panel with the three suggested commands (`cerefox ingest`, `cerefox search`, `cerefox configure-agent`). No animation, no video. Time-box to 2 hours. If you want richer, scope grows. |
+| R9 | **Effort estimate (5-6 weeks part-time) is a guess.** v0.5.0 compressed into ~48 hours real-time despite being 10 Parts. v0.6 might compress similarly or stretch — genuinely unknown. | N/A | Track actual time and update plan.md's iter-24 footer for posterity. Not a blocker. |
+
+**For a fresh-session pickup**: this iter-24 design is self-contained. Read this section + the v0.5.3/v0.5.4 Decision Log entries in Q2 Part 3 and Part 4 + the design doc `docs/specs/polish-and-distribution-design.md` §13 v0.6.0 (which is the abstract framing). All locked decisions are documented above; the table of known risks (R1–R9) lists what still needs resolution during the build, with default plans for each. Nothing needs re-deciding before code starts; the risks are flagged for resolution in their specific Parts.
 
 ---
 
