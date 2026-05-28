@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-05-28T01:00:56Z",
+  "server_version": "0.5.4",
+  "base_url": "http://127.0.0.1:8000",
+  "inputs": {
+    "/api/v1/version": {},
+    "/api/v1/dashboard": {},
+    "/api/v1/search": {
+      "q": "cerefox",
+      "mode": "docs",
+      "count": 5
+    },
+    "/api/v1/audit-log": {
+      "limit": 10
+    },
+    "/api/v1/documents/{id}": {
+      "document_id": "17954ead-d1d7-47cb-81e8-99213415baa1"
+    }
+  },
+  "notes": "Server was the FastAPI Python web (`uv run cerefox web`). Fixtures are the response shape v0.6.0 Hono TS server must match in Part 24I parity tests."
+}

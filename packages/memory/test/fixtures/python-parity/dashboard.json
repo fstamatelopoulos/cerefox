@@ -1,0 +1,231 @@
+{
+  "doc_count": 160,
+  "project_count": 11,
+  "recent_docs": [
+    {
+      "id": "17954ead-d1d7-47cb-81e8-99213415baa1",
+      "title": "Cerefox Decision Log — 2026 Q2 (Part 4)",
+      "source": "agent",
+      "chunk_count": 7,
+      "total_chars": 22178,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-28T00:36:59.101952+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    },
+    {
+      "id": "456f355d-b5cd-494d-b653-7deb6c0667b4",
+      "title": "Migrating to Cerefox v0.4.0 (historical)",
+      "source": "manual",
+      "chunk_count": 3,
+      "total_chars": 8667,
+      "review_status": "approved",
+      "updated_at": "2026-05-28T00:22:50.339939+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    },
+    {
+      "id": "9f0f964e-4a22-4ead-89aa-967595eae62f",
+      "title": "Migrating to Cerefox v0.5.x",
+      "source": "manual",
+      "chunk_count": 4,
+      "total_chars": 11629,
+      "review_status": "approved",
+      "updated_at": "2026-05-28T00:21:57.910938+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    },
+    {
+      "id": "a27d97e5-a0b6-45b6-84a1-ab1cf21039fc",
+      "title": "Cerefox Decision Log — 2026 Q2 (Part 3)",
+      "source": "agent",
+      "chunk_count": 17,
+      "total_chars": 55370,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-28T00:20:27.325189+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    },
+    {
+      "id": "a49b288f-b6f0-4c43-a06d-7fb68505332a",
+      "title": "Upgrading Cerefox",
+      "source": "cerefox-self-docs",
+      "chunk_count": 5,
+      "total_chars": 16526,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-27T21:36:33.839505+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    },
+    {
+      "id": "38b4a6e2-a2b8-4f09-9444-e148530c20ca",
+      "title": "Connecting AI Agents to Cerefox",
+      "source": "cerefox-self-docs",
+      "chunk_count": 19,
+      "total_chars": 62204,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-27T21:36:29.434662+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    },
+    {
+      "id": "1e9e831c-b148-416d-ad82-ecbecee780f2",
+      "title": "Cerefox Knowledge Base -- Agent Quick Reference",
+      "source": "cerefox-self-docs",
+      "chunk_count": 3,
+      "total_chars": 6897,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-27T21:36:26.250358+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    },
+    {
+      "id": "bb3d8018-74ce-4720-b050-5085ccf6bb20",
+      "title": "Career Coach - Lisa Nichols INTOO",
+      "source": "agent",
+      "chunk_count": 2,
+      "total_chars": 5834,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-27T21:02:58.585065+00:00",
+      "project_ids": [
+        "75ac5563-8c49-42df-9cdf-14285bde835a"
+      ]
+    },
+    {
+      "id": "12bcae31-11fd-486a-b1c5-3b73e1672cba",
+      "title": "Opportunity - Gallop Intelligence",
+      "source": "agent",
+      "chunk_count": 5,
+      "total_chars": 17869,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-27T20:55:56.936668+00:00",
+      "project_ids": [
+        "75ac5563-8c49-42df-9cdf-14285bde835a"
+      ]
+    },
+    {
+      "id": "a52d4ef1-f6c5-40ca-bd5d-91eab1b627c9",
+      "title": "Operations Scripts",
+      "source": "cerefox-self-docs",
+      "chunk_count": 4,
+      "total_chars": 11889,
+      "review_status": "pending_review",
+      "updated_at": "2026-05-27T06:07:15.401992+00:00",
+      "project_ids": [
+        "32d1d418-c49d-4801-9ee1-111a77a21b5b"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": "32d1d418-c49d-4801-9ee1-111a77a21b5b",
+      "name": "Cerefox",
+      "description": "User owned share memory/KB for AI agents",
+      "created_at": "2026-03-11T05:15:54.112564+00:00",
+      "updated_at": "2026-03-16T05:37:38.580648+00:00"
+    },
+    {
+      "id": "e8092c01-2607-4046-a4c9-5163479e1914",
+      "name": "Cerefox Agent",
+      "description": "Project for the Cerefox Agent",
+      "created_at": "2026-03-23T17:33:44.664602+00:00",
+      "updated_at": "2026-03-23T23:05:45.288627+00:00"
+    },
+    {
+      "id": "f73196a4-287b-4680-af5c-8fface23cade",
+      "name": "cfcf",
+      "description": "Cerefox Code Factory - cf²",
+      "created_at": "2026-04-26T07:49:00.426695+00:00",
+      "updated_at": "2026-05-18T21:11:48.02591+00:00"
+    },
+    {
+      "id": "b4f9a4ba-054c-4555-8c9f-2bf17da71a78",
+      "name": "gmbot",
+      "description": "",
+      "created_at": "2026-05-06T15:34:51.6068+00:00",
+      "updated_at": "2026-05-06T15:34:51.6068+00:00"
+    },
+    {
+      "id": "75ac5563-8c49-42df-9cdf-14285bde835a",
+      "name": "Job-Hunting",
+      "description": "Job Hunting May 2016 onward",
+      "created_at": "2026-05-22T18:46:22.483002+00:00",
+      "updated_at": "2026-05-22T19:08:14.202165+00:00"
+    },
+    {
+      "id": "2bc873eb-e0b8-4071-8df0-35447c4ddbad",
+      "name": "Networking",
+      "description": "Everything about professional networking",
+      "created_at": "2026-03-19T20:38:44.129367+00:00",
+      "updated_at": "2026-03-19T20:39:35.370118+00:00"
+    },
+    {
+      "id": "6d260915-38ef-489e-942d-baa95a5ff8ba",
+      "name": "Personal",
+      "description": "Personal notes",
+      "created_at": "2026-03-11T19:02:58.861706+00:00",
+      "updated_at": "2026-03-11T20:18:48.965929+00:00"
+    },
+    {
+      "id": "38d5cee6-7c22-4ce4-9055-3c368ffcf521",
+      "name": "Publications",
+      "description": "Content related to publications and promo strategy",
+      "created_at": "2026-03-25T23:00:45.83198+00:00",
+      "updated_at": "2026-05-26T05:27:21.555+00:00"
+    },
+    {
+      "id": "446d1741-9c9e-4f47-ab1f-f58e3b784f8a",
+      "name": "Teliboria",
+      "description": "Content about Teliboria the sandbox TTRPG world",
+      "created_at": "2026-03-11T18:59:10.943549+00:00",
+      "updated_at": "2026-03-11T20:19:09.985926+00:00"
+    },
+    {
+      "id": "022122e8-b4e4-4b1f-a2eb-8f5add370635",
+      "name": "Teliboria-World-Context",
+      "description": "",
+      "created_at": "2026-05-24T01:48:51.478952+00:00",
+      "updated_at": "2026-05-24T01:48:51.478952+00:00"
+    },
+    {
+      "id": "3b6e2c94-32f3-4be9-ac0e-b8972407dc2e",
+      "name": "Test Files",
+      "description": "Container project for test files",
+      "created_at": "2026-03-11T05:24:00.59117+00:00",
+      "updated_at": "2026-03-11T05:24:00.59117+00:00"
+    }
+  ],
+  "project_doc_counts": {
+    "32d1d418-c49d-4801-9ee1-111a77a21b5b": 59,
+    "e8092c01-2607-4046-a4c9-5163479e1914": 4,
+    "f73196a4-287b-4680-af5c-8fface23cade": 5,
+    "b4f9a4ba-054c-4555-8c9f-2bf17da71a78": 1,
+    "75ac5563-8c49-42df-9cdf-14285bde835a": 16,
+    "2bc873eb-e0b8-4071-8df0-35447c4ddbad": 1,
+    "6d260915-38ef-489e-942d-baa95a5ff8ba": 2,
+    "38d5cee6-7c22-4ce4-9055-3c368ffcf521": 4,
+    "446d1741-9c9e-4f47-ab1f-f58e3b784f8a": 7,
+    "022122e8-b4e4-4b1f-a2eb-8f5add370635": 59,
+    "3b6e2c94-32f3-4be9-ac0e-b8972407dc2e": 1
+  },
+  "project_deleted_doc_counts": {
+    "32d1d418-c49d-4801-9ee1-111a77a21b5b": 0,
+    "e8092c01-2607-4046-a4c9-5163479e1914": 0,
+    "f73196a4-287b-4680-af5c-8fface23cade": 1,
+    "b4f9a4ba-054c-4555-8c9f-2bf17da71a78": 0,
+    "75ac5563-8c49-42df-9cdf-14285bde835a": 0,
+    "2bc873eb-e0b8-4071-8df0-35447c4ddbad": 0,
+    "6d260915-38ef-489e-942d-baa95a5ff8ba": 0,
+    "38d5cee6-7c22-4ce4-9055-3c368ffcf521": 0,
+    "446d1741-9c9e-4f47-ab1f-f58e3b784f8a": 0,
+    "022122e8-b4e4-4b1f-a2eb-8f5add370635": 0,
+    "3b6e2c94-32f3-4be9-ac0e-b8972407dc2e": 2
+  }
+}
