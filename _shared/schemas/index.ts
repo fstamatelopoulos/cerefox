@@ -19,3 +19,4 @@ export * from "./discovery.js";
 export * from "./documents.js";
 export * from "./projects.js";
 export * from "./config.js";
+export * from "./audit-usage.js";
