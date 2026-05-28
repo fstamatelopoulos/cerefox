@@ -37,6 +37,7 @@ import { registerConfigRoutes } from "./routes/config.ts";
 import { registerDiscoveryRoutes } from "./routes/discovery.ts";
 import { registerDocumentReadRoutes } from "./routes/documents-read.ts";
 import { registerDocumentWriteRoutes } from "./routes/documents-write.ts";
+import { registerIngestStubRoutes } from "./routes/ingest.ts";
 import { registerMetaRoutes } from "./routes/meta.ts";
 import { registerProjectsRoutes } from "./routes/projects.ts";
 import {
@@ -61,6 +62,9 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
 
   // (1) JSON API — registered first.
   registerMetaRoutes(app, ctx);
+  // Ingestion stubs always 503 — same payload shape regardless of ctx
+  // (they don't need DB access; they just signal "v0.7 feature").
+  registerIngestStubRoutes(app);
   if (ctx) {
     registerDiscoveryRoutes(app, ctx);
     registerDocumentReadRoutes(app, ctx);
