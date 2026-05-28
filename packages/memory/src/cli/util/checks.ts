@@ -6,11 +6,10 @@
  * Checks are independent: a failure in one doesn't short-circuit the
  * others — operators want the complete picture in one shot.
  *
- * Designed for v0.5; the Postgres direct-connection check (DDL-capable
- * Session Pooler) is deliberately not yet implemented — v0.5 npm-only
- * users typically don't have CEREFOX_DATABASE_URL set, and the schema
- * deploy still goes via `uv run scripts/db_deploy.py` (port pending in
- * v0.6). The check stub reports "skipped (v0.6)".
+ * v0.7.1: `checkPostgres` runs a real DDL connectivity probe via the
+ * `postgres` (Porsager) lib — the same client `scripts/db_deploy.ts`
+ * and `scripts/db_migrate.ts` use. `runAllChecks` / `runFastChecks`
+ * accept an `onProgress` callback so callers can drive a spinner.
  */
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
@@ -360,49 +359,124 @@ export function checkLegacyShadowEnv(): CheckResult | null {
   };
 }
 
-export function checkPostgres(): CheckResult {
-  // v0.5: not yet ported. The Python CLI uses CEREFOX_DATABASE_URL for
-  // DDL operations (schema deploy + migrations). For npm-installed users
-  // who only need read/write, this check is informational.
-  if (process.env.CEREFOX_DATABASE_URL) {
+export async function checkPostgres(): Promise<CheckResult> {
+  if (!process.env.CEREFOX_DATABASE_URL) {
     return {
       name: "postgres",
       status: "skipped",
-      detail: "DDL check deferred to v0.6 (use `uv run scripts/db_status.py` for now).",
+      detail: "CEREFOX_DATABASE_URL not set; skip if you only use the Data API for reads/writes.",
+      hint: "Required for schema deploy (`bun scripts/db_deploy.ts`) and migrations.",
     };
   }
-  return {
-    name: "postgres",
-    status: "skipped",
-    detail: "CEREFOX_DATABASE_URL not set; DDL operations require the Python CLI (v0.5).",
-    hint: "Schema deploy: `uv run python scripts/db_deploy.py`.",
-  };
+  let postgres: typeof import("postgres").default;
+  try {
+    postgres = (await import("postgres")).default;
+  } catch (err) {
+    return {
+      name: "postgres",
+      status: "error",
+      detail: `Could not load the postgres client: ${err instanceof Error ? err.message : String(err)}`,
+      hint: "Reinstall: `npm install -g @cerefox/memory`.",
+    };
+  }
+  const sql = postgres(process.env.CEREFOX_DATABASE_URL, {
+    max: 1,
+    idle_timeout: 5,
+    connect_timeout: 5,
+    prepare: false,
+    onnotice: () => {},
+  });
+  try {
+    const rows = (await sql`SELECT version() AS version`) as Array<{ version: string }>;
+    // Trim "PostgreSQL 16.10 on aarch64-...,by..." to just the version + arch prefix.
+    const short = (rows[0]?.version ?? "").split(",")[0];
+    return {
+      name: "postgres",
+      status: "ok",
+      detail: `${short || "connected"} — DDL endpoint reachable`,
+    };
+  } catch (err) {
+    return {
+      name: "postgres",
+      status: "error",
+      detail: `Could not connect: ${err instanceof Error ? err.message : String(err)}`,
+      hint:
+        "Verify CEREFOX_DATABASE_URL: Session Pooler (port 5432, not Transaction Pooler 6543), " +
+        "username must be `postgres.<project-ref>`, append `?sslmode=require`. " +
+        "See `docs/guides/setup-supabase.md` → Connection pooling.",
+    };
+  } finally {
+    await sql.end({ timeout: 1 }).catch(() => {});
+  }
 }
 
 // ── Aggregations ───────────────────────────────────────────────────────────
 
-/** Full diagnostic — what `cerefox doctor` runs. */
-export async function runAllChecks(): Promise<CheckResult[]> {
-  const legacy = checkLegacyShadowEnv();
-  return [
-    checkBinary(),
-    checkRuntime(),
-    checkVersion(),
-    checkConfig(),
-    ...(legacy ? [legacy] : []),
-    await checkSupabase(),
-    await checkOpenAI(),
-    await checkSchemaVersion(),
-    checkPostgres(),
-    checkMcpConfigs(),
-  ];
+/**
+ * Progress event emitted before each check starts.
+ *
+ * `phase` is a human-readable label suitable for a spinner ("Probing
+ * Supabase Data API"); `name` matches the eventual `CheckResult.name`.
+ */
+export interface CheckProgress {
+  phase: string;
+  name: string;
+  index: number;
+  total: number;
 }
 
-/** Fast subset — what `cerefox status` runs. Skips the network probes. */
-export async function runFastChecks(): Promise<CheckResult[]> {
-  return [
-    checkVersion(),
-    checkConfig(),
-    await checkSupabase(),
+export interface RunChecksOptions {
+  onProgress?: (ev: CheckProgress) => void;
+}
+
+interface CheckStep {
+  name: string;
+  phase: string;
+  run: () => CheckResult | null | Promise<CheckResult | null>;
+}
+
+async function runSteps(
+  steps: CheckStep[],
+  opts: RunChecksOptions,
+): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    opts.onProgress?.({
+      phase: step.phase,
+      name: step.name,
+      index: i + 1,
+      total: steps.length,
+    });
+    const r = await step.run();
+    if (r != null) results.push(r);
+  }
+  return results;
+}
+
+/** Full diagnostic — what `cerefox doctor` runs. */
+export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckResult[]> {
+  const steps: CheckStep[] = [
+    { name: "binary", phase: "Locating binary", run: () => checkBinary() },
+    { name: "runtime", phase: "Inspecting runtime", run: () => checkRuntime() },
+    { name: "version", phase: "Reading package version", run: () => checkVersion() },
+    { name: "config", phase: "Resolving config", run: () => checkConfig() },
+    { name: "legacy env", phase: "Checking legacy env shadowing", run: () => checkLegacyShadowEnv() },
+    { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
+    { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
+    { name: "schema", phase: "Reading schema version", run: () => checkSchemaVersion() },
+    { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
+    { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },
   ];
+  return runSteps(steps, opts);
+}
+
+/** Fast subset — what `cerefox status` runs. Skips the heavier network probes. */
+export async function runFastChecks(opts: RunChecksOptions = {}): Promise<CheckResult[]> {
+  const steps: CheckStep[] = [
+    { name: "version", phase: "Reading package version", run: () => checkVersion() },
+    { name: "config", phase: "Resolving config", run: () => checkConfig() },
+    { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
+  ];
+  return runSteps(steps, opts);
 }

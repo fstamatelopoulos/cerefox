@@ -9,7 +9,51 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.7.1 — "Post-release polish".** Cleanup pass after v0.7.0: a real
+Postgres DDL probe in `cerefox doctor` (replacing the stale "deferred to
+v0.6" placeholder), spinner UX on the long-running diagnostic commands, the
+favicon is back in the TS web server, the metadata `Key` field on Document
+Edit no longer rejects new strings, and the README catches up to v0.7.0.
+
+### Fixed
+
+- `cerefox doctor` postgres check now runs a real DDL connectivity probe via
+  the `postgres` (Porsager) client (the same one `scripts/db_deploy.ts` uses)
+  instead of printing the stale "DDL check deferred to v0.6 (use `uv run
+  scripts/db_status.py` for now)" message. Reports the live Postgres version
+  banner on success and a hint about Session Pooler vs Transaction Pooler on
+  failure.
+- Document Edit page: the metadata `Key` input no longer rejects values that
+  don't match an existing key. Was `<Select>` (which restricts to the data
+  set); now `<Autocomplete>` (free typing; existing keys are shown as
+  suggestions for consistency, not as a constraint).
+- Web favicon (the fox) is back. The Python web server served it via
+  `web/static/cerefox_logo.jpg`, which never made it into the
+  `@cerefox/memory` npm bundle. v0.7.1 ships the asset as
+  `frontend/public/cerefox_icon.png` so it's part of the SPA bundle and
+  serves on both source and installed paths.
+
+### Changed
+
+- `cerefox doctor` and `cerefox status` show an `ora`-driven spinner that
+  updates per check (`Probing Supabase Data API [6/10]`). Same pattern as
+  `scripts/db_status.ts`. Skipped automatically in `--json` mode and when
+  stderr isn't a TTY (CI redirects).
+- `runAllChecks()` / `runFastChecks()` in `packages/memory/src/cli/util/checks.ts`
+  gained an `onProgress` callback option. Existing callers without the option
+  still work.
+
+### Docs
+
+- README rewrites: marks v0.7.0 as current; splits the v0.6/v0.7 roadmap row
+  into shipped rows with their actual scope; updates the Quickstart to list
+  all 5 `configure-agent` writers (Claude Code, Claude Desktop, Cursor, Codex,
+  Gemini); replaces `uv run python scripts/db_deploy.py` with
+  `bun scripts/db_deploy.ts`; flips the "Local stdio MCP" example from
+  `uv --directory /path/to/cerefox run cerefox mcp` to `cerefox mcp` (or
+  `npx --package=@cerefox/memory cerefox mcp`); rewrites the "Building from
+  source" prerequisites table so Bun is primary and Python is the
+  contributor-only path.
 
 ---
 
