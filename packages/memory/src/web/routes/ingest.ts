@@ -1,45 +1,231 @@
 /**
- * Ingestion 503 stubs (Part 24H — 3 endpoints):
+ * Ingestion endpoints (Part 25F — swap from 503 stubs to real handlers):
  *
- *   POST /api/v1/ingest
- *   POST /api/v1/ingest/file
- *   POST /api/v1/documents/{document_id}/upload
+ *   POST /api/v1/ingest                            — paste mode
+ *   POST /api/v1/ingest/file                       — multipart file upload
+ *   POST /api/v1/documents/{document_id}/upload    — replace existing content
  *
- * Locked decision (plan.md § Iteration 24): these three endpoints
- * return 503 in v0.6 because they need the v0.7 in-process ingestion
- * pipeline (chunker + embedder + version-snapshot orchestration). The
- * frontend's Mantine toast (Part 24J) detects the 503 and surfaces the
- * "Ingestion lands in v0.7 — use `cerefox ingest file.md` from the
- * CLI for now" message; the CLI path hits the cerefox-ingest Edge
- * Function and works fully.
+ * v0.6 (Part 24H) shipped these as 503 stubs with a friendly toast.
+ * v0.7 (this Part) wires them to the in-process `IngestionPipeline`.
+ * Frontend's `V07IngestionDeferredError` toast detector stays in
+ * `api/client.ts` as dead code — no frontend changes required.
  *
- * Python source for the shapes these handlers replace:
+ * Python source (kept through v0.7.x for the legacy Python web):
  *   - api_ingest_paste     (routes_api.py:1030)
  *   - api_ingest_file      (routes_api.py:1074)
  *   - api_upload_content   (routes_api.py:994)
  *
- * The 503 body shape matches the contract /edit's content-change
- * branch already uses in Part 24E, so the frontend can share one
- * detector function.
+ * Embedder dependency: when `ctx.openAiApiKey` is null these endpoints
+ * return 503 with `error: "Embedder not available"` — matches Python's
+ * `Embedder not available` 503 shape.
  */
 
 import { Hono } from "hono";
 
-const V07_MIGRATION_URL =
-  "https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-v0.5.md#v06";
+import { IngestionPipeline } from "../../ingestion/pipeline.ts";
+import type { WebContext } from "../context.ts";
 
-const STUB_BODY = {
-  success: false,
-  error: "Ingestion lands in v0.7",
-  see: V07_MIGRATION_URL,
-  note:
-    "Web-UI ingestion (paste / upload / replace) requires the in-process pipeline that ships in v0.7. " +
-    "Working alternatives today: `cerefox ingest <file>` from the CLI (hits the Edge Function), or " +
-    "`uv run cerefox web` to use the Python web server.",
-} as const;
+interface IngestResponse {
+  success: boolean;
+  document_id?: string;
+  title?: string;
+  skipped?: boolean;
+  updated?: boolean;
+  note?: string;
+  error?: string;
+}
 
-export function registerIngestStubRoutes(app: Hono): void {
-  app.post("/api/v1/ingest", (c) => c.json(STUB_BODY, 503));
-  app.post("/api/v1/ingest/file", (c) => c.json(STUB_BODY, 503));
-  app.post("/api/v1/documents/:document_id/upload", (c) => c.json(STUB_BODY, 503));
+function notReady(error: string): IngestResponse {
+  return { success: false, error };
+}
+
+export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
+  // ── POST /api/v1/ingest (paste) ───────────────────────────────────────────
+  app.post("/api/v1/ingest", async (c) => {
+    if (!ctx.openAiApiKey) {
+      return c.json(notReady("Embedder not available"), 503);
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json(notReady("Invalid JSON body"), 400);
+    }
+    const title = String(body.title ?? "").trim();
+    const content = String(body.content ?? "");
+
+    if (!title) return c.json(notReady("Title is required."), 200);
+    if (!content.trim()) return c.json(notReady("Content cannot be empty."), 200);
+
+    try {
+      const pipeline = new IngestionPipeline({
+        supabase: ctx.supabase,
+        openAiApiKey: ctx.openAiApiKey,
+      });
+      const result = await pipeline.ingestText({
+        text: content.trim(),
+        title,
+        source: "paste",
+        projectIds: Array.isArray(body.project_ids)
+          ? (body.project_ids as string[])
+          : null,
+        metadata: (body.metadata as Record<string, string> | undefined) ?? null,
+        updateExisting: Boolean(body.update_existing),
+        documentId: (body.document_id as string | undefined) ?? null,
+        author: "web-ui",
+        authorType: "user",
+      });
+      const skipped = result.action === "skipped";
+      const resp: IngestResponse = {
+        success: !skipped,
+        document_id: result.documentId,
+        title: result.title,
+        skipped,
+        updated: result.reindexed,
+      };
+      if (result.note) resp.note = result.note;
+      return c.json(resp, 200);
+    } catch (err) {
+      return c.json(
+        notReady(err instanceof Error ? err.message : String(err)),
+        200,
+      );
+    }
+  });
+
+  // ── POST /api/v1/ingest/file (multipart) ──────────────────────────────────
+  app.post("/api/v1/ingest/file", async (c) => {
+    if (!ctx.openAiApiKey) {
+      return c.json(notReady("Embedder not available"), 503);
+    }
+
+    let form: { [k: string]: unknown };
+    try {
+      form = await c.req.parseBody();
+    } catch (err) {
+      return c.json(
+        notReady(`Invalid multipart body: ${err instanceof Error ? err.message : err}`),
+        400,
+      );
+    }
+    const file = form.file as File | undefined;
+    if (!file) return c.json(notReady("file field is required."), 400);
+
+    const text = await file.text();
+    const titleField = String(form.title ?? "").trim();
+    const docTitle = titleField || file.name || "Untitled";
+    const updateExisting = String(form.update_existing ?? "false") === "true";
+    const projectIdsStr = String(form.project_ids ?? "");
+    const projectIds = projectIdsStr
+      ? projectIdsStr.split(",").map((s) => s.trim()).filter(Boolean)
+      : null;
+    const metadataStr = String(form.metadata ?? "");
+    let metadata: Record<string, string> | null = null;
+    if (metadataStr) {
+      try {
+        metadata = JSON.parse(metadataStr) as Record<string, string>;
+      } catch {
+        metadata = null;
+      }
+    }
+
+    try {
+      const pipeline = new IngestionPipeline({
+        supabase: ctx.supabase,
+        openAiApiKey: ctx.openAiApiKey,
+      });
+      const result = await pipeline.ingestText({
+        text,
+        title: docTitle,
+        source: "file",
+        sourcePath: file.name,
+        projectIds,
+        metadata,
+        updateExisting,
+        author: "web-ui",
+        authorType: "user",
+      });
+      const skipped = result.action === "skipped";
+      return c.json(
+        {
+          success: !skipped,
+          document_id: result.documentId,
+          title: result.title,
+          skipped,
+          updated: result.reindexed,
+        },
+        200,
+      );
+    } catch (err) {
+      return c.json(
+        notReady(err instanceof Error ? err.message : String(err)),
+        200,
+      );
+    }
+  });
+
+  // ── POST /api/v1/documents/{id}/upload (replace existing) ────────────────
+  app.post("/api/v1/documents/:document_id/upload", async (c) => {
+    if (!ctx.openAiApiKey) {
+      return c.json(notReady("Embedder not available"), 503);
+    }
+    const documentId = c.req.param("document_id");
+
+    let form: { [k: string]: unknown };
+    try {
+      form = await c.req.parseBody();
+    } catch (err) {
+      return c.json(
+        notReady(`Invalid multipart body: ${err instanceof Error ? err.message : err}`),
+        400,
+      );
+    }
+    const file = form.file as File | undefined;
+    if (!file) return c.json(notReady("file field is required."), 400);
+
+    const text = await file.text();
+
+    // Fetch the existing doc so we can preserve its title if the upload
+    // doesn't provide one (matches Python: keeps existing.title or
+    // falls back to filename).
+    const { data: existing } = await ctx.supabase
+      .from("cerefox_documents")
+      .select("id, title")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (!existing) return c.json(notReady("Document not found"), 404);
+
+    const title =
+      (existing.title as string | null) || file.name || "Untitled";
+
+    try {
+      const pipeline = new IngestionPipeline({
+        supabase: ctx.supabase,
+        openAiApiKey: ctx.openAiApiKey,
+      });
+      const result = await pipeline.updateDocument({
+        documentId,
+        text,
+        title,
+        source: "file",
+        author: "web-ui",
+        authorType: "user",
+      });
+      return c.json(
+        {
+          success: true,
+          document_id: result.documentId,
+          title: result.title,
+          updated: result.reindexed,
+        },
+        200,
+      );
+    } catch (err) {
+      return c.json(
+        notReady(err instanceof Error ? err.message : String(err)),
+        200,
+      );
+    }
+  });
 }
