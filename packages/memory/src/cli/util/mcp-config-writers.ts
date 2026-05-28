@@ -42,11 +42,14 @@ import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
+import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+
 export type WriterKind = "direct-write" | "delegated";
+export type WriterFormat = "json" | "toml";
 
 export interface ConfigWriter {
   /** Stable client identifier used as the --tool flag value. */
-  id: "claude-code" | "claude-desktop";
+  id: "claude-code" | "claude-desktop" | "cursor" | "codex" | "gemini";
   /** Human-readable label for log lines. */
   label: string;
   /**
@@ -54,6 +57,13 @@ export interface ConfigWriter {
    * "delegated": this writer shells out to the target client's CLI.
    */
   kind: WriterKind;
+  /**
+   * Wire format the config file uses. Defaults to "json"; "toml" is set
+   * for Codex CLI (R1 default plan — extends the writer with file
+   * format support so a single direct-write path serves both JSON and
+   * TOML clients).
+   */
+  format?: WriterFormat;
   /**
    * For direct-write: absolute path the writer manages.
    * For delegated: the canonical path that the delegated CLI typically
@@ -119,6 +129,18 @@ function claudeCodeDelegated(): { cmd: string; args: string[] } {
   };
 }
 
+function cursorConfigPath(): string {
+  return join(homedir(), ".cursor", "mcp.json");
+}
+
+function codexConfigPath(): string {
+  return join(homedir(), ".codex", "config.toml");
+}
+
+function geminiConfigPath(): string {
+  return join(homedir(), ".gemini", "settings.json");
+}
+
 export const WRITERS: Record<string, ConfigWriter> = {
   "claude-code": {
     id: "claude-code",
@@ -133,6 +155,30 @@ export const WRITERS: Record<string, ConfigWriter> = {
     label: "Claude Desktop",
     kind: "direct-write",
     configPath: claudeDesktopConfigPath(),
+    buildServerEntry: defaultCerefoxEntry,
+  },
+  cursor: {
+    id: "cursor",
+    label: "Cursor",
+    kind: "direct-write",
+    format: "json",
+    configPath: cursorConfigPath(),
+    buildServerEntry: defaultCerefoxEntry,
+  },
+  codex: {
+    id: "codex",
+    label: "OpenAI Codex CLI",
+    kind: "direct-write",
+    format: "toml",
+    configPath: codexConfigPath(),
+    buildServerEntry: defaultCerefoxEntry,
+  },
+  gemini: {
+    id: "gemini",
+    label: "Gemini CLI",
+    kind: "direct-write",
+    format: "json",
+    configPath: geminiConfigPath(),
     buildServerEntry: defaultCerefoxEntry,
   },
 };
@@ -176,6 +222,7 @@ function directWrite(
   opts: { noBackup?: boolean; dryRun?: boolean },
 ): WriteResult {
   const entry = writer.buildServerEntry();
+  const format = writer.format ?? "json";
 
   if (!opts.dryRun) mkdirSync(dirname(configPath), { recursive: true });
 
@@ -185,12 +232,14 @@ function directWrite(
 
   if (existsSync(configPath)) {
     try {
-      existing = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
-      action = (existing.mcpServers as Record<string, unknown> | undefined)?.cerefox
-        ? "replaced"
-        : "merged";
+      const raw = readFileSync(configPath, "utf8");
+      existing =
+        format === "toml"
+          ? (parseToml(raw) as Record<string, unknown>)
+          : (JSON.parse(raw) as Record<string, unknown>);
+      action = hasCerefoxEntry(existing, format) ? "replaced" : "merged";
     } catch {
-      // Malformed JSON — treat as no existing config, but still back up
+      // Malformed config — treat as no existing config, but still back up
       // the broken file so the user can recover.
       action = "replaced";
     }
@@ -200,18 +249,38 @@ function directWrite(
     }
   }
 
-  const mcpServers =
-    (existing.mcpServers && typeof existing.mcpServers === "object"
-      ? (existing.mcpServers as Record<string, unknown>)
+  // Codex uses a snake_case TOML table name (`[mcp_servers.cerefox]`);
+  // every JSON-format client we support uses `mcpServers`.
+  const serversKey = format === "toml" ? "mcp_servers" : "mcpServers";
+  const servers =
+    (existing[serversKey] && typeof existing[serversKey] === "object"
+      ? (existing[serversKey] as Record<string, unknown>)
       : {}) ?? {};
-  mcpServers.cerefox = entry;
-  existing.mcpServers = mcpServers;
+  servers.cerefox = entry;
+  existing[serversKey] = servers;
 
   if (!opts.dryRun) {
-    writeFileSync(configPath, JSON.stringify(existing, null, 2) + "\n", "utf8");
+    const body =
+      format === "toml"
+        ? stringifyToml(existing) + "\n"
+        : JSON.stringify(existing, null, 2) + "\n";
+    writeFileSync(configPath, body, "utf8");
   }
 
   return { configPath, backupPath, action, serverEntry: entry };
+}
+
+function hasCerefoxEntry(
+  existing: Record<string, unknown>,
+  format: WriterFormat,
+): boolean {
+  const key = format === "toml" ? "mcp_servers" : "mcpServers";
+  const servers = existing[key];
+  return (
+    typeof servers === "object" &&
+    servers !== null &&
+    (servers as Record<string, unknown>).cerefox !== undefined
+  );
 }
 
 /**

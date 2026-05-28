@@ -23,8 +23,10 @@ import { useNavigate } from "react-router-dom";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 
 import { ingestPaste, checkFilename } from "../api/documents";
+import { detectV07FromResponse } from "../api/client";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import type { FilenameCheckResponse, IngestResponse } from "../api/types";
+import { showError, showV07DeferredToast } from "../utils/notifications";
 
 export function IngestPage() {
   const navigate = useNavigate();
@@ -73,6 +75,11 @@ export function IngestPage() {
         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       }
     },
+    onError: (err) => {
+      if (!showV07DeferredToast(err)) {
+        showError("Ingest failed", err instanceof Error ? err.message : String(err));
+      }
+    },
   });
 
   const fileMutation = useMutation({
@@ -99,13 +106,22 @@ export function IngestPage() {
         method: "POST",
         body: formData,
       });
-      if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
+      if (!resp.ok) {
+        const v07 = await detectV07FromResponse(resp);
+        if (v07) throw v07;
+        throw new Error(`Upload failed: ${resp.status}`);
+      }
       return resp.json() as Promise<IngestResponse>;
     },
     onSuccess: (res) => {
       setResult(res);
       if (res.success) {
         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      }
+    },
+    onError: (err) => {
+      if (!showV07DeferredToast(err)) {
+        showError("File ingest failed", err instanceof Error ? err.message : String(err));
       }
     },
   });

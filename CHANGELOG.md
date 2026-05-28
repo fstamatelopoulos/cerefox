@@ -9,7 +9,77 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.6.0 — "TS Web Server" (FastAPI → Hono).** The local web server, the
+last big runtime component still on Python after v0.5, moves to
+TypeScript on Bun. `cerefox web` boots an in-process Hono server instead
+of shelling out to a Python FastAPI process; the React SPA is now
+bundled into `@cerefox/memory` so the web UI installs alongside the
+CLI in a single npm package.
+
+32 of 35 `/api/v1/*` endpoints port with response-shape parity. The
+remaining 3 — `/ingest`, `/ingest/file`, `/documents/{id}/upload` —
+return **503 with a friendly "Ingestion lands in v0.7" body**: the web
+UI surfaces a Mantine toast pointing users at the working CLI fallback
+(`cerefox ingest <file>`, which hits the Edge Function and works
+fully), and `uv run cerefox web` keeps the Python web available for
+the few days between v0.6 and v0.7. v0.7 swaps the stubs for in-process
+pipeline calls; no frontend changes will be needed (the toast just
+stops firing).
+
+**No Python web deprecation banner yet.** Deferred to v0.7's Part 25L
+when the TS web becomes a complete replacement (after the in-process
+ingestion swap). The v0.5.0 generic Python CLI deprecation banner is
+unchanged — `uv run cerefox web` users see the same one-line ⚠ banner
+they did before.
+
+### Added
+
+- **TS web server in `@cerefox/memory`**: Hono on Bun, lives at
+  `packages/memory/src/web/`. `cerefox web --host --port --watch`
+  boots in-process. Works in source mode (`bun packages/memory/src/
+  bin/cerefox.ts web` from a checkout), built mode (`node dist/bin/
+  cerefox.js web`), and mixed (server from source + frontend from
+  built dist).
+- **React SPA bundled into the npm package**: `prepublishOnly` now
+  runs `bundle-docs → build-frontend → bundle-frontend → build`,
+  placing `frontend/dist/` at `<pkg>/dist/frontend/`. Tarball gains
+  `dist/frontend/index.html` + Vite assets + source map.
+  `npm pack --dry-run` lists everything.
+- **`_shared/schemas/` zod source-of-truth**: every `/api/v1/*`
+  response shape is a zod schema, consumed by both the server (for
+  contract-checking) and the React frontend (typed responses) via the
+  Vite alias `@cerefox/schemas` → `../_shared/schemas/`.
+- **Configure-agent Phase 2**: `cerefox configure-agent` now writes
+  configs for `cursor`, `codex` (TOML — `~/.codex/config.toml` via
+  smol-toml), and `gemini` (`~/.gemini/settings.json`). The existing
+  `claude-code` + `claude-desktop` writers are unchanged.
+- **Parity snapshot tests** (`packages/memory/test/parity.test.ts`):
+  the 5 captured Python response fixtures from the pre-iter step
+  (`packages/memory/test/fixtures/python-parity/`) zod-parse cleanly
+  against the matching schemas in `_shared/schemas/`. Runs in CI
+  without Supabase.
+
+### Changed
+
+- **`_shared/config/paths.ts` level-3 dev-mode `.env` fallback**
+  now requires at least one `CEREFOX_*` key in the CWD `.env` before
+  honouring it. Protects users running `cerefox` from an unrelated
+  Node project (whose own `.env` would otherwise silently bleed in).
+
+### Removed
+
+- `migration-v0.4.md` is no longer copied into the npm bundle by
+  `scripts/bundle_package_docs.ts`. The historical guide stays in
+  git; anyone reading docs in `@cerefox/memory` at this point is
+  way past v0.4.
+
+### Deferred to v0.7
+
+- **In-process ingestion pipeline** (chunker + embedder + version
+  snapshot). Replaces the 3 web-UI 503 stubs and unblocks the Python
+  web deprecation banner.
+- **`db_deploy.py` port to TS** (eliminates the residual Python step
+  in `cerefox init`).
 
 ---
 

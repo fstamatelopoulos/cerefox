@@ -23,8 +23,7 @@ function action(options: ConfigureAgentOptions): void {
   if (!writer) {
     throw userError(
       `Unknown --tool "${options.tool}".`,
-      `Supported in v0.5 Phase 1: ${Object.keys(WRITERS).join(", ")}. ` +
-        `Cursor, Codex, and Gemini ship in v0.5.x / v0.6.`,
+      `Supported clients: ${Object.keys(WRITERS).join(", ")}.`,
     );
   }
 
@@ -57,14 +56,27 @@ function action(options: ConfigureAgentOptions): void {
   println(JSON.stringify(result.serverEntry, null, 2));
   if (!options.dryRun) {
     println("");
-    println(
-      c.dim(
-        writer.id === "claude-desktop"
-          ? "Restart Claude Desktop fully (Cmd+Q on macOS) to pick up the new server."
-          : "Start a new Claude Code session to pick up the new server " +
-              "(running sessions cache MCP server lists at startup).",
-      ),
-    );
+    println(c.dim(restartHint(writer.id)));
+  }
+}
+
+function restartHint(id: string): string {
+  switch (id) {
+    case "claude-desktop":
+      return "Restart Claude Desktop fully (Cmd+Q on macOS) to pick up the new server.";
+    case "claude-code":
+      return (
+        "Start a new Claude Code session to pick up the new server " +
+        "(running sessions cache MCP server lists at startup)."
+      );
+    case "cursor":
+      return "Reload Cursor (or restart) to pick up the new MCP server.";
+    case "codex":
+      return "Restart the Codex CLI session to pick up the new server.";
+    case "gemini":
+      return "Restart the Gemini CLI session to pick up the new server.";
+    default:
+      return "Restart your MCP client to pick up the new server.";
   }
 }
 
@@ -74,7 +86,7 @@ export function registerConfigureAgent(program: Command): void {
     .description("Write the MCP server config for a supported client.")
     .requiredOption(
       "-t, --tool <client>",
-      "Target client: 'claude-code', 'claude-desktop' (v0.5 Phase 1 surface).",
+      "Target client: claude-code, claude-desktop, cursor, codex, gemini.",
     )
     .option("--config-path <path>", "Override the default config-file path.")
     .option("--no-backup", "Skip the .pre-cerefox.bak backup of any existing config.")

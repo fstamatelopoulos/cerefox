@@ -29,7 +29,7 @@
  * `paths.py` goes with it.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve as resolvePath } from "node:path";
 import { cwd as processCwd, env } from "node:process";
@@ -69,12 +69,29 @@ export function resolveConfigDir(opts: ResolverOptions = {}): string {
   // Legacy dev-mode fallback: repo-local .env wins when home isn't set up.
   // This preserves the experience for existing users who haven't migrated
   // yet — their <repo>/.env keeps working without any action on their part.
+  //
+  // Tightened (iter-24 / v0.6): only treat the CWD `.env` as a Cerefox env
+  // if it actually contains at least one `CEREFOX_*` key. Without this,
+  // running `cerefox` from an unrelated Node project (its own `.env` full
+  // of `DATABASE_URL=...`, etc.) would silently inherit garbage values
+  // and surface as cryptic Supabase-auth failures. Flagged as a v0.5.3
+  // leftover in the pre-iter-24 review; resolved here.
   const here = opts.cwd ?? processCwd();
-  if (existsSync(join(here, ".env"))) {
+  const cwdEnv = join(here, ".env");
+  if (existsSync(cwdEnv) && cwdEnvHasCerefoxKey(cwdEnv)) {
     return resolvePath(here);
   }
 
   return userState;
+}
+
+function cwdEnvHasCerefoxKey(envPath: string): boolean {
+  try {
+    const contents = readFileSync(envPath, "utf8");
+    return /^\s*CEREFOX_[A-Z0-9_]+\s*=/m.test(contents);
+  } catch {
+    return false;
+  }
 }
 
 export function resolveEnvFile(opts: ResolverOptions = {}): string {
@@ -97,7 +114,12 @@ export function isDevMode(opts: ResolverOptions = {}): boolean {
   if ((env.CEREFOX_CONFIG_DIR ?? "").trim()) return false;
   if (existsSync(join(userStateDirAbs(opts), ".env"))) return false;
   const here = opts.cwd ?? processCwd();
-  return existsSync(join(here, ".env"));
+  const cwdEnv = join(here, ".env");
+  // Mirrors resolveConfigDir's tightened heuristic (iter-24K): a CWD
+  // `.env` only counts as "Cerefox dev-mode" when it actually has a
+  // CEREFOX_* key. An unrelated Node project's .env doesn't trip
+  // dev-mode detection.
+  return existsSync(cwdEnv) && cwdEnvHasCerefoxKey(cwdEnv);
 }
 
 /**

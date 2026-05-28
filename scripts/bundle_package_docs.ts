@@ -82,7 +82,9 @@ const wantedGuides = (() => {
     "operational-cost.md",
     "response-limits.md",
     "upgrading.md",
-    "migration-v0.4.md",
+    // migration-v0.4.md is intentionally NOT in the npm bundle from v0.6
+    // onward — anyone reading docs in @cerefox/memory is way past v0.4,
+    // and the historical guide stays available in git for the long tail.
     "migration-v0.5.md", // may or may not exist yet — copy if present
   ]);
 })();
