@@ -254,7 +254,7 @@ export class IngestionDbBridge {
   async updateChunkFts(documentId: string, newTitle: string): Promise<void> {
     const { error } = await this.supabase.rpc("cerefox_update_chunk_fts", {
       p_document_id: documentId,
-      p_title: newTitle,
+      p_new_title: newTitle,
     });
     if (error) throw error;
   }

@@ -276,17 +276,217 @@ export class IngestionPipeline {
   }
 
   /**
-   * Re-ingest an existing document in place. Lands in Part 25E.
-   * Currently stubbed — `ingestText` delegates here for the
-   * `documentId` and `updateExisting` branches; both paths throw with
-   * a clear message until 25E.
+   * Re-ingest an existing document in place, preserving its ID. Mirrors
+   * Python's `update_document`.
+   *
+   * Three sub-paths:
+   *   1. **Content unchanged + chunks exist** → metadata-only update.
+   *      Update title/metadata via direct UPDATE; if the title changed,
+   *      re-embed all chunks (contextual enrichment) + refresh FTS;
+   *      create an `update-metadata` audit entry (client-side, not via
+   *      the RPC).
+   *   2. **Content changed** → call `cerefox_ingest_document` RPC with
+   *      `documentId`; the RPC internally snapshots old chunks as a
+   *      version, then inserts the new chunks. `reindexed = true`.
+   *   3. **Content unchanged + no chunks** → data-corruption guard;
+   *      Python errors here. Currently treated as a metadata-only
+   *      update (less strict, but recoverable).
+   *
+   * Project assignment is updated only when `projectIds` (or legacy
+   * `projectId`) is explicitly provided. `null` / `undefined` leaves
+   * the existing assignments unchanged; `[]` removes from all projects.
+   *
+   * @throws if the document is not found, or if the new content
+   *   collides with a DIFFERENT document's content_hash.
    */
-  async updateDocument(_opts: UpdateDocumentOptions): Promise<IngestResult> {
-    throw new Error(
-      "IngestionPipeline.updateDocument: lands in Part 25E. For v0.7 Part 25D, " +
-        "ingestText's create + dedup paths are functional; update branches " +
-        "(documentId / updateExisting on existing doc) are not yet wired.",
+  async updateDocument(opts: UpdateDocumentOptions): Promise<IngestResult> {
+    const {
+      documentId,
+      text,
+      title,
+      source = "manual",
+      projectId,
+      projectIds,
+      metadata,
+      author = "unknown",
+      authorType = "user",
+    } = opts;
+
+    // ── (1) Verify document exists ───────────────────────────────────────
+    const existing = await this.db.getDocumentById(documentId);
+    if (!existing) {
+      throw new Error(`Document ${JSON.stringify(documentId)} not found`);
+    }
+
+    // ── (2) Hash + collision check ───────────────────────────────────────
+    const newHash = contentHash(text);
+    const contentUnchanged = newHash === existing.content_hash;
+
+    if (!contentUnchanged) {
+      const collision = await this.db.getDocumentByHash(newHash);
+      if (collision && collision.id !== documentId) {
+        throw new Error(
+          `Identical content already exists as document ${JSON.stringify(collision.title)}. ` +
+            "Edit that document or change the content before saving.",
+        );
+      }
+    }
+
+    // ── (3) Resolve project assignments ──────────────────────────────────
+    let newProjectIds: string[] | null = null;
+    if (projectIds !== undefined && projectIds !== null) {
+      newProjectIds = projectIds.filter((p) => p);
+    } else if (projectId !== undefined && projectId !== null) {
+      newProjectIds = [projectId];
+    }
+
+    // ── Branch: metadata-only update ─────────────────────────────────────
+    const actualChunks = await this.db.listChunksForDocument(documentId);
+    const hasChunks = actualChunks.length > 0;
+
+    if (contentUnchanged && hasChunks) {
+      const oldTitle = existing.title ?? "";
+      const titleChanged = oldTitle !== title;
+
+      const updates: Record<string, unknown> = { title };
+      if (metadata !== undefined && metadata !== null) {
+        updates.metadata = metadata;
+      }
+      await this.db.updateDocumentRow(documentId, updates);
+
+      // Title-change re-embed (contextual enrichment).
+      if (titleChanged) {
+        const texts = actualChunks.map((c) => `# ${title}\n${c.content}`);
+        try {
+          const embeddings = await embedBatch(texts, this.apiKey);
+          for (let i = 0; i < actualChunks.length; i++) {
+            await this.db.updateChunkEmbedding(
+              actualChunks[i].id,
+              embeddings[i],
+              this.embedderModel,
+            );
+          }
+        } catch (err) {
+          // Match Python: log a warning but don't block the metadata save.
+          // eslint-disable-next-line no-console
+          console.warn(
+            `Failed to re-embed chunks after title change for ${documentId}:`,
+            err,
+          );
+        }
+        try {
+          await this.db.updateChunkFts(documentId, title);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `Failed to update FTS after title change for ${documentId}:`,
+            err,
+          );
+        }
+      }
+
+      // Project membership.
+      let finalProjectIds: string[];
+      if (newProjectIds !== null) {
+        await this.db.assignDocumentProjects(documentId, newProjectIds);
+        finalProjectIds = newProjectIds;
+      } else {
+        finalProjectIds = await this.db.getDocumentProjectIds(documentId);
+      }
+
+      const chunkCount = existing.chunk_count ?? 0;
+      const totalChars = existing.total_chars ?? 0;
+
+      await this.db.createAuditEntry({
+        operation: "update-metadata",
+        author,
+        authorType,
+        documentId,
+        sizeBefore: totalChars,
+        sizeAfter: totalChars,
+        description: `Updated metadata for '${title}' (content unchanged)`,
+      });
+
+      return {
+        documentId,
+        title,
+        chunkCount,
+        totalChars,
+        action: "updated",
+        reindexed: false,
+        projectIds: finalProjectIds,
+        note: "",
+      };
+    }
+
+    // ── Branch: content changed (or no chunks) ───────────────────────────
+    const chunks = chunkMarkdown(
+      text,
+      this.settings.maxChunkChars,
+      this.settings.minChunkChars,
     );
+    const totalChars = chunks.reduce((acc, c) => acc + c.char_count, 0);
+
+    let chunkRows: ChunkInsertRow[] = [];
+    if (chunks.length > 0) {
+      const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+      const embeddings = await embedBatch(texts, this.apiKey);
+      chunkRows = chunks.map((c, i) => ({
+        chunk_index: c.chunk_index,
+        heading_path: c.heading_path,
+        heading_level: c.heading_level,
+        title: c.title,
+        content: c.content,
+        char_count: c.char_count,
+        embedding: embeddings[i],
+        embedder: this.embedderModel,
+      }));
+    }
+
+    const reviewStatus =
+      authorType === "agent" ? "pending_review" : "approved";
+
+    // metadata semantics: undefined/null → keep existing; otherwise use new.
+    const metaToWrite =
+      metadata !== undefined && metadata !== null
+        ? metadata
+        : (existing.metadata as Record<string, unknown>) ?? {};
+
+    await this.db.ingestDocumentRpc({
+      documentId,
+      title,
+      source,
+      sourcePath: existing.source_path,
+      contentHash: newHash,
+      metadata: metaToWrite,
+      reviewStatus,
+      chunks: chunkRows,
+      author,
+      authorType,
+      sourceLabel: source,
+      retentionHours: this.settings.versionRetentionHours,
+      cleanupEnabled: this.settings.versionCleanupEnabled,
+    });
+
+    // Update project membership if explicitly provided.
+    let finalProjectIds: string[];
+    if (newProjectIds !== null) {
+      await this.db.assignDocumentProjects(documentId, newProjectIds);
+      finalProjectIds = newProjectIds;
+    } else {
+      finalProjectIds = await this.db.getDocumentProjectIds(documentId);
+    }
+
+    return {
+      documentId,
+      title,
+      chunkCount: chunks.length,
+      totalChars,
+      action: "updated",
+      reindexed: true,
+      projectIds: finalProjectIds,
+      note: "",
+    };
   }
 
   /**
