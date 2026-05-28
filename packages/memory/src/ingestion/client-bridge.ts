@@ -1,0 +1,360 @@
+/**
+ * Thin DB-call layer for the TS ingestion pipeline.
+ *
+ * Replaces the subset of Python `CerefoxClient` methods the pipeline
+ * needs (per the iter-25 coverage matrix). Python `CerefoxClient` stays
+ * intact for the Python MCP server (which keeps it alive through
+ * v0.9+ per the Python-minimization policy).
+ *
+ * Methods here are 1:1 wrappers over `@supabase/supabase-js` calls
+ * (`supabase.rpc(...)` or `supabase.from(...).select/insert/update`).
+ * No business logic in this file — it's a typed bridge.
+ *
+ * Public API match (Python → TS):
+ *   get_document_by_id → getDocumentById
+ *   get_document_by_hash → getDocumentByHash
+ *   find_document_by_title → findDocumentByTitle
+ *   find_document_by_source_path → findDocumentBySourcePath
+ *   list_chunks_for_document → listChunksForDocument
+ *   get_document_project_ids → getDocumentProjectIds
+ *   ingest_document_rpc → ingestDocumentRpc
+ *   update_document → updateDocumentRow
+ *   update_chunk_embedding → updateChunkEmbedding
+ *   update_chunk_fts → updateChunkFts
+ *   assign_document_projects → assignDocumentProjects (destructive)
+ *   add_document_to_projects → addDocumentToProjects (non-destructive)
+ *   get_or_create_project → getOrCreateProject
+ *   create_audit_entry → createAuditEntry
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+// ── Types ───────────────────────────────────────────────────────────────────
+
+export interface DocumentRow {
+  id: string;
+  title: string;
+  source: string | null;
+  source_path: string | null;
+  content_hash: string | null;
+  metadata: Record<string, unknown> | null;
+  chunk_count: number;
+  total_chars: number;
+  review_status: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface ChunkRowForUpdate {
+  id: string;
+  document_id: string;
+  chunk_index: number;
+  heading_path: string[];
+  heading_level: number | null;
+  title: string;
+  content: string;
+  char_count: number;
+}
+
+/**
+ * Shape of the chunk payload passed to `cerefox_ingest_document` RPC.
+ * Embedding is the 768-dim float vector.
+ */
+export interface ChunkInsertRow {
+  chunk_index: number;
+  heading_path: string[];
+  heading_level: number;
+  title: string;
+  content: string;
+  char_count: number;
+  embedding_primary: number[];
+  embedder_primary: string;
+}
+
+export interface IngestDocumentRpcResult {
+  document_id: string;
+  chunk_count: number;
+  total_chars: number;
+  operation: "create" | "update-content";
+  version_id: string | null;
+}
+
+export interface ProjectRow {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+// ── Bridge class ────────────────────────────────────────────────────────────
+
+export class IngestionDbBridge {
+  constructor(private readonly supabase: SupabaseClient) {}
+
+  // ── Documents (read) ──────────────────────────────────────────────────────
+
+  async getDocumentById(documentId: string): Promise<DocumentRow | null> {
+    const { data } = await this.supabase
+      .from("cerefox_documents")
+      .select("*")
+      .eq("id", documentId)
+      .maybeSingle();
+    return (data as DocumentRow | null) ?? null;
+  }
+
+  async getDocumentByHash(contentHash: string): Promise<DocumentRow | null> {
+    const { data } = await this.supabase
+      .from("cerefox_documents")
+      .select("*")
+      .eq("content_hash", contentHash)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    const rows = (data ?? []) as DocumentRow[];
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async findDocumentByTitle(title: string): Promise<DocumentRow | null> {
+    const { data } = await this.supabase
+      .from("cerefox_documents")
+      .select("*")
+      .eq("title", title)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    const rows = (data ?? []) as DocumentRow[];
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async findDocumentBySourcePath(sourcePath: string): Promise<DocumentRow | null> {
+    const { data } = await this.supabase
+      .from("cerefox_documents")
+      .select("*")
+      .eq("source_path", sourcePath)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    const rows = (data ?? []) as DocumentRow[];
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  async listChunksForDocument(documentId: string): Promise<ChunkRowForUpdate[]> {
+    const { data } = await this.supabase
+      .from("cerefox_chunks")
+      .select(
+        "id, document_id, chunk_index, heading_path, heading_level, title, content, char_count",
+      )
+      .eq("document_id", documentId)
+      .is("version_id", null)
+      .order("chunk_index");
+    return (data ?? []) as ChunkRowForUpdate[];
+  }
+
+  async getDocumentProjectIds(documentId: string): Promise<string[]> {
+    const { data } = await this.supabase
+      .from("cerefox_document_projects")
+      .select("project_id")
+      .eq("document_id", documentId);
+    return ((data ?? []) as Array<{ project_id: string }>).map(
+      (r) => r.project_id,
+    );
+  }
+
+  // ── Documents (write) ─────────────────────────────────────────────────────
+
+  /**
+   * Call the `cerefox_ingest_document` RPC — atomic transaction that
+   * either INSERTs (when `documentId === null`) or UPDATEs (when
+   * `documentId` is a UUID; old chunks are snapshotted to a version)
+   * the document + its chunks, plus inserts the audit entry.
+   */
+  async ingestDocumentRpc(args: {
+    documentId: string | null;
+    title: string;
+    source: string;
+    sourcePath: string | null;
+    contentHash: string;
+    metadata: Record<string, unknown>;
+    reviewStatus: "approved" | "pending_review";
+    chunks: ChunkInsertRow[];
+    author: string;
+    authorType: "user" | "agent";
+    sourceLabel?: string;
+    retentionHours?: number;
+    cleanupEnabled?: boolean;
+  }): Promise<IngestDocumentRpcResult> {
+    const params: Record<string, unknown> = {
+      p_document_id: args.documentId,
+      p_title: args.title,
+      p_source: args.source,
+      p_source_path: args.sourcePath,
+      p_content_hash: args.contentHash,
+      p_metadata: args.metadata,
+      p_review_status: args.reviewStatus,
+      p_chunks: args.chunks,
+      p_author: args.author,
+      p_author_type: args.authorType,
+    };
+    if (args.sourceLabel !== undefined) params.p_source_label = args.sourceLabel;
+    if (args.retentionHours !== undefined)
+      params.p_retention_hours = args.retentionHours;
+    if (args.cleanupEnabled !== undefined)
+      params.p_cleanup_enabled = args.cleanupEnabled;
+
+    const { data, error } = await this.supabase.rpc(
+      "cerefox_ingest_document",
+      params,
+    );
+    if (error) throw error;
+    // RPC returns either a single object or an array-with-one-object
+    // depending on Supabase client version. Normalise.
+    if (Array.isArray(data) && data.length > 0) {
+      return data[0] as IngestDocumentRpcResult;
+    }
+    return data as IngestDocumentRpcResult;
+  }
+
+  /** Direct UPDATE on the documents row. Used for metadata-only updates. */
+  async updateDocumentRow(
+    documentId: string,
+    fields: Record<string, unknown>,
+  ): Promise<void> {
+    const { error } = await this.supabase
+      .from("cerefox_documents")
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq("id", documentId);
+    if (error) throw error;
+  }
+
+  async updateChunkEmbedding(
+    chunkId: string,
+    embedding: number[],
+    embedderName: string,
+  ): Promise<void> {
+    const { error } = await this.supabase
+      .from("cerefox_chunks")
+      .update({
+        embedding_primary: embedding,
+        embedder_primary: embedderName,
+      })
+      .eq("id", chunkId);
+    if (error) throw error;
+  }
+
+  /**
+   * Refresh the FTS tsvector on all current chunks of a document
+   * (used after a title change for the contextual-enrichment path).
+   * Calls the `cerefox_update_chunk_fts` RPC.
+   */
+  async updateChunkFts(documentId: string, newTitle: string): Promise<void> {
+    const { error } = await this.supabase.rpc("cerefox_update_chunk_fts", {
+      p_document_id: documentId,
+      p_title: newTitle,
+    });
+    if (error) throw error;
+  }
+
+  // ── Project M2M ───────────────────────────────────────────────────────────
+
+  /**
+   * Destructive replace — clears existing junction rows then inserts
+   * the new set. Use for "set the full project membership" (issue #38
+   * list form).
+   */
+  async assignDocumentProjects(
+    documentId: string,
+    projectIds: string[],
+  ): Promise<void> {
+    await this.supabase
+      .from("cerefox_document_projects")
+      .delete()
+      .eq("document_id", documentId);
+    if (projectIds.length === 0) return;
+    const rows = projectIds.map((pid) => ({
+      document_id: documentId,
+      project_id: pid,
+    }));
+    const { error } = await this.supabase
+      .from("cerefox_document_projects")
+      .insert(rows);
+    if (error) throw error;
+  }
+
+  /**
+   * Non-destructive add — inserts junction rows for any project_id not
+   * already linked. Use for "ensure this membership exists, leave
+   * others alone" (issue #38 singular form).
+   */
+  async addDocumentToProjects(
+    documentId: string,
+    projectIds: string[],
+  ): Promise<void> {
+    if (projectIds.length === 0) return;
+    const existing = await this.getDocumentProjectIds(documentId);
+    const toAdd = projectIds.filter((pid) => !existing.includes(pid));
+    if (toAdd.length === 0) return;
+    const rows = toAdd.map((pid) => ({
+      document_id: documentId,
+      project_id: pid,
+    }));
+    const { error } = await this.supabase
+      .from("cerefox_document_projects")
+      .insert(rows);
+    if (error) throw error;
+  }
+
+  async getOrCreateProject(name: string): Promise<ProjectRow> {
+    // Try by-name lookup first (case-sensitive, matches Python).
+    const { data: existing } = await this.supabase
+      .from("cerefox_projects")
+      .select("*")
+      .eq("name", name)
+      .maybeSingle();
+    if (existing) return existing as ProjectRow;
+
+    const { data, error } = await this.supabase
+      .from("cerefox_projects")
+      .insert({ name, description: "" })
+      .select("*")
+      .maybeSingle();
+    if (error || !data) {
+      throw error ?? new Error(`getOrCreateProject(${name}) returned no data`);
+    }
+    return data as ProjectRow;
+  }
+
+  // ── Audit ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Create an audit log entry. Pipeline uses this for the
+   * `update-metadata` branch (content unchanged but title/metadata
+   * changed); `create` and `update-content` entries are emitted by the
+   * `cerefox_ingest_document` RPC itself.
+   */
+  async createAuditEntry(args: {
+    operation: string;
+    author: string;
+    authorType?: "user" | "agent";
+    documentId?: string | null;
+    versionId?: string | null;
+    sizeBefore?: number | null;
+    sizeAfter?: number | null;
+    description?: string;
+  }): Promise<void> {
+    try {
+      await this.supabase.rpc("cerefox_create_audit_entry", {
+        p_document_id: args.documentId ?? null,
+        p_version_id: args.versionId ?? null,
+        p_operation: args.operation,
+        p_author: args.author,
+        p_author_type: args.authorType ?? "user",
+        p_size_before: args.sizeBefore ?? null,
+        p_size_after: args.sizeAfter ?? null,
+        p_description: args.description ?? "",
+      });
+    } catch {
+      // Audit failures don't block the user-visible operation — Python
+      // logs a warning and continues; we match that behaviour.
+    }
+  }
+}

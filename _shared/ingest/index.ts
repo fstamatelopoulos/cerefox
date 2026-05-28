@@ -17,3 +17,10 @@
  */
 
 export { chunkMarkdown, type ChunkData } from "./chunker.js";
+export {
+  normalizeForHash,
+  contentHash,
+  deriveSourcePath,
+  resolveProjectIds,
+  type ProjectResolveInput,
+} from "./pipeline-helpers.js";
