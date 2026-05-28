@@ -1,0 +1,16 @@
+{
+  "fixture": "02-no-headings",
+  "input_text": "Plain text with no headings at all.\n\nJust paragraphs separated by blank lines. Tests the level-0 preamble path.\n",
+  "input_char_count": 112,
+  "chunk_count": 1,
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "heading_path": [],
+      "heading_level": 0,
+      "title": "",
+      "content": "Plain text with no headings at all.\n\nJust paragraphs separated by blank lines. Tests the level-0 preamble path.",
+      "char_count": 111
+    }
+  ]
+}

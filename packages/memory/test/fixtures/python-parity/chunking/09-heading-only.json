@@ -1,0 +1,16 @@
+{
+  "fixture": "09-heading-only",
+  "input_text": "# Just A Heading\n\n## And Another\n\n### Even Deeper\n",
+  "input_char_count": 50,
+  "chunk_count": 1,
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "heading_path": [],
+      "heading_level": 0,
+      "title": "",
+      "content": "# Just A Heading\n\n## And Another\n\n### Even Deeper",
+      "char_count": 49
+    }
+  ]
+}

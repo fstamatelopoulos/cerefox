@@ -1,0 +1,16 @@
+{
+  "fixture": "12-many-blank-lines",
+  "input_text": "# Doc\n\n\n\nParagraph after extra blanks.\n\n\n\n\nAnother paragraph.\n",
+  "input_char_count": 62,
+  "chunk_count": 1,
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "heading_path": [],
+      "heading_level": 0,
+      "title": "",
+      "content": "# Doc\n\n\n\nParagraph after extra blanks.\n\n\n\n\nAnother paragraph.",
+      "char_count": 61
+    }
+  ]
+}
