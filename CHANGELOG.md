@@ -9,7 +9,83 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.7.0 — "TS Ingestion Pipeline" (last big Python component).** The
+chunking + embedding orchestration + version snapshotting move to TS.
+Completes the v0.6 TS web by swapping the 3 ingestion endpoints' 503
+stubs for in-process pipeline calls. `cerefox ingest` and
+`cerefox ingest-dir` no longer round-trip to the Edge Function — they
+call the in-process pipeline directly. `cerefox reindex` (a v0.5
+deferred stub) now works.
+
+Python parity is enforced at the chunker boundary (12 fixtures,
+byte-identical output across Python / TS / EF chunkers), the embedding
+boundary (cosine similarity ≥ 1 - 1e-6 against a captured Python
+reference), and the `content_hash` algorithm (promoted from v0.6's
+inline `normalizeForHash` to `_shared/ingest/pipeline-helpers.ts` so
+the v0.6 /edit short-circuit + v0.7 pipeline share one
+implementation).
+
+PDF/DOCX support dropped. Python web prints a deprecation banner at
+startup. **Python MCP server stays fully functional** per the
+"Python minimization, not removal" policy — repo-clone users keep
+`uv run cerefox mcp`.
+
+### Added
+
+- **TS chunker at `_shared/ingest/chunker.ts`** — byte-identical to
+  Python's `chunking/markdown.py` for all 12 captured fixtures.
+  Code-point-based length matching Python's `len()`.
+- **96-chunk batching in `_shared/embeddings/embedBatch`** — matches
+  Python's `CloudEmbedder.BATCH_SIZE`.
+- **TS ingestion pipeline at `packages/memory/src/ingestion/
+  pipeline.ts`** — 3 public methods (`ingestText`, `updateDocument`,
+  `ingestFile`) mirroring Python's pipeline. Project-ID resolution
+  follows issue #38 precedence. Review-status auto-transition (agent
+  → pending_review). Title-boosted embeddings.
+- **`_shared/ingest/pipeline-helpers.ts`** — `normalizeForHash`,
+  `contentHash`, `deriveSourcePath`, `resolveProjectIds`.
+- **`packages/memory/src/ingestion/client-bridge.ts`** — TS analog
+  of the 14 `CerefoxClient` methods the pipeline uses.
+- **`cerefox reindex` CLI** — replaces the v0.5 deferred stub.
+- **`packages/memory/test/web-integration/ingest.test.ts`** — 5 HTTP-
+  boundary tests for the 3 unblocked endpoints.
+
+### Changed
+
+- **3 web `/api/v1/ingest*` endpoints** swap from v0.6's 503 stubs to
+  real handlers. Frontend's `V07IngestionDeferredError` toast detector
+  stays as dead code.
+- **`/edit` content-change branch** swaps from 503 to in-process
+  `pipeline.updateDocument`.
+- **`cerefox ingest` + `cerefox ingest-dir`** switch from EF-route to
+  in-process pipeline. Output strings preserved.
+
+### Removed
+
+- **PDF / DOCX support** — `chunking/converters.py` (357 lines) +
+  `tests/chunking/test_converters.py` (24 tests) deleted. CLI's
+  `.pdf` / `.docx` branches now print a clear "dropped in v0.7.0"
+  error pointing at pandoc / docling.
+
+### Deprecated
+
+- **Python FastAPI web** (`src/cerefox/api/app.py`) prints a yellow
+  ⚠ deprecation banner at startup. Stays through v0.7.x / v0.8 as a
+  husk; possible deletion in v0.9 per iter-26.
+
+### Known limitations (deferred to v0.7.1 / v0.8)
+
+- `scripts/db_deploy.py`, `db_migrate.py`, `backup_create.py`,
+  `backup_restore.py`, `reindex_all.py` still Python. Port deferred
+  to a v0.7.1 patch.
+- `tests/chunking/test_markdown.py`, `tests/embeddings/`,
+  `tests/ingestion/`, `tests/retrieval/`, `tests/db/test_versioning.py`,
+  `tests/db/test_audit_and_governance.py` still in pytest. Port to
+  TS deferred to v0.7.1 / v0.8.
+- 2 state-dependent flakes in `write-commands.test.ts` carry over
+  from iter-25G. The TS pipeline's content-hash collision check is
+  stricter than the legacy EF route (correct per Python parity);
+  test harness needs cleanup in a follow-up.
 
 ---
 
