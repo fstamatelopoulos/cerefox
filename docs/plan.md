@@ -2606,20 +2606,35 @@ consolidated single-package model).
 
 ---
 
-## Iteration 26: v0.8.0 — "Deprecate Python" + v0.9.0 — "Python Removal"
+## Iteration 26: v0.8.0 — "Deprecate Python CLI/Web" + v0.9.0 — "Python Minimization"
 
-**Goal**: Two-step Python retirement.
+**Goal**: Two-step Python retirement — **but Python is NOT wiped out**.
+The Python MCP server (`src/cerefox/mcp_server.py`) stays functional
+forever (repo-clone users run `uv run cerefox mcp` as a fallback path
+when they don't want the npm install). The Python CLI subcommands
+become husks that print a "use the TS CLI" message and exit. Per
+maintainer call 2026-05-28: "we should not completely wipe python
+out. We want to keep the python mcp in place since current users
+check out the repo and run the mcp server via the repo, and we will
+also keep the python cli commands as husks."
 
-**v0.8.0** (T-shirt: M): all Python entry points print prominent deprecation banner. Code
-moved to `python-legacy/` subdirectory. Install docs no longer mention Python.
-**Dedicated test-runner cutover pass** (per design doc §19 "Test migration policy"):
+**v0.8.0** (T-shirt: M): prominent deprecation banner on every Python
+CLI subcommand. Install docs (`installing.md`, `quickstart.md`) no
+longer mention Python as the recommended path. **First half of the
+test-runner cutover pass** (per design doc §19 "Test migration
+policy"):
 - `tests/e2e/test_edge_functions_e2e.py` (489 lines) → `packages/memory/test/edge-functions/*.test.ts`. The EFs themselves stay live (Deno-on-Supabase); only the test harness moves.
 - `tests/e2e/test_mcp_e2e.py` (560 lines) → `packages/memory/test/mcp-remote/*.test.ts`. Same shape: the remote `cerefox-mcp` EF stays; tests migrate.
 - `tests/e2e/test_ui_e2e.py` (247 lines) → `frontend/tests/e2e/*.spec.ts` using `@playwright/test`. Playwright bindings exist in both languages so the port is mechanical.
-- After v0.8: the only `.py` left in `tests/` should be helper conftest infrastructure slated for v0.9 removal.
+- After v0.8: the only `.py` left in `tests/` covers genuinely-Python code that stays through v0.9+ (the MCP server + CLI husks).
 
-**v0.9.0** (T-shirt: S): `python-legacy/` deleted. `pyproject.toml`, `uv.lock`, `.python-version`
-removed. **`tests/*.py` deleted along with `pyproject.toml`** — by this point every test layer has a TS equivalent. Repo is pure TS + SQL + React.
+**v0.9.0** (T-shirt: M): **Python minimization, not removal**.
+- Python CLI subcommands become husks: each one prints "Cerefox CLI moved to TypeScript: install with `npm install -g @cerefox/memory` and re-run as `cerefox <subcommand>`" and exits 0 (or non-zero for unimplemented-by-design — TBD).
+- Python MCP server (`src/cerefox/mcp_server.py`) **stays fully functional**. Repo-clone users keep their `uv run cerefox mcp` workflow.
+- Python web (`src/cerefox/api/*`) — **likely also becomes a husk** at this point (the TS web shipped in v0.6 is the canonical implementation; the Python web's role after v0.7's TS ingestion swap is unclear). Final call lives in iter-25's design pass — flag in iter-26's pre-kickoff design discussion.
+- **Second half of the test-runner cutover pass**: tests for surviving Python (`tests/test_mcp_server.py`, `tests/test_python_cli_deprecation_banner.py`, new husk-CLI tests) port to TS via subprocess pattern under `packages/memory/test/python-runtime/`. TS test spawns `uv run cerefox X` and asserts behavior at the process boundary — same shape `cli-smoke.test.ts` uses for the TS CLI.
+- **`pyproject.toml`, `uv.lock`, `.python-version` STAY** because the Python runtime stays. Pytest as a test runner goes away.
+- End state after v0.9: zero `.py` in `tests/`; one test runner (`bun test`); Python runtime minimised to MCP server + CLI husks (+ maybe web husk).
 
 **Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0 + §19 test migration policy](specs/polish-and-distribution-design.md).
 

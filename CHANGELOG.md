@@ -74,9 +74,12 @@ they did before.
   `docs/specs/polish-and-distribution-design.md` §19. Codifies "tests
   follow code"; HTTP-boundary tests are TS-only from v0.6 onward;
   v0.7 ports the chunking/embedding/ingestion/retrieval test suites
-  with their code; v0.8 batches the remaining EF/MCP/UI test port to
-  TS; v0.9 deletes any `tests/*.py` that remains alongside the
-  Python stack itself.
+  with their code; v0.8 batches the EF/MCP/UI test port to TS; v0.9
+  ports the remaining tests for surviving Python code (MCP server,
+  CLI husks) via the subprocess pattern. **Python minimization, not
+  removal** — the Python MCP server stays functional for repo-clone
+  users; the Python CLI becomes husks pointing at the TS CLI;
+  `pyproject.toml` stays.
 
 ### Changed
 

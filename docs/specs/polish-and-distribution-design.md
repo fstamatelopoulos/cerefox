@@ -975,20 +975,31 @@ coverage. The policy below makes test migration explicit so future
 iterations don't repeat the same misunderstanding.
 
 **Tests follow code.** When code migrates from Python to TS, its tests
-migrate too. By v0.9, no `.py` remains in `tests/` — same as
-`pyproject.toml`, `uv.lock`, and `.python-version`. Keeping pytest as a
-test runner past the Python-removal commitment is a contradiction; we
-take a hard line.
+migrate too. By v0.9 there is no `pytest` in `tests/` — but Python the
+runtime stays. The maintainer's clarification (2026-05-28): the
+Python MCP server keeps working through v0.9+ (current users check
+out the repo and run `uv run cerefox mcp`), and the Python CLI
+subcommands become husks that print a "use the TS CLI" message and
+exit. This is **Python minimization, not Python removal**.
+
+The hard line at v0.9 is *test-runner unification*, not
+runtime-elimination: tests for surviving Python code (MCP server, CLI
+husks) migrate to TS at v0.9 using the subprocess pattern (a TS test
+spawns `uv run cerefox X` and asserts behavior at the process
+boundary — same shape as `cli-smoke.test.ts` already uses for the TS
+CLI). pytest as a test runner goes away; `pyproject.toml`,
+`uv.lock`, `.python-version` stay because Python the runtime stays.
 
 ### 20a. Test layers and where they live
 
 | Test layer | From v0.6 onward | Migrated by | Lives in |
 |---|---|---|---|
-| Unit tests for Python modules | Stay in `tests/` until their underlying module is deleted | v0.7 (chunking, embedding, ingestion, retrieval), v0.8 (CLI deprecation wrapper, paths) | `tests/*.py` → `packages/memory/test/*.test.ts` or `_shared/__tests__/*.test.ts` per ownership |
+| Unit tests for Python modules **that get deleted** | Stay in `tests/` until their underlying module is deleted | v0.7 (chunking, embedding, ingestion, retrieval), v0.8 (paths if its module is consolidated into TS) | `tests/*.py` → `packages/memory/test/*.test.ts` or `_shared/__tests__/*.test.ts` per ownership |
 | HTTP-boundary tests for `/api/v1/*` | **TS from v0.6.0 onward** | v0.6.0 (`tests/api/test_docs_endpoints.py`) | `packages/memory/test/web-integration/*.test.ts` |
-| EF + MCP integration tests | Stay in Python through v0.8 | v0.8 ("Deprecate Python") batch port | `tests/e2e/test_edge_functions_e2e.py`, `tests/e2e/test_mcp_e2e.py` → `packages/memory/test/edge-functions/`, `packages/memory/test/mcp-remote/` |
+| EF + MCP integration tests (HTTP / remote) | Stay in Python through v0.8 | v0.8 batch port | `tests/e2e/test_edge_functions_e2e.py`, `tests/e2e/test_mcp_e2e.py` → `packages/memory/test/edge-functions/`, `packages/memory/test/mcp-remote/` |
 | UI tests (Playwright) | Stay in Python through v0.8 | v0.8 batch port (`@playwright/test`) | `tests/e2e/test_ui_e2e.py` → `frontend/tests/e2e/*.spec.ts` |
-| DB-layer tests for `CerefoxClient` | Stay in Python until v0.7 deletes the client | v0.7 (alongside `CerefoxClient` deletion) | `tests/test_db_client.py` + `tests/db/*` → equivalent TS suite covering the same RPC contracts |
+| DB-layer tests for `CerefoxClient` | Stay in Python until v0.7 lands the TS DB-access path that MCP also uses | v0.7 — but the underlying `CerefoxClient` likely stays for the Python MCP server's read-side calls (TBD in iter-25 design pass) | `tests/test_db_client.py` + `tests/db/*` → TS suite covering the same RPC contracts; Python tests may stay if the module stays |
+| **Tests for surviving Python (MCP server + CLI husks)** | Stay in `tests/*.py` through v0.8 | v0.9 — port to **TS via subprocess**. TS test spawns `uv run cerefox mcp` (or `uv run cerefox X` for a husk), drives JSON-RPC handshake / asserts husk message + exit code. Same shape `cli-smoke.test.ts` uses for the TS CLI. | `tests/test_mcp_server.py`, `tests/test_python_cli_deprecation_banner.py`, future Python-husk-CLI tests → `packages/memory/test/python-runtime/*.test.ts` |
 
 ### 20b. Rules
 
@@ -1013,16 +1024,22 @@ take a hard line.
    v0.6 verified its 5 critical wire shapes; v0.7's chunker port
    needs the same pattern over `tests/chunking/fixtures/`.
 
-4. **v0.8 is the test-runner cutover pass.** The Python e2e tests
-   covering still-live Deno EFs and the React UI port to TS during
-   v0.8, alongside the Python deprecation banner. After v0.8, the
-   only `.py` left in `tests/` should be helper infrastructure
-   slated for v0.9 removal.
+4. **v0.8 is the first half of the test-runner cutover pass.** The
+   Python e2e tests covering still-live Deno EFs and the React UI
+   port to TS during v0.8, alongside the Python deprecation banner
+   that nudges users from `uv run cerefox X` toward
+   `cerefox` (npm). After v0.8, the only `.py` left in `tests/` is
+   tests for code that genuinely stays Python (Python MCP server,
+   CLI husks).
 
-5. **v0.9 deletes `tests/*.py` along with the rest of the Python
-   stack** (`pyproject.toml`, `uv.lock`, `.python-version`).
-   Period. By this point every test layer has a TS equivalent and
-   nothing should remain to delete except orphan `__pycache__`.
+5. **v0.9 ends pytest as a test runner** — but **not** the Python
+   runtime. Tests for surviving Python code (MCP server + CLI
+   husks) port to TS using the subprocess pattern: TS spawns
+   `uv run cerefox X` and asserts the contract at the process
+   boundary. `pyproject.toml` / `uv.lock` / `.python-version` stay
+   because the Python MCP server keeps working for repo-clone
+   users. After v0.9: zero `.py` in `tests/`; Python runtime
+   minimized to MCP + CLI husks; one test runner (`bun test`).
 
 ### 20c. What "HTTP-roundtrip test per destructive operation" looks like
 
