@@ -1,19 +1,19 @@
 /**
- * Meta endpoints for the Cerefox web server.
+ * Meta endpoints: /version, /docs, /docs/{path}, /schema-version.
  *
- * Part 24A scope: only `/version`. The rest of the meta routes
- * (`/docs`, `/docs/{path}`, `/schema-version`) land in Part 24C alongside
- * `_shared/schemas/`.
+ * Python source: `src/cerefox/api/routes_api.py` lines 68-161.
  *
- * The Python equivalent lives at `src/cerefox/api/routes_api.py`
- * around line 68 (`api_version`) — see also the `_resolve_git_commit_short`
- * helper at line 40 for the matching git-shortcut behaviour.
+ * /version is reachable without DB credentials (mirrors Python's
+ * dependency-free `api_version`). The other three need either bundled
+ * docs (filesystem) or the Supabase RPC `cerefox_schema_version`.
  */
 
 import { execFileSync } from "node:child_process";
 import { Hono } from "hono";
 
 import { PKG_VERSION } from "../../meta.ts";
+import type { WebContext } from "../context.ts";
+import { listBundledDocs, readDoc } from "../docs.ts";
 
 function resolveGitCommitShort(): string | null {
   const env = process.env.CEREFOX_GIT_COMMIT;
@@ -37,6 +37,80 @@ const VERSION_INFO = {
   build_date: process.env.CEREFOX_BUILD_DATE ?? null,
 };
 
-export function registerMetaRoutes(app: Hono): void {
+const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
+
+export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
   app.get("/api/v1/version", (c) => c.json(VERSION_INFO));
+
+  app.get("/api/v1/docs", (c) => c.json(listBundledDocs()));
+
+  app.get("/api/v1/docs/:path{.+}", (c) => {
+    const docPath = c.req.param("path");
+    const content = readDoc(docPath);
+    if (content === null) {
+      return c.json({ detail: `Doc not found: ${docPath}` }, 404);
+    }
+    return c.body(content, 200, {
+      "Content-Type": "text/markdown; charset=utf-8",
+    });
+  });
+
+  app.get("/api/v1/schema-version", async (c) => {
+    // bundled: read the @version marker from the in-package schema.sql
+    let bundled: string | null = null;
+    try {
+      const { readFileSync, existsSync } = await import("node:fs");
+      const { fileURLToPath } = await import("node:url");
+      const { dirname, join } = await import("node:path");
+      const here = dirname(fileURLToPath(import.meta.url));
+      // Resolver mirrors docs.ts: look under <pkg>/db/schema.sql, then the repo's
+      // src/cerefox/db/schema.sql as a source-mode fallback.
+      const candidates = [
+        join(here, "..", "..", "..", "db", "schema.sql"),
+        join(here, "..", "..", "..", "..", "..", "src", "cerefox", "db", "schema.sql"),
+      ];
+      for (const path of candidates) {
+        if (existsSync(path)) {
+          const sql = readFileSync(path, "utf8");
+          const match = sql.match(SCHEMA_VERSION_RE);
+          bundled = match ? match[1] : null;
+          break;
+        }
+      }
+    } catch {
+      bundled = null;
+    }
+
+    let deployed: string | null = null;
+    if (ctx) {
+      try {
+        const { data, error } = await ctx.supabase.rpc("cerefox_schema_version");
+        if (!error && data) {
+          if (typeof data === "string") deployed = data;
+          else if (Array.isArray(data) && data.length > 0) {
+            const first = data[0];
+            if (typeof first === "string") deployed = first;
+            else if (first && typeof first === "object") {
+              for (const key of [
+                "cerefox_schema_version",
+                "version",
+                "result",
+              ] as const) {
+                const v = (first as Record<string, unknown>)[key];
+                if (typeof v === "string") {
+                  deployed = v;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Legacy deployments may not have the RPC — treat as "unknown".
+      }
+    }
+
+    const mismatch = Boolean(bundled && deployed && bundled !== deployed);
+    return c.json({ bundled, deployed, mismatch });
+  });
 }

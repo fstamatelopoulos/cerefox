@@ -31,7 +31,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Hono } from "hono";
 
+import { buildWebContext, type WebContext } from "./context.ts";
+import { registerDiscoveryRoutes } from "./routes/discovery.ts";
 import { registerMetaRoutes } from "./routes/meta.ts";
+import { registerProjectsRoutes } from "./routes/projects.ts";
 import {
   ROOT_REDIRECT_HTML,
   resolveSpaDist,
@@ -49,11 +52,24 @@ export interface WebServerHandle {
   close: () => Promise<void>;
 }
 
-export function buildApp(): Hono {
+export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   const app = new Hono();
 
   // (1) JSON API — registered first.
-  registerMetaRoutes(app);
+  registerMetaRoutes(app, ctx);
+  if (ctx) {
+    registerDiscoveryRoutes(app, ctx);
+    registerProjectsRoutes(app, ctx);
+  } else {
+    // Stub DB-touching endpoints with 503 so the frontend gets a clear
+    // signal during dev / CI runs without .env.
+    app.all("/api/v1/search", (c) =>
+      c.json({ detail: "Supabase not configured" }, 503),
+    );
+    app.all("/api/v1/dashboard", (c) =>
+      c.json({ detail: "Supabase not configured" }, 503),
+    );
+  }
 
   // (2) Repo /static — logo/favicon.
   const staticDir = resolveStaticDir();
