@@ -10,7 +10,8 @@
     "frontend"
   ],
   "dependencies": {
-    "ora": "^9.4.0"
+    "ora": "^9.4.0",
+    "postgres": "^3.4.9"
   },
   "scripts": {
     "test": "cd _shared && bun test",
