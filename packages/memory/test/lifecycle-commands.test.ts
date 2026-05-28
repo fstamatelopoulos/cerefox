@@ -170,6 +170,125 @@ describe("configure-agent (local-only)", () => {
     expect(parsed.action).toBe("created");
     expect(parsed.delegatedCommand).toBeUndefined();
   });
+
+  // Phase 2 (v0.6 / iter-24K): Cursor, Codex, Gemini writers.
+
+  test("Phase 2: cursor writes JSON with mcpServers.cerefox", () => {
+    const cfg = join(tmpdir(), `cerefox-cursor-test-${Date.now()}.json`);
+    const { status } = run([
+      "configure-agent",
+      "--tool",
+      "cursor",
+      "--config-path",
+      cfg,
+    ]);
+    expect(status).toBe(0);
+    expect(existsSync(cfg)).toBe(true);
+    const parsed = JSON.parse(readFileSync(cfg, "utf8")) as {
+      mcpServers: { cerefox: { command: string; args: string[] } };
+    };
+    expect(parsed.mcpServers.cerefox.command).toBe("npx");
+    expect(parsed.mcpServers.cerefox.args).toContain("--package=@cerefox/memory");
+    rmSync(cfg, { force: true });
+    rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
+  });
+
+  test("Phase 2: gemini writes JSON with mcpServers.cerefox", () => {
+    const cfg = join(tmpdir(), `cerefox-gemini-test-${Date.now()}.json`);
+    const { status } = run([
+      "configure-agent",
+      "--tool",
+      "gemini",
+      "--config-path",
+      cfg,
+    ]);
+    expect(status).toBe(0);
+    expect(existsSync(cfg)).toBe(true);
+    const parsed = JSON.parse(readFileSync(cfg, "utf8")) as {
+      mcpServers: { cerefox: { command: string; args: string[] } };
+    };
+    expect(parsed.mcpServers.cerefox.command).toBe("npx");
+    rmSync(cfg, { force: true });
+    rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
+  });
+
+  test("Phase 2: codex writes TOML with [mcp_servers.cerefox] table", () => {
+    // R1 default plan: TOML format. Round-trip via smol-toml parse to
+    // assert the table shape rather than string-matching format quirks.
+    const cfg = join(tmpdir(), `cerefox-codex-test-${Date.now()}.toml`);
+    const { status } = run([
+      "configure-agent",
+      "--tool",
+      "codex",
+      "--config-path",
+      cfg,
+    ]);
+    expect(status).toBe(0);
+    expect(existsSync(cfg)).toBe(true);
+    const raw = readFileSync(cfg, "utf8");
+    expect(raw).toContain("[mcp_servers.cerefox]");
+    expect(raw).toContain("command =");
+    expect(raw).toContain("args =");
+    // Re-import the parser dynamically so test isolation isn't broken.
+    // Tests share the package's node_modules, so smol-toml is available.
+    return import("smol-toml").then(({ parse }) => {
+      const parsed = parse(raw) as {
+        mcp_servers?: { cerefox?: { command?: string; args?: string[] } };
+      };
+      expect(parsed.mcp_servers?.cerefox?.command).toBe("npx");
+      expect(parsed.mcp_servers?.cerefox?.args).toContain(
+        "--package=@cerefox/memory",
+      );
+      rmSync(cfg, { force: true });
+      rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
+    });
+  });
+
+  test("Phase 2: codex merge preserves unrelated TOML keys", () => {
+    const cfg = join(tmpdir(), `cerefox-codex-merge-${Date.now()}.toml`);
+    writeFileSync(
+      cfg,
+      [
+        "model = \"o4-mini\"",
+        "",
+        "[mcp_servers.other]",
+        'command = "fake"',
+        "",
+      ].join("\n"),
+    );
+    const { stdout, status } = run([
+      "configure-agent",
+      "--tool",
+      "codex",
+      "--config-path",
+      cfg,
+    ]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("merged");
+    const raw = readFileSync(cfg, "utf8");
+    return import("smol-toml").then(({ parse }) => {
+      const parsed = parse(raw) as {
+        model?: string;
+        mcp_servers?: {
+          other?: { command?: string };
+          cerefox?: { command?: string };
+        };
+      };
+      expect(parsed.model).toBe("o4-mini");
+      expect(parsed.mcp_servers?.other?.command).toBe("fake");
+      expect(parsed.mcp_servers?.cerefox?.command).toBe("npx");
+      rmSync(cfg, { force: true });
+      rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
+    });
+  });
+
+  // R2 resolution: the round-trip smoke test for `claude mcp add` is
+  // deferred to the Part 24L manual test plan. Verifying $HOME respect
+  // before running the test risks polluting the maintainer's real
+  // `~/.claude.json` if claude's home-discovery doesn't honour $HOME
+  // (some CLIs use `getpwuid()` instead). The locked R2 default plan
+  // explicitly allows the "local-only, manual test plan only" fallback;
+  // we take it for safety.
 });
 
 describe("self-update --check (registry probe only)", () => {
