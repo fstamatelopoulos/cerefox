@@ -47,8 +47,32 @@ STATIC_DIR = _resolve_static_dir()
 SPA_DIST_DIR = _resolve_spa_dist()
 
 
+_V07_DEPRECATION_BANNER = (
+    "\n"
+    "  \033[33m⚠\033[0m Cerefox Python web server is deprecated as of v0.7.0.\n"
+    "    The canonical web UI is `cerefox web` from `@cerefox/memory`\n"
+    "    (npm install -g @cerefox/memory). The Python web stays through\n"
+    "    v0.7.x and v0.8 as a husk; consider switching now.\n"
+    "    See docs/guides/migration-v0.5.md § v0.7 for the migration path.\n"
+)
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    # Print the deprecation banner once at startup. The npm-installed
+    # `cerefox web` (Hono/TS) is the v0.6+ canonical implementation;
+    # iter-25 (v0.7) completes the TS web's ingestion swap, so the
+    # Python web is now functionally redundant. Banner ASCII colour
+    # codes degrade gracefully on non-TTY streams.
+    import sys  # noqa: PLC0415
+    if sys.stderr.isatty():
+        print(_V07_DEPRECATION_BANNER, file=sys.stderr)
+    else:
+        # Non-TTY (e.g. systemd journal): strip ANSI for legibility.
+        import re  # noqa: PLC0415
+        plain = re.sub(r"\033\[[\d;]*m", "", _V07_DEPRECATION_BANNER)
+        print(plain, file=sys.stderr)
+
     app = FastAPI(
         title="Cerefox",
         description="Personal knowledge base for AI agents",

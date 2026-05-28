@@ -402,6 +402,104 @@ the banner prominent; v0.9 deletes the Python web code.
 
 ---
 
+## v0.7.0 completes the TS migration arc
+
+**TL;DR**: the 3 ingestion endpoints that returned 503 in v0.6 now
+work. `cerefox ingest` and `cerefox ingest-dir` run in-process (no
+Edge Function round-trip). `cerefox reindex` (a v0.5 deferred stub)
+is a real command. PDF/DOCX support dropped. Python web prints a
+deprecation banner. Python MCP server keeps working unchanged.
+
+### The 503 toast is gone
+
+If you saw "Ingestion lands in v0.7 — use `cerefox ingest <file>` from
+the CLI for now" anywhere in the web UI during v0.6, that's gone in
+v0.7. The 3 ingestion endpoints (`POST /api/v1/ingest`,
+`POST /api/v1/ingest/file`, `POST /api/v1/documents/{id}/upload`) now
+call the in-process TS pipeline. The frontend's
+`V07IngestionDeferredError` toast detector stays in `api/client.ts`
+as dead code — no churn there, just stops firing.
+
+### CLI gets faster (no EF round-trip)
+
+`cerefox ingest <file>` and `cerefox ingest-dir <dir>` pre-v0.7 made
+an HTTP call to the `cerefox-ingest` Edge Function (Deno on Supabase).
+In v0.7+ they run the in-process TS pipeline directly: chunk +
+embed + atomic RPC, all in the same Bun/Node process. Faster + no
+network egress to Supabase Functions (only to Postgres + OpenAI).
+
+`cerefox reindex` is no longer a v0.5 stub. It re-embeds chunks via
+the same in-process pipeline. Defaults to stale-only (chunks with a
+different embedder model recorded); `--all` reindexes everything.
+`--batch <n>` controls the batch size. `--document-id <uuid>` scopes
+to one doc. `--dry-run` previews.
+
+### PDF / DOCX support dropped
+
+The `src/cerefox/chunking/converters.py` module and its tests are
+deleted. The Python CLI's `.pdf` / `.docx` branches now print a clear
+"support dropped in v0.7.0" error pointing at pandoc / docling for
+client-side conversion. The TS surfaces never had PDF/DOCX support;
+no UX change there.
+
+If you were using the Python CLI to ingest PDFs/DOCXs: convert them
+to markdown client-side first (`pandoc input.pdf -o input.md` or
+similar), then ingest the .md.
+
+### Python web shows a deprecation banner
+
+`uv run cerefox web` now prints a yellow ⚠ deprecation banner at
+startup:
+
+```
+  ⚠ Cerefox Python web server is deprecated as of v0.7.0.
+    The canonical web UI is `cerefox web` from `@cerefox/memory`
+    (npm install -g @cerefox/memory). The Python web stays through
+    v0.7.x and v0.8 as a husk; consider switching now.
+    See docs/guides/migration-v0.5.md § v0.7 for the migration path.
+```
+
+The Python web stays through v0.7.x and v0.8 (likely as a husk that
+returns 503 on every route in v0.8). v0.9's call on the Python web is
+TBD per the iter-26 design pass. Switch to `cerefox web` from npm
+when you can — it's been functionally complete since v0.6 + has had
+ingestion since v0.7.
+
+### Python MCP server stays unchanged
+
+Per the "Python minimization, not removal" policy locked at iter-24,
+the Python MCP server stays fully functional through v0.9+. If you
+check out the repo and run `uv run cerefox mcp`, that keeps working
+indefinitely. `CerefoxClient` stays in the Python tree for the same
+reason — MCP uses it.
+
+### Scripts: 3 ported, 2 stay Python
+
+| Script | Status in v0.7.0 |
+|---|---|
+| `scripts/db_deploy.py` | Husk; use `bun scripts/db_deploy.ts` |
+| `scripts/db_migrate.py` | Husk; use `bun scripts/db_migrate.ts` |
+| `scripts/reindex_all.py` | Husk; use `bun scripts/reindex_all.ts` |
+| `scripts/backup_create.py` | Stays Python through v0.7.x (port deferred) |
+| `scripts/backup_restore.py` | Stays Python through v0.7.x (port deferred) |
+
+The Postgres client used by `db_deploy.ts` / `db_migrate.ts` is the
+`postgres` (Porsager) library — small, well-typed, no native deps.
+Cross-runtime (Bun + Node).
+
+### Should I upgrade from v0.6.0 to v0.7.0?
+
+| Workflow | Recommendation |
+|---|---|
+| Web UI for ingestion | **Yes — that's the whole point.** v0.6 sent you to the CLI for ingest; v0.7 has it in the browser. |
+| MCP client only (Claude Code, Cursor, etc.) | Yes — no functional change for you, but you'll get the v0.7 npm cleanup. |
+| `cerefox` CLI | Yes — faster ingest paths + working reindex. |
+| `uv run cerefox web` (Python) | Optional — banner appears; can ignore for now. v0.8 will make this prominent. |
+| `uv run cerefox mcp` (Python) | No-op — Python MCP unchanged. |
+| PDF/DOCX ingest via Python CLI | Convert to markdown client-side before upgrading. |
+
+---
+
 ## Known gotchas
 
 ### `npx` from inside an npm workspace

@@ -1,50 +1,25 @@
-#!/usr/bin/env python
-"""Reindex all documents with title-boosted embeddings and FTS.
+#!/usr/bin/env python3
+"""Husk: use `bun scripts/reindex_all.ts` instead (v0.7.0+).
 
-Run this after applying migration 0011 (title boosting) to update existing
-documents with the new embedding format (title prefix) and FTS formula
-(document title at weight A).
+The working wrapper moved to `scripts/reindex_all.ts` in v0.7.0. It
+invokes `cerefox reindex` from `@cerefox/memory` (now a working TS
+command, not the v0.5 deferred stub).
 
-New documents ingested after migration 0011 are already correct -- this
-script is only needed for documents that existed before the migration.
-
-Usage::
-
-    uv run python scripts/reindex_all.py [--dry-run] [--batch N]
-
-Options:
-    --dry-run   Show counts without making any changes.
-    --batch N   Number of chunks to embed per API call (default: 50).
-
-The script is resumable: if interrupted, re-running it will skip chunks
-already embedded with the current model (unless --all was passed to the
-underlying cerefox reindex command).
+Equivalent: `bun scripts/reindex_all.ts [--dry-run] [--batch N]`
 """
 
-import subprocess
 import sys
 
-
-def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dry-run", action="store_true", help="Preview without changes.")
-    parser.add_argument("--batch", type=int, default=50, help="Chunks per embedding API call (default: 50).")
-    args = parser.parse_args()
-
-    cmd = [
-        "uv", "run", "cerefox", "reindex",
-        "--all",
-        f"--batch={args.batch}",
-    ]
-    if args.dry_run:
-        cmd.append("--dry-run")
-
-    print("Running:", " ".join(cmd))
-    result = subprocess.run(cmd)
-    sys.exit(result.returncode)
-
-
-if __name__ == "__main__":
-    main()
+print(
+    "⚠ scripts/reindex_all.py is a husk as of v0.7.0.",
+    file=sys.stderr,
+)
+print(
+    "  Use the TypeScript equivalent: `bun scripts/reindex_all.ts`",
+    file=sys.stderr,
+)
+print(
+    "  Flags: --dry-run, --batch N (default 50), --help",
+    file=sys.stderr,
+)
+sys.exit(0)

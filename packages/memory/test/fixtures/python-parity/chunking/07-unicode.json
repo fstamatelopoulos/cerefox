@@ -1,0 +1,16 @@
+{
+  "fixture": "07-unicode",
+  "input_text": "# Unicode 🌍\n\nMulti-byte: café, naïve, résumé. Emoji: 🎉🚀💡.\n\n## CJK Test\n\n中文测试. 日本語テスト. 한국어 테스트.\n\n## Math\n\n∑ ∫ √ ≠ ≈ ∞\n",
+  "input_char_count": 117,
+  "chunk_count": 1,
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "heading_path": [],
+      "heading_level": 0,
+      "title": "",
+      "content": "# Unicode 🌍\n\nMulti-byte: café, naïve, résumé. Emoji: 🎉🚀💡.\n\n## CJK Test\n\n中文测试. 日本語テスト. 한국어 테스트.\n\n## Math\n\n∑ ∫ √ ≠ ≈ ∞",
+      "char_count": 116
+    }
+  ]
+}

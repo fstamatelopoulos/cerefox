@@ -71,10 +71,27 @@ export async function getEmbedding(text: string, apiKey: string): Promise<number
   throw lastError ?? new Error(`Embedding API failed after ${EMBEDDING_MAX_RETRIES} attempts`);
 }
 
-/** Embed multiple strings in one API call. Used for chunk embeddings during
- *  `cerefox_ingest`. Results are returned in input order (the API may return
- *  them out of order; we re-sort by `index`). */
-export async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> {
+/**
+ * Per-API-call batch limit. Mirrors Python's `CloudEmbedder.BATCH_SIZE`
+ * (in `src/cerefox/embeddings/cloud.py`). OpenAI's `/v1/embeddings`
+ * accepts up to 2048 inputs per request, but 96 is the Python contract
+ * and matches what the existing corpus was embedded with.
+ *
+ * v0.7 (iter-25 / Part 25B) introduces this constant to TS — the v0.4
+ * `embedBatch` had no batching and would blow the API limit on bulk
+ * ingest of large documents.
+ */
+export const EMBEDDING_BATCH_SIZE = 96;
+
+/**
+ * Single API call to OpenAI's embeddings endpoint. Caller is responsible
+ * for staying within the API's per-request limit; in practice, use
+ * `embedBatch` which chunks calls at `EMBEDDING_BATCH_SIZE`.
+ */
+async function embedBatchSingleCall(
+  texts: string[],
+  apiKey: string,
+): Promise<number[][]> {
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < EMBEDDING_MAX_RETRIES; attempt++) {
@@ -124,4 +141,35 @@ export async function embedBatch(texts: string[], apiKey: string): Promise<numbe
   }
 
   throw lastError ?? new Error(`Embedding API failed after ${EMBEDDING_MAX_RETRIES} attempts`);
+}
+
+/**
+ * Embed multiple strings, chunked into per-API-call batches of
+ * `batchSize` (default 96). Used by the v0.7 ingestion pipeline + the
+ * MCP-tools ingest handler.
+ *
+ * Results are returned in input order (each per-call response is sorted
+ * by `index` and the results concatenated in input order).
+ *
+ * Pre-v0.7 callers that used the old single-call `embedBatch` (no
+ * batching) continue to work — the signature is backward-compatible.
+ * The new `batchSize` param is opt-in; default 96 matches Python.
+ */
+export async function embedBatch(
+  texts: string[],
+  apiKey: string,
+  batchSize: number = EMBEDDING_BATCH_SIZE,
+): Promise<number[][]> {
+  if (texts.length === 0) return [];
+  if (texts.length <= batchSize) {
+    return embedBatchSingleCall(texts, apiKey);
+  }
+
+  const out: number[][] = [];
+  for (let start = 0; start < texts.length; start += batchSize) {
+    const slice = texts.slice(start, start + batchSize);
+    const vectors = await embedBatchSingleCall(slice, apiKey);
+    for (const v of vectors) out.push(v);
+  }
+  return out;
 }

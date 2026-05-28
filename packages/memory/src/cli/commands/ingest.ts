@@ -1,9 +1,19 @@
 /**
  * `cerefox ingest [path]` — ingest a file or stdin-paste into the KB.
  *
- * Calls the shared `ingestTool.handler` from `_shared/mcp-tools/ingest.ts` —
- * same code the MCP server and Edge Function use. Chunking + embedding +
- * write happen inside that handler; the CLI command is a thin shell.
+ * v0.7+ (iter-25 Part 25G): calls the in-process `IngestionPipeline`
+ * directly. Pre-v0.7 this command routed through `ingestTool.handler`
+ * in `_shared/mcp-tools/` which called the deployed cerefox-ingest
+ * Edge Function — the CLI was a network client of its own remote
+ * server. v0.7's in-process pipeline removes the EF round-trip,
+ * making the CLI both faster and usable offline (with Supabase
+ * reachable for the RPC + OpenAI reachable for embeddings).
+ *
+ * The MCP server's path (`_shared/mcp-tools/ingest.ts`) is unchanged:
+ * MCP clients keep routing through the EF, which the remote MCP needs
+ * (Deno on Supabase has no in-process pipeline alternative). Local
+ * MCP server stays consistent with remote — same ingest path; future
+ * iteration may switch local MCP to the in-process pipeline.
  *
  * Three input modes:
  *   - `cerefox ingest file.md`            — read from a file path
@@ -12,6 +22,7 @@
  */
 
 import type { Command } from "commander";
+import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
 
@@ -25,9 +36,8 @@ import {
   userError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
-import { ingestTool } from "../../../../../_shared/mcp-tools/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
-import { getClient } from "../util/client.ts";
+import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 
 interface IngestOptions {
   title?: string;
@@ -42,7 +52,10 @@ interface IngestOptions {
   authorType?: string;
 }
 
-async function readContent(path: string | undefined, paste: boolean): Promise<{ content: string; titleFromPath: string | undefined }> {
+async function readContent(
+  path: string | undefined,
+  paste: boolean,
+): Promise<{ content: string; titleFromPath: string | undefined }> {
   if (paste) {
     if (path) {
       throw userError("--paste and a positional path are mutually exclusive.");
@@ -74,8 +87,14 @@ async function readContent(path: string | undefined, paste: boolean): Promise<{ 
   return { content, titleFromPath };
 }
 
-async function action(path: string | undefined, options: IngestOptions): Promise<void> {
-  const { content, titleFromPath } = await readContent(path, Boolean(options.paste));
+async function action(
+  path: string | undefined,
+  options: IngestOptions,
+): Promise<void> {
+  const { content, titleFromPath } = await readContent(
+    path,
+    Boolean(options.paste),
+  );
 
   const title = options.title ?? titleFromPath;
   if (!title || title.trim() === "") {
@@ -104,41 +123,84 @@ async function action(path: string | undefined, options: IngestOptions): Promise
     if (projectNames.length === 0) projectNames = undefined;
   }
 
-  const client = getClient();
   const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    throw userError(
+      "Supabase credentials not configured — run `cerefox init` first.",
+    );
+  }
+  if (!settings.openaiApiKey) {
+    throw userError(
+      "OPENAI_API_KEY not set — required for embeddings during ingest.",
+    );
+  }
+  const supabase = createClient(settings.supabaseUrl, settings.supabaseKey, {
+    auth: { persistSession: false },
+  });
+  const pipeline = new IngestionPipeline({
+    supabase,
+    openAiApiKey: settings.openaiApiKey,
+  });
 
-  // Build args matching the ingest tool's JSON schema.
-  const args: Record<string, unknown> = {
-    title,
-    content,
-    source: options.source ?? "cli",
-    metadata,
-    update_if_exists: Boolean(options.updateIfExists),
-    author,
-    author_type: authorType,
-  };
-  if (options.documentId) args.document_id = options.documentId;
-  if (options.projectName) args.project_name = options.projectName;
-  if (projectNames) args.project_names = projectNames;
-
-  let message: string;
   try {
-    message = await ingestTool.handler(
-      client.raw as unknown as Parameters<typeof ingestTool.handler>[0],
-      args,
-      {
-        openaiApiKey: settings.openaiApiKey,
-        accessPath: "cli",
-      },
+    const result =
+      path && !options.paste
+        ? await pipeline.ingestFile(path, {
+            title,
+            source: options.source ?? "cli",
+            projectName: options.projectName ?? null,
+            projectNames: projectNames ?? null,
+            metadata: metadata as Record<string, unknown>,
+            updateExisting: Boolean(options.updateIfExists),
+            documentId: options.documentId ?? null,
+            author,
+            authorType: authorType as "user" | "agent",
+          })
+        : await pipeline.ingestText({
+            text: content,
+            title,
+            source: options.source ?? "cli",
+            projectName: options.projectName ?? null,
+            projectNames: projectNames ?? null,
+            metadata: metadata as Record<string, unknown>,
+            updateExisting: Boolean(options.updateIfExists),
+            documentId: options.documentId ?? null,
+            author,
+            authorType: authorType as "user" | "agent",
+          });
+
+    // Match the legacy `ingestTool.handler` output shape — users may
+    // have grep / pipe expectations against this string.
+    // Match the legacy `_shared/mcp-tools/ingest.ts` output strings:
+    // tooling pipes the CLI's stdout and greps for "up-to-date" /
+    // "updated" / "saved". When the pipeline returns action="updated"
+    // with reindexed=false, the user-visible outcome is "nothing
+    // changed" — same as a hash-match skip — so we collapse those two
+    // cases to the same "already up-to-date" message.
+    let verb: string;
+    if (result.action === "created") {
+      verb = "Document saved";
+    } else if (result.action === "updated" && result.reindexed) {
+      verb = "Document updated";
+    } else {
+      // skipped, OR updated+!reindexed (metadata-only or no-op).
+      verb = "Document already up-to-date";
+    }
+
+    const projects =
+      result.projectIds.length > 0
+        ? ` [projects: ${result.projectIds.length}]`
+        : "";
+    const note = result.note ? ` (${result.note})` : "";
+    println(
+      c.green("✓ ") +
+        `${verb}: ${JSON.stringify(result.title)} (id: ${result.documentId}), ` +
+        `${result.chunkCount} chunk(s), ${result.totalChars} chars.${projects}${note}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw systemError(`Ingest failed: ${msg}`);
   }
-
-  // ingest tool returns a string like:
-  //   Document saved: "Title" (id: <uuid>), 4 chunk(s), 12345 chars.
-  println(c.green("✓ ") + message);
 }
 
 export function registerIngest(program: Command): void {
@@ -147,8 +209,14 @@ export function registerIngest(program: Command): void {
     .description("Ingest a file (or stdin paste) into the knowledge base.")
     .argument("[path]", "Path to the file to ingest. Omit when using --paste.")
     .option("--paste", "Read content from stdin instead of a file.")
-    .option("-t, --title <title>", "Document title (required with --paste; defaults to filename without extension).")
-    .option("-p, --project-name <name>", "Single project membership (non-destructive on update).")
+    .option(
+      "-t, --title <title>",
+      "Document title (required with --paste; defaults to filename without extension).",
+    )
+    .option(
+      "-p, --project-name <name>",
+      "Single project membership (non-destructive on update).",
+    )
     .option(
       "-P, --project-names <names>",
       "Comma-separated full project membership set (destructive replace on update).",
@@ -156,7 +224,10 @@ export function registerIngest(program: Command): void {
     .option("-m, --metadata <json>", "JSON metadata object.")
     .option("--source <label>", "Origin label (default: cli).", "cli")
     .option("-u, --update-if-exists", "Update an existing doc with the same title.")
-    .option("-i, --document-id <uuid>", "Update a specific document by UUID (overrides --update-if-exists).")
+    .option(
+      "-i, --document-id <uuid>",
+      "Update a specific document by UUID (overrides --update-if-exists).",
+    )
     .option("-a, --author <name>", "Caller identity (audit log).")
     .option(
       "--author-type <type>",

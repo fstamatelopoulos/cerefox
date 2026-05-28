@@ -32,26 +32,19 @@
  * the pipeline.
  */
 
-import { createHash } from "node:crypto";
-
 import { Hono } from "hono";
 
+import { contentHash } from "../../../../../_shared/ingest/index.ts";
+import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 import type { WebContext } from "../context.ts";
 
 const V07_MIGRATION_URL =
   "https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-v0.5.md#v06";
 
-function normaliseForHash(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .trim()
-    .replace(/\n{3,}/g, "\n\n");
-}
-
-function contentHash(text: string): string {
-  return createHash("sha256").update(normaliseForHash(text), "utf8").digest("hex");
-}
+// `normaliseForHash` + `contentHash` promoted to `_shared/ingest/pipeline-
+// helpers.ts` in iter-25 Part 25C so the TS ingestion pipeline (v0.7) and
+// the v0.6 /edit content-hash short-circuit share one implementation.
+// Drift = dedup breaks across the CLI / web / Python paths.
 
 async function createAuditEntry(
   ctx: WebContext,
@@ -140,18 +133,49 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     const contentChanged =
       proposedHash !== null && currentHash !== null && proposedHash !== currentHash;
 
+    // v0.7 (iter-25 Part 25E): content-change branch now routes through
+    // the in-process TS ingestion pipeline. Previously returned 503 with
+    // the V07IngestionDeferredError body the frontend toast catches.
+    // The toast detector stays in `client.ts` as dead code — keeps the
+    // pattern in place for any future 503 fallback we might want, and
+    // avoids frontend churn.
     if (contentChanged) {
-      return c.json(
-        {
-          success: false,
-          error: "Ingestion lands in v0.7",
-          see: V07_MIGRATION_URL,
-          note:
-            "Content edits require the in-process ingestion pipeline (chunking + embedding + version snapshot) that ships in v0.7. " +
-            "For now, re-ingest from the CLI: `cerefox ingest <file>`. Title / metadata / project changes work in this UI.",
-        },
-        503,
-      );
+      if (!ctx.openAiApiKey) {
+        return c.json(
+          {
+            success: false,
+            error: "Embedder not available — set OPENAI_API_KEY in your config",
+          },
+          503,
+        );
+      }
+      try {
+        const pipeline = new IngestionPipeline({
+          supabase: ctx.supabase,
+          openAiApiKey: ctx.openAiApiKey,
+        });
+        const result = await pipeline.updateDocument({
+          documentId,
+          text: content,
+          title: title || (doc.title as string),
+          source: "manual",
+          projectIds: Array.isArray(body.project_ids)
+            ? (body.project_ids as string[])
+            : undefined,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          author: "web-ui",
+          authorType: "user",
+        });
+        return c.json({ success: true, reindexed: result.reindexed });
+      } catch (err) {
+        return c.json(
+          {
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          },
+          500,
+        );
+      }
     }
 
     // Metadata-only update path. Mirrors the no-content-change branch of

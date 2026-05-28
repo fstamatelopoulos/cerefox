@@ -37,7 +37,7 @@ import { registerConfigRoutes } from "./routes/config.ts";
 import { registerDiscoveryRoutes } from "./routes/discovery.ts";
 import { registerDocumentReadRoutes } from "./routes/documents-read.ts";
 import { registerDocumentWriteRoutes } from "./routes/documents-write.ts";
-import { registerIngestStubRoutes } from "./routes/ingest.ts";
+import { registerIngestRoutes } from "./routes/ingest.ts";
 import { registerMetaRoutes } from "./routes/meta.ts";
 import { registerProjectsRoutes } from "./routes/projects.ts";
 import {
@@ -62,9 +62,6 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
 
   // (1) JSON API — registered first.
   registerMetaRoutes(app, ctx);
-  // Ingestion stubs always 503 — same payload shape regardless of ctx
-  // (they don't need DB access; they just signal "v0.7 feature").
-  registerIngestStubRoutes(app);
   if (ctx) {
     registerDiscoveryRoutes(app, ctx);
     registerDocumentReadRoutes(app, ctx);
@@ -72,6 +69,12 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
     registerProjectsRoutes(app, ctx);
     registerConfigRoutes(app, ctx);
     registerAuditUsageRoutes(app, ctx);
+    // v0.7 (Part 25F): ingest endpoints now require a real ctx to call
+    // the in-process IngestionPipeline. They used to be 503 stubs (v0.6
+    // Part 24H) registered unconditionally; the swap moves them inside
+    // the ctx-gated block. ctx===null branches still 503 for the same
+    // graceful-fallback shape.
+    registerIngestRoutes(app, ctx);
   } else {
     // Stub DB-touching endpoints with 503 so the frontend gets a clear
     // signal during dev / CI runs without .env.
@@ -81,6 +84,11 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
     app.all("/api/v1/dashboard", (c) =>
       c.json({ detail: "Supabase not configured" }, 503),
     );
+    const ingest503 = () =>
+      Response.json({ success: false, error: "Supabase not configured" }, { status: 503 });
+    app.post("/api/v1/ingest", ingest503);
+    app.post("/api/v1/ingest/file", ingest503);
+    app.post("/api/v1/documents/:document_id/upload", ingest503);
   }
 
   // (2) Repo /static — logo/favicon.

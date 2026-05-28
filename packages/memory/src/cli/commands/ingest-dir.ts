@@ -1,19 +1,24 @@
 /**
  * `cerefox ingest-dir <dir>` — batch ingest a directory.
  *
- * Recursively walks the directory; for each file matching the
- * `--extensions` filter, reads + ingests via the shared `ingestTool`
- * handler. Shows a `cli-progress` bar (N / M files + current path) when
- * stdout is a TTY; suppresses progress on non-TTY streams (CI / pipes).
+ * v0.7+: uses the in-process `IngestionPipeline` directly. Same swap
+ * as `cerefox ingest` (Part 25G) — removes the EF round-trip per
+ * file.
  *
- * Fails-soft on per-file errors: prints a summary at the end including
- * any files that didn't ingest, with exit code 0 (partial success) or
- * 2 (every file failed).
+ * Recursively walks the directory; for each file matching the
+ * `--extensions` filter, reads + ingests via the pipeline. Shows a
+ * `cli-progress` bar when stdout is a TTY; suppresses progress on
+ * non-TTY streams (CI / pipes).
+ *
+ * Fails-soft on per-file errors: prints a summary including any files
+ * that didn't ingest, with exit code 0 (partial success) or 2 (every
+ * file failed).
  */
 
 import type { Command } from "commander";
+import { createClient } from "@supabase/supabase-js";
 import cliProgress from "cli-progress";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 
 import {
@@ -27,9 +32,8 @@ import {
   userError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
-import { ingestTool } from "../../../../../_shared/mcp-tools/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
-import { getClient } from "../util/client.ts";
+import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 
 interface IngestDirOptions {
   projectName?: string;
@@ -77,7 +81,6 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
       .map((e) => (e.startsWith(".") ? e : "." + e))
       .filter((e) => e.length > 0),
   );
-
   const files = walk(dir, extensions);
 
   if (files.length === 0) {
@@ -94,8 +97,24 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
   }
   const metadata = parseJsonObjectArg(options.metadata, "--metadata") ?? {};
 
-  const client = getClient();
   const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    throw userError(
+      "Supabase credentials not configured — run `cerefox init` first.",
+    );
+  }
+  if (!settings.openaiApiKey) {
+    throw userError(
+      "OPENAI_API_KEY not set — required for embeddings during ingest.",
+    );
+  }
+  const supabase = createClient(settings.supabaseUrl, settings.supabaseKey, {
+    auth: { persistSession: false },
+  });
+  const pipeline = new IngestionPipeline({
+    supabase,
+    openAiApiKey: settings.openaiApiKey,
+  });
 
   const showProgress = process.stdout.isTTY === true;
   const bar = showProgress
@@ -116,38 +135,21 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
 
   for (const file of files) {
     bar?.update({ file: basename(file) });
-    let content: string;
     try {
-      content = readFileSync(file, "utf8");
-    } catch (err) {
-      outcomes.push({ file, status: "error", detail: `read failed: ${err instanceof Error ? err.message : String(err)}` });
-      bar?.increment();
-      continue;
-    }
-    if (content.trim() === "") {
-      outcomes.push({ file, status: "error", detail: "empty file (skipped)" });
-      bar?.increment();
-      continue;
-    }
-    const title = basename(file, extname(file));
-    const args: Record<string, unknown> = {
-      title,
-      content,
-      source: options.source ?? "cli",
-      metadata,
-      update_if_exists: Boolean(options.updateIfExists),
-      author,
-      author_type: authorType,
-    };
-    if (options.projectName) args.project_name = options.projectName;
-
-    try {
-      const message = await ingestTool.handler(
-        client.raw as unknown as Parameters<typeof ingestTool.handler>[0],
-        args,
-        { openaiApiKey: settings.openaiApiKey, accessPath: "cli" },
-      );
-      outcomes.push({ file, status: "ok", detail: message });
+      const result = await pipeline.ingestFile(file, {
+        title: basename(file, extname(file)),
+        source: options.source ?? "cli",
+        projectName: options.projectName ?? null,
+        metadata: metadata as Record<string, unknown>,
+        updateExisting: Boolean(options.updateIfExists),
+        author,
+        authorType: authorType as "user" | "agent",
+      });
+      outcomes.push({
+        file,
+        status: "ok",
+        detail: `${result.action}: ${result.chunkCount} chunks`,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       outcomes.push({ file, status: "error", detail: msg });
@@ -156,23 +158,20 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
   }
   bar?.stop();
 
-  // Summary.
   const ok = outcomes.filter((o) => o.status === "ok");
   const errs = outcomes.filter((o) => o.status === "error");
   println("");
-  println(c.bold(`Summary: ${ok.length} ok · ${errs.length} error${errs.length === 1 ? "" : "s"}`));
+  println(
+    c.bold(`Summary: ${ok.length} ok · ${errs.length} error${errs.length === 1 ? "" : "s"}`),
+  );
   if (errs.length > 0) {
     println("");
     printTable(
-      errs.map((e) => ({
-        file: e.file,
-        error: e.detail.slice(0, 100),
-      })),
+      errs.map((e) => ({ file: e.file, error: e.detail.slice(0, 100) })),
     );
   }
 
   if (errs.length === outcomes.length) {
-    // Every file failed.
     throw systemError(`All ${errs.length} file(s) failed to ingest.`);
   }
 }
