@@ -108,23 +108,27 @@ export class IngestionDbBridge {
   }
 
   async getDocumentByHash(contentHash: string): Promise<DocumentRow | null> {
+    // No `deleted_at` filter — matches Python's `get_document_by_hash`.
+    // Soft-deleted docs still occupy the unique constraint on
+    // `content_hash`; finding them lets us return action=skipped
+    // instead of crashing on insert.
     const { data } = await this.supabase
       .from("cerefox_documents")
       .select("*")
       .eq("content_hash", contentHash)
-      .is("deleted_at", null)
-      .order("updated_at", { ascending: false })
       .limit(1);
     const rows = (data ?? []) as DocumentRow[];
     return rows.length > 0 ? rows[0] : null;
   }
 
   async findDocumentByTitle(title: string): Promise<DocumentRow | null> {
+    // No `deleted_at` filter — matches Python's `find_document_by_title`.
+    // Soft-deleted docs MUST be findable so that --update-if-exists can
+    // either resurrect them OR fail the dedup-skip check downstream.
     const { data } = await this.supabase
       .from("cerefox_documents")
       .select("*")
       .eq("title", title)
-      .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(1);
     const rows = (data ?? []) as DocumentRow[];
@@ -132,11 +136,11 @@ export class IngestionDbBridge {
   }
 
   async findDocumentBySourcePath(sourcePath: string): Promise<DocumentRow | null> {
+    // No `deleted_at` filter — matches Python.
     const { data } = await this.supabase
       .from("cerefox_documents")
       .select("*")
       .eq("source_path", sourcePath)
-      .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(1);
     const rows = (data ?? []) as DocumentRow[];
@@ -210,7 +214,7 @@ export class IngestionDbBridge {
       "cerefox_ingest_document",
       params,
     );
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? JSON.stringify(error));
     // RPC returns either a single object or an array-with-one-object
     // depending on Supabase client version. Normalise.
     if (Array.isArray(data) && data.length > 0) {
@@ -228,7 +232,7 @@ export class IngestionDbBridge {
       .from("cerefox_documents")
       .update({ ...fields, updated_at: new Date().toISOString() })
       .eq("id", documentId);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
   async updateChunkEmbedding(
@@ -243,7 +247,7 @@ export class IngestionDbBridge {
         embedder_primary: embedderName,
       })
       .eq("id", chunkId);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
   /**
@@ -256,7 +260,7 @@ export class IngestionDbBridge {
       p_document_id: documentId,
       p_new_title: newTitle,
     });
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
   // ── Project M2M ───────────────────────────────────────────────────────────
@@ -282,7 +286,7 @@ export class IngestionDbBridge {
     const { error } = await this.supabase
       .from("cerefox_document_projects")
       .insert(rows);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
   /**
@@ -305,7 +309,7 @@ export class IngestionDbBridge {
     const { error } = await this.supabase
       .from("cerefox_document_projects")
       .insert(rows);
-    if (error) throw error;
+    if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
   async getOrCreateProject(name: string): Promise<ProjectRow> {
