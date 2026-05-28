@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.6.0] -- 2026-05-28
+
 **v0.6.0 — "TS Web Server" (FastAPI → Hono).** The local web server, the
 last big runtime component still on Python after v0.5, moves to
 TypeScript on Bun. `cerefox web` boots an in-process Hono server instead
