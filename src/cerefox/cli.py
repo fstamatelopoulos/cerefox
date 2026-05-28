@@ -244,7 +244,9 @@ def ingest(
     """Ingest a markdown, PDF, or DOCX file (or stdin) into the knowledge base."""
     import json  # noqa: PLC0415
 
-    from cerefox.chunking.converters import convert_to_markdown  # noqa: PLC0415
+    # PDF/DOCX converters dropped in v0.7.0. The converters module no
+    # longer exists; calls to it now surface as a clear error message
+    # at the .pdf/.docx branch below.
     from cerefox.ingestion.pipeline import IngestionPipeline  # noqa: PLC0415
 
     # Validate inputs before touching external services.
@@ -299,11 +301,13 @@ def ingest(
 
         p = _Path(path)
         if p.suffix.lower() in (".pdf", ".docx"):
-            try:
-                text = convert_to_markdown(p)
-            except ImportError as exc:
-                click.echo(f"❌  {exc}", err=True)
-                sys.exit(1)
+            click.echo(
+                f"❌  PDF/DOCX support dropped in v0.7.0 ({p.suffix} no longer "
+                "supported). Convert to markdown client-side before ingesting "
+                "(e.g. via pandoc / docling).",
+                err=True,
+            )
+            sys.exit(1)
             try:
                 result = pipeline.ingest_text(
                     text=text,
@@ -427,7 +431,9 @@ def ingest_dir(
     import json  # noqa: PLC0415
     from pathlib import Path as _Path  # noqa: PLC0415
 
-    from cerefox.chunking.converters import convert_to_markdown  # noqa: PLC0415
+    # PDF/DOCX converters dropped in v0.7.0. The converters module no
+    # longer exists; calls to it now surface as a clear error message
+    # at the .pdf/.docx branch below.
     from cerefox.ingestion.pipeline import IngestionPipeline  # noqa: PLC0415
 
     # Parse shared metadata JSON if supplied.
@@ -469,7 +475,18 @@ def ingest_dir(
     for f in files:
         try:
             if f.suffix.lower() in (".pdf", ".docx"):
-                text = convert_to_markdown(f)
+                # PDF/DOCX support dropped in v0.7.0. Skip these files
+                # with a per-file error message; convert client-side
+                # if you need them ingested.
+                click.echo(
+                    f"  ⊘  {f}: {f.suffix} support dropped in v0.7.0 "
+                    "(convert to markdown first).",
+                    err=True,
+                )
+                errors += 1
+                continue
+                # unreachable — kept the legacy branch structure for clarity
+                text = ""
                 result = pipeline.ingest_text(
                     text=text,
                     title=f.stem,
