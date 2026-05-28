@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.7.1] -- 2026-05-28
+
 **v0.7.1 — "Post-release polish".** Cleanup pass after v0.7.0: a real
 Postgres DDL probe in `cerefox doctor` (replacing the stale "deferred to
 v0.6" placeholder), spinner UX on the long-running diagnostic commands, the
