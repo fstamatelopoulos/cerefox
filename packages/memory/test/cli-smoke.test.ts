@@ -142,11 +142,16 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(stdout).toContain("--watch");
   });
 
-  test("`cerefox reindex` prints v0.7-deferred message and exits 0", () => {
-    const { stdout, stderr, status } = run(["reindex"]);
+  test("`cerefox reindex --help` advertises the v0.7 in-process flags", () => {
+    // v0.7 wires reindex in-process — the v0.5/v0.6 deferred-message
+    // stub is gone. Live behaviour is covered by cli-reindex.test.ts
+    // (probe-and-skip on Supabase reachability); here we just check
+    // the CLI surface from the built bin.
+    const { stdout, status } = run(["reindex", "--help"]);
     expect(status).toBe(0);
-    const all = stdout + stderr;
-    expect(all).toContain("v0.7");
-    expect(all).toContain("uv run cerefox reindex");
+    expect(stdout).toContain("--all");
+    expect(stdout).toContain("--batch");
+    expect(stdout).toContain("--dry-run");
+    expect(stdout).toContain("--document-id");
   });
 });
