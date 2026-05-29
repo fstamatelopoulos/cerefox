@@ -1,8 +1,10 @@
 """Tests for the v0.5 Python CLI deprecation banner.
 
 The banner prints on every Python CLI invocation pointing users at the
-new npm-installable `@cerefox/memory` package. v0.5–v0.7 keeps the
-Python CLI fully functional; v0.8/v0.9 removes it.
+new npm-installable `@cerefox/memory` package. The Python CLI stays
+functional through v0.8; in v0.9 the subcommands become husks that
+point at the npm CLI. (The Python MCP server is NOT deprecated — it
+stays as a repo-clone fallback through v1.x.)
 
 Suppression cases (each tested):
   - `CEREFOX_NO_DEPRECATION_BANNER` env var set.
