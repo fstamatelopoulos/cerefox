@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.8.0] -- 2026-05-29
+
 **v0.8.0 — "Production-Ready Install".** The npm package can now stand up
 the entire Cerefox server side without a repo clone, every server surface
 is versioned with a client↔server compatibility matrix, and `cerefox web`
