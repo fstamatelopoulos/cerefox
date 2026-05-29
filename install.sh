@@ -17,7 +17,12 @@
 set -eu
 
 PACKAGE="@cerefox/memory"
-VERSION_HINT=""
+# Default to the `latest` dist-tag (not a bare name). A bare
+# `bun install -g @cerefox/memory` treats an already-installed global as
+# satisfied and skips the upgrade, so a re-install kept the old version;
+# pinning `@latest` forces bun/npm to re-resolve and upgrade. Overridden by
+# the VERSION env below.
+VERSION_HINT="@latest"
 
 # Allow opting into a specific version via env: VERSION=0.5.0-rc.1 sh install.sh
 if [ -n "${VERSION:-}" ]; then

@@ -9,7 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- The one-line install script now pins the `latest` dist-tag instead of
+  installing `@cerefox/memory` unversioned. A bare `bun install -g
+  @cerefox/memory` treats an already-installed global as satisfied and skips
+  the upgrade, so re-running the installer kept the old version; `@latest`
+  forces bun/npm to re-resolve and upgrade. (Served from each GitHub release,
+  so this takes effect for installs of the release *after* it ships.)
 
 ---
 
