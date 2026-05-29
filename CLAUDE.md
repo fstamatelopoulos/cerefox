@@ -150,6 +150,18 @@ cerefox/
 | API e2e | `uv run pytest -m e2e` | Hits live Supabase (REST API + Edge Functions) |
 | UI e2e | `uv run pytest -m ui` | Playwright browser tests against local web app |
 | All Python e2e | `uv run pytest -m "e2e or ui"` | Both API and UI e2e |
+| Live EF e2e (TS) | `CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts` | Hits the deployed primitive Edge Functions. **Opt-in** — skipped by default. |
+| Live remote-MCP e2e (TS) | `CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts` | Hits the deployed `cerefox-mcp` EF over JSON-RPC. **Opt-in** — skipped by default. |
+
+> **Conserve free-tier Edge Function quota.** The two live TS suites
+> (`packages/memory/test/edge-functions/`, `.../mcp-remote/`) make real Edge
+> Function calls and are **gated behind `CEREFOX_LIVE_E2E=1`** (checked before
+> the reachability probe, so a default `bun test` makes ZERO EF calls). Run
+> them only when changing EF code (`supabase/functions/**`,
+> `_shared/{mcp-tools,embeddings,ef-meta}`) or for pre-release validation — and
+> prefer the narrowest file. They tag their calls with `requestor: "e2e-test"`
+> so usage-log rows are attributable (not "Unknown"). `cerefox doctor` also
+> calls the `/version?peers=true` aggregator (several EF calls), so don't loop it.
 
 - **API e2e** (`tests/e2e/test_api_e2e.py`): Uses credentials from `.env`. Edge Function tests need `CEREFOX_SUPABASE_ANON_KEY` (JWT). Cleans up `[E2E]`-prefixed test data automatically.
 - **UI e2e** (`tests/e2e/test_ui_e2e.py`): Requires web app running at `http://127.0.0.1:8000/`. Uses Playwright + Chromium. Install browsers: `uv run playwright install chromium`.
