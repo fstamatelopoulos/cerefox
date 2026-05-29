@@ -9,7 +9,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.7.2 — "Docs honesty patch".** Two doc fixes that change what users
+see, no code surface change:
+
+### Docs
+
+- npm `@cerefox/memory` README now distinguishes the server side (Postgres
+  schema + RPCs + Edge Functions, shipped with the source repo) from the
+  client side (this package). Adds the clone-and-deploy step explicitly —
+  a fresh `npm install -g @cerefox/memory` is not enough to stand up
+  Cerefox; the user also needs to clone the repo, run
+  `bun scripts/db_deploy.ts`, and deploy the 9 Edge Functions. Drops the
+  stale "Schema deploy (v0.5)" callout that promised v0.6 would port the
+  deploy logic (v0.7 actually did).
+
+### Fixed
+
+- Web UI's `SchemaVersionBanner` now points at `bun scripts/db_deploy.ts`
+  instead of the v0.7.0 husk `uv run python scripts/db_deploy.py`. The
+  banner only fires on schema mismatch (uncommon), but when it does the
+  hint should run.
 
 ---
 
