@@ -42,9 +42,10 @@ describe("cerefox deploy-server CLI", () => {
     const { stdout, status } = run(["deploy-server", "--help"]);
     expect(status).toBe(0);
     expect(stdout).toContain("--dry-run");
-    expect(stdout).toContain("--reset");
     expect(stdout).toContain("--schema-only");
     expect(stdout).toContain("--functions-only");
+    // --reset was removed in v0.8.1 — it lives only in scripts/db_deploy.ts now.
+    expect(stdout).not.toContain("--reset");
   });
 
   test("--schema-only --dry-run runs pre-flight + plan without deploying", () => {

@@ -2,26 +2,25 @@
 /**
  * Apply pending database migrations to an existing Cerefox instance.
  *
- * Migration files live in src/cerefox/db/migrations/ and are named
- * with a numeric prefix (e.g. 0003_add_versions.sql). Applied in
- * filename order. Each file is applied exactly once; applied
- * filenames are recorded in `cerefox_migrations` so they're never
- * re-applied.
+ * Migration files live in src/cerefox/db/migrations/ and are named with a
+ * numeric prefix (e.g. 0003_add_versions.sql). Applied in filename order;
+ * each exactly once, recorded in `cerefox_migrations`.
  *
  * Usage:
  *   bun scripts/db_migrate.ts              # apply all pending migrations
  *   bun scripts/db_migrate.ts --dry-run    # show what would run
  *   bun scripts/db_migrate.ts --status     # list status, exit
+ *   bun scripts/db_migrate.ts --assets-dir <path>
  *
- * TS port of `scripts/db_migrate.py` (iter-25 Part 25H).
+ * Low-level contributor script. End users get the same effect (and more)
+ * from `cerefox deploy-server`, which runs pending migrations on existing
+ * databases. The migrate logic lives in `_shared/db-deploy/`
+ * (`runDbMigrate` / `migrationStatus`); this script is a thin wrapper.
  */
-
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import postgres from "postgres";
 
 import { loadEnv } from "../_shared/config/index.js";
 import { resolveServerAssets } from "../_shared/server-assets/index.js";
+import { migrationStatus, runDbMigrate } from "../_shared/db-deploy/index.js";
 import {
   EXIT_OK,
   EXIT_USER_ERROR,
@@ -32,14 +31,6 @@ import {
 } from "../_shared/cli-core/index.js";
 
 loadEnv();
-
-const BOOTSTRAP_SQL = `
-CREATE TABLE IF NOT EXISTS cerefox_migrations (
-    id         SERIAL      PRIMARY KEY,
-    filename   TEXT        NOT NULL UNIQUE,
-    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-`;
 
 interface Args {
   dryRun: boolean;
@@ -71,13 +62,6 @@ function parseArgs(argv: string[]): Args {
   return out;
 }
 
-function listMigrationFiles(migrationsDir: string): string[] {
-  if (!existsSync(migrationsDir)) return [];
-  return readdirSync(migrationsDir)
-    .filter((n) => n.endsWith(".sql"))
-    .sort();
-}
-
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const dbUrl = process.env.CEREFOX_DATABASE_URL ?? "";
@@ -89,90 +73,51 @@ async function main(): Promise<void> {
   }
 
   const assets = resolveServerAssets({ assetsDir: args.assetsDir });
-  const migrationsDir = assets.migrationsDir;
 
   println(c.bold("╔══════════════════════════════════════╗"));
   println(c.bold("║  Cerefox DB Migrate                  ║"));
   println(c.bold("╚══════════════════════════════════════╝"));
 
-  const sql = postgres(dbUrl, { prepare: false, onnotice: () => {} });
-
-  // Bootstrap: ensure tracking table exists.
-  await sql.unsafe(BOOTSTRAP_SQL);
-
-  const allFiles = listMigrationFiles(migrationsDir);
-  const appliedRows = await sql<
-    { filename: string }[]
-  >`SELECT filename FROM cerefox_migrations ORDER BY filename`;
-  const applied = new Set(appliedRows.map((r) => r.filename));
-
   if (args.status) {
-    if (allFiles.length === 0) {
+    const status = await migrationStatus({ dbUrl, assets });
+    if (status.all.length === 0) {
       println("No migration files found.");
-      await sql.end({ timeout: 5 });
-      return;
+      process.exit(EXIT_OK);
     }
     println(`\n${"Filename".padEnd(50)}  Status`);
     println("─".repeat(60));
-    for (const f of allFiles) {
-      const status = applied.has(f) ? c.green("✓  applied") : c.yellow("○  pending");
-      println(`  ${f.padEnd(50)}  ${status}`);
+    const appliedSet = new Set(status.applied);
+    for (const f of status.all) {
+      const label = appliedSet.has(f) ? c.green("✓  applied") : c.yellow("○  pending");
+      println(`  ${f.padEnd(50)}  ${label}`);
     }
-    const pendingCount = allFiles.filter((f) => !applied.has(f)).length;
     println(
-      `\n${allFiles.length} total  |  ${allFiles.length - pendingCount} applied  |  ${pendingCount} pending`,
+      `\n${status.all.length} total  |  ${status.applied.length} applied  |  ${status.pending.length} pending`,
     );
-    await sql.end({ timeout: 5 });
-    return;
+    process.exit(EXIT_OK);
   }
 
-  const pending = allFiles.filter((f) => !applied.has(f));
-  if (pending.length === 0) {
+  const result = await runDbMigrate({
+    dbUrl,
+    assets,
+    dryRun: args.dryRun,
+    log: (line) => println(c.bold(`▶  ${line}`)),
+  });
+
+  if (!result.ok) {
+    errorln(`\n❌  ${result.failedFile} failed: ${result.error}`);
+    errorln("\nMigration stopped. Previous migrations in this run were committed.");
+    errorln("Fix the error in the migration file and re-run.");
+    process.exit(EXIT_SYSTEM_ERROR);
+  }
+
+  if (result.pending.length === 0) {
     println(c.green("\n✓  No pending migrations — database is up to date."));
-    await sql.end({ timeout: 5 });
-    return;
+  } else if (args.dryRun) {
+    println(c.yellow(`\n⚠️  Dry-run — ${result.pending.length} migration(s) would be applied.`));
+  } else {
+    println(c.green(`\n✓  Applied ${result.applied.length} migration(s) successfully.`));
   }
-
-  println(`\n${pending.length} pending migration(s):`);
-  for (const f of pending) println(`  • ${f}`);
-
-  if (args.dryRun) {
-    println(c.yellow("\n⚠️  Dry-run mode — no changes will be made."));
-    for (const f of pending) {
-      const body = readFileSync(join(migrationsDir, f), "utf8");
-      println(`\n── ${f} ──`);
-      println(c.dim(body.slice(0, 600) + (body.length > 600 ? "..." : "")));
-    }
-    await sql.end({ timeout: 5 });
-    return;
-  }
-
-  println("");
-  let appliedCount = 0;
-  for (const f of pending) {
-    const body = readFileSync(join(migrationsDir, f), "utf8");
-    println(c.bold(`▶  Applying ${f}…`));
-    try {
-      // Each migration runs in its own implicit transaction via
-      // `sql.begin`. Insert the tracking row in the SAME transaction so
-      // an error rolls both back.
-      await sql.begin(async (tx) => {
-        await tx.unsafe(body);
-        await tx`INSERT INTO cerefox_migrations (filename) VALUES (${f}) ON CONFLICT DO NOTHING`;
-      });
-      println(c.green("   ✓  Done"));
-      appliedCount++;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errorln(`\n❌  ${f} failed: ${msg}`);
-      errorln("\nMigration stopped. Previous migrations in this run were committed.");
-      errorln("Fix the error in the migration file and re-run db_migrate.ts.");
-      await sql.end({ timeout: 5 });
-      process.exit(EXIT_SYSTEM_ERROR);
-    }
-  }
-  println(c.green(`\n✓  Applied ${appliedCount} migration(s) successfully.`));
-  await sql.end({ timeout: 5 });
 }
 
 main().catch((err) => {

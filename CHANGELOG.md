@@ -9,7 +9,57 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.8.1 — deploy-server handles updates, not just fresh installs.** Fixes a
+gap in v0.8.0: `cerefox deploy-server` only ever did a *fresh* deploy (apply
+schema + RPCs, then stamp every migration as already-applied). Run against a
+database that already had a Cerefox schema, it silently re-stamped migrations
+without running them — so a release that shipped a new migration never applied
+it. `deploy-server` is now the catch-all for both standing up *and updating*
+the server side.
+
+### Added
+
+- `cerefox delete-project <name-or-id>` — new CLI subcommand. Looks up by
+  UUID or exact name; refuses if documents are still linked unless `--force`;
+  `--yes` skips the prompt for scripts. Symmetric to the existing Projects page
+  DELETE action in the web UI. Used by `write-commands.test.ts` to reap the
+  `_e2e-v0.5` test project so prior runs don't leave stray projects behind.
+
+### Changed
+
+- **`cerefox deploy-server` detects fresh vs. existing databases.** On a fresh
+  database it deploys schema + RPCs and stamps migrations (unchanged). On a
+  database that already has a Cerefox schema it applies any *pending*
+  migrations (each in its own transaction) and re-applies `rpcs.sql` to refresh
+  the RPCs — i.e. an in-place update. Re-running after a release that changes
+  RPCs and/or adds a migration now does the right thing; no separate migrate
+  step is needed. The dry-run plan shows which path will run and lists pending
+  migrations.
+- **`cerefox doctor`** relabels the `schema` row to `schema + RPCs` and now
+  classifies the deployed schema/RPC version against the client's required
+  minimum (error if below) and bundled version (warning if older). When the
+  schema and/or Edge Functions are out of date, doctor prints a single
+  consolidated remediation line: `cerefox deploy-server` when both are stale,
+  or the matching `--schema-only` / `--functions-only` when only one is.
+- **`cerefox web` log lines now carry a local-time timestamp**
+  (`YYYY-MM-DD HH:mm:ss.SSS`) — both the per-request logger and the
+  start/shutdown lines. Makes the daemon log (`~/.cerefox/web.log`) readable
+  after the fact (previously lines like `Received SIGTERM; shutting down` had
+  no time).
+
+### Removed
+
+- **`cerefox deploy-server --reset`.** The destructive drop-everything flag is
+  gone from the user-facing command — a full wipe is a contributor/recovery
+  operation. It remains in the low-level `bun scripts/db_deploy.ts --reset`
+  (repo clone only, behind its typed-`yes` guard).
+
+### Internal
+
+- Extracted `runDbMigrate`, `migrationStatus`, `detectExistingSchema`, and
+  `applyRpcs` into `_shared/db-deploy/` so the `deploy-server` command and the
+  low-level `scripts/db_migrate.ts` share one implementation. `db_migrate.ts`
+  is now a thin wrapper (with a new `--status` flag).
 
 ---
 

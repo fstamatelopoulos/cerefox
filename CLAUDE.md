@@ -93,6 +93,8 @@ cerefox/
 │   ├── backup_restore.py      # Restore from a backup
 │   ├── cut_release.ts         # Cut/tag a release; optional --npm-publish
 │   ├── bundle_help.ts         # Bundle AGENT_QUICK_REFERENCE.md into _shared/mcp-tools/get-help-content.ts
+│   ├── db_deploy.ts           # Low-level fresh schema+RPC deploy (contributor; has --reset)
+│   ├── db_migrate.ts          # Low-level apply-pending-migrations (contributor; --status/--dry-run)
 │   └── *.ts                   # TS strangler-fig ports of legacy Python scripts
 ├── tests/
 │   ├── chunking/
@@ -269,6 +271,21 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/` | Claude Code, Cursor, Claude Desktop (via supergateway) |
 
 The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md` and `docs/guides/migration-v0.5.md`.
+
+### Deploying the server side: `cerefox deploy-server`
+
+`cerefox deploy-server` is the **catch-all** for both standing up *and updating*
+the server side — schema + RPCs (in-process via `_shared/db-deploy/`) and all 9
+Edge Functions (`npx supabase functions deploy`), from assets bundled in the
+npm package (no repo clone). It detects fresh vs. existing databases: a fresh DB
+gets schema + RPCs deployed and migrations stamped; an existing DB gets *pending
+migrations applied* and `rpcs.sql` re-applied (an in-place update). So a release
+that changes RPCs or adds a migration ships by re-running this command. Flags:
+`--schema-only`, `--functions-only`, `--dry-run`. There is deliberately **no
+`--reset`** here — a destructive wipe lives only in the low-level
+`bun scripts/db_deploy.ts --reset` (contributor, repo clone, typed-`yes` guard).
+The migrate/deploy logic is shared with `scripts/db_migrate.ts` /
+`scripts/db_deploy.ts` via `_shared/db-deploy/`.
 
 ### Edge Function Model Config
 

@@ -16,7 +16,7 @@
 
 import type { Command } from "commander";
 
-import { c, eprintln, info, println } from "../../../../../_shared/cli-core/index.ts";
+import { c, eprintln, info, localTimestamp, println } from "../../../../../_shared/cli-core/index.ts";
 import { buildWebServer, CompatibilityError } from "../../web/server.ts";
 import {
   daemonPaths,
@@ -47,12 +47,14 @@ async function runForeground(host: string, port: number, watch?: boolean): Promi
   }
   try {
     const handle = await buildWebServer({ host, port });
-    info(`Cerefox web listening on http://${handle.host}:${handle.port}/`);
+    // Timestamped to match the request-logger lines in the daemon log
+    // (~/.cerefox/web.log); local time per maintainer preference.
+    println(`${localTimestamp()}  Cerefox web listening on http://${handle.host}:${handle.port}/`);
     println(`  Web UI:  http://${handle.host}:${handle.port}/app/`);
     println(`  API:     http://${handle.host}:${handle.port}/api/v1/`);
 
     const shutdown = async (signal: string) => {
-      info(`Received ${signal}; shutting down.`);
+      println(`${localTimestamp()}  Received ${signal}; shutting down.`);
       await handle.close().catch(() => {});
       process.exit(0);
     };

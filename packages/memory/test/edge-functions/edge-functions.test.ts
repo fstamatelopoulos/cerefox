@@ -379,16 +379,18 @@ describe("Edge Functions (live HTTP)", () => {
 
     test("document_id + update_if_exists=false still updates + returns a note", async () => {
       const title = uniqueTitle("ID Note");
+      // uniqueContent() (not fixed strings) so the global content_hash
+      // uniqueness constraint isn't tripped by leftovers from a prior run.
       const r1 = await invokeOk("cerefox-ingest", {
         title,
-        content: "# ID Note\n\nOriginal.",
+        content: uniqueContent(),
         author: "e2e-ef-test",
         author_type: "agent",
       });
       track(r1.document_id);
       const r2 = await invokeOk("cerefox-ingest", {
         title,
-        content: "# ID Note\n\nModified.",
+        content: uniqueContent(),
         document_id: r1.document_id,
         update_if_exists: false,
         author: "e2e-ef-test",

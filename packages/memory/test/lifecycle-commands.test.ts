@@ -320,11 +320,11 @@ describe("doctor / status (live)", () => {
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as Array<{ name: string; status: string }>;
     expect(Array.isArray(parsed)).toBe(true);
-    // We expect at least binary, runtime, version, config, supabase, openai, schema.
+    // We expect at least binary, runtime, version, config, supabase, openai, schema + RPCs.
     const names = parsed.map((c) => c.name);
     expect(names).toContain("binary");
     expect(names).toContain("supabase");
-    expect(names).toContain("schema");
+    expect(names).toContain("schema + RPCs");
   });
 
   test("status --json returns a 3-element array", () => {

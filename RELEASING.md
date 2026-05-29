@@ -81,14 +81,19 @@ bun scripts/cut_release.ts <version> --npm-publish
 ## Server-surface changes (schema / RPCs / Edge Functions)
 
 If the release changed the server side, the CHANGELOG **and** the migration
-guide must include the redeploy step prominently (not buried):
+guide must include the redeploy step prominently (not buried). For end users
+the single command covers everything:
 
 ```bash
-# From a repo clone of the matching tag:
-bun scripts/db_deploy.ts        # or db_migrate.ts for incremental schema changes
-# Then redeploy the Edge Functions (or use cerefox deploy-server):
-cerefox deploy-server
+cerefox deploy-server   # fresh DB → deploy schema+RPCs+EFs;
+                        # existing DB → apply pending migrations, refresh RPCs+EFs
 ```
+
+`deploy-server` is the catch-all: on an existing database it applies any
+*pending* migrations and re-applies `rpcs.sql`, so a release that changes RPCs
+or adds a migration is shipped just by re-running it. The low-level scripts
+(`bun scripts/db_deploy.ts` for a fresh deploy, `bun scripts/db_migrate.ts` for
+incremental migrations) remain for contributors working from a repo clone.
 
 ## If something is wrong after publish
 

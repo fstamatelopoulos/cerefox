@@ -134,3 +134,152 @@ export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult
 export function migrationPath(assets: ServerAssetPaths, file: string): string {
   return join(assets.migrationsDir, file);
 }
+
+// ── Incremental migrations (extracted from scripts/db_migrate.ts, v0.8.1) ────
+
+export const BOOTSTRAP_MIGRATIONS_SQL = `
+CREATE TABLE IF NOT EXISTS cerefox_migrations (
+    id         SERIAL      PRIMARY KEY,
+    filename   TEXT        NOT NULL UNIQUE,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
+/**
+ * Does this database already have a Cerefox schema? Used by
+ * `cerefox deploy-server` to choose the fresh-deploy path vs the
+ * apply-pending-migrations path. Probes for the core documents table.
+ */
+export async function detectExistingSchema(dbUrl: string): Promise<boolean> {
+  const sql = postgres(dbUrl, { prepare: false, onnotice: () => {} });
+  try {
+    const rows = (await sql`SELECT to_regclass('public.cerefox_documents') AS t`) as Array<{
+      t: string | null;
+    }>;
+    return rows[0]?.t != null;
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
+export interface MigrationStatus {
+  all: string[];
+  applied: string[];
+  pending: string[];
+}
+
+/** Read which migration files exist vs are recorded as applied. */
+export async function migrationStatus(opts: {
+  dbUrl: string;
+  assets: ServerAssetPaths;
+}): Promise<MigrationStatus> {
+  const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
+  try {
+    await sql.unsafe(BOOTSTRAP_MIGRATIONS_SQL);
+    const all = listMigrationFiles(opts.assets.migrationsDir);
+    const appliedRows = (await sql`SELECT filename FROM cerefox_migrations ORDER BY filename`) as Array<{
+      filename: string;
+    }>;
+    const appliedSet = new Set(appliedRows.map((r) => r.filename));
+    return {
+      all,
+      applied: all.filter((f) => appliedSet.has(f)),
+      pending: all.filter((f) => !appliedSet.has(f)),
+    };
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
+export interface DbMigrateOptions {
+  dbUrl: string;
+  assets: ServerAssetPaths;
+  dryRun?: boolean;
+  log?: (line: string) => void;
+}
+
+export interface DbMigrateResult {
+  ok: boolean;
+  /** Filenames applied (empty in dry-run; that's what `pending` is for). */
+  applied: string[];
+  /** All pending migrations found at start. */
+  pending: string[];
+  failedFile?: string;
+  error?: string;
+}
+
+/**
+ * Apply pending migrations to an existing database, each in its own
+ * transaction (with the tracking-row insert in the same txn so a failure
+ * rolls both back). Bootstraps `cerefox_migrations` first. Returns a
+ * structured result; never calls process.exit.
+ */
+export async function runDbMigrate(opts: DbMigrateOptions): Promise<DbMigrateResult> {
+  const log = opts.log ?? (() => {});
+  const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
+  try {
+    await sql.unsafe(BOOTSTRAP_MIGRATIONS_SQL);
+    const allFiles = listMigrationFiles(opts.assets.migrationsDir);
+    const appliedRows = (await sql`SELECT filename FROM cerefox_migrations ORDER BY filename`) as Array<{
+      filename: string;
+    }>;
+    const appliedSet = new Set(appliedRows.map((r) => r.filename));
+    const pending = allFiles.filter((f) => !appliedSet.has(f));
+
+    if (pending.length === 0) return { ok: true, applied: [], pending: [] };
+    if (opts.dryRun) {
+      for (const f of pending) log(`Would apply ${f}`);
+      return { ok: true, applied: [], pending };
+    }
+
+    const applied: string[] = [];
+    for (const f of pending) {
+      const body = readFileSync(join(opts.assets.migrationsDir, f), "utf8");
+      log(`Applying ${f}…`);
+      try {
+        await sql.begin(async (tx) => {
+          await tx.unsafe(body);
+          await tx`INSERT INTO cerefox_migrations (filename) VALUES (${f}) ON CONFLICT DO NOTHING`;
+        });
+        applied.push(f);
+      } catch (err) {
+        return {
+          ok: false,
+          applied,
+          pending,
+          failedFile: f,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+    return { ok: true, applied, pending };
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
+/**
+ * Re-apply `rpcs.sql` to refresh the Postgres RPCs (CREATE OR REPLACE /
+ * DROP+CREATE — idempotent). Used by the existing-DB path of
+ * `cerefox deploy-server` so an update lands the latest RPC definitions.
+ */
+export async function applyRpcs(opts: {
+  dbUrl: string;
+  assets: ServerAssetPaths;
+  dryRun?: boolean;
+  log?: (line: string) => void;
+}): Promise<{ ok: boolean; error?: string }> {
+  const log = opts.log ?? (() => {});
+  log("Refresh RPCs (rpcs.sql)…");
+  if (opts.dryRun) return { ok: true };
+  const rpcsSql = readFileSync(opts.assets.rpcsFile, "utf8");
+  const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
+  try {
+    await sql.unsafe(rpcsSql);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}

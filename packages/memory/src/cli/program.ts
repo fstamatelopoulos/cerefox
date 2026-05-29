@@ -25,6 +25,7 @@ import { registerConfigGet } from "./commands/config-get.ts";
 import { registerConfigSet } from "./commands/config-set.ts";
 import { registerConfigureAgent } from "./commands/configure-agent.ts";
 import { registerDeleteDoc } from "./commands/delete-doc.ts";
+import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
 import { registerDocs } from "./commands/docs.ts";
 import { registerDoctor } from "./commands/doctor.ts";
@@ -71,7 +72,7 @@ export function buildProgram(): Command {
       "\nCommand groups (each row in the list above falls into one):\n" +
         "  READS      search · get-doc · list-docs · list-versions · list-projects\n" +
         "             · list-metadata-keys · metadata-search · get-audit-log\n" +
-        "  WRITES     ingest · ingest-dir · delete-doc\n" +
+        "  WRITES     ingest · ingest-dir · delete-doc · delete-project\n" +
         "  SERVERS    mcp · web\n" +
         "  LIFECYCLE  init · doctor · status · configure-agent · self-update · upgrade · sync-self-docs · deploy-server\n" +
         "  OPS        backup · restore · sync-docs · docs · reindex · config-get · config-set · completion\n" +
@@ -98,6 +99,7 @@ export function buildProgram(): Command {
   registerIngest(program);
   registerIngestDir(program);
   registerDeleteDoc(program);
+  registerDeleteProject(program);
 
   // ── SERVERS ─────────────────────────────────────────────────────────────
   registerMcp(program);

@@ -87,6 +87,19 @@ export function printTable(
   }
 }
 
+/**
+ * Local-time timestamp `YYYY-MM-DD HH:mm:ss.SSS` for log lines (web server
+ * daemon log). Local time (not UTC) so a maintainer tailing their own log
+ * reads wall-clock time directly.
+ */
+export function localTimestamp(d: Date = new Date()): string {
+  const p = (n: number, w = 2) => String(n).padStart(w, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`
+  );
+}
+
 // ── stderr writers ──────────────────────────────────────────────────────────
 
 /** Write a single line of text + newline to stderr. */

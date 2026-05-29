@@ -1,19 +1,28 @@
 /**
- * `cerefox deploy-server` — deploy the Cerefox server side to your Supabase
- * project (iter-26 Part 26D): the Postgres schema + RPCs (in-process via the
- * shared `runDbDeploy`) and the 9 Edge Functions (via `npx supabase
- * functions deploy`).
+ * `cerefox deploy-server` — the catch-all for standing up *and updating*
+ * the Cerefox server side on your Supabase project: the Postgres schema +
+ * RPCs (in-process) and the 9 Edge Functions (via `npx supabase functions
+ * deploy`).
  *
  * Eliminates the repo-clone step: the server assets (SQL + EF sources) ship
- * bundled in `dist/server-assets/` (Part 26A), so a fresh
- * `npm install -g @cerefox/memory` can stand up the whole server.
+ * bundled in `dist/server-assets/`, so a fresh `npm install -g
+ * @cerefox/memory` can stand up the whole server.
+ *
+ * Fresh vs. existing (v0.8.1): the DB half detects whether a Cerefox schema
+ * already exists.
+ *   - Fresh DB → apply schema.sql + rpcs.sql + stamp migrations (full deploy).
+ *   - Existing DB → apply pending migrations + refresh RPCs (an *update*).
+ * So a release that changes RPCs and/or adds a migration is deployed by
+ * re-running this command — no separate migrate step needed. (The low-level
+ * `scripts/db_deploy.ts` / `db_migrate.ts` remain for contributors.)
  *
  * Comprehensive pre-flight: every external prerequisite is probed up-front
- * and reported as a single all-or-nothing remediation list. The user fixes
- * what's missing and re-runs — the command is idempotent.
+ * and reported as a single all-or-nothing remediation list. Idempotent.
  *
- * Flags: --dry-run (plan only, no prompt), --reset (drop + redeploy),
- *        --schema-only, --functions-only.
+ * Flags: --dry-run (plan only, no prompt), --schema-only, --functions-only.
+ * There is deliberately NO --reset (drop-everything) here — a full wipe is a
+ * contributor/recovery operation; use `bun scripts/db_deploy.ts --reset`
+ * (repo clone, typed-`yes` guard) if you truly need it.
  */
 
 import type { Command } from "commander";
@@ -30,11 +39,16 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { resolveServerAssets } from "../../../../../_shared/server-assets/index.ts";
-import { runDbDeploy } from "../../../../../_shared/db-deploy/index.ts";
+import {
+  applyRpcs,
+  detectExistingSchema,
+  migrationStatus,
+  runDbDeploy,
+  runDbMigrate,
+} from "../../../../../_shared/db-deploy/index.ts";
 
 interface DeployServerOptions {
   dryRun?: boolean;
-  reset?: boolean;
   schemaOnly?: boolean;
   functionsOnly?: boolean;
 }
@@ -143,14 +157,39 @@ async function action(options: DeployServerOptions): Promise<void> {
   }
   println(c.green("\n✓ All prerequisites satisfied."));
 
+  // ── Detect fresh vs existing (read-only probe) ───────────────────────────
+  let schemaMode: "fresh" | "existing" | "unknown" = "unknown";
+  let pending: string[] = [];
+  if (doSchema) {
+    try {
+      const exists = await detectExistingSchema(settings.databaseUrl);
+      schemaMode = exists ? "existing" : "fresh";
+      if (exists) {
+        pending = (await migrationStatus({ dbUrl: settings.databaseUrl, assets })).pending;
+      }
+    } catch (err) {
+      if (!options.dryRun) {
+        eprintln(c.red(`\n✗ Could not connect to the database: ${err instanceof Error ? err.message : String(err)}`));
+        eprintln(c.dim("   Verify CEREFOX_DATABASE_URL (Session Pooler, port 5432)."));
+        process.exit(1);
+      }
+      // dry-run tolerates a probe failure — just show a generic plan.
+    }
+  }
+
   // ── Plan + confirm ──────────────────────────────────────────────────────
   const planLines: string[] = [];
   if (doSchema) {
-    planLines.push(
-      `  • ${options.reset ? "RESET + redeploy" : "Deploy"} schema + RPCs to ${
-        settings.supabaseUrl || "your Supabase database"
-      }`,
-    );
+    if (schemaMode === "fresh") {
+      planLines.push(`  • Deploy fresh schema + RPCs to ${settings.supabaseUrl || "your Supabase database"}`);
+    } else if (schemaMode === "existing") {
+      planLines.push(
+        `  • Update existing schema: apply ${pending.length} pending migration(s) + refresh RPCs`,
+      );
+      for (const f of pending) planLines.push(c.dim(`      – ${f}`));
+    } else {
+      planLines.push(`  • Schema + RPCs (fresh or update — couldn't probe the DB)`);
+    }
   }
   if (doFunctions) {
     planLines.push(`  • Deploy ${efNames.length} Edge Function(s): ${efNames.join(", ")}`);
@@ -164,10 +203,7 @@ async function action(options: DeployServerOptions): Promise<void> {
     process.exit(0);
   }
 
-  const proceed = await confirm(
-    `\nProceed with deployment to Supabase${options.reset ? " (--reset DROPS existing data!)" : ""}?`,
-    true, // default No
-  );
+  const proceed = await confirm("\nProceed with deployment to Supabase?", true /* default No */);
   if (!proceed) {
     println(c.dim("Aborted."));
     process.exit(0);
@@ -175,18 +211,46 @@ async function action(options: DeployServerOptions): Promise<void> {
 
   // ── Schema ────────────────────────────────────────────────────────────────
   if (doSchema) {
-    println(c.bold("\n▶  Deploying schema + RPCs…"));
-    const result = await runDbDeploy({
-      dbUrl: settings.databaseUrl,
-      assets,
-      reset: options.reset,
-      log: (line) => println(c.dim(`   ${line}`)),
-    });
-    if (!result.ok) {
-      eprintln(c.red(`\n✗ Schema deploy failed at "${result.failedStep}": ${result.error}`));
-      process.exit(1);
+    if (schemaMode === "fresh") {
+      println(c.bold("\n▶  Deploying fresh schema + RPCs…"));
+      const result = await runDbDeploy({
+        dbUrl: settings.databaseUrl,
+        assets,
+        log: (line) => println(c.dim(`   ${line}`)),
+      });
+      if (!result.ok) {
+        eprintln(c.red(`\n✗ Schema deploy failed at "${result.failedStep}": ${result.error}`));
+        process.exit(1);
+      }
+      println(c.green(`   ✓ Fresh schema deployed (${result.stepsRun} steps).`));
+    } else {
+      // Existing DB: apply pending migrations, then refresh RPCs.
+      println(c.bold("\n▶  Updating existing schema (migrations + RPC refresh)…"));
+      const mig = await runDbMigrate({
+        dbUrl: settings.databaseUrl,
+        assets,
+        log: (line) => println(c.dim(`   ${line}`)),
+      });
+      if (!mig.ok) {
+        eprintln(c.red(`\n✗ Migration "${mig.failedFile}" failed: ${mig.error}`));
+        eprintln(c.dim("   Earlier migrations in this run were committed. Fix + re-run."));
+        process.exit(1);
+      }
+      const rpcs = await applyRpcs({
+        dbUrl: settings.databaseUrl,
+        assets,
+        log: (line) => println(c.dim(`   ${line}`)),
+      });
+      if (!rpcs.ok) {
+        eprintln(c.red(`\n✗ RPC refresh failed: ${rpcs.error}`));
+        process.exit(1);
+      }
+      println(
+        c.green(
+          `   ✓ Applied ${mig.applied.length} migration(s); RPCs refreshed.`,
+        ),
+      );
     }
-    println(c.green(`   ✓ Schema deployed (${result.stepsRun} steps).`));
   }
 
   // ── Edge Functions ──────────────────────────────────────────────────────
@@ -223,10 +287,9 @@ async function action(options: DeployServerOptions): Promise<void> {
 export function registerDeployServer(program: Command): void {
   program
     .command("deploy-server")
-    .description("Deploy the Cerefox server side (schema + RPCs + Edge Functions) to Supabase.")
+    .description("Deploy/update the Cerefox server side (schema + RPCs + Edge Functions) on Supabase.")
     .option("--dry-run", "Print the plan + pre-flight without deploying.")
-    .option("--reset", "DROP existing Cerefox tables before redeploying the schema (DESTRUCTIVE).")
-    .option("--schema-only", "Deploy only the schema + RPCs (skip Edge Functions).")
-    .option("--functions-only", "Deploy only the Edge Functions (skip the schema).")
+    .option("--schema-only", "Deploy/update only the schema + RPCs (skip Edge Functions).")
+    .option("--functions-only", "Deploy only the Edge Functions (skip the schema/RPCs).")
     .action(action);
 }
