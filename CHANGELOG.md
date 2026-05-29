@@ -9,8 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-**v0.7.2 — "Docs honesty patch".** Two doc fixes that change what users
-see, no code surface change:
+**v0.7.2 — "Docs honesty + web-server glitches".** README correction
+on npm, two SchemaVersionBanner/Layout fixes, plus three web-server
+glitches surfaced during v0.7.1 testing (favicon routing, in-app logo
+broken on npm installs, no request logging).
 
 ### Docs
 
@@ -25,6 +27,26 @@ see, no code surface change:
 
 ### Fixed
 
+- **Favicon now actually loads.** v0.7.1 added the asset and the
+  `<link rel="icon">` to `frontend/index.html`, but `cerefox web`'s
+  middleware order had `/app/*` catch-all returning `index.html` for
+  every `/app/*` path — including `/app/cerefox_icon.png`. The catch-all
+  ran before any file-serving middleware for the SPA root. A new
+  `serveStatic` for `spaDist` at the SPA root is registered before the
+  catch-all; Hono falls through on 404 so React-router paths like
+  `/app/projects` still hit the catch-all correctly.
+- **In-app logo loads on npm installs.** The header in `Layout.tsx`
+  referenced `/static/cerefox_logo.jpg`, which only resolves when the
+  repo's `web/static/` directory is reachable. The npm tarball doesn't
+  ship `web/static/`, so npm users saw a broken image. Switched the
+  reference to `/app/cerefox_icon.png` — the same asset bundled with
+  the SPA in v0.7.1 — so it works on both source and installed paths.
+- **`cerefox web` logs requests.** The Python web server logged each
+  HTTP request via uvicorn; the v0.6 Hono port had no logger
+  middleware so the foreground server was silent. Added Hono's
+  `logger()` middleware (writes one line per request to stderr,
+  matching the uvicorn UX). Skipped under `NODE_ENV=test` so smoke
+  tests stay quiet.
 - Web UI's `SchemaVersionBanner` now points at `bun scripts/db_deploy.ts`
   instead of the v0.7.0 husk `uv run python scripts/db_deploy.py`. The
   banner only fires on schema mismatch (uncommon), but when it does the
