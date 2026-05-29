@@ -2782,6 +2782,103 @@ the 2026-05-28 daemon-mode design discussion:
 - **`pyproject.toml`, `uv.lock`, `.python-version` STAY** because the Python runtime stays. Pytest as a test runner goes away.
 - End state after v0.9: zero `.py` in `tests/`; one test runner (`bun test`); Python runtime minimised to MCP server + CLI husks (+ maybe web husk).
 
+**v0.8.0 design items added 2026-05-28 (post-v0.7.1 review)**:
+
+1. **Eliminate the repo-clone for end users (`cerefox deploy-server`).**
+   Today a fresh npm install of `@cerefox/memory` is not enough to stand
+   up Cerefox — the user also needs the repo for `schema.sql`, `rpcs.sql`,
+   `migrations/`, and `supabase/functions/`. Plan:
+   - **Bundle server assets into the npm tarball.** Add a
+     `prepublishOnly` step that copies `src/cerefox/db/schema.sql`,
+     `rpcs.sql`, `migrations/`, and `supabase/functions/` into
+     `dist/server-assets/`. Verified total footprint is ~272 KB
+     (schema 20K + rpcs 72K + migrations 84K + EFs 96K) — bundling
+     bumps the tarball from 1.9 MB → ~2.2 MB. Single package; no
+     `@cerefox/memory-server` split needed (the optimization only
+     earns its complexity if assets ever cross ~10 MB, which SQL +
+     Deno TS source won't).
+   - **New CLI command `cerefox deploy-server`.** Wraps the
+     `db_deploy.ts` logic + invokes `npx supabase functions deploy`
+     for each of the 9 EFs. Flags mirror the scripts: `--dry-run`,
+     `--reset`. Probe `CEREFOX_DATABASE_URL` + Supabase CLI presence
+     up-front; refuse with clear remediation if either is missing.
+   - **`cerefox init` calls `deploy-server` for fresh installs.**
+     Detection: after the user provides Supabase URL + key, call
+     `cerefox_schema_version()` — if it 404s (no schema yet),
+     offer to deploy. Existing installs unchanged.
+   - **Repo clone stays the contributor path.** End-users get the
+     all-npm path; contributors who edit `schema.sql` or EFs still
+     clone and run `bun scripts/db_deploy.ts` directly.
+   - **README + setup-supabase.md rewrite.** Once `deploy-server`
+     ships, drop the clone-and-deploy block from the npm README;
+     setup-supabase becomes the contributor reference.
+
+2. **Client ↔ server version compatibility matrix.** Today the schema
+   version is exposed (`cerefox_schema_version()`) but EF versions
+   aren't visible to clients, and nothing asserts a minimum-required
+   server. After v0.7 the gap is real — clients drift forward while
+   long-running Supabase deployments stay on older EF code. The
+   SchemaVersionBanner's "any difference → yellow" model is also too
+   coarse. Plan:
+   - **Schema + RPCs keep one version.** They deploy as an atomic
+     unit (`db_deploy.ts` applies `schema.sql` + `rpcs.sql` in one
+     transaction); the existing `@version:` marker covers both.
+     No change.
+   - **Each Edge Function gets `GET /version`.** Returns
+     `{name: "cerefox-mcp", version: "0.8.0"}`. Shared via a tiny
+     `_shared/ef-meta/` helper imported by each EF; the constant
+     bumped by `cut_release.ts` alongside the existing `PKG_VERSION`
+     bump.
+   - **Aggregator endpoint** (recommend on `cerefox-mcp`):
+     `GET /version?peers=true` returns
+     `{schema: "...", efs: {"cerefox-mcp": "...", "cerefox-search": "...", ...}}`.
+     One round-trip for `cerefox doctor` instead of nine.
+   - **Client-side compatibility matrix.** New module
+     `_shared/compatibility/index.ts`:
+     ```ts
+     export const COMPATIBILITY = {
+       minSchema: "0.3.0",          // bumped only on schema-breaking change
+       minEdgeFunctions: "0.6.0",   // bumped on EF response-shape changes
+     };
+     ```
+     Hand-updated when a client release requires a newer server.
+   - **`checkServerCompatibility()`** in `_shared/`, consumed by:
+     - `cerefox doctor` — promote from "info" to "error" when below
+       minimum; "warn" when above-min-but-old.
+     - `cerefox web` boot — refuse to bind if incompatible, with a
+       clear "redeploy your Supabase" message naming the failing
+       component and the required minimum.
+     - `SchemaVersionBanner` — two-tier signal: below-min → red
+       (blocking), above-min-but-old → yellow (nudge).
+   - **SemVer policy update in `CONTRIBUTING.md`.** Spell out when
+     each minimum bumps: schema/EF minimum bumps require a minor
+     client bump; client patch releases never raise minimums.
+
+3. **GPT Actions OpenAPI schema sync rule** (process item — applies to
+   every iteration that touches EFs, codified here in v0.8 because
+   that's when the EF contract changes for the `/version` work).
+   Every change to an EF's request/response contract must update the
+   OpenAPI block in `docs/guides/connect-agents.md` — that's the GPT
+   Actions schema reference ChatGPT users paste into their Custom
+   GPT. The OpenAPI doc's `info.version` field is its own ratchet
+   (currently `1.7.0`); bump on any request-body or response-shape
+   change.
+
+   This rule was missing through v0.5–v0.7 — the OpenAPI block may
+   already be out of sync with shipped EF behaviour. **Iter-26
+   Part 26X: audit the existing OpenAPI block** against each EF's
+   current request/response handling. Compare to the v0.6 ingest-
+   route changes and the v0.7 ingestion-pipeline swap (the EFs
+   weren't touched by the v0.7 pipeline migration, but worth
+   confirming). Document any drift found; fix in the same iter-26
+   commit that adds `/version` to each EF.
+
+   Going forward, **every PR that modifies an EF must include the
+   OpenAPI diff** alongside the EF change. Enforce by adding a CI
+   check that fails if `supabase/functions/cerefox-*/index.ts`
+   changed but `docs/guides/connect-agents.md` didn't (or vice
+   versa). Probably a small `scripts/check_gpt_actions_sync.ts`.
+
 **Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0 + §19 test migration policy](specs/polish-and-distribution-design.md).
 
 ---
