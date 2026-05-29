@@ -36,7 +36,7 @@ export function Layout() {
         <Group h="100%" px="md" justify="space-between">
           <Group gap="sm">
             <img
-              src="/static/cerefox_logo.jpg"
+              src="/app/cerefox_icon.png"
               alt="Cerefox"
               height={32}
               width={32}

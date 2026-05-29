@@ -30,6 +30,7 @@ import { existsSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Hono } from "hono";
+import { logger } from "hono/logger";
 
 import { buildWebContext, type WebContext } from "./context.ts";
 import { registerAuditUsageRoutes } from "./routes/audit-usage.ts";
@@ -59,6 +60,13 @@ export interface WebServerHandle {
 
 export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   const app = new Hono();
+
+  // (0) Request logger — writes one line per request to stderr, matching the
+  // UX FastAPI/uvicorn provided on the Python web server. Skipped in test
+  // runs (NODE_ENV=test) so smoke tests stay quiet.
+  if (process.env.NODE_ENV !== "test") {
+    app.use(logger());
+  }
 
   // (1) JSON API — registered first.
   registerMetaRoutes(app, ctx);
@@ -103,10 +111,11 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
     );
   }
 
-  // (3) + (4) SPA — only when a usable dist is available.
+  // (3) + (4) + (5) SPA — only when a usable dist is available.
   const spaDist = resolveSpaDist();
   if (spaDist) {
-    // (3) Vite assets — explicit prefix BEFORE the catch-all.
+    // (3) Vite hashed JS/CSS — explicit prefix BEFORE the public-asset
+    //     middleware so they always go through the assets directory.
     app.use(
       "/app/assets/*",
       serveStatic({
@@ -115,7 +124,19 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
       }),
     );
 
-    // (4) SPA catch-all for client-side routing.
+    // (4) SPA public/ assets at the SPA root (favicon, icons, anything Vite
+    //     copies from frontend/public/). Hono's serveStatic calls next() on
+    //     a 404, so React-router paths like /app/projects fall through to
+    //     the catch-all below and correctly return index.html.
+    app.use(
+      "/app/*",
+      serveStatic({
+        root: spaDist,
+        rewriteRequestPath: (path) => path.replace(/^\/app/, "") || "/",
+      }),
+    );
+
+    // (5) SPA catch-all for client-side routing.
     const indexPath = join(spaDist, "index.html");
     if (existsSync(indexPath)) {
       const indexHtml = readFileSync(indexPath, "utf8");
