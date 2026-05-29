@@ -61,24 +61,30 @@ cd cerefox
 uv sync
 
 # Run tests
-uv run pytest                     # unit tests
-uv run pytest -m e2e              # API e2e (needs live Supabase)
-uv run pytest -m ui               # UI e2e (needs running app + Playwright)
+uv run pytest                     # Python unit tests
+uv run pytest -m e2e              # Python API e2e (needs live Supabase)
 
 # Lint and format
 uv run ruff check . && uv run ruff format .
 
 # Build frontend
-cd frontend && npm install && npm run build
+cd frontend && bun install && bun run build
 
 # Run a TypeScript script (Bun)
 bun scripts/cut_release.ts --check
 
-# TS unit tests (_shared/mcp-tools, _shared/db-status, etc.)
+# TS unit tests (_shared/) + package tests (CLI/web/MCP smokes + live e2e)
 cd _shared && bun test
-
-# Build and smoke-test the local MCP server (npm package)
 cd packages/memory && bun run build && bun test
+
+# Edge Function + remote-MCP e2e (TS, ported from pytest in v0.8 — auto-skip
+# without Supabase/anon-key; create [E2E-EF]/[E2E-MCP] docs and self-clean)
+cd packages/memory && bun test test/edge-functions test/mcp-remote
+
+# UI e2e (Playwright, TS — ported from pytest in v0.8). One-time browser
+# install, then run against a `cerefox web` server (auto-started by the config):
+cd frontend && bunx playwright install chromium   # ~150 MB, one-time
+cd frontend && bun run build && bun run test:e2e
 ```
 
 ---
