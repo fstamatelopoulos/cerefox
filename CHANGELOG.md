@@ -9,7 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- `cerefox doctor` no longer warns that the Edge Functions are "older than this
+  client" right after a fresh redeploy. The EF version check baselined the
+  deployed EF version against the npm package version (`PKG_VERSION`) instead of
+  the version of the Edge Functions the package actually bundles (`EF_VERSION`).
+  Because a client-only release bumps `PKG_VERSION` without changing the EFs,
+  doctor flagged up-to-date EFs as stale. Now baselined against `EF_VERSION`.
 
 ---
 

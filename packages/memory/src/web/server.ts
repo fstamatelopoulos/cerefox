@@ -47,6 +47,7 @@ import {
   resolveStaticDir,
 } from "./static.ts";
 import { PKG_VERSION } from "../meta.ts";
+import { EF_VERSION } from "../../../../_shared/ef-meta/index.ts";
 import { localTimestamp } from "../../../../_shared/cli-core/index.ts";
 import { loadSettings } from "../../../../_shared/config/index.ts";
 import {
@@ -176,7 +177,10 @@ async function assertServerCompatible(): Promise<void> {
     compat = await checkServerCompatibility({
       aggregatorUrl: aggregatorUrlFor(settings.supabaseUrl),
       bearer: settings.supabaseAnonKey,
-      bundledEf: PKG_VERSION,
+      // EF version this package bundles, not the npm package version — see the
+      // note in checks.ts. (Web boot only refuses on `below-min`, which uses
+      // `min`, so this is for correctness/consistency rather than behavior.)
+      bundledEf: EF_VERSION,
     });
   } catch {
     return; // probe failure → tolerant boot

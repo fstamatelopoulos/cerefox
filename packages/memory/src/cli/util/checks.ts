@@ -17,6 +17,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { PKG_VERSION } from "../../meta.ts";
+import { EF_VERSION } from "../../../../../_shared/ef-meta/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import {
   resolveConfigDir,
@@ -484,7 +485,11 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
     compat = await checkServerCompatibility({
       aggregatorUrl: aggregatorUrlFor(settings.supabaseUrl),
       bearer: settings.supabaseAnonKey,
-      bundledEf: PKG_VERSION,
+      // Baseline against the EF version this package *bundles* (EF_VERSION),
+      // not the npm package version (PKG_VERSION). A client-only release bumps
+      // PKG_VERSION without changing the EFs, so using PKG_VERSION here made
+      // doctor warn "EFs older than client" even right after a fresh redeploy.
+      bundledEf: EF_VERSION,
     });
   } catch (err) {
     return {
@@ -515,7 +520,7 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
       return {
         name: "edge functions",
         status: "warn",
-        detail: `Deployed EF v${deployed} works but is older than this client (v${PKG_VERSION}).`,
+        detail: `Deployed EF v${deployed} works but is older than the bundled Edge Functions (v${EF_VERSION}).`,
         hint: "Update the Edge Functions (see remediation below).",
       };
     default:
