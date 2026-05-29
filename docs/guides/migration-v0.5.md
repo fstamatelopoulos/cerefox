@@ -500,6 +500,56 @@ Cross-runtime (Bun + Node).
 
 ---
 
+## v0.8.0 — production-ready install (redeploy required)
+
+> **Upgrading to v0.8 changes the server side. After upgrading the client,
+> redeploy your Supabase server** so the new client↔server compatibility
+> checks pass:
+>
+> ```bash
+> cerefox deploy-server              # schema + RPCs + all 9 Edge Functions
+> # or, if your schema is already current:
+> cerefox deploy-server --functions-only
+> ```
+
+**What changed for you:**
+
+- **No more repo clone to deploy.** `@cerefox/memory` now bundles the
+  schema, RPCs, and Edge Functions. `cerefox deploy-server` stands up (or
+  updates) the whole server side. It runs a pre-flight first and tells you
+  exactly what's missing (Node/npx, the Supabase CLI, `npx supabase login`
+  + `link`, env vars, the OpenAI secret) — fix and re-run; it's idempotent.
+- **`cerefox init`** now offers to run `deploy-server` automatically when it
+  detects no schema (or a schema below the minimum). Existing, up-to-date
+  installs see no new prompt.
+- **Version visibility.** Every Edge Function answers `GET <ef>/version`;
+  `cerefox-mcp` aggregates them (`GET /version?peers=true`). `cerefox
+  doctor` gains an "edge functions" row that flags drift. Until you redeploy
+  the v0.8 functions, doctor shows them as "predate v0.8" (non-blocking).
+- **Background web server.** `cerefox web start` / `stop` / `status` run the
+  web app as a detached daemon (logs to `~/.cerefox/web.log`). Plain
+  `cerefox web` still runs in the foreground.
+- **`cerefox web` will refuse to start** against a server older than the
+  client's minimum — with a message telling you to redeploy. Compatible or
+  unknown (pre-0.8) servers boot normally.
+- **New export script.** `bun scripts/cerefox_export.ts <folder>` dumps all
+  documents to markdown files (one folder per project) — a quick local copy
+  independent of the JSON `backup_create`/`restore` round-trip.
+
+**Nothing destructive happens automatically.** `deploy-server` prompts
+before deploying, and `--reset` (which drops tables) requires an explicit
+extra confirmation. Your documents are untouched by a normal
+`--functions-only` redeploy.
+
+| If you… | Do this |
+|---|---|
+| Installed via npm and have a working Supabase | `cerefox deploy-server --functions-only` after upgrading, then `cerefox doctor` |
+| Are setting up fresh | `cerefox init` → accept the deploy prompt (or run `cerefox deploy-server`) |
+| Run `cerefox web` at login | Switch to `cerefox web start` for background mode |
+| Use the Python MCP server | No change — it's not deprecated and needs no redeploy |
+
+---
+
 ## Known gotchas
 
 ### `npx` from inside an npm workspace

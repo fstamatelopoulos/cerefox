@@ -9,7 +9,86 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.8.0 — "Production-Ready Install".** The npm package can now stand up
+the entire Cerefox server side without a repo clone, every server surface
+is versioned with a client↔server compatibility matrix, and `cerefox web`
+gains background daemon mode.
+
+> **⚠ Upgrading requires a server redeploy.** v0.8 changes the Edge
+> Functions (adds `GET /version` to all 9) and ships them bundled in the
+> npm package. After upgrading the client, redeploy the server so the
+> compatibility checks pass:
+>
+> ```bash
+> cerefox deploy-server              # schema + RPCs + all 9 Edge Functions
+> # or just the functions, if your schema is already current:
+> cerefox deploy-server --functions-only
+> ```
+>
+> Until you redeploy, `cerefox doctor` reports the Edge Functions as
+> "predate v0.8" (non-blocking) and the version aggregator is unavailable.
+
+### Added
+
+- **`cerefox deploy-server`** — deploys the schema + RPCs (in-process) and
+  all 9 Edge Functions (`npx supabase functions deploy`) from assets
+  bundled in the npm package. Comprehensive pre-flight (Node/npx, Supabase
+  CLI, login, link, env vars, secrets) prints one all-or-nothing
+  remediation list. Flags: `--dry-run`, `--reset`, `--schema-only`,
+  `--functions-only`. Eliminates the repo-clone requirement for fresh
+  installs.
+- **Server-side asset bundling** — `dist/server-assets/` ships `schema.sql`,
+  `rpcs.sql`, `migrations/`, and `supabase/functions/` (with the `_shared`
+  subtrees the EFs import), mirroring the repo's relative layout so EF
+  imports resolve from the bundled copy.
+- **`GET /version` on every Edge Function** — `{name, version}`; plus an
+  aggregator on `cerefox-mcp` (`GET /version?peers=true`) returning the
+  schema version + all peer EF versions in one round-trip.
+- **Client ↔ server compatibility matrix** (`_shared/compatibility/`) —
+  `cerefox doctor` asserts deployed schema + EF versions against the
+  client's `minSchema`/`minEdgeFunctions`; `cerefox web` refuses to bind
+  against a below-min server; the `SchemaVersionBanner` is now two-tier
+  (red below-min, yellow above-min-but-old). Bump policy in CONTRIBUTING.
+- **`cerefox web start/stop/status`** — background daemon mode. Pidfile
+  `~/.cerefox/web.pid`, append-only log `~/.cerefox/web.log`, graceful
+  SIGTERM→SIGKILL stop, stale-pidfile detection. Bare `cerefox web` stays
+  foreground. Unix-first (Windows daemon is a follow-up).
+- **`cerefox init` auto-offers `deploy-server`** when the schema is missing
+  (404) or below `minSchema`. Existing, compatible installs see no prompt.
+- **`scripts/cerefox_export.ts`** — one-way export of every document to a
+  folder of markdown files (one folder per project; multi-project docs
+  duplicated). For easy local copies/backups; `backup_create/restore`
+  remain the JSON round-trip path.
+- **`RELEASING.md`** — maintainer release playbook (versioning model,
+  pre-release checklist, cut steps, post-release verification, rollback).
+
+### Changed
+
+- **`scripts/backup_create.py` / `backup_restore.py` → TypeScript.** The
+  backup module ported to `_shared/backup/` (+ `scripts/backup_*.ts`);
+  identical JSON format (`version: 1`) so backups round-trip across
+  runtimes. Python scripts become husks; `fs_backup.py` removed.
+- **`cut_release.ts`** bumps `EF_VERSION` only when Edge Function source
+  changed since the last tag (client-only releases leave it untouched).
+- **Test-runner cutover (phase 1)** — the Edge Function, remote-MCP, and
+  UI e2e suites are ported from pytest to TS (`bun test` +
+  `@playwright/test`); the Python originals are removed. The Python API
+  e2e (`test_api_e2e.py`) stays for now.
+- `resolveSpaDist` prefers the repo's fresh `frontend/dist` over a stale
+  `packages/memory/dist/frontend` bundle in source mode (dev-UX).
+
+### Fixed
+
+- The two state-dependent `write-commands.test.ts` flakes (leftover
+  `[E2E v0.5-test]` docs tripping the v0.7 content-hash collision check)
+  — the suite now hard-purges them before/after.
+
+### Deprecated
+
+- The Python CLI deprecation banner's policy text updated: the CLI stays
+  functional through v0.8; subcommands become husks in v0.9. (The Python
+  **MCP server** is NOT deprecated — it stays as a repo-clone fallback
+  through v1.x.)
 
 ---
 
