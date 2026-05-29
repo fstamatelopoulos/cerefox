@@ -2734,6 +2734,15 @@ scripts/reindex_all.ts                       # NEW
 
 ## Iteration 26: v0.8.0 — "Production-Ready Install"
 
+**Status: Done.** All 14 Parts (26A–26N) shipped in **v0.8.0** (2026-05-29). Verified present: `_shared/{server-assets,ef-meta,compatibility,backup}`, `cerefox deploy-server`, daemon-mode `cerefox web start/stop/status`, the EF `/version` route + aggregator, the client↔server compat matrix, `scripts/{cerefox_export,backup_create,backup_restore}.ts`, `RELEASING.md`, `frontend/playwright.config.ts` + `frontend/tests/e2e/ui.spec.ts`, and the Python CLI deprecation banner. The three Python e2e files (`test_edge_functions_e2e.py`, `test_mcp_e2e.py`, `test_ui_e2e.py`) and `src/cerefox/backup/fs_backup.py` were deleted as planned.
+
+Follow-up patches shipped after v0.8.0 (see CHANGELOG + Iteration 26.1):
+- **v0.8.1** — `deploy-server` applies pending migrations + refreshes RPCs on existing DBs (was fresh-deploy-only); `--reset` removed from the user-facing command; doctor relabel "schema + RPCs" + consolidated remediation; `cerefox delete-project` (cherry-picked from the un-merged v0.7.1 commit).
+- **v0.8.2** — `deploy-server` EF deploy works without a per-directory `supabase link` (derive `--project-ref` from `CEREFOX_SUPABASE_URL`); doctor EF check baselines against `EF_VERSION` (not `PKG_VERSION`).
+- **v0.8.3** — `install.sh` pins `@latest` (re-installs now upgrade); live EF/remote-MCP test suites gated behind `CEREFOX_LIVE_E2E=1` + tagged `requestor: "e2e-test"`; setup-supabase Docker-warning note.
+
+**Validated live** (maintainer's existing Supabase + Mac, 2026-05-29): install via script, `cerefox doctor` all-green, `deploy-server --functions-only` (9 EFs redeployed → EF row green), `deploy-server --schema-only` (existing-DB path: 0 pending migrations + RPC refresh). **NOT yet validated** (26N's staging-Supabase acceptance, deferred): a clean/fresh Supabase project end-to-end (incl. the *fresh-deploy* path and the *migration-apply* path — the existing DB has 0 pending migrations so `runDbMigrate` applying a file is still unexercised), and a clean-machine install. Tracked as tasks in Iteration 27 (see below).
+
 **Goal**: Two themes for **v0.8.0**:
 
 1. **Production-ready end-user install.** Eliminate the repo-clone step that today blocks fresh installs of `@cerefox/memory` from being self-sufficient. Add `cerefox deploy-server`, ship server assets (SQL + EFs) inside the npm tarball, version every server-side surface (Schema/RPCs + 9 EFs), and codify a client ↔ server compatibility matrix that surfaces drift via `cerefox doctor`, the SchemaVersionBanner, and `cerefox web` boot. Plus daemon-mode `cerefox web start/stop/status` for fire-and-forget end-user usage.
@@ -2979,7 +2988,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 
 **Goal**: Close a gap found right after v0.8.0 published: `cerefox deploy-server` only ever did a *fresh* deploy (apply schema + RPCs, then **stamp** every migration as applied without running it). Re-run against a database that already has a Cerefox schema, it never applied pending migrations and never refreshed RPCs — so a release that ships a new migration or changed RPCs wasn't actually deployed by re-running the catch-all command. v0.8.1 makes `deploy-server` the true catch-all for standing up **and updating** the server side.
 
-**Status**: Implemented on `feat/v0.8.1-deploy-server-migrations` (2026-05-29). **Cut deferred** until the clone-env walk validates the existing-DB migration path end-to-end (a fresh side-by-side Supabase account, side-by-side with the maintainer), which also refreshes `docs/guides/setup-supabase.md`.
+**Status: Done.** Shipped in **v0.8.1** (2026-05-29), with follow-ups in **v0.8.2** and **v0.8.3** (see the Iteration 26 status block above for the full breakdown). The existing-DB *RPC-refresh* path was validated live (`deploy-server --schema-only` → "0 pending migrations + refresh RPCs"); the *migration-apply* path (`runDbMigrate` actually applying a pending file) remains unexercised because the maintainer's DB is fully migrated — folded into the clean-Supabase validation task in Iteration 27.
 
 | Part | Description | Acceptance |
 |------|-------------|-----------|
@@ -3036,6 +3045,15 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 | **27I** | CHANGELOG v0.9.0 entry; migration-v0.9.md (or v0.5 update with v0.9 section); CLAUDE.md verb-conventions section. |
 | **27J** | **Two-install-path documentation overhaul**: README top-level "Choose your path" split (end user via install-script + CLI vs contributor via repo clone); reframe `quickstart.md` as the contributor flow; document the end-user `init → deploy-server → configure-agent` path with no clone; cross-link `setup-supabase.md` + `connect-agents.md`; update the guide index. Both paths kept. |
 | **27K** | Closeout: design doc §13 v0.9.0 updated; Decision Log entry; manual test plan update. |
+
+**Carried-over validation tasks (deferred from iter-26 / v0.8.x — do side-by-side with the maintainer):**
+
+| Task | Scope | Why deferred |
+|---|---|---|
+| **V1 — Clean Supabase install** | Stand up a **fresh** Supabase project (separate account or a `cerefox`-identical second env) and run the full end-to-end install against it: `cerefox init` → `cerefox deploy-server` (the **fresh-deploy** path: schema + RPCs + stamp migrations + 9 EFs) → `cerefox doctor` all-green → ingest/search smoke. Critically, this is the **only** way to exercise (a) the fresh-deploy branch of `deploy-server` and (b) the **migration-apply** path (`runDbMigrate` actually applying a pending file) — the maintainer's primary DB is fully migrated (0 pending), so that path is still unexercised in production. Refresh `docs/guides/setup-supabase.md` with whatever surfaces. | v0.8 shipped against the maintainer's existing (already-migrated) Supabase; a fresh project was never stood up. 26N's "staging-Supabase validation" acceptance was deferred. |
+| **V2 — Clean machine install** | On a machine with **no prior Cerefox install** (or a fully reset `~/.cerefox` + uninstalled global), run the one-line install script → `cerefox init` → wire an agent → first ingest/search. Confirms the end-user (no-repo-clone) path works cold, and that `install.sh`'s `@latest` pin behaves on a first install (not just an upgrade). | All install testing so far was on the maintainer's primary machine, which already had Cerefox + `.env` + linked Supabase. The cold-start path is unverified. |
+
+> These two validations gate confidence for **v1.0**, not v0.9.0 functionality. Per the maintainer (2026-05-29): schedule them **after** the 0.9.0 code work, side-by-side. They may surface doc fixes (setup-supabase, quickstart, the two-install-path docs in 27J) and possibly small `deploy-server`/`init` fixes — budget a v0.9.x patch slot for anything found.
 
 **Risks**:
 
