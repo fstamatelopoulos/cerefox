@@ -42,7 +42,7 @@ export function SchemaVersionBanner() {
         Run from the repo root:
       </Text>
       <Code block mt="xs">
-        uv run python scripts/db_deploy.py
+        bun scripts/db_deploy.ts
       </Code>
     </Alert>
   );
