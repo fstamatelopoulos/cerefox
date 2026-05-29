@@ -83,6 +83,44 @@ const VERSION_LITERAL_FILES: VersionLiteralFile[] = [
   },
 ];
 
+/**
+ * The Edge Function version literal (iter-26 Part 26B). Unlike PKG_VERSION
+ * (which bumps every release), EF_VERSION bumps ONLY when Edge Function
+ * code changed since the previous tag — a client-only release (CLI / web
+ * fixes, docs) leaves the deployed EF version untouched so the compat
+ * matrix stays meaningful. See `efsChangedSinceLastTag()`.
+ */
+const EF_VERSION_LITERAL: VersionLiteralFile = {
+  path: join(REPO_ROOT, "_shared", "ef-meta", "index.ts"),
+  prefix: 'export const EF_VERSION = "',
+  suffix: '";',
+};
+
+/**
+ * Paths whose changes since the last tag mean the deployed EF behaviour
+ * changed: the EFs themselves + the `_shared` subtrees bundled with them.
+ */
+const EF_SOURCE_PATHS = [
+  "supabase/functions",
+  "_shared/ef-meta",
+  "_shared/mcp-tools",
+  "_shared/embeddings",
+];
+
+/** True when EF-relevant source changed since the most recent git tag. */
+function efsChangedSinceLastTag(): boolean {
+  const lastTag = run("git", ["describe", "--tags", "--abbrev=0"]).stdout.trim();
+  if (!lastTag) return true; // no prior tag — bump to be safe
+  const diff = run("git", [
+    "diff",
+    "--name-only",
+    `${lastTag}..HEAD`,
+    "--",
+    ...EF_SOURCE_PATHS,
+  ]);
+  return diff.stdout.trim().length > 0;
+}
+
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[.-][A-Za-z0-9.-]+)?$/;
 
 // ── tiny shell helper ────────────────────────────────────────────────────
@@ -476,6 +514,17 @@ async function main(): Promise<void> {
   );
   ok("CHANGELOG sections parsed; [Unreleased] has content.");
 
+  // EF_VERSION bumps only when EF code changed since the last tag.
+  const bumpEf = efsChangedSinceLastTag();
+  const literalsToBump: VersionLiteralFile[] = bumpEf
+    ? [...VERSION_LITERAL_FILES, EF_VERSION_LITERAL]
+    : VERSION_LITERAL_FILES;
+  if (bumpEf) {
+    info("Edge Function source changed since last tag — EF_VERSION will bump.");
+  } else {
+    info("No Edge Function changes since last tag — leaving EF_VERSION as-is.");
+  }
+
   // 3. Mutate files
   if (args.dryRun) {
     info("DRY-RUN: would write VERSION:");
@@ -490,7 +539,7 @@ async function main(): Promise<void> {
         `DRY-RUN: would bump ${relative(REPO_ROOT, pkgPath)} version: ${current} → ${newVersion}`,
       );
     }
-    for (const lit of VERSION_LITERAL_FILES) {
+    for (const lit of literalsToBump) {
       const current = readVersionLiteral(lit);
       info(
         `DRY-RUN: would bump ${relative(REPO_ROOT, lit.path)} \`${lit.prefix}…\`: ${current} → ${newVersion}`,
@@ -513,7 +562,7 @@ async function main(): Promise<void> {
     // VERSION too. Forgetting this caused v0.4.2's bin to print "0.4.0"
     // when run as v0.4.2 (server.ts PKG_VERSION + cerefox-mcp.ts VERSION
     // were both still hardcoded to the bootstrap version).
-    for (const lit of VERSION_LITERAL_FILES) {
+    for (const lit of literalsToBump) {
       const before = readVersionLiteral(lit);
       writeVersionLiteral(lit, newVersion);
       ok(`Bumped ${relative(REPO_ROOT, lit.path)}: ${before} → ${newVersion}`);
@@ -527,7 +576,7 @@ async function main(): Promise<void> {
     "VERSION",
     "CHANGELOG.md",
     ...NPM_PACKAGE_FILES.map((p) => relative(REPO_ROOT, p)),
-    ...VERSION_LITERAL_FILES.map((l) => relative(REPO_ROOT, l.path)),
+    ...literalsToBump.map((l) => relative(REPO_ROOT, l.path)),
   ];
 
   if (args.dryRun) {

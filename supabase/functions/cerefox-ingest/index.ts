@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 
 /**
  * cerefox-ingest — Supabase Edge Function
@@ -400,6 +401,13 @@ Deno.serve(async (req: Request) => {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
       },
+    });
+  }
+
+  if (isVersionRequest(req)) {
+    return versionResponse("cerefox-ingest", {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
     });
   }
 

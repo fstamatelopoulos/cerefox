@@ -16,7 +16,8 @@
  *   ├── supabase/functions/cerefox-* dirs   (all 9 EFs)
  *   └── _shared/
  *       ├── mcp-tools/                       (imported by cerefox-mcp)
- *       └── embeddings/                      (transitively imported by mcp-tools)
+ *       ├── embeddings/                      (transitively imported by mcp-tools)
+ *       └── ef-meta/                         (GET /version helper, imported by all 9 EFs)
  *
  * From `…/server-assets/supabase/functions/cerefox-mcp/`, `../../../_shared`
  * resolves to `…/server-assets/_shared`. ✓
@@ -72,7 +73,7 @@ function main(): void {
   });
 
   // ── _shared/ (only the subtrees the EFs import) ──────────────────────────
-  for (const sub of ["mcp-tools", "embeddings"]) {
+  for (const sub of ["mcp-tools", "embeddings", "ef-meta"]) {
     cpSync(join(SHARED_SRC, sub), join(OUT, "_shared", sub), {
       recursive: true,
       filter: notPythonCruft,
