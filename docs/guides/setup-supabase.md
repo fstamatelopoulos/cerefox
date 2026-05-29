@@ -221,9 +221,17 @@ Deployed Functions on project <your-project-ref>: cerefox-ingest
 You can verify in the Supabase Dashboard → **Edge Functions** — all three functions should
 appear with a green "Active" status.
 
+> **`WARNING: Docker is not running` is expected and harmless.** The Supabase CLI checks for
+> Docker (its older local bundler ran in a container) but falls back to bundling the functions
+> server-side — it uploads the source assets (you'll see `Uploading asset (…)` lines) and
+> Supabase compiles them in the cloud. **Docker is not a prerequisite for deploying Cerefox's
+> Edge Functions.** A deploy succeeded as long as each function ends with
+> `Deployed Functions on project …`. This applies to both the manual commands here and
+> `cerefox deploy-server --functions-only`.
+
 > **Re-deploying after updates**: run the same `npx supabase functions deploy` commands
-> again from the project root. `npx supabase login` and `npx supabase link` only need to be
-> run once per machine.
+> again from the project root, or just `cerefox deploy-server --functions-only` (it deploys
+> all 9 from the bundled assets). `npx supabase login` only needs to be run once per machine.
 
 ---
 
