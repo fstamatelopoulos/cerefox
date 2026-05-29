@@ -2732,154 +2732,240 @@ scripts/reindex_all.ts                       # NEW
 
 ---
 
-## Iteration 26: v0.8.0 — "Deprecate Python CLI/Web" + v0.9.0 — "Python Minimization"
+## Iteration 26: v0.8.0 — "Production-Ready Install" + v0.9.0 — "Python Minimization"
 
-**Goal**: Two-step Python retirement — **but Python is NOT wiped out**.
-The Python MCP server (`src/cerefox/mcp_server.py`) stays functional
-forever (repo-clone users run `uv run cerefox mcp` as a fallback path
-when they don't want the npm install). The Python CLI subcommands
-become husks that print a "use the TS CLI" message and exit. Per
-maintainer call 2026-05-28: "we should not completely wipe python
-out. We want to keep the python mcp in place since current users
-check out the repo and run the mcp server via the repo, and we will
-also keep the python cli commands as husks."
+**Goal**: Two themes for **v0.8.0**:
 
-**v0.8.0** (T-shirt: M): prominent deprecation banner on every Python
-CLI subcommand. Install docs (`installing.md`, `quickstart.md`) no
-longer mention Python as the recommended path. **`cerefox web`
-lifecycle commands for fire-and-forget end-user usage** (decided
-2026-05-28; maintainer use case is "production usage, not dev work —
-start at login, browser-bookmark UX, same as cfcf"). Shape B from
-the 2026-05-28 daemon-mode design discussion:
-- `cerefox web --daemon` — spawns the server detached; idempotent
-  (already-running → prints "running on :8000 (pid N)" + exits 0).
-  Port collision → clear error with conflicting pid.
-- `cerefox web --stop` — reads pidfile, signals, polls for exit.
-- `cerefox web --status` — pidfile + process liveness + port
-  reachability check.
-- Pidfile at `~/.cerefox/web.pid` (matches the `~/.cerefox/` config
-  dir pattern).
-- Logfile at `~/.cerefox/web.log` — append by default; no Cerefox-
-  side rotation. System-level rotation when user installs as
-  launchd / systemd; manual `> ~/.cerefox/web.log` truncation
-  otherwise.
-- Foreground `cerefox web` keeps working unchanged for active dev.
-- Reference shape: cfcf's `server.ts` (282 lines) + `server-spawn.ts`
-  (70 lines), but flag-based not subcommand-based — ~half the LOC.
+1. **Production-ready end-user install.** Eliminate the repo-clone step that today blocks fresh installs of `@cerefox/memory` from being self-sufficient. Add `cerefox deploy-server`, ship server assets (SQL + EFs) inside the npm tarball, version every server-side surface (Schema/RPCs + 9 EFs), and codify a client ↔ server compatibility matrix that surfaces drift via `cerefox doctor`, the SchemaVersionBanner, and `cerefox web` boot. Plus daemon-mode `cerefox web --daemon/--stop/--status` for fire-and-forget end-user usage.
+2. **Test-runner cutover phase 1 + Python CLI deprecation banner.** Port `test_edge_functions_e2e.py`, `test_mcp_e2e.py`, and `test_ui_e2e.py` to TS (the last bumps `frontend/` to `@playwright/test`). Add the Python CLI deprecation banner per design doc §13. After v0.8 the only `.py` in `tests/` covers code that stays Python through v0.9+.
 
-**First half of the test-runner cutover pass** (per design doc §19
-"Test migration policy"):
-- `tests/e2e/test_edge_functions_e2e.py` (489 lines) → `packages/memory/test/edge-functions/*.test.ts`. The EFs themselves stay live (Deno-on-Supabase); only the test harness moves.
-- `tests/e2e/test_mcp_e2e.py` (560 lines) → `packages/memory/test/mcp-remote/*.test.ts`. Same shape: the remote `cerefox-mcp` EF stays; tests migrate.
-- `tests/e2e/test_ui_e2e.py` (247 lines) → `frontend/tests/e2e/*.spec.ts` using `@playwright/test`. Playwright bindings exist in both languages so the port is mechanical.
-- After v0.8: the only `.py` left in `tests/` covers genuinely-Python code that stays through v0.9+ (the MCP server + CLI husks).
+Plus v0.7.x carryovers that don't justify their own patch (write-commands.test.ts state-flake purge, `resolveSpaDist` source-vs-bundled priority swap, `backup_create.ts` + `backup_restore.ts` ports).
 
-**v0.9.0** (T-shirt: M): **Python minimization, not removal**.
-- Python CLI subcommands become husks: each one prints "Cerefox CLI moved to TypeScript: install with `npm install -g @cerefox/memory` and re-run as `cerefox <subcommand>`" and exits 0 (or non-zero for unimplemented-by-design — TBD).
-- Python MCP server (`src/cerefox/mcp_server.py`) **stays fully functional**. Repo-clone users keep their `uv run cerefox mcp` workflow.
-- Python web (`src/cerefox/api/*`) — **likely also becomes a husk** at this point (the TS web shipped in v0.6 is the canonical implementation; the Python web's role after v0.7's TS ingestion swap is unclear). Final call lives in iter-25's design pass — flag in iter-26's pre-kickoff design discussion.
-- **Second half of the test-runner cutover pass**: tests for surviving Python (`tests/test_mcp_server.py`, `tests/test_python_cli_deprecation_banner.py`, new husk-CLI tests) port to TS via subprocess pattern under `packages/memory/test/python-runtime/`. TS test spawns `uv run cerefox X` and asserts behavior at the process boundary — same shape `cli-smoke.test.ts` uses for the TS CLI.
-- **`pyproject.toml`, `uv.lock`, `.python-version` STAY** because the Python runtime stays. Pytest as a test runner goes away.
-- End state after v0.9: zero `.py` in `tests/`; one test runner (`bun test`); Python runtime minimised to MCP server + CLI husks (+ maybe web husk).
-
-**v0.8.0 design items added 2026-05-28 (post-v0.7.1 review)**:
-
-1. **Eliminate the repo-clone for end users (`cerefox deploy-server`).**
-   Today a fresh npm install of `@cerefox/memory` is not enough to stand
-   up Cerefox — the user also needs the repo for `schema.sql`, `rpcs.sql`,
-   `migrations/`, and `supabase/functions/`. Plan:
-   - **Bundle server assets into the npm tarball.** Add a
-     `prepublishOnly` step that copies `src/cerefox/db/schema.sql`,
-     `rpcs.sql`, `migrations/`, and `supabase/functions/` into
-     `dist/server-assets/`. Verified total footprint is ~272 KB
-     (schema 20K + rpcs 72K + migrations 84K + EFs 96K) — bundling
-     bumps the tarball from 1.9 MB → ~2.2 MB. Single package; no
-     `@cerefox/memory-server` split needed (the optimization only
-     earns its complexity if assets ever cross ~10 MB, which SQL +
-     Deno TS source won't).
-   - **New CLI command `cerefox deploy-server`.** Wraps the
-     `db_deploy.ts` logic + invokes `npx supabase functions deploy`
-     for each of the 9 EFs. Flags mirror the scripts: `--dry-run`,
-     `--reset`. Probe `CEREFOX_DATABASE_URL` + Supabase CLI presence
-     up-front; refuse with clear remediation if either is missing.
-   - **`cerefox init` calls `deploy-server` for fresh installs.**
-     Detection: after the user provides Supabase URL + key, call
-     `cerefox_schema_version()` — if it 404s (no schema yet),
-     offer to deploy. Existing installs unchanged.
-   - **Repo clone stays the contributor path.** End-users get the
-     all-npm path; contributors who edit `schema.sql` or EFs still
-     clone and run `bun scripts/db_deploy.ts` directly.
-   - **README + setup-supabase.md rewrite.** Once `deploy-server`
-     ships, drop the clone-and-deploy block from the npm README;
-     setup-supabase becomes the contributor reference.
-
-2. **Client ↔ server version compatibility matrix.** Today the schema
-   version is exposed (`cerefox_schema_version()`) but EF versions
-   aren't visible to clients, and nothing asserts a minimum-required
-   server. After v0.7 the gap is real — clients drift forward while
-   long-running Supabase deployments stay on older EF code. The
-   SchemaVersionBanner's "any difference → yellow" model is also too
-   coarse. Plan:
-   - **Schema + RPCs keep one version.** They deploy as an atomic
-     unit (`db_deploy.ts` applies `schema.sql` + `rpcs.sql` in one
-     transaction); the existing `@version:` marker covers both.
-     No change.
-   - **Each Edge Function gets `GET /version`.** Returns
-     `{name: "cerefox-mcp", version: "0.8.0"}`. Shared via a tiny
-     `_shared/ef-meta/` helper imported by each EF; the constant
-     bumped by `cut_release.ts` alongside the existing `PKG_VERSION`
-     bump.
-   - **Aggregator endpoint** (recommend on `cerefox-mcp`):
-     `GET /version?peers=true` returns
-     `{schema: "...", efs: {"cerefox-mcp": "...", "cerefox-search": "...", ...}}`.
-     One round-trip for `cerefox doctor` instead of nine.
-   - **Client-side compatibility matrix.** New module
-     `_shared/compatibility/index.ts`:
-     ```ts
-     export const COMPATIBILITY = {
-       minSchema: "0.3.0",          // bumped only on schema-breaking change
-       minEdgeFunctions: "0.6.0",   // bumped on EF response-shape changes
-     };
-     ```
-     Hand-updated when a client release requires a newer server.
-   - **`checkServerCompatibility()`** in `_shared/`, consumed by:
-     - `cerefox doctor` — promote from "info" to "error" when below
-       minimum; "warn" when above-min-but-old.
-     - `cerefox web` boot — refuse to bind if incompatible, with a
-       clear "redeploy your Supabase" message naming the failing
-       component and the required minimum.
-     - `SchemaVersionBanner` — two-tier signal: below-min → red
-       (blocking), above-min-but-old → yellow (nudge).
-   - **SemVer policy update in `CONTRIBUTING.md`.** Spell out when
-     each minimum bumps: schema/EF minimum bumps require a minor
-     client bump; client patch releases never raise minimums.
-
-3. **GPT Actions OpenAPI schema sync rule** (process item — applies to
-   every iteration that touches EFs, codified here in v0.8 because
-   that's when the EF contract changes for the `/version` work).
-   Every change to an EF's request/response contract must update the
-   OpenAPI block in `docs/guides/connect-agents.md` — that's the GPT
-   Actions schema reference ChatGPT users paste into their Custom
-   GPT. The OpenAPI doc's `info.version` field is its own ratchet
-   (currently `1.7.0`); bump on any request-body or response-shape
-   change.
-
-   This rule was missing through v0.5–v0.7 — the OpenAPI block may
-   already be out of sync with shipped EF behaviour. **Iter-26
-   Part 26X: audit the existing OpenAPI block** against each EF's
-   current request/response handling. Compare to the v0.6 ingest-
-   route changes and the v0.7 ingestion-pipeline swap (the EFs
-   weren't touched by the v0.7 pipeline migration, but worth
-   confirming). Document any drift found; fix in the same iter-26
-   commit that adds `/version` to each EF.
-
-   Going forward, **every PR that modifies an EF must include the
-   OpenAPI diff** alongside the EF change. Enforce by adding a CI
-   check that fails if `supabase/functions/cerefox-*/index.ts`
-   changed but `docs/guides/connect-agents.md` didn't (or vice
-   versa). Probably a small `scripts/check_gpt_actions_sync.ts`.
+**v0.9.0** continues **Python minimization (NOT removal)** per the 2026-05-28 maintainer call: Python MCP server stays as a first-class fallback for repo-clone users (`uv run cerefox mcp`); Python CLI subcommands become husks; pytest as a test runner retires (tests-for-Python migrate to the subprocess pattern under `packages/memory/test/python-runtime/`). `pyproject.toml` / `uv.lock` / `.python-version` STAY because the runtime stays.
 
 **Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0 + §19 test migration policy](specs/polish-and-distribution-design.md).
+
+> **Correction to design doc §13**: item #2 of design-doc v0.8.0 says "Python code moved to `python-legacy/` subdirectory in repo". This is **SUPERSEDED** by the 2026-05-28 maintainer call ("Python minimization, not removal"). plan.md is the source of truth for v0.8 scope.
+
+**Size**: **XL** (T-shirt) — same scale as iter-24 and iter-25. ~13 Parts (26A–26M), single PR, one cut. Six major scope areas plus carryovers — see Parts table.
+
+**Headline items**:
+
+- **`cerefox deploy-server`** — new CLI command that wraps the server-side deploy (schema + RPCs via `db_deploy.ts` logic in-process + `npx supabase functions deploy` for each of 9 EFs). Bundled server assets resolved via candidate-walker pattern (same shape as `resolveSpaDist`). `--dry-run`, `--reset`, `--schema-only`, `--functions-only` flags. Probes `CEREFOX_DATABASE_URL`, `npx supabase --version`, and Supabase project linkage state up-front; refuses with clear remediation if any is missing.
+- **`cerefox init` calls `deploy-server` for fresh installs.** Detection: after collecting Supabase URL + key, probe `cerefox_schema_version()` — if it 404s (no schema yet), offer to deploy. Existing installs see zero behavior change.
+- **Each Edge Function gets `GET /version`.** Returns `{name, version}`. Shared via `_shared/ef-meta/index.ts` exporting the `EF_VERSION` constant; `cut_release.ts` bumps it alongside `PKG_VERSION`.
+- **Aggregator on `cerefox-mcp`**: `GET /version?peers=true` returns `{schema, efs: {<name>: <version>}}`. One round-trip for `cerefox doctor` instead of nine. Parallel `Promise.all` with 2s per-peer timeout; failed peers reported in a separate `errors` field.
+- **Client-side compatibility matrix.** New `_shared/compatibility/index.ts` exporting `COMPATIBILITY` constant (`minSchema`, `minEdgeFunctions`). Hand-edited at PR review when a client release requires newer server. `checkServerCompatibility()` consumed by `cerefox doctor` (assert: error if below-min, warn if above-min-but-old), `cerefox web` boot (refuse to bind if incompatible — clear "redeploy your Supabase" message), and `SchemaVersionBanner` (two-tier: red below-min / yellow above-min-but-old).
+- **CONTRIBUTING.md SemVer-bump policy section.** Spells out when each minimum bumps: schema/EF minimum bumps require a minor client bump; client patch releases never raise minimums.
+- **GPT Actions OpenAPI sync rule** — every EF contract change updates `docs/guides/connect-agents.md`. Existing block may have drifted through v0.5–v0.7 (sync was undisciplined); **Part 26L audits + fixes drift + adds CI gate** (`scripts/check_gpt_actions_sync.ts` fails when an EF source changed but `connect-agents.md` didn't, or vice versa).
+- **Daemon-mode `cerefox web --daemon/--stop/--status`** (flag-based, not subcommand). Pidfile at `~/.cerefox/web.pid` (JSON: `{pid, port, startedAt}`). Logfile at `~/.cerefox/web.log` (append; no Cerefox-side rotation). Reference: cfcf's `packages/cli/src/{commands/server.ts, server-spawn.ts}` (~412 LOC total); Cerefox's flag-based form is ~half. Unix-first; Windows daemon-mode is a follow-up.
+- **Python CLI deprecation banner.** Every `uv run cerefox <subcommand>` prints a yellow banner pointing at the npm install. Python MCP server stays silent (the user runs `uv run cerefox mcp` deliberately as a fallback path; banner there would be noise).
+- **Test-runner cutover phase 1.** Three e2e suites ported: `test_edge_functions_e2e.py` (489 lines) → `packages/memory/test/edge-functions/`, `test_mcp_e2e.py` (560 lines) → `packages/memory/test/mcp-remote/`, `test_ui_e2e.py` (247 lines, 14 tests) → `frontend/tests/e2e/*.spec.ts` with `@playwright/test` (new dep). Python files deleted in the same Parts.
+- **v0.7.x carryovers folded into Part 26K.** (a) `write-commands.test.ts` afterAll/beforeAll harness purges `[E2E v0.5-test]`-prefixed leftovers so the two state-flakes from iter-25 stop firing. (b) `resolveSpaDist` candidate order swap: source `<repo>/frontend/dist/` wins over bundled `packages/memory/dist/frontend/` when both exist (dev-UX fix; npm publish path unaffected). (c) `scripts/backup_create.ts` + `scripts/backup_restore.ts` ports (deferred from iter-25 — the underlying `cerefox.backup.fs_backup` Python module ports too, ~200 LOC).
+
+**Locked design decisions (2026-05-29, pre-iter-26 design pass)**:
+
+| # | Decision | Rationale |
+|---|---|---|
+| 1 | **Single PR per iter; ~13 atomic Parts (26A–26M); one cut.** | Matches iter-24 + iter-25 discipline. Validated twice. |
+| 2 | **Server assets bundled into `@cerefox/memory`, not a separate package.** | Total footprint ~272 KB (verified: schema 20K + rpcs 72K + migrations 84K + EFs 96K). Single-package wins on simplicity. Split into `@cerefox/memory-server` only earns its complexity at >10 MB; SQL + Deno TS source won't get there. |
+| 3 | **`cerefox deploy-server` wraps `db_deploy.ts` IN-PROCESS** (no shelling out to `bun scripts/db_deploy.ts`). | Code is already imported by the bin. In-process gives unified UX, single error path, no spawning overhead. Per-EF `npx supabase functions deploy` still shells out (the supabase CLI is the canonical interface). |
+| 4 | **EF version surface is a dedicated `GET /version` path** (not a query parameter on the existing entry). | Discoverability + clean separation from business logic. One conditional in the EF entry function dispatches to a small `respondVersion()` helper from `_shared/ef-meta/`. |
+| 5 | **Aggregator endpoint lives on `cerefox-mcp` as `GET /version?peers=true`** — not a new `cerefox-versions` EF. | `cerefox-mcp` is already the canonical Cerefox endpoint and the only EF agents probe. Adding a 10th EF for marginal benefit is wrong tradeoff. |
+| 6 | **Compatibility matrix lives in `_shared/compatibility/index.ts`, hand-edited.** | Auto-generating from CHANGELOG was considered; rejected. Hand-editing keeps the "what counts as incompatible" decision explicit at PR review (each bump is intentional). |
+| 7 | **Compat checks: doctor asserts (error if below-min); web boot refuses (won't bind); banner warns (yellow above-min-but-old, red below-min).** | Three different surfaces with three different SLAs — assertion vs refusal vs warning maps cleanly. |
+| 8 | **Daemon-mode mirrors cfcf's pattern precisely** (pidfile JSON shape `{pid, port, startedAt}`, graceful + SIGTERM stop, signal-0 + HTTP probe for status). | Don't reinvent. Lifted from `~/src/cfcf/packages/cli/src/{commands/server.ts, server-spawn.ts}` (~412 LOC total). Divergence: flag-based (`--daemon/--stop/--status`) vs subcommand-based — same surface, fewer command-tree entries. |
+| 9 | **Daemon-mode is Unix-first; Windows is a follow-up.** | Cerefox's primary users are on macOS/Linux. Windows daemon-mode requires service/scheduled-task integration. Out of v0.8 scope. |
+| 10 | **`cerefox init` deploys server iff `cerefox_schema_version()` 404s.** | Detection rather than prompt-every-time. Existing users see zero change. |
+| 11 | **GPT Actions OpenAPI sync handled in two phases: (a) audit + fix in Part 26L; (b) CI gate from 26L forward.** | Phase A reconciles current state (drift may be substantial through v0.5–v0.7); phase B prevents recurrence. |
+| 12 | **Python CLI deprecation banner: CLI subcommands only; Python MCP server is silent.** | Per maintainer call 2026-05-28: Python MCP stays as first-class fallback. Banner on MCP would be noise; the user *chose* the Python path. |
+| 13 | **v0.7.x carryovers folded into v0.8's cleanup Part (26K).** | Three small items (write-commands flake purge, resolveSpaDist priority swap, backup/restore ports) fit one Part. Avoids three v0.7.x patch cuts. |
+| 14 | **Compat matrix initial values: `minSchema: "0.3.1"`, `minEdgeFunctions: "0.6.0"`.** | Schema 0.3.1 is the current `@version:` marker. v0.6.0 is the first version where the EFs' response shapes match what the v0.6 TS web consumes; v0.5 EFs predate the iter-24 response-shape locks. Confirmable during 26C. |
+| 15 | **OpenAPI doc `info.version` bumps from 1.7.0 → 1.8.0** when the `/version` route is added across the 9 EFs. | Following the OpenAPI doc's own ratchet; route addition is a contract change. |
+| 16 | **Test-migration delta enumerated per Part** (per design doc §19 rule). | Each Part touching code lists explicitly which Python test files its work supersedes (and how the TS port absorbs them). |
+| 17 | **Pre-kickoff design pass produces this docs-only PR**; implementation is a separate atomic PR. | Same pattern as iter-24 (PR #54 + #55) and iter-25 (PR #58). Helps with reasoned-vs-surprise deviation budget during the autonomous build. |
+
+**Parts breakdown (26A–26M)**:
+
+| Part | Scope | Acceptance | Test-migration delta (per design doc §19) |
+|------|-------|-----------|-------------------------------------------|
+| **26A** | **Bundle server assets in npm tarball.** Extend `packages/memory/package.json`'s `prepublishOnly` with a new `bundle-server-assets` step (run order: `clean → bundle-server-assets → bundle-docs → build-frontend → bundle-frontend → build`; server-assets has no other build deps so it goes early). Copies `src/cerefox/db/{schema.sql, rpcs.sql, migrations/}` and `supabase/functions/` into `dist/server-assets/`. New `_shared/server-assets/index.ts` resolver with candidate-walker pattern. `db_deploy.ts` + `db_migrate.ts` refactored to use the resolver (so they work from both repo-clone and npm-installed paths). | `bun scripts/db_deploy.ts --dry-run` runs from a fresh `npm install` (no repo clone) and prints expected steps. Same script run from a repo clone still loads from `src/cerefox/db/`. Tarball size +~272 KB confirmed via `npm pack --dry-run`. | New TS-only tests for the resolver under `_shared/__tests__/server-assets.test.ts`. No Python tests affected. |
+| **26B** | **EF `GET /version` endpoints + aggregator.** New `_shared/ef-meta/index.ts` exporting `EF_VERSION` constant. Modify each of 9 EFs to handle `GET /version` (~5 lines per EF — dispatch + helper call). Aggregator on `cerefox-mcp`: `GET /version?peers=true` calls peer EFs in parallel (2s timeout each), returns `{schema, efs, errors}`. **Bump `cut_release.ts`** to update `EF_VERSION` alongside `PKG_VERSION`. | All 9 EFs respond to `GET /version` with `{name, version}`. Aggregator returns the full map in <2s. `cut_release.ts` bumps both versions. | New `packages/memory/test/edge-functions/version.test.ts` (probe-and-skip on Supabase reachability). No Python tests affected. |
+| **26C** | **Compat matrix + checks.** New `_shared/compatibility/index.ts` with `COMPATIBILITY` constant + `checkServerCompatibility(client)` (calls the aggregator). `cerefox doctor` integrates via a new `checkEdgeFunctionsCompat()`. `cerefox web` boot calls `checkServerCompatibility()` once; refuses to bind if below-min (clear message naming failing component + required minimum). `SchemaVersionBanner` two-tier color logic. **CONTRIBUTING.md SemVer-bump policy section** (new). | `cerefox doctor` shows ✓ when matching; ⚠ when above-min-but-old; ✗ + bind-refusal when below-min. Manual: simulate by editing `COMPATIBILITY.minEdgeFunctions` to a future version, restart web, observe refusal. | TS-only: new `_shared/__tests__/compatibility.test.ts` (matrix shape + check logic with mocked server responses). No Python tests affected. |
+| **26D** | **`cerefox deploy-server` CLI command.** New `packages/memory/src/cli/commands/deploy-server.ts`. Wraps `db_deploy.ts` in-process (imports + calls); wraps `npx supabase functions deploy <ef>` for each of 9 EFs (probe `npx supabase --version` first). Pre-flight probes: `CEREFOX_DATABASE_URL` set, `npx supabase login`/`link` done (detect via `.supabase/config.toml` or stderr from a probe call). Flags: `--dry-run`, `--reset` (drops + redeploys), `--schema-only`, `--functions-only`. | `cerefox deploy-server --dry-run` exits 0 with a complete plan; `--functions-only` skips the schema. Refuses with remediation when probes fail. | New `packages/memory/test/cli-deploy-server.test.ts` (smoke `--help` + `--dry-run` + missing-prereq paths). No Python tests affected. |
+| **26E** | **`cerefox init` calls `deploy-server` for fresh installs.** After collecting Supabase URL + key, probe `cerefox_schema_version()`. If 404 (no schema): offer to run deploy-server (interactive Y/n; default N for safety; `--auto-deploy` to skip prompt). Decline → continue init unchanged; user will be nudged again at next `cerefox doctor`. | Fresh-install flow: `cerefox init` → 404 detected → "Deploy now? [y/N]" → user types y → deploy-server runs → init continues. | Extends existing `lifecycle-commands.test.ts` (in TS). No Python tests affected. |
+| **26F** | **Daemon-mode `cerefox web --daemon/--stop/--status`.** Pidfile `~/.cerefox/web.pid` (JSON: `{pid, port, startedAt}`). Logfile `~/.cerefox/web.log` (append-only). Spawn detached via `child_process.spawn({ detached: true, stdio: ['ignore', logFd, logFd] })`. `--stop`: SIGTERM, poll for exit up to 3s, SIGKILL on timeout. `--status`: signal-0 + HTTP probe `/api/v1/version`. Stale-pidfile detection (signal-0 throws → mark stale). Port collision: same port + alive PID → "already running" + exit 0; different port → refuse + clear conflict message. Foreground `cerefox web` unchanged. | `cerefox web --daemon` returns immediately; second invocation prints "already running on :8000 (pid N)" + exit 0. `--stop` returns when port becomes unreachable. `--status` distinguishes running/stopped/stale-pidfile. | New `packages/memory/test/cli-web-daemon.test.ts` (smoke `--help` + `--status` against not-running state). Live daemon-mode hard to test in CI; document in v0.7-manual-test-plan.md § 14. No Python tests affected. |
+| **26G** | **Test cutover: EFs.** Port `tests/e2e/test_edge_functions_e2e.py` (489 lines) → `packages/memory/test/edge-functions/*.test.ts`. Per-EF probe-and-skip; `[E2E ef-...]` prefix on any created data; self-cleaning purge in afterAll. Delete the Python file. | All EF e2e tests run via `bun test`. `pytest -m e2e` no longer collects EF tests (verify via `pytest --collect-only`). | DELETE `tests/e2e/test_edge_functions_e2e.py`. NEW `packages/memory/test/edge-functions/*.test.ts`. |
+| **26H** | **Test cutover: MCP-remote.** Port `tests/e2e/test_mcp_e2e.py` (560 lines) → `packages/memory/test/mcp-remote/*.test.ts`. HTTP MCP handshake → tools/list → sample tool call. Delete the Python file. | Remote MCP e2e tests run via `bun test`. | DELETE `tests/e2e/test_mcp_e2e.py`. NEW `packages/memory/test/mcp-remote/*.test.ts`. |
+| **26I** | **Test cutover: UI Playwright TS.** Add `@playwright/test` to `frontend/package.json` (dev dep). New `frontend/playwright.config.ts` (base URL `http://127.0.0.1:8000`, single Chromium project). Port `tests/e2e/test_ui_e2e.py` (247 lines, 14 tests) → `frontend/tests/e2e/*.spec.ts`. Update `frontend/package.json` scripts: `bun run test:e2e`. **Chromium install required** — `bunx playwright install chromium` (~150 MB download); add to CONTRIBUTING.md "One-time contributor setup". Delete the Python file. **Order with 26G/26H**: 26I deletes UI test file; if `tests/e2e/conftest.py` is shared with EF/MCP tests, defer its deletion until 26G + 26H are done (last-of-the-three deletes conftest.py if no remaining consumers). | All 14 UI tests run via `bun run test:e2e` (frontend dir). `bunx playwright install chromium` documented in CONTRIBUTING. | DELETE `tests/e2e/test_ui_e2e.py`. DELETE `tests/e2e/conftest.py` only after 26G+26H (verify no remaining consumers). NEW `frontend/tests/e2e/*.spec.ts`. |
+| **26J** | **Python CLI deprecation banner.** Add `_print_deprecation_banner()` to `src/cerefox/cli.py` that fires on every subcommand (yellow ⚠ on TTY, plain on non-TTY). Banner text: "⚠ Python `uv run cerefox <subcommand>` is deprecated. Install the TS CLI with `npm install -g @cerefox/memory` for the canonical experience. This Python CLI keeps working through v0.9." | Every `uv run cerefox <subcommand>` prints the banner before running. `uv run cerefox mcp` does NOT print the banner (per locked decision #12). | NEW `tests/test_python_cli_deprecation_banner.py` — Python (lives until v0.9 cutover per §19). |
+| **26K** | **v0.7.x carryovers.** (a) `write-commands.test.ts` beforeAll purges `[E2E v0.5-test]`-prefixed leftover docs + the `_e2e-v0.5` project via direct Supabase REST (the `delete-project` CLI did NOT ship in v0.7.2 — second commit on PR #61 was not merged). (b) Swap `resolveSpaDist` candidate order in `packages/memory/src/web/static.ts` so source `<repo>/frontend/dist/` wins over bundled `packages/memory/dist/frontend/`. Verify the existing `static.ts` doc comment still matches. (c) Port `scripts/backup_create.py` → `scripts/backup_create.ts` and `scripts/backup_restore.py` → `scripts/backup_restore.ts` (+ a `_shared/backup/` module since `cerefox.backup.fs_backup` ports too). Python originals become husks. **Round-trip acceptance**: TS write → TS restore reproduces the same document set (content_hash + project assignments + audit log entries) — not byte-identical (backup files include timestamps). | The two write-commands flakes pass cleanly across consecutive runs. Source-mode dev sees fresh frontend changes without manually deleting `dist/frontend/`. `bun scripts/backup_create.ts` + `backup_restore.ts` smoke-tested live; round-trip identity verified on a fixture-sized backup. | NEW `_shared/__tests__/backup.test.ts`. NEW `_shared/__tests__/scripts-smoke.test.ts` extensions for the backup scripts. DELETE `src/cerefox/backup/fs_backup.py` after TS port. NEW `packages/memory/test/web-static-resolution.test.ts` for the resolveSpaDist swap. |
+| **26L** | **GPT Actions OpenAPI: audit + sync rule.** **Audit phase**: read each of 9 EF `index.ts` files; compare request body / response shape to `docs/guides/connect-agents.md` OpenAPI block. Document drift in `docs/research/gpt-actions-drift-audit-2026-05.md`. **Fix phase**: update the OpenAPI block to match shipping EF reality; bump `info.version` 1.7.0 → 1.8.0 (also reflects the new `/version` route additions from 26B). **CI gate**: new `scripts/check_gpt_actions_sync.ts` is a **heuristic** — uses git diff to compare paths: fails when `supabase/functions/cerefox-*/index.ts` changed but `docs/guides/connect-agents.md` didn't (or vice versa). **Known limitations** (documented): false-positives on comment-only EF edits; false-negatives on EF behavioural changes that don't change the wire shape but should be documented. The check nudges the author to think; it doesn't catch every drift mode. New `.github/workflows/gpt-actions-sync.yml` wires the check into CI on every PR that touches either path. | Audit doc enumerates every drift point. Connect-agents.md OpenAPI block matches shipping reality. CI check fails a synthetic PR that modifies an EF without the schema. Limitations documented in script header comment. | NEW `_shared/__tests__/check-gpt-actions-sync.test.ts`. No Python tests affected. |
+| **26M** | **Closeout.** CHANGELOG v0.8.0 entry. Decision Log entry (Cerefox Decision Log Q2 Part 5 → likely Q3 Part 6 depending on Part 5 size at iter-26 cut). Update `docs/guides/migration-v0.5.md` with v0.8 section ("v0.8 completes the production-ready install arc"). Update `docs/research/v0.7-manual-test-plan.md` § 14 with daemon-mode + deploy-server + compat-matrix tests. | All four artifacts present in the merge commit. Manual test plan covers every new user-facing surface. | Closeout-only Part; no test-migration delta. |
+
+**Out of scope (deferred to v0.8.1+ or v1.0)**:
+
+| Item | Where it lands |
+|---|---|
+| Compat-matrix auto-generation from CHANGELOG | Manual hand-edit is fine for v0.8; revisit at v1.0 if release cadence demands automation. |
+| Daemon-mode on Windows (launchd / systemd integration) | v0.8.x patch or v0.9 follow-up. Unix-first. |
+| Standalone `cerefox-versions` EF | Aggregator on cerefox-mcp covers the use case. New EF only if peer-call latency becomes a real problem. |
+| Automatic EF version bump in `cut_release.ts` for non-EF-changing releases | Only bump `EF_VERSION` when the EF source actually changed. Add a guard in `cut_release.ts`: if `supabase/functions/cerefox-*/index.ts` had no changes since the previous tag, leave `EF_VERSION` alone. Folded into Part 26B. |
+| Removing the OPENAI fallback / Fireworks support | Out of v0.8 scope; tracked in TODO.md. |
+| `cerefox deploy-server --link` (interactive `npx supabase link` wrapper) | v0.8.x if user feedback requests it. v0.8 ships the "user must `npx supabase login` + `link` first" UX. |
+
+**Critical files / directories created in iter-26**:
+
+```
+_shared/ef-meta/                                    # NEW (Part 26B)
+├── index.ts                                        # EF_VERSION constant + respondVersion() helper
+└── peers.ts                                        # Peer-EF list for the aggregator
+
+_shared/compatibility/                              # NEW (Part 26C)
+├── index.ts                                        # COMPATIBILITY constant + checkServerCompatibility()
+└── types.ts                                        # ServerVersionResponse, CompatLevel
+
+_shared/server-assets/                              # NEW (Part 26A)
+└── index.ts                                        # resolveServerAssets() candidate walker
+
+_shared/backup/                                     # NEW (Part 26K)
+├── fs-backup.ts                                    # port of cerefox.backup.fs_backup
+└── types.ts                                        # BackupManifest, BackupOptions
+
+packages/memory/src/cli/commands/                   # 1 new file (Part 26D)
+└── deploy-server.ts
+
+packages/memory/test/edge-functions/                # NEW (Parts 26B + 26G)
+├── version.test.ts                                 # /version + aggregator (26B)
+├── search.test.ts                                  # migrated from test_edge_functions_e2e.py (26G)
+├── ingest.test.ts
+├── metadata.test.ts
+├── get-document.test.ts
+├── list-versions.test.ts
+├── get-audit-log.test.ts
+├── metadata-search.test.ts
+└── list-projects.test.ts
+
+packages/memory/test/mcp-remote/                    # NEW (Part 26H)
+├── handshake.test.ts                               # MCP initialize + tools/list
+├── tool-calls.test.ts                              # sample tool calls
+└── error-handling.test.ts
+
+frontend/tests/e2e/                                 # NEW (Part 26I)
+├── dashboard.spec.ts
+├── ingest.spec.ts
+├── search.spec.ts
+├── projects.spec.ts
+├── document-detail.spec.ts
+├── metadata-search.spec.ts
+├── analytics.spec.ts
+└── audit-log.spec.ts
+
+frontend/playwright.config.ts                       # NEW (Part 26I)
+
+scripts/backup_create.ts                            # NEW (Part 26K)
+scripts/backup_restore.ts                           # NEW (Part 26K)
+scripts/check_gpt_actions_sync.ts                   # NEW (Part 26L)
+
+docs/research/gpt-actions-drift-audit-2026-05.md    # NEW (Part 26L)
+```
+
+**Files modified**:
+
+- `packages/memory/package.json` — `prepublishOnly` extended with `bundle-server-assets`; `@playwright/test` dep added (Parts 26A, 26I)
+- Each of 9 `supabase/functions/cerefox-*/index.ts` — `GET /version` handler added (Part 26B)
+- `supabase/functions/cerefox-mcp/index.ts` — aggregator `GET /version?peers=true` (Part 26B)
+- `_shared/db-status/index.ts` — already covers schema version; verify no changes needed
+- `packages/memory/src/cli/commands/doctor.ts` — new `checkEdgeFunctionsCompat()` (Part 26C)
+- `packages/memory/src/cli/commands/init.ts` — `deploy-server` integration on 404 (Part 26E)
+- `packages/memory/src/cli/commands/web.ts` — daemon-mode flag handling (Part 26F)
+- `packages/memory/src/web/server.ts` — boot-time `checkServerCompatibility()` (Part 26C)
+- `packages/memory/src/web/static.ts` — `resolveSpaDist` candidate order swap (Part 26K)
+- `frontend/src/components/SchemaVersionBanner.tsx` — two-tier color logic (Part 26C)
+- `scripts/cut_release.ts` — `EF_VERSION` bump alongside `PKG_VERSION`; OpenAPI `info.version` bump nudge (Parts 26B, 26L)
+- `src/cerefox/cli.py` — `_print_deprecation_banner()` (Part 26J)
+- `docs/guides/connect-agents.md` — OpenAPI block updates + `/version` route additions; `info.version` 1.7.0 → 1.8.0 (Part 26L)
+- `CONTRIBUTING.md` — SemVer-bump policy section (Part 26C)
+- `docs/guides/migration-v0.5.md` — v0.8 section (Part 26M)
+- `docs/research/v0.7-manual-test-plan.md` — § 14 (Part 26M)
+- `CHANGELOG.md` — v0.8.0 entry under `[Unreleased]` (Part 26M)
+
+**Files deleted**:
+
+- `tests/e2e/test_edge_functions_e2e.py` (Part 26G)
+- `tests/e2e/test_mcp_e2e.py` (Part 26H)
+- `tests/e2e/test_ui_e2e.py` (Part 26I)
+- `tests/e2e/conftest.py` — only if it's exclusively for the UI tests (verify in 26I)
+- `src/cerefox/backup/fs_backup.py` — after TS port lands (Part 26K)
+- `scripts/backup_create.py` — becomes husk (Part 26K)
+- `scripts/backup_restore.py` — becomes husk (Part 26K)
+
+**Known risks / questions that need resolution DURING the build** (raised in the iter-26 design pass on 2026-05-29):
+
+| # | Risk / open question | Resolves in | Default plan |
+|---|---|---|---|
+| **R1** | **Supabase CLI absence on user machine.** `cerefox deploy-server` needs `npx supabase` to exist; the `npx` part requires Node ≥ 20. End-users on Bun-only machines will hit it. | Part 26D | Probe `npx supabase --version` up-front. If absent: print clear remediation ("Install Node 20+ from nodejs.org; npx ships with it. Then re-run `cerefox deploy-server`.") and exit 1. Document in `cerefox deploy-server --help`. |
+| **R2** | **EF aggregator round-trip latency.** `cerefox-mcp`'s `/version?peers=true` calls 8 peer EFs. Cold starts can be 500ms each — serial would be 8×500ms = 4s; parallel bounded by the slowest peer. | Part 26B | Parallel `Promise.all` with a 2s per-peer timeout — worst case 2s total. Failed peers reported as `{name, error: "<reason>"}` in a separate `errors` field; partial success still returns. Doctor surfaces partial results clearly. |
+| **R3** | **Daemon-mode race conditions.** Two simultaneous `cerefox web --daemon` invocations could both read empty pidfile and both spawn. cfcf accepts this risk in practice. | Part 26F | Accept low-probability race; the second daemon will fail at port-bind anyway and exit. Don't over-engineer with file locks for a personal-use tool. |
+| **R4** | **Playwright TS migration parity.** Python's Playwright tests use specific selectors + page-object patterns. TS `@playwright/test` uses similar but not identical idioms. | Part 26I | Port mechanically test-by-test; run live. Time-box each test to ≤30 min porting effort. If any test takes longer, escalate (likely indicates a real UX selector to replace). |
+| **R5** | **GPT Actions OpenAPI drift scope unknown.** Audit may surface anything from 0 to 20 drift points across 9 EFs × ~5 endpoints each. | Part 26L | Time-box audit to 2 hours; document everything found in `gpt-actions-drift-audit-2026-05.md`. Fix all in same Part if drift is small (≤5 endpoints affected). If drift is large (>5 endpoints), split 26L into 26L1 (audit + doc) + 26L2 (fixes) and consider the fixes a separate v0.8.x patch. |
+| **R6** | **Bundled `db_deploy.ts` runtime resolution.** When called from `cerefox deploy-server` after `npm install -g`, the script must resolve schema.sql + rpcs.sql + migrations/ from `dist/server-assets/`, not from `src/cerefox/db/`. | Parts 26A + 26D | `_shared/server-assets/index.ts` candidate-walker (mirrors `resolveSpaDist`). Test on both Node and Bun runtimes (`import.meta.url` behavior differs subtly). Use `fileURLToPath` for cross-runtime safety. |
+| **R7** | **Test cutover surfacing live-data dependencies.** `test_edge_functions_e2e.py` may have hidden deps on the maintainer's specific Supabase state (project rows, doc counts). | Parts 26G + 26H | Port verbatim first; surface as flakes; clean up via probe-and-purge in beforeAll using `[E2E ef-...]` / `[E2E mcp-...]` prefixes. |
+| **R8** | **`supabase functions deploy` requires linked project state.** Without `npx supabase link` having been run, deploys fail with a non-obvious error. | Part 26D | Detect linkage state at deploy-server entry (check for `.supabase/config.toml` or capture the stderr of `npx supabase functions list`). If unlinked, exit 1 with: "Run `npx supabase login` then `npx supabase link --project-ref <ref>` and re-run." |
+| **R9** | **`cerefox init` flow change is user-visible.** Adding a "Deploy server now?" prompt changes interactive UX. Existing users in fresh terminal sessions could see unexpected behavior. | Part 26E | Probe `cerefox_schema_version()` BEFORE prompting; only ask when 404. Existing-install users see zero prompt. Default answer is N (safety) — destructive operations are opt-in. |
+| **R10** | **Compat matrix initial values (`minSchema`, `minEdgeFunctions`).** Choosing the wrong anchors could either break existing installs (too aggressive) or fail to catch incompatibility (too lenient). | Part 26C | Default plan: `minSchema: "0.3.1"` (current schema marker — every install since v0.4 has this), `minEdgeFunctions: "0.6.0"` (the first version where EFs match the v0.6 TS web). Test by running doctor against a fresh deploy and against a v0.5-vintage deploy. Adjust the v0.6.0 anchor if testing reveals a different boundary. |
+| **R11** | **Daemon-mode platform compatibility.** Node's `child_process.spawn({ detached: true })` behaves differently on Windows than Unix. | Part 26F | Implement for Unix; document Windows as "not yet supported — use foreground `cerefox web` or set up a service manually." Add a platform check at the top of `--daemon` that exits 1 on Windows with a clear pointer. |
+| **R12** | **Three-tier vs two-tier `SchemaVersionBanner`.** Today: any-difference → yellow. Design pass: red below-min, yellow above-min-but-old. Open question: what about `deployed > bundled` (server is ahead of client)? | Part 26C | Default: stay two-tier; treat `deployed > bundled` as "no banner" (this is fine — newer server has features client doesn't use but won't break). If user feedback later reveals this state surprises them, add a blue/info tier in a v0.8.x patch. |
+| **R13** | **`backup_create.ts` / `backup_restore.ts` may surface state-shape divergence.** Python's `fs_backup.py` writes a specific JSON shape; TS port must read/write the same shape so existing backup files restore correctly. | Part 26K | Capture a sample backup from the maintainer's Supabase as a fixture before porting. Port. Test round-trip: TS write → TS restore = identity; Python write (existing fixture) → TS restore = identity. |
+| **R14** | **`info.version` bump in OpenAPI doc — semver semantics.** OpenAPI doc uses 1.7.0 today; bumping to 1.8.0 implies "minor change". The `/version` additions are additive (new routes, no breaking changes), so 1.8.0 is correct. But if the audit uncovers a breaking change in the existing OpenAPI block (e.g., a field rename), 2.0.0 is correct. | Part 26L | Default to 1.8.0; if the audit surfaces a breaking change to an existing endpoint, bump to 2.0.0 and document in the migration guide. |
+
+**Design-pass discussion items (locked-but-reversible)**:
+
+These items are LOCKED in this design pass per the rationale in the decisions table above, but each has a credible alternative. Flagged here for maintainer review at the design-pass PR; if any flip, the affected Part(s) adjust before implementation kicks off. **These are not blockers** — implementation can start with the locked answers if no maintainer pushback by the time the design PR merges.
+
+| # | Item (rationale already locked above) | Locked answer | Credible alternative + when it'd win |
+|---|---|---|---|
+| **D1** | EF `/version` surface (decision #4) | Dedicated `GET /version` path | Query `GET ?meta=version` — wins if any future tooling can't auth a second path. Low likelihood. |
+| **D2** | Aggregator location (decision #5) | `cerefox-mcp` `/version?peers=true` | New `cerefox-versions` EF — wins if cerefox-mcp's response-time SLA matters (the peer-call loop adds latency to anything probing cerefox-mcp for non-version reasons). |
+| **D3** | `cerefox init` auto-deploy prompt | Prompt-with-default-N (safety) | Auto-deploy with `--no-auto-deploy` opt-out — wins if user feedback says "I always want it deployed; the prompt is friction." |
+| **D4** | Carryover backups in v0.8 (decision #13) | `backup_create.ts` + `backup_restore.ts` ported in Part 26K | Defer to v0.8.1 — wins if iter-26 swells past 14 Parts during build. |
+| **D5** | `resolveSpaDist` candidate-order swap | Swap so source `<repo>/frontend/dist/` wins over bundled `dist/frontend/` | Env-flag `CEREFOX_PREFER_SOURCE_SPA=1` opt-in — wins if any contributor reports the swap breaks an unusual layout. |
+| **D6** | Python web v0.9 fate | **Delete** at v0.9 (the TS web is canonical from v0.6 forward) | Husk through v0.9; delete in v0.10 — wins if any user surfaces a "I still rely on the Python web" use case before v0.9 cuts. |
+| **D7** | OpenAPI audit + fix in one Part (decision #11) | Part 26L if drift ≤5 endpoints; split into 26L1/26L2 if larger | Always split — wins if the audit finds drift before code starts (escalate at brainstorming time). |
+| **D8** | Compat matrix initial anchors (decision #14) | `minSchema: "0.3.1"`, `minEdgeFunctions: "0.6.0"` | Tighten `minEdgeFunctions` to "0.7.0" — wins if v0.6 EFs are known to have a real incompatibility with v0.7+ client code. The author of v0.6 + v0.7 (myself) doesn't recall any such break, but the maintainer's wider memory may surface one. |
+| **D9** | Daemon-mode surface (decision #8) | Flag-based `--daemon/--stop/--status` | Subcommand-based `web start/stop/status` (matches cfcf 1:1) — wins if "cleaner command tree" beats "matches existing plan.md outline." |
+| **D10** | Python deprecation banner opt-out | Add `CEREFOX_SUPPRESS_PYTHON_DEPRECATION=1` env var | No opt-out — wins if "maximum nudge" beats "user wraps `uv run cerefox` in CI scripts where banner is noise." |
+
+**Local testing during the build**:
+
+```bash
+# Mode 1 — Full source-tree (chunker + EF + bundled deploy parity)
+cd /Users/fotis/src/cerefox
+bun scripts/db_deploy.ts --dry-run       # source path still works
+bun scripts/db_deploy.ts                 # apply to a test Supabase
+
+# Mode 2 — Bundled-install simulation
+cd packages/memory && bun run build && bun run bundle-server-assets
+node dist/bin/cerefox.js deploy-server --dry-run    # bundled path
+
+# Mode 3 — Daemon-mode walk
+cerefox web --daemon                     # spawn detached
+cerefox web --status                     # confirm running
+curl http://127.0.0.1:8000/api/v1/version
+cerefox web --stop                       # graceful shutdown
+
+# Mode 4 — Compatibility matrix simulated mismatch
+# Edit _shared/compatibility/index.ts: COMPATIBILITY.minEdgeFunctions = "99.0.0"
+cerefox doctor                           # expect ✗ on edge-functions row
+cerefox web                              # expect refusal at boot
+
+# Mode 5 — OpenAPI sync check
+bun scripts/check_gpt_actions_sync.ts    # exits 0 on clean tree
+# Edit an EF index.ts (e.g., add a field to response)
+bun scripts/check_gpt_actions_sync.ts    # exits 1 with diff pointer
+```
+
+**For a fresh-session pickup**: this iter-26 design is self-contained. Read this section + the v0.7.0 closing entry in Cerefox Decision Log Q2 Part 5 + the v0.7.1 "anti-pattern" entry (Part 5) + design doc §13 v0.8.0/v0.9.0 + §19 (test migration policy). All locked decisions are documented above; the 14 risks have default plans; the 10 open questions need the maintainer's call **before** code starts. Headline items are ordered roughly in the dependency sequence (server-assets first, then EF /version, then compat matrix, etc.) so a single autonomous build can execute Parts 26A through 26M in order with mid-Part check-ins only when an open question's default plan needs reconsideration.
 
 ---
 
