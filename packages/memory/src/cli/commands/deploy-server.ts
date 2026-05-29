@@ -19,8 +19,9 @@
  * Comprehensive pre-flight: every external prerequisite is probed up-front
  * and reported as a single all-or-nothing remediation list. Idempotent.
  *
- * Flags: --dry-run (plan only, no prompt), --schema-only, --functions-only.
- * There is deliberately NO --reset (drop-everything) here — a full wipe is a
+ * Flags: --dry-run (plan only, no prompt), --schema-only, --functions-only,
+ * --project-ref (override the ref derived from CEREFOX_SUPABASE_URL for EF
+ * deploys). There is deliberately NO --reset (drop-everything) here — a full wipe is a
  * contributor/recovery operation; use `bun scripts/db_deploy.ts --reset`
  * (repo clone, typed-`yes` guard) if you truly need it.
  */
@@ -51,6 +52,7 @@ interface DeployServerOptions {
   dryRun?: boolean;
   schemaOnly?: boolean;
   functionsOnly?: boolean;
+  projectRef?: string;
 }
 
 /** One pre-flight check + its remediation when failed. */
@@ -66,6 +68,28 @@ function commandSucceeds(cmd: string, args: string[]): boolean {
     return r.status === 0;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Derive the Supabase project ref from CEREFOX_SUPABASE_URL
+ * (`https://<ref>.supabase.co` → `<ref>`). Refs are 20 lowercase
+ * alphanumerics. Returns null for custom domains / unparseable URLs — the
+ * caller then relies on the explicit `--project-ref` flag.
+ *
+ * We pass `--project-ref` to `supabase functions deploy` so the deploy works
+ * from the bundled-assets directory without a per-directory `supabase link`
+ * (link state lives in `supabase/.temp/` of whatever dir you linked, which is
+ * NOT the bundled-assets dir the CLI runs in).
+ */
+function parseProjectRef(supabaseUrl: string | undefined): string | null {
+  if (!supabaseUrl) return null;
+  try {
+    const host = new URL(supabaseUrl).hostname; // e.g. ljdz….supabase.co
+    const label = host.split(".")[0];
+    return /^[a-z0-9]{20}$/.test(label) ? label : null;
+  } catch {
+    return null;
   }
 }
 
@@ -86,6 +110,10 @@ async function action(options: DeployServerOptions): Promise<void> {
 
   const doSchema = !options.functionsOnly;
   const doFunctions = !options.schemaOnly;
+
+  // Project ref for `supabase functions deploy --project-ref` (see
+  // parseProjectRef). Explicit flag wins; otherwise derive from the URL.
+  const projectRef = options.projectRef ?? parseProjectRef(settings.supabaseUrl);
 
   // ── Pre-flight ────────────────────────────────────────────────────────────
   const checks: Preflight[] = [];
@@ -125,18 +153,19 @@ async function action(options: DeployServerOptions): Promise<void> {
         "Install Node 20+ (npx ships with it) from nodejs.org, then re-run. " +
         "`cerefox deploy-server` shells out to the Supabase CLI via npx.",
     });
-    // Linkage: a linked project writes supabase/config.toml in cwd. We can't
-    // see the user's cwd reliably from a global install, so we surface the
-    // requirement rather than hard-fail when we can't detect it.
+    // Project ref: we pass it explicitly to `functions deploy`, so we DON'T
+    // need a per-directory `supabase link` (that state lives in the dir you
+    // linked, not the bundled-assets dir the CLI runs in). We do need a
+    // resolvable ref + a logged-in CLI; login is global, so we just remind
+    // about it here and let the deploy surface a clear error if it's missing.
     checks.push({
-      label: "Supabase project linked (`npx supabase link`)",
-      ok: existsSync("supabase/config.toml") || existsSync(".supabase/config.toml"),
+      label: "Supabase project ref resolved (from CEREFOX_SUPABASE_URL)",
+      ok: Boolean(projectRef),
       remediation:
-        "Authenticate + link your project (one-time, from any working dir):\n" +
-        "      npx supabase login\n" +
-        "      npx supabase link --project-ref <your-project-ref>\n" +
-        "    Your project ref is in the dashboard URL: " +
-        "https://supabase.com/dashboard/project/<project-ref>",
+        "Could not derive the project ref from CEREFOX_SUPABASE_URL.\n" +
+        "    Set CEREFOX_SUPABASE_URL to your project URL " +
+        "(https://<project-ref>.supabase.co), or pass --project-ref <ref>.\n" +
+        "    Also make sure you're logged in once: npx supabase login",
     });
   }
 
@@ -192,7 +221,9 @@ async function action(options: DeployServerOptions): Promise<void> {
     }
   }
   if (doFunctions) {
-    planLines.push(`  • Deploy ${efNames.length} Edge Function(s): ${efNames.join(", ")}`);
+    planLines.push(
+      `  • Deploy ${efNames.length} Edge Function(s) to project ${projectRef}: ${efNames.join(", ")}`,
+    );
   }
 
   println(c.bold("\nPlan:"));
@@ -262,8 +293,13 @@ async function action(options: DeployServerOptions): Promise<void> {
       info(`   deploying ${ef}…`);
       // Run with cwd = the assets root's supabase parent so the CLI finds
       // supabase/functions/<ef>. functionsDir is <root>/supabase/functions.
+      // Pass --project-ref explicitly: the bundled-assets dir is not linked
+      // (link state lives in whatever dir the user ran `supabase link`), so a
+      // bare deploy here couldn't resolve the target project.
       const workdir = assets.functionsDir.replace(/\/functions$/, "").replace(/\/supabase$/, "");
-      const r = spawnSync("npx", ["--yes", "supabase", "functions", "deploy", ef], {
+      const args = ["--yes", "supabase", "functions", "deploy", ef];
+      if (projectRef) args.push("--project-ref", projectRef);
+      const r = spawnSync("npx", args, {
         encoding: "utf8",
         stdio: "inherit",
         cwd: workdir,
@@ -291,5 +327,9 @@ export function registerDeployServer(program: Command): void {
     .option("--dry-run", "Print the plan + pre-flight without deploying.")
     .option("--schema-only", "Deploy/update only the schema + RPCs (skip Edge Functions).")
     .option("--functions-only", "Deploy only the Edge Functions (skip the schema/RPCs).")
+    .option(
+      "--project-ref <ref>",
+      "Supabase project ref for Edge Function deploys (default: derived from CEREFOX_SUPABASE_URL).",
+    )
     .action(action);
 }

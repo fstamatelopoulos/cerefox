@@ -9,7 +9,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`cerefox deploy-server` Edge Function deploy now works without a
+  per-directory `supabase link`.** Two bugs: (1) the pre-flight detected
+  linkage by looking for `supabase/config.toml` (the `supabase init` marker),
+  so a correctly-linked project with no `config.toml` was reported as "not
+  linked"; (2) the actual `supabase functions deploy` ran from the
+  bundled-assets directory, which has no link state, so it couldn't resolve the
+  target project even when the pre-flight passed. Now the project ref is derived
+  from `CEREFOX_SUPABASE_URL` (override with `--project-ref <ref>`) and passed
+  explicitly to `supabase functions deploy`, making the deploy
+  directory-independent. The pre-flight checks that a ref is resolvable instead
+  of looking for `config.toml`; `supabase login` (a global token) is all that's
+  required.
+- `cerefox doctor` no longer warns that the Edge Functions are "older than this
+  client" right after a fresh redeploy. The EF version check baselined the
+  deployed EF version against the npm package version (`PKG_VERSION`) instead of
+  the version of the Edge Functions the package actually bundles (`EF_VERSION`).
+  Because a client-only release bumps `PKG_VERSION` without changing the EFs,
+  doctor flagged up-to-date EFs as stale. Now baselined against `EF_VERSION`.
 
 ---
 

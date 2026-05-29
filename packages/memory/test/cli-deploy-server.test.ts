@@ -44,6 +44,8 @@ describe("cerefox deploy-server CLI", () => {
     expect(stdout).toContain("--dry-run");
     expect(stdout).toContain("--schema-only");
     expect(stdout).toContain("--functions-only");
+    // v0.8.2: --project-ref overrides the ref derived from CEREFOX_SUPABASE_URL.
+    expect(stdout).toContain("--project-ref");
     // --reset was removed in v0.8.1 — it lives only in scripts/db_deploy.ts now.
     expect(stdout).not.toContain("--reset");
   });
