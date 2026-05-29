@@ -379,8 +379,9 @@ function launchDeployServer(extraArgs: string[] = []): number {
 /**
  * iter-26 Part 26E: offer to deploy the server side when the schema is
  * missing (404) or below the client's minimum. Three cases:
- *   (a) no schema      → "Deploy now?" → deploy-server
- *   (b) below minSchema → "Redeploy now?" → deploy-server --reset
+ *   (a) no schema      → "Deploy now?" → deploy-server (fresh)
+ *   (b) below minSchema → "Update now?" → deploy-server (applies pending
+ *       migrations + refreshes RPCs in place; v0.8.1 — no longer --reset)
  *   (c) compatible      → silent pass
  * Declining at any prompt continues init; `cerefox doctor` nudges again.
  */
@@ -407,9 +408,9 @@ async function maybeOfferServerDeploy(): Promise<void> {
         `  Deployed schema v${deployed} is below the required v${COMPATIBILITY.minSchema}.`,
       ),
     );
-    const yes = await confirm("  Redeploy the server now (--reset DROPS existing data)?", true);
-    if (yes) launchDeployServer(["--reset"]);
-    else println(c.dim("  Skipped. Run `cerefox deploy-server --reset` when ready."));
+    const yes = await confirm("  Update the server now (applies pending migrations, refreshes RPCs + EFs)?", true);
+    if (yes) launchDeployServer();
+    else println(c.dim("  Skipped. Run `cerefox deploy-server` when ready."));
     println("");
     return;
   }

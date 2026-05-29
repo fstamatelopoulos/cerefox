@@ -2975,13 +2975,31 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 
 ---
 
+## Iteration 26.1: v0.8.1 — "deploy-server handles updates"
+
+**Goal**: Close a gap found right after v0.8.0 published: `cerefox deploy-server` only ever did a *fresh* deploy (apply schema + RPCs, then **stamp** every migration as applied without running it). Re-run against a database that already has a Cerefox schema, it never applied pending migrations and never refreshed RPCs — so a release that ships a new migration or changed RPCs wasn't actually deployed by re-running the catch-all command. v0.8.1 makes `deploy-server` the true catch-all for standing up **and updating** the server side.
+
+**Status**: Implemented on `feat/v0.8.1-deploy-server-migrations` (2026-05-29). **Cut deferred** until the clone-env walk validates the existing-DB migration path end-to-end (a fresh side-by-side Supabase account, side-by-side with the maintainer), which also refreshes `docs/guides/setup-supabase.md`.
+
+| Part | Description | Acceptance |
+|------|-------------|-----------|
+| **26.1-A** | Extract `runDbMigrate`, `migrationStatus`, `detectExistingSchema`, `applyRpcs` into `_shared/db-deploy/`. Refactor `scripts/db_migrate.ts` into a thin wrapper over the shared logic; add `--status`. | `_shared` + scripts-smoke green; `db_migrate.ts --status` lists applied/pending live. |
+| **26.1-B** | `deploy-server` detects fresh vs. existing DB (`detectExistingSchema`). Fresh → `runDbDeploy` (unchanged). Existing → `runDbMigrate` (apply pending, each in its own txn) + `applyRpcs` (refresh RPCs). Dry-run plan shows the chosen path + pending list. **Remove `--reset`** from the user-facing command (stays in `scripts/db_deploy.ts --reset`). `cerefox init`'s below-min-schema path now runs plain `deploy-server` (in-place update) instead of `--reset`. | `deploy-server --schema-only --dry-run` against a live existing DB reports "apply N pending migration(s) + refresh RPCs"; `--help` no longer advertises `--reset`; `cli-deploy-server.test.ts` green. |
+| **26.1-C** | `doctor` relabels `schema` → `schema + RPCs`; classifies deployed schema/RPC version against `COMPATIBILITY.minSchema` (error) + bundled `@version` (warn). Consolidated remediation footer: both stale → `deploy-server`; one stale → `--schema-only` / `--functions-only`. | `doctor` renders the new label + footer; full package suite green. |
+| **26.1-D** | Closeout: CHANGELOG [Unreleased] entry, RELEASING.md + CLAUDE.md note deploy-server as the migration-aware catch-all, this plan section, PR. Cut deferred to the clone-env walk. | Artifacts present; PR opened. |
+
+**Out of scope**: cutting/publishing the tag (deferred to the clone-env validation walk); any new migration files (none added in v0.8.1).
+
+---
+
 ## Iteration 27: v0.9.0 — "CLI Redesign + Python Web Deletion"
 
-**Goal**: Three themes for **v0.9.0**:
+**Goal**: Four themes for **v0.9.0**:
 
 1. **CLI ↔ web functional parity + verb normalization.** Audit every operation the web UI supports vs every CLI command; close gaps both ways. Then redesign the entire CLI verb structure to a resource-verb pattern matching cfcf's convention: `cerefox <resource> <verb> [args]`. E.g., `cerefox document get|delete|list|edit|ingest`, `cerefox project create|delete|list|edit`, `cerefox version list|archive`. Each old top-level verb (`get-doc`, `list-docs`, `delete-doc`, …) becomes a husk that prints "use `cerefox document <verb>` instead" and exits with a non-zero code (so muscle-memory scripts surface the rename loudly). v0.9.0 is the last release with the old verbs reachable at all.
 2. **Delete the Python web** (per Fotis-13 / D6). `src/cerefox/api/*` removed. The TS web has been canonical since v0.6; nobody chooses Python web as a fallback path (unlike Python MCP, which agents wire up deliberately via stdio).
 3. **Test-runner cutover phase 2 + subprocess-pattern tests for surviving Python.** Per design doc §19 rule 5: tests for the Python MCP server move to TS via subprocess pattern (TS test spawns `uv run cerefox mcp` and asserts JSON-RPC handshake + tools/list + sample tool call at the process boundary). New husk-CLI tests for every renamed-to-husk Python subcommand. After v0.9: zero `.py` in `tests/`; one test runner (`bun test`); `pyproject.toml` / `uv.lock` / `.python-version` STAY because Python the runtime stays (MCP server).
+4. **Two-install-path documentation overhaul** (Fotis, 2026-05-29). Since v0.8 the project has two distinct install audiences and the README / guides don't cleanly separate them. Restructure all user-facing docs around **two paths, both kept**: **(a) End user (no repo checkout)** — the install script + `cerefox` CLI commands (`init` → `deploy-server` → `configure-agent`); never needs to clone the repo. **(b) Contributor** — the existing README + `quickstart.md` repo-clone flow (uv, bun, repo scripts). The decision is to keep both, clearly labelled, so neither audience is led down the other's path. Touches README.md (top-level split), `quickstart.md`, `setup-supabase.md`, `connect-agents.md`, and the guide index.
 
 **Python MCP retention** (per Fotis-13): the Python MCP server (`src/cerefox/mcp_server.py`) stays **through v1.x at minimum**. Repo-clone users who `git pull && uv run cerefox mcp` without reading docs keep working. Removal considered post-v1.0 — probably v2.0 candidate or "kept indefinitely as a fallback path." The long-tail Python footprint is accepted.
 
@@ -3001,6 +3019,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 - **Migration guide update**: `docs/guides/migration-v0.5.md` gets a v0.9 section. May warrant a new `migration-v0.9.md` since the verb rename is the largest user-impact change since v0.5.
 - **CLAUDE.md update**: `CLI verb conventions` section codifying the resource-verb pattern so future commands follow it.
 - **Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out** (added 2026-05-29 per Fotis): the Python CLI deprecation banner's suppress env var predates iter-26 (shipped v0.5.0). Fotis-19 leaned against having an opt-out at all; iter-26 kept it only to avoid breaking existing quiet-CI usage mid-stream. v0.9 turns the Python CLI subcommands into husks anyway, so the banner's role changes — drop the env var here so the husk message always prints (maximum nudge). Note in the CHANGELOG that the suppress var is gone.
+- **Two-install-path documentation overhaul** (Fotis, 2026-05-29): restructure README + guides around the two audiences (end user via install-script + CLI; contributor via repo clone). Both paths kept, clearly labelled. README gets a top-level "Choose your path" split near the top; `quickstart.md` framed explicitly as the contributor/repo-clone flow; the end-user path documents `install → cerefox init → cerefox deploy-server → cerefox configure-agent` with no `git clone`. Cross-link `setup-supabase.md` and `connect-agents.md` from both. Verify the install script exists / is referenced consistently.
 
 **Parts breakdown (27A–27J)**:
 
@@ -3015,7 +3034,8 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 | **27G** | Husk-CLI subprocess tests for every renamed verb. |
 | **27H** | Delete all surviving `.py` test files under `tests/` (except subprocess targets that genuinely run Python). pytest dep removed from pyproject.toml. |
 | **27I** | CHANGELOG v0.9.0 entry; migration-v0.9.md (or v0.5 update with v0.9 section); CLAUDE.md verb-conventions section. |
-| **27J** | Closeout: design doc §13 v0.9.0 updated; Decision Log entry; manual test plan update. |
+| **27J** | **Two-install-path documentation overhaul**: README top-level "Choose your path" split (end user via install-script + CLI vs contributor via repo clone); reframe `quickstart.md` as the contributor flow; document the end-user `init → deploy-server → configure-agent` path with no clone; cross-link `setup-supabase.md` + `connect-agents.md`; update the guide index. Both paths kept. |
+| **27K** | Closeout: design doc §13 v0.9.0 updated; Decision Log entry; manual test plan update. |
 
 **Risks**:
 

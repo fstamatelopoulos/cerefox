@@ -116,7 +116,12 @@ describe("meta endpoints (HTTP boundary)", () => {
     const resp = await fetch(`${server.base}/api/v1/schema-version`);
     expect(resp.status).toBe(200);
     const body = await resp.json();
-    expect(Object.keys(body).sort()).toEqual(["bundled", "deployed", "mismatch"]);
+    // Core mismatch-banner contract: bundled / deployed / mismatch. iter-26C
+    // added compatibility classification fields (level, min) — assert the core
+    // keys are present rather than an exact set so the endpoint can grow.
+    for (const key of ["bundled", "deployed", "mismatch"]) {
+      expect(Object.keys(body)).toContain(key);
+    }
     expect(typeof body.mismatch).toBe("boolean");
     // bundled / deployed may be null if the schema.sql @version marker is
     // missing or the RPC isn't deployed; we don't assert specific values

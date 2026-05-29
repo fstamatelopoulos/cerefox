@@ -26,7 +26,10 @@ import {
 import {
   aggregatorUrlFor,
   checkServerCompatibility,
+  classifyCompat,
+  COMPATIBILITY,
 } from "../../../../../_shared/compatibility/index.ts";
+import { resolveServerAssets } from "../../../../../_shared/server-assets/index.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 
@@ -231,11 +234,28 @@ export async function checkOpenAI(): Promise<CheckResult> {
   }
 }
 
+/** Matches the `-- @version: X.Y.Z` marker at the top of schema.sql. */
+const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
+
+/** Read the schema version this client bundles (from the schema.sql header). */
+function readBundledSchemaVersion(): string | null {
+  try {
+    const assets = resolveServerAssets();
+    if (!existsSync(assets.schemaFile)) return null;
+    const m = readFileSync(assets.schemaFile, "utf8").match(SCHEMA_VERSION_RE);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+const SCHEMA_CHECK_NAME = "schema + RPCs";
+
 export async function checkSchemaVersion(): Promise<CheckResult> {
   const settings = loadSettings();
   if (!settings.supabaseUrl || !settings.supabaseKey) {
     return {
-      name: "schema",
+      name: SCHEMA_CHECK_NAME,
       status: "skipped",
       detail: "Supabase config missing; skipped.",
     };
@@ -253,26 +273,44 @@ export async function checkSchemaVersion(): Promise<CheckResult> {
     });
     if (!resp.ok) {
       return {
-        name: "schema",
+        name: SCHEMA_CHECK_NAME,
         status: "error",
-        detail: `cerefox_schema_version returned ${resp.status}`,
-        hint: "Deploy the schema: `uv run python scripts/db_deploy.py`",
+        detail: `cerefox_schema_version returned ${resp.status} — schema not deployed.`,
+        hint: "Deploy the schema + RPCs (see remediation below).",
       };
     }
     const deployed = (await resp.json()) as string;
-    // Schema version is independent of the npm package version — they
-    // ratchet on different cadences. The web UI's mismatch banner
-    // (v0.3.0) is for "I rebuilt my server but forgot to redeploy the
-    // schema"; the doctor check here just surfaces the deployed value
-    // matter-of-factly.
-    return {
-      name: "schema",
-      status: "ok",
-      detail: `cerefox_schema_version() → "${deployed}"`,
-    };
+    // Classify the deployed Postgres schema/RPC version against this client's
+    // minimum (blocking) and bundled (informational) versions. The remediation
+    // command is owned by the doctor footer, which consolidates schema + EF
+    // suggestions into a single `cerefox deploy-server [--schema-only]` line.
+    const bundled = readBundledSchemaVersion();
+    const level = classifyCompat(deployed, COMPATIBILITY.minSchema, bundled);
+    switch (level) {
+      case "below-min":
+        return {
+          name: SCHEMA_CHECK_NAME,
+          status: "error",
+          detail: `Deployed schema v${deployed} is below the required minimum v${COMPATIBILITY.minSchema}.`,
+          hint: "Update the schema + RPCs (see remediation below).",
+        };
+      case "above-min-but-old":
+        return {
+          name: SCHEMA_CHECK_NAME,
+          status: "warn",
+          detail: `Deployed schema v${deployed} works but is older than this client's bundled v${bundled}.`,
+          hint: "Update the schema + RPCs (see remediation below).",
+        };
+      default:
+        return {
+          name: SCHEMA_CHECK_NAME,
+          status: "ok",
+          detail: `cerefox_schema_version() → "${deployed}"${bundled ? ` (bundled v${bundled})` : ""}`,
+        };
+    }
   } catch (err) {
     return {
-      name: "schema",
+      name: SCHEMA_CHECK_NAME,
       status: "error",
       detail: `Schema version probe failed: ${err instanceof Error ? err.message : String(err)}`,
     };
@@ -471,14 +509,14 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
         name: "edge functions",
         status: "error",
         detail: `Deployed EF v${deployed} is below the required minimum v${compat.edgeFunctions.min}.`,
-        hint: "Redeploy the Edge Functions: `cerefox deploy-server --functions-only`.",
+        hint: "Update the Edge Functions (see remediation below).",
       };
     case "above-min-but-old":
       return {
         name: "edge functions",
         status: "warn",
         detail: `Deployed EF v${deployed} works but is older than this client (v${PKG_VERSION}).`,
-        hint: "Consider redeploying: `cerefox deploy-server --functions-only`.",
+        hint: "Update the Edge Functions (see remediation below).",
       };
     default:
       return {
@@ -543,7 +581,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "legacy env", phase: "Checking legacy env shadowing", run: () => checkLegacyShadowEnv() },
     { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
-    { name: "schema", phase: "Reading schema version", run: () => checkSchemaVersion() },
+    { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
     { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },

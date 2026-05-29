@@ -67,6 +67,31 @@ async function action(options: { json?: boolean }): Promise<void> {
     println("");
   }
 
+  // Consolidated server-update remediation. The schema+RPC and Edge Function
+  // checks classify drift but deliberately leave the command to here so we
+  // emit a single suggestion: both stale → run the whole `deploy-server`;
+  // only one stale → the matching --schema-only / --functions-only flag.
+  if (!options.json) {
+    const stale = (name: string) => {
+      const r = results.find((x) => x.name === name);
+      return r != null && (r.status === "error" || r.status === "warn");
+    };
+    const needsSchema = stale("schema + RPCs");
+    const needsEf = stale("edge functions");
+    let remediation: string | null = null;
+    if (needsSchema && needsEf) {
+      remediation = "Update the server (schema + RPCs + Edge Functions): cerefox deploy-server";
+    } else if (needsSchema) {
+      remediation = "Update the schema + RPCs: cerefox deploy-server --schema-only";
+    } else if (needsEf) {
+      remediation = "Update the Edge Functions: cerefox deploy-server --functions-only";
+    }
+    if (remediation) {
+      println(cErr.yellow("→ " + remediation));
+      println("");
+    }
+  }
+
   const errCount = results.filter((r) => r.status === "error").length;
   const warnCount = results.filter((r) => r.status === "warn").length;
   if (errCount > 0) {
