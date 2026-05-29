@@ -28,6 +28,7 @@ export {
   eprintln,
   errorln,
   info,
+  localTimestamp,
   ok,
   printJson,
   println,

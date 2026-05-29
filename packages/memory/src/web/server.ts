@@ -47,6 +47,7 @@ import {
   resolveStaticDir,
 } from "./static.ts";
 import { PKG_VERSION } from "../meta.ts";
+import { localTimestamp } from "../../../../_shared/cli-core/index.ts";
 import { loadSettings } from "../../../../_shared/config/index.ts";
 import {
   aggregatorUrlFor,
@@ -67,11 +68,13 @@ export interface WebServerHandle {
 export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   const app = new Hono();
 
-  // (0) Request logger — writes one line per request to stderr, matching the
-  // UX FastAPI/uvicorn provided on the Python web server. Skipped in test
-  // runs (NODE_ENV=test) so smoke tests stay quiet.
+  // (0) Request logger — writes one line per request, matching the UX
+  // FastAPI/uvicorn provided on the Python web server. Each line is prefixed
+  // with a local-time timestamp so the daemon log (~/.cerefox/web.log) is
+  // readable after the fact. Skipped in test runs (NODE_ENV=test) so smoke
+  // tests stay quiet.
   if (process.env.NODE_ENV !== "test") {
-    app.use(logger());
+    app.use(logger((message, ...rest) => console.log(`${localTimestamp()}  ${message}`, ...rest)));
   }
 
   // (1) JSON API — registered first.
