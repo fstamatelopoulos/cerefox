@@ -78,7 +78,7 @@ async function hardPurgeE2eDocs(): Promise<void> {
 }
 
 // Probe whether Supabase is reachable.
-const probe = run(["list-projects", "--json"]);
+const probe = run(["project", "list", "--json"]);
 const LIVE_OK = probe.status === 0;
 
 // Track docs we create so we can clean them up regardless of test
@@ -107,11 +107,11 @@ describe("cerefox write commands (live)", () => {
     // hardPurgeE2eDocs only removes documents; reap the `_e2e-v0.5` project
     // row too so it doesn't leak across runs. `--force` deletes even if a
     // doc link lingers (the project row goes; doc rows stay).
-    run(["delete-project", "_e2e-v0.5", "--yes", "--force"]);
+    run(["project", "delete", "_e2e-v0.5", "--yes", "--force"]);
   });
 
   test("ingest --paste: title required", () => {
-    const { status, stderr } = run(["ingest", "--paste"], { stdin: "# hi\n" });
+    const { status, stderr } = run(["document", "ingest", "--paste"], { stdin: "# hi\n" });
     expect(status).toBe(1);
     expect(stderr).toContain("--title");
   });
@@ -120,7 +120,7 @@ describe("cerefox write commands (live)", () => {
     const title = "[E2E v0.5-test] paste-mode-ingest";
     const { stdout, status } = run(
       [
-        "ingest",
+        "document", "ingest",
         "--paste",
         "--title",
         title,
@@ -144,7 +144,7 @@ describe("cerefox write commands (live)", () => {
 
   test("ingest --paste: empty stdin → exit 1", () => {
     const { status, stderr } = run(
-      ["ingest", "--paste", "--title", "[E2E v0.5-test] empty"],
+      ["document", "ingest", "--paste", "--title", "[E2E v0.5-test] empty"],
       { stdin: "" },
     );
     expect(status).toBe(1);
@@ -152,7 +152,7 @@ describe("cerefox write commands (live)", () => {
   });
 
   test("ingest: missing file → exit 1", () => {
-    const { status, stderr } = run(["ingest", "/tmp/nonexistent-file-xyz.md", "--title", "t"]);
+    const { status, stderr } = run(["document", "ingest", "/tmp/nonexistent-file-xyz.md", "--title", "t"]);
     expect(status).toBe(1);
     expect(stderr).toContain("Cannot read");
   });
@@ -162,7 +162,7 @@ describe("cerefox write commands (live)", () => {
     // First ingest.
     const r1 = run(
       [
-        "ingest",
+        "document", "ingest",
         "--paste",
         "--title",
         title,
@@ -184,7 +184,7 @@ describe("cerefox write commands (live)", () => {
     // Re-ingest with same content → up-to-date.
     const r2 = run(
       [
-        "ingest",
+        "document", "ingest",
         "--paste",
         "--title",
         title,
@@ -204,7 +204,7 @@ describe("cerefox write commands (live)", () => {
     // Re-ingest with changed content → updated.
     const r3 = run(
       [
-        "ingest",
+        "document", "ingest",
         "--paste",
         "--title",
         title,
@@ -237,7 +237,7 @@ describe("cerefox write commands (live)", () => {
       writeFileSync(join(dir, "ignored.csv"), "ignore,me\n");
 
       const { stdout, status } = run([
-        "ingest-dir",
+        "document", "ingest-dir",
         dir,
         "--project-name",
         "_e2e-v0.5",
@@ -252,7 +252,7 @@ describe("cerefox write commands (live)", () => {
 
       // Look up the resulting IDs for cleanup via the same _e2e-v0.5 project.
       const listing = run([
-        "list-docs",
+        "document", "list",
         "--project",
         "_e2e-v0.5",
         "--limit",
@@ -272,7 +272,7 @@ describe("cerefox write commands (live)", () => {
 
   test("delete-doc: bogus UUID → exit 3", () => {
     const { status, stderr } = run([
-      "delete-doc",
+      "document", "delete",
       "00000000-0000-0000-0000-000000000000",
       "--yes",
     ]);

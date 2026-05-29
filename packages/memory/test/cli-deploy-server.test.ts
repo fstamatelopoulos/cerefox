@@ -39,7 +39,7 @@ function run(
 
 describe("cerefox deploy-server CLI", () => {
   test("--help advertises the flags", () => {
-    const { stdout, status } = run(["deploy-server", "--help"]);
+    const { stdout, status } = run(["server", "deploy", "--help"]);
     expect(status).toBe(0);
     expect(stdout).toContain("--dry-run");
     expect(stdout).toContain("--schema-only");
@@ -54,7 +54,7 @@ describe("cerefox deploy-server CLI", () => {
     // Provide a DB URL so the schema pre-flight passes; --dry-run skips
     // the actual connection. Functions checks are skipped via --schema-only,
     // so this exercises the schema-side plan deterministically.
-    const { stdout, status } = run(["deploy-server", "--schema-only", "--dry-run"], {
+    const { stdout, status } = run(["server", "deploy", "--schema-only", "--dry-run"], {
       CEREFOX_DATABASE_URL: "postgresql://user:pass@localhost:5432/postgres",
     });
     expect(status).toBe(0);
@@ -64,7 +64,7 @@ describe("cerefox deploy-server CLI", () => {
   });
 
   test("missing CEREFOX_DATABASE_URL → pre-flight refuses with remediation", () => {
-    const { stdout, stderr, status } = run(["deploy-server", "--schema-only"], {
+    const { stdout, stderr, status } = run(["server", "deploy", "--schema-only"], {
       CEREFOX_DATABASE_URL: "",
     });
     expect(status).toBe(1);

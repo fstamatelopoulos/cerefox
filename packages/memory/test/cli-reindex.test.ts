@@ -40,12 +40,12 @@ function run(args: string[]): {
 }
 
 // Probe via list-projects (the canonical "is the backend reachable" smoke).
-const probe = run(["list-projects", "--json"]);
+const probe = run(["project", "list", "--json"]);
 const LIVE_OK = probe.status === 0;
 
 describe("cerefox reindex CLI", () => {
   test("--help advertises the v0.7 flags", () => {
-    const { stdout, status } = run(["reindex", "--help"]);
+    const { stdout, status } = run(["server", "reindex", "--help"]);
     expect(status).toBe(0);
     expect(stdout).toContain("Re-embed existing");
     expect(stdout).toContain("--all");
@@ -63,7 +63,7 @@ describe("cerefox reindex CLI", () => {
     // first; if Supabase is unreachable the test would fail for the
     // wrong reason (the DB-connect error fires before the batch
     // validation), hence the probe-and-skip.
-    const { stderr, status } = run(["reindex", "--batch", "not-a-number"]);
+    const { stderr, status } = run(["server", "reindex", "--batch", "not-a-number"]);
     expect(status).not.toBe(0);
     expect(stderr).toContain("Invalid --batch");
   });
@@ -73,7 +73,7 @@ describe("cerefox reindex CLI", () => {
       console.log("(skipped: Supabase unreachable)");
       return;
     }
-    const { stdout, status } = run(["reindex", "--dry-run"]);
+    const { stdout, status } = run(["server", "reindex", "--dry-run"]);
     expect(status).toBe(0);
     // Either "Reindexing N chunk(s) — DRY RUN" or "nothing to reindex"
     // depending on what the DB looks like. Both are valid outcomes.
@@ -82,7 +82,7 @@ describe("cerefox reindex CLI", () => {
 
   test("--all + --dry-run reports all chunks", () => {
     if (!LIVE_OK) return;
-    const { stdout, status } = run(["reindex", "--all", "--dry-run"]);
+    const { stdout, status } = run(["server", "reindex", "--all", "--dry-run"]);
     expect(status).toBe(0);
     expect(stdout).toMatch(/Reindexing \d+ chunk|nothing to reindex/);
     // --all path should mention "(--all)" tag, not "(stale only)"
@@ -92,7 +92,7 @@ describe("cerefox reindex CLI", () => {
   test("--document-id with a fake UUID returns 'nothing to reindex'", () => {
     if (!LIVE_OK) return;
     const { stdout, status } = run([
-      "reindex",
+      "server", "reindex",
       "--dry-run",
       "--document-id",
       "00000000-0000-0000-0000-000000000000",
