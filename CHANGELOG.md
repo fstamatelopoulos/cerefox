@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.8.1] -- 2026-05-29
+
 **v0.8.1 — deploy-server handles updates, not just fresh installs.** Fixes a
 gap in v0.8.0: `cerefox deploy-server` only ever did a *fresh* deploy (apply
 schema + RPCs, then stamp every migration as already-applied). Run against a
