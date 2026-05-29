@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.8.3] -- 2026-05-29
+
 ### Fixed
 
 - The one-line install script now pins the `latest` dist-tag instead of
