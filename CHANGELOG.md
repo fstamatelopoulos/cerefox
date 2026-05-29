@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.7.2] -- 2026-05-29
+
 **v0.7.2 — "Docs honesty + web-server glitches".** README correction
 on npm, two SchemaVersionBanner/Layout fixes, plus three web-server
 glitches surfaced during v0.7.1 testing (favicon routing, in-app logo
