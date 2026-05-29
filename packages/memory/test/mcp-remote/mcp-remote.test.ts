@@ -71,9 +71,15 @@ function extractId(text: string): string | null {
   return m ? m[1] : null;
 }
 
+// Opt-in gate: these tests hit the live cerefox-mcp Edge Function (free-tier
+// quota). Skipped unless CEREFOX_LIVE_E2E=1, checked BEFORE the probe so a
+// default `bun test` makes ZERO Edge Function calls. See the EF e2e suite for
+// the rationale; run both with the same flag.
+const E2E_ENABLED = process.env.CEREFOX_LIVE_E2E === "1";
+
 // Probe: a tools/list handshake confirms the EF is reachable.
 let LIVE_OK = false;
-if (anonKey && mcpUrl) {
+if (E2E_ENABLED && anonKey && mcpUrl) {
   try {
     const resp = await rpc("tools/list");
     LIVE_OK = !resp.error && Array.isArray(resp.result?.tools);
@@ -88,6 +94,10 @@ function track(id: unknown): void {
 }
 
 describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
+  if (!E2E_ENABLED) {
+    test.skip("opt-in only — set CEREFOX_LIVE_E2E=1 to run (hits live EFs; consumes free-tier quota)", () => {});
+    return;
+  }
   if (!LIVE_OK) {
     test.skip("Supabase / anon JWT not available — skipping MCP-remote e2e", () => {});
     return;

@@ -9,7 +9,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- The one-line install script now pins the `latest` dist-tag instead of
+  installing `@cerefox/memory` unversioned. A bare `bun install -g
+  @cerefox/memory` treats an already-installed global as satisfied and skips
+  the upgrade, so re-running the installer kept the old version; `@latest`
+  forces bun/npm to re-resolve and upgrade. (Served from each GitHub release,
+  so this takes effect for installs of the release *after* it ships.)
+
+### Changed
+
+- **Live Edge Function / remote-MCP test suites are now opt-in.** The TS suites
+  in `packages/memory/test/edge-functions/` and `.../mcp-remote/` make real
+  Edge Function calls; they're gated behind `CEREFOX_LIVE_E2E=1` (checked
+  before the reachability probe), so a default `bun test` makes zero EF calls
+  and doesn't consume free-tier quota. The suites also tag their calls with
+  `requestor: "e2e-test"` so usage-log rows are attributable instead of
+  appearing as "Unknown" in the Analytics view.
+
+### Docs
+
+- `setup-supabase.md`: noted that `WARNING: Docker is not running` during Edge
+  Function deploy is expected and harmless (the CLI bundles server-side);
+  Docker is not a prerequisite.
 
 ---
 

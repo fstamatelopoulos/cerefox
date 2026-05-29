@@ -68,7 +68,11 @@ async function invoke(fn: string, body: Record<string, unknown> = {}): Promise<I
       apikey: anonKey,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    // Tag every call with a `requestor` so usage-log rows from the test suite
+    // are attributable to "e2e-test" rather than NULL → "Unknown" in the
+    // Analytics word cloud. The primitive EFs log `body.requestor ?? null`.
+    // Individual bodies can still override it.
+    body: JSON.stringify({ requestor: "e2e-test", ...body }),
   });
   let parsed: unknown = null;
   try {
@@ -88,10 +92,18 @@ async function invokeOk(fn: string, body: Record<string, unknown> = {}): Promise
   return r.body;
 }
 
-// Probe reachability once. The deployed EFs answer POST; a network/credential
-// failure or missing anon key skips the whole suite.
+// Opt-in gate: these tests make real Edge Function invocations, which count
+// against the (low) Supabase free-tier quota. They're SKIPPED unless
+// CEREFOX_LIVE_E2E=1, and the env var is checked BEFORE the reachability
+// probe so a default `bun test` makes ZERO Edge Function calls. Run them only
+// when changing EF code or for pre-release validation:
+//   CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts
+const E2E_ENABLED = process.env.CEREFOX_LIVE_E2E === "1";
+
+// Probe reachability once (only when enabled). The deployed EFs answer POST; a
+// network/credential failure or missing anon key skips the whole suite.
 let LIVE_OK = false;
-if (anonKey && efBase) {
+if (E2E_ENABLED && anonKey && efBase) {
   try {
     const probe = await invoke("cerefox-metadata", {});
     LIVE_OK = probe.status >= 200 && probe.status < 500;
@@ -106,6 +118,10 @@ function track(id: unknown): void {
 }
 
 describe("Edge Functions (live HTTP)", () => {
+  if (!E2E_ENABLED) {
+    test.skip("opt-in only — set CEREFOX_LIVE_E2E=1 to run (hits live EFs; consumes free-tier quota)", () => {});
+    return;
+  }
   if (!LIVE_OK) {
     test.skip("Supabase / anon JWT not available — skipping EF e2e", () => {});
     return;
