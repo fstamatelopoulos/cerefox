@@ -23,26 +23,45 @@ export function SchemaVersionBanner() {
     retry: false,
   });
 
-  if (!data || !data.mismatch) return null;
+  // iter-26 Part 26C: two-tier. `below-min` = blocking (red); the deployed
+  // schema is older than this client requires and features WILL break.
+  // Otherwise fall back to the legacy mismatch nudge (yellow) — deployed is
+  // older than bundled but still ≥ the minimum.
+  const blocking = data?.level === "below-min";
+  if (!data || (!blocking && !data.mismatch)) return null;
 
   return (
     <Alert
       icon={<IconAlertTriangle size={18} />}
-      color="yellow"
-      title="Database schema out of date"
+      color={blocking ? "red" : "yellow"}
+      title={
+        blocking
+          ? "Database schema is incompatible"
+          : "Database schema out of date"
+      }
       withCloseButton={false}
       mb="md"
     >
       <Text size="sm">
-        Cerefox v{data.bundled} ships a newer schema than what is currently
-        deployed to your Supabase (v{data.deployed ?? "unknown"}). Some
-        features may behave incorrectly until you redeploy.
+        {blocking ? (
+          <>
+            This Cerefox client (v{data.bundled}) requires schema v{data.min} or
+            newer, but your Supabase has v{data.deployed ?? "unknown"}. Features
+            will not work correctly until you redeploy.
+          </>
+        ) : (
+          <>
+            Cerefox v{data.bundled} ships a newer schema than what is currently
+            deployed to your Supabase (v{data.deployed ?? "unknown"}). Some
+            features may behave incorrectly until you redeploy.
+          </>
+        )}
       </Text>
       <Text size="sm" mt="xs">
-        Run from the repo root:
+        Redeploy with the Cerefox CLI:
       </Text>
       <Code block mt="xs">
-        bun scripts/db_deploy.ts
+        cerefox deploy-server --schema-only
       </Code>
     </Alert>
   );

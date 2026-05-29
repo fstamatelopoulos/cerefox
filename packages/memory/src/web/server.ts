@@ -46,6 +46,12 @@ import {
   resolveSpaDist,
   resolveStaticDir,
 } from "./static.ts";
+import { PKG_VERSION } from "../meta.ts";
+import { loadSettings } from "../../../../_shared/config/index.ts";
+import {
+  aggregatorUrlFor,
+  checkServerCompatibility,
+} from "../../../../_shared/compatibility/index.ts";
 
 export interface BuildWebServerOptions {
   host?: string;
@@ -150,11 +156,56 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   return app;
 }
 
+/**
+ * Refuse to bind when the deployed server is below the client's minimum
+ * (iter-26 Part 26C). Only blocks on a *confirmed* below-min server — a
+ * missing anon key or unreachable aggregator boots normally (tolerant-boot
+ * principle; the per-route 503s handle a missing backend). Throws a
+ * CompatibilityError the `cerefox web` command renders + exits on.
+ */
+export class CompatibilityError extends Error {}
+
+async function assertServerCompatible(): Promise<void> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseAnonKey) return; // tolerant boot
+  let compat;
+  try {
+    compat = await checkServerCompatibility({
+      aggregatorUrl: aggregatorUrlFor(settings.supabaseUrl),
+      bearer: settings.supabaseAnonKey,
+      bundledEf: PKG_VERSION,
+    });
+  } catch {
+    return; // probe failure → tolerant boot
+  }
+  if (!compat.blocking) return;
+  const parts: string[] = [];
+  if (compat.schema.level === "below-min") {
+    parts.push(
+      `  • schema v${compat.schema.deployed} is below the required v${compat.schema.min}`,
+    );
+  }
+  if (compat.edgeFunctions.level === "below-min") {
+    parts.push(
+      `  • Edge Functions v${compat.edgeFunctions.deployed} are below the required v${compat.edgeFunctions.min}`,
+    );
+  }
+  throw new CompatibilityError(
+    `Refusing to start: the deployed Cerefox server is incompatible with this client (v${PKG_VERSION}).\n` +
+      parts.join("\n") +
+      `\n\nRedeploy your server:  cerefox deploy-server\n` +
+      `(or downgrade the client to match the deployed server).`,
+  );
+}
+
 export async function buildWebServer(
   options: BuildWebServerOptions = {},
 ): Promise<WebServerHandle> {
   const host = options.host ?? "127.0.0.1";
   const port = options.port ?? 8000;
+
+  await assertServerCompatible();
+
   const app = buildApp();
 
   const server = serve({ fetch: app.fetch, hostname: host, port });

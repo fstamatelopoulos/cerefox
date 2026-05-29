@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 
 /**
  * cerefox-search — Supabase Edge Function
@@ -179,6 +180,10 @@ Deno.serve(async (req: Request) => {
         "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
       },
     });
+  }
+
+  if (isVersionRequest(req)) {
+    return versionResponse("cerefox-search", headers);
   }
 
   if (req.method !== "POST") {

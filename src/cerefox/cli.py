@@ -73,9 +73,11 @@ def cli() -> None:
 
     .. deprecated:: 0.5.0
        The Python CLI is deprecated in favour of the TypeScript CLI shipped
-       as `@cerefox/memory` on npm. The Python CLI remains functional through
-       v0.7.x; removal lands in v0.8 / v0.9. See
-       `docs/guides/migration-v0.5.md` for the upgrade path.
+       as `@cerefox/memory` on npm. It stays functional through v0.8; in v0.9
+       the subcommands become husks that point at the npm CLI. (The Python
+       *MCP server* — `uv run cerefox mcp` — is NOT deprecated and stays as a
+       repo-clone fallback through v1.x.) See `docs/guides/migration-v0.5.md`
+       for the upgrade path.
     """
     # Print the deprecation banner — `_emit_deprecation_banner` inspects
     # `sys.argv` and suppresses the banner for `--version`, `--help`,

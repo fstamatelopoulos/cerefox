@@ -25,6 +25,7 @@ import { registerConfigGet } from "./commands/config-get.ts";
 import { registerConfigSet } from "./commands/config-set.ts";
 import { registerConfigureAgent } from "./commands/configure-agent.ts";
 import { registerDeleteDoc } from "./commands/delete-doc.ts";
+import { registerDeployServer } from "./commands/deploy-server.ts";
 import { registerDocs } from "./commands/docs.ts";
 import { registerDoctor } from "./commands/doctor.ts";
 import { registerGetAuditLog } from "./commands/get-audit-log.ts";
@@ -72,7 +73,7 @@ export function buildProgram(): Command {
         "             · list-metadata-keys · metadata-search · get-audit-log\n" +
         "  WRITES     ingest · ingest-dir · delete-doc\n" +
         "  SERVERS    mcp · web\n" +
-        "  LIFECYCLE  init · doctor · status · configure-agent · self-update · upgrade · sync-self-docs\n" +
+        "  LIFECYCLE  init · doctor · status · configure-agent · self-update · upgrade · sync-self-docs · deploy-server\n" +
         "  OPS        backup · restore · sync-docs · docs · reindex · config-get · config-set · completion\n" +
         "\nExit codes:\n" +
         "  0  success            2  system error (unreachable Supabase, RPC failure, …)\n" +
@@ -109,6 +110,7 @@ export function buildProgram(): Command {
   registerConfigureAgent(program);
   registerSelfUpdate(program);
   registerSyncSelfDocs(program);
+  registerDeployServer(program);
 
   // ── OPS ─────────────────────────────────────────────────────────────────
   registerBackup(program);

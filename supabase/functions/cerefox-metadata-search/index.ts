@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 
 /**
  * cerefox-metadata-search -- Supabase Edge Function
@@ -37,6 +38,10 @@ const CORS_HEADERS = {
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
+  }
+
+  if (isVersionRequest(req)) {
+    return versionResponse("cerefox-metadata-search", { ...CORS_HEADERS, "Content-Type": "application/json" });
   }
 
   if (req.method !== "POST") {

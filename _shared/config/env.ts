@@ -65,6 +65,13 @@ export function loadEnv(opts: ResolverOptions = {}): { path: string; vars: numbe
 export interface Settings {
   supabaseUrl: string;
   supabaseKey: string;
+  /**
+   * Legacy anon JWT (`eyJ…`). Gateway-valid for Edge Function calls — the
+   * new `sb_publishable_…` keys are rejected by the EF gateway. Optional;
+   * only needed for client-side EF probes (e.g. the version aggregator
+   * used by the compatibility check). May be empty.
+   */
+  supabaseAnonKey: string;
   databaseUrl: string;
   openaiApiKey: string;
   fireworksApiKey: string;
@@ -76,6 +83,7 @@ export function loadSettings(opts: ResolverOptions = {}): Settings {
   return {
     supabaseUrl: env.CEREFOX_SUPABASE_URL ?? "",
     supabaseKey: env.CEREFOX_SUPABASE_KEY ?? "",
+    supabaseAnonKey: env.CEREFOX_SUPABASE_ANON_KEY ?? "",
     databaseUrl: env.CEREFOX_DATABASE_URL ?? "",
     openaiApiKey: env.CEREFOX_OPENAI_API_KEY ?? env.OPENAI_API_KEY ?? "",
     fireworksApiKey: env.CEREFOX_FIREWORKS_API_KEY ?? "",

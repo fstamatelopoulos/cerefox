@@ -48,6 +48,7 @@
  */
 
 import type { Command } from "commander";
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -70,9 +71,11 @@ import {
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
 import {
+  loadSettings,
   resolveEnvFile,
   USER_STATE_DIR_NAME,
 } from "../../../../../_shared/config/index.ts";
+import { COMPATIBILITY, compareSemver } from "../../../../../_shared/compatibility/index.ts";
 import { WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
 
 interface InitOptions {
@@ -345,21 +348,85 @@ async function promptMigrationChoice(): Promise<"c" | "u" | "f"> {
   return ch;
 }
 
+/**
+ * Probe the deployed Postgres schema version via the REST RPC.
+ * Returns the version string, or null when the schema isn't deployed
+ * (404 / missing function) or the probe couldn't run.
+ */
+async function probeSchemaVersion(url: string, key: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${url.replace(/\/$/, "")}/rest/v1/rpc/cerefox_schema_version`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
+      body: "{}",
+    });
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as unknown;
+    return typeof data === "string" ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Spawn `cerefox deploy-server` (inherit stdio) and await it. */
+function launchDeployServer(extraArgs: string[] = []): number {
+  const r = spawnSync(process.execPath, [process.argv[1], "deploy-server", ...extraArgs], {
+    stdio: "inherit",
+  });
+  return r.status ?? 1;
+}
+
+/**
+ * iter-26 Part 26E: offer to deploy the server side when the schema is
+ * missing (404) or below the client's minimum. Three cases:
+ *   (a) no schema      → "Deploy now?" → deploy-server
+ *   (b) below minSchema → "Redeploy now?" → deploy-server --reset
+ *   (c) compatible      → silent pass
+ * Declining at any prompt continues init; `cerefox doctor` nudges again.
+ */
+async function maybeOfferServerDeploy(): Promise<void> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) return; // can't probe
+
+  const deployed = await probeSchemaVersion(settings.supabaseUrl, settings.supabaseKey);
+
+  if (deployed === null) {
+    println(c.bold("Schema deploy"));
+    println(c.dim("  No Cerefox schema detected on this Supabase project."));
+    const yes = await confirm("  Deploy the server now (schema + RPCs + Edge Functions)?", false);
+    if (yes) launchDeployServer();
+    else println(c.dim("  Skipped. Run `cerefox deploy-server` later (or `cerefox doctor` to recheck)."));
+    println("");
+    return;
+  }
+
+  if (compareSemver(deployed, COMPATIBILITY.minSchema) < 0) {
+    println(c.bold("Schema deploy"));
+    println(
+      c.yellow(
+        `  Deployed schema v${deployed} is below the required v${COMPATIBILITY.minSchema}.`,
+      ),
+    );
+    const yes = await confirm("  Redeploy the server now (--reset DROPS existing data)?", true);
+    if (yes) launchDeployServer(["--reset"]);
+    else println(c.dim("  Skipped. Run `cerefox deploy-server --reset` when ready."));
+    println("");
+    return;
+  }
+
+  // Compatible — no prompt (just a quiet confirmation line).
+  println(c.dim(`Schema v${deployed} already deployed (≥ required v${COMPATIBILITY.minSchema}).`));
+  println("");
+}
+
 /** Continue the lifecycle steps (self-docs + MCP wiring) after the .env
  * is in place. Shared by all three branches. */
 async function postWriteLifecycle(envPath: string, options: InitOptions): Promise<void> {
-  // Schema deploy: v0.5 deferred.
+  // Schema deploy (iter-26 Part 26E): probe the deployed schema version and
+  // offer to run `cerefox deploy-server` when it's missing or below the
+  // client's minimum. Existing, compatible installs see no prompt.
   if (!options.skipSchema) {
-    println(c.bold("Schema deploy"));
-    println(
-      c.dim(
-        "  v0.5 doesn't yet bundle the schema-deploy path (it needs the direct\n" +
-          "  Postgres connection ported, scheduled for v0.6). For now:",
-      ),
-    );
-    println(c.cyan("    uv run python scripts/db_deploy.py"));
-    println(c.dim("  Skip this if your Supabase already has the schema."));
-    println("");
+    await maybeOfferServerDeploy();
   }
 
   // Self-doc ingest (Layer 2 of MCP discoverability, Part 23F).

@@ -252,3 +252,9 @@ packages/*/bun.lockb
 packages/memory/docs/
 packages/memory/AGENT_GUIDE.md
 packages/memory/AGENT_QUICK_REFERENCE.md
+
+# Playwright (frontend e2e)
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/

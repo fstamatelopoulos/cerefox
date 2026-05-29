@@ -33,6 +33,15 @@ import {
   TOOLS_BY_NAME,
   type ToolContext,
 } from "../../../_shared/mcp-tools/index.ts";
+import {
+  type AggregatedVersions,
+  EF_VERSION,
+  isVersionRequest,
+  PEER_EF_NAMES,
+  peerVersionUrl,
+  versionResponse,
+  wantsPeers,
+} from "../../../_shared/ef-meta/index.ts";
 
 const MCP_VERSION = "2025-03-26";
 const SERVER_NAME = "cerefox";
@@ -147,6 +156,81 @@ async function handleToolsCall(
   }
 }
 
+// ── Version surface (iter-26 Part 26B) ───────────────────────────────────────
+
+const JSON_HEADERS = { ...CORS_HEADERS, "Content-Type": "application/json" };
+
+/** Overall budget for the peer-version aggregator. */
+const AGGREGATOR_BUDGET_MS = 5_000;
+/** Per-peer request timeout (so one slow peer can't eat the whole budget). */
+const PEER_TIMEOUT_MS = 2_000;
+
+async function handleVersion(req: Request): Promise<Response> {
+  // Single-EF version unless ?peers=true requests the aggregator.
+  if (!wantsPeers(req)) {
+    return versionResponse("cerefox-mcp", JSON_HEADERS);
+  }
+
+  const result: AggregatedVersions = {
+    name: "cerefox-mcp",
+    version: EF_VERSION,
+    schema: null,
+    efs: [],
+    errors: [],
+  };
+
+  // Deployed Postgres schema version (best-effort; null on failure).
+  try {
+    // deno-lint-ignore no-explicit-any
+    const supabase: any = makeSupabaseClient();
+    const { data } = await supabase.rpc("cerefox_schema_version");
+    if (typeof data === "string") result.schema = data;
+  } catch {
+    // leave schema null
+  }
+
+  // Probe peers sequentially within an overall budget. Forward the caller's
+  // auth so the gateway lets each peer request through.
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const apikeyHeader = req.headers.get("apikey") ?? "";
+  const deadline = Date.now() + AGGREGATOR_BUDGET_MS;
+
+  for (const peer of PEER_EF_NAMES) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      result.errors.push({ name: peer, error: "skipped (5s budget exhausted)" });
+      continue;
+    }
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), Math.min(remaining, PEER_TIMEOUT_MS));
+      let resp: Response;
+      try {
+        resp = await fetch(peerVersionUrl(req.url, peer), {
+          method: "GET",
+          headers: { Authorization: authHeader, apikey: apikeyHeader },
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!resp.ok) {
+        result.errors.push({ name: peer, error: `HTTP ${resp.status}` });
+        continue;
+      }
+      const payload = (await resp.json()) as { version?: string };
+      result.efs.push({ name: peer, version: payload.version ?? "unknown" });
+    } catch (err) {
+      result.errors.push({
+        name: peer,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return new Response(JSON.stringify(result), { status: 200, headers: JSON_HEADERS });
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -154,10 +238,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
   }
 
-  // GET — per MCP spec (2025-03-26), return 405 to indicate this server does
-  // not support SSE notifications via GET. Prevents MCP clients from
-  // maintaining a persistent SSE polling connection (~1/sec/client).
+  // GET — the only supported GET is the /version surface (iter-26). Per MCP
+  // spec (2025-03-26) this server otherwise returns 405 on GET to signal it
+  // does not support SSE notifications (prevents MCP clients from holding a
+  // persistent ~1/sec polling connection).
   if (req.method === "GET") {
+    if (isVersionRequest(req)) {
+      return await handleVersion(req);
+    }
     return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
   }
   if (req.method !== "POST") {

@@ -61,24 +61,30 @@ cd cerefox
 uv sync
 
 # Run tests
-uv run pytest                     # unit tests
-uv run pytest -m e2e              # API e2e (needs live Supabase)
-uv run pytest -m ui               # UI e2e (needs running app + Playwright)
+uv run pytest                     # Python unit tests
+uv run pytest -m e2e              # Python API e2e (needs live Supabase)
 
 # Lint and format
 uv run ruff check . && uv run ruff format .
 
 # Build frontend
-cd frontend && npm install && npm run build
+cd frontend && bun install && bun run build
 
 # Run a TypeScript script (Bun)
 bun scripts/cut_release.ts --check
 
-# TS unit tests (_shared/mcp-tools, _shared/db-status, etc.)
+# TS unit tests (_shared/) + package tests (CLI/web/MCP smokes + live e2e)
 cd _shared && bun test
-
-# Build and smoke-test the local MCP server (npm package)
 cd packages/memory && bun run build && bun test
+
+# Edge Function + remote-MCP e2e (TS, ported from pytest in v0.8 — auto-skip
+# without Supabase/anon-key; create [E2E-EF]/[E2E-MCP] docs and self-clean)
+cd packages/memory && bun test test/edge-functions test/mcp-remote
+
+# UI e2e (Playwright, TS — ported from pytest in v0.8). One-time browser
+# install, then run against a `cerefox web` server (auto-started by the config):
+cd frontend && bunx playwright install chromium   # ~150 MB, one-time
+cd frontend && bun run build && bun run test:e2e
 ```
 
 ---
@@ -102,6 +108,28 @@ Cerefox follows [Semantic Versioning](https://semver.org). Until **v1.0.0** the 
 **Deprecation cycle**: renames get one minor-version deprecation cycle with both old and new names working; hard removals only at major versions; internal-only changes need no deprecation.
 
 **The "force-move tags only on objective failure" rule**: once a release tag (`vX.Y.Z`) is pushed to origin and a GitHub Release is published, the tag **never moves**. If anything needs fixing after publish — even if you noticed seconds later — ship a new patch version. The single exception is an objective failure of the release pipeline itself (e.g. CI failed mid-release, half the artifacts didn't publish). Reasoning: a moved tag silently invalidates anyone who already fetched it; a new patch version is honest about what changed.
+
+### Client ↔ server compatibility matrix (from v0.8.0)
+
+Cerefox splits into a **client** (the `@cerefox/memory` npm package: CLI, MCP, web) and a **server** (your Supabase project: Postgres schema + RPCs + Edge Functions). They version independently and a user can run a new client against an old server (or vice versa). The client carries a minimum-required-server matrix in [`_shared/compatibility/index.ts`](_shared/compatibility/index.ts):
+
+```ts
+export const COMPATIBILITY = {
+  minSchema: "0.3.1",         // min deployed Postgres schema version
+  minEdgeFunctions: "0.6.0",  // min deployed Edge Function version
+};
+```
+
+`cerefox doctor` asserts against it (error below-min, warn above-min-but-old), `cerefox web` refuses to bind against a below-min server, and the web `SchemaVersionBanner` shows a red (below-min) or yellow (old-but-ok) banner.
+
+**Bump policy — raise a minimum ONLY when a client release genuinely needs the newer server surface:**
+
+- **Raise `minSchema`** when the client starts depending on a schema/RPC change that an older deployment won't have (new column, new RPC, changed RPC signature). Requires a **minor** client bump.
+- **Raise `minEdgeFunctions`** when the client depends on an EF request/response shape that older EFs don't produce. Requires a **minor** client bump.
+- **Client patch releases never raise a minimum.** A patch must run against the same server range as the minor it patches.
+- Each bump is intentional and reviewed at PR time — don't raise a minimum "just because" the server moved. The minimum is the *oldest server this client still works with*, not *the newest server available*.
+
+Two versions track the server side: the **schema version** (`@version:` marker in `src/cerefox/db/schema.sql`, covers schema + RPCs since they deploy atomically) and **`EF_VERSION`** (`_shared/ef-meta/index.ts`, covers all Edge Functions). `cut_release.ts` bumps `EF_VERSION` only when EF source changed since the last tag; the schema version is bumped by hand when `schema.sql`/`rpcs.sql` change.
 
 ---
 

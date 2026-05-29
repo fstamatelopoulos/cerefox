@@ -274,6 +274,10 @@ The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mc
 
 `OPENAI_MODEL` and `EMBEDDING_DIMENSIONS` are TypeScript constants inside each Edge Function (not Supabase secrets). They are not sensitive — they're configuration. Changing the model requires editing the constant and redeploying the function (`npx supabase functions deploy <name>`). This is by design: changing the embedding model is a breaking schema change that also requires `cerefox reindex` to re-embed all existing chunks, so a redeploy is expected.
 
+### Rule: keep the GPT Actions OpenAPI block in sync with the EFs
+
+**When you change an Edge Function's request body or response shape, update the GPT Actions OpenAPI block in `docs/guides/connect-agents.md` in the same PR, and bump its `info.version` per SemVer.** That block is what ChatGPT users paste into a Custom GPT's Actions config; if it drifts from what the EFs actually accept/return, those GPTs silently break. There is no CI gate for this (a path-diff heuristic was too lossy) — the discipline lives here + in the release playbook (`RELEASING.md`). When an EF's `EF_VERSION` surface changes, also consider whether the client compatibility matrix (`_shared/compatibility/index.ts`) needs a `minEdgeFunctions` bump (see CONTRIBUTING.md).
+
 ### Client Compatibility
 
 | Client | How to connect | Notes |
