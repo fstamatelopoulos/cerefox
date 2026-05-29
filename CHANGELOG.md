@@ -16,14 +16,25 @@ broken on npm installs, no request logging).
 
 ### Docs
 
-- npm `@cerefox/memory` README now distinguishes the server side (Postgres
-  schema + RPCs + Edge Functions, shipped with the source repo) from the
-  client side (this package). Adds the clone-and-deploy step explicitly —
-  a fresh `npm install -g @cerefox/memory` is not enough to stand up
-  Cerefox; the user also needs to clone the repo, run
-  `bun scripts/db_deploy.ts`, and deploy the 9 Edge Functions. Drops the
-  stale "Schema deploy (v0.5)" callout that promised v0.6 would port the
-  deploy logic (v0.7 actually did).
+- npm `@cerefox/memory` README rewrites for v0.7.2:
+  - Distinguishes the server side (Postgres schema + RPCs + Edge Functions,
+    shipped with the source repo) from the client side (this package). Adds
+    the clone-and-deploy step explicitly — a fresh `npm install -g
+    @cerefox/memory` is not enough to stand up Cerefox; the user also needs
+    to clone the repo, run `bun scripts/db_deploy.ts`, and deploy the 9 Edge
+    Functions.
+  - Adds a "Why cloud-backed?" paragraph explaining the design rationale —
+    same memory reachable from every agent on every device via hybrid
+    (semantic + full-text) search.
+  - Single-binary table now includes `cerefox web` (the in-process Hono
+    server + bundled React UI — was missing despite shipping in v0.6).
+  - `configure-agent` block lists all 5 writers (Claude Code, Claude
+    Desktop, Cursor, Codex CLI, Gemini CLI); drops the stale "Cursor /
+    Codex / Gemini ship in a follow-up" note (they shipped in v0.6).
+  - Drops the stale "Schema deploy (v0.5)" callout that promised v0.6
+    would port the deploy logic (v0.7 actually did).
+  - Minor fixes: `cerefox doctor` description completed; "Path C in the
+    architecture" parenthetical dropped (unexplained).
 
 ### Fixed
 
