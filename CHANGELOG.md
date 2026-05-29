@@ -9,7 +9,46 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.0 — "CLI verb redesign + Python surface retirement".** The
+contract-hardening release before v1.0. Client/CLI only — no data, schema, or
+Edge Function changes. See [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
+
+> **⚠ CLI verbs renamed.** The flat verbs moved under resource groups
+> (`cerefox get-doc X` → `cerefox document get X`). The old names still run but
+> print the new form and exit non-zero; they are **removed in v1.0**. Update
+> scripts/aliases and re-run `cerefox completion <shell>`.
+
+### Changed
+
+- **CLI is now resource-verb** (`cerefox <resource> <verb>`). Rename-only — no
+  behavior or flags changed. Groups: `document` (get/list/delete/ingest/
+  ingest-dir), `project` (list/delete), `version` (list), `metadata`
+  (keys/search), `audit` (list), `config` (get/set), `backup` (create/restore),
+  `server` (deploy/reindex). `search` + lifecycle commands stay flat. Full
+  old→new table in the migration guide.
+
+### Removed / deprecated
+
+- **Old flat verbs are hidden husks** that exit non-zero with a pointer to the
+  new form (removed entirely in v1.0).
+- **Python CLI retired to husks** — every `uv run cerefox <cmd>` except `mcp`
+  now redirects to the TypeScript CLI. The `CEREFOX_NO_DEPRECATION_BANNER`
+  opt-out is gone.
+- **Python web app removed** — `cerefox.api.app` is a husk; use the TypeScript
+  `cerefox web`. FastAPI/uvicorn dropped from `pyproject.toml`.
+- **`pytest` retired as a test runner** — `tests/**/*.py` deleted; the suite is
+  `bun test`. `pyproject.toml`/`uv.lock`/`.python-version` stay (the Python MCP
+  runtime remains).
+
+### Kept
+
+- **`uv run cerefox mcp`** still launches the in-tree Python MCP server — a
+  frozen, unmaintained, offline / no-npm repo-clone fallback through v1.x.
+
+### Deferred to v0.9.1
+
+- New CLI commands (additive, non-breaking): `document edit`, `document
+  restore`, `version archive/unarchive`, `audit tail/search`.
 
 ---
 

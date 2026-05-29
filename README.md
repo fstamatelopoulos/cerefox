@@ -105,9 +105,28 @@ ops scripts, not part of the runtime. (v0.4–v0.5.0 also shipped a dedicated
 
 ## Getting Started
 
-> **Full walkthrough**: `docs/guides/quickstart.md` -- zero to first ingested document and connected agent in 15 minutes.
->
-> **Upgrading from v0.4.x?** See [`docs/guides/migration-v0.5.md`](docs/guides/migration-v0.5.md) — it now covers v0.5 → v0.7. Your existing MCP configs keep working; the npm-installed `cerefox` CLI is opt-in.
+> **Upgrading to v0.9.0?** The CLI verbs were renamed to a resource-verb shape
+> (`cerefox get-doc X` → `cerefox document get X`; old names still run but
+> redirect) and the Python CLI/web were retired to husks. See
+> [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
+
+### Choose your path
+
+Cerefox has **two supported install paths** — pick the one that fits you:
+
+- **🚀 End user (no repo checkout)** — you want to *use* Cerefox. Install the
+  `@cerefox/memory` CLI, point it at a Supabase project, wire up your agent.
+  Everything is the `cerefox` command — no `git clone`, no Python, no build.
+  → the **Quickstart (npm path)** below.
+- **🛠 Contributor / tinkerer (repo clone)** — you want to *hack on* Cerefox or
+  run it from source. Clone the repo, use `uv` (Python MCP fallback) + `bun`
+  (everything else), run the repo scripts.
+  → [`docs/guides/quickstart.md`](docs/guides/quickstart.md) (contributor flow).
+
+Both paths are first-class and kept in sync. The sections below cover the
+end-user path; the contributor flow lives in the quickstart guide.
+
+> **Full end-user walkthrough**: `docs/guides/quickstart.md` -- zero to first ingested document and connected agent in ~15 minutes.
 
 ### Quickstart (npm path — recommended)
 

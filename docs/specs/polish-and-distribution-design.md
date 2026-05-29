@@ -860,18 +860,28 @@ Each phase ships as its own minor version with a tight, defensible scope. Number
 | 5 | `pyproject.toml` marked as legacy in its description |
 | 6 | Final Python release (`cerefox-py` on PyPI?) — open question whether we ever publish to PyPI at all |
 
-### v0.9.0 — "Python Removal" (~1 week)
+### v0.9.0 — "CLI Verb Redesign + Python Surface Retirement + Docs Overhaul"
 
-**Theme**: Repo is pure TS + SQL + React. Python gone.
+**Theme**: The contract-hardening release before v1.0. **This entry was
+rewritten 2026-05-30** — the original ("python-legacy/ deleted; pyproject.toml
+deleted; all tests in vitest") is superseded by "Python minimization, not
+removal" (2026-05-28) + the v1.x Python-MCP retention decision (2026-05-29) +
+the L1–L5 scope decisions (2026-05-30). plan.md Iteration 27 is the source of
+truth; this is the summary.
 
 | # | Item |
 |---|---|
-| 1 | `python-legacy/` deleted |
-| 2 | `pyproject.toml`, `uv.lock`, `.python-version` deleted |
-| 3 | Single `package.json` at repo root (or workspaces structure) |
-| 4 | CI runs only on Bun + Node |
-| 5 | All tests in vitest |
-| 6 | Decision log entry summarising the migration |
+| 1 | **CLI → resource-verb, rename-only.** `cerefox <resource> <verb>`; old flat verbs become hidden husks (removed v1.0). No new commands (those → v0.9.1). |
+| 2 | **Python CLI → husks except `mcp`.** Every `uv run cerefox <cmd>` except `mcp` redirects to the TS CLI. `CEREFOX_NO_DEPRECATION_BANNER` removed. |
+| 3 | **Python web → husk.** `cerefox.api.app` is a redirect husk; `routes_api.py`/`deps.py` deleted; FastAPI/uvicorn dropped from `pyproject.toml`. |
+| 4 | **Python MCP server kept** (`uv run cerefox mcp`) — frozen, unmaintained, repo-clone fallback through v1.x. NOT removed. |
+| 5 | **pytest retired as a runner.** `tests/**/*.py` deleted; `bun test` is the only suite. `pyproject.toml`/`uv.lock`/`.python-version` STAY (Python MCP runtime). CI Python job removed. |
+| 6 | **Comprehensive docs overhaul** — two install paths (end-user CLI vs contributor repo-clone); new `migration-v0.9.md`; sweep stale Python/verb refs. |
+| 7 | Decision log entry summarising the CLI rename + Python retirement. |
+
+**NOT in v0.9.0** (was wrongly implied by the old entry): deleting
+`pyproject.toml`/`uv.lock`/`.python-version` (kept — Python runtime stays);
+removing the Python MCP server (kept through v1.x).
 
 ### v1.0.0 — "Stability Commitment" (when ready)
 

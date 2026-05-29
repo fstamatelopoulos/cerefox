@@ -10,17 +10,17 @@ Single-user, open-source (Apache 2.0), designed to be cheap/free to operate. See
 
 ## Tech Stack
 
-- **Language**: Python 3.11+ (CLI, web/API, Python MCP fallback); TypeScript via Bun (local MCP server, build/release scripts, Edge Functions)
+- **Language**: TypeScript via Bun (CLI, web server, local MCP server, build/release scripts, Edge Functions). Python 3.11+ remains **only** as the frozen, unmaintained MCP-server fallback (`uv run cerefox mcp`) — its CLI + web app were retired to husks in v0.9.0.
 - **Database**: PostgreSQL 16+ with pgvector (Supabase free tier or local Docker)
 - **Embeddings**: OpenAI `text-embedding-3-small` (768-dim, cloud API); Fireworks AI as alternative; Edge Functions handle embedding server-side for agents
-- **Web framework**: FastAPI (JSON API backend)
+- **Web framework**: Hono on Bun/Node (TypeScript), in `packages/memory` — served by `cerefox web`. (The former Python FastAPI web app is a husk as of v0.9.0.)
 - **Web UI**: React + TypeScript SPA (Mantine UI, TanStack Query, Vite); served at `/app/`
-- **CLI**: Click (Python); long-term TS ports land under `scripts/*.ts` via strangler-fig
+- **CLI**: commander (TypeScript) in `@cerefox/memory`; resource-verb shape (v0.9.0). The Python Click CLI is husked (redirects to the TS CLI).
 - **Local MCP server**: `@cerefox/memory` npm package (Node ≥20 / Bun ≥1.0); single artifact growing to host CLI + web server + ingestion in future iterations
 - **Shared TS modules**: `_shared/{config,db-client,db-status,embeddings,mcp-tools}/` — imported by both Edge Functions (Deno) and local server (Node/Bun) via structural typing
 - **Package management**: uv (pyproject.toml) for Python; bun workspaces for TS
-- **Testing**: pytest (Python), `bun test` (TS)
-- **Linting**: ruff (Python)
+- **Testing**: `bun test` (TypeScript) — the only test runner as of v0.9.0 (pytest retired; `tests/**/*.py` deleted)
+- **Linting**: ruff (the surviving Python MCP code); biome/tsc for TS
 
 ## Project Structure
 
@@ -119,6 +119,24 @@ cerefox/
 - Database RPCs: `cerefox_` prefix (e.g., `cerefox_hybrid_search`)
 - Python modules: snake_case, short names
 - Config: environment variables with `CEREFOX_` prefix
+
+### CLI verb conventions (v0.9.0+)
+The CLI uses a **resource-verb** shape: `cerefox <resource> <verb> [args]`.
+Resource groups: `document` (get/list/delete/ingest/ingest-dir), `project`
+(list/delete), `version` (list), `metadata` (keys/search), `audit` (list),
+`config` (get/set), `backup` (create/restore), `server` (deploy/reindex). The
+primary verb `search` and lifecycle/server commands (`init`, `doctor`,
+`status`, `configure-agent`, `self-update`, `mcp`, `web`, `docs`, `completion`,
+`sync-docs`, `sync-self-docs`) stay **flat**.
+- **Adding a command**: register it under the right resource group in
+  `program.ts` via `moveInto(group, registerX, "verb")`. The handler file keeps
+  its existing `registerX(program)` shape; `moveInto` renames it under the
+  group. New top-level groups are rare — prefer an existing one.
+- **Renames are breaking**: the old flat verbs (pre-v0.9) survive as hidden
+  husks (`RENAMED_VERBS` in `program.ts`) that exit non-zero with a pointer.
+  Remove husks only at a major version (v1.0).
+- Genuinely new commands (not renames) are additive/non-breaking and slot into
+  a minor (e.g., v0.9.1) — see plan.md Iteration 27's v0.9.1 block.
 
 ### Architecture Principles
 - **Pluggable embedders**: all embedders implement the `Embedder` protocol (see `embeddings/base.py`)
@@ -284,9 +302,10 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 
 The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md` and `docs/guides/migration-v0.5.md`.
 
-### Deploying the server side: `cerefox deploy-server`
+### Deploying the server side: `cerefox server deploy`
 
-`cerefox deploy-server` is the **catch-all** for both standing up *and updating*
+`cerefox server deploy` (renamed from `cerefox deploy-server` in v0.9.0; the old
+name is a husk) is the **catch-all** for both standing up *and updating*
 the server side — schema + RPCs (in-process via `_shared/db-deploy/`) and all 9
 Edge Functions (`npx supabase functions deploy`), from assets bundled in the
 npm package (no repo clone). It detects fresh vs. existing databases: a fresh DB
@@ -301,7 +320,7 @@ The migrate/deploy logic is shared with `scripts/db_migrate.ts` /
 
 ### Edge Function Model Config
 
-`OPENAI_MODEL` and `EMBEDDING_DIMENSIONS` are TypeScript constants inside each Edge Function (not Supabase secrets). They are not sensitive — they're configuration. Changing the model requires editing the constant and redeploying the function (`npx supabase functions deploy <name>`). This is by design: changing the embedding model is a breaking schema change that also requires `cerefox reindex` to re-embed all existing chunks, so a redeploy is expected.
+`OPENAI_MODEL` and `EMBEDDING_DIMENSIONS` are TypeScript constants inside each Edge Function (not Supabase secrets). They are not sensitive — they're configuration. Changing the model requires editing the constant and redeploying the function (`npx supabase functions deploy <name>`). This is by design: changing the embedding model is a breaking schema change that also requires `cerefox server reindex` to re-embed all existing chunks, so a redeploy is expected.
 
 ### Rule: keep the GPT Actions OpenAPI block in sync with the EFs
 
