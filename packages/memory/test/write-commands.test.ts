@@ -16,6 +16,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
+import { loadSettings } from "../../../_shared/config/index.ts";
+import { createClient } from "../../../_shared/db-client/index.ts";
+
+const E2E_TITLE_PREFIX = "[E2E v0.5-test]";
+
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = join(PKG_ROOT, "..", "..");
 const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
@@ -48,6 +53,30 @@ function parseIdFromIngestMessage(message: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Hard-purge any leftover `[E2E v0.5-test]` documents (iter-26 Part 26K).
+ *
+ * The CLI `delete-doc` is soft-delete only, and the v0.7 ingestion
+ * pipeline's content-hash collision check considers soft-deleted docs —
+ * so leftovers from a prior run caused "Identical content already exists"
+ * flakes. A direct hard delete on `cerefox_documents` cascades to chunks +
+ * versions + project memberships (all ON DELETE CASCADE), clearing the
+ * collision. Best-effort: never throws.
+ */
+async function hardPurgeE2eDocs(): Promise<void> {
+  try {
+    const settings = loadSettings();
+    if (!settings.supabaseUrl || !settings.supabaseKey) return;
+    const client = createClient(settings);
+    await client.raw
+      .from("cerefox_documents")
+      .delete()
+      .like("title", `${E2E_TITLE_PREFIX}%`);
+  } catch {
+    // best-effort
+  }
+}
+
 // Probe whether Supabase is reachable.
 const probe = run(["list-projects", "--json"]);
 const LIVE_OK = probe.status === 0;
@@ -65,11 +94,16 @@ describe("cerefox write commands (live)", () => {
     return;
   }
 
-  afterAll(() => {
-    // Best-effort cleanup; don't fail the suite if a deletion errors.
-    for (const id of createdIds) {
-      run(["delete-doc", id, "--yes", "--author", "v0.5-test", "--author-type", "agent"]);
-    }
+  // Hard-purge leftovers from any prior interrupted run BEFORE the suite,
+  // so soft-deleted [E2E] docs can't trip the v0.7 content-hash collision
+  // check (the iter-25 flake). Also purge after, replacing the old
+  // soft-delete loop so nothing lingers for the next run.
+  beforeAll(async () => {
+    await hardPurgeE2eDocs();
+  });
+
+  afterAll(async () => {
+    await hardPurgeE2eDocs();
   });
 
   test("ingest --paste: title required", () => {
