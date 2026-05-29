@@ -133,6 +133,26 @@ change.
 > make authenticated POST calls to the Edge Functions. The built-in local server is
 > the correct solution.
 
+### Fastest setup: `cerefox configure-agent`
+
+You don't have to hand-edit the per-client config files below. `cerefox configure-agent
+--tool <client>` writes the correct local-stdio entry (`npx -y --package=@cerefox/memory
+cerefox mcp`) into the right config file for you. Supported clients:
+
+```bash
+cerefox configure-agent --tool claude-code      # ~/.claude.json (via `claude mcp add`)
+cerefox configure-agent --tool claude-desktop   # Claude Desktop config
+cerefox configure-agent --tool cursor           # ~/.cursor/mcp.json
+cerefox configure-agent --tool codex            # ~/.codex/config.toml
+cerefox configure-agent --tool gemini           # ~/.gemini/settings.json
+```
+
+Useful flags: `--dry-run` (print the planned write without touching any file), `--json`
+(machine-readable result), `--config-path <path>` (override the target file), `--no-backup`
+(skip the `.pre-cerefox.bak` backup). The command is idempotent and backs up any existing
+config before writing. The per-client sections below document the same entries for anyone
+who prefers to edit by hand or needs the remote (`Path A-Remote`) HTTP transport instead.
+
 ### Path A MCP tools
 
 Once configured, every Path A client has these tools:

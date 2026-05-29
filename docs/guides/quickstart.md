@@ -49,14 +49,18 @@ Cerefox usage guidance.
 # Run the commands that apply to your setup:
 cerefox configure-agent --tool claude-code      # Claude Code (~/.claude.json)
 cerefox configure-agent --tool claude-desktop   # Claude Desktop config
+cerefox configure-agent --tool cursor           # Cursor (~/.cursor/mcp.json)
+cerefox configure-agent --tool codex            # OpenAI Codex CLI (~/.codex/config.toml)
+cerefox configure-agent --tool gemini           # Gemini CLI (~/.gemini/settings.json)
 ```
 
 Then restart your client:
 - **Claude Code**: start a fresh session — running sessions cache the MCP tool list.
 - **Claude Desktop**: Cmd+Q to fully quit, then relaunch.
+- **Cursor / Codex CLI / Gemini CLI**: reload or restart the client/session.
 
-Cursor, OpenAI Codex CLI, and Gemini CLI ship in a follow-up (v0.6+).
-For manual setup of those today, see [`connect-agents.md`](connect-agents.md).
+All five writers configure the local stdio server. For the remote (Edge Function)
+HTTP transport, or to edit configs by hand, see [`connect-agents.md`](connect-agents.md).
 
 ## 4. Try it
 

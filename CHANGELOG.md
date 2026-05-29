@@ -41,6 +41,11 @@ the server side.
   schema and/or Edge Functions are out of date, doctor prints a single
   consolidated remediation line: `cerefox deploy-server` when both are stale,
   or the matching `--schema-only` / `--functions-only` when only one is.
+- **`cerefox web` log lines now carry a local-time timestamp**
+  (`YYYY-MM-DD HH:mm:ss.SSS`) — both the per-request logger and the
+  start/shutdown lines. Makes the daemon log (`~/.cerefox/web.log`) readable
+  after the fact (previously lines like `Received SIGTERM; shutting down` had
+  no time).
 
 ### Removed
 
