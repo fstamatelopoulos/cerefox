@@ -57,16 +57,17 @@ These are "input adapters" -- Cerefox is the backend, these tools are the author
 ### Infrastructure
 - [ ] Row-Level Security (RLS) policies for multi-user future
 - [ ] Rate limiting on API endpoints
-- [ ] Health check endpoint
+- [x] Health check endpoint — superseded by per-EF `GET /version` + cerefox-mcp aggregator design (iter-26 / v0.8.0; see plan.md § Iteration 26 Parts 26B + 26C)
 - [ ] Usage statistics (docs stored, searches performed, storage used)
 - [ ] CI/CD pipeline (GitHub Actions: lint, test, build)
 - [ ] **Local Supabase dev environment** -- set up a full local Supabase stack for offline development and Edge Function testing. Moved from iteration plan to backlog.
 - [ ] **Validate Docker/local deployment** -- `Dockerfile` and `docker-compose.yml` have never been tested end-to-end. Low priority.
+- [ ] **Standalone binaries** (`cerefox`, `cerefox.exe`) per design doc §6d "Phase 2". Bundle Bun/Node runtime + JS code into a single executable per OS/arch (macOS-arm64, macOS-x86_64, Linux-x86_64, Windows-x86_64). ~70 MB per binary, ~280 MB total per release. Eliminates the Node/Bun install step for end users. **Deferred** beyond v1.0 per 2026-05-29 maintainer call (Fotis-23): the complexity (cross-compile gotchas, code-signing — $99/year Apple Developer Program for macOS, security concerns around bundling runtimes) doesn't justify the friction reduction for Cerefox's tech-savvy user base. Revisit if a real demand surfaces post-v1.0.
 
 ### Backup & Sync
 - [ ] Scheduled automatic backups
 - [ ] Backup verification (compare DB state with backup)
-- [ ] Export knowledge base as a zip of markdown files
+- [x] Export knowledge base as a folder of markdown files — scheduled as `scripts/cerefox_export.ts` (iter-26 / v0.8.0 Part 26N)
 - [ ] Sync between local Postgres and Supabase
 
 ### MCP & Agent Integration
