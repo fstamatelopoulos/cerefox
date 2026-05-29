@@ -23,6 +23,10 @@ import {
   resolveEnvFile,
   USER_STATE_DIR_NAME,
 } from "../../../../../_shared/config/index.ts";
+import {
+  aggregatorUrlFor,
+  checkServerCompatibility,
+} from "../../../../../_shared/compatibility/index.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 
@@ -410,6 +414,81 @@ export async function checkPostgres(): Promise<CheckResult> {
   }
 }
 
+/**
+ * Edge Function compatibility check (iter-26 Part 26C). Probes the
+ * cerefox-mcp `/version?peers=true` aggregator and classifies the deployed
+ * EF + schema versions against the client's compatibility matrix.
+ *
+ * Needs a gateway-valid anon JWT (`CEREFOX_SUPABASE_ANON_KEY`). Without it,
+ * or before v0.8 EFs are deployed (aggregator 404), the check reports
+ * `skipped` rather than failing — those are expected transitional states.
+ */
+export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl) {
+    return {
+      name: "edge functions",
+      status: "skipped",
+      detail: "Supabase URL not set; EF version check skipped.",
+    };
+  }
+  if (!settings.supabaseAnonKey) {
+    return {
+      name: "edge functions",
+      status: "skipped",
+      detail: "No CEREFOX_SUPABASE_ANON_KEY set; EF version check skipped.",
+      hint: "Set the legacy anon JWT (eyJ…) to enable client↔server version checks.",
+    };
+  }
+
+  let compat;
+  try {
+    compat = await checkServerCompatibility({
+      aggregatorUrl: aggregatorUrlFor(settings.supabaseUrl),
+      bearer: settings.supabaseAnonKey,
+      bundledEf: PKG_VERSION,
+    });
+  } catch (err) {
+    return {
+      name: "edge functions",
+      status: "skipped",
+      detail: `Version probe failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  if (compat.efProbeSkipped) {
+    return {
+      name: "edge functions",
+      status: "skipped",
+      detail: compat.efSkipReason ?? "EF version check skipped.",
+    };
+  }
+
+  const deployed = compat.edgeFunctions.deployed ?? "unknown";
+  switch (compat.edgeFunctions.level) {
+    case "below-min":
+      return {
+        name: "edge functions",
+        status: "error",
+        detail: `Deployed EF v${deployed} is below the required minimum v${compat.edgeFunctions.min}.`,
+        hint: "Redeploy the Edge Functions: `cerefox deploy-server --functions-only`.",
+      };
+    case "above-min-but-old":
+      return {
+        name: "edge functions",
+        status: "warn",
+        detail: `Deployed EF v${deployed} works but is older than this client (v${PKG_VERSION}).`,
+        hint: "Consider redeploying: `cerefox deploy-server --functions-only`.",
+      };
+    default:
+      return {
+        name: "edge functions",
+        status: "ok",
+        detail: `Deployed EF v${deployed} (≥ required v${compat.edgeFunctions.min}).`,
+      };
+  }
+}
+
 // ── Aggregations ───────────────────────────────────────────────────────────
 
 /**
@@ -465,6 +544,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
     { name: "schema", phase: "Reading schema version", run: () => checkSchemaVersion() },
+    { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
     { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },
   ];

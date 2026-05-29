@@ -17,7 +17,7 @@
 import type { Command } from "commander";
 
 import { eprintln, info, println } from "../../../../../_shared/cli-core/index.ts";
-import { buildWebServer } from "../../web/server.ts";
+import { buildWebServer, CompatibilityError } from "../../web/server.ts";
 
 interface WebOptions {
   host: string;
@@ -57,7 +57,11 @@ export function registerWeb(program: Command): void {
         process.on("SIGINT", () => void shutdown("SIGINT"));
         process.on("SIGTERM", () => void shutdown("SIGTERM"));
       } catch (err) {
-        eprintln(`Failed to start web server: ${err instanceof Error ? err.message : String(err)}`);
+        if (err instanceof CompatibilityError) {
+          eprintln(err.message);
+        } else {
+          eprintln(`Failed to start web server: ${err instanceof Error ? err.message : String(err)}`);
+        }
         process.exit(1);
       }
     });

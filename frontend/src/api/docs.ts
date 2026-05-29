@@ -30,10 +30,20 @@ export async function fetchDocContent(path: string): Promise<string> {
   return response.text();
 }
 
+export type SchemaCompatLevel =
+  | "ok"
+  | "above-min-but-old"
+  | "below-min"
+  | "unknown";
+
 export interface SchemaVersionInfo {
   bundled: string | null;
   deployed: string | null;
   mismatch: boolean;
+  /** iter-26 Part 26C two-tier compat level (may be absent on older servers). */
+  level?: SchemaCompatLevel;
+  /** Minimum schema version this client requires (may be absent on older servers). */
+  min?: string;
 }
 
 export async function fetchSchemaVersion(): Promise<SchemaVersionInfo> {

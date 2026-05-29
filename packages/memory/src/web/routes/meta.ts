@@ -14,6 +14,10 @@ import { Hono } from "hono";
 import { PKG_VERSION } from "../../meta.ts";
 import type { WebContext } from "../context.ts";
 import { listBundledDocs, readDoc } from "../docs.ts";
+import {
+  classifyCompat,
+  COMPATIBILITY,
+} from "../../../../../_shared/compatibility/index.ts";
 
 function resolveGitCommitShort(): string | null {
   const env = process.env.CEREFOX_GIT_COMMIT;
@@ -111,6 +115,16 @@ export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
     }
 
     const mismatch = Boolean(bundled && deployed && bundled !== deployed);
-    return c.json({ bundled, deployed, mismatch });
+    // iter-26 Part 26C: two-tier compatibility level so the banner can
+    // distinguish a *blocking* outdated schema (below the client minimum,
+    // red) from a *nudge* (older than bundled but still ≥ minimum, yellow).
+    const level = classifyCompat(deployed, COMPATIBILITY.minSchema, bundled);
+    return c.json({
+      bundled,
+      deployed,
+      mismatch,
+      level,
+      min: COMPATIBILITY.minSchema,
+    });
   });
 }
