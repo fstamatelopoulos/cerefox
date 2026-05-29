@@ -17,11 +17,11 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import postgres from "postgres";
 
 import { loadEnv } from "../_shared/config/index.js";
+import { resolveServerAssets } from "../_shared/server-assets/index.js";
 import {
   EXIT_OK,
   EXIT_USER_ERROR,
@@ -32,16 +32,6 @@ import {
 } from "../_shared/cli-core/index.js";
 
 loadEnv();
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = join(
-  HERE,
-  "..",
-  "src",
-  "cerefox",
-  "db",
-  "migrations",
-);
 
 const BOOTSTRAP_SQL = `
 CREATE TABLE IF NOT EXISTS cerefox_migrations (
@@ -54,15 +44,24 @@ CREATE TABLE IF NOT EXISTS cerefox_migrations (
 interface Args {
   dryRun: boolean;
   status: boolean;
+  assetsDir?: string;
 }
 
 function parseArgs(argv: string[]): Args {
   const out: Args = { dryRun: false, status: false };
-  for (const a of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a === "--dry-run") out.dryRun = true;
     else if (a === "--status") out.status = true;
-    else if (a === "--help" || a === "-h") {
-      println("Usage: bun scripts/db_migrate.ts [--dry-run | --status]");
+    else if (a === "--assets-dir") {
+      const v = argv[++i];
+      if (!v) {
+        errorln("--assets-dir requires a path argument");
+        process.exit(EXIT_USER_ERROR);
+      }
+      out.assetsDir = v;
+    } else if (a === "--help" || a === "-h") {
+      println("Usage: bun scripts/db_migrate.ts [--dry-run | --status] [--assets-dir <path>]");
       process.exit(EXIT_OK);
     } else {
       errorln(`Unknown arg: ${a}`);
@@ -72,9 +71,9 @@ function parseArgs(argv: string[]): Args {
   return out;
 }
 
-function listMigrationFiles(): string[] {
-  if (!existsSync(MIGRATIONS_DIR)) return [];
-  return readdirSync(MIGRATIONS_DIR)
+function listMigrationFiles(migrationsDir: string): string[] {
+  if (!existsSync(migrationsDir)) return [];
+  return readdirSync(migrationsDir)
     .filter((n) => n.endsWith(".sql"))
     .sort();
 }
@@ -89,6 +88,9 @@ async function main(): Promise<void> {
     process.exit(EXIT_USER_ERROR);
   }
 
+  const assets = resolveServerAssets({ assetsDir: args.assetsDir });
+  const migrationsDir = assets.migrationsDir;
+
   println(c.bold("╔══════════════════════════════════════╗"));
   println(c.bold("║  Cerefox DB Migrate                  ║"));
   println(c.bold("╚══════════════════════════════════════╝"));
@@ -98,7 +100,7 @@ async function main(): Promise<void> {
   // Bootstrap: ensure tracking table exists.
   await sql.unsafe(BOOTSTRAP_SQL);
 
-  const allFiles = listMigrationFiles();
+  const allFiles = listMigrationFiles(migrationsDir);
   const appliedRows = await sql<
     { filename: string }[]
   >`SELECT filename FROM cerefox_migrations ORDER BY filename`;
@@ -137,7 +139,7 @@ async function main(): Promise<void> {
   if (args.dryRun) {
     println(c.yellow("\n⚠️  Dry-run mode — no changes will be made."));
     for (const f of pending) {
-      const body = readFileSync(join(MIGRATIONS_DIR, f), "utf8");
+      const body = readFileSync(join(migrationsDir, f), "utf8");
       println(`\n── ${f} ──`);
       println(c.dim(body.slice(0, 600) + (body.length > 600 ? "..." : "")));
     }
@@ -148,7 +150,7 @@ async function main(): Promise<void> {
   println("");
   let appliedCount = 0;
   for (const f of pending) {
-    const body = readFileSync(join(MIGRATIONS_DIR, f), "utf8");
+    const body = readFileSync(join(migrationsDir, f), "utf8");
     println(c.bold(`▶  Applying ${f}…`));
     try {
       // Each migration runs in its own implicit transaction via

@@ -19,12 +19,12 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import postgres from "postgres";
 
 import { loadEnv } from "../_shared/config/index.js";
+import { resolveServerAssets } from "../_shared/server-assets/index.js";
 import {
   EXIT_OK,
   EXIT_USER_ERROR,
@@ -35,13 +35,6 @@ import {
 } from "../_shared/cli-core/index.js";
 
 loadEnv();
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(HERE, "..");
-const DB_DIR = join(REPO_ROOT, "src", "cerefox", "db");
-const SCHEMA_FILE = join(DB_DIR, "schema.sql");
-const RPCS_FILE = join(DB_DIR, "rpcs.sql");
-const MIGRATIONS_DIR = join(DB_DIR, "migrations");
 
 // Tables to drop in --reset mode (order matters for FK constraints).
 const RESET_SQL = `
@@ -64,15 +57,30 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 interface Args {
   dryRun: boolean;
   reset: boolean;
+  assetsDir?: string;
 }
 
 function parseArgs(argv: string[]): Args {
   const out: Args = { dryRun: false, reset: false };
-  for (const a of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     if (a === "--dry-run") out.dryRun = true;
     else if (a === "--reset") out.reset = true;
-    else if (a === "--help" || a === "-h") {
-      println("Usage: bun scripts/db_deploy.ts [--dry-run] [--reset]");
+    else if (a === "--assets-dir") {
+      const v = argv[++i];
+      if (!v) {
+        errorln("--assets-dir requires a path argument");
+        process.exit(EXIT_USER_ERROR);
+      }
+      out.assetsDir = v;
+    } else if (a === "--help" || a === "-h") {
+      println("Usage: bun scripts/db_deploy.ts [--dry-run] [--reset] [--assets-dir <path>]");
+      println("");
+      println("  --dry-run        Print the planned steps without executing.");
+      println("  --reset          DROP all Cerefox tables first (DESTRUCTIVE).");
+      println("  --assets-dir     Override the server-assets root (bundled layout:");
+      println("                   <dir>/db/schema.sql etc). Defaults to auto-resolution");
+      println("                   (repo src/cerefox/db/ or the bundled dist/server-assets/).");
       process.exit(EXIT_OK);
     } else {
       errorln(`Unknown arg: ${a}`);
@@ -92,9 +100,9 @@ async function confirmReset(): Promise<boolean> {
   return answer.trim().toLowerCase() === "yes";
 }
 
-function listMigrationFiles(): string[] {
-  if (!existsSync(MIGRATIONS_DIR)) return [];
-  return readdirSync(MIGRATIONS_DIR)
+function listMigrationFiles(migrationsDir: string): string[] {
+  if (!existsSync(migrationsDir)) return [];
+  return readdirSync(migrationsDir)
     .filter((n) => n.endsWith(".sql"))
     .sort();
 }
@@ -109,15 +117,17 @@ async function main(): Promise<void> {
     process.exit(EXIT_USER_ERROR);
   }
 
-  if (!existsSync(SCHEMA_FILE) || !existsSync(RPCS_FILE)) {
-    errorln(`❌  Schema files missing under ${DB_DIR}.`);
-    errorln("   Run from a repo checkout that includes src/cerefox/db/.");
+  const assets = resolveServerAssets({ assetsDir: args.assetsDir });
+  if (!existsSync(assets.schemaFile) || !existsSync(assets.rpcsFile)) {
+    errorln(`❌  Schema files missing (looked for ${assets.schemaFile}).`);
+    errorln("   Run from a repo checkout that includes src/cerefox/db/,");
+    errorln("   or pass --assets-dir pointing at a bundled server-assets root.");
     process.exit(EXIT_SYSTEM_ERROR);
   }
 
-  const schemaSql = readFileSync(SCHEMA_FILE, "utf8");
-  const rpcsSql = readFileSync(RPCS_FILE, "utf8");
-  const migrationFiles = listMigrationFiles();
+  const schemaSql = readFileSync(assets.schemaFile, "utf8");
+  const rpcsSql = readFileSync(assets.rpcsFile, "utf8");
+  const migrationFiles = listMigrationFiles(assets.migrationsDir);
 
   println(c.bold("╔══════════════════════════════════════╗"));
   println(c.bold("║  Cerefox DB Deploy                   ║"));
