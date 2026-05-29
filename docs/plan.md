@@ -3000,6 +3000,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 - **CHANGELOG v0.9.0 entry** explicitly covers the verb rename + the husk transitions, with a table mapping old → new.
 - **Migration guide update**: `docs/guides/migration-v0.5.md` gets a v0.9 section. May warrant a new `migration-v0.9.md` since the verb rename is the largest user-impact change since v0.5.
 - **CLAUDE.md update**: `CLI verb conventions` section codifying the resource-verb pattern so future commands follow it.
+- **Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out** (added 2026-05-29 per Fotis): the Python CLI deprecation banner's suppress env var predates iter-26 (shipped v0.5.0). Fotis-19 leaned against having an opt-out at all; iter-26 kept it only to avoid breaking existing quiet-CI usage mid-stream. v0.9 turns the Python CLI subcommands into husks anyway, so the banner's role changes — drop the env var here so the husk message always prints (maximum nudge). Note in the CHANGELOG that the suppress var is gone.
 
 **Parts breakdown (27A–27J)**:
 
@@ -3007,7 +3008,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 |---|---|
 | **27A** | CLI ↔ web parity audit doc; design the new resource-verb taxonomy. |
 | **27B** | New CLI command files (`cerefox document <verb>`, `cerefox project <verb>`, etc.) — each delegates to existing logic via internal calls. |
-| **27C** | Husk-on-rename for every old top-level verb. Bash completion updates. |
+| **27C** | Husk-on-rename for every old top-level verb. Bash completion updates. Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out from the Python CLI banner. |
 | **27D** | Frontend ↔ CLI parity gap closures (whatever surfaced in 27A). |
 | **27E** | Python web deletion (`src/cerefox/api/*` + `tests/api/*`). FastAPI dep removal from pyproject.toml. |
 | **27F** | Subprocess-pattern Python MCP tests under `packages/memory/test/python-runtime/`. |

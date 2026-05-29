@@ -18,13 +18,12 @@
  * deps) and `bun:sql` (Bun-only, locks the script runtime).
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
-import postgres from "postgres";
 
 import { loadEnv } from "../_shared/config/index.js";
 import { resolveServerAssets } from "../_shared/server-assets/index.js";
+import { runDbDeploy } from "../_shared/db-deploy/index.js";
 import {
   EXIT_OK,
   EXIT_USER_ERROR,
@@ -35,24 +34,6 @@ import {
 } from "../_shared/cli-core/index.js";
 
 loadEnv();
-
-// Tables to drop in --reset mode (order matters for FK constraints).
-const RESET_SQL = `
-DROP TABLE IF EXISTS cerefox_chunks      CASCADE;
-DROP TABLE IF EXISTS cerefox_documents   CASCADE;
-DROP TABLE IF EXISTS cerefox_projects    CASCADE;
-DROP TABLE IF EXISTS cerefox_migrations  CASCADE;
-DROP FUNCTION IF EXISTS cerefox_set_updated_at CASCADE;
-DROP FUNCTION IF EXISTS cerefox_hybrid_search   CASCADE;
-DROP FUNCTION IF EXISTS cerefox_fts_search      CASCADE;
-DROP FUNCTION IF EXISTS cerefox_semantic_search CASCADE;
-DROP FUNCTION IF EXISTS cerefox_reconstruct_doc CASCADE;
-`;
-
-const EXTENSIONS_SQL = `
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "vector";
-`;
 
 interface Args {
   dryRun: boolean;
@@ -100,13 +81,6 @@ async function confirmReset(): Promise<boolean> {
   return answer.trim().toLowerCase() === "yes";
 }
 
-function listMigrationFiles(migrationsDir: string): string[] {
-  if (!existsSync(migrationsDir)) return [];
-  return readdirSync(migrationsDir)
-    .filter((n) => n.endsWith(".sql"))
-    .sort();
-}
-
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const dbUrl = process.env.CEREFOX_DATABASE_URL ?? "";
@@ -125,10 +99,6 @@ async function main(): Promise<void> {
     process.exit(EXIT_SYSTEM_ERROR);
   }
 
-  const schemaSql = readFileSync(assets.schemaFile, "utf8");
-  const rpcsSql = readFileSync(assets.rpcsFile, "utf8");
-  const migrationFiles = listMigrationFiles(assets.migrationsDir);
-
   println(c.bold("╔══════════════════════════════════════╗"));
   println(c.bold("║  Cerefox DB Deploy                   ║"));
   println(c.bold("╚══════════════════════════════════════╝"));
@@ -145,67 +115,27 @@ async function main(): Promise<void> {
     }
   }
 
-  // postgres lib auto-detects SSL from the URL; Supabase URLs include
-  // `?sslmode=require` or similar. `prepare: false` because Supabase
-  // connection pooler doesn't support prepared statements at txn level.
-  const sql = postgres(dbUrl, {
-    prepare: false,
-    onnotice: () => {},
+  if (!args.dryRun) println("\nConnecting to database...");
+
+  const result = await runDbDeploy({
+    dbUrl,
+    assets,
+    dryRun: args.dryRun,
+    reset: args.reset,
+    log: (line) => println(c.bold(`\n${line}`)),
   });
 
-  const steps: Array<{ sql: string; label: string }> = [];
-  if (args.reset) {
-    steps.push({ sql: RESET_SQL, label: "Reset: drop existing Cerefox objects" });
+  if (!result.ok) {
+    errorln(`\n❌  ${result.failedStep} failed: ${result.error}`);
+    errorln(`\nDeployment stopped at: ${result.failedStep}`);
+    process.exit(EXIT_SYSTEM_ERROR);
   }
-  steps.push(
-    { sql: EXTENSIONS_SQL, label: "Enable extensions (uuid-ossp, vector/pgvector)" },
-    { sql: schemaSql, label: "Apply schema (tables, indexes, triggers)" },
-    { sql: rpcsSql, label: "Apply RPCs (search functions)" },
-  );
-
-  // Stamp the migration files as already applied so db_migrate.ts
-  // doesn't re-run changes already incorporated in schema.sql/rpcs.sql.
-  if (migrationFiles.length > 0) {
-    const values = migrationFiles.map((n) => `('${n.replace(/'/g, "''")}')`).join(", ");
-    steps.push({
-      sql: `INSERT INTO cerefox_migrations (filename) VALUES ${values} ON CONFLICT (filename) DO NOTHING;`,
-      label: "Stamp migration files as already applied",
-    });
-  }
-
-  println("\nConnecting to database...");
-  let successCount = 0;
-  for (const step of steps) {
-    println(c.bold(`\n▶  ${step.label}…`));
-    if (args.dryRun) {
-      const preview = step.sql.slice(0, 500) + (step.sql.length > 500 ? "..." : "");
-      println(c.dim(`   ── (dry-run, not executed) ──`));
-      println(c.dim(preview));
-      successCount++;
-      continue;
-    }
-    try {
-      // `sql.unsafe()` accepts a multi-statement SQL string. Required
-      // because schema.sql + rpcs.sql contain many statements per file.
-      await sql.unsafe(step.sql);
-      println(c.green("   ✓  Done"));
-      successCount++;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errorln(`\n❌  ${step.label} failed: ${msg}`);
-      errorln(`\nDeployment stopped at: ${step.label}`);
-      await sql.end({ timeout: 5 });
-      process.exit(EXIT_SYSTEM_ERROR);
-    }
-  }
-
-  await sql.end({ timeout: 5 });
 
   println("\n" + "─".repeat(42));
   if (args.dryRun) {
-    println(c.green(`✓  Dry-run complete. ${successCount} steps would have run.`));
+    println(c.green(`✓  Dry-run complete. ${result.stepsRun} steps would have run.`));
   } else {
-    println(c.green(`✓  Deployment complete. ${successCount} steps applied.`));
+    println(c.green(`✓  Deployment complete. ${result.stepsRun} steps applied.`));
     println("\nNext step: verify the schema with:");
     println("    bun scripts/db_status.ts");
   }

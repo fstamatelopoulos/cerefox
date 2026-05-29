@@ -81,6 +81,7 @@ describe("cerefox CLI smoke (built bin)", () => {
       "self-update",
       "upgrade",
       "sync-self-docs",
+      "deploy-server",
       // Ops
       "backup",
       "restore",
