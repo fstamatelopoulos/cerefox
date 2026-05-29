@@ -657,7 +657,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 1.7.0
+  version: 1.8.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -682,7 +682,11 @@ paths:
                   type: string
                 mode:
                   type: string
+                  enum: [docs, hybrid, fts]
                   default: docs
+                  description: >
+                    docs = document-level hybrid (recommended); hybrid = chunk-level
+                    semantic+FTS; fts = keyword-only (no embedding).
                 metadata_filter:
                   type: object
                   additionalProperties:
@@ -693,6 +697,26 @@ paths:
                     Example: {"type": "decision", "status": "active"}.
                     Call listMetadataKeys to discover available keys and their values.
                     Omit or set to null to search all documents.
+                alpha:
+                  type: number
+                  default: 0.7
+                  description: >
+                    Semantic weight for hybrid/docs modes (0 = pure FTS, 1 = pure
+                    semantic). Advanced; leave unset for the default blend.
+                min_score:
+                  type: number
+                  default: 0.5
+                  description: >
+                    Minimum cosine similarity for a vector-only match to be included.
+                    Advanced; leave unset for the default threshold.
+                max_bytes:
+                  type: integer
+                  default: 200000
+                  description: >
+                    Response size budget in bytes (server hard ceiling 200000).
+                    Whole results are dropped (never truncated mid-document) until
+                    the budget is met; the response sets `truncated: true` when this
+                    happens. Advanced; leave unset for the default.
                 requestor:
                   type: string
                   description: >
@@ -735,6 +759,18 @@ paths:
                     the document, note the document_id, pass it here.
                 project_name:
                   type: string
+                  description: >
+                    Add the document to this project (non-destructive — keeps any
+                    existing project memberships). Looked up by name.
+                project_names:
+                  type: array
+                  items:
+                    type: string
+                  description: >
+                    Destructive full-set project assignment: the document's project
+                    memberships are replaced with exactly this list. Use project_name
+                    (singular) to add without removing. If both are given, project_names
+                    wins.
                 source:
                   type: string
                   default: agent
@@ -764,7 +800,14 @@ paths:
                     the document to pending_review, user writes set it to approved.
       responses:
         '200':
-          description: Ingest result
+          description: >
+            Ingest result. Fields vary by outcome:
+            { document_id, title, chunk_count, total_chars,
+              project_id?, project_name?,   # set when a project was assigned on create
+              skipped?,                      # true when identical content was deduplicated
+              updated?,                      # true when an existing doc was updated
+              message?,                      # human note on dedup/skip/update
+              note? }                        # note when a flag (e.g. update_if_exists) was overridden
   /cerefox-metadata:
     post:
       operationId: listMetadataKeys
@@ -867,6 +910,9 @@ paths:
                 since:
                   type: string
                   description: ISO timestamp lower bound for temporal queries (optional)
+                until:
+                  type: string
+                  description: ISO timestamp upper bound for temporal queries (optional)
                 limit:
                   type: integer
                   default: 50
@@ -921,7 +967,10 @@ paths:
                     Example: {"type": "decision", "status": "active"}.
                 project_id:
                   type: string
-                  description: Filter by project UUID (optional)
+                  description: >
+                    Filter by project UUID (optional). NOTE: this is the project
+                    UUID, not its name — unlike searchKnowledgeBase / ingestNote
+                    which take project_name. Get UUIDs from listProjects.
                 updated_since:
                   type: string
                   description: ISO-8601 timestamp; only docs updated on/after (optional)
@@ -935,6 +984,12 @@ paths:
                   type: boolean
                   default: false
                   description: Include full document text in results
+                max_bytes:
+                  type: integer
+                  default: 200000
+                  description: >
+                    Response size budget in bytes when include_content is true
+                    (whole results dropped to fit). Advanced; leave unset for the default.
                 requestor:
                   type: string
                   description: Name of the agent making this request. Optional.

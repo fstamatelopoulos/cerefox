@@ -1,5 +1,18 @@
 # GPT Actions OpenAPI Drift Audit — 2026-05-29
 
+> **RESOLVED (iter-26 Part 26L).** All 17 drift items below were applied to
+> the OpenAPI block in `docs/guides/connect-agents.md`: `info.version`
+> bumped 1.7.0 → 1.8.0; cerefox-search gained `mode` enum + `alpha` /
+> `min_score` / `max_bytes`; cerefox-ingest gained `project_names` + a
+> fully-documented 200 response; cerefox-get-audit-log gained `until`;
+> cerefox-metadata-search gained `max_bytes` + a project_id-vs-project_name
+> clarification. (list-versions `archived` and metadata-search `project_id`
+> were already correct in the block.) The `/version` routes added in 26B
+> were deliberately NOT added — they're client compat-probe endpoints, not
+> GPT-facing operations, and would only clutter the schema users paste into
+> ChatGPT. Going forward the sync rule lives in CLAUDE.md + RELEASING.md.
+> This document is kept as the historical audit record.
+
 ## Summary
 
 Audit of 8 Cerefox edge functions (EFs) comparing their OpenAPI schema definitions in `docs/guides/connect-agents.md` (lines 657–967) against actual request/response shapes in the EF implementations.

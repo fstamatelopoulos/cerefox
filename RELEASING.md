@@ -1,0 +1,106 @@
+# Releasing Cerefox
+
+This is the maintainer checklist for cutting a Cerefox release. It documents
+the **public release workflow** — the steps, the order, and the
+post-release verification. Releases are gated to maintainers (npm trusted
+publishing + the GitHub Actions release workflow); this file is the
+playbook, not an invitation for arbitrary contributors to publish.
+
+> Scope: this covers `@cerefox/memory` (the npm package) + the git tag +
+> the GitHub Release. The server side (Supabase schema / RPCs / Edge
+> Functions) deploys separately via `cerefox deploy-server` and is **not**
+> part of the npm release — but a release that changes the server surface
+> must tell users to redeploy (see "Server-surface changes" below).
+
+## Versioning model
+
+Three version surfaces move independently:
+
+| Surface | Where | Bumped by |
+|---|---|---|
+| **Client** (`PKG_VERSION`) | `packages/memory/src/meta.ts` + every `package.json` | `cut_release.ts`, every release |
+| **Schema** (schema + RPCs) | `@version:` marker in `src/cerefox/db/schema.sql` | by hand, when `schema.sql`/`rpcs.sql` change |
+| **Edge Functions** (`EF_VERSION`) | `_shared/ef-meta/index.ts` | `cut_release.ts`, only when EF source changed since the last tag |
+
+The client carries a **compatibility matrix** (`_shared/compatibility/index.ts`,
+`minSchema` / `minEdgeFunctions`). See CONTRIBUTING.md → "Client ↔ server
+compatibility matrix" for the bump policy. **If this release raises either
+minimum, say so loudly in the CHANGELOG + migration guide** — users must
+redeploy their server.
+
+## Pre-release checklist
+
+1. **Working tree is clean** and you're on `main` with everything merged.
+2. **CHANGELOG.md** has a populated `[Unreleased]` section describing the
+   release. `cut_release.ts` promotes it to the new version heading.
+3. **Compatibility matrix** (`_shared/compatibility/index.ts`) — if this
+   release's client needs a newer server, raise `minSchema` /
+   `minEdgeFunctions` and confirm the CHANGELOG calls out "redeploy
+   required".
+4. **Schema version** — if `schema.sql` / `rpcs.sql` changed, bump the
+   `@version:` marker by hand.
+5. **GPT Actions OpenAPI block** (`docs/guides/connect-agents.md`) — if any
+   Edge Function's request/response shape changed this cycle, update the
+   OpenAPI block and bump its `info.version`. (See the CLAUDE.md rule;
+   ideally this already happened in the EF-changing PR.)
+6. **All tests green**: `uv run pytest`, `cd _shared && bun test`,
+   `cd packages/memory && bun run build && bun test`. Live/e2e suites
+   auto-skip without credentials — run them against a real project when the
+   release touches their surface.
+7. **Docs current**: `docs/plan.md`, migration guide, and the npm
+   `packages/memory/README.md` reflect what's shipping.
+
+## Cutting the release
+
+```bash
+# Dry-run first — prints every file it would change + the tag it would create:
+bun scripts/cut_release.ts <version> --dry-run
+
+# Then for real (tag + GitHub Release; add --npm-publish to also publish):
+bun scripts/cut_release.ts <version> --npm-publish
+```
+
+`cut_release.ts`:
+- bumps `VERSION`, every `package.json`, and `PKG_VERSION`;
+- bumps `EF_VERSION` only if Edge Function source changed since the last tag;
+- promotes the CHANGELOG `[Unreleased]` section;
+- commits, creates an annotated tag, pushes, and (with `--npm-publish`)
+  triggers the release workflow that publishes to npm via trusted publishing.
+
+## Post-release verification
+
+1. The release workflow run is green (build + test, then publish).
+2. `npm view @cerefox/memory version` shows the new version.
+3. The GitHub Release exists and is marked "Latest".
+4. Smoke the published artifact:
+   ```bash
+   npx --package=@cerefox/memory cerefox --version   # prints the new version
+   ```
+5. The npm package page shows the updated README.
+
+## Server-surface changes (schema / RPCs / Edge Functions)
+
+If the release changed the server side, the CHANGELOG **and** the migration
+guide must include the redeploy step prominently (not buried):
+
+```bash
+# From a repo clone of the matching tag:
+bun scripts/db_deploy.ts        # or db_migrate.ts for incremental schema changes
+# Then redeploy the Edge Functions (or use cerefox deploy-server):
+cerefox deploy-server
+```
+
+## If something is wrong after publish
+
+Per the "force-move tags only on objective failure" rule (CONTRIBUTING.md):
+a published tag **never moves**. Ship a new patch version instead. The only
+exception is an objective failure of the release pipeline itself (CI failed
+mid-release, half the artifacts didn't publish) — in that narrow case the
+force-move-tag recovery is:
+
+```bash
+git tag -d v<version>
+git push origin :refs/tags/v<version>
+# fix the issue, re-tag at the correct commit, re-run the workflow,
+# then un-draft the GitHub Release if it was demoted.
+```
