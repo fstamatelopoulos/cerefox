@@ -3100,6 +3100,22 @@ maintainer asked to **fold them into v0.9.0** ("no need to wait"). Outcome:
 | `cerefox document edit <id>` | **Remains v0.9.1** | Content edits already work via `cerefox document ingest --document-id <id> --update`. A dedicated `edit` adds title/metadata-only editing, which has a **title-boosting re-embed nuance** (a title change must re-embed per the title-boost design) worth a short design pass with the maintainer before it joins the v1.0 contract. Don't ship it hastily into the contract-lead-in. |
 | `cerefox audit tail` / `audit search` | **Remains v0.9.1 (likely dropped)** | `audit list` already covers filtering (`--author/--operation/--since/--until`) + recency (`--limit`). `search` would be a pure alias; `tail` (live-follow) is the only non-redundant bit. Revisit only if a real streaming need appears — otherwise drop from scope. |
 
+#### v0.9.1 broader scope (gathered 2026-05-30 from v0.9.0 dogfooding)
+
+Accumulating on `fix/v0.9.1` (draft PR #68). Status as of 2026-05-30:
+
+| Item | Status | Notes |
+|---|---|---|
+| **`cut_release.ts` confirm-first** | ✅ done | Prompt moved before any mutation; a declined cut leaves the tree pristine + re-runnable. (Found cutting v0.9.0 — an accidental `N` stranded the cut.) |
+| **`cerefox search` rendering bugs** | ✅ done | Was `partial (N of M chars)` — `N` is chunk_count, mislabeled as chars, and only shown for `is_partial` results (full docs showed nothing). Now every result shows `· score X · N chunks · M chars · partial\|full`. Inter-result separator changed from `---` (collides with markdown content) to a distinctive rule. |
+| **`cerefox search --only-metadata`** | ✅ done | Collapsed "which docs matched" list (id/score/chunks/chars/partial-full), no body — the web UI's collapsed view; great for "grab the id, then `document get`". Works in text + `--json`. |
+| **`project create` / `project edit`** | ✅ done | Parity with web/API (`POST`/`PUT /api/v1/projects`). `project-create.ts` / `project-edit.ts`. (Implicit create via `--project-name` on ingest still works.) Live round-trip validated. |
+| **Full docs sweep / sanity pass** | ⬜ open (big) | Every guide is stale, made worse by the verb rename. Includes: rewrite `cli.md` for the new surface, sweep all `docs/guides/*`, the CLAUDE.md structure tree (still lists `api/routes_api.py`, `deps.py`, `tests/`, `cli.py`), README. **Add a manual-config appendix to `connect-agents.md`** (keep the hand-config + "what configure-agent does" for users who want to debug if the CLI breaks). |
+| **`document edit`** | ⬜ open — needs design | See discussion: content edits already work via `document ingest --document-id --update`; the open question is title/metadata-only edit + the title-boost re-embed. Decide the content-input model (`--file`/`--paste`/`--title`/`--set-meta`). |
+| **`audit` scope** | ⬜ decide | Recommendation: `audit list` IS web parity (audit log is immutable/read-only + already filterable). Drop `audit tail/search` unless a streaming need appears. |
+| **`search` deeper parity** | ⬜ open | (a) best-matched-chunk text (web shows it; the docs RPC returns assembled content + `best_score` but not the best-chunk text — needs an RPC field or a chunk-mode follow-up); (b) last-updated date in the metadata line. Agents should use `--json` for robust parsing. |
+| **`completion` UX** | ⬜ decide | Today `cerefox completion <shell>` prints a raw script with no usage. Options: (a) add usage instructions to the output, or (b) the cfcf pattern — the installer generates + wires it and prints a one-line "add this to your shell rc" final step. Lean: (b) for new installs + (a) as a fallback. |
+
 > **Engineering note (2026-05-30, Claude):** I folded the two **clean, verified,
 > low-risk** wrappers (restore, version archive/unarchive) into v0.9.0 and held
 > `document edit` + `audit tail/search` because they need a design decision

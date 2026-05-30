@@ -31,6 +31,8 @@ import { registerDeleteDoc } from "./commands/delete-doc.ts";
 import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
 import { registerDocumentRestore } from "./commands/document-restore.ts";
+import { registerProjectCreate } from "./commands/project-create.ts";
+import { registerProjectEdit } from "./commands/project-edit.ts";
 import { registerVersionArchive } from "./commands/version-archive.ts";
 import { registerDocs } from "./commands/docs.ts";
 import { registerDoctor } from "./commands/doctor.ts";
@@ -175,8 +177,10 @@ export function buildProgram(): Command {
   moveInto(document, registerIngest, "ingest");
   moveInto(document, registerIngestDir, "ingest-dir");
 
-  const project = program.command("project").description("Projects: list, delete.");
+  const project = program.command("project").description("Projects: list, create, edit, delete.");
   moveInto(project, registerListProjects, "list");
+  registerProjectCreate(project); // v0.9.1: explicit create (parity with web/API)
+  registerProjectEdit(project); // v0.9.1: rename / edit description
   moveInto(project, registerDeleteProject, "delete");
 
   const version = program
