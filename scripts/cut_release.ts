@@ -525,6 +525,31 @@ async function main(): Promise<void> {
     info("No Edge Function changes since last tag — leaving EF_VERSION as-is.");
   }
 
+  const tag = `v${newVersion}`;
+
+  // Confirm BEFORE any mutation. Declining here leaves the working tree
+  // pristine — nothing written, committed, tagged, or pushed — so the cut is
+  // immediately re-runnable. (Through v0.9.0 the script mutated + committed +
+  // tagged FIRST and prompted last; a declined prompt left a local commit +
+  // tag that tripped the `checkTagDoesNotExist` preflight on the next run.)
+  if (!args.dryRun && !args.yes) {
+    console.log("");
+    info(
+      `About to cut ${tag}: bump VERSION/CHANGELOG/package.json + version literals, ` +
+        `commit, create an annotated tag, push to origin, and create a GitHub Release` +
+        (args.npmPublish ? ", then trigger the npm-publish workflow." : "."),
+    );
+    info(
+      `Per the "force-move tags only on objective failure" rule, once pushed, ` +
+        `fixes ship as a NEW patch version — not a tag move.`,
+    );
+    const yes = await confirm("Proceed?");
+    if (!yes) {
+      warn("Aborted before any changes — working tree untouched, nothing committed/tagged/pushed. Re-run when ready.");
+      return;
+    }
+  }
+
   // 3. Mutate files
   if (args.dryRun) {
     info("DRY-RUN: would write VERSION:");
@@ -569,8 +594,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // 4. Git commit + tag
-  const tag = `v${newVersion}`;
+  // 4. Git commit + tag (`tag` declared + confirmed above)
   const commitMessage = `chore: cut ${tag}`;
   const stagedFiles = [
     "VERSION",
@@ -599,21 +623,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // 5. Push + GitHub Release
-  if (!args.dryRun && !args.yes) {
-    console.log("");
-    info(`About to push commit and tag ${tag} to origin and create a GitHub Release.`);
-    info(
-      `Per the "force-move tags only on objective failure" rule, fixes after this point ship as a NEW patch version.`,
-    );
-    const yes = await confirm("Proceed?");
-    if (!yes) {
-      warn("Aborted. The commit and tag remain LOCAL; nothing pushed yet.");
-      warn(`To finish manually:  git push origin main && git push origin ${tag} && gh release create ${tag} --notes-file <FILE>`);
-      warn(`To abandon entirely: git reset --hard HEAD~1 && git tag -d ${tag}`);
-      return;
-    }
-  }
+  // 5. Push + GitHub Release (already confirmed before any mutation, above)
 
   if (args.dryRun) {
     info(`DRY-RUN: would 'git push origin main'`);
