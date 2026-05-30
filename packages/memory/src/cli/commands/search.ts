@@ -34,6 +34,7 @@ interface DocResult {
   doc_title: string;
   doc_source: string | null;
   best_score: number | null;
+  best_chunk_heading_path: string[] | null;
   full_content: string;
   chunk_count: number;
   total_chars: number;
@@ -219,6 +220,18 @@ async function action(
       const counts = ` · ${doc.chunk_count} chunk${doc.chunk_count === 1 ? "" : "s"} · ${doc.total_chars.toLocaleString()} chars`;
       const kind = doc.is_partial ? " · partial" : " · full";
       println(c.bold(`## ${title}${docId}${score}${counts}${kind}`));
+      // Parity with the web result row: best-match breadcrumb + last-updated.
+      const bestMatch = doc.best_chunk_heading_path?.length
+        ? doc.best_chunk_heading_path.join(" › ")
+        : null;
+      const updated = doc.doc_updated_at ? doc.doc_updated_at.slice(0, 10) : null;
+      if (bestMatch || updated) {
+        const bits = [
+          bestMatch ? `best match: ${bestMatch}` : null,
+          updated ? `updated ${updated}` : null,
+        ].filter(Boolean);
+        println(c.dim(`   ${bits.join(" · ")}`));
+      }
       // --only-metadata: header line per match (the web UI's collapsed list),
       // no body. Otherwise print the content with a distinctive separator
       // (not `---`, which collides with `---` inside markdown content).

@@ -25,11 +25,13 @@ import { c, eprintln } from "../../../../_shared/cli-core/index.ts";
 import { registerBackup } from "./commands/backup.ts";
 import { registerCompletion } from "./commands/completion.ts";
 import { registerConfigGet } from "./commands/config-get.ts";
+import { registerConfigList } from "./commands/config-list.ts";
 import { registerConfigSet } from "./commands/config-set.ts";
 import { registerConfigureAgent } from "./commands/configure-agent.ts";
 import { registerDeleteDoc } from "./commands/delete-doc.ts";
 import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
+import { registerDocumentEdit } from "./commands/document-edit.ts";
 import { registerDocumentRestore } from "./commands/document-restore.ts";
 import { registerProjectCreate } from "./commands/project-create.ts";
 import { registerProjectEdit } from "./commands/project-edit.ts";
@@ -174,6 +176,7 @@ export function buildProgram(): Command {
   moveInto(document, registerListDocs, "list");
   moveInto(document, registerDeleteDoc, "delete");
   registerDocumentRestore(document); // v0.9.0: new command (no old flat verb)
+  registerDocumentEdit(document); // v0.9.1: non-destructive title/metadata patch
   moveInto(document, registerIngest, "ingest");
   moveInto(document, registerIngestDir, "ingest-dir");
 
@@ -196,7 +199,8 @@ export function buildProgram(): Command {
   const audit = program.command("audit").description("Audit log: list.");
   moveInto(audit, registerGetAuditLog, "list");
 
-  const config = program.command("config").description("Runtime config: get, set.");
+  const config = program.command("config").description("Runtime config: list, get, set.");
+  registerConfigList(config); // v0.9.1: list the allowed config keys
   moveInto(config, registerConfigGet, "get");
   moveInto(config, registerConfigSet, "set");
 

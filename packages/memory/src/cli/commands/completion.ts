@@ -17,9 +17,13 @@
  *   cerefox completion fish  > ~/.config/fish/completions/cerefox.fish
  */
 
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import type { Command } from "commander";
 
-import { println, userError } from "../../../../../_shared/cli-core/index.ts";
+import { c, confirm, eprintln, println, userError } from "../../../../../_shared/cli-core/index.ts";
 import { buildProgram } from "../program.ts";
 
 interface CompletionInfo {
@@ -124,31 +128,105 @@ function fishScript(info: CompletionInfo): string {
   return lines.join("\n") + "\n";
 }
 
-function action(shell: string): void {
+type Shell = "bash" | "zsh" | "fish";
+
+function scriptFor(shell: Shell): string {
   const info = collectCompletionInfo();
-  let script: string;
   switch (shell) {
     case "bash":
-      script = bashScript(info);
-      break;
+      return bashScript(info);
     case "zsh":
-      script = zshScript(info);
-      break;
+      return zshScript(info);
     case "fish":
-      script = fishScript(info);
-      break;
-    default:
-      throw userError(
-        `Unknown shell "${shell}". Supported: bash, zsh, fish.`,
-      );
+      return fishScript(info);
   }
-  println(script);
+}
+
+/** Detect the user's shell from $SHELL (basename). */
+function detectShell(): Shell | null {
+  const sh = (process.env.SHELL ?? "").split("/").pop() ?? "";
+  if (sh === "bash" || sh === "zsh" || sh === "fish") return sh;
+  return null;
+}
+
+const RC_BEGIN = "# >>> cerefox shell completion (managed by `cerefox completion install`) >>>";
+const RC_END = "# <<< cerefox shell completion <<<";
+
+/**
+ * `cerefox completion install [--shell <s>] [--yes]` — write the completion
+ * script to `~/.cerefox-completion.<shell>` and source it from the shell rc
+ * via an idempotent sentinel block. Re-running regenerates the script (so new
+ * commands appear); the rc block is added once. Mirrors cfcf's pattern;
+ * `install.sh` runs this on install/upgrade so completion stays current.
+ */
+async function installMode(options: { shell?: string; yes?: boolean }): Promise<void> {
+  const shell = (options.shell as Shell | undefined) ?? detectShell();
+  if (!shell) {
+    throw userError(
+      "Could not detect your shell from $SHELL. Pass --shell bash|zsh|fish.",
+    );
+  }
+  if (shell !== "bash" && shell !== "zsh" && shell !== "fish") {
+    throw userError(`Unsupported --shell "${shell}". Use bash, zsh, or fish.`);
+  }
+
+  const home = homedir();
+  const scriptPath = join(home, `.cerefox-completion.${shell}`);
+  // Always (re)write the script so upgrades pick up new commands/flags.
+  writeFileSync(scriptPath, scriptFor(shell), "utf8");
+  println(c.green(`✓ Wrote completion script: ${scriptPath}`));
+
+  // fish: drop-in dir, no rc edit needed.
+  if (shell === "fish") {
+    println(c.dim("  For fish, also copy it into ~/.config/fish/completions/cerefox.fish (or `source` it)."));
+    return;
+  }
+
+  const rcPath = join(home, shell === "zsh" ? ".zshrc" : ".bashrc");
+  const sourceLine = `[ -s "${scriptPath}" ] && source "${scriptPath}"`;
+  const block = `${RC_BEGIN}\n${sourceLine}\n${RC_END}\n`;
+  const existing = existsSync(rcPath) ? readFileSync(rcPath, "utf8") : "";
+
+  if (existing.includes(RC_BEGIN)) {
+    println(c.dim(`  ${rcPath} already sources the completion (left as-is).`));
+  } else {
+    // Editing the user's rc — confirm unless --yes or non-interactive.
+    const interactive = process.stdout.isTTY && !options.yes;
+    if (interactive) {
+      const ok = await confirm(`Add a completion source line to ${rcPath}?`, false);
+      if (!ok) {
+        println(c.dim(`Skipped the rc edit. Add this line to ${rcPath} yourself:`));
+        println(`  ${sourceLine}`);
+        return;
+      }
+    }
+    writeFileSync(rcPath, (existing.endsWith("\n") || existing === "" ? existing : existing + "\n") + "\n" + block, "utf8");
+    println(c.green(`✓ Added completion to ${rcPath}.`));
+  }
+  println(c.dim(`  Activate now: exec ${shell}   (or open a new terminal).`));
+}
+
+async function action(target: string, options: { shell?: string; yes?: boolean }): Promise<void> {
+  if (target === "install") {
+    await installMode(options);
+    return;
+  }
+  if (target !== "bash" && target !== "zsh" && target !== "fish") {
+    throw userError(`Unknown shell "${target}". Supported: bash, zsh, fish (or 'install').`);
+  }
+  // Raw emit: print the script to stdout (pipe/redirect it yourself).
+  println(scriptFor(target));
+  if (process.stdout.isTTY) {
+    eprintln(c.dim(`\n# Tip: \`cerefox completion install\` writes this + wires your shell rc automatically.`));
+  }
 }
 
 export function registerCompletion(program: Command): void {
   program
     .command("completion")
-    .description("Emit a tab-completion script for your shell.")
-    .argument("<shell>", "Target shell: bash, zsh, or fish.")
+    .description("Shell tab-completion. `install` to auto-wire your shell, or a shell name to print the script.")
+    .argument("<shell>", "bash | zsh | fish (print the script), or 'install' (auto-wire).")
+    .option("--shell <shell>", "For 'install': override the auto-detected shell.")
+    .option("--yes", "For 'install': skip the rc-edit confirmation (used by install.sh).")
     .action(action);
 }
