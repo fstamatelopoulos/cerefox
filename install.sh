@@ -101,6 +101,17 @@ fi
 
 VERSION_OUT="$(cerefox --version 2>/dev/null || echo "?")"
 echo "✓ Cerefox ${VERSION_OUT} installed at $(command -v cerefox)"
+
+# Shell tab-completion (best-effort, idempotent). Regenerates the completion
+# script (so new commands appear on upgrade) and adds a sentinel-marked source
+# line to your shell rc. --yes because this runs non-interactively (curl | sh).
+# Remove the `# >>> cerefox shell completion >>>` block from your rc to undo.
+if cerefox completion install --yes >/dev/null 2>&1; then
+  echo "✓ Shell completion installed (run 'exec \$SHELL' or open a new terminal to activate)."
+else
+  echo "ℹ Shell completion not set up automatically — run 'cerefox completion install' later."
+fi
+
 echo ""
 echo "Next steps:"
 echo "  1. cerefox init                 # interactive setup (~2 min)"

@@ -25,14 +25,18 @@ import { c, eprintln } from "../../../../_shared/cli-core/index.ts";
 import { registerBackup } from "./commands/backup.ts";
 import { registerCompletion } from "./commands/completion.ts";
 import { registerConfigGet } from "./commands/config-get.ts";
+import { registerConfigList } from "./commands/config-list.ts";
 import { registerConfigSet } from "./commands/config-set.ts";
 import { registerConfigureAgent } from "./commands/configure-agent.ts";
 import { registerDeleteDoc } from "./commands/delete-doc.ts";
 import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
+import { registerDocumentEdit } from "./commands/document-edit.ts";
 import { registerDocumentRestore } from "./commands/document-restore.ts";
+import { registerGuides } from "./commands/guides.ts";
+import { registerProjectCreate } from "./commands/project-create.ts";
+import { registerProjectEdit } from "./commands/project-edit.ts";
 import { registerVersionArchive } from "./commands/version-archive.ts";
-import { registerDocs } from "./commands/docs.ts";
 import { registerDoctor } from "./commands/doctor.ts";
 import { registerGetAuditLog } from "./commands/get-audit-log.ts";
 import { registerGetDoc } from "./commands/get-doc.ts";
@@ -50,7 +54,6 @@ import { registerRestore } from "./commands/restore.ts";
 import { registerSearch } from "./commands/search.ts";
 import { registerSelfUpdate } from "./commands/self-update.ts";
 import { registerStatus } from "./commands/status.ts";
-import { registerSyncDocs } from "./commands/sync-docs.ts";
 import { registerSyncSelfDocs } from "./commands/sync-self-docs.ts";
 import { registerWeb } from "./commands/web.ts";
 
@@ -80,7 +83,7 @@ const RENAMED_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["ingest-dir", "document ingest-dir"],
   ["list-projects", "project list"],
   ["delete-project", "project delete"],
-  ["list-versions", "version list"],
+  ["list-versions", "document version list"],
   ["get-audit-log", "audit list"],
   ["list-metadata-keys", "metadata keys"],
   ["metadata-search", "metadata search"],
@@ -89,6 +92,8 @@ const RENAMED_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["restore", "backup restore"],
   ["deploy-server", "server deploy"],
   ["reindex", "server reindex"],
+  ["docs", "guides"],
+  ["sync-self-docs", "guides ingest"],
 ];
 
 function registerRenameHusks(program: Command): void {
@@ -99,7 +104,7 @@ function registerRenameHusks(program: Command): void {
       .allowExcessArguments(true)
       .argument("[args...]", "(renamed)")
       .action(() => {
-        eprintln(c.yellow(`✗ \`cerefox ${oldName}\` was renamed in v0.9.0.`));
+        eprintln(c.yellow(`✗ \`cerefox ${oldName}\` was renamed.`));
         eprintln(`  Use \`cerefox ${newForm}\` instead (run \`cerefox ${newForm.split(" ")[0]} --help\`).`);
         process.exit(1);
       });
@@ -127,17 +132,17 @@ export function buildProgram(): Command {
     .addHelpText(
       "after",
       "\nResource groups (run `cerefox <group> --help`):\n" +
-        "  document   get · list · delete · ingest · ingest-dir\n" +
-        "  project    list · delete\n" +
-        "  version    list\n" +
+        "  document   get · list · edit · delete · restore · ingest · ingest-dir · version {list·archive·unarchive}\n" +
+        "  project    list · create · edit · delete\n" +
         "  metadata   keys · search\n" +
         "  audit      list\n" +
-        "  config     get · set\n" +
+        "  config     list · get · set\n" +
         "  backup     create · restore\n" +
         "  server     deploy · reindex\n" +
+        "  guides     list · open · show · ingest   (bundled documentation)\n" +
         "\nTop-level commands:\n" +
         "  search · init · doctor · status · configure-agent · self-update\n" +
-        "  mcp · web · docs · completion · sync-docs · sync-self-docs\n" +
+        "  mcp · web · completion\n" +
         "\nRenamed in v0.9.0: the old flat verbs (get-doc, list-docs, ingest, …)\n" +
         "  now live under the groups above. The old names still run but exit with\n" +
         "  a pointer to the new form. They are removed in v1.0.\n" +
@@ -159,31 +164,35 @@ export function buildProgram(): Command {
   registerSelfUpdate(program);
   registerMcp(program);
   registerWeb(program);
-  registerDocs(program);
   registerCompletion(program);
-  registerSyncDocs(program);
-  registerSyncSelfDocs(program);
 
   // ── Resource groups (v0.9.0 rename-only redesign) ────────────────────────
   const document = program
     .command("document")
-    .description("Documents: get, list, delete, ingest.");
+    .description("Documents: get, list, edit, delete, restore, ingest, ingest-dir, version.");
   moveInto(document, registerGetDoc, "get");
   moveInto(document, registerListDocs, "list");
   moveInto(document, registerDeleteDoc, "delete");
   registerDocumentRestore(document); // v0.9.0: new command (no old flat verb)
+  registerDocumentEdit(document); // v0.9.1: non-destructive title/metadata patch
   moveInto(document, registerIngest, "ingest");
   moveInto(document, registerIngestDir, "ingest-dir");
 
-  const project = program.command("project").description("Projects: list, delete.");
-  moveInto(project, registerListProjects, "list");
-  moveInto(project, registerDeleteProject, "delete");
-
-  const version = program
+  // v0.9.1: versions nested under `document` (Clio's shape — a version belongs
+  // to a document). The top-level `version` group shipped in v0.9.0 hours
+  // earlier; no husk (nobody would have adopted it). The v0.8 flat
+  // `list-versions` husk now points at `document version list`.
+  const documentVersion = document
     .command("version")
-    .description("Document version history: list, archive, unarchive.");
-  moveInto(version, registerListVersions, "list");
-  registerVersionArchive(version); // v0.9.0: new archive/unarchive commands
+    .description("Document versions: list, archive, unarchive.");
+  moveInto(documentVersion, registerListVersions, "list");
+  registerVersionArchive(documentVersion);
+
+  const project = program.command("project").description("Projects: list, create, edit, delete.");
+  moveInto(project, registerListProjects, "list");
+  registerProjectCreate(project); // v0.9.1: explicit create (parity with web/API)
+  registerProjectEdit(project); // v0.9.1: rename / edit description
+  moveInto(project, registerDeleteProject, "delete");
 
   const metadata = program.command("metadata").description("Metadata: keys, search.");
   moveInto(metadata, registerListMetadataKeys, "keys");
@@ -192,7 +201,8 @@ export function buildProgram(): Command {
   const audit = program.command("audit").description("Audit log: list.");
   moveInto(audit, registerGetAuditLog, "list");
 
-  const config = program.command("config").description("Runtime config: get, set.");
+  const config = program.command("config").description("Runtime config: list, get, set.");
+  registerConfigList(config); // v0.9.1: list the allowed config keys
   moveInto(config, registerConfigGet, "get");
   moveInto(config, registerConfigSet, "set");
 
@@ -211,8 +221,30 @@ export function buildProgram(): Command {
   moveInto(server, registerDeployServer, "deploy");
   moveInto(server, registerReindex, "reindex");
 
+  // v0.9.1: the bundled documentation — renamed from flat `docs` (disambiguates
+  // from the `document` resource) + merged with `sync-self-docs` as `ingest`.
+  const guides = program
+    .command("guides")
+    .description("Bundled docs: list, open, show, ingest (into the KB).");
+  registerGuides(guides);
+  moveInto(guides, registerSyncSelfDocs, "ingest"); // sync-self-docs → guides ingest
+
   // ── Husks for the renamed flat verbs (hidden; fail loudly with a pointer) ─
   registerRenameHusks(program);
+
+  // v0.9.1: `sync-docs` removed from the CLI — it synced a local repo clone (a
+  // contributor op), now only `bun scripts/sync_docs.ts`. Custom husk because
+  // the redirect target isn't a `cerefox` command.
+  program
+    .command("sync-docs", { hidden: true })
+    .allowUnknownOption(true)
+    .allowExcessArguments(true)
+    .argument("[args...]", "(removed)")
+    .action(() => {
+      eprintln(c.yellow("✗ `cerefox sync-docs` was removed from the CLI in v0.9.1."));
+      eprintln("  It synced a local repo clone (contributor op). From a repo clone: `bun scripts/sync_docs.ts`.");
+      process.exit(1);
+    });
 
   return program;
 }

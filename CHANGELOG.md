@@ -9,7 +9,52 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.1 — CLI parity + polish.** Closes CLI↔web gaps, fixes search output, and
+tidies the docs commands. Client/CLI only — no schema, RPC, or Edge Function
+changes. The renamed/removed commands keep working as husks that point at the
+new form (removed in v1.0).
+
+### Added
+
+- **`cerefox document edit <id>`** — non-destructive title/metadata patch:
+  `--set-meta key=value` (repeatable; value JSON-parsed when possible),
+  `--unset-meta key` (repeatable), `--title`. Preserves metadata keys you don't
+  touch (unlike `document ingest --update`, which replaces the whole object). A
+  `--title` change refreshes the FTS index; semantic embeddings update on the
+  next `cerefox server reindex`.
+- **`cerefox project create <name>`** and **`cerefox project edit <name-or-id>`**
+  — explicit project create/rename/describe (parity with the web UI / API).
+- **`cerefox config list`** — list the runtime `cerefox_config` keys (not values).
+- **`cerefox completion install [--shell] [--yes]`** — write the completion
+  script + add an idempotent, sentinel-marked source line to your shell rc.
+  `install.sh` now runs it on install/upgrade so completion stays current.
+  Raw `cerefox completion <shell>` (print the script) still works.
+- **`cerefox search --only-metadata`** — list matching docs (id, score, chunks,
+  chars, partial/full) without their content — the web UI's collapsed result
+  view; pair with `cerefox document get <id>`.
+
+### Changed
+
+- **Versions are now under `document`**: `cerefox document version
+  {list|archive|unarchive}` (was a top-level `version` group). The v0.8
+  `list-versions` husk points at `document version list`.
+- **Bundled docs are now `cerefox guides`**: `guides {list|open|show}` (renamed
+  from `docs`, to disambiguate from the `document` resource) plus **`guides
+  ingest`** (was `sync-self-docs`). `cerefox sync-docs` is **removed from the
+  CLI** (it synced a local repo clone — a contributor op; use `bun
+  scripts/sync_docs.ts` from a clone).
+- **`cerefox search` output**: every result now shows
+  `score · N chunks · M chars · partial|full` plus a `best match: <breadcrumb> ·
+  updated <date>` line (web parity). The previous header mislabeled the chunk
+  count as chars and omitted counts for full-document results. Inter-result
+  separator changed from `---` (collides with markdown content) to a
+  distinctive rule. Use `--json` for robust parsing.
+
+### Fixed
+
+- **`scripts/cut_release.ts` confirms before any mutation.** It used to bump +
+  commit + tag and only then prompt; declining left a local commit + tag that
+  blocked re-running. Declining now leaves the working tree pristine.
 
 ---
 

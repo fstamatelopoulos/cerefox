@@ -34,6 +34,7 @@ interface DocResult {
   doc_title: string;
   doc_source: string | null;
   best_score: number | null;
+  best_chunk_heading_path: string[] | null;
   full_content: string;
   chunk_count: number;
   total_chars: number;
@@ -65,6 +66,7 @@ async function action(
     maxBytes?: string;
     requestor?: string;
     json?: boolean;
+    onlyMetadata?: boolean;
   },
 ): Promise<void> {
   if (!query || query.trim() === "") {
@@ -178,8 +180,18 @@ async function action(
     .then(() => {}, () => {});
 
   if (options.json) {
+    // --only-metadata: drop the body so the JSON is a compact "which docs
+    // matched" list (id, title, score, chunk_count, total_chars, is_partial).
+    const jsonResults = options.onlyMetadata
+      ? accepted.map((r) => {
+          const copy = { ...(r as Record<string, unknown>) };
+          delete copy.full_content;
+          delete copy.content;
+          return copy;
+        })
+      : accepted;
     printJson({
-      results: accepted,
+      results: jsonResults,
       query,
       mode,
       match_count: matchCount,
@@ -201,15 +213,33 @@ async function action(
       const doc = row as DocResult;
       const title = doc.doc_title ?? "Untitled";
       const docId = doc.document_id ? ` [id: ${doc.document_id}]` : "";
-      const score = doc.best_score != null ? ` (score: ${doc.best_score.toFixed(3)})` : "";
-      const partial = doc.is_partial
-        ? ` -- partial (${doc.chunk_count} of ${doc.total_chars.toLocaleString()} chars)`
-        : "";
-      println(c.bold(`## ${title}${docId}${score}${partial}`));
+      const score = doc.best_score != null ? ` · score ${doc.best_score.toFixed(3)}` : "";
+      // Always show chunk + char counts (was previously only shown for
+      // `is_partial` results, and mislabeled the chunk count as chars).
+      // `partial` = small-to-big assembled subset; `full` = whole document.
+      const counts = ` · ${doc.chunk_count} chunk${doc.chunk_count === 1 ? "" : "s"} · ${doc.total_chars.toLocaleString()} chars`;
+      const kind = doc.is_partial ? " · partial" : " · full";
+      println(c.bold(`## ${title}${docId}${score}${counts}${kind}`));
+      // Parity with the web result row: best-match breadcrumb + last-updated.
+      const bestMatch = doc.best_chunk_heading_path?.length
+        ? doc.best_chunk_heading_path.join(" › ")
+        : null;
+      const updated = doc.doc_updated_at ? doc.doc_updated_at.slice(0, 10) : null;
+      if (bestMatch || updated) {
+        const bits = [
+          bestMatch ? `best match: ${bestMatch}` : null,
+          updated ? `updated ${updated}` : null,
+        ].filter(Boolean);
+        println(c.dim(`   ${bits.join(" · ")}`));
+      }
+      // --only-metadata: header line per match (the web UI's collapsed list),
+      // no body. Otherwise print the content with a distinctive separator
+      // (not `---`, which collides with `---` inside markdown content).
+      if (options.onlyMetadata) continue;
       println("");
       println(doc.full_content ?? "");
       println("");
-      println(c.dim("---"));
+      println(c.dim("════════════════════════════════════════"));
       println("");
     } else {
       const chunk = row as ChunkResult;
@@ -251,5 +281,9 @@ export function registerSearch(program: Command): void {
     .option("--max-bytes <n>", "Response size budget in bytes.", "200000")
     .option("-r, --requestor <name>", "Agent / user name (recorded in usage log).")
     .option("--json", "Emit machine-readable JSON instead of the default text.")
+    .option(
+      "--only-metadata",
+      "List matching docs (id, score, chunks, chars, partial/full) WITHOUT their content — like the web UI's collapsed result list. Grab a [id:…] then `cerefox document get <id>`.",
+    )
     .action(action);
 }
