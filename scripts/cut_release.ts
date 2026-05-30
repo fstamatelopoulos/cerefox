@@ -540,8 +540,9 @@ async function main(): Promise<void> {
         (args.npmPublish ? ", then trigger the npm-publish workflow." : "."),
     );
     info(
-      `Per the "force-move tags only on objective failure" rule, once pushed, ` +
-        `fixes ship as a NEW patch version — not a tag move.`,
+      `Note: release tags are immutable here. Once this tag is pushed it never ` +
+        `moves — any later fix ships as a NEW patch version, not a re-tag. ` +
+        `(The "force-move tags only on objective failure" rule; see CONTRIBUTING.md.)`,
     );
     const yes = await confirm("Proceed?");
     if (!yes) {
