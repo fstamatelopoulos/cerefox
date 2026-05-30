@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.0] -- 2026-05-30
+
 **v0.9.0 — "CLI verb redesign + Python surface retirement".** The
 contract-hardening release before v1.0. Client/CLI only — no data, schema, or
 Edge Function changes. See [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
