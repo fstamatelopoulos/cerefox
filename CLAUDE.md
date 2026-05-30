@@ -42,8 +42,7 @@ cerefox/
 │       │   ├── rpcs.sql           # Search RPC functions
 │       │   └── client.py          # Supabase/Postgres client wrapper
 │       ├── chunking/
-│       │   ├── markdown.py        # Heading-aware MD splitter
-│       │   └── converters.py      # PDF/DOCX → MD (future)
+│       │   └── markdown.py        # Heading-aware MD splitter (PDF/DOCX converters dropped in v0.7)
 │       ├── embeddings/
 │       │   ├── base.py            # Embedder protocol/interface
 │       │   └── cloud.py           # OpenAI/Fireworks REST API embedder
@@ -51,14 +50,10 @@ cerefox/
 │       │   └── pipeline.py        # Ingest documents → chunks → DB
 │       ├── retrieval/
 │       │   └── search.py          # Search + small-to-big assembly
-│       ├── backup/
-│       │   └── fs_backup.py       # File system / git backup
 │       ├── api/
-│       │   ├── app.py             # FastAPI application factory
-│       │   ├── routes_api.py      # JSON API endpoints (/api/v1/)
-│       │   └── deps.py            # Shared dependency injection
-│       ├── mcp_server.py          # Python MCP fallback (cerefox mcp wraps @cerefox/memory)
-│       └── cli.py                 # CLI entry point
+│       │   └── app.py             # Husk (v0.9): Python web removed; use the TS `cerefox web`
+│       ├── mcp_server.py          # Python MCP server — the one live Python path (`uv run cerefox mcp`); frozen/unmaintained fallback
+│       └── cli.py                 # Python CLI — husked in v0.9 (all subcommands redirect to the TS CLI except `mcp`)
 ├── _shared/                       # TS modules imported by both EFs (Deno) and local server (Node/Bun)
 │   ├── config/                    # paths, env loading
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
@@ -86,22 +81,16 @@ cerefox/
 │   └── package.json
 ├── web/
 │   └── static/                    # Static assets (logo, favicon)
-├── scripts/
-│   ├── db_deploy.py           # Deploy schema to Supabase/Postgres
-│   ├── db_migrate.py          # Apply schema migrations
-│   ├── backup_create.py       # Take a local backup of the knowledge base
-│   ├── backup_restore.py      # Restore from a backup
-│   ├── cut_release.ts         # Cut/tag a release; optional --npm-publish
+├── scripts/                   # contributor ops (end users use `cerefox server …` / `cerefox backup …`)
+│   ├── cut_release.ts         # Cut/tag a release; optional --npm-publish (confirm-first since v0.9.1)
 │   ├── bundle_help.ts         # Bundle AGENT_QUICK_REFERENCE.md into _shared/mcp-tools/get-help-content.ts
 │   ├── db_deploy.ts           # Low-level fresh schema+RPC deploy (contributor; has --reset)
 │   ├── db_migrate.ts          # Low-level apply-pending-migrations (contributor; --status/--dry-run)
-│   └── *.ts                   # TS strangler-fig ports of legacy Python scripts
-├── tests/
-│   ├── chunking/
-│   ├── embeddings/
-│   ├── ingestion/
-│   ├── retrieval/
-│   └── conftest.py
+│   ├── backup_create.ts / backup_restore.ts / reindex_all.ts / sync_docs.ts / cerefox_export.ts
+│   └── *.py                   # LEGACY Python scripts — superseded by the .ts ports above
+├── packages/memory/test/      # TS test suite (`bun test`) — the only test runner (v0.9)
+├── _shared/__tests__/         # TS unit tests for the shared modules
+├── frontend/tests/e2e/        # Playwright UI e2e (@playwright/test)
 ├── docker-compose.yml
 └── Dockerfile
 ```
@@ -153,23 +142,20 @@ primary verb `search` and lifecycle/server commands (`init`, `doctor`,
 - Key settings: `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, `OPENAI_API_KEY`, `CEREFOX_EMBEDDER`, `CEREFOX_MAX_RESPONSE_BYTES`
 
 ### Testing
-- **Write tests alongside code, not after** — every module added to `src/cerefox/` gets a corresponding test module in `tests/`
-- Tests go in `tests/` mirroring `src/cerefox/` structure (e.g., `tests/chunking/test_markdown.py`)
-- Use fixtures for DB client mocking — never hit a real database in unit tests
-- Test at least: happy path, edge cases (empty input, max size, malformed input), error conditions
+- **`bun test` is the only test runner as of v0.9.0** — `pytest` is retired and `tests/**/*.py` is deleted. Write TS tests alongside new TS code.
+- TS tests live in `packages/memory/test/`, `_shared/__tests__/`, and `frontend/tests/e2e/` (Playwright).
+- Use mocked clients for unit tests — never hit a real database in unit tests. Live suites are probe-and-skip + self-cleaning.
+- Test at least: happy path, edge cases (empty input, max size, malformed input), error conditions.
 
 **Test suites and how to run them:**
 
 | Suite | Command | What it does |
 |-------|---------|-------------|
-| Python unit tests | `uv run pytest` | Fast, mocked, no network (default) |
 | TS unit tests (`_shared/`) | `cd _shared && bun test` | Fast, mocked, no network |
-| MCP stdio smoke (built bin) | `cd packages/memory && bun run build && bun test` | Spawns `cerefox mcp` against the built bin, performs initialize + tools/list handshake; needs `.env` |
-| API e2e | `uv run pytest -m e2e` | Hits live Supabase (REST API + Edge Functions) |
-| UI e2e | `uv run pytest -m ui` | Playwright browser tests against local web app |
-| All Python e2e | `uv run pytest -m "e2e or ui"` | Both API and UI e2e |
-| Live EF e2e (TS) | `CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts` | Hits the deployed primitive Edge Functions. **Opt-in** — skipped by default. |
-| Live remote-MCP e2e (TS) | `CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts` | Hits the deployed `cerefox-mcp` EF over JSON-RPC. **Opt-in** — skipped by default. |
+| Package suite (built bin) | `cd packages/memory && bun run build && bun test` | CLI smoke, MCP stdio handshake, + live read/write commands (probe-and-skip when Supabase isn't reachable); needs `.env` for the live ones |
+| UI e2e (Playwright) | `cd frontend && bun run test:e2e` | Browser tests against a local `cerefox web`; needs `bunx playwright install chromium` |
+| Live EF e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts` | Hits the deployed Edge Functions. Skipped by default. |
+| Live remote-MCP e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts` | Hits the deployed `cerefox-mcp` EF over JSON-RPC. Skipped by default. |
 
 > **Conserve free-tier Edge Function quota.** The two live TS suites
 > (`packages/memory/test/edge-functions/`, `.../mcp-remote/`) make real Edge
@@ -181,8 +167,8 @@ primary verb `search` and lifecycle/server commands (`init`, `doctor`,
 > so usage-log rows are attributable (not "Unknown"). `cerefox doctor` also
 > calls the `/version?peers=true` aggregator (several EF calls), so don't loop it.
 
-- **API e2e** (`tests/e2e/test_api_e2e.py`): Uses credentials from `.env`. Edge Function tests need `CEREFOX_SUPABASE_ANON_KEY` (JWT). Cleans up `[E2E]`-prefixed test data automatically.
-- **UI e2e** (`tests/e2e/test_ui_e2e.py`): Requires web app running at `http://127.0.0.1:8000/`. Uses Playwright + Chromium. Install browsers: `uv run playwright install chromium`.
+- The live read/write command suites (`packages/memory/test/{read,write}-commands.test.ts`) hit the Data API (not Edge Functions), probe-and-skip when Supabase is unreachable, and self-clean `[E2E …]`-prefixed data.
+- The Python side is **not tested** — it's a frozen, unmaintained fallback (see the Python-legacy note above).
 - See `docs/e2e-use-cases.md` for the full use-case matrix and TODO list.
 
 ### Git (Lightweight GitHub Flow)

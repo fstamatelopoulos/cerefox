@@ -44,15 +44,29 @@ $ cerefox get-doc abc
 | `cerefox reindex` | `cerefox server reindex` |
 
 **Unchanged (still flat):** `search`, `init`, `doctor`, `status`,
-`configure-agent`, `self-update`, `mcp`, `web`, `docs`, `completion`,
-`sync-docs`, `sync-self-docs`.
+`configure-agent`, `self-update`, `mcp`, `web`, `completion`.
 
-**Action:** update any scripts/aliases. Re-run `cerefox completion <shell>` to
-refresh tab-completion (it includes the new groups; the old names remain as
-"renamed" hints). The husks are removed in **v1.0**, so migrate now.
+**Action:** update any scripts/aliases. Re-run `cerefox completion install`
+(v0.9.1+) or `cerefox completion <shell>` to refresh tab-completion (it includes
+the new groups; the old names remain as "renamed" hints). The husks are removed
+in **v1.0**, so migrate now.
 
-New commands deferred to **v0.9.1** (additive, non-breaking): `document edit`,
-`document restore` (undelete), `version archive/unarchive`, `audit tail/search`.
+### Also changed in v0.9.1
+
+| Old (v0.9.0) | New (v0.9.1) |
+|---|---|
+| `cerefox version <verb>` | `cerefox document version <verb>` (versions belong to a document) |
+| `cerefox docs <topic>` | `cerefox guides open <topic>` / `cerefox guides show <topic>` |
+| `cerefox docs --list` | `cerefox guides list` |
+| `cerefox sync-self-docs` | `cerefox guides ingest` |
+| `cerefox sync-docs` | **removed from the CLI** — repo-clone contributor op; use `bun scripts/sync_docs.ts` |
+
+**New commands added in v0.9.1** (additive): `document edit` (`--title` /
+`--set-meta key=value` / `--unset-meta key` — non-destructive metadata patch),
+`document restore` (undelete), `document version archive`/`unarchive`,
+`project create`/`edit`, `config list`, `cerefox search --only-metadata`, and
+`cerefox completion install` (auto-wires shell tab-completion). (`document
+restore` and `version archive`/`unarchive` actually shipped in v0.9.0.)
 
 ## 2. Python surfaces retired
 
