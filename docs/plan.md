@@ -3088,18 +3088,25 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 | R5 | **Python web husk or CLI husks break `uv run cerefox mcp`** (the one Python path that must keep working). | `mcp` is explicitly excluded from the CLI husking (L4) and doesn't import `cerefox.api`. Verify with a grep (`mcp_server.py` imports only `embeddings`/`ingestion`/`config`/`db`) + a manual boot smoke in 27G. |
 | R6 | **Doc overhaul scope creep** — "review every document everywhere" is open-ended. | Time-box a first pass (README + the `docs/guides/` install/setup/connect files + CHANGELOG/migration), present to the maintainer, then iterate. Lower-traffic docs (research/specs) get a lighter stale-reference sweep, not a rewrite. |
 
-### v0.9.1 — new CLI verbs (deferred from v0.9.0's rename-only scope)
+### v0.9.1 — new CLI verbs
 
-These are the commands intentionally **left out of v0.9.0** (L1: v0.9.0 is rename-only). They're all **additive and non-breaking**, so they slot cleanly into a v0.9.1 minor *after* the resource-verb taxonomy lands — they do **not** wait for v1.0 (which is a contract release, not features). Each is a thin CLI surface over logic that already exists server-side; effort is small. Lock the exact flags when picking this up.
+Originally deferred from v0.9.0's rename-only scope. On 2026-05-30 the
+maintainer asked to **fold them into v0.9.0** ("no need to wait"). Outcome:
 
-| New command | What it does | Backing logic (already exists) | Notes / effort |
-|---|---|---|---|
-| `cerefox document edit <id>` | Edit a document's content / title / metadata from the CLI (today this is web-only). | `cerefox_ingest_document` RPC with `update_if_exists` (the TS web's Document Edit page uses it). | Needs a `--content`/`--file`/`--title`/`--set-meta` flag design, or an `$EDITOR` round-trip. Small–medium. |
-| `cerefox document restore <id>` | Un-soft-delete a document (inverse of `document delete`). | Restore RPC already exists (`rpcs.sql`: `UPDATE cerefox_documents SET deleted_at = NULL …`). | Thin wrapper. Small. The v0.9.0 `backup → backup restore` rename (L5) keeps this name free. |
-| `cerefox version archive <id>` / `version unarchive <id>` | Archive / unarchive a specific document version. | Version snapshot/lifecycle RPCs (chunks-anchored versioning). | Confirm the archive/unarchive RPC surface; thin wrapper. Small. |
-| `cerefox audit tail` / `audit search` | Follow recent audit entries / query the audit log by text. | `cerefox_list_audit_entries` (already filterable — `audit log`/`audit list` ships in v0.9.0). | `tail` = follow/poll mode; `search` = a filtered alias. Small. |
+| New command | Status | Notes |
+|---|---|---|
+| `cerefox document restore <id>` | **✅ Folded into v0.9.0** | Thin wrapper over `cerefox_restore_document`. `document-restore.ts`. |
+| `cerefox version archive <version-id>` / `unarchive` | **✅ Folded into v0.9.0** | Flip `cerefox_document_versions.archived` + audit entry (mirrors the web). `version-archive.ts`. |
+| `cerefox document edit <id>` | **Remains v0.9.1** | Content edits already work via `cerefox document ingest --document-id <id> --update`. A dedicated `edit` adds title/metadata-only editing, which has a **title-boosting re-embed nuance** (a title change must re-embed per the title-boost design) worth a short design pass with the maintainer before it joins the v1.0 contract. Don't ship it hastily into the contract-lead-in. |
+| `cerefox audit tail` / `audit search` | **Remains v0.9.1 (likely dropped)** | `audit list` already covers filtering (`--author/--operation/--since/--until`) + recency (`--limit`). `search` would be a pure alias; `tail` (live-follow) is the only non-redundant bit. Revisit only if a real streaming need appears — otherwise drop from scope. |
 
-> **Sequencing**: these depend on the v0.9.0 resource groups (`document`, `version`, `audit`) being in place, so they're naturally a v0.9.x follow-up. If any becomes urgent it can be pulled forward into v0.9.0, but the default is to keep v0.9.0 a clean rename-only surface for the v1.0 contract lead-in. Also revisit whether each should appear in the web UI for CLI↔web parity (feed the 27A audit's gap list).
+> **Engineering note (2026-05-30, Claude):** I folded the two **clean, verified,
+> low-risk** wrappers (restore, version archive/unarchive) into v0.9.0 and held
+> `document edit` + `audit tail/search` because they need a design decision
+> (edit) or are redundant surface (audit) — and v0.9.0 is the lead-in to the
+> v1.0 *contract freeze*, so adding a subtly-wrong or redundant verb now is the
+> expensive mistake. Both held items are documented above for the maintainer to
+> green-light/redesign.
 
 ---
 

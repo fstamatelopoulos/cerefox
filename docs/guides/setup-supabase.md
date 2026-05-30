@@ -227,10 +227,10 @@ appear with a green "Active" status.
 > Supabase compiles them in the cloud. **Docker is not a prerequisite for deploying Cerefox's
 > Edge Functions.** A deploy succeeded as long as each function ends with
 > `Deployed Functions on project …`. This applies to both the manual commands here and
-> `cerefox deploy-server --functions-only`.
+> `cerefox server deploy --functions-only`.
 
 > **Re-deploying after updates**: run the same `npx supabase functions deploy` commands
-> again from the project root, or just `cerefox deploy-server --functions-only` (it deploys
+> again from the project root, or just `cerefox server deploy --functions-only` (it deploys
 > all 9 from the bundled assets). `npx supabase login` only needs to be run once per machine.
 
 ---

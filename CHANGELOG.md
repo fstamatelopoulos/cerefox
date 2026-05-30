@@ -18,14 +18,27 @@ Edge Function changes. See [`docs/guides/migration-v0.9.md`](docs/guides/migrati
 > print the new form and exit non-zero; they are **removed in v1.0**. Update
 > scripts/aliases and re-run `cerefox completion <shell>`.
 
+### Added
+
+- **`cerefox document restore <id>`** — un-soft-delete a document from the
+  trash (inverse of `document delete`; wraps `cerefox_restore_document`).
+- **`cerefox version archive <version-id>` / `version unarchive <version-id>`**
+  — protect a version from the cleanup sweep (or release it), with an audit
+  entry. Mirrors the web UI's version-archive action.
+
+  (Folded forward from the v0.9.1 plan — both are thin wrappers over existing
+  server operations. `document edit` + `audit tail/search` remain in v0.9.1;
+  see below.)
+
 ### Changed
 
-- **CLI is now resource-verb** (`cerefox <resource> <verb>`). Rename-only — no
-  behavior or flags changed. Groups: `document` (get/list/delete/ingest/
-  ingest-dir), `project` (list/delete), `version` (list), `metadata`
-  (keys/search), `audit` (list), `config` (get/set), `backup` (create/restore),
-  `server` (deploy/reindex). `search` + lifecycle commands stay flat. Full
-  old→new table in the migration guide.
+- **CLI is now resource-verb** (`cerefox <resource> <verb>`). Rename-only for
+  the *existing* surface — no behavior or flags changed. Groups: `document`
+  (get/list/delete/restore/ingest/ingest-dir), `project` (list/delete),
+  `version` (list/archive/unarchive), `metadata` (keys/search), `audit`
+  (list), `config` (get/set), `backup` (create/restore), `server`
+  (deploy/reindex). `search` + lifecycle commands stay flat. Full old→new
+  table in the migration guide.
 
 ### Removed / deprecated
 
@@ -47,8 +60,13 @@ Edge Function changes. See [`docs/guides/migration-v0.9.md`](docs/guides/migrati
 
 ### Deferred to v0.9.1
 
-- New CLI commands (additive, non-breaking): `document edit`, `document
-  restore`, `version archive/unarchive`, `audit tail/search`.
+- **`document edit`** — content edits already work via `cerefox document ingest
+  --document-id <id> --update`; a dedicated `edit` adds title/metadata-only
+  editing, which has a title-boosting re-embed nuance worth a small design pass
+  before it joins the v1.0 contract.
+- **`audit tail` / `audit search`** — `audit list` already covers filtering
+  (`--author/--operation/--since/--until`) and recency (`--limit`); these would
+  be redundant surface. Revisit only if a real follow/streaming need appears.
 
 ---
 

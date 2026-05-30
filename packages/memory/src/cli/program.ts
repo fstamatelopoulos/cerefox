@@ -30,6 +30,8 @@ import { registerConfigureAgent } from "./commands/configure-agent.ts";
 import { registerDeleteDoc } from "./commands/delete-doc.ts";
 import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
+import { registerDocumentRestore } from "./commands/document-restore.ts";
+import { registerVersionArchive } from "./commands/version-archive.ts";
 import { registerDocs } from "./commands/docs.ts";
 import { registerDoctor } from "./commands/doctor.ts";
 import { registerGetAuditLog } from "./commands/get-audit-log.ts";
@@ -169,6 +171,7 @@ export function buildProgram(): Command {
   moveInto(document, registerGetDoc, "get");
   moveInto(document, registerListDocs, "list");
   moveInto(document, registerDeleteDoc, "delete");
+  registerDocumentRestore(document); // v0.9.0: new command (no old flat verb)
   moveInto(document, registerIngest, "ingest");
   moveInto(document, registerIngestDir, "ingest-dir");
 
@@ -176,8 +179,11 @@ export function buildProgram(): Command {
   moveInto(project, registerListProjects, "list");
   moveInto(project, registerDeleteProject, "delete");
 
-  const version = program.command("version").description("Document version history: list.");
+  const version = program
+    .command("version")
+    .description("Document version history: list, archive, unarchive.");
   moveInto(version, registerListVersions, "list");
+  registerVersionArchive(version); // v0.9.0: new archive/unarchive commands
 
   const metadata = program.command("metadata").description("Metadata: keys, search.");
   moveInto(metadata, registerListMetadataKeys, "keys");

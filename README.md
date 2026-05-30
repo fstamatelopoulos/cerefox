@@ -43,27 +43,29 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 | **Heading-aware chunking** | Greedy section accumulation — H1/H2/H3 sections accumulate until MAX_CHUNK_CHARS; heading breadcrumb preserved per chunk |
 | **Cloud embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API — or swap to Fireworks AI |
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and anon key; no Python install needed |
-| **Local MCP server** | `cerefox mcp` stdio server -- local alternative with zero Edge Function usage, lower latency, and offline support; requires Python + uv + local clone |
-| **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; FastAPI JSON API backend; Markdown viewer, search with 4 modes, document editing, project management |
+| **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. (A frozen Python MCP server also ships for repo-clone users: `uv run cerefox mcp`.) |
+| **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
 | **Multi-format ingest** | `.md`, `.txt`, `.pdf` (pypdf), `.docx` (python-docx) |
-| **Batch ingest** | `cerefox ingest-dir` recurses directories |
+| **Batch ingest** | `cerefox document ingest-dir` recurses directories |
 | **Deduplication** | SHA-256 content hash; re-ingesting the same file is a no-op |
 | **Backup and restore** | JSON snapshots, optional git commit |
 | **Small-to-big retrieval** | `cerefox_context_expand` RPC returns chunk neighbours for richer context |
 | **Audit log** | Immutable, append-only log of all write operations (create, update, delete, status change). Author attribution with `author_type` ('user' or 'agent'). Browsable via web UI, queryable via MCP tool and Edge Function |
 | **Review status** | Schema-level `review_status` on documents (`approved` / `pending_review`). Auto-transitions based on author_type. Filterable on search |
 | **Version governance** | Version archival (protect specific versions from cleanup), configurable retention (`CEREFOX_VERSION_CLEANUP_ENABLED`), version diff viewer |
-| **Usage tracking** | Opt-in logging of all operations (reads and writes) across all access paths. Tracks operation type, access path (remote-mcp, local-mcp, edge-function, webapp, cli), requestor identity, query text, and result count. Controlled via `cerefox config-set usage_tracking_enabled true/false` -- no redeploy needed |
+| **Usage tracking** | Opt-in logging of all operations (reads and writes) across all access paths. Tracks operation type, access path (remote-mcp, local-mcp, edge-function, webapp, cli), requestor identity, query text, and result count. Controlled via `cerefox config set usage_tracking_enabled true/false` -- no redeploy needed |
 | **Analytics dashboard** | `/app/analytics` -- 7 interactive charts: calls per day, access path breakdown, top documents, top readers, operations donut, reader word cloud, and reader-to-document access pattern visualization (HEB). Date range + project + path filters. CSV export. |
 
 ---
 
 ## Project status
 
-Cerefox is a single-maintainer open-source project, currently at **v0.7.0** and in
+Cerefox is a single-maintainer open-source project, at **v0.9.0** and wrapping up
 its **"Polish & Distribution" arc** — the work that takes it from "runnable from a
-git clone" to "installable like any other modern CLI". Highlights of what's
-already shipped (full history in [`CHANGELOG.md`](CHANGELOG.md)):
+git clone" to "installable like any other modern CLI" (v0.8 shipped the
+production-ready installer + `cerefox deploy-server`; v0.9 hardens the CLI surface
+before the v1.0 contract). Highlights of what's already shipped (full history in
+[`CHANGELOG.md`](CHANGELOG.md)):
 
 - A complete Cerefox feature surface: hybrid search, metadata-filtered search,
   small-to-big retrieval, implicit versioning with a per-document audit log,
@@ -85,7 +87,7 @@ already shipped (full history in [`CHANGELOG.md`](CHANGELOG.md)):
 | v0.4.x | TS MCP server | Local `cerefox mcp` becomes a TypeScript Bun/Node process, published as [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) on npm · 10th MCP tool `cerefox_get_help` · `_shared/mcp-tools/` shared by remote EF + local server · OIDC trusted publishing |
 | v0.5.0 | TS CLI | `cerefox` binary added to `@cerefox/memory` (same package, growing surface) — callable from any directory, no Python install needed · 6 new lifecycle commands (`init`, `doctor`, `status`, `configure-agent`, `self-update`, `sync-self-docs`) · automatic self-doc ingest (Layer 2 of MCP discoverability) · tab completion for bash/zsh/fish · documented exit codes · Python CLI deprecated (functional through v0.7) |
 | v0.6.0 | TS web server | FastAPI → Hono on Bun · all `/api/v1/*` endpoints + bundled SPA served by `cerefox web` from the same `@cerefox/memory` package · `configure-agent` adds Cursor + Codex + Gemini writers |
-| **v0.7.0** (current) | TS ingestion pipeline | Chunking + embedding orchestration + version snapshotting move to TS · `cerefox ingest` / `ingest-dir` / `reindex` use the in-process pipeline (no Edge Function round-trip) · PDF/DOCX support dropped · `scripts/db_deploy.ts` + `db_migrate.ts` ported · Python web prints a deprecation banner at startup; Python MCP server unchanged |
+| **v0.7.0** (current) | TS ingestion pipeline | Chunking + embedding orchestration + version snapshotting move to TS · `cerefox document ingest` / `ingest-dir` / `reindex` use the in-process pipeline (no Edge Function round-trip) · PDF/DOCX support dropped · `scripts/db_deploy.ts` + `db_migrate.ts` ported · Python web prints a deprecation banner at startup; Python MCP server unchanged |
 | v0.8.0 – v0.9.0 | Python retirement | Deprecation banners → removal (MCP server + CLI husks survive through v0.9; pytest as a test runner retires) |
 | **v1.0.0** | Stability commitment | Strict SemVer becomes binding; long-lived API contract |
 
@@ -106,7 +108,7 @@ ops scripts, not part of the runtime. (v0.4–v0.5.0 also shipped a dedicated
 ## Getting Started
 
 > **Upgrading to v0.9.0?** The CLI verbs were renamed to a resource-verb shape
-> (`cerefox get-doc X` → `cerefox document get X`; old names still run but
+> (`cerefox document get X` → `cerefox document get X`; old names still run but
 > redirect) and the Python CLI/web were retired to husks. See
 > [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
 
@@ -257,7 +259,7 @@ This produces `frontend/dist/`, which `cerefox web` serves at `/app/`.
 ### 7. Ingest a document and open the web UI
 
 ```bash
-cerefox ingest my-notes.md --title "My notes"
+cerefox document ingest my-notes.md --title "My notes"
 cerefox web                       # → http://localhost:8000
 ```
 
@@ -275,7 +277,7 @@ Re-run `sync_docs.ts` any time after updating documentation to keep the knowledg
 you can ingest to experiment with search before adding your own content:
 
 ```bash
-cerefox ingest-dir test-data/ --recursive
+cerefox document ingest-dir test-data/ --recursive
 ```
 
 ---

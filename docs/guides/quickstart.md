@@ -93,8 +93,8 @@ After v0.6.0, `cerefox init` will offer to do this for you.
 
 ## What's next
 
-- **Ingest your notes**: `cerefox ingest my-notes.md`, or
-  `cerefox ingest-dir ./notes/ --recursive`
+- **Ingest your notes**: `cerefox document ingest my-notes.md`, or
+  `cerefox document ingest-dir ./notes/ --recursive`
 - **Search from the CLI**: `cerefox search "your query"`
 - **Discover all commands**: `cerefox --help`
 - **Run the web UI** (Python-only until v0.6): [`setup-local.md`](setup-local.md)
