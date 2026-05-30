@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.1] -- 2026-05-30
+
 **v0.9.1 — CLI parity + polish.** Closes CLI↔web gaps, fixes search output, and
 tidies the docs commands. Client/CLI only — no schema, RPC, or Edge Function
 changes. The renamed/removed commands keep working as husks that point at the
