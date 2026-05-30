@@ -70,6 +70,7 @@ describe("cerefox CLI smoke (built bin)", () => {
       "config",
       "backup",
       "server",
+      "guides", // v0.9.1: was `docs`; hosts `guides ingest` (was `sync-self-docs`)
       // Servers
       "mcp",
       "web",
@@ -80,9 +81,6 @@ describe("cerefox CLI smoke (built bin)", () => {
       "configure-agent",
       "self-update",
       "upgrade",
-      "sync-self-docs",
-      "sync-docs",
-      "docs",
       "completion",
     ];
     for (const cmd of expectedCommands) {
@@ -204,6 +202,19 @@ describe("cerefox CLI smoke (built bin)", () => {
     const { stdout, status } = run(["search", "--help"]);
     expect(status).toBe(0);
     expect(stdout).toContain("--only-metadata");
+  });
+
+  test("`cerefox guides --help` lists list/open/show/ingest; `docs` husks to it", () => {
+    const help = run(["guides", "--help"]);
+    expect(help.status).toBe(0);
+    for (const verb of ["list", "open", "show", "ingest"]) expect(help.stdout).toContain(verb);
+    // `docs` is now a husk → guides; `sync-docs` removed.
+    const docsHusk = run(["docs"]);
+    expect(docsHusk.status).toBe(1);
+    expect(docsHusk.stdout + docsHusk.stderr).toContain("guides");
+    const syncDocs = run(["sync-docs"]);
+    expect(syncDocs.status).toBe(1);
+    expect(syncDocs.stdout + syncDocs.stderr).toContain("sync_docs.ts");
   });
 
   test("`cerefox completion install --help` advertises --shell / --yes", () => {
