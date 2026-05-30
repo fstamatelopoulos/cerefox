@@ -33,7 +33,7 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
   };
 }
 
-const liveProbe = run(["list-projects", "--json"]);
+const liveProbe = run(["project", "list", "--json"]);
 const LIVE_OK = liveProbe.status === 0;
 
 describe("configure-agent (local-only)", () => {

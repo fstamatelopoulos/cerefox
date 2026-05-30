@@ -3,10 +3,8 @@ name: CI
 # Pre-release checks. Runs on every PR targeting main and on every push
 # to main (so anything that lands directly to main still gets validated).
 #
-# Three independent jobs so total wall-clock stays under ~90 seconds:
+# Two independent jobs so total wall-clock stays tight:
 #
-#   python      — ruff lint + format check + pytest -q (unit tests only;
-#                 e2e tests need live Supabase + are maintainer-only).
 #   ts-shared   — bun test inside _shared/.
 #   ts-memory   — bun install at the repo root, then build packages/memory/,
 #                 verify both bin invocations (`cerefox --version`,
@@ -14,17 +12,20 @@ name: CI
 #                 tests, and verify the cerefox_get_help bundle is in sync
 #                 with AGENT_QUICK_REFERENCE.md.
 #
+# v0.9.0: the Python test job was removed — pytest is retired as a test
+# runner and `tests/**/*.py` is deleted. The Python side (the MCP server) is a
+# frozen, unmaintained repo-clone fallback; `bun test` is the only suite.
+#
 # What's intentionally NOT here:
-#   - Live e2e tests (`pytest -m e2e`, `scripts/check_ef_parity.ts`) —
-#     they need Supabase credentials. Forks don't get the secret; the
-#     maintainer runs them manually before each cut and as part of
-#     docs/research/v0.5-manual-test-plan.md walks.
+#   - Live e2e tests (gated TS suites behind CEREFOX_LIVE_E2E=1,
+#     `scripts/check_ef_parity.ts`) — they need Supabase credentials. Forks
+#     don't get the secret; the maintainer runs them manually before each cut.
 #   - Schema-deploy / npm-publish dry runs — covered by release.yml at
 #     cut time.
 #
 # Designed so a future PR from a fork (no secrets) still passes every
 # check — the package's live test suite auto-skips when Supabase isn't
-# reachable.
+# reachable / not opted in.
 
 on:
   pull_request:
@@ -42,50 +43,6 @@ permissions:
   contents: read
 
 jobs:
-  python:
-    name: Python — unit tests
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up uv (Python toolchain)
-        uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            pyproject.toml
-            uv.lock
-
-      - name: Set up Python (via uv)
-        run: uv python install 3.11
-
-      - name: Stub frontend/dist for hatchling force-include
-        # `pyproject.toml`'s [tool.hatch.build.targets.wheel.force-include]
-        # ships `frontend/dist/` inside the wheel (so `cerefox web` can
-        # serve the SPA via importlib.resources). The directory only
-        # exists locally after `cd frontend && npm run build`; CI doesn't
-        # build the SPA because the Python unit suite doesn't need it.
-        # Create an empty placeholder so the force-include is satisfied.
-        run: mkdir -p frontend/dist
-
-      - name: Install Python deps
-        run: uv sync --frozen || uv sync
-
-      - name: Pytest (unit suite — no e2e)
-        # Default pytest config deselects @pytest.mark.e2e + @pytest.mark.ui;
-        # those need live Supabase / a running web app. We rely on that
-        # default here.
-        #
-        # NOTE: ruff lint + format checks are deliberately NOT in this
-        # workflow yet. main currently has ~28 lint warnings + ~28 files
-        # that ruff format would reformat; enforcing them here would
-        # block every PR until that debt is cleaned up. That cleanup
-        # deserves its own focused PR (it's a real diff that the
-        # maintainer should review on its merits). Once that PR lands,
-        # add `uv run ruff check .` and `uv run ruff format --check .`
-        # steps here.
-        run: uv run pytest -q
-
   ts-shared:
     name: TS — _shared/ unit tests
     runs-on: ubuntu-24.04

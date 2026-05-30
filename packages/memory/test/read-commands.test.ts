@@ -42,7 +42,7 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
 
 // Probe once at module load. If Supabase isn't configured, skip the live
 // section instead of failing the whole suite.
-const probe = run(["list-projects", "--json"]);
+const probe = run(["project", "list", "--json"]);
 const LIVE_OK = probe.status === 0;
 
 describe("cerefox read commands (live)", () => {
@@ -55,7 +55,7 @@ describe("cerefox read commands (live)", () => {
   }
 
   test("list-projects: JSON shape", () => {
-    const { stdout, status } = run(["list-projects", "--json"]);
+    const { stdout, status } = run(["project", "list", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as Array<{ id: string; name: string }>;
     expect(Array.isArray(parsed)).toBe(true);
@@ -66,7 +66,7 @@ describe("cerefox read commands (live)", () => {
   });
 
   test("list-projects: table mode has a header line", () => {
-    const { stdout, status } = run(["list-projects"]);
+    const { stdout, status } = run(["project", "list"]);
     expect(status).toBe(0);
     // Header is `id  name  description`; not all columns must appear,
     // but at least "id" + "name".
@@ -75,7 +75,7 @@ describe("cerefox read commands (live)", () => {
   });
 
   test("list-docs: respects --limit", () => {
-    const { stdout, status } = run(["list-docs", "--limit", "3", "--json"]);
+    const { stdout, status } = run(["document", "list", "--limit", "3", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as unknown[];
     expect(parsed.length).toBeLessThanOrEqual(3);
@@ -83,7 +83,7 @@ describe("cerefox read commands (live)", () => {
 
   test("list-docs: bogus project → exit 1", () => {
     const { status, stderr } = run([
-      "list-docs",
+      "document", "list",
       "--project",
       "definitely-not-a-real-project-name",
     ]);
@@ -92,7 +92,7 @@ describe("cerefox read commands (live)", () => {
   });
 
   test("list-metadata-keys: returns key/doc_count/example_values", () => {
-    const { stdout, status } = run(["list-metadata-keys", "--json"]);
+    const { stdout, status } = run(["metadata", "keys", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as Array<{
       key: string;
@@ -109,7 +109,7 @@ describe("cerefox read commands (live)", () => {
 
   test("get-doc: bogus UUID → exit 3", () => {
     const { status, stderr } = run([
-      "get-doc",
+      "document", "get",
       "00000000-0000-0000-0000-000000000000",
     ]);
     expect(status).toBe(3);
@@ -117,7 +117,7 @@ describe("cerefox read commands (live)", () => {
   });
 
   test("get-audit-log --limit 1 returns at most one row", () => {
-    const { stdout, status } = run(["get-audit-log", "--limit", "1", "--json"]);
+    const { stdout, status } = run(["audit", "list", "--limit", "1", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as unknown[];
     expect(parsed.length).toBeLessThanOrEqual(1);
@@ -125,13 +125,13 @@ describe("cerefox read commands (live)", () => {
 
   test("metadata-search: missing --metadata-filter → exit 1", () => {
     // commander treats a missing required option as exit 1
-    const { status } = run(["metadata-search"]);
+    const { status } = run(["metadata", "search"]);
     expect(status).toBe(1);
   });
 
   test("metadata-search: invalid JSON in --metadata-filter → exit 1", () => {
     const { status, stderr } = run([
-      "metadata-search",
+      "metadata", "search",
       "--metadata-filter",
       "not-json",
     ]);
@@ -140,7 +140,7 @@ describe("cerefox read commands (live)", () => {
   });
 
   test("metadata-search: empty object → exit 1", () => {
-    const { status, stderr } = run(["metadata-search", "--metadata-filter", "{}"]);
+    const { status, stderr } = run(["metadata", "search", "--metadata-filter", "{}"]);
     expect(status).toBe(1);
     expect(stderr).toContain("non-empty");
   });

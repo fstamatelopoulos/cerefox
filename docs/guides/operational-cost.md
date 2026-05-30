@@ -100,7 +100,7 @@ If you want to keep costs as low as possible:
   See `docs/guides/configuration.md` for how to switch.
 - **Batch ingest, don't re-ingest**: Cerefox deduplicates by content hash — re-ingesting the
   same file twice costs nothing. Only new or changed content triggers embedding calls.
-- **`cerefox reindex`**: Re-embeds all existing chunks if you switch embedders. Run this once
+- **`cerefox server reindex`**: Re-embeds all existing chunks if you switch embedders. Run this once
   after switching, not repeatedly.
 
 ---

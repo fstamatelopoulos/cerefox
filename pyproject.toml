@@ -9,6 +9,9 @@ description = "Personal second brain: cloud knowledge backend with MCP access fo
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
+# Frozen at v0.9.0: the Python side is now only the MCP server (a repo-clone
+# fallback). The web app (FastAPI/uvicorn) was retired to a husk in v0.9.0, so
+# its deps are gone. These deps support `cerefox mcp` + ingestion/search.
 dependencies = [
     "supabase>=2.0.0",
     "pydantic-settings>=2.0.0",
@@ -16,9 +19,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "httpx>=0.27.0",
     "click>=8.1.0",
-    "fastapi>=0.110.0",
-    "python-multipart>=0.0.9",
-    "uvicorn>=0.29.0",
     "mcp>=1.0.0",
 ]
 
@@ -32,12 +32,10 @@ converters = ["pypdf>=4.0.0", "python-docx>=1.1.0"]
 [project.scripts]
 cerefox = "cerefox.cli:cli"
 
+# v0.9.0: pytest retired as a test runner — the test suite is `bun test`
+# (TS). The Python side is frozen/unmaintained; only ruff is kept for linting.
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-playwright>=0.7.2",
     "ruff>=0.4.0",
 ]
 
@@ -75,12 +73,5 @@ target-version = "py311"
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-markers = [
-    "integration: marks tests that require a live Supabase/Postgres connection (skipped by default)",
-    "e2e: end-to-end tests against a live Supabase instance (skipped by default, run with -m e2e)",
-    "ui: UI end-to-end tests via Playwright (skipped by default, run with -m ui)",
-]
-addopts = "-m 'not integration and not e2e and not ui'"
+# pytest config removed in v0.9.0 — the test suite is `bun test` (TypeScript).
+# See docs/specs/polish-and-distribution-design.md §19 and CLAUDE.md.

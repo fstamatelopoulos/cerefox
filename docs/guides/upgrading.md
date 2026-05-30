@@ -213,7 +213,7 @@ uv run python scripts/reindex_all.py --dry-run
 uv run python scripts/reindex_all.py
 
 # Or run directly via the CLI (same effect)
-uv run cerefox reindex --all
+uv run cerefox server reindex --all
 ```
 
 The reindex is **resumable**: if interrupted, re-running it skips chunks already embedded with the current model. Archived chunks (historical versions) are not reindexed -- they are not searched.
@@ -238,7 +238,7 @@ redeploy RPCs via `db_deploy.py` (step 4) to update the canonical function defin
 
 **Usage tracking is opt-in**: disabled by default. Enable via CLI:
 ```bash
-cerefox config-set usage_tracking_enabled true
+cerefox config set usage_tracking_enabled true
 ```
 Or via the toggle on the Analytics page. When enabled, **all operations** (both reads
 and writes) are logged with operation type, access path, requestor identity, query text,
@@ -290,7 +290,7 @@ MCP clients pick up new tools automatically on the next connection.
 
 ### Upgrading to v0.1.1+ (from v0.1.0)
 
-**Cloud-only embeddings**: Local embedders (mpnet, Ollama) were removed. If you were using a local embedder, switch to OpenAI or Fireworks AI and run `uv run cerefox reindex` to re-embed all chunks.
+**Cloud-only embeddings**: Local embedders (mpnet, Ollama) were removed. If you were using a local embedder, switch to OpenAI or Fireworks AI and run `uv run cerefox server reindex` to re-embed all chunks.
 
 ## AI Agent Integration After Upgrade
 

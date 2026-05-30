@@ -16,14 +16,14 @@ Invoke any command with `uv run cerefox <subcommand>`. Inside an activated venv,
 
 ## Commands
 
-### `cerefox ingest`
+### `cerefox document ingest`
 
 **Purpose**: ingest a markdown / PDF / DOCX file (or stdin) into the knowledge base.
 
 **Synopsis**:
 ```
-cerefox ingest [OPTIONS] [PATH]
-cerefox ingest --paste --title "<title>" [OPTIONS]   # stdin
+cerefox document ingest [OPTIONS] [PATH]
+cerefox document ingest --paste --title "<title>" [OPTIONS]   # stdin
 ```
 
 **Options**:
@@ -45,18 +45,18 @@ cerefox ingest --paste --title "<title>" [OPTIONS]   # stdin
 **Examples**:
 ```bash
 # Minimal: ingest a file
-cerefox ingest notes.md
+cerefox document ingest notes.md
 
 # Paste from stdin
-printf '# Title\n\nbody' | cerefox ingest --paste --title "Title"
+printf '# Title\n\nbody' | cerefox document ingest --paste --title "Title"
 
 # Agent ingestion with full attribution
-cerefox ingest notes.md \
+cerefox document ingest notes.md \
   --author "claude-code" --author-type "agent" \
   --project-name "research" --metadata '{"type":"design-doc"}'
 
 # Deterministic update (preferred — agents should search → grab ID → ingest)
-cerefox ingest --paste --title "Same Title" \
+cerefox document ingest --paste --title "Same Title" \
   --document-id "abc12345-..." \
   --author "claude-code" --author-type "agent"
 ```
@@ -69,13 +69,13 @@ cerefox ingest --paste --title "Same Title" \
 
 ---
 
-### `cerefox ingest-dir`
+### `cerefox document ingest-dir`
 
 **Purpose**: bulk-ingest every matching file in a directory.
 
 **Synopsis**:
 ```
-cerefox ingest-dir [OPTIONS] DIRECTORY
+cerefox document ingest-dir [OPTIONS] DIRECTORY
 ```
 
 **Options**:
@@ -94,11 +94,11 @@ cerefox ingest-dir [OPTIONS] DIRECTORY
 **Examples**:
 ```bash
 # Bulk import research notes with shared metadata
-cerefox ingest-dir ./research-notes --recursive \
+cerefox document ingest-dir ./research-notes --recursive \
   --project-name "research" --metadata '{"type":"research","status":"active"}'
 
 # Re-ingest after editing files
-cerefox ingest-dir ./notes --update-if-exists
+cerefox document ingest-dir ./notes --update-if-exists
 ```
 
 **Output**: one line per file showing `✓` (ingested), `↑` (updated), `⏭` (skipped: hash match), or `❌` (error); summary at the end.
@@ -143,27 +143,27 @@ cerefox search "what we tried" --mode semantic --requestor "claude-code"
 
 ---
 
-### `cerefox get-doc`
+### `cerefox document get`
 
 **Purpose**: print the full markdown content of a document to stdout.
 
 **Synopsis**:
 ```
-cerefox get-doc [OPTIONS] DOCUMENT_ID
+cerefox document get [OPTIONS] DOCUMENT_ID
 ```
 
 **Options**:
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--version-id TEXT` (alias: `--version`) | UUID | _none_ (current) | Archived version UUID — get from `cerefox list-versions`. |
+| `--version-id TEXT` (alias: `--version`) | UUID | _none_ (current) | Archived version UUID — get from `cerefox version list`. |
 | `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
 
 **Examples**:
 ```bash
-cerefox get-doc abc12345-...
-cerefox get-doc abc12345-... --version-id <version-uuid>     # archived
-cerefox get-doc abc12345-... | bat -l md                  # pipe to viewer
+cerefox document get abc12345-...
+cerefox document get abc12345-... --version-id <version-uuid>     # archived
+cerefox document get abc12345-... | bat -l md                  # pipe to viewer
 ```
 
 **Output**: title + metadata line, blank line, then raw markdown.
@@ -172,13 +172,13 @@ cerefox get-doc abc12345-... | bat -l md                  # pipe to viewer
 
 ---
 
-### `cerefox list-docs`
+### `cerefox document list`
 
 **Purpose**: list documents in the knowledge base.
 
 **Synopsis**:
 ```
-cerefox list-docs [OPTIONS]
+cerefox document list [OPTIONS]
 ```
 
 **Options**:
@@ -192,13 +192,13 @@ cerefox list-docs [OPTIONS]
 
 ---
 
-### `cerefox list-versions`
+### `cerefox version list`
 
 **Purpose**: list all archived versions of a document.
 
 **Synopsis**:
 ```
-cerefox list-versions [OPTIONS] DOCUMENT_ID
+cerefox version list [OPTIONS] DOCUMENT_ID
 ```
 
 **Options**:
@@ -207,19 +207,19 @@ cerefox list-versions [OPTIONS] DOCUMENT_ID
 |---|---|---|---|
 | `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
 
-**Output**: table with version number, created timestamp, source, chunk/char counts, and version UUID. Pass the UUID to `cerefox get-doc --version-id <uuid>` to retrieve the archived content.
+**Output**: table with version number, created timestamp, source, chunk/char counts, and version UUID. Pass the UUID to `cerefox document get --version-id <uuid>` to retrieve the archived content.
 
 **MCP equivalent**: [`cerefox_list_versions`](../../AGENT_GUIDE.md).
 
 ---
 
-### `cerefox list-projects`
+### `cerefox project list`
 
 **Purpose**: list all projects.
 
 **Synopsis**:
 ```
-cerefox list-projects [OPTIONS]
+cerefox project list [OPTIONS]
 ```
 
 **Options**:
@@ -232,23 +232,23 @@ cerefox list-projects [OPTIONS]
 
 ---
 
-### `cerefox list-metadata-keys`
+### `cerefox metadata keys`
 
 **Purpose**: discover metadata keys used across all documents (with example values and document counts).
 
-**Synopsis**: `cerefox list-metadata-keys`
+**Synopsis**: `cerefox metadata keys`
 
 **MCP equivalent**: [`cerefox_list_metadata_keys`](../../AGENT_GUIDE.md).
 
 ---
 
-### `cerefox metadata-search`
+### `cerefox metadata search`
 
 **Purpose**: find documents by metadata key-value criteria (no text query needed).
 
 **Synopsis**:
 ```
-cerefox metadata-search --metadata-filter '<json>' [OPTIONS]
+cerefox metadata search --metadata-filter '<json>' [OPTIONS]
 ```
 
 **Options**:
@@ -265,21 +265,21 @@ cerefox metadata-search --metadata-filter '<json>' [OPTIONS]
 
 **Examples**:
 ```bash
-cerefox metadata-search --metadata-filter '{"type":"decision-log"}' --updated-since 2026-05-01
-cerefox metadata-search --metadata-filter '{"status":"active"}' --project-name "research" --include-content
+cerefox metadata search --metadata-filter '{"type":"decision-log"}' --updated-since 2026-05-01
+cerefox metadata search --metadata-filter '{"status":"active"}' --project-name "research" --include-content
 ```
 
 **MCP equivalent**: [`cerefox_metadata_search`](../../AGENT_GUIDE.md).
 
 ---
 
-### `cerefox get-audit-log`
+### `cerefox audit list`
 
 **Purpose**: query the immutable audit log (who changed what, when).
 
 **Synopsis**:
 ```
-cerefox get-audit-log [OPTIONS]
+cerefox audit list [OPTIONS]
 ```
 
 **Options**:
@@ -298,24 +298,24 @@ cerefox get-audit-log [OPTIONS]
 **Examples**:
 ```bash
 # All audit entries in the last week
-cerefox get-audit-log --since 2026-05-11
+cerefox audit list --since 2026-05-11
 
 # All edits by a specific agent
-cerefox get-audit-log --author "claude-code" --operation update-content
+cerefox audit list --author "claude-code" --operation update-content
 
 # JSON output, piped to jq
-cerefox get-audit-log --json --limit 1000 | jq 'select(.author_type == "agent")'
+cerefox audit list --json --limit 1000 | jq 'select(.author_type == "agent")'
 ```
 
 **MCP equivalent**: [`cerefox_get_audit_log`](../../AGENT_GUIDE.md).
 
 ---
 
-### `cerefox delete-doc`
+### `cerefox document delete`
 
 **Purpose**: **soft-delete** a document — moves it to trash, recoverable. The CLI cannot permanently delete or restore; see [Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the rationale.
 
-**Synopsis**: `cerefox delete-doc [OPTIONS] DOCUMENT_ID`
+**Synopsis**: `cerefox document delete [OPTIONS] DOCUMENT_ID`
 
 **Options**:
 
@@ -327,7 +327,7 @@ cerefox get-audit-log --json --limit 1000 | jq 'select(.author_type == "agent")'
 
 **What this command does:**
 - Sets `deleted_at` on the document row. The document stays in the database.
-- Excludes the document from search and from `cerefox list-docs`.
+- Excludes the document from search and from `cerefox document list`.
 - Writes an immutable `delete` audit-log entry with the resolved author / author_type and timestamp.
 
 **What this command does NOT do:**
@@ -340,7 +340,7 @@ cerefox get-audit-log --json --limit 1000 | jq 'select(.author_type == "agent")'
 **Agent usage**:
 ```bash
 # Required: --yes (no TTY for confirmation) + identity flags
-cerefox delete-doc <doc-id> --yes \
+cerefox document delete <doc-id> --yes \
   --author "claude-code" --author-type "agent"
 ```
 The success message echoes the resolved author / author_type back so you can surface it to the user in your response.
@@ -349,11 +349,11 @@ The success message echoes the resolved author / author_type back so you can sur
 
 ---
 
-### `cerefox reindex`
+### `cerefox server reindex`
 
 **Purpose**: re-embed chunks (e.g. after switching embedding models or pulling a schema change like title-boosting).
 
-**Synopsis**: `cerefox reindex [OPTIONS]`
+**Synopsis**: `cerefox server reindex [OPTIONS]`
 
 **Options**:
 
@@ -365,14 +365,14 @@ The success message echoes the resolved author / author_type back so you can sur
 
 ---
 
-### `cerefox config-get` / `cerefox config-set`
+### `cerefox config get` / `cerefox config set`
 
 **Purpose**: read/write runtime config in `cerefox_config` (e.g. `usage_tracking_enabled`).
 
 **Synopsis**:
 ```
-cerefox config-get KEY
-cerefox config-set KEY VALUE
+cerefox config get KEY
+cerefox config set KEY VALUE
 ```
 
 Used for toggling features at runtime without a redeploy — see [Decision Log Q1 Part 2 — usage tracking opt-in](https://github.com/fstamatelopoulos/cerefox) entry.
@@ -436,14 +436,14 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 | MCP tool | CLI command |
 |---|---|
 | `cerefox_search(query, match_count, project_name, metadata_filter, requestor)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --requestor <name>` |
-| `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, source, author, author_type)` (file) | `cerefox ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type <t>` |
-| `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox ingest --paste --title "<t>"` (same flags) |
-| `cerefox_get_document(document_id, version_id, requestor)` | `cerefox get-doc <id> --version-id <vid> --requestor <name>` |
-| `cerefox_list_versions(document_id, requestor)` | `cerefox list-versions <id> --requestor <name>` |
-| `cerefox_list_projects(requestor)` | `cerefox list-projects --requestor <name>` |
-| `cerefox_list_metadata_keys()` | `cerefox list-metadata-keys` |
-| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata-search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
-| `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox get-audit-log --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --requestor <name>` |
+| `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type <t>` |
+| `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>"` (same flags) |
+| `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <id> --version-id <vid> --requestor <name>` |
+| `cerefox_list_versions(document_id, requestor)` | `cerefox version list <id> --requestor <name>` |
+| `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
+| `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
+| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
+| `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --requestor <name>` |
 
 ## Known issues
 
@@ -453,7 +453,7 @@ None outstanding as of v0.1.17 (cerefox#27 — the `cerefox search` NameError �
 
 ### Bulk-import a directory with shared metadata
 ```bash
-cerefox ingest-dir ./papers --recursive --pattern '*.pdf' \
+cerefox document ingest-dir ./papers --recursive --pattern '*.pdf' \
   --project-name "literature" \
   --metadata '{"type":"paper","status":"reviewed"}'
 ```
@@ -465,7 +465,7 @@ cerefox search "the OAuth design doc" --match-count 1
 
 # Step 2: copy the id from `Doc: ... (id: <uuid>)` line
 # Step 3: update in place
-printf '%s' "$NEW_CONTENT" | cerefox ingest --paste \
+printf '%s' "$NEW_CONTENT" | cerefox document ingest --paste \
   --title "OAuth 2.1 Design Document" \
   --document-id "<uuid>" \
   --author "claude-code" --author-type "agent"
@@ -474,7 +474,7 @@ printf '%s' "$NEW_CONTENT" | cerefox ingest --paste \
 ### Unattended sync job
 ```bash
 # In a cron job / launchd plist. Set CEREFOX_AUTHOR_NAME=sync-script in env.
-cd /path/to/cerefox && uv run cerefox ingest-dir ~/notes --recursive --update-if-exists
+cd /path/to/cerefox && uv run cerefox document ingest-dir ~/notes --recursive --update-if-exists
 ```
 
 ### Use the CLI from an agent's Bash tool

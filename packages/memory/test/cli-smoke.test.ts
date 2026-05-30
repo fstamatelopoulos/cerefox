@@ -55,26 +55,24 @@ describe("cerefox CLI smoke (built bin)", () => {
   test("--help exits 0 and lists every expected subcommand", () => {
     const { stdout, status } = run(["--help"]);
     expect(status).toBe(0);
-    // Spot-check a representative slice from each category.
+    // v0.9.0: the surface is resource-verb. Top-level `--help` lists the
+    // resource groups + the flat commands (old flat verbs are hidden husks).
     const expectedCommands = [
-      // Reads
+      // Primary verb (stays flat)
       "search",
-      "get-doc",
-      "list-docs",
-      "list-versions",
-      "list-projects",
-      "list-metadata-keys",
-      "metadata-search",
-      "get-audit-log",
-      // Writes
-      "ingest",
-      "ingest-dir",
-      "delete-doc",
-      "delete-project",
+      // Resource groups
+      "document",
+      "project",
+      "version",
+      "metadata",
+      "audit",
+      "config",
+      "backup",
+      "server",
       // Servers
       "mcp",
       "web",
-      // Lifecycle
+      // Lifecycle / misc (flat)
       "init",
       "doctor",
       "status",
@@ -82,15 +80,8 @@ describe("cerefox CLI smoke (built bin)", () => {
       "self-update",
       "upgrade",
       "sync-self-docs",
-      "deploy-server",
-      // Ops
-      "backup",
-      "restore",
       "sync-docs",
       "docs",
-      "reindex",
-      "config-get",
-      "config-set",
       "completion",
     ];
     for (const cmd of expectedCommands) {
@@ -125,11 +116,11 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(stdout).toMatch(/config detected/i);
   });
 
-  test("--help footer lists command groups + exit codes", () => {
+  test("--help footer lists resource groups + exit codes", () => {
     const { stdout, status } = run(["--help"]);
     expect(status).toBe(0);
-    expect(stdout).toContain("READS");
-    expect(stdout).toContain("WRITES");
+    expect(stdout).toContain("Resource groups");
+    expect(stdout).toContain("Top-level commands");
     expect(stdout).toContain("Exit codes:");
   });
 
@@ -144,12 +135,9 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(stdout).toContain("--watch");
   });
 
-  test("`cerefox reindex --help` advertises the v0.7 in-process flags", () => {
-    // v0.7 wires reindex in-process — the v0.5/v0.6 deferred-message
-    // stub is gone. Live behaviour is covered by cli-reindex.test.ts
-    // (probe-and-skip on Supabase reachability); here we just check
-    // the CLI surface from the built bin.
-    const { stdout, status } = run(["reindex", "--help"]);
+  test("`cerefox server reindex --help` advertises the v0.7 in-process flags", () => {
+    // v0.9 moved reindex under the `server` group; the handler is unchanged.
+    const { stdout, status } = run(["server", "reindex", "--help"]);
     expect(status).toBe(0);
     expect(stdout).toContain("--all");
     expect(stdout).toContain("--batch");
@@ -157,11 +145,17 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(stdout).toContain("--document-id");
   });
 
-  test("`cerefox delete-project --help` advertises name-or-id + safety flags", () => {
-    const { stdout, status } = run(["delete-project", "--help"]);
+  test("`cerefox project delete --help` advertises name-or-id + safety flags", () => {
+    const { stdout, status } = run(["project", "delete", "--help"]);
     expect(status).toBe(0);
     expect(stdout).toContain("name-or-id");
     expect(stdout).toContain("--yes");
     expect(stdout).toContain("--force");
+  });
+
+  test("renamed flat verbs are husks: exit 1 + point to the new form", () => {
+    const { stdout, stderr, status } = run(["get-doc", "abc"]);
+    expect(status).toBe(1);
+    expect(stdout + stderr).toContain("document get");
   });
 });

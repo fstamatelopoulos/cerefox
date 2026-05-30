@@ -200,7 +200,7 @@ Backups are JSON files with the following structure:
 }
 ```
 
-**Embeddings are included** in backups. This means a restored database is immediately searchable — no `cerefox reindex` required after restore.
+**Embeddings are included** in backups. This means a restored database is immediately searchable — no `cerefox server reindex` required after restore.
 
 The backup directory (`./backup-data/` by default) is gitignored. Back up the backup files separately if you want off-site copies (e.g. copy to cloud storage).
 
@@ -257,15 +257,15 @@ The `cerefox` CLI also provides data management commands:
 
 | Command | Description |
 |---------|-------------|
-| `uv run cerefox ingest FILE` | Ingest a markdown file |
-| `uv run cerefox ingest --paste --title TITLE` | Ingest text from stdin |
+| `uv run cerefox document ingest FILE` | Ingest a markdown file |
+| `uv run cerefox document ingest --paste --title TITLE` | Ingest text from stdin |
 | `uv run cerefox search QUERY` | Search the knowledge base |
-| `uv run cerefox list-docs` | List all documents |
-| `uv run cerefox delete-doc ID` | Delete a document by ID |
-| `uv run cerefox list-projects` | List all projects |
-| `uv run cerefox list-versions ID` | List all archived versions of a document |
-| `uv run cerefox get-doc ID` | Retrieve current content of a document |
-| `uv run cerefox get-doc ID --version VERSION_ID` | Retrieve a specific archived version |
+| `uv run cerefox document list` | List all documents |
+| `uv run cerefox document delete ID` | Delete a document by ID |
+| `uv run cerefox project list` | List all projects |
+| `uv run cerefox version list ID` | List all archived versions of a document |
+| `uv run cerefox document get ID` | Retrieve current content of a document |
+| `uv run cerefox document get ID --version VERSION_ID` | Retrieve a specific archived version |
 | `uv run cerefox web` | Start the web UI |
 
 Run `uv run cerefox --help` or `uv run cerefox COMMAND --help` for details.

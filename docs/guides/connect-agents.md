@@ -65,7 +65,7 @@ Three top-level paths plus a few special cases:
 
 **For all paths:**
 - Supabase project set up and schema deployed (see `setup-supabase.md`)
-- Some content ingested (`cerefox ingest my-notes.md`)
+- Some content ingested (`cerefox document ingest my-notes.md`)
 
 **For Path A-Local only:**
 - **Recommended (v0.4.0+):** [Node.js ≥20](https://nodejs.org) (for `npx --package=@cerefox/memory cerefox mcp`)
@@ -1177,7 +1177,7 @@ Quick sanity check before pointing an agent at it:
 ```bash
 cd /path/to/cerefox
 uv run cerefox search "any query"
-uv run cerefox list-projects
+uv run cerefox project list
 ```
 
 If both work for you, they'll work for the agent.
@@ -1218,14 +1218,14 @@ The agent docs are written around MCP tool names. **CLI flag names match MCP par
 | MCP tool | CLI command |
 |---|---|
 | `cerefox_search` | `uv run cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`) |
-| `cerefox_ingest` (file) | `uv run cerefox ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
-| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox ingest --paste --title "<title>"` (same flags) |
-| `cerefox_get_document` | `uv run cerefox get-doc <document-id> --version-id <vid> --requestor <name>` |
-| `cerefox_list_versions` | `uv run cerefox list-versions <document-id> --requestor <name>` |
-| `cerefox_list_projects` | `uv run cerefox list-projects --requestor <name>` |
-| `cerefox_list_metadata_keys` | `uv run cerefox list-metadata-keys` |
-| `cerefox_metadata_search` | `uv run cerefox metadata-search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
-| `cerefox_get_audit_log` | `uv run cerefox get-audit-log --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
+| `cerefox_ingest` (file) | `uv run cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
+| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox document ingest --paste --title "<title>"` (same flags) |
+| `cerefox_get_document` | `uv run cerefox document get <document-id> --version-id <vid> --requestor <name>` |
+| `cerefox_list_versions` | `uv run cerefox version list <document-id> --requestor <name>` |
+| `cerefox_list_projects` | `uv run cerefox project list --requestor <name>` |
+| `cerefox_list_metadata_keys` | `uv run cerefox metadata keys` |
+| `cerefox_metadata_search` | `uv run cerefox metadata search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
+| `cerefox_get_audit_log` | `uv run cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
 
 ### Path C verification prompts
 
@@ -1235,16 +1235,16 @@ After pointing your agent at the repo, ask it:
 > Expected: agent runs `uv run cerefox search "second brain"` via its Bash tool and reports results.
 
 > "Save a note titled 'Test Note' to Cerefox with the content '# Test\nThis is a Path C test.'"
-> Expected: agent runs `cerefox ingest --paste --title "Test Note"` (or equivalent) and reports the new document ID.
+> Expected: agent runs `cerefox document ingest --paste --title "Test Note"` (or equivalent) and reports the new document ID.
 
 > "List my Cerefox projects."
-> Expected: agent runs `uv run cerefox list-projects`.
+> Expected: agent runs `uv run cerefox project list`.
 
 ### Caveats
 
 - **Privilege level**: the CLI uses the **service-role key** (`CEREFOX_SUPABASE_KEY`), which bypasses Row Level Security. An agent with Bash access has the same full read/write power you do. Only enable Path C for agents you trust to act on your behalf — the same trust level you'd grant Cursor/Claude Code for editing your source code.
 - **Audit attribution**: Path C records `access_path = "cli"` in usage logs, distinct from `"local-mcp"` / `"remote-mcp"`. **Agents must set `--author <name> --author-type agent` on writes and `--requestor <name>` on reads** (or rely on `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` env vars). Without these flags, writes attribute to `"unknown"` / `"user"`, which under-reports agent activity. See the 2026-05-18 Decision Log Q2 entry for the design rationale (`author_type` is caller-declared on ambiguous channels — CLI and Edge Functions — but `access_path` is always derived from the code layer).
-- **Soft-delete is reachable; purge and restore are not** — by design. `cerefox delete-doc` is exposed on the CLI and sends documents to trash with an audit entry. **Permanent purge** (irreversible) and **restore from trash** (un-doing a destructive action) are intentionally web-UI-only and require human-in-the-loop confirmation. If an agent on Path C decides to delete content, it should surface that to the user explicitly so they can review and either restore or commit. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
+- **Soft-delete is reachable; purge and restore are not** — by design. `cerefox document delete` is exposed on the CLI and sends documents to trash with an audit entry. **Permanent purge** (irreversible) and **restore from trash** (un-doing a destructive action) are intentionally web-UI-only and require human-in-the-loop confirmation. If an agent on Path C decides to delete content, it should surface that to the user explicitly so they can review and either restore or commit. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
 - **Cross-doc links in content you ingest** become clickable when the user views them in the Cerefox web UI. Author them as `[Text](uuid)` (most stable), `[Text](docs/path.md)` (repo files), or `[Text](<Title With Spaces>)` (angle-bracket form — bare spaces break markdown). See [`AGENT_GUIDE.md` → "Writing linkable content"](../../AGENT_GUIDE.md#writing-linkable-content) for the full set of rules.
 - **One repo per machine**: the agent needs your checkout — there's no "Path C without a local clone". If you skip the local install entirely, Path A-Remote or Path B is the only option.
 - **No sandboxing beyond the agent's existing Bash sandbox**: the CLI is just shell. If your agent's tool framework restricts which commands run, allowlist `uv run cerefox …` explicitly.
@@ -1295,7 +1295,7 @@ for hit in resp.results:
 Both paths use the same Postgres RPCs and the same stored embeddings, but embed queries
 independently. If you change the embedding model, **update both paths** before searching:
 
-1. Update `.env` + run `cerefox reindex` (re-embeds stored chunks via Python)
+1. Update `.env` + run `cerefox server reindex` (re-embeds stored chunks via Python)
 2. Update the TypeScript constants in `supabase/functions/*/index.ts` + redeploy Edge Functions
 
 See `docs/guides/configuration.md` → "Changing the embedding model" for the full procedure.

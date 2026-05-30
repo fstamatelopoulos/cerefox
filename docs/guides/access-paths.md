@@ -177,7 +177,7 @@ paths.
 | Tier | Operations | Reversible? | Where exposed |
 |---|---|---|---|
 | 1. Reads + soft mutations | search, get, list-*, ingest (create/update), metadata-search, get-audit-log | n/a (reads) / yes (versioned) | All paths — MCP, Edge Functions, CLI, web UI |
-| 2. Soft-destructive | `delete_document` (soft delete to trash), `set_review_status` | yes — restorable via web UI | All paths (CLI: `cerefox delete-doc`; web UI; Python; **not** MCP or Edge Functions today) |
+| 2. Soft-destructive | `delete_document` (soft delete to trash), `set_review_status` | yes — restorable via web UI | All paths (CLI: `cerefox document delete`; web UI; Python; **not** MCP or Edge Functions today) |
 | 3. **Hard-destructive** | `purge_document` (permanent), `restore_document` (un-trash), `set_version_archived` (toggle version retention) | no (purge) / yes (restore, but recovers from a destructive action) | **Web UI only** |
 
 ### Why purge / restore are web-UI-only
@@ -210,7 +210,7 @@ clear before the operation actually runs).
 
 If you're building tooling that uses the CLI (Path C) or any MCP/Edge Function path:
 
-- **Use `cerefox delete-doc` freely** to soft-delete agent-authored content. Pair it
+- **Use `cerefox document delete` freely** to soft-delete agent-authored content. Pair it
   with `--author <name> --author-type agent` so the audit trail is correct.
 - **Surface the soft-delete to the user.** When your agent decides to delete something,
   tell the user explicitly: "I soft-deleted X (recoverable from the Cerefox trash in
@@ -221,13 +221,13 @@ If you're building tooling that uses the CLI (Path C) or any MCP/Edge Function p
 
 ### CLI delete-doc — interactive vs scripted
 
-`cerefox delete-doc` prompts for confirmation by default (since `click.confirm` requires
+`cerefox document delete` prompts for confirmation by default (since `click.confirm` requires
 a TTY, an agent's Bash tool will get an abort instead of accidentally deleting). Agents
 that legitimately need to soft-delete must pass `--yes` *and* set `--author` /
 `--author-type` so the audit log captures who acted:
 
 ```bash
-cerefox delete-doc <doc-id> --yes \
+cerefox document delete <doc-id> --yes \
   --author "claude-code" --author-type "agent"
 ```
 

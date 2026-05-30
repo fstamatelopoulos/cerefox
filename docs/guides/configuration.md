@@ -121,7 +121,7 @@ The `metadata_filter` search parameter (available in all search modes, all acces
 - All key-value pairs must match (AND semantics via PostgreSQL `@>` operator)
 - Uses the existing GIN index on `cerefox_documents.metadata` — no additional schema changes needed
 - `NULL` filter = no restriction (backwards-compatible default)
-- Discover available keys via `cerefox_list_metadata_keys` MCP tool or `cerefox list-metadata-keys` CLI
+- Discover available keys via `cerefox_list_metadata_keys` MCP tool or `cerefox metadata keys` CLI
 
 Access paths:
 - **MCP tool**: `metadata_filter` argument on `cerefox_search`
@@ -209,8 +209,8 @@ Metadata-only updates (same content, different title or project) do **not** crea
 
 To view and retrieve previous versions:
 ```bash
-uv run cerefox list-versions <document-id>
-uv run cerefox get-doc <document-id> --version <version-id>
+uv run cerefox version list <document-id>
+uv run cerefox document get <document-id> --version <version-id>
 ```
 
 ---
@@ -281,7 +281,7 @@ Change `CEREFOX_OPENAI_EMBEDDING_MODEL` and `CEREFOX_OPENAI_EMBEDDING_DIMENSIONS
 ### Step 2 — Re-embed all stored chunks
 
 ```bash
-uv run cerefox reindex
+uv run cerefox server reindex
 ```
 
 This re-embeds every chunk in the database using the model now configured in `.env`.
@@ -351,13 +351,13 @@ This means:
 **Via CLI:**
 ```bash
 # Enable
-cerefox config-set usage_tracking_enabled true
+cerefox config set usage_tracking_enabled true
 
 # Disable
-cerefox config-set usage_tracking_enabled false
+cerefox config set usage_tracking_enabled false
 
 # Check current state
-cerefox config-get usage_tracking_enabled
+cerefox config get usage_tracking_enabled
 ```
 
 **Via REST API:**
@@ -401,7 +401,7 @@ The `access_path` is set by the caller layer (not the end user):
 
 **CLI:**
 ```bash
-cerefox config-get usage_tracking_enabled
+cerefox config get usage_tracking_enabled
 ```
 
 ---
@@ -421,11 +421,11 @@ with a helpful message telling the agent what to provide.
 
 ```bash
 # Require all MCP tool calls to include requestor/author
-cerefox config-set require_requestor_identity true
+cerefox config set require_requestor_identity true
 
 # Optionally override the default naming format (regex)
 # Default: ^[a-zA-Z0-9_:.\- ]+$ (letters, numbers, underscores, colons, dots, hyphens, spaces)
-cerefox config-set requestor_identity_format "^[a-z]+:[a-z]+$"
+cerefox config set requestor_identity_format "^[a-z]+:[a-z]+$"
 ```
 
 ### Format examples
@@ -441,7 +441,7 @@ The format is applied to both `requestor` (read tools) and `author` (ingest).
 ### Disabling enforcement
 
 ```bash
-cerefox config-set require_requestor_identity false
+cerefox config set require_requestor_identity false
 ```
 
 When disabled, the requestor parameter remains optional with the `"mcp-agent"` default.

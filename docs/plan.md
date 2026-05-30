@@ -2734,6 +2734,15 @@ scripts/reindex_all.ts                       # NEW
 
 ## Iteration 26: v0.8.0 — "Production-Ready Install"
 
+**Status: Done.** All 14 Parts (26A–26N) shipped in **v0.8.0** (2026-05-29). Verified present: `_shared/{server-assets,ef-meta,compatibility,backup}`, `cerefox deploy-server`, daemon-mode `cerefox web start/stop/status`, the EF `/version` route + aggregator, the client↔server compat matrix, `scripts/{cerefox_export,backup_create,backup_restore}.ts`, `RELEASING.md`, `frontend/playwright.config.ts` + `frontend/tests/e2e/ui.spec.ts`, and the Python CLI deprecation banner. The three Python e2e files (`test_edge_functions_e2e.py`, `test_mcp_e2e.py`, `test_ui_e2e.py`) and `src/cerefox/backup/fs_backup.py` were deleted as planned.
+
+Follow-up patches shipped after v0.8.0 (see CHANGELOG + Iteration 26.1):
+- **v0.8.1** — `deploy-server` applies pending migrations + refreshes RPCs on existing DBs (was fresh-deploy-only); `--reset` removed from the user-facing command; doctor relabel "schema + RPCs" + consolidated remediation; `cerefox delete-project` (cherry-picked from the un-merged v0.7.1 commit).
+- **v0.8.2** — `deploy-server` EF deploy works without a per-directory `supabase link` (derive `--project-ref` from `CEREFOX_SUPABASE_URL`); doctor EF check baselines against `EF_VERSION` (not `PKG_VERSION`).
+- **v0.8.3** — `install.sh` pins `@latest` (re-installs now upgrade); live EF/remote-MCP test suites gated behind `CEREFOX_LIVE_E2E=1` + tagged `requestor: "e2e-test"`; setup-supabase Docker-warning note.
+
+**Validated live** (maintainer's existing Supabase + Mac, 2026-05-29): install via script, `cerefox doctor` all-green, `deploy-server --functions-only` (9 EFs redeployed → EF row green), `deploy-server --schema-only` (existing-DB path: 0 pending migrations + RPC refresh). **NOT yet validated** (26N's staging-Supabase acceptance, deferred): a clean/fresh Supabase project end-to-end (incl. the *fresh-deploy* path and the *migration-apply* path — the existing DB has 0 pending migrations so `runDbMigrate` applying a file is still unexercised), and a clean-machine install. Tracked as tasks in Iteration 27 (see below).
+
 **Goal**: Two themes for **v0.8.0**:
 
 1. **Production-ready end-user install.** Eliminate the repo-clone step that today blocks fresh installs of `@cerefox/memory` from being self-sufficient. Add `cerefox deploy-server`, ship server assets (SQL + EFs) inside the npm tarball, version every server-side surface (Schema/RPCs + 9 EFs), and codify a client ↔ server compatibility matrix that surfaces drift via `cerefox doctor`, the SchemaVersionBanner, and `cerefox web` boot. Plus daemon-mode `cerefox web start/stop/status` for fire-and-forget end-user usage.
@@ -2979,7 +2988,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 
 **Goal**: Close a gap found right after v0.8.0 published: `cerefox deploy-server` only ever did a *fresh* deploy (apply schema + RPCs, then **stamp** every migration as applied without running it). Re-run against a database that already has a Cerefox schema, it never applied pending migrations and never refreshed RPCs — so a release that ships a new migration or changed RPCs wasn't actually deployed by re-running the catch-all command. v0.8.1 makes `deploy-server` the true catch-all for standing up **and updating** the server side.
 
-**Status**: Implemented on `feat/v0.8.1-deploy-server-migrations` (2026-05-29). **Cut deferred** until the clone-env walk validates the existing-DB migration path end-to-end (a fresh side-by-side Supabase account, side-by-side with the maintainer), which also refreshes `docs/guides/setup-supabase.md`.
+**Status: Done.** Shipped in **v0.8.1** (2026-05-29), with follow-ups in **v0.8.2** and **v0.8.3** (see the Iteration 26 status block above for the full breakdown). The existing-DB *RPC-refresh* path was validated live (`deploy-server --schema-only` → "0 pending migrations + refresh RPCs"); the *migration-apply* path (`runDbMigrate` actually applying a pending file) remains unexercised because the maintainer's DB is fully migrated — folded into the clean-Supabase validation task in Iteration 27.
 
 | Part | Description | Acceptance |
 |------|-------------|-----------|
@@ -2992,50 +3001,81 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 
 ---
 
-## Iteration 27: v0.9.0 — "CLI Redesign + Python Web Deletion"
+## Iteration 27: v0.9.0 — "CLI Verb Redesign + Python Surface Retirement + Docs Overhaul"
 
-**Goal**: Four themes for **v0.9.0**:
+**Status: Implemented (2026-05-30) on `feat/iter-27-v0.9-design`, pending review + a docs-sweep follow-up + the V1/V2 validation walks.** Done: 27A (parity audit doc + rename-only taxonomy), 27B (resource-verb groups via `moveInto`), 27C (husks for old verbs + completion + `_stub.ts` removed), 27D (audit found no must-fix gaps — all map to v0.9.1), 27E (Python web → husk; `routes_api.py`/`deps.py` deleted; FastAPI/uvicorn dropped), 27F (Python CLI → husks except `mcp`; banner opt-out removed), 27G (all `tests/**/*.py` deleted; pytest dropped; CI Python job removed), 27I-partial (design doc §13 rewritten; this status). **27H is a FIRST PASS** — `migration-v0.9.md`, CHANGELOG v0.9.0, CLAUDE.md verb-conventions + tech-stack fixes, README "Choose your path" split are done; the **full sweep of the remaining ~10 guides + the CLAUDE.md structure tree is deferred to a post-first-pass discussion** with the maintainer (per their instruction). **Decision Log** entry → maintainer to add in the live Cerefox KB (not written autonomously). Cut deferred until docs sweep + validation.
 
-1. **CLI ↔ web functional parity + verb normalization.** Audit every operation the web UI supports vs every CLI command; close gaps both ways. Then redesign the entire CLI verb structure to a resource-verb pattern matching cfcf's convention: `cerefox <resource> <verb> [args]`. E.g., `cerefox document get|delete|list|edit|ingest`, `cerefox project create|delete|list|edit`, `cerefox version list|archive`. Each old top-level verb (`get-doc`, `list-docs`, `delete-doc`, …) becomes a husk that prints "use `cerefox document <verb>` instead" and exits with a non-zero code (so muscle-memory scripts surface the rename loudly). v0.9.0 is the last release with the old verbs reachable at all.
-2. **Delete the Python web** (per Fotis-13 / D6). `src/cerefox/api/*` removed. The TS web has been canonical since v0.6; nobody chooses Python web as a fallback path (unlike Python MCP, which agents wire up deliberately via stdio).
-3. **Test-runner cutover phase 2 + subprocess-pattern tests for surviving Python.** Per design doc §19 rule 5: tests for the Python MCP server move to TS via subprocess pattern (TS test spawns `uv run cerefox mcp` and asserts JSON-RPC handshake + tools/list + sample tool call at the process boundary). New husk-CLI tests for every renamed-to-husk Python subcommand. After v0.9: zero `.py` in `tests/`; one test runner (`bun test`); `pyproject.toml` / `uv.lock` / `.python-version` STAY because Python the runtime stays (MCP server).
-4. **Two-install-path documentation overhaul** (Fotis, 2026-05-29). Since v0.8 the project has two distinct install audiences and the README / guides don't cleanly separate them. Restructure all user-facing docs around **two paths, both kept**: **(a) End user (no repo checkout)** — the install script + `cerefox` CLI commands (`init` → `deploy-server` → `configure-agent`); never needs to clone the repo. **(b) Contributor** — the existing README + `quickstart.md` repo-clone flow (uv, bun, repo scripts). The decision is to keep both, clearly labelled, so neither audience is led down the other's path. Touches README.md (top-level split), `quickstart.md`, `setup-supabase.md`, `connect-agents.md`, and the guide index.
+**Goal**: Four themes for **v0.9.0** — the contract-hardening lead-in to v1.0. Scope decisions locked with the maintainer 2026-05-30 (see "Locked decisions" below).
 
-**Python MCP retention** (per Fotis-13): the Python MCP server (`src/cerefox/mcp_server.py`) stays **through v1.x at minimum**. Repo-clone users who `git pull && uv run cerefox mcp` without reading docs keep working. Removal considered post-v1.0 — probably v2.0 candidate or "kept indefinitely as a fallback path." The long-tail Python footprint is accepted.
+1. **CLI verb normalization — RENAME-ONLY — + CLI ↔ web parity.** Redesign the CLI to a resource-verb shape (`cerefox <resource> <verb> [args]`) matching cfcf's convention. **This is a pure rename of the *existing* command surface — no new commands.** Every old top-level verb (`get-doc`, `list-docs`, `delete-doc`, …) becomes a husk that prints "use `cerefox <resource> <verb>` instead" and exits non-zero. Genuinely new commands (`document edit`, `document restore`/undelete, `version archive`, `audit tail/search`) are **deferred to v0.9.1** as deliberate feature adds — captured in the v0.9.1 scope block at the end of this iteration. Also run a CLI↔web parity audit and close a *capped* set of small gaps. v0.9.0 is the last release with the old verbs reachable (as husks).
+2. **Retire the Python surfaces to husks.** (a) **Python web** (`src/cerefox/api/app.py`, `routes_api.py`) collapses to an **almost-empty husk** that prints "the Python web is removed; use `cerefox web` (TypeScript, from `@cerefox/memory`)" and exits — no FastAPI app, no routes. (b) **Python CLI subcommands** all become husks that redirect to the TS CLI equivalent — **except `cerefox mcp`**, which stays functional (it's how git-pull users launch the surviving Python MCP server). (c) The **Python MCP server** (`src/cerefox/mcp_server.py`) + the modules it imports (`embeddings`, `ingestion`, `chunking`, `config`, `db`) stay in the repo **as-is, unmaintained**, purely so `git pull && uv run cerefox mcp` keeps working for people mid-migration. We do **not** maintain or test it going forward.
+3. **Delete ALL Python tests; retire pytest as a test runner.** Per the maintainer (2026-05-30): since the Python side is no longer maintained, delete `tests/**/*.py` wholesale (no subprocess-pattern port). After v0.9: **zero `.py` in `tests/`**, one test runner (`bun test`), `pytest` removed from `pyproject.toml`'s dev deps. `pyproject.toml` / `uv.lock` / `.python-version` STAY (the Python runtime stays for the MCP server). **Accepted tradeoff:** the surviving Python code ships untested — acceptable because it's a frozen, unmaintained fallback, fully superseded by the TS implementation.
+4. **Comprehensive documentation overhaul** (Fotis, 2026-05-29/30). A **major cleanup of every document, everywhere** — not just README/quickstart. Restructure all user-facing docs around **two paths, both kept and clearly labelled**: **(a) End user (no repo checkout)** — install script + `cerefox` CLI (`init` → `deploy-server` → `configure-agent`); **(b) Contributor / "play with the code"** — repo-clone flow (uv, bun, repo scripts). Audit the full `docs/` tree + root markdown for stale Python-CLI/Python-web references, the old verb names, and repo-clone-only assumptions. Detailed scope to be finalized with the maintainer after a first implementation pass.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.9.0](specs/polish-and-distribution-design.md). The current §13 v0.9.0 entry is OUTDATED (says "python-legacy/ deleted; pyproject.toml deleted") — superseded by the 2026-05-28 "Python minimization, not removal" call AND the 2026-05-29 Fotis-13 extension to v1.x retention. Update design doc as part of iter-27's closeout.
+**Locked decisions (2026-05-30 maintainer review):**
 
-**Size**: **L** (T-shirt) — smaller than iter-26 but the CLI redesign is a big user-visible surface change. ~10 Parts (27A–27J), single PR, one cut.
+| # | Decision | Rationale |
+|---|---|---|
+| L1 | **Verb redesign is rename-only.** No new commands in v0.9.0. | v0.9.0 hardens the surface before the 1.0 contract; renames are the breaking part — do them once, now. New verbs are additive/non-breaking, so they slot into **v0.9.1** (see the scope block at the end of this iteration) without waiting for v1.0. |
+| L2 | **Drop the subprocess-pattern Python tests entirely.** Delete all `.py` tests. | The Python side is an unmaintained fallback; testing it is wasted effort. Simplifies scope (no `python-runtime/` TS test dir). |
+| L3 | **Python web → husk, not full file deletion.** | A husk that names the TS replacement is friendlier than an import error and avoids touching every `cerefox.api` importer; `cli.py`'s `web` subcommand redirects too. |
+| L4 | **Python CLI → husks, except `mcp`.** | `uv run cerefox mcp` must keep launching the surviving Python MCP server; everything else redirects to the TS CLI. |
+| L5 | **No `server reset`; backup keeps its own resource.** | Honors the v0.8.1 removal of the user-facing `--reset`; `cerefox backup {create,restore}` avoids colliding with a future `document restore`. |
+
+**Python MCP retention** (per Fotis-13): the Python MCP server stays **through v1.x at minimum**, frozen/unmaintained. Removal considered post-v1.0. The long-tail Python footprint is accepted.
+
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.9.0](specs/polish-and-distribution-design.md). The §13 v0.9.0 entry is **stale** (says "python-legacy/ deleted; pyproject.toml deleted; all tests in vitest") — superseded by "Python minimization, not removal" (2026-05-28), the v1.x retention extension (2026-05-29), and these L1–L5 decisions. Rewritten in 27J closeout.
+
+**Size**: **M–L** (T-shirt) — the rename-only scope + delete-don't-port test decision shrink this below the original L estimate. ~9 Parts (27A–27I) + 2 validation walks, single PR, one cut.
 
 **Headline items**:
 
-- **CLI ↔ web parity audit** (`docs/research/cli-web-parity-audit.md`): for every web UI page/action, list the equivalent CLI command. For every CLI command, list the equivalent web UI surface. Document gaps; decide which to close vs which to leave web-only (e.g., the analytics charts are web-only by design) vs which to leave CLI-only (e.g., backup scripts).
-- **CLI verb normalization**: design a resource-verb taxonomy (matches cfcf). Every old top-level verb becomes a husk pointing at the new shape. New: `cerefox document {get|delete|list|edit|ingest|restore}`, `cerefox project {create|delete|list|edit}`, `cerefox version {list|archive|unarchive}`, `cerefox audit {list|tail|search}`, `cerefox config {get|set|list}`, `cerefox server {deploy|status|reset}`. Lifecycle stays flat (`init`, `doctor`, `status`, `configure-agent`, `self-update`, `upgrade`).
-- **Husk-on-rename pattern**: every renamed verb exits with code 1 (user error) + a message naming the new shape. Bash completion still includes the husks (so tab-completion works for muscle memory) but their hint string says "renamed — use ... instead." Removed entirely in v1.0.
-- **Python web deletion**: `src/cerefox/api/app.py`, `src/cerefox/api/deps.py`, `src/cerefox/api/routes_api.py`, plus tests that target only the Python web (`tests/api/`). Verify no other Python module imports them; the FastAPI app and uvicorn dep can be dropped from `pyproject.toml`.
-- **Subprocess-pattern Python MCP tests**: `packages/memory/test/python-runtime/python-mcp.test.ts` spawns `uv run cerefox mcp`, drives JSON-RPC initialize + tools/list + 2-3 sample tool calls (search, get-document, ingest-via-MCP), asserts response shapes. Mirrors the cli-smoke pattern.
-- **Husk-CLI subprocess tests**: `packages/memory/test/python-runtime/python-cli-husks.test.ts` spawns each `uv run cerefox <renamed-verb>`, asserts exit code 1 + the "renamed — use ..." message in stderr.
-- **CHANGELOG v0.9.0 entry** explicitly covers the verb rename + the husk transitions, with a table mapping old → new.
-- **Migration guide update**: `docs/guides/migration-v0.5.md` gets a v0.9 section. May warrant a new `migration-v0.9.md` since the verb rename is the largest user-impact change since v0.5.
-- **CLAUDE.md update**: `CLI verb conventions` section codifying the resource-verb pattern so future commands follow it.
-- **Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out** (added 2026-05-29 per Fotis): the Python CLI deprecation banner's suppress env var predates iter-26 (shipped v0.5.0). Fotis-19 leaned against having an opt-out at all; iter-26 kept it only to avoid breaking existing quiet-CI usage mid-stream. v0.9 turns the Python CLI subcommands into husks anyway, so the banner's role changes — drop the env var here so the husk message always prints (maximum nudge). Note in the CHANGELOG that the suppress var is gone.
-- **Two-install-path documentation overhaul** (Fotis, 2026-05-29): restructure README + guides around the two audiences (end user via install-script + CLI; contributor via repo clone). Both paths kept, clearly labelled. README gets a top-level "Choose your path" split near the top; `quickstart.md` framed explicitly as the contributor/repo-clone flow; the end-user path documents `install → cerefox init → cerefox deploy-server → cerefox configure-agent` with no `git clone`. Cross-link `setup-supabase.md` and `connect-agents.md` from both. Verify the install script exists / is referenced consistently.
+- **CLI ↔ web parity audit** (`docs/research/cli-web-parity-audit.md`): for every web UI page/action, list the equivalent CLI command; for every CLI command, the equivalent web surface. Document gaps; decide close vs leave-web-only (analytics charts) vs leave-CLI-only (backup/deploy-server). Time-boxed; gap-closure capped (see R2).
+- **CLI verb normalization (rename-only)**: map the *existing* commands into a resource-verb taxonomy (cfcf-style). Proposed mapping of today's surface:
+  - `get-doc → document get` · `list-docs → document list` · `delete-doc → document delete` · `ingest → document ingest` · `ingest-dir → document ingest-dir`
+  - `list-projects → project list` · `delete-project → project delete`
+  - `list-versions → version list`
+  - `get-audit-log → audit log` (or `audit list`)
+  - `list-metadata-keys → metadata keys` · `metadata-search → metadata search`
+  - `search` stays top-level (primary verb) — or `document search`; decide in 27A
+  - `config-get → config get` · `config-set → config set`
+  - `backup → backup create` · `restore → backup restore` (frees `document restore` for a future undelete; honors L5)
+  - `deploy-server → server deploy` · (no `server reset` — L5)
+  - `reindex → server reindex` (or stays flat; decide in 27A)
+  - Flat lifecycle (unchanged): `init`, `doctor`, `status`, `configure-agent`, `self-update`, `upgrade`, `mcp`, `web`, `docs`, `completion`, `sync-docs`, `sync-self-docs`
+  - **No new commands** (`document edit`, `document restore`, `version archive/unarchive`, `audit tail/search` → **v0.9.1**, see the scope block at the end of this iteration; L1).
+- **Husk-on-rename pattern**: every old top-level verb stays registered as a husk that exits non-zero + names the new shape ("`get-doc` is renamed — use `cerefox document get`"). Bash/zsh completion keeps the husks with a "renamed — use …" hint. Husks removed entirely in v1.0.
+- **Python web → husk** (L3): reduce `src/cerefox/api/app.py` + `routes_api.py` to an almost-empty husk — no FastAPI app, no routes; any entry point prints "the Python web is removed; use `cerefox web` (TypeScript) — `npm install -g @cerefox/memory`" and exits non-zero. `cli.py`'s `web` subcommand redirects the same way. Drop FastAPI/uvicorn from `pyproject.toml` deps. (Files kept as husks, not deleted, to avoid touching every importer.)
+- **Python CLI → husks except `mcp`** (L4): every Python `cerefox <subcommand>` except `mcp` becomes a husk that prints the TS-CLI equivalent and exits non-zero. `cerefox mcp` stays fully functional (launches the surviving Python MCP server). Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out (the banner's job is now done by the husks).
+- **Delete ALL Python tests** (L2): remove `tests/**/*.py` wholesale (including the already-dead `test_mcp_soft_wrapper.py` — soft-wrapper removed v0.5.2). No subprocess-pattern port. Remove `pytest` (+ plugins) from `pyproject.toml` dev deps. CI test job runs only `bun test` (+ `cd _shared && bun test`). `pyproject.toml`/`uv.lock`/`.python-version` stay (runtime).
+- **Comprehensive documentation overhaul** (full `docs/` + root audit): two clearly-labelled paths — **end user** (install script + `cerefox` CLI: `init → deploy-server → configure-agent`, no clone) and **contributor** (repo clone, uv/bun, repo scripts). README "Choose your path" split; reframe `quickstart.md` as the contributor flow; sweep every doc for stale Python-CLI/Python-web references and old verb names; cross-link `setup-supabase.md` + `connect-agents.md`. Final scope confirmed with the maintainer after a first pass.
+- **CHANGELOG v0.9.0** with an old→new verb table + the Python-web/Python-CLI husk transitions + the `CEREFOX_NO_DEPRECATION_BANNER` removal.
+- **Migration guide**: new `docs/guides/migration-v0.9.md` (largest user-impact change since v0.5) — verb rename table, Python-surface husks, what still works (`uv run cerefox mcp`).
+- **CLAUDE.md**: a `CLI verb conventions` section codifying the resource-verb pattern + dead-code cleanup (`_stub.ts` and any remaining `stubAction` callers).
+- **Dead-code cleanup**: remove `packages/memory/src/cli/commands/_stub.ts` once no command uses `stubAction` (its own comment says "don't leave past iter-23").
 
-**Parts breakdown (27A–27J)**:
+**Parts breakdown (27A–27I)**:
 
 | Part | Scope |
 |---|---|
-| **27A** | CLI ↔ web parity audit doc; design the new resource-verb taxonomy. |
-| **27B** | New CLI command files (`cerefox document <verb>`, `cerefox project <verb>`, etc.) — each delegates to existing logic via internal calls. |
-| **27C** | Husk-on-rename for every old top-level verb. Bash completion updates. Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out from the Python CLI banner. |
-| **27D** | Frontend ↔ CLI parity gap closures (whatever surfaced in 27A). |
-| **27E** | Python web deletion (`src/cerefox/api/*` + `tests/api/*`). FastAPI dep removal from pyproject.toml. |
-| **27F** | Subprocess-pattern Python MCP tests under `packages/memory/test/python-runtime/`. |
-| **27G** | Husk-CLI subprocess tests for every renamed verb. |
-| **27H** | Delete all surviving `.py` test files under `tests/` (except subprocess targets that genuinely run Python). pytest dep removed from pyproject.toml. |
-| **27I** | CHANGELOG v0.9.0 entry; migration-v0.9.md (or v0.5 update with v0.9 section); CLAUDE.md verb-conventions section. |
-| **27J** | **Two-install-path documentation overhaul**: README top-level "Choose your path" split (end user via install-script + CLI vs contributor via repo clone); reframe `quickstart.md` as the contributor flow; document the end-user `init → deploy-server → configure-agent` path with no clone; cross-link `setup-supabase.md` + `connect-agents.md`; update the guide index. Both paths kept. |
-| **27K** | Closeout: design doc §13 v0.9.0 updated; Decision Log entry; manual test plan update. |
+| **27A** | CLI ↔ web parity audit doc (`docs/research/cli-web-parity-audit.md`); finalize the **rename-only** resource-verb taxonomy (resolve the open `search`/`reindex` placements). No new commands. |
+| **27B** | New resource-verb CLI command files — each is a thin wrapper that **delegates to the existing handler** (no logic moves). `commander` subcommand groups (`document`, `project`, `version`, `metadata`, `config`, `backup`, `server`, `audit`). |
+| **27C** | Husk-on-rename for every old top-level verb (exit non-zero + name the new shape). Bash/zsh completion updated with "renamed" hints. Remove `_stub.ts` + any `stubAction` callers. |
+| **27D** | CLI↔web parity gap closures (capped at ~3 small fills from 27A; larger gaps → v0.9.x). |
+| **27E** | **Python web → husk**: collapse `api/app.py` + `routes_api.py` to a redirect husk; husk `cli.py`'s `web` subcommand; drop FastAPI/uvicorn from `pyproject.toml`. Verify no surviving Python module needs the removed routes. |
+| **27F** | **Python CLI → husks except `mcp`**: every Python subcommand redirects to its TS equivalent; `mcp` stays functional. Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out. |
+| **27G** | **Delete all Python tests**: `rm tests/**/*.py`; remove `pytest` (+ plugins) from `pyproject.toml`; update CI to run `bun test` only. Confirm `uv run cerefox mcp` still boots (manual smoke, not a test). |
+| **27H** | **Documentation overhaul** (the big one): README "Choose your path" split; reframe `quickstart.md` (contributor) + add the end-user CLI path; full `docs/` sweep for stale Python/verb references; CHANGELOG v0.9.0 (verb table); new `migration-v0.9.md`; CLAUDE.md verb-conventions section. |
+| **27I** | Closeout: rewrite design doc §13 v0.9.0 (L1–L5); Decision Log entry; manual test plan update. |
+
+**Carried-over validation tasks (deferred from iter-26 / v0.8.x — do side-by-side with the maintainer):**
+
+| Task | Scope | Why deferred |
+|---|---|---|
+| **V1 — Clean Supabase install** | Stand up a **fresh** Supabase project (separate account or a `cerefox`-identical second env) and run the full end-to-end install against it: `cerefox init` → `cerefox deploy-server` (the **fresh-deploy** path: schema + RPCs + stamp migrations + 9 EFs) → `cerefox doctor` all-green → ingest/search smoke. Critically, this is the **only** way to exercise (a) the fresh-deploy branch of `deploy-server` and (b) the **migration-apply** path (`runDbMigrate` actually applying a pending file) — the maintainer's primary DB is fully migrated (0 pending), so that path is still unexercised in production. Refresh `docs/guides/setup-supabase.md` with whatever surfaces. | v0.8 shipped against the maintainer's existing (already-migrated) Supabase; a fresh project was never stood up. 26N's "staging-Supabase validation" acceptance was deferred. |
+| **V2 — Clean machine install** | On a machine with **no prior Cerefox install** (or a fully reset `~/.cerefox` + uninstalled global), run the one-line install script → `cerefox init` → wire an agent → first ingest/search. Confirms the end-user (no-repo-clone) path works cold, and that `install.sh`'s `@latest` pin behaves on a first install (not just an upgrade). | All install testing so far was on the maintainer's primary machine, which already had Cerefox + `.env` + linked Supabase. The cold-start path is unverified. |
+
+> These two validations gate confidence for **v1.0**, not v0.9.0 functionality. Per the maintainer (2026-05-29): schedule them **after** the 0.9.0 code work, side-by-side. They may surface doc fixes (setup-supabase, quickstart, the two-install-path docs in 27H) and possibly small `deploy-server`/`init` fixes — budget a v0.9.x patch slot for anything found.
 
 **Risks**:
 
@@ -3044,8 +3084,29 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 | R1 | **Husk-on-rename surprises automation scripts** in the wild. Users with `cerefox get-doc <id>` in cron jobs/CI will hit exit code 1. | Accept. Banner is the point. v0.8 ships v0.9 nudge in CHANGELOG ("verbs renaming next minor"); v0.9 ships the renames; v1.0 removes husks entirely. Three-release deprecation window matches Python deprecation cadence. |
 | R2 | **CLI ↔ web parity audit surfaces large gaps** that swell v0.9 scope. | Time-box audit to a half-day; cap gap-closure work in 27D at 3 small fills. Anything bigger gets deferred to v0.9.x. |
 | R3 | **Verb taxonomy bikeshedding.** Subjective choices (e.g., `cerefox version archive` vs `cerefox archive version`). | Lock the cfcf-style `<resource> <verb>` shape in 27A. Decisions get rationale comments in `CLAUDE.md`. No second-pass redesign in same iteration. |
-| R4 | **Python MCP tests broken by subprocess pattern**. Live Supabase + spawn timing edge cases. | Probe-and-skip on Supabase reachability; generous timeouts (5s for spawn, 10s for tool calls). Match cli-smoke's existing patterns. |
-| R5 | **FastAPI dep removal breaks something else**. Check whether other Python modules import from `cerefox.api`. | Grep + delete cleanly. Run full pytest to verify. |
+| R4 | **Deleting all Python tests strips coverage from the surviving Python MCP server + its modules.** | **Accepted** (L2). The Python side is a frozen, unmaintained fallback fully superseded by the TS implementation; the TS suites + the post-release clean-Supabase walk (V1) cover the real surfaces. The only safety net kept is a manual `uv run cerefox mcp` boot smoke in 27G. |
+| R5 | **Python web husk or CLI husks break `uv run cerefox mcp`** (the one Python path that must keep working). | `mcp` is explicitly excluded from the CLI husking (L4) and doesn't import `cerefox.api`. Verify with a grep (`mcp_server.py` imports only `embeddings`/`ingestion`/`config`/`db`) + a manual boot smoke in 27G. |
+| R6 | **Doc overhaul scope creep** — "review every document everywhere" is open-ended. | Time-box a first pass (README + the `docs/guides/` install/setup/connect files + CHANGELOG/migration), present to the maintainer, then iterate. Lower-traffic docs (research/specs) get a lighter stale-reference sweep, not a rewrite. |
+
+### v0.9.1 — new CLI verbs
+
+Originally deferred from v0.9.0's rename-only scope. On 2026-05-30 the
+maintainer asked to **fold them into v0.9.0** ("no need to wait"). Outcome:
+
+| New command | Status | Notes |
+|---|---|---|
+| `cerefox document restore <id>` | **✅ Folded into v0.9.0** | Thin wrapper over `cerefox_restore_document`. `document-restore.ts`. |
+| `cerefox version archive <version-id>` / `unarchive` | **✅ Folded into v0.9.0** | Flip `cerefox_document_versions.archived` + audit entry (mirrors the web). `version-archive.ts`. |
+| `cerefox document edit <id>` | **Remains v0.9.1** | Content edits already work via `cerefox document ingest --document-id <id> --update`. A dedicated `edit` adds title/metadata-only editing, which has a **title-boosting re-embed nuance** (a title change must re-embed per the title-boost design) worth a short design pass with the maintainer before it joins the v1.0 contract. Don't ship it hastily into the contract-lead-in. |
+| `cerefox audit tail` / `audit search` | **Remains v0.9.1 (likely dropped)** | `audit list` already covers filtering (`--author/--operation/--since/--until`) + recency (`--limit`). `search` would be a pure alias; `tail` (live-follow) is the only non-redundant bit. Revisit only if a real streaming need appears — otherwise drop from scope. |
+
+> **Engineering note (2026-05-30, Claude):** I folded the two **clean, verified,
+> low-risk** wrappers (restore, version archive/unarchive) into v0.9.0 and held
+> `document edit` + `audit tail/search` because they need a design decision
+> (edit) or are redundant surface (audit) — and v0.9.0 is the lead-in to the
+> v1.0 *contract freeze*, so adding a subtly-wrong or redundant verb now is the
+> expensive mistake. Both held items are documented above for the maintainer to
+> green-light/redesign.
 
 ---
 

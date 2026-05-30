@@ -9,7 +9,64 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.0 — "CLI verb redesign + Python surface retirement".** The
+contract-hardening release before v1.0. Client/CLI only — no data, schema, or
+Edge Function changes. See [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
+
+> **⚠ CLI verbs renamed.** The flat verbs moved under resource groups
+> (`cerefox get-doc X` → `cerefox document get X`). The old names still run but
+> print the new form and exit non-zero; they are **removed in v1.0**. Update
+> scripts/aliases and re-run `cerefox completion <shell>`.
+
+### Added
+
+- **`cerefox document restore <id>`** — un-soft-delete a document from the
+  trash (inverse of `document delete`; wraps `cerefox_restore_document`).
+- **`cerefox version archive <version-id>` / `version unarchive <version-id>`**
+  — protect a version from the cleanup sweep (or release it), with an audit
+  entry. Mirrors the web UI's version-archive action.
+
+  (Folded forward from the v0.9.1 plan — both are thin wrappers over existing
+  server operations. `document edit` + `audit tail/search` remain in v0.9.1;
+  see below.)
+
+### Changed
+
+- **CLI is now resource-verb** (`cerefox <resource> <verb>`). Rename-only for
+  the *existing* surface — no behavior or flags changed. Groups: `document`
+  (get/list/delete/restore/ingest/ingest-dir), `project` (list/delete),
+  `version` (list/archive/unarchive), `metadata` (keys/search), `audit`
+  (list), `config` (get/set), `backup` (create/restore), `server`
+  (deploy/reindex). `search` + lifecycle commands stay flat. Full old→new
+  table in the migration guide.
+
+### Removed / deprecated
+
+- **Old flat verbs are hidden husks** that exit non-zero with a pointer to the
+  new form (removed entirely in v1.0).
+- **Python CLI retired to husks** — every `uv run cerefox <cmd>` except `mcp`
+  now redirects to the TypeScript CLI. The `CEREFOX_NO_DEPRECATION_BANNER`
+  opt-out is gone.
+- **Python web app removed** — `cerefox.api.app` is a husk; use the TypeScript
+  `cerefox web`. FastAPI/uvicorn dropped from `pyproject.toml`.
+- **`pytest` retired as a test runner** — `tests/**/*.py` deleted; the suite is
+  `bun test`. `pyproject.toml`/`uv.lock`/`.python-version` stay (the Python MCP
+  runtime remains).
+
+### Kept
+
+- **`uv run cerefox mcp`** still launches the in-tree Python MCP server — a
+  frozen, unmaintained, offline / no-npm repo-clone fallback through v1.x.
+
+### Deferred to v0.9.1
+
+- **`document edit`** — content edits already work via `cerefox document ingest
+  --document-id <id> --update`; a dedicated `edit` adds title/metadata-only
+  editing, which has a title-boosting re-embed nuance worth a small design pass
+  before it joins the v1.0 contract.
+- **`audit tail` / `audit search`** — `audit list` already covers filtering
+  (`--author/--operation/--since/--until`) and recency (`--limit`); these would
+  be redundant surface. Revisit only if a real follow/streaming need appears.
 
 ---
 
