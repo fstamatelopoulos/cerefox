@@ -279,4 +279,105 @@ describe("cerefox write commands (live)", () => {
     expect(status).toBe(3);
     expect(stderr).toContain("not found");
   });
+
+  // ── v0.9.x commands: live round-trips (self-cleaning) ──────────────────────
+
+  test("project create → edit → delete round-trip", () => {
+    const name = "[E2E v0.5-test] proj-roundtrip";
+    const renamed = "[E2E v0.5-test] proj-renamed";
+    const create = run(["project", "create", name, "--description", "tmp"]);
+    expect(create.status).toBe(0);
+    expect(create.stdout).toContain(name);
+
+    const edit = run(["project", "edit", name, "--name", renamed, "--description", "edited"]);
+    expect(edit.status).toBe(0);
+    expect(edit.stdout).toContain(renamed);
+
+    const del = run(["project", "delete", renamed, "--yes", "--force"]);
+    expect(del.status).toBe(0);
+  });
+
+  test("project create: duplicate name → exit non-zero", () => {
+    const name = "[E2E v0.5-test] proj-dup";
+    const first = run(["project", "create", name]);
+    expect(first.status).toBe(0);
+    const dup = run(["project", "create", name]);
+    expect(dup.status).not.toBe(0);
+    run(["project", "delete", name, "--yes", "--force"]); // cleanup
+  });
+
+  test("document edit: non-destructive metadata patch (keep / set / unset)", async () => {
+    const title = "[E2E v0.5-test] edit-patch";
+    const ingest = run(
+      [
+        "document", "ingest", "--paste", "--title", title,
+        "--project-name", "_e2e-v0.5",
+        "--metadata", '{"keep":"yes","drop":"old"}',
+        "--author", "v0.5-test", "--author-type", "agent",
+      ],
+      { stdin: `# Edit patch\n\nbody ${Date.now()}\n` },
+    );
+    expect(ingest.status).toBe(0);
+    const id = parseIdFromIngestMessage(ingest.stdout);
+    expect(id).not.toBeNull();
+    if (!id) return;
+    createdIds.push(id);
+
+    const edit = run([
+      "document", "edit", id,
+      "--set-meta", "status=approved",
+      "--set-meta", "count=3",
+      "--unset-meta", "drop",
+      "--author", "v0.5-test", "--author-type", "agent",
+    ]);
+    expect(edit.status).toBe(0);
+
+    // `document get` returns reconstructed content, not metadata — verify the
+    // patch directly against the row (same client hardPurgeE2eDocs uses).
+    const client = createClient(loadSettings());
+    const { data } = await client.raw
+      .from("cerefox_documents")
+      .select("metadata")
+      .eq("id", id)
+      .maybeSingle();
+    const meta = ((data?.metadata as Record<string, unknown>) ?? {});
+    expect(meta.keep).toBe("yes"); // preserved
+    expect(meta.drop).toBeUndefined(); // unset
+    expect(meta.status).toBe("approved"); // set
+    expect(meta.count).toBe(3); // JSON-parsed to a number
+  });
+
+  test("document delete → restore clears + re-sets deleted_at", async () => {
+    const title = "[E2E v0.5-test] restore-flow";
+    const ingest = run(
+      [
+        "document", "ingest", "--paste", "--title", title,
+        "--project-name", "_e2e-v0.5",
+        "--author", "v0.5-test", "--author-type", "agent",
+      ],
+      { stdin: `# Restore flow\n\nbody ${Date.now()}\n` },
+    );
+    expect(ingest.status).toBe(0);
+    const id = parseIdFromIngestMessage(ingest.stdout);
+    expect(id).not.toBeNull();
+    if (!id) return;
+    createdIds.push(id);
+
+    const client = createClient(loadSettings());
+    const deletedAt = async (): Promise<unknown> => {
+      const { data } = await client.raw
+        .from("cerefox_documents")
+        .select("deleted_at")
+        .eq("id", id)
+        .maybeSingle();
+      return data?.deleted_at ?? null;
+    };
+
+    expect(run(["document", "delete", id, "--yes", "--author", "v0.5-test", "--author-type", "agent"]).status).toBe(0);
+    expect(await deletedAt()).not.toBeNull(); // soft-deleted
+
+    const restore = run(["document", "restore", id, "--author", "v0.5-test", "--author-type", "agent"]);
+    expect(restore.status).toBe(0);
+    expect(await deletedAt()).toBeNull(); // restored
+  });
 });
