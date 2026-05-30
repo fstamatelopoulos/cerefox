@@ -5,7 +5,7 @@ configure, what can reach the database, and which path is right for your integra
 
 > **A note on Supabase keys (2026):** Cerefox needs two API keys for two different transport
 > layers. Layer 1 (Edge Functions) uses the **legacy anon JWT** as a Bearer token — the new
-> `sb_publishable_…` key is rejected by the Edge Function gateway. Layer 2 (Python REST)
+> `sb_publishable_…` key is rejected by the Edge Function gateway. Layer 2 (web + CLI REST)
 > uses the new **secret key** (`sb_secret_…`) or the legacy `service_role` JWT — either
 > works. See [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026)
 > for the full picture and why this asymmetry exists.
@@ -14,7 +14,7 @@ configure, what can reach the database, and which path is right for your integra
 
 ## Layer 1 — AI Agents via Edge Functions (HTTPS)
 
-This is the primary integration layer for AI clients. Six Supabase Edge Functions are
+This is the primary integration layer for AI clients. Nine Supabase Edge Functions are
 deployed on the Supabase platform and are reachable over HTTPS with nothing more than the
 **legacy anon JWT** (a public-facing JWT, `eyJ…`). The Supabase gateway validates the key
 before any request reaches a function; individual functions then use the service-role key
@@ -25,7 +25,7 @@ internally to call Postgres RPCs. Your anon key is never elevated to database-le
 > [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026)
 > for why.
 
-### The six Edge Functions
+### The nine Edge Functions
 
 | Edge Function | Role |
 |---|---|
@@ -34,29 +34,28 @@ internally to call Postgres RPCs. Your anon key is never elevated to database-le
 | `cerefox-metadata` | List metadata keys with document counts and example values |
 | `cerefox-get-document` | Retrieve full document content (current or archived version) |
 | `cerefox-list-versions` | List the archived version history for a document |
-| `cerefox-mcp` | Streamable HTTP MCP adapter — delegates to all five above |
+| `cerefox-get-audit-log` | Query audit log entries with filters |
+| `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search |
+| `cerefox-list-projects` | List all projects with names, IDs, and descriptions |
+| `cerefox-mcp` | Streamable HTTP MCP adapter — calls Postgres RPCs directly |
 
 ### How clients connect
 
 **MCP clients** (Claude Code, Cursor, Claude Desktop) connect to `cerefox-mcp`. It speaks
-the MCP Streamable HTTP protocol and fans out each tool call to the appropriate primitive
-Edge Function via an internal `fetch()`. The client only ever talks to one URL.
+the MCP Streamable HTTP protocol and calls the Postgres RPCs directly (no internal fan-out
+to the primitive Edge Functions). The client only ever talks to one URL.
 
 ```
 MCP client (anon key)
     │
     ▼
-cerefox-mcp ──▶ cerefox-search
-            ──▶ cerefox-ingest
-            ──▶ cerefox-metadata
-            ──▶ cerefox-get-document
-            ──▶ cerefox-list-versions
-                    │
-                    ▼ (service-role key, internal)
-             Postgres RPCs
+cerefox-mcp
+    │
+    ▼ (service-role key, internal)
+Postgres RPCs
 ```
 
-**ChatGPT Custom GPT Actions** call the five primitive Edge Functions directly over HTTPS
+**ChatGPT Custom GPT Actions** call the eight primitive Edge Functions directly over HTTPS
 using an OpenAPI schema. `cerefox-mcp` is not involved (ChatGPT does not support the
 Streamable HTTP MCP protocol).
 
@@ -72,14 +71,17 @@ See `docs/guides/connect-agents.md` for step-by-step setup per client.
 
 ---
 
-## Layer 2 — Python Web App and CLI via Supabase REST
+## Layer 2 — Web UI and CLI via Supabase REST
 
-The FastAPI web app and all `cerefox` CLI commands (`ingest`, `search`, `reindex`,
-`backup`, etc.) use `CerefoxClient` (`src/cerefox/db/client.py`), a thin wrapper around
-`supabase-py`. This library talks to Supabase over its REST API (PostgREST), but
-authenticates with a **service-role-equivalent key** rather than the anon key — either
-the new **secret key** (`sb_secret_…`) or the legacy `service_role` JWT. Both are
-accepted by the Data API gateway.
+The web UI (TypeScript Hono backend + React/Mantine SPA, served by `cerefox web`) and all
+`cerefox` CLI commands (`document ingest`, `search`, `server reindex`, `backup`, etc.) talk
+to Supabase over its REST API (PostgREST), authenticating with a **service-role-equivalent
+key** rather than the anon key — either the new **secret key** (`sb_secret_…`) or the legacy
+`service_role` JWT. Both are accepted by the Data API gateway.
+
+> The legacy Python FastAPI web app and Python CLI are husks slated for removal; only
+> `uv run cerefox mcp` survives as a frozen, unmaintained fallback. The TS `cerefox` CLI
+> and `cerefox web` are the current implementations.
 
 The service-role key bypasses Supabase Row Level Security (RLS) policies and grants
 unrestricted read and write access. This is intentional — the CLI and web app are trusted,
@@ -87,14 +89,14 @@ local tools that need to insert, update, and delete freely. Keep this key out of
 public-facing configuration.
 
 > **Local coding agents (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) also reach
-> Cerefox through this layer**, when the user authorises the agent to invoke `uv run cerefox …`
+> Cerefox through this layer**, when the user authorises the agent to invoke `cerefox …`
 > via its Bash tool. This is "Path C" in `connect-agents.md`. The agent runs with the same
 > service-role privileges as the user — same trust assumption as letting the agent edit
 > source code in your repo. See `docs/guides/connect-agents.md` → "Path C — Shell CLI for
 > local coding agents" for the setup and caveats.
 
 ```
-Python web app / CLI (service-role key)
+Web UI / CLI (service-role key)
     │
     ▼
 Supabase REST API (PostgREST)
@@ -103,7 +105,7 @@ Supabase REST API (PostgREST)
 Postgres RPCs  (same cerefox_* functions called by Edge Functions)
 ```
 
-The Python layer calls the same Postgres RPCs as the Edge Functions — the business logic
+This layer calls the same Postgres RPCs as the Edge Functions — the business logic
 lives in one place (Postgres) and is shared across all callers.
 
 ### Credentials needed
@@ -115,20 +117,24 @@ lives in one place (Postgres) and is shared across all callers.
 
 ## Layer 3 — Direct Postgres (Deployment Scripts Only)
 
-The deployment and migration scripts (`scripts/db_deploy.py`, `scripts/db_migrate.py`,
-`scripts/backup_restore.py`) connect directly to Postgres over TCP using **psycopg2** and
-the database connection string. This is the only path that can run DDL statements (`CREATE
-TABLE`, `CREATE FUNCTION`) — the REST API does not support them.
+For end users, `cerefox server deploy` (which bundles schema + RPCs + the nine Edge
+Functions from the npm package) handles schema deployment directly. For contributors, the
+canonical deployment and migration scripts (`bun scripts/db_deploy.ts`,
+`bun scripts/db_migrate.ts`, `bun scripts/backup_restore.ts`) connect directly to Postgres
+over TCP using the database connection string. (The legacy `.py` equivalents still exist
+but are deprecated.) This is the only path that can run DDL statements (`CREATE TABLE`,
+`CREATE FUNCTION`) — the REST API does not support them.
 
 ```
-scripts/db_deploy.py  (DB password via DATABASE_URL)
+cerefox server deploy / bun scripts/db_deploy.ts  (DB password via DATABASE_URL)
     │
     ▼
 Postgres (direct TCP connection)
 ```
 
-No application code — not the web app, not the CLI — uses this path at runtime. It is
-exclusively for schema deployment and data restore operations.
+No application code — not the web app, not the CLI's runtime read/write commands — uses
+this path at request time. It is exclusively for schema deployment and data restore
+operations.
 
 ### Credentials needed
 
@@ -149,10 +155,10 @@ exclusively for schema deployment and data restore operations.
 | Claude Desktop | HTTPS → `cerefox-mcp` (via `supergateway`) | Legacy anon JWT | Daily AI assistant access |
 | ChatGPT Custom GPT | HTTPS → primitive Edge Functions | Legacy anon JWT | AI assistant via GPT Actions |
 | curl / HTTP scripts | HTTPS → primitive Edge Functions | Legacy anon JWT | Ad-hoc queries, automation |
-| Python web app | Supabase REST API | Secret key (or legacy service_role) | Web UI backend |
+| Web UI (`cerefox web`) | Supabase REST API | Secret key (or legacy service_role) | Web UI backend (TS Hono) |
 | `cerefox` CLI (human) | Supabase REST API | Secret key (or legacy service_role) | Ingestion, search, reindex, backup |
 | Local coding agent via `cerefox` CLI | Supabase REST API | Secret key (or legacy service_role) | User-authorised agent (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) acting on user's behalf via Bash tool |
-| Deployment scripts | Direct TCP (psycopg2) | DB password | Schema deploy, data restore |
+| `cerefox server deploy` / deployment scripts | Direct TCP | DB password | Schema deploy, data restore |
 
 ### Key security principle
 

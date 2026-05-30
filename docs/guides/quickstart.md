@@ -11,7 +11,7 @@ clone, no Python required.**
 ## Prerequisites
 
 - **Node.js 20+** (`node --version`) or **Bun 1.0+** (`bun --version`)
-- A **Supabase account** -- [supabase.com](https://supabase.com) (free tier works) -- with the Cerefox schema deployed (see [Note on schema deploy](#note-on-schema-deploy) below)
+- A **Supabase account** -- [supabase.com](https://supabase.com) (free tier works). A fresh project is fine — `cerefox server deploy` (Step 2) deploys the schema for you.
 - An **OpenAI API key** -- [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
 ---
@@ -39,11 +39,26 @@ cerefox doctor      # green across the board if everything's wired correctly
 ```
 
 `cerefox init` validates each entry against the live service before saving,
-writes `~/.cerefox/.env` (mode 0600), and optionally ingests the bundled
+writes `~/.cerefox/.env` (mode 0600), offers to deploy the schema + RPCs +
+Edge Functions to a fresh Supabase project, and optionally ingests the bundled
 self-docs into the `_cerefox-self-docs` project so agents can search for
 Cerefox usage guidance.
 
-## 3. Wire up an AI agent
+## 3. Deploy the server side (fresh project only)
+
+If `cerefox init` didn't already do it, deploy the schema, RPCs, and Edge
+Functions to your Supabase project — straight from the npm-bundled assets, no
+source clone:
+
+```bash
+cerefox server deploy        # detects fresh vs. existing DB; --dry-run to preview
+```
+
+On an existing database this applies pending migrations and re-applies RPCs
+in place, so re-run it after upgrading. Detailed walkthrough:
+[`setup-supabase.md`](setup-supabase.md).
+
+## 4. Wire up an AI agent
 
 ```bash
 # Run the commands that apply to your setup:
@@ -62,7 +77,7 @@ Then restart your client:
 All five writers configure the local stdio server. For the remote (Edge Function)
 HTTP transport, or to edit configs by hand, see [`connect-agents.md`](connect-agents.md).
 
-## 4. Try it
+## 5. Try it
 
 From your AI agent, ask:
 
@@ -72,22 +87,13 @@ You should see results from the bundled self-docs.
 
 ---
 
-## Note on schema deploy
+## Contributing instead?
 
-If your Supabase project is **brand new**, the Cerefox schema needs to be
-deployed once before the CLI works. Until v0.6 ports the schema deploy to
-TypeScript, this is the one step that still requires the source-checkout
-path:
-
-```bash
-git clone https://github.com/fstamatelopoulos/cerefox.git && cd cerefox
-uv sync
-# Add CEREFOX_DATABASE_URL to your .env, then:
-uv run python scripts/db_deploy.py
-```
-
-Detailed walkthrough: [`setup-supabase.md`](setup-supabase.md).
-After v0.6.0, `cerefox init` will offer to do this for you.
+The path above is for **end users** (no clone). If you want to hack on Cerefox,
+clone the repo, run `bun install`, and use the contributor scripts
+(`bun scripts/db_deploy.ts`, `bun scripts/db_migrate.ts`). `uv` is only needed
+for the legacy Python MCP fallback. See [`setup-local.md`](setup-local.md) and
+`CONTRIBUTING.md`.
 
 ---
 
@@ -97,7 +103,7 @@ After v0.6.0, `cerefox init` will offer to do this for you.
   `cerefox document ingest-dir ./notes/ --recursive`
 - **Search from the CLI**: `cerefox search "your query"`
 - **Discover all commands**: `cerefox --help`
-- **Run the web UI** (Python-only until v0.6): [`setup-local.md`](setup-local.md)
+- **Run the web UI**: `cerefox web` (TypeScript — Hono backend + React SPA); see [`setup-local.md`](setup-local.md)
 - **Connect more AI clients** (Cursor, Codex, ChatGPT GPT Actions, etc.):
   [`connect-agents.md`](connect-agents.md)
 - **Configuration reference**: [`configuration.md`](configuration.md)

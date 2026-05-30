@@ -49,12 +49,27 @@ new form (removed in v1.0).
   count as chars and omitted counts for full-document results. Inter-result
   separator changed from `---` (collides with markdown content) to a
   distinctive rule. Use `--json` for robust parsing.
+- **Documentation refreshed end-to-end.** First sweep since the TypeScript
+  migration + installer landed: README simplified into two clear paths
+  (use-it-via-npm vs. hack-on-it-from-source), every guide updated to the
+  installer + resource-verb CLI, manual per-client agent config moved to an
+  appendix in `connect-agents.md` (`cerefox configure-agent` now leads), Python
+  marked legacy throughout, and stale pre-migration instructions (pytest,
+  PDF/DOCX ingest, `uv run cerefox` for non-MCP commands) removed.
 
 ### Fixed
 
 - **`scripts/cut_release.ts` confirms before any mutation.** It used to bump +
   commit + tag and only then prompt; declining left a local commit + tag that
   blocked re-running. Declining now leaves the working tree pristine.
+
+### Internal
+
+- **Live write-command round-trips folded into the test suite**
+  (`packages/memory/test/write-commands.test.ts`): project create→edit→delete,
+  duplicate-name rejection, `document edit` non-destructive metadata patch, and
+  `document delete`→`restore`. Probe-and-skip when no Supabase is reachable;
+  self-cleaning `[E2E]`-prefixed fixtures.
 
 ---
 

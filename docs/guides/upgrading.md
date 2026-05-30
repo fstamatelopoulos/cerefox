@@ -4,24 +4,35 @@ This guide covers upgrading an existing Cerefox installation. All steps are idem
 
 ## Pick your path
 
-Cerefox has two install paths since v0.4.0 (npm) and v0.5.0 (TS CLI). The right
-upgrade procedure depends on how you installed Cerefox:
+The right upgrade procedure depends on how you installed Cerefox:
 
 | You installed via | Upgrade with |
 |---|---|
-| **npm / Bun** (`@cerefox/memory` global) | `bun update -g @cerefox/memory` (or `npm update -g @cerefox/memory`), then read [`migration-v0.5.md`](migration-v0.5.md) for any breaking-change notes per version. **`cerefox doctor`** verifies the install. |
-| **Source checkout** (`git clone` + `uv sync`) | The "Standard Upgrade Checklist" below — Python deps, schema migrations, Edge Functions, frontend build, the works. |
-| **Both** (you contribute AND have the npm bin globally) | Both flows. The two paths share the same Supabase + `.env`; just keep them updated in lockstep. |
+| **Installer / npm** (end user, no repo clone) | Re-run the installer (`curl …/install.sh \| sh`) or `cerefox self-update` (or `bun update -g @cerefox/memory` / `npm update -g @cerefox/memory`). Then run `cerefox server deploy` **if the server side changed** (new migration or RPC change — release notes will say). **`cerefox doctor`** verifies the install. |
+| **Source checkout** (`git clone`, contributor) | The "Contributor Upgrade Checklist" below — `git pull`, schema migrations, Edge Functions, frontend build. |
+| **Both** (you contribute AND have the bin globally) | Both flows. The two paths share the same Supabase + `.env`; just keep them updated in lockstep. |
 
-> If you're upgrading from Python `cerefox` to the npm-installed TS CLI for the first
-> time, [`migration-v0.5.md`](migration-v0.5.md) is the canonical guide — it covers
-> `cerefox init`'s coexistence flow (`[c]opy` your existing `.env` to `~/.cerefox/.env`),
-> the v0.5.2 soft-wrapper removal, and the v0.5.3 paths precedence change.
+> If you're upgrading across a major boundary for the first time,
+> [`migration-v0.9.md`](migration-v0.9.md) is the canonical migration guide.
 
-The rest of this document covers the **source checkout** path (Python + frontend + Edge
-Functions). If you're an npm-installed user, you've already got everything you need.
+## End-User Upgrade
 
-## Standard Upgrade Checklist (source-checkout users)
+```bash
+# 1. Update the CLI
+cerefox self-update          # or: re-run the installer, or bun/npm update -g @cerefox/memory
+
+# 2. If the release notes flag a server-side change (new migration / RPC change):
+cerefox server deploy        # applies pending migrations, re-applies RPCs, redeploys the 9 Edge Functions
+
+# 3. Verify
+cerefox doctor
+```
+
+`cerefox server deploy` is the catch-all for the server side: on an existing DB it applies
+pending migrations and re-applies `rpcs.sql` in place, then redeploys all nine Edge Functions
+from npm-bundled assets. No repo clone required.
+
+## Contributor Upgrade Checklist (source checkout)
 
 Run these steps every time you pull a new version:
 
@@ -29,19 +40,16 @@ Run these steps every time you pull a new version:
 # 1. Pull the latest code
 git pull origin main
 
-# 2. Install/update Python dependencies
-uv sync
+# 2. Apply database migrations (skips already-applied ones)
+bun scripts/db_migrate.ts
 
-# 3. Apply database migrations (skips already-applied ones)
-uv run python scripts/db_migrate.py
+# 3. Redeploy RPC functions (safe to re-run)
+bun scripts/db_deploy.ts
 
-# 4. Redeploy RPC functions (safe to re-run)
-uv run python scripts/db_deploy.py
-
-# 5. Build the web UI
+# 4. Build the web UI
 cd frontend && npm install && npm run build && cd ..
 
-# 6. Deploy Edge Functions (if using Supabase-hosted)
+# 5. Deploy Edge Functions (if using Supabase-hosted)
 #    Run from the project root (where supabase/ directory is)
 npx supabase functions deploy cerefox-search
 npx supabase functions deploy cerefox-ingest
@@ -50,16 +58,21 @@ npx supabase functions deploy cerefox-get-document
 npx supabase functions deploy cerefox-list-versions
 npx supabase functions deploy cerefox-get-audit-log
 npx supabase functions deploy cerefox-metadata-search
+npx supabase functions deploy cerefox-list-projects
 npx supabase functions deploy cerefox-mcp
 
-# 7. Restart the application
-uv run uvicorn cerefox.api.app:create_app --factory --reload
+# 6. Restart the web UI
+cerefox web
 
-# 8. (Optional) Sync project docs to Cerefox knowledge base
-uv run python scripts/sync_docs.py
+# 7. (Optional) Sync project docs to Cerefox knowledge base
+bun scripts/sync_docs.ts
 ```
 
-Steps 3-4 require `CEREFOX_DATABASE_URL` in your `.env` file (direct Postgres connection). Steps 6 require the Supabase CLI and a linked project.
+Steps 2-3 require `CEREFOX_DATABASE_URL` in your `.env` file (direct Postgres connection). Step 5 requires the Supabase CLI and a linked project. (`cerefox server deploy` does steps 2, 3, and 5 in one command.)
+
+> Python is legacy and slated for removal: the Python CLI and FastAPI web app are husks; only
+> `uv run cerefox mcp` survives as a frozen, unmaintained fallback. Tests run via `bun test`
+> (pytest is retired).
 
 ## Verifying the Upgrade
 
@@ -67,10 +80,10 @@ After upgrading, verify the key components:
 
 ```bash
 # Check migration status
-uv run python scripts/db_migrate.py --status
+bun scripts/db_migrate.ts --status
 
 # Run unit tests (optional but recommended)
-uv run pytest -q
+bun test
 
 # Visit the web UI
 open http://localhost:8000/app/
@@ -213,7 +226,7 @@ uv run python scripts/reindex_all.py --dry-run
 uv run python scripts/reindex_all.py
 
 # Or run directly via the CLI (same effect)
-uv run cerefox server reindex --all
+cerefox server reindex --all
 ```
 
 The reindex is **resumable**: if interrupted, re-running it skips chunks already embedded with the current model. Archived chunks (historical versions) are not reindexed -- they are not searched.
@@ -290,7 +303,7 @@ MCP clients pick up new tools automatically on the next connection.
 
 ### Upgrading to v0.1.1+ (from v0.1.0)
 
-**Cloud-only embeddings**: Local embedders (mpnet, Ollama) were removed. If you were using a local embedder, switch to OpenAI or Fireworks AI and run `uv run cerefox server reindex` to re-embed all chunks.
+**Cloud-only embeddings**: Local embedders (mpnet, Ollama) were removed. If you were using a local embedder, switch to OpenAI or Fireworks AI and run `cerefox server reindex` to re-embed all chunks.
 
 ## AI Agent Integration After Upgrade
 

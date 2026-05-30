@@ -34,14 +34,14 @@ Three top-level paths plus a few special cases:
 | Cursor (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
 | OpenAI Codex CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key env var; TOML config |
 | ChatGPT (chatgpt.com or desktop) | Path B — Custom GPT → Edge Functions | Hybrid | ChatGPT Plus required |
-| Claude Desktop (local) | Path A-Local — `@cerefox/memory` via `npx` (recommended) or `cerefox mcp` (Python fallback) | Hybrid | Local alternative; Node.js (npm path) or Python + uv + local clone (legacy path); zero Edge Function invocations |
-| Claude Code (local) | Path A-Local — `@cerefox/memory` via `npx` or `cerefox mcp` | Hybrid | Local alternative; zero Edge Function invocations |
-| Cursor (local) | Path A-Local — `@cerefox/memory` via `npx` or `cerefox mcp` | Hybrid | Local alternative; zero Edge Function invocations |
+| Claude Desktop (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; Node.js; zero Edge Function invocations |
+| Claude Code (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
+| Cursor (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
 | Cloud Claude (claude.ai web) | Remote Supabase MCP | FTS only | No install; search quality limited |
 | Gemini CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
-| Local coding agents (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) | Path C — Shell CLI (Bash tool) | Hybrid | Local clone + `uv`; agent runs `uv run cerefox …` as a shell command. Useful when MCP setup is friction. |
+| Local coding agents (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) | Path C — Shell CLI (Bash tool) | Hybrid | `npm install -g @cerefox/memory`; agent runs `cerefox …` as a shell command. Useful when MCP setup is friction. |
 | curl / scripts | Path B — Edge Functions directly | Hybrid | Direct HTTP; no client needed |
-| Custom Python agents | Python SDK directly | Hybrid | Local Python required |
+| Custom Python agents | Python SDK directly (legacy) | Hybrid | Local Python + repo clone; the Python path is legacy/frozen |
 
 > **"Hybrid"** = FTS + semantic, document-level (complete reconstructed notes, not isolated chunks).
 > **"FTS only"** = keyword search only; no semantic/vector search.
@@ -68,13 +68,14 @@ Three top-level paths plus a few special cases:
 - Some content ingested (`cerefox document ingest my-notes.md`)
 
 **For Path A-Local only:**
-- **Recommended (v0.4.0+):** [Node.js ≥20](https://nodejs.org) (for `npx --package=@cerefox/memory cerefox mcp`)
+- [Node.js ≥20](https://nodejs.org) (for `npx --package=@cerefox/memory cerefox mcp`, or a
+  global `npm install -g @cerefox/memory`)
   + `.env` file in the working directory the client launches the server from (see "env block"
   in the per-client configs below if your client can't see the file)
-- **Alternative:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) installed on your machine + Cerefox repository cloned locally (e.g. `/Users/yourname/src/cerefox`)
-  + `.env` in the checkout
-- Either way, `.env` must define `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, and your
+- `.env` must define `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, and your
   embedding API key (`OPENAI_API_KEY`)
+- A frozen Python MCP server still exists as a standalone fallback (`uv run cerefox mcp` from a
+  repo clone), but the npm package is the maintained path.
 
 > **Important — which anon key to use (2026):** Path A-Remote and Path B both require an
 > "anon key" as a Bearer token. As of 2026, you **must** use the **legacy anon JWT**
@@ -91,10 +92,11 @@ Three top-level paths plus a few special cases:
 - For Claude Code: [Node.js](https://nodejs.org) for `npx mcp-remote` (recommended), or no extra deps for native HTTP
 
 **For Path B (Edge Functions / GPT Actions) only:**
-- Supabase Edge Functions deployed: `cerefox-search`, `cerefox-ingest`, `cerefox-metadata`,
-  `cerefox-get-document`, `cerefox-list-versions`, `cerefox-get-audit-log`,
-  `cerefox-metadata-search`, `cerefox-list-projects` --
-  see `setup-supabase.md` for the deploy procedure (`npx supabase functions deploy`)
+- Supabase Edge Functions deployed (all 9, including `cerefox-mcp`): `cerefox-search`,
+  `cerefox-ingest`, `cerefox-metadata`, `cerefox-get-document`, `cerefox-list-versions`,
+  `cerefox-get-audit-log`, `cerefox-metadata-search`, `cerefox-list-projects`, `cerefox-mcp`.
+  End-user path: `cerefox server deploy`. Contributor/manual path: `npx supabase functions
+  deploy` (see `setup-supabase.md`).
 - Your **legacy anon JWT** (see callout above): Supabase Dashboard → Project Settings → API Keys → Legacy → anon
 - Your **project ref**: visible in the Supabase Dashboard URL
   (`app.supabase.com/project/<project-ref>`)
@@ -111,23 +113,22 @@ Three top-level paths plus a few special cases:
 The local Cerefox MCP server runs on your machine and exposes the same 10 tools as the remote
 Edge Function, communicating with clients over stdio.
 
-As of **v0.4.0** the local server ships as an npm package — **[`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)** — built with the official `@modelcontextprotocol/sdk`.
+The local server ships as an npm package — **[`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)** — built with the official `@modelcontextprotocol/sdk`.
 The bin entry is `cerefox` (run as `cerefox mcp`). The recommended client config is `npx -y --package=@cerefox/memory cerefox mcp`, or if you've installed the package globally, just `cerefox mcp`.
 
-The Python `uv run cerefox mcp` invocation **still works** and remains the right choice if
-you've installed Cerefox from a source checkout. v0.4 through v0.5.1 advertised a
-"soft wrapper" that tried to auto-delegate to the npm package, but the probe was unreliable
-under MCP-client launch environments — v0.5.2 removed it. The two paths (Python via
-`uv run`, TS via `cerefox mcp` on PATH or via `npx`) are now **fully independent**.
-Pick one explicitly in your MCP client config.
+A separate, **frozen** Python MCP server still exists as a standalone fallback — invoke it
+explicitly with `uv run cerefox mcp` from a Cerefox repo clone. It is independent and
+unmaintained; the npm package is the maintained path. (A "soft wrapper" that auto-delegated
+the Python `cerefox mcp` to the npm package was removed in v0.5.2 — the two are now fully
+separate. Pick one explicitly in your MCP client config.)
 
 - Embeddings are computed locally using your `.env` key (no extra credentials)
 - Works offline except for the OpenAI embedding API call per query
 - One setup, all compatible local clients (Claude Desktop, Cursor, Claude Code, Codex CLI, …)
 
-See [`docs/guides/migration-v0.5.md`](migration-v0.5.md) for the per-client config
-snippets, the v0.5.2 soft-wrapper removal explainer, and the v0.5.3 `.env` location
-change.
+See [`docs/guides/migration-v0.5.md`](migration-v0.5.md) and
+[`docs/guides/migration-v0.9.md`](migration-v0.9.md) for the per-client config snippets and
+the upgrade path.
 
 > **Why not `mcp-server-fetch`?** The generic fetch MCP only supports GET requests and cannot
 > make authenticated POST calls to the Edge Functions. The built-in local server is
@@ -189,7 +190,7 @@ For the full tool reference, search Cerefox for "How AI Agents Use Cerefox".
 
 > **Agent reference docs**: `AGENT_GUIDE.md` (comprehensive) and `AGENT_QUICK_REFERENCE.md` (quick
 > reference) in the repo root contain the full tool reference for AI agents. These are also
-> ingested into the Cerefox KB via `sync_docs.py`, so agents can find them by searching.
+> ingested into the Cerefox KB via `bun scripts/sync_docs.ts`, so agents can find them by searching.
 
 ### Path A verification prompts
 
@@ -211,53 +212,17 @@ After setup, ask your client:
 
 ### Claude Desktop
 
-**Config file location:**
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+**Recommended — let the CLI write it:**
 
-**Recommended — npm (`@cerefox/memory`, v0.4.0+):**
-
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "npx",
-      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
-      "env": {
-        "CEREFOX_SUPABASE_URL": "https://<your-project-ref>.supabase.co",
-        "CEREFOX_SUPABASE_KEY": "<your-service-role-or-sb_secret-key>",
-        "OPENAI_API_KEY": "sk-..."
-      }
-    }
-  }
-}
+```bash
+cerefox configure-agent --tool claude-desktop
 ```
 
-The `env` block is only needed if you don't already have a `.env` file in a directory the
-server can find — the server resolves `.env` from the current working directory.
+This writes the local-stdio entry into your `claude_desktop_config.json` and backs up the
+existing file. Then restart Claude Desktop fully (Cmd+Q on macOS, not just close the window).
 
-**Alternative — local checkout (Python or pre-v0.4 setups):**
-
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
-    }
-  }
-}
-```
-
-Replace `/path/to/cerefox` with the absolute path to your Cerefox checkout
-(e.g. `/Users/yourname/src/cerefox` on macOS, `C:\Users\yourname\src\cerefox` on Windows).
-This invocation soft-wraps `npx --package=@cerefox/memory cerefox mcp` when available; otherwise the
-legacy Python MCP server takes over.
-
-**Important:**
-- Merge the `mcpServers` block into any existing `claude_desktop_config.json` — do not wrap it
-  in an extra `{}` or replace the whole file.
-- Restart Claude Desktop fully (Cmd+Q on macOS, not just close the window) after saving.
+For the manual JSON (for the curious, or to debug if the CLI can't write your config), see
+[Appendix: manual per-client config](#appendix-manual-per-client-config).
 
 ---
 
@@ -275,44 +240,17 @@ legacy Python MCP server takes over.
 
 ### Cursor
 
-1. Open **Cursor Settings** (`Cmd+,`) → **Tools & Integrations** → **MCP** → **Add new global MCP server**
-2. Paste either of the following into the MCP config JSON:
+**Recommended — let the CLI write it:**
 
-**Recommended — npm:**
-
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "npx",
-      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
-      "env": {
-        "CEREFOX_SUPABASE_URL": "https://<your-project-ref>.supabase.co",
-        "CEREFOX_SUPABASE_KEY": "<your-service-role-or-sb_secret-key>",
-        "OPENAI_API_KEY": "sk-..."
-      }
-    }
-  }
-}
+```bash
+cerefox configure-agent --tool cursor
 ```
 
-**Alternative — local checkout:**
+This writes the local-stdio entry into `~/.cursor/mcp.json`. Save and restart Cursor.
 
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
-    }
-  }
-}
-```
-
-3. Save and restart Cursor.
-
-Alternatively, add a `.cursor/mcp.json` file in your project root with the same content for
-project-scoped access (committed to git, shared with your team).
+For project-scoped access, copy the generated entry into a `.cursor/mcp.json` in your project
+root (committed to git, shared with your team). For the manual JSON, see
+[Appendix: manual per-client config](#appendix-manual-per-client-config).
 
 ---
 
@@ -321,49 +259,21 @@ project-scoped access (committed to git, shared with your team).
 Claude Code (the CLI tool and the **Code** tab inside Claude Desktop) uses its own MCP config —
 separate from `claude_desktop_config.json`. Changes made in one do not affect the other.
 
-**Option 1: CLI command — npm (recommended)**
+**Recommended — let the CLI write it:**
 
 ```bash
-claude mcp add --scope user cerefox \
-  npx -- -y --package=@cerefox/memory cerefox mcp
+cerefox configure-agent --tool claude-code
 ```
 
-- `--scope user` makes the server available in every project (stored in `~/.claude/mcp.json`).
-- Use `--scope project` instead to limit it to the current directory (stored in `.mcp.json`).
-
-If you don't already have `.env` resolvable from your shell's CWD, add the credentials inline
-by editing the resulting JSON config to add an `env` block (see the Claude Desktop example
-above).
-
-Verify:
+This runs the right `claude mcp add` for you. Verify with:
 ```bash
 claude mcp list
 ```
 
-**Option 2: CLI command — local checkout (uv)**
-
-```bash
-claude mcp add --scope user cerefox \
-  uv -- --directory /path/to/cerefox run cerefox mcp
-```
-
-This soft-wraps `npx --package=@cerefox/memory cerefox mcp` when available; otherwise falls back to
-the legacy Python MCP server.
-
-**Option 3: `.mcp.json` in project root (project-scoped, committable)**
-
-Create `.mcp.json` in the root of the repo you work in:
-
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "npx",
-      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]
-    }
-  }
-}
-```
+If you don't already have `.env` resolvable from your shell's CWD, edit the resulting JSON
+config to add an `env` block (see the manual config in the
+[Appendix](#appendix-manual-per-client-config)). For project-scoped access, drop a `.mcp.json`
+in the repo root with the same local-stdio entry (committable, shared with your team).
 
 **Code tab inside Claude Desktop:**
 The **Code** tab in Claude Desktop uses the same config as the Claude Code CLI, not
@@ -399,10 +309,13 @@ https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
 | Offline use or development on the cerefox codebase | Path A-Local -- no network dependency |
 | Lowest latency (same machine, no HTTPS round-trip) | Path A-Local -- slightly faster |
 
-**Deploy the Edge Function** (once, after cloning the repo):
+**Deploy the Edge Functions** (end-user path — deploys schema, RPCs, and all 9 Edge Functions
+from assets bundled in the npm package, no repo clone):
 ```bash
-npx supabase functions deploy cerefox-mcp
+cerefox server deploy
 ```
+Contributors working from a repo clone can deploy a single function manually with
+`npx supabase functions deploy cerefox-mcp`.
 
 ---
 
@@ -1148,19 +1061,19 @@ Claude.ai web can connect to the Supabase-hosted remote MCP (no local install):
 
 ### What it is
 
-Modern local coding agents — Claude Code, OpenAI Codex CLI, opencode, OpenClaw, Hermes, and many others — all expose a **Bash tool** (or similar shell-execution tool) to their underlying model. If the agent's user grants the agent access to a checked-out Cerefox repo, the agent can read and write the knowledge base by running `uv run cerefox …` exactly the same way a human would.
+Modern local coding agents — Claude Code, OpenAI Codex CLI, opencode, OpenClaw, Hermes, and many others — all expose a **Bash tool** (or similar shell-execution tool) to their underlying model. If the agent's user has installed the Cerefox CLI (`npm install -g @cerefox/memory`), the agent can read and write the knowledge base by running `cerefox …` exactly the same way a human would.
 
-This is **not a separate Cerefox installation path** — it's the same Layer 2 access (Python REST + service-role key) that you already use as a human via the CLI. What's new is the *usage model*: the user authorizes a local agent to use that CLI on their behalf, instead of (or alongside) configuring MCP.
+This is **not a separate Cerefox installation path** — it's the same Layer 2 access (REST + service-role key) that you already use as a human via the CLI. What's new is the *usage model*: the user authorizes a local agent to use that CLI on their behalf, instead of (or alongside) configuring MCP.
 
 When to choose Path C over Path A:
 
 - **No MCP setup friction** — the agent already has a Bash tool; no `.mcp.json`, no `claude mcp add`, no Claude Desktop config edits.
-- **One Cerefox checkout serves any number of local agents** — Claude Code, Codex CLI, opencode, etc. running in the same project all use the same `uv run cerefox …` commands.
+- **One Cerefox CLI install serves any number of local agents** — Claude Code, Codex CLI, opencode, etc. running in the same project all use the same `cerefox …` commands.
 - **Best for power users who already use the CLI themselves** — the agent and the user share one mental model and one set of conventions.
 
 When Path A is still better:
 
-- Cleaner agent UX — named tool calls (`cerefox_search(...)`) read better in agent transcripts than `Bash("uv run cerefox search 'foo'")`.
+- Cleaner agent UX — named tool calls (`cerefox_search(...)`) read better in agent transcripts than `Bash("cerefox search 'foo'")`.
 - Some agents may rate-limit or budget Bash calls separately from MCP calls.
 - Cloud-only agents (claude.ai, chatgpt.com) cannot use Path C at all — they have no Bash tool.
 
@@ -1168,16 +1081,14 @@ When Path A is still better:
 
 Same as **Path A-Local**:
 
-- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) installed on your machine
-- Cerefox repository cloned locally (e.g. `/Users/yourname/src/cerefox`)
-- `.env` configured with `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY` (service-role / new secret key), and your embedding API key (`OPENAI_API_KEY`)
+- [Node.js ≥20](https://nodejs.org) + the CLI installed: `npm install -g @cerefox/memory`
+- `.env` configured (resolved from the working directory) with `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY` (service-role / new secret key), and your embedding API key (`OPENAI_API_KEY`)
 
 Quick sanity check before pointing an agent at it:
 
 ```bash
-cd /path/to/cerefox
-uv run cerefox search "any query"
-uv run cerefox project list
+cerefox search "any query"
+cerefox project list
 ```
 
 If both work for you, they'll work for the agent.
@@ -1186,8 +1097,8 @@ If both work for you, they'll work for the agent.
 
 The pattern is the same across Claude Code, Codex CLI, opencode, OpenClaw, Hermes, and similar tools:
 
-1. **Tell the agent the Cerefox checkout path** (e.g. via system prompt, project memory, or your agent's equivalent of `CLAUDE.md`).
-2. **Point the agent at the agent docs** in that checkout: `AGENT_GUIDE.md` and `AGENT_QUICK_REFERENCE.md`. These already describe what to read, what to write, and the audit/metadata conventions. They cover MCP usage; the CLI mapping is in `AGENT_GUIDE.md` ("Using Cerefox via the CLI").
+1. **Confirm the `cerefox` CLI is installed and on PATH** (`npm install -g @cerefox/memory`) with a resolvable `.env`.
+2. **Point the agent at the agent docs**: `AGENT_GUIDE.md` and `AGENT_QUICK_REFERENCE.md` (repo root, also retrievable over MCP via `cerefox_get_help`). These describe what to read, what to write, and the audit/metadata conventions. They cover MCP usage; the CLI mapping is in `AGENT_GUIDE.md` ("Using Cerefox via the CLI").
 3. **Optionally**: add a one-line reminder in the agent's system prompt so the model defaults to using Cerefox proactively.
 
 Example system-prompt snippet (adapt for your agent — Claude Code's `CLAUDE.md`, Codex's `AGENTS.md`, opencode's project config, etc.):
@@ -1195,16 +1106,16 @@ Example system-prompt snippet (adapt for your agent — Claude Code's `CLAUDE.md
 ```
 You have access to a personal Cerefox knowledge base via a local CLI.
 
-- Path: /path/to/cerefox  (cd here before running commands)
-- Run any command with: uv run cerefox <subcommand>
-- Read AGENT_GUIDE.md and AGENT_QUICK_REFERENCE.md in that directory for
-  conventions, metadata rules, and the MCP-tool → CLI-command mapping.
-  Full per-flag reference: docs/guides/cli.md.
+- Run any command with: cerefox <subcommand>  (resource-verb shape, e.g.
+  `cerefox document get`, `cerefox project list`, `cerefox metadata search`)
+- Read AGENT_GUIDE.md and AGENT_QUICK_REFERENCE.md for conventions, metadata
+  rules, and the MCP-tool → CLI-command mapping. Full per-flag reference:
+  docs/guides/cli.md.
 
 Identify yourself on every call:
-- Writes (ingest, ingest-dir): pass --author "<your-name>" --author-type agent
-- Reads (search, get-doc, list-versions, list-projects, metadata-search,
-  get-audit-log): pass --requestor "<your-name>"
+- Writes (document ingest, document ingest-dir): pass --author "<your-name>" --author-type agent
+- Reads (search, document get, document version list, project list,
+  metadata search, audit list): pass --requestor "<your-name>"
 
 When answering questions, search Cerefox first. When the user asks you to
 remember something, ingest it. Cite document titles for every claim drawn
@@ -1217,28 +1128,30 @@ The agent docs are written around MCP tool names. **CLI flag names match MCP par
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search` | `uv run cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`) |
-| `cerefox_ingest` (file) | `uv run cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
-| `cerefox_ingest` (paste) | `printf '...' \| uv run cerefox document ingest --paste --title "<title>"` (same flags) |
-| `cerefox_get_document` | `uv run cerefox document get <document-id> --version-id <vid> --requestor <name>` |
-| `cerefox_list_versions` | `uv run cerefox version list <document-id> --requestor <name>` |
-| `cerefox_list_projects` | `uv run cerefox project list --requestor <name>` |
-| `cerefox_list_metadata_keys` | `uv run cerefox metadata keys` |
-| `cerefox_metadata_search` | `uv run cerefox metadata search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
-| `cerefox_get_audit_log` | `uv run cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
+| `cerefox_search` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`, `--only-metadata`) |
+| `cerefox_ingest` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
+| `cerefox_ingest` (paste) | `printf '...' \| cerefox document ingest --paste --title "<title>"` (same flags) |
+| `cerefox_get_document` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
+| `cerefox_list_versions` | `cerefox document version list <document-id> --requestor <name>` |
+| `cerefox_list_projects` | `cerefox project list --requestor <name>` |
+| `cerefox_list_metadata_keys` | `cerefox metadata keys` |
+| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
+| `cerefox_get_audit_log` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
+
+> CLI verbs with no MCP equivalent: `cerefox document edit`, `cerefox document restore`, `cerefox project create` / `cerefox project edit`, `cerefox config list`.
 
 ### Path C verification prompts
 
 After pointing your agent at the repo, ask it:
 
 > "Run a Cerefox search for 'second brain'. What did you find?"
-> Expected: agent runs `uv run cerefox search "second brain"` via its Bash tool and reports results.
+> Expected: agent runs `cerefox search "second brain"` via its Bash tool and reports results.
 
 > "Save a note titled 'Test Note' to Cerefox with the content '# Test\nThis is a Path C test.'"
 > Expected: agent runs `cerefox document ingest --paste --title "Test Note"` (or equivalent) and reports the new document ID.
 
 > "List my Cerefox projects."
-> Expected: agent runs `uv run cerefox project list`.
+> Expected: agent runs `cerefox project list`.
 
 ### Caveats
 
@@ -1246,25 +1159,30 @@ After pointing your agent at the repo, ask it:
 - **Audit attribution**: Path C records `access_path = "cli"` in usage logs, distinct from `"local-mcp"` / `"remote-mcp"`. **Agents must set `--author <name> --author-type agent` on writes and `--requestor <name>` on reads** (or rely on `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` env vars). Without these flags, writes attribute to `"unknown"` / `"user"`, which under-reports agent activity. See the 2026-05-18 Decision Log Q2 entry for the design rationale (`author_type` is caller-declared on ambiguous channels — CLI and Edge Functions — but `access_path` is always derived from the code layer).
 - **Soft-delete is reachable; purge and restore are not** — by design. `cerefox document delete` is exposed on the CLI and sends documents to trash with an audit entry. **Permanent purge** (irreversible) and **restore from trash** (un-doing a destructive action) are intentionally web-UI-only and require human-in-the-loop confirmation. If an agent on Path C decides to delete content, it should surface that to the user explicitly so they can review and either restore or commit. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
 - **Cross-doc links in content you ingest** become clickable when the user views them in the Cerefox web UI. Author them as `[Text](uuid)` (most stable), `[Text](docs/path.md)` (repo files), or `[Text](<Title With Spaces>)` (angle-bracket form — bare spaces break markdown). See [`AGENT_GUIDE.md` → "Writing linkable content"](../../AGENT_GUIDE.md#writing-linkable-content) for the full set of rules.
-- **One repo per machine**: the agent needs your checkout — there's no "Path C without a local clone". If you skip the local install entirely, Path A-Remote or Path B is the only option.
-- **No sandboxing beyond the agent's existing Bash sandbox**: the CLI is just shell. If your agent's tool framework restricts which commands run, allowlist `uv run cerefox …` explicitly.
+- **CLI install per machine**: the agent needs the `cerefox` binary installed (`npm install -g @cerefox/memory`) with a resolvable `.env`. If you skip the local install entirely, Path A-Remote or Path B is the only option.
+- **No sandboxing beyond the agent's existing Bash sandbox**: the CLI is just shell. If your agent's tool framework restricts which commands run, allowlist `cerefox …` explicitly.
 
 ### Path C is configuration-free, but here's the per-agent footprint
 
-| Agent | Where to mention the Cerefox path |
+| Agent | Where to remind the agent about Cerefox |
 |---|---|
 | Claude Code | `CLAUDE.md` in the project, or `~/.claude/CLAUDE.md` globally. No MCP entry needed. |
 | OpenAI Codex CLI | `AGENTS.md` or the project's instructions file. |
 | opencode | Project config / agent system prompt. |
 | OpenClaw, Hermes, custom local agents | Whatever the tool's system-prompt / memory mechanism is. |
 
-There is nothing Cerefox-specific to install for the agent itself — just the repo + your `.env`.
+There is nothing Cerefox-specific to configure for the agent itself — just the globally-installed `cerefox` CLI + your `.env`.
 
 ---
 
-## Custom agents (Python SDK)
+## Custom agents (Python SDK — legacy)
 
-Use the Cerefox Python client directly for scripted or embedded agents:
+> **Legacy/frozen path.** The Python codebase is no longer the maintained runtime — the CLI,
+> local MCP server, and deploy tooling have all moved to TypeScript (`@cerefox/memory`). The
+> Python client below still works from a repo clone but is unmaintained. Prefer Path A (MCP),
+> Path B (Edge Functions HTTP), or Path C (the `cerefox` CLI) for new integrations.
+
+Use the Cerefox Python client directly for scripted or embedded agents (from a repo clone):
 
 ```python
 from cerefox.config import Settings
@@ -1295,8 +1213,8 @@ for hit in resp.results:
 Both paths use the same Postgres RPCs and the same stored embeddings, but embed queries
 independently. If you change the embedding model, **update both paths** before searching:
 
-1. Update `.env` + run `cerefox server reindex` (re-embeds stored chunks via Python)
-2. Update the TypeScript constants in `supabase/functions/*/index.ts` + redeploy Edge Functions
+1. Update `.env` + run `cerefox server reindex` (re-embeds stored chunks)
+2. Update the TypeScript constants in `supabase/functions/*/index.ts` + redeploy Edge Functions (`cerefox server deploy`)
 
 See `docs/guides/configuration.md` → "Changing the embedding model" for the full procedure.
 
@@ -1504,3 +1422,62 @@ This RPC derives keys from actual `doc_metadata` JSONB — no separate registry 
 Cerefox's default `max_response_bytes = 200000` is a safety ceiling; small-to-big retrieval
 keeps individual results compact so this limit is rarely reached in practice. If your MCP
 client has a lower context limit, reduce it via `CEREFOX_MAX_RESPONSE_BYTES` in your `.env`.
+
+---
+
+## Appendix: manual per-client config
+
+`cerefox configure-agent --tool <client>` writes these entries for you (recommended). The raw
+config below is here for the curious, or for debugging if the CLI can't write your config. Each
+block is the local-stdio Path A-Local entry — the `npx -y --package=@cerefox/memory cerefox mcp`
+invocation. The `env` block is only needed if you don't already have a `.env` file in a
+directory the server can find (the server resolves `.env` from the current working directory).
+
+### Claude Desktop (manual)
+
+Config file location:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "cerefox": {
+      "command": "npx",
+      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
+      "env": {
+        "CEREFOX_SUPABASE_URL": "https://<your-project-ref>.supabase.co",
+        "CEREFOX_SUPABASE_KEY": "<your-service-role-or-sb_secret-key>",
+        "OPENAI_API_KEY": "sk-..."
+      }
+    }
+  }
+}
+```
+
+Merge the `mcpServers` block into any existing file — do not wrap it in an extra `{}` or
+replace the whole file. Restart Claude Desktop fully (Cmd+Q on macOS) after saving.
+
+### Cursor (manual)
+
+Open **Cursor Settings** (`Cmd+,`) → **Tools & Integrations** → **MCP** → **Add new global MCP
+server**, then paste the same block as Claude Desktop (above). Save and restart Cursor. For
+project-scoped access, put the same content in `.cursor/mcp.json` in your project root.
+
+### Claude Code (manual)
+
+```bash
+claude mcp add --scope user cerefox \
+  npx -- -y --package=@cerefox/memory cerefox mcp
+```
+
+- `--scope user` makes the server available in every project (stored in `~/.claude/mcp.json`).
+- Use `--scope project` instead to limit it to the current directory (stored in `.mcp.json`).
+
+If `.env` isn't resolvable from your shell's CWD, edit the resulting JSON config to add an
+`env` block (see the Claude Desktop block above). The **Code** tab inside Claude Desktop uses
+this same config — run the `claude mcp add` above and it picks it up automatically.
+
+> The legacy Python MCP server can be wired manually as a standalone fallback by pointing the
+> `command` at `uv` with args `["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]`.
+> It is frozen and unmaintained — prefer the npm entry above.

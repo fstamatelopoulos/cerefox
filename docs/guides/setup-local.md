@@ -2,13 +2,17 @@
 
 Run the Cerefox web server and database on your own machine using Docker for Postgres+pgvector. Embeddings use the OpenAI API — an `OPENAI_API_KEY` is required even for local setups.
 
+This guide is aimed at **contributors** who want a fully local stack (no hosted Supabase). End users on a hosted Supabase project should follow [`quickstart.md`](quickstart.md) instead.
+
 ---
 
 ## Prerequisites
 
 - Docker and Docker Compose
-- Python 3.11+ with `uv` (`pip install uv`)
+- **Node.js 20+** or **Bun 1.0+** (the CLI runtime)
 - An OpenAI API key (for embeddings — [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
+
+> The Python implementation is legacy and slated for removal in a future release; only the Python MCP server remains as a fallback. `uv` is only needed if you intend to run that fallback (`uv run cerefox mcp`).
 
 ---
 
@@ -17,7 +21,7 @@ Run the Cerefox web server and database on your own machine using Docker for Pos
 ```bash
 git clone https://github.com/fstamatelopoulos/cerefox.git
 cd cerefox
-uv sync
+bun install
 ```
 
 ---
@@ -68,7 +72,7 @@ OPENAI_API_KEY=sk-...
 ## Step 4 — Deploy the schema
 
 ```bash
-python scripts/db_deploy.py
+bun scripts/db_deploy.ts
 ```
 
 This creates all tables, indexes, and RPC functions. Run with `--dry-run` to preview SQL without executing.
@@ -76,18 +80,20 @@ This creates all tables, indexes, and RPC functions. Run with `--dry-run` to pre
 To start fresh:
 
 ```bash
-python scripts/db_deploy.py --reset   # drops all cerefox_ tables first
+bun scripts/db_deploy.ts --reset   # drops all cerefox_ tables first (typed-`yes` guard)
 ```
+
+> End users on a hosted Supabase project use `cerefox server deploy` instead (no clone). The `bun scripts/db_*.ts` scripts are the low-level contributor path.
 
 ---
 
 ## Step 5 — Verify the setup
 
 ```bash
-python scripts/db_status.py
+bun scripts/db_migrate.ts --status
 ```
 
-You should see all tables (cerefox_documents, cerefox_chunks, cerefox_projects) and RPC functions listed as ✓.
+You should see the schema reported as up to date with all migrations applied.
 
 ---
 
@@ -162,10 +168,10 @@ docker compose down -v       # stop and delete database volume
 When a new version of Cerefox introduces schema changes, run:
 
 ```bash
-python scripts/db_migrate.py
+bun scripts/db_migrate.ts            # --status to preview, --dry-run to see SQL
 ```
 
-This applies incremental migrations without losing data. Always back up first (see `ops-scripts.md`).
+This applies incremental migrations without losing data. Always back up first (see `ops-scripts.md`). End users on a hosted Supabase project run `cerefox server deploy` instead.
 
 ---
 
