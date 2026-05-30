@@ -17,7 +17,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,10 +61,10 @@ describe("cerefox CLI smoke (built bin)", () => {
     const expectedCommands = [
       // Primary verb (stays flat)
       "search",
-      // Resource groups
+      // Resource groups (v0.9.1: versions nested under `document`, so no
+      // top-level `version` group)
       "document",
       "project",
-      "version",
       "metadata",
       "audit",
       "config",
@@ -157,5 +158,82 @@ describe("cerefox CLI smoke (built bin)", () => {
     const { stdout, stderr, status } = run(["get-doc", "abc"]);
     expect(status).toBe(1);
     expect(stdout + stderr).toContain("document get");
+  });
+
+  // ── v0.9.1 new commands: --help smoke (no DB) ──────────────────────────────
+
+  test("`cerefox document edit --help` advertises --title / --set-meta / --unset-meta", () => {
+    const { stdout, status } = run(["document", "edit", "--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("--title");
+    expect(stdout).toContain("--set-meta");
+    expect(stdout).toContain("--unset-meta");
+  });
+
+  test("`cerefox document restore --help` advertises document-id", () => {
+    const { stdout, status } = run(["document", "restore", "--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("document-id");
+  });
+
+  test("`cerefox document version --help` lists list/archive/unarchive", () => {
+    const { stdout, status } = run(["document", "version", "--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("list");
+    expect(stdout).toContain("archive");
+    expect(stdout).toContain("unarchive");
+  });
+
+  test("`cerefox project create --help` + `project edit --help`", () => {
+    const create = run(["project", "create", "--help"]);
+    expect(create.status).toBe(0);
+    expect(create.stdout).toContain("--description");
+    const edit = run(["project", "edit", "--help"]);
+    expect(edit.status).toBe(0);
+    expect(edit.stdout).toContain("--name");
+  });
+
+  test("`cerefox config list` prints the allowed keys (no DB)", () => {
+    const { stdout, status } = run(["config", "list"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("usage_tracking_enabled");
+    expect(stdout).toContain("require_requestor_identity");
+  });
+
+  test("`cerefox search --help` advertises --only-metadata", () => {
+    const { stdout, status } = run(["search", "--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("--only-metadata");
+  });
+
+  test("`cerefox completion install --help` advertises --shell / --yes", () => {
+    const { stdout, status } = run(["completion", "install", "--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("--shell");
+    expect(stdout).toContain("--yes");
+  });
+
+  test("`completion install` writes the script + an idempotent rc block (sandbox HOME)", () => {
+    const home = mkdtempSync(join(tmpdir(), "cf-comp-"));
+    try {
+      const env = { ...process.env, HOME: home };
+      const r1 = spawnSync("node", [BIN, "completion", "install", "--shell", "zsh", "--yes"], {
+        encoding: "utf8",
+        env,
+      });
+      expect(r1.status).toBe(0);
+      expect(existsSync(join(home, ".cerefox-completion.zsh"))).toBe(true);
+      const rc = readFileSync(join(home, ".zshrc"), "utf8");
+      expect(rc).toContain(">>> cerefox shell completion");
+      // Idempotent: re-running leaves exactly one managed block.
+      spawnSync("node", [BIN, "completion", "install", "--shell", "zsh", "--yes"], {
+        encoding: "utf8",
+        env,
+      });
+      const rc2 = readFileSync(join(home, ".zshrc"), "utf8");
+      expect(rc2.split(">>> cerefox shell completion").length - 1).toBe(1);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });

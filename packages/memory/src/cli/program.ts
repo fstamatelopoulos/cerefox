@@ -84,7 +84,7 @@ const RENAMED_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["ingest-dir", "document ingest-dir"],
   ["list-projects", "project list"],
   ["delete-project", "project delete"],
-  ["list-versions", "version list"],
+  ["list-versions", "document version list"],
   ["get-audit-log", "audit list"],
   ["list-metadata-keys", "metadata keys"],
   ["metadata-search", "metadata search"],
@@ -103,7 +103,7 @@ function registerRenameHusks(program: Command): void {
       .allowExcessArguments(true)
       .argument("[args...]", "(renamed)")
       .action(() => {
-        eprintln(c.yellow(`✗ \`cerefox ${oldName}\` was renamed in v0.9.0.`));
+        eprintln(c.yellow(`✗ \`cerefox ${oldName}\` was renamed.`));
         eprintln(`  Use \`cerefox ${newForm}\` instead (run \`cerefox ${newForm.split(" ")[0]} --help\`).`);
         process.exit(1);
       });
@@ -131,12 +131,11 @@ export function buildProgram(): Command {
     .addHelpText(
       "after",
       "\nResource groups (run `cerefox <group> --help`):\n" +
-        "  document   get · list · delete · ingest · ingest-dir\n" +
-        "  project    list · delete\n" +
-        "  version    list\n" +
+        "  document   get · list · edit · delete · restore · ingest · ingest-dir · version {list·archive·unarchive}\n" +
+        "  project    list · create · edit · delete\n" +
         "  metadata   keys · search\n" +
         "  audit      list\n" +
-        "  config     get · set\n" +
+        "  config     list · get · set\n" +
         "  backup     create · restore\n" +
         "  server     deploy · reindex\n" +
         "\nTop-level commands:\n" +
@@ -171,7 +170,7 @@ export function buildProgram(): Command {
   // ── Resource groups (v0.9.0 rename-only redesign) ────────────────────────
   const document = program
     .command("document")
-    .description("Documents: get, list, delete, ingest.");
+    .description("Documents: get, list, edit, delete, restore, ingest, ingest-dir, version.");
   moveInto(document, registerGetDoc, "get");
   moveInto(document, registerListDocs, "list");
   moveInto(document, registerDeleteDoc, "delete");
@@ -180,17 +179,21 @@ export function buildProgram(): Command {
   moveInto(document, registerIngest, "ingest");
   moveInto(document, registerIngestDir, "ingest-dir");
 
+  // v0.9.1: versions nested under `document` (Clio's shape — a version belongs
+  // to a document). The top-level `version` group shipped in v0.9.0 hours
+  // earlier; no husk (nobody would have adopted it). The v0.8 flat
+  // `list-versions` husk now points at `document version list`.
+  const documentVersion = document
+    .command("version")
+    .description("Document versions: list, archive, unarchive.");
+  moveInto(documentVersion, registerListVersions, "list");
+  registerVersionArchive(documentVersion);
+
   const project = program.command("project").description("Projects: list, create, edit, delete.");
   moveInto(project, registerListProjects, "list");
   registerProjectCreate(project); // v0.9.1: explicit create (parity with web/API)
   registerProjectEdit(project); // v0.9.1: rename / edit description
   moveInto(project, registerDeleteProject, "delete");
-
-  const version = program
-    .command("version")
-    .description("Document version history: list, archive, unarchive.");
-  moveInto(version, registerListVersions, "list");
-  registerVersionArchive(version); // v0.9.0: new archive/unarchive commands
 
   const metadata = program.command("metadata").description("Metadata: keys, search.");
   moveInto(metadata, registerListMetadataKeys, "keys");
