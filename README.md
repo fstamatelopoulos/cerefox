@@ -45,7 +45,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and anon key; no Python install needed |
 | **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. (A frozen Python MCP server also ships for repo-clone users: `uv run cerefox mcp`.) |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
-| **Multi-format ingest** | `.md`, `.txt`, `.pdf` (pypdf), `.docx` (python-docx) |
+| **Markdown-first ingest** | `.md` / `.txt` (Markdown is the storage format; PDF/DOCX conversion was dropped in v0.7 — convert upstream) |
 | **Batch ingest** | `cerefox document ingest-dir` recurses directories |
 | **Deduplication** | SHA-256 content hash; re-ingesting the same file is a no-op |
 | **Backup and restore** | JSON snapshots, optional git commit |
@@ -63,7 +63,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 Cerefox is a single-maintainer open-source project, at **v0.9.0** and wrapping up
 its **"Polish & Distribution" arc** — the work that takes it from "runnable from a
 git clone" to "installable like any other modern CLI" (v0.8 shipped the
-production-ready installer + `cerefox deploy-server`; v0.9 hardens the CLI surface
+production-ready installer + `cerefox server deploy`; v0.9 hardens the CLI surface
 before the v1.0 contract). Highlights of what's already shipped (full history in
 [`CHANGELOG.md`](CHANGELOG.md)):
 
@@ -95,190 +95,93 @@ Until v1.0.0 the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
 aspirational — breaking changes can land in minor versions when there's a good
 reason. After v1.0.0 it's binding.
 
-**The npm install path is now complete** as of v0.7.0: the entire runtime
-surface (CLI, MCP, web server, ingestion pipeline) ships in `@cerefox/memory`
-with no Python required. End users install via the one-liner below or
-`npm install -g @cerefox/memory`. Schema deploy / migrations / backup
-restore still use the Bun-run `scripts/*.ts` from a repo clone — those are
-ops scripts, not part of the runtime. (v0.4–v0.5.0 also shipped a dedicated
-`cerefox-mcp` bin; dropped in v0.5.1 as redundant with `cerefox mcp`.)
+**The npm install path is complete:** the entire runtime surface — CLI, MCP,
+web server, ingestion pipeline, *and* server-side deploy (schema + RPCs + Edge
+Functions via `cerefox server deploy`) — ships in `@cerefox/memory` with no
+Python and no repo clone required. End users install via the one-liner below or
+`npm install -g @cerefox/memory`. The Bun-run `scripts/*.ts` (db_deploy,
+db_migrate, sync_docs, …) remain for contributors working from a clone — they
+duplicate what the CLI does, not capabilities only available from source.
 
 ---
 
 ## Getting Started
 
-> **Upgrading to v0.9.0?** The CLI verbs were renamed to a resource-verb shape
-> (`cerefox document get X` → `cerefox document get X`; old names still run but
+> **Upgrading to v0.9?** The CLI verbs were renamed to a resource-verb shape
+> (`cerefox get-doc X` → `cerefox document get X`; old names still run but
 > redirect) and the Python CLI/web were retired to husks. See
 > [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
 
-### Choose your path
+Cerefox has **two install paths**. Pick the one that fits you — both are
+first-class and kept in sync.
 
-Cerefox has **two supported install paths** — pick the one that fits you:
+### Path A — I just want to *use* Cerefox (no repo clone)
 
-- **🚀 End user (no repo checkout)** — you want to *use* Cerefox. Install the
-  `@cerefox/memory` CLI, point it at a Supabase project, wire up your agent.
-  Everything is the `cerefox` command — no `git clone`, no Python, no build.
-  → the **Quickstart (npm path)** below.
-- **🛠 Contributor / tinkerer (repo clone)** — you want to *hack on* Cerefox or
-  run it from source. Clone the repo, use `uv` (Python MCP fallback) + `bun`
-  (everything else), run the repo scripts.
-  → [`docs/guides/quickstart.md`](docs/guides/quickstart.md) (contributor flow).
-
-Both paths are first-class and kept in sync. The sections below cover the
-end-user path; the contributor flow lives in the quickstart guide.
-
-> **Full end-user walkthrough**: `docs/guides/quickstart.md` -- zero to first ingested document and connected agent in ~15 minutes.
-
-### Quickstart (npm path — recommended)
+Everything is the `cerefox` command from the [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)
+npm package. **No `git clone`, no Python, no build, no `scripts/`.** The whole
+runtime — CLI, MCP server, web UI, ingestion pipeline, *and* schema + Edge
+Function deploy — ships in that one package.
 
 ```bash
-# One-line install (detects Bun or installs it, falls back to npm):
+# 1. Install (one-liner; detects Bun, falls back to npm):
 curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh | sh
+#    or: npm install -g @cerefox/memory     (Node ≥ 20)
 
-# Or direct:
-npm install -g @cerefox/memory      # Node ≥ 20
-# bun install -g @cerefox/memory    # alternative — faster
+# 2. Configure + stand up the server side (against your own Supabase project):
+cerefox init             # interactive setup: Supabase URL/keys, embedding key
+cerefox server deploy    # schema + RPCs + all 9 Edge Functions, from the npm bundle
+cerefox doctor           # verify everything is wired up
 
-cerefox init                         # interactive 5-step setup
-cerefox doctor                       # verify the install
+# 3. Wire up your AI agent(s) — run the ones that apply:
+cerefox configure-agent --tool claude-code      # also: claude-desktop | cursor | codex | gemini
 
-# Wire up your MCP client(s) — run the ones that apply to your setup:
-cerefox configure-agent --tool claude-code      # Claude Code (~/.claude.json via `claude mcp add`)
-cerefox configure-agent --tool claude-desktop   # Claude Desktop config
-cerefox configure-agent --tool cursor           # Cursor (~/.cursor/mcp.json)
-cerefox configure-agent --tool codex            # OpenAI Codex CLI (~/.codex/config.toml)
-cerefox configure-agent --tool gemini           # Gemini CLI (~/.gemini/settings.json)
-```
-
-That's the path for end users who don't need to hack on Cerefox itself. The
-entire runtime surface (CLI, MCP, web server, ingestion pipeline) is in this
-single npm package as of v0.7.0. The schema deploy and migration scripts
-under `scripts/` still need a repo clone — see "Building from source" below.
-
-### Prerequisites for the npm install path
-
-| Tool | Why | Install |
-|---|---|---|
-| **Node 20+** or **Bun 1.0+** | Runtime for the `cerefox` bin (includes `cerefox mcp` subcommand for MCP clients) | [nodejs.org](https://nodejs.org/) · [bun.sh](https://bun.sh) |
-| A Supabase account | Database + pgvector + Edge Functions (free tier is enough) | [supabase.com](https://supabase.com/) |
-| An embedding API key | OpenAI `text-embedding-3-small` (default) or Fireworks AI | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-
-### Building from source / Contributors
-
-For schema deploy + migrations, or contributing to Cerefox itself:
-
-| Tool | Why | Install |
-|---|---|---|
-| **[Bun](https://bun.sh) 1.x** | TypeScript scripts (`scripts/db_deploy.ts`, `db_migrate.ts`, `sync_docs.ts`, `db_status.ts`), `_shared/` + `packages/memory/` tests, `@cerefox/memory` build, frontend build | `curl -fsSL https://bun.sh/install \| bash` |
-| **Node 20+** | Alternative runtime for the same `cerefox` bin (CI uses Node) | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
-| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | Legacy `uv run cerefox mcp` (Python MCP server, kept through v0.9); `pytest` suites that haven't ported yet | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| A Supabase account + embedding API key | Same as above | (same links) |
-
-Full contributor setup in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-### 1. Clone and install
-
-```bash
-git clone https://github.com/fstamatelopoulos/cerefox.git
-cd cerefox
-bun install              # workspace deps (root + packages/memory + frontend)
-uv sync                  # only if you need the Python MCP server / pytest
-```
-
-### 2. Set up Supabase (free)
-
-1. Sign up at [supabase.com](https://supabase.com) — a GitHub login works fine.
-2. Create a new project. Give it a name (e.g. `cerefox`) and set a database password (store it somewhere safe — you'll need it once).
-3. On the project creation screen leave the defaults:
-   - **Enable Data API** ✅ — required (the Python client uses this)
-   - **Enable automatic RLS** — leave unchecked (single-user app, not needed)
-
-### 3. Configure `.env`
-
-```bash
-cp .env.example .env
-```
-
-Open `.env` and fill in these values:
-
-| Variable | Where to find it |
-|---|---|
-| `CEREFOX_SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
-| `CEREFOX_SUPABASE_KEY` | Supabase → Project Settings → API Keys → **Secret key** (`sb_secret_…`). Legacy `service_role` JWT also works. |
-| `CEREFOX_DATABASE_URL` | Supabase → Project Settings → Database → **Connection pooling → Session Pooler** (port `5432`). See notes below. |
-| `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-| `CEREFOX_SUPABASE_ANON_KEY` (only for Edge Functions / MCP / GPT Actions) | Supabase → Project Settings → API Keys → **Legacy → anon** (JWT, `eyJ…`). The new `sb_publishable_…` does **not** work for Edge Function Bearer auth. See [`docs/guides/setup-supabase.md` → Supabase API keys (2026)](docs/guides/setup-supabase.md#supabase-api-keys-2026). |
-
-**`CEREFOX_DATABASE_URL` notes:**
-- Use the **Session Pooler** (port `5432`), not the Transaction Pooler (`6543`, no DDL) or the Direct Connection (IPv6-only on free tier).
-- The Session Pooler may not be a first-class option in the new "Connect" dialog; either find it under **Connection pooling**, or take the Transaction Pooler URI and change `:6543` → `:5432`.
-- The username must include your project ref: `postgres.your-project-ref` — not just `postgres`. Without the suffix Supabase returns "Tenant or user not found".
-- Append `?sslmode=require` to enforce TLS.
-- Full reference: [`docs/guides/setup-supabase.md` → Connection pooling (2026)](docs/guides/setup-supabase.md#connection-pooling-2026).
-
-### 4. Deploy the schema
-
-```bash
-bun scripts/db_deploy.ts            # full schema + RPCs (`--dry-run` to preview, `--reset` to drop first)
-# bun scripts/db_migrate.ts         # apply incremental migrations on an already-deployed instance
-```
-
-### 5. Deploy the Edge Functions
-
-Edge Functions handle server-side embedding so AI agents never need a local model. Requires the [Supabase CLI](https://supabase.com/docs/guides/cli).
-
-```bash
-npx supabase functions deploy cerefox-search
-npx supabase functions deploy cerefox-ingest
-npx supabase functions deploy cerefox-mcp
-```
-
-Set your OpenAI key as a Supabase secret (used by the functions at runtime):
-
-```bash
-npx supabase secrets set OPENAI_API_KEY=sk-...your-key...
-```
-
-### 6. Build the web UI (only when working from a repo clone)
-
-The web UI is a React + Vite SPA. The bundled `@cerefox/memory` npm package
-already includes the built SPA — you only need to build it yourself if you
-cloned the repo and are running `cerefox web` from source or have edited
-`frontend/` files:
-
-```bash
-cd frontend
-bun install
-bun run build
-cd ..
-```
-
-This produces `frontend/dist/`, which `cerefox web` serves at `/app/`.
-
-### 7. Ingest a document and open the web UI
-
-```bash
+# 4. Use it:
 cerefox document ingest my-notes.md --title "My notes"
-cerefox web                       # → http://localhost:8000
+cerefox search "what did I decide about auth?"
+cerefox web              # web UI → http://localhost:8000/app/
 ```
 
-**Optional**: ingest the Cerefox docs themselves so AI agents can look up project details:
+**Prerequisites:** Node 20+ or Bun 1.0+ · a Supabase account (free tier is
+enough) · an embedding API key (OpenAI `text-embedding-3-small` by default, or
+Fireworks AI).
+
+**Try it with sample data:** `cerefox document ingest-dir test-data/ --recursive`
+(the repo's `test-data/` has six diverse markdown docs — or point it at any
+folder of your own `.md` files).
+
+> **Full end-user walkthrough:** [`docs/guides/quickstart.md`](docs/guides/quickstart.md)
+> — zero to first ingested document and a connected agent in ~15 minutes.
+> Supabase specifics (API keys, connection pooling) are in
+> [`docs/guides/setup-supabase.md`](docs/guides/setup-supabase.md).
+
+### Path B — I want to *hack on* Cerefox (run from source)
+
+Clone the repo and run from source. `bun` drives everything; `uv` is only for
+the legacy Python MCP fallback.
 
 ```bash
-# Create a "cerefox" project first, then sync README + all docs/ into it.
-cerefox create-project cerefox
-bun scripts/sync_docs.ts
+git clone https://github.com/fstamatelopoulos/cerefox.git && cd cerefox
+bun install                  # workspace deps: root + packages/memory + frontend
+uv sync                      # OPTIONAL — only for the legacy `uv run cerefox mcp` fallback
+cp .env.example .env         # fill in Supabase URL/keys + embedding key
+
+bun scripts/db_deploy.ts     # schema + RPCs  (--dry-run to preview · --reset to wipe first)
+npx supabase functions deploy   # Edge Functions (or just use `cerefox server deploy`)
+
+cd frontend && bun run build && cd ..   # build the SPA `cerefox web` serves at /app/
+bun test                     # run the suite (root + packages/memory + _shared)
 ```
 
-Re-run `sync_docs.ts` any time after updating documentation to keep the knowledge base current.
+Full contributor setup, conventions, and the test matrix are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and the contributor section of
+[`docs/guides/quickstart.md`](docs/guides/quickstart.md).
 
-**Try with sample data**: the `test-data/` directory contains six diverse markdown documents
-you can ingest to experiment with search before adding your own content:
-
-```bash
-cerefox document ingest-dir test-data/ --recursive
-```
+> **Python is legacy.** As of v0.9 the entire runtime (CLI, MCP, web,
+> ingestion) is TypeScript in `@cerefox/memory`. The only surviving Python is
+> `uv run cerefox mcp` — a frozen, offline / no-npm MCP fallback for repo-clone
+> users. It is unmaintained and slated for removal; everything else Python is a
+> husk that redirects to the TS CLI. See
+> [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
 
 ---
 
@@ -291,7 +194,7 @@ id, title, source     id, document_id, chunk_index
 content_hash          heading_path, heading_level
 project_id            content, char_count
 metadata (JSONB)      embedding_primary (VECTOR 768)
-chunk_count           fts (TSVECTOR, generated)
+chunk_count           fts (TSVECTOR, title-boosted)
 ```
 
 Search RPCs (MCP tools): `cerefox_hybrid_search`, `cerefox_fts_search`,
@@ -302,70 +205,39 @@ Search RPCs (MCP tools): `cerefox_hybrid_search`, `cerefox_fts_search`,
 
 ## Connecting AI agents
 
-**Option 1 — Remote MCP (recommended)** — just a URL, a legacy anon JWT (Supabase → Project Settings → API Keys → **Legacy → anon**, not the new `sb_publishable_…` key — see [setup-supabase.md](docs/guides/setup-supabase.md#supabase-api-keys-2026)), and `npx`:
+The fastest path is `cerefox configure-agent --tool <client>` — it writes the
+right config for Claude Code, Claude Desktop, Cursor, Codex, or Gemini. There
+are four ways an agent can reach Cerefox:
 
-The `cerefox-mcp` Supabase Edge Function speaks MCP Streamable HTTP. No Python, no local
-repo clone — works from any machine with Node.js installed.
+**1 — Remote MCP (recommended).** The `cerefox-mcp` Edge Function speaks MCP
+Streamable HTTP. Just a URL + a legacy anon JWT (Supabase → API Keys →
+**Legacy → anon**, *not* the new `sb_publishable_…` key — see
+[setup-supabase.md](docs/guides/setup-supabase.md#supabase-api-keys-2026)). No
+local install:
 
 ```bash
-# Claude Code (native HTTP transport)
 claude mcp add --transport http cerefox \
   https://<project-ref>.supabase.co/functions/v1/cerefox-mcp \
   --header "Authorization: Bearer <anon-key>"
 ```
 
-For Claude Desktop, use [`supergateway`](https://www.npmjs.com/package/supergateway) as
-a stdio-to-HTTP bridge in `claude_desktop_config.json`:
+**2 — Local stdio MCP.** `cerefox mcp` runs the same 10 tools in-process — lower
+latency, no per-call Edge Function billing. `configure-agent` wires it up, or
+point your client at `command: "cerefox", args: ["mcp"]`.
 
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "npx",
-      "args": [
-        "-y", "supergateway",
-        "--streamableHttp", "https://<project-ref>.supabase.co/functions/v1/cerefox-mcp",
-        "--header", "Authorization: Bearer <anon-key>"
-      ]
-    }
-  }
-}
-```
+**3 — ChatGPT.** Custom GPT + GPT Actions pointing at the Edge Functions
+(requires ChatGPT Plus). Paste the OpenAPI block from
+[`connect-agents.md`](docs/guides/connect-agents.md).
 
-For Cursor, use `url` + `headers.Authorization` in `mcp.json`.
+**4 — Shell CLI.** Local coding agents with a Bash tool (Claude Code, Codex,
+opencode, …) can read and write Cerefox by running the installed `cerefox`
+command directly — no MCP config at all. Point the agent at
+[`AGENT_GUIDE.md`](AGENT_GUIDE.md) and let it use `cerefox search` /
+`cerefox document ingest`.
 
-**Option 2 — ChatGPT (web + desktop)** via Custom GPT + GPT Actions (requires ChatGPT Plus):
-
-Create a Custom GPT and add an Action pointing at the Supabase Edge Functions — no local
-install, no MCP config, works from both ChatGPT web and desktop. Uses the Supabase anon key
-as Bearer auth.
-
-**Option 3 — Local stdio MCP** — runs the same 10 tools in-process; no Edge Function billing per call. Install once with `npm install -g @cerefox/memory`, then either run `cerefox configure-agent --tool <client>` (see Option 1's command list) or hand-write the config:
-
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "cerefox",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-If you'd rather not install globally, `npx --package=@cerefox/memory cerefox mcp` works as a one-off. A clone-and-`uv run cerefox mcp` Python fallback also still works for repo contributors through v0.9.
-
-**Option 4 — Shell CLI for local coding agents** — no MCP setup at all:
-
-Modern local coding agents (Claude Code, OpenAI Codex CLI, opencode, OpenClaw, Hermes, …)
-have a Bash tool. If you've already got Cerefox checked out and your `.env` configured for
-the CLI, you can simply point the agent at the repo path in its system prompt / project
-memory, and tell it to read `AGENT_GUIDE.md`. The agent reads and writes Cerefox by
-running `uv run cerefox …`. No `.mcp.json`, no `claude mcp add`, no Claude Desktop edit.
-Useful when you want one Cerefox checkout to serve any number of local agents in the
-same project with zero per-agent configuration.
-
-Full setup for all options: `docs/guides/connect-agents.md`
+Full setup for every client — plus a manual per-client config appendix for when
+`configure-agent` can't reach a tool — is in
+[`docs/guides/connect-agents.md`](docs/guides/connect-agents.md).
 
 ---
 
@@ -386,6 +258,8 @@ Full setup for all options: `docs/guides/connect-agents.md`
 | `docs/guides/setup-cloud-run.md` | Google Cloud Run deployment |
 | `docs/guides/operational-cost.md` | Cost breakdown for all deployment options |
 | `docs/guides/upgrading.md` | Standard upgrade checklist, version-specific notes |
+| `docs/guides/migration-v0.9.md` | v0.9 CLI verb rename + Python retirement |
+| `AGENT_GUIDE.md` | Reference for AI agents using Cerefox tools |
 | `CONTRIBUTING.md` | How to contribute to Cerefox |
 
 ---

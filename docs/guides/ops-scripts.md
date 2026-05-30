@@ -4,23 +4,36 @@ Reference guide for the operational scripts in `scripts/`. Run these from the pr
 
 > Looking for `cerefox <subcommand>` reference (ingest, search, get-doc, etc.)? See [`docs/guides/cli.md`](cli.md). This guide covers the `scripts/` directory only.
 
-## Two languages, one directory
+## Who this guide is for
 
-As of v0.3.0, Cerefox scripts come in two flavors:
+There are two audiences:
 
-| Script | Language | Run with |
-|---|---|---|
-| `db_status.ts` | TypeScript (v0.3.0+) | `bun scripts/db_status.ts` |
-| `sync_docs.ts` | TypeScript (v0.3.0+) | `bun scripts/sync_docs.ts` |
-| `db_deploy.py` | Python | `uv run python scripts/db_deploy.py` |
-| `db_migrate.py` | Python | `uv run python scripts/db_migrate.py` |
-| `backup_create.py` | Python | `uv run python scripts/backup_create.py` |
-| `backup_restore.py` | Python | `uv run python scripts/backup_restore.py` |
-| `reindex_all.py` | Python | `uv run python scripts/reindex_all.py` |
+- **End users** (installed via the installer or `npm install -g @cerefox/memory`, no repo
+  clone) do not run the `scripts/` directory at all. The user-facing equivalents are CLI
+  commands: `cerefox server deploy` (schema + RPCs + Edge Functions), `cerefox server reindex`,
+  and `cerefox backup create` / `cerefox backup restore`. Skip to [CLI commands](#cli-commands).
+- **Contributors** (clone the repo, use `bun`) run the `scripts/` directly. That's the rest
+  of this guide.
 
-The TS scripts require [Bun](https://bun.sh) — install with `curl -fsSL https://bun.sh/install | bash`. They are functionally equivalent to their previous Python forms; **the legacy `db_status.py` and `sync_docs.py` are deprecation shims that exit non-zero with a pointer to the TS replacement**. The shims are kept indefinitely as a migration aid — there's no scheduled removal date, but the exit code stays non-zero, so update any cron jobs / CI / make targets that invoke them.
+## Contributor scripts
 
-The remaining `.py` scripts stay Python until their scheduled port (v0.5 for `db_deploy` / `db_migrate`; v0.7 for `backup_*` / `reindex_all`) — per the §12f script-language policy in [`CONTRIBUTING.md`](../../CONTRIBUTING.md), Python scripts get ported when they're extended.
+The canonical scripts are **TypeScript**, run with [Bun](https://bun.sh) (install with
+`curl -fsSL https://bun.sh/install | bash`):
+
+| Script | Run with |
+|---|---|
+| `db_status.ts` | `bun scripts/db_status.ts` |
+| `sync_docs.ts` | `bun scripts/sync_docs.ts` |
+| `db_deploy.ts` | `bun scripts/db_deploy.ts` |
+| `db_migrate.ts` | `bun scripts/db_migrate.ts` |
+| `backup_create.ts` | `bun scripts/backup_create.ts` |
+| `backup_restore.ts` | `bun scripts/backup_restore.ts` |
+| `reindex_all.ts` | `bun scripts/reindex_all.ts` |
+
+The `.py` equivalents are **legacy** — they still exist as a migration aid but are no longer
+maintained; use the `.ts` scripts. The legacy `db_status.py` and `sync_docs.py` are
+deprecation shims that exit non-zero with a pointer to the TS replacement, so update any cron
+jobs / CI / make targets that invoke them.
 
 ### TS scripts and `.env` resolution
 
@@ -34,28 +47,28 @@ See [`docs/specs/polish-and-distribution-design.md` §7b](../specs/polish-and-di
 
 ---
 
-## db_deploy.py — Schema deployment
+## db_deploy.ts — Schema deployment
 
-Applies the full Cerefox schema (tables, indexes, RPC functions) to a Postgres database. Use this for **fresh installs** or to re-apply the schema after a Cerefox update.
+Applies the full Cerefox schema (tables, indexes, RPC functions) to a Postgres database. Use this for **fresh installs** or to re-apply the schema after a Cerefox update. (End users use `cerefox server deploy` instead.)
 
 ```bash
-uv run python scripts/db_deploy.py [OPTIONS]
+bun scripts/db_deploy.ts [OPTIONS]
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--dry-run` | Print the SQL that would be executed, without running it |
-| `--reset` | Drop all `cerefox_*` tables before deploying (destructive) |
+| `--reset` | Drop all `cerefox_*` tables before deploying (destructive; typed-`yes` guard) |
 
 **Requires**: `CEREFOX_DATABASE_URL` — a direct Postgres connection URL (not the Supabase API URL).
 
-After applying the schema, `db_deploy.py` automatically stamps any migration files in `src/cerefox/db/migrations/` into the `cerefox_migrations` table. This ensures `db_migrate.py` does not re-apply changes that are already incorporated in the base schema.
+After applying the schema, `db_deploy.ts` automatically stamps any migration files in `src/cerefox/db/migrations/` into the `cerefox_migrations` table. This ensures `db_migrate.ts` does not re-apply changes that are already incorporated in the base schema.
 
 Example:
 ```bash
 # Deploy to local Docker Postgres
 CEREFOX_DATABASE_URL=postgresql://cerefox:cerefox@localhost:5432/cerefox \
-  uv run python scripts/db_deploy.py
+  bun scripts/db_deploy.ts
 ```
 
 ---
@@ -77,16 +90,16 @@ Reports:
 
 Exit code 0 if everything is healthy; 1 if any check fails; 2 on configuration error.
 
-**Function-existence detection** routes through the `cerefox_pg_function_exists()` introspection RPC for reliability. Legacy deployments missing that RPC fall back to a naive "call with no args" probe — the legacy fallback will misreport RPCs that take required parameters as missing, which is itself a signal that the deployment needs `db_deploy.py`.
+**Function-existence detection** routes through the `cerefox_pg_function_exists()` introspection RPC for reliability. Legacy deployments missing that RPC fall back to a naive "call with no args" probe — the legacy fallback will misreport RPCs that take required parameters as missing, which is itself a signal that the deployment needs `db_deploy.ts`.
 
 ---
 
-## db_migrate.py — Schema migrations
+## db_migrate.ts — Schema migrations
 
-Applies incremental migration files to an **existing** database with data. Use this when upgrading Cerefox on a database that already has documents — it applies only the changes that haven't been applied yet.
+Applies incremental migration files to an **existing** database with data. Use this when upgrading Cerefox on a database that already has documents — it applies only the changes that haven't been applied yet. (End users get the same effect via `cerefox server deploy`, which applies pending migrations on an existing DB.)
 
 ```bash
-uv run python scripts/db_migrate.py [OPTIONS]
+bun scripts/db_migrate.ts [OPTIONS]
 ```
 
 | Option | Description |
@@ -94,31 +107,31 @@ uv run python scripts/db_migrate.py [OPTIONS]
 | `--dry-run` | Show which migrations would run, without applying them |
 | `--status` | List all migration files and whether each has been applied |
 
-**When to use `db_deploy.py` vs `db_migrate.py`:**
+**When to use `db_deploy.ts` vs `db_migrate.ts`:**
 
 | Situation | Use |
 |-----------|-----|
-| Fresh database, no data | `db_deploy.py` |
-| Existing database, upgrading to a new version | `db_migrate.py` |
+| Fresh database, no data | `db_deploy.ts` |
+| Existing database, upgrading to a new version | `db_migrate.ts` |
 
-On a freshly deployed database, `db_migrate.py` is always a no-op — `db_deploy.py` has already stamped all existing migrations.
+On a freshly deployed database, `db_migrate.ts` is always a no-op — `db_deploy.ts` has already stamped all existing migrations.
 
 Migration files live in `src/cerefox/db/migrations/` and are applied in filename order (`0001_...`, `0002_...`). Each file is applied exactly once; applied filenames are recorded in the `cerefox_migrations` table.
 
 Always run a backup before migrating:
 
 ```bash
-uv run python scripts/backup_create.py && uv run python scripts/db_migrate.py
+bun scripts/backup_create.ts && bun scripts/db_migrate.ts
 ```
 
 ---
 
-## backup_create.py — Create a backup
+## backup_create.ts — Create a backup
 
-Exports all documents, chunks, and metadata to a JSON file in the backup directory.
+Exports all documents, chunks, and metadata to a JSON file in the backup directory. (End users use `cerefox backup create`.)
 
 ```bash
-uv run python scripts/backup_create.py [OPTIONS]
+bun scripts/backup_create.ts [OPTIONS]
 ```
 
 | Option | Description |
@@ -133,19 +146,19 @@ Backup filename format: `cerefox-{YYYYMMDDTHHMMSSZ}[-{label}].json`
 
 Example:
 ```bash
-uv run python scripts/backup_create.py --label before-v2-migration
+bun scripts/backup_create.ts --label before-v2-migration
 ```
 
 Output: `backup-data/cerefox-20260308T143022Z-before-v2-migration.json`
 
 ---
 
-## backup_restore.py — Restore from a backup
+## backup_restore.ts — Restore from a backup
 
-Restores documents and chunks from a previously created backup file. Idempotent — documents with the same content hash are skipped.
+Restores documents and chunks from a previously created backup file. Idempotent — documents with the same content hash are skipped. (End users use `cerefox backup restore`.)
 
 ```bash
-uv run python scripts/backup_restore.py BACKUP_FILE [OPTIONS]
+bun scripts/backup_restore.ts BACKUP_FILE [OPTIONS]
 ```
 
 | Option | Description |
@@ -155,10 +168,10 @@ uv run python scripts/backup_restore.py BACKUP_FILE [OPTIONS]
 Example:
 ```bash
 # Preview what will be restored
-uv run python scripts/backup_restore.py backup-data/cerefox-20260308T143022Z.json --dry-run
+bun scripts/backup_restore.ts backup-data/cerefox-20260308T143022Z.json --dry-run
 
 # Restore
-uv run python scripts/backup_restore.py backup-data/cerefox-20260308T143022Z.json
+bun scripts/backup_restore.ts backup-data/cerefox-20260308T143022Z.json
 ```
 
 Restore output shows counts of restored / skipped / error documents.
@@ -208,7 +221,7 @@ The backup directory (`./backup-data/` by default) is gitignored. Back up the ba
 
 ## sync_docs.ts — Sync project documentation into Cerefox
 
-**TypeScript (v0.3.0+).** Ingests `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and every Markdown file under `docs/` into your Cerefox knowledge base, updating existing documents in-place. Run this any time after editing documentation so AI agents always have access to the current state of the project.
+Ingests `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and every Markdown file under `docs/` into your Cerefox knowledge base, updating existing documents in-place. Run this any time after editing documentation so AI agents always have access to the current state of the project.
 
 Replaces the legacy `sync_docs.py`, which now prints a deprecation notice and exits non-zero.
 
@@ -223,7 +236,7 @@ bun scripts/sync_docs.ts [OPTIONS]
 
 **Requires**: `CEREFOX_SUPABASE_URL` and `CEREFOX_SUPABASE_ANON_KEY` (the legacy anon JWT — `eyJ…` — used to invoke Edge Functions). Embedding happens server-side inside the `cerefox-ingest` Edge Function, so you don't need an OpenAI / Fireworks key in your local env for the TS script.
 
-The target project must already exist (create it with `uv run cerefox create-project cerefox` if needed).
+The target project must already exist (create it with `cerefox project create cerefox` if needed).
 
 **What gets synced**: `README.md` + `AGENT_GUIDE.md` + `AGENT_QUICK_REFERENCE.md` + all `.md` files under `docs/` (including `docs/research/` and `docs/specs/`). Research notes are included because Cerefox is a shared memory layer for multiple agents — exploratory notes, experiments, and decision rationale are exactly the kind of context agents benefit from. Files are matched to existing documents by their relative path (`source_path`), so re-running the script updates content in-place rather than creating duplicates.
 
@@ -244,7 +257,10 @@ Done. 0 new · 1 updated · 21 unchanged · 0 errors
 For a personal knowledge base, a simple daily cron is sufficient:
 
 ```cron
-0 3 * * * cd /path/to/cerefox && uv run python scripts/backup_create.py --label daily
+# End user (CLI):
+0 3 * * * cerefox backup create --label daily
+# Contributor (repo clone):
+0 3 * * * cd /path/to/cerefox && bun scripts/backup_create.ts --label daily
 ```
 
 Backups include embeddings so they are larger than pure-text exports, but for a personal knowledge base they typically remain well under 100 MB.
@@ -253,19 +269,23 @@ Backups include embeddings so they are larger than pure-text exports, but for a 
 
 ## CLI commands
 
-The `cerefox` CLI also provides data management commands:
+The `cerefox` CLI also provides data management commands (these are the end-user equivalents of the contributor scripts above):
 
 | Command | Description |
 |---------|-------------|
-| `uv run cerefox document ingest FILE` | Ingest a markdown file |
-| `uv run cerefox document ingest --paste --title TITLE` | Ingest text from stdin |
-| `uv run cerefox search QUERY` | Search the knowledge base |
-| `uv run cerefox document list` | List all documents |
-| `uv run cerefox document delete ID` | Delete a document by ID |
-| `uv run cerefox project list` | List all projects |
-| `uv run cerefox version list ID` | List all archived versions of a document |
-| `uv run cerefox document get ID` | Retrieve current content of a document |
-| `uv run cerefox document get ID --version VERSION_ID` | Retrieve a specific archived version |
-| `uv run cerefox web` | Start the web UI |
+| `cerefox server deploy` | Deploy/update schema + RPCs + the 9 Edge Functions |
+| `cerefox server reindex` | Re-embed all chunks |
+| `cerefox backup create` | Create a backup |
+| `cerefox backup restore FILE` | Restore from a backup |
+| `cerefox document ingest FILE` | Ingest a markdown file |
+| `cerefox document ingest --paste --title TITLE` | Ingest text from stdin |
+| `cerefox search QUERY` | Search the knowledge base |
+| `cerefox document list` | List all documents |
+| `cerefox document delete ID` | Delete a document by ID |
+| `cerefox project list` | List all projects |
+| `cerefox document version list ID` | List all archived versions of a document |
+| `cerefox document get ID` | Retrieve current content of a document |
+| `cerefox document get ID --version VERSION_ID` | Retrieve a specific archived version |
+| `cerefox web` | Start the web UI |
 
-Run `uv run cerefox --help` or `uv run cerefox COMMAND --help` for details.
+Run `cerefox --help` or `cerefox COMMAND --help` for details.

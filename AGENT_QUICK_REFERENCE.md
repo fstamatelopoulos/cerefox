@@ -51,26 +51,26 @@ metadata_search(metadata_filter={"type": "decision-log"}, updated_since="2026-03
 
 ## CLI fallback (when MCP is unavailable)
 
-If `cerefox_search` is not in your tool list, your user has likely installed the Cerefox CLI. From v0.5+ the canonical invocation is plain **`cerefox <subcommand>`** (installed via `npm install -g @cerefox/memory`). The legacy `uv run cerefox <subcommand>` (Python CLI in a Cerefox checkout) still works through v0.7 but emits a deprecation banner.
+If `cerefox_search` is not in your tool list, your user has likely installed the Cerefox CLI. The canonical invocation is plain **`cerefox <subcommand>`** (the TypeScript CLI, installed via `npm install -g @cerefox/memory`). It uses a resource-verb shape (`cerefox document get`, `cerefox project list`, …). The legacy Python `uv run cerefox` is now a frozen husk as of v0.9 — only `uv run cerefox mcp` still works.
 
 Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md). CLI flag names match MCP parameter names exactly (e.g. `metadata_filter` ↔ `--metadata-filter`); short forms (`--filter`, `--project`, `--count`, `--update`, `--version`) work as aliases.
 
-| MCP tool | CLI (v0.5+ canonical) |
+| MCP tool | CLI |
 |---|---|
 | `cerefox_search` | `cerefox search "<q>" --requestor "<your-name>"` |
-| `cerefox_ingest` (paste) | `printf '...' \| cerefox ingest --paste --title "<t>" --author "<your-name>" --author-type agent` |
-| `cerefox_ingest` (update by ID) | `printf '...' \| cerefox ingest --paste --title "<t>" --document-id "<uuid>" --author "<your-name>" --author-type agent` |
-| `cerefox_get_document` | `cerefox get-doc <id> --version-id <vid> --requestor "<your-name>"` |
-| `cerefox_list_versions` | `cerefox list-versions <id> --requestor "<your-name>"` |
-| `cerefox_list_projects` | `cerefox list-projects --requestor "<your-name>"` |
-| `cerefox_list_metadata_keys` | `cerefox list-metadata-keys` |
-| `cerefox_metadata_search` | `cerefox metadata-search --metadata-filter '<json>' --requestor "<your-name>"` |
+| `cerefox_ingest` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>" --author "<your-name>" --author-type agent` |
+| `cerefox_ingest` (update by ID) | `printf '...' \| cerefox document ingest --paste --title "<t>" --document-id "<uuid>" --author "<your-name>" --author-type agent` |
+| `cerefox_get_document` | `cerefox document get <id> --version-id <vid> --requestor "<your-name>"` |
+| `cerefox_list_versions` | `cerefox document version list <id> --requestor "<your-name>"` |
+| `cerefox_list_projects` | `cerefox project list --requestor "<your-name>"` |
+| `cerefox_list_metadata_keys` | `cerefox metadata keys` |
+| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --requestor "<your-name>"` |
 | `cerefox_set_document_projects` | _MCP-only; a CLI command will be added in a future release. Until then, run via MCP if available._ |
-| `cerefox_get_audit_log` | `cerefox get-audit-log --requestor "<your-name>"` (add `--json` for scripted access) |
-| `cerefox_get_help` | `cerefox docs agent-quick-reference --print` (or `cerefox docs --list` for the full bundled-docs index) |
+| `cerefox_get_audit_log` | `cerefox audit list --requestor "<your-name>"` (add `--json` for scripted access) |
+| `cerefox_get_help` | `cerefox guides show agent-quick-reference` (or `cerefox guides list` for the full bundled-docs index) |
 
 **Set identity on every call**, exactly as you would on MCP:
-- Writes (`ingest`, `ingest-dir`): `--author "<your-name>" --author-type agent`
+- Writes (`document ingest`, `document ingest-dir`): `--author "<your-name>" --author-type agent`
 - Reads: `--requestor "<your-name>"`
 
 Or have your user set `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` in their `.env` to apply defaults once.

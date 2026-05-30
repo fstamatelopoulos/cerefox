@@ -8,9 +8,11 @@ This guide walks you from a blank Supabase project to a fully deployed Cerefox s
 
 ## Prerequisites
 
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) installed
+- The Cerefox CLI installed (`cerefox --version`) — see [`quickstart.md`](quickstart.md#1-install). End users do **not** need a source clone or Python.
+- **Node.js 20+** or **Bun 1.0+** (the CLI runtime; also used for `npx supabase`).
 - A Supabase account (free tier is enough): [supabase.com](https://supabase.com)
-- Python 3.11 or higher
+
+> The `python scripts/db_*.py` paths shown in the contributor footnotes below are **legacy**. The Python implementation is legacy and slated for removal in a future release; only the Python MCP server remains as a fallback. Contributors with a repo clone should use `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts`.
 
 ---
 
@@ -52,14 +54,14 @@ Either way: keep this key secret — it bypasses Row Level Security and grants f
 
 ### 3c. Direct database URL — `CEREFOX_DATABASE_URL`
 
-This is used by `db_deploy.py`, `db_migrate.py`, and `db_status.py`. See the **[Connection pooling in 2026](#connection-pooling-2026)** reference section near the end of this guide for context. The short version:
+This is used by `cerefox server deploy` (and the contributor scripts `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts`). See the **[Connection pooling in 2026](#connection-pooling-2026)** reference section near the end of this guide for context. The short version:
 
 1. Open **Project Settings → Database → Connection pooling** (not the "Connect" dialog — that one usually omits the Session Pooler in the new UI).
 2. Copy the **Session Pooler** URI (host ends in `.pooler.supabase.com`, port `5432`).
 3. Confirm the username has the form `postgres.<project-ref>` — without that suffix you'll get "Tenant or user not found".
 4. Append `?sslmode=require` to enforce TLS explicitly.
 
-If you only see Direct Connection and Transaction Pooler in your dashboard, take the Transaction Pooler URI and change `:6543` → `:5432`. That gives you the Session Pooler. **Do not use port 6543** — Transaction Pooler does not support DDL and `db_deploy.py` will fail mid-schema.
+If you only see Direct Connection and Transaction Pooler in your dashboard, take the Transaction Pooler URI and change `:6543` → `:5432`. That gives you the Session Pooler. **Do not use port 6543** — Transaction Pooler does not support DDL and the schema deploy will fail mid-schema.
 
 The Direct Connection (`db.<project-ref>.supabase.co:5432`) is IPv6-only on the free tier and unusable on most home/office networks. The dashboard now warns about this directly.
 
@@ -67,133 +69,56 @@ The Direct Connection (`db.<project-ref>.supabase.co:5432`) is IPv6-only on the 
 
 ## Step 4 — Configure Your Environment
 
+Run the interactive setup — it validates each credential against the live
+service and writes `~/.cerefox/.env` (mode 0600):
+
 ```bash
-# In the cerefox project root:
-cp .env.example .env
+cerefox init
 ```
 
-Edit `.env` and fill in your values. A minimal working configuration looks like:
+When prompted, supply the three values from Step 3 (URL, secret key, database
+URL) plus your `OPENAI_API_KEY`. If you plan to connect AI agents via the
+remote MCP / GPT Actions path, also set `CEREFOX_SUPABASE_ANON_KEY` to the
+**legacy anon JWT** (`eyJ…`, not `sb_publishable_…` — see "Supabase API keys
+(2026)" below).
+
+A minimal `~/.cerefox/.env` looks like:
 
 ```bash
 CEREFOX_SUPABASE_URL=https://your-project-ref.supabase.co
 CEREFOX_SUPABASE_KEY=sb_secret_...your-secret-key...
 CEREFOX_DATABASE_URL=postgresql://postgres.yourref:yourpassword@aws-N-region.pooler.supabase.com:5432/postgres?sslmode=require
-# CEREFOX_SUPABASE_ANON_KEY only needed if you'll deploy Edge Functions (Step 8)
-# Must be the legacy anon JWT, NOT sb_publishable_... — see "Supabase API keys (2026)" below
+OPENAI_API_KEY=sk-...
+# Only needed for Edge Functions / MCP / GPT Actions — must be the legacy anon JWT:
 # CEREFOX_SUPABASE_ANON_KEY=eyJ...your-legacy-anon-jwt...
 ```
 
-Leave all other settings at their defaults for now.
+> **Contributors** (repo clone): copy `cp .env.example .env` in the project root
+> and edit it directly; the repo-local `.env` takes precedence (see
+> [`configuration.md`](configuration.md#where-cerefox-looks-for-env-v030)).
 
 ---
 
-## Step 5 — Install Dependencies
+## Step 5 — Deploy the Schema and Edge Functions
 
-```bash
-uv sync
-```
-
-This installs all Python dependencies defined in `pyproject.toml`, including `supabase`, `psycopg2-binary`, and `pydantic-settings`.
-
----
-
-## Step 6 — Deploy the Schema
+`cerefox server deploy` is the catch-all end-user deploy path. It deploys the
+schema + RPCs (using `CEREFOX_DATABASE_URL`) and all 9 Edge Functions — straight
+from the npm-bundled assets, no source clone. It detects fresh vs. existing
+databases: a fresh DB gets schema + RPCs + migration stamps; an existing DB gets
+pending migrations applied and `rpcs.sql` re-applied in place.
 
 ```bash
 # Preview what will happen (no changes made):
-python scripts/db_deploy.py --dry-run
+cerefox server deploy --dry-run
 
-# Apply the schema:
-python scripts/db_deploy.py
+# Deploy everything (schema + RPCs + Edge Functions):
+cerefox server deploy
 ```
 
-Expected output:
-```
-╔══════════════════════════════════════╗
-║  Cerefox DB Deploy                   ║
-╚══════════════════════════════════════╝
+Useful flags: `--schema-only`, `--functions-only`, `--dry-run`.
 
-Connecting to database...
-
-▶  Enable extensions (uuid-ossp, vector/pgvector)...
-   ✓  Done
-
-▶  Apply schema (tables, indexes, triggers)...
-   ✓  Done
-
-▶  Apply RPCs (search functions)...
-   ✓  Done
-
-──────────────────────────────────────────
-✓  Deployment complete. 3 steps applied.
-
-Next step: verify the schema with:
-    python scripts/db_status.py
-```
-
----
-
-## Step 7 — Verify the Schema
-
-```bash
-python scripts/db_status.py
-```
-
-Expected output:
-```
-╔══════════════════════════════════════╗
-║  Cerefox DB Status                   ║
-╚══════════════════════════════════════╝
-
-Extensions:
-  ✓  uuid-ossp
-  ✓  vector
-
-Tables:
-  ✓  cerefox_projects
-  ✓  cerefox_documents
-  ✓  cerefox_chunks
-  ✓  cerefox_migrations
-
-Functions / RPCs:
-  ✓  cerefox_set_updated_at()
-  ✓  cerefox_hybrid_search()
-  ✓  cerefox_fts_search()
-  ✓  cerefox_semantic_search()
-  ✓  cerefox_reconstruct_doc()
-  ✓  cerefox_save_note()
-  ✓  cerefox_search_docs()
-  ✓  cerefox_context_expand()
-
-Indexes:
-  ✓  idx_cerefox_chunks_fts
-  ✓  idx_cerefox_chunks_emb_primary
-  ✓  idx_cerefox_chunks_emb_upgrade
-  ✓  idx_cerefox_chunks_document
-  ✓  idx_cerefox_docs_metadata
-  ✓  idx_cerefox_docs_project
-
-Row counts:
-  ℹ  cerefox_projects: 0 rows
-  ℹ  cerefox_documents: 0 rows
-  ℹ  cerefox_chunks: 0 rows
-
-──────────────────────────────────────────
-✓  All checks passed. Schema looks healthy.
-```
-
-All checks should show ✓. If any show ✗, re-run `python scripts/db_deploy.py`.
-
----
-
-## Step 8 — Deploy Edge Functions
-
-The Edge Functions run server-side on Supabase. `cerefox-search` and `cerefox-ingest` handle
-embedding for agents; `cerefox-mcp` wraps them as a remote MCP endpoint (recommended for
-Claude Code, Cursor, and Claude Desktop). Deploy using the Supabase CLI via `npx` — no
-separate install needed, just Node.js.
-
-**First time only — authenticate and link your project:**
+**First time only — the Edge Function step authenticates and links your project**
+(it shells out to `npx supabase`). If prompted, run:
 
 ```bash
 npx supabase login        # opens a browser tab; click "Confirm" to generate an access token
@@ -203,71 +128,41 @@ npx supabase link         # prompts for your project ref (the ID in your Supabas
 Your project ref is in the Supabase dashboard URL:
 `https://supabase.com/dashboard/project/<project-ref>`
 
-**Deploy all three functions** (from the cerefox project root):
-
-```bash
-npx supabase functions deploy cerefox-ingest
-npx supabase functions deploy cerefox-search
-npx supabase functions deploy cerefox-mcp
-```
-
-Expected output for each:
-```
-Bundling Function: cerefox-ingest
-Deploying Function: cerefox-ingest (script size: ~880kB)
-Deployed Functions on project <your-project-ref>: cerefox-ingest
-```
-
-You can verify in the Supabase Dashboard → **Edge Functions** — all three functions should
-appear with a green "Active" status.
+After it finishes, verify in the Supabase Dashboard → **Edge Functions** — all 9
+functions should appear with a green "Active" status.
 
 > **`WARNING: Docker is not running` is expected and harmless.** The Supabase CLI checks for
 > Docker (its older local bundler ran in a container) but falls back to bundling the functions
 > server-side — it uploads the source assets (you'll see `Uploading asset (…)` lines) and
 > Supabase compiles them in the cloud. **Docker is not a prerequisite for deploying Cerefox's
 > Edge Functions.** A deploy succeeded as long as each function ends with
-> `Deployed Functions on project …`. This applies to both the manual commands here and
-> `cerefox server deploy --functions-only`.
+> `Deployed Functions on project …`.
 
-> **Re-deploying after updates**: run the same `npx supabase functions deploy` commands
-> again from the project root, or just `cerefox server deploy --functions-only` (it deploys
-> all 9 from the bundled assets). `npx supabase login` only needs to be run once per machine.
+> **Re-deploying after upgrades**: just re-run `cerefox server deploy` (or
+> `cerefox server deploy --functions-only` for EFs only). It applies pending
+> migrations and re-applies RPCs in place. `npx supabase login` only needs to be
+> run once per machine.
 
----
-
-## Step 9 — Run the Tests
-
-Confirm everything is wired up correctly:
-
-```bash
-uv run pytest
-```
-
-These are unit tests only (no real database connection needed). You should see all tests pass.
-
-To also run the integration tests against your live Supabase instance:
-```bash
-uv run pytest -m integration
-```
+> **Contributors** (repo clone): the low-level path is `bun scripts/db_deploy.ts`
+> / `bun scripts/db_migrate.ts` for schema, and `npx supabase functions deploy
+> <name>` per Edge Function. The `python scripts/db_deploy.py` path is legacy.
 
 ---
 
-## Step 11 — Connect an AI agent (optional)
+## Step 6 — Connect an AI agent (optional)
 
 Cerefox ships a built-in MCP server that gives desktop agents named tools
 (`cerefox_search`, `cerefox_ingest`) with full hybrid search.
 
-**For Claude Desktop / ChatGPT Desktop / Cursor** — add to the client's MCP config:
-```json
-{
-  "mcpServers": {
-    "cerefox": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
-    }
-  }
-}
+**For Claude Code / Claude Desktop / Cursor / Codex / Gemini** — let the CLI
+write the config:
+```bash
+cerefox configure-agent --tool claude-code      # or claude-desktop, cursor, codex, gemini
 ```
+
+This points the client at the local stdio server (`cerefox mcp`). To edit
+configs by hand or use the remote (Edge Function) HTTP transport, see
+[`connect-agents.md`](connect-agents.md).
 
 **For cloud Claude.ai** — connect to the Supabase remote MCP (FTS keyword search only):
 1. In Supabase Dashboard → Project Settings → Integrations → MCP, get your project ref
@@ -288,14 +183,14 @@ architecture explanation, and ChatGPT GPT Actions setup.
 
 ### "extension 'vector' does not exist"
 - Go to Supabase Dashboard → Database → Extensions → enable `vector`
-- Then re-run `python scripts/db_deploy.py`
+- Then re-run `cerefox server deploy`
 
 ### "permission denied for table"
 - Make sure `CEREFOX_SUPABASE_KEY` is your secret key (`sb_secret_…`) or legacy `service_role` JWT — not the publishable / anon key. See [Supabase API keys (2026)](#supabase-api-keys-2026) below.
 
 ### Schema already exists (re-deploying)
-- All schema objects use `CREATE ... IF NOT EXISTS` / `CREATE OR REPLACE`, so re-running is safe
-- To start completely fresh: `python scripts/db_deploy.py --reset` (⚠️ deletes all data)
+- All schema objects use `CREATE ... IF NOT EXISTS` / `CREATE OR REPLACE`, so re-running `cerefox server deploy` is safe
+- To start completely fresh, contributors with a repo clone can run `bun scripts/db_deploy.ts --reset` (⚠️ deletes all data; typed-`yes` guard). There is deliberately no `--reset` on `cerefox server deploy`.
 
 ---
 
@@ -342,7 +237,7 @@ Supabase's "Connect" dialog was redesigned in 2026 and the **Session Pooler** is
 | Type | Host / port | DDL support | IPv4 compatible? | Use for Cerefox? |
 |---|---|---|---|---|
 | **Direct Connection** | `db.<project-ref>.supabase.co:5432` | ✓ | **IPv6 only on free tier.** Dashboard warns about this directly. | No — most networks can't reach it. |
-| **Transaction Pooler** | `aws-N-region.pooler.supabase.com:6543` (note port) | **✗ no DDL** | ✓ | No — `db_deploy.py` fails mid-schema. |
+| **Transaction Pooler** | `aws-N-region.pooler.supabase.com:6543` (note port) | **✗ no DDL** | ✓ | No — the schema deploy fails mid-schema. |
 | **Session Pooler** | `aws-N-region.pooler.supabase.com:5432` | ✓ | ✓ | **Yes — use this.** |
 
 The Transaction Pooler runs PgBouncer in transaction mode and does not maintain a session between statements, breaking DDL, prepared statements, `SET LOCAL`, and advisory locks. The Session Pooler is the same hostname on a different port and keeps a full session per connection.

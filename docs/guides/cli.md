@@ -10,15 +10,17 @@ Every command reads configuration from `.env` in the working directory (or envir
 
 - `CEREFOX_SUPABASE_URL` and `CEREFOX_SUPABASE_KEY` for any command that talks to Supabase
 - `OPENAI_API_KEY` (or `CEREFOX_FIREWORKS_API_KEY`) for any command that embeds (ingest, search)
-- `CEREFOX_DATABASE_URL` only for the `scripts/db_*.py` deployment scripts (not the `cerefox` CLI itself)
+- `CEREFOX_DATABASE_URL` for `cerefox server deploy` and the contributor scripts (`bun scripts/db_*.ts`)
 
-Invoke any command with `uv run cerefox <subcommand>`. Inside an activated venv, `cerefox <subcommand>` works too — but `uv run` is preferred (no venv activation needed; see Decision Log Q2 lesson on `uv` installation).
+The CLI is the TypeScript `@cerefox/memory` package. Invoke any command as plain `cerefox <subcommand>` (installed via the installer or `npm install -g @cerefox/memory` — see [`quickstart.md`](quickstart.md#1-install)).
+
+> **v0.9 verb rename**: commands now follow a `resource verb` shape (e.g. `cerefox document get`, `cerefox project list`). The old flat verbs (`get-doc`, `list-docs`, `ingest`, `list-versions`, `config-get`, `deploy-server`, `docs`, …) are husks and have been removed — use the new forms below.
 
 ## Commands
 
 ### `cerefox document ingest`
 
-**Purpose**: ingest a markdown / PDF / DOCX file (or stdin) into the knowledge base.
+**Purpose**: ingest a markdown / plain-text file (or stdin) into the knowledge base. (PDF/DOCX conversion was dropped in v0.7 — markdown/text only.)
 
 **Synopsis**:
 ```
@@ -82,7 +84,7 @@ cerefox document ingest-dir [OPTIONS] DIRECTORY
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--pattern TEXT` | glob | `*.md` | Glob pattern. Examples: `**/*.md`, `*.pdf`. |
+| `--pattern TEXT` | glob | `*.md` | Glob pattern. Examples: `**/*.md`, `*.txt`. |
 | `--project-name TEXT` (alias: `--project`, `-p`) | str | _none_ | Project to assign every document to. |
 | `--recursive / --no-recursive` | flag | `--no-recursive` | Recurse into sub-directories. |
 | `--dry-run` | flag | off | Print files that would be ingested; do nothing. |
@@ -126,6 +128,7 @@ cerefox search [OPTIONS] QUERY
 | `--alpha FLOAT` | float | `0.7` | FTS/semantic weight (hybrid only). |
 | `--min-score FLOAT` | float | `CEREFOX_MIN_SEARCH_SCORE` or `0.50` | Minimum cosine similarity (hybrid/semantic only). |
 | `--metadata-filter TEXT` (alias: `--filter`, `-f`) | JSON | _none_ | JSONB metadata containment filter, e.g. `'{"type":"decision"}'`. |
+| `--only-metadata` | flag | off | Return only document titles + metadata (no chunk content / previews) — a compact listing. |
 | `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
 
 **Examples**:
@@ -133,6 +136,7 @@ cerefox search [OPTIONS] QUERY
 cerefox search "OAuth design"
 cerefox search "decisions" --metadata-filter '{"type":"decision-log"}' --match-count 5
 cerefox search "what we tried" --mode semantic --requestor "claude-code"
+cerefox search "design docs" --only-metadata
 ```
 
 **Output**: numbered result list with title, score, and 300-char preview per hit. Final line shows total results + bytes.
@@ -156,7 +160,7 @@ cerefox document get [OPTIONS] DOCUMENT_ID
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--version-id TEXT` (alias: `--version`) | UUID | _none_ (current) | Archived version UUID — get from `cerefox version list`. |
+| `--version-id TEXT` (alias: `--version`) | UUID | _none_ (current) | Archived version UUID — get from `cerefox document version list`. |
 | `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
 
 **Examples**:
@@ -192,13 +196,59 @@ cerefox document list [OPTIONS]
 
 ---
 
-### `cerefox version list`
+### `cerefox document edit`
+
+**Purpose**: update a document's title and/or metadata in place, without re-ingesting content.
+
+**Synopsis**:
+```
+cerefox document edit [OPTIONS] DOCUMENT_ID
+```
+
+**Options**:
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--title TEXT` | str | _unchanged_ | New document title. |
+| `--set-meta TEXT` | `key=value` (repeatable) | _none_ | Set/overwrite a metadata key, e.g. `--set-meta type=decision --set-meta status=active`. |
+| `--unset-meta TEXT` | key (repeatable) | _none_ | Remove a metadata key, e.g. `--unset-meta status`. |
+| `--author TEXT` | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Identity recorded in the audit log. |
+| `--author-type [user\|agent]` | choice | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. |
+
+Metadata-only edits do **not** create a new version. A title change re-derives the FTS vector and re-embeds current chunks.
+
+**Examples**:
+```bash
+cerefox document edit <doc-id> --title "Renamed Doc"
+cerefox document edit <doc-id> --set-meta status=archived --unset-meta draft
+```
+
+---
+
+### `cerefox document restore`
+
+**Purpose**: restore a soft-deleted (trashed) document back to active.
+
+**Synopsis**: `cerefox document restore [OPTIONS] DOCUMENT_ID`
+
+**Options**:
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--author TEXT` | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Identity recorded in the audit log. |
+| `--author-type [user\|agent]` | choice | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. |
+
+Clears `deleted_at`, returning the document to search and `cerefox document list`, and writes a `restore` audit entry.
+
+---
+
+### `cerefox document version list`
 
 **Purpose**: list all archived versions of a document.
 
 **Synopsis**:
 ```
-cerefox version list [OPTIONS] DOCUMENT_ID
+cerefox document version list [OPTIONS] DOCUMENT_ID
 ```
 
 **Options**:
@@ -210,6 +260,20 @@ cerefox version list [OPTIONS] DOCUMENT_ID
 **Output**: table with version number, created timestamp, source, chunk/char counts, and version UUID. Pass the UUID to `cerefox document get --version-id <uuid>` to retrieve the archived content.
 
 **MCP equivalent**: [`cerefox_list_versions`](../../AGENT_GUIDE.md).
+
+---
+
+### `cerefox document version archive` / `cerefox document version unarchive`
+
+**Purpose**: mark a specific version as `archived` (protecting it from automatic version-retention cleanup), or remove that protection.
+
+**Synopsis**:
+```
+cerefox document version archive [OPTIONS] DOCUMENT_ID VERSION_ID
+cerefox document version unarchive [OPTIONS] DOCUMENT_ID VERSION_ID
+```
+
+An archived version is never deleted by the lazy version-retention sweep (see [`configuration.md` → Versioning](configuration.md#versioning)). `unarchive` makes it eligible for cleanup again. Both write an `archive` / `unarchive` audit entry.
 
 ---
 
@@ -229,6 +293,34 @@ cerefox project list [OPTIONS]
 | `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
 
 **MCP equivalent**: [`cerefox_list_projects`](../../AGENT_GUIDE.md).
+
+---
+
+### `cerefox project create` / `cerefox project edit` / `cerefox project delete`
+
+**Purpose**: manage projects (the grouping documents are assigned to). CLI/web-only — there is no MCP equivalent for mutations.
+
+**Synopsis**:
+```
+cerefox project create [OPTIONS] NAME
+cerefox project edit   [OPTIONS] PROJECT          # by id or name
+cerefox project delete [OPTIONS] PROJECT
+```
+
+**Options** (common):
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description TEXT` | str | _none_ | Project description (`create` / `edit`). |
+| `--name TEXT` | str | _unchanged_ | New name (`edit`). |
+| `-y, --yes` | flag | off | Skip confirmation (`delete`; required for non-interactive use). |
+
+**Examples**:
+```bash
+cerefox project create research --description "Literature and design notes"
+cerefox project edit research --name research-archive
+cerefox project delete research-archive --yes
+```
 
 ---
 
@@ -349,6 +441,24 @@ The success message echoes the resolved author / author_type back so you can sur
 
 ---
 
+### `cerefox server deploy`
+
+**Purpose**: stand up *or update* the server side — schema + RPCs and all 9 Edge Functions — from the npm-bundled assets (no source clone). This is the end-user deploy path.
+
+**Synopsis**: `cerefox server deploy [OPTIONS]`
+
+**Options**:
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--schema-only` | flag | off | Deploy only schema + RPCs (skip Edge Functions). |
+| `--functions-only` | flag | off | Deploy only the 9 Edge Functions (skip schema). |
+| `--dry-run` | flag | off | Preview what would happen; make no changes. |
+
+Detects fresh vs. existing databases: a fresh DB gets schema + RPCs + migration stamps; an existing DB gets pending migrations applied and `rpcs.sql` re-applied in place. There is deliberately **no `--reset`** here — the destructive wipe lives only in the contributor script `bun scripts/db_deploy.ts --reset`. See [`setup-supabase.md`](setup-supabase.md).
+
+---
+
 ### `cerefox server reindex`
 
 **Purpose**: re-embed chunks (e.g. after switching embedding models or pulling a schema change like title-boosting).
@@ -365,12 +475,13 @@ The success message echoes the resolved author / author_type back so you can sur
 
 ---
 
-### `cerefox config get` / `cerefox config set`
+### `cerefox config list` / `cerefox config get` / `cerefox config set`
 
-**Purpose**: read/write runtime config in `cerefox_config` (e.g. `usage_tracking_enabled`).
+**Purpose**: read/write runtime config in `cerefox_config` (e.g. `usage_tracking_enabled`, `require_requestor_identity`).
 
 **Synopsis**:
 ```
+cerefox config list           # all current key/value pairs
 cerefox config get KEY
 cerefox config set KEY VALUE
 ```
@@ -381,7 +492,7 @@ Used for toggling features at runtime without a redeploy — see [Decision Log Q
 
 ### `cerefox web`
 
-**Purpose**: start the FastAPI web UI (React SPA + JSON API).
+**Purpose**: start the web UI — a TypeScript Hono backend serving the React/Mantine SPA + JSON API.
 
 **Synopsis**: `cerefox web [OPTIONS]`
 
@@ -391,9 +502,8 @@ Used for toggling features at runtime without a redeploy — see [Decision Log Q
 |---|---|---|---|
 | `--host TEXT` | str | `127.0.0.1` | Bind address. |
 | `--port INTEGER` | int | `8000` | Listen port. |
-| `--reload` | flag | off | Auto-reload on source changes (dev). |
 
-Requires the frontend to be built: `cd frontend && npm install && npm run build`.
+The SPA assets are bundled in the npm package; no separate build step is needed for installed users. Contributors building from source can rebuild the frontend with `cd frontend && bun install && bun run build`.
 
 ---
 
@@ -404,6 +514,38 @@ Requires the frontend to be built: `cd frontend && npm install && npm run build`
 **Synopsis**: `cerefox mcp`
 
 No options. See [`connect-agents.md` → Path A-Local](connect-agents.md#path-a-local--local-mcp-server-cerefox-mcp).
+
+---
+
+### `cerefox guides`
+
+**Purpose**: work with the bundled Cerefox self-docs that ship inside the npm package.
+
+**Synopsis**:
+```
+cerefox guides list                 # list the bundled guide names
+cerefox guides show <name>          # print a guide to stdout
+cerefox guides open <name>          # open a guide in your pager / browser
+cerefox guides ingest               # ingest the bundled self-docs into the knowledge base
+```
+
+`cerefox guides ingest` loads the bundled guides into the `_cerefox-self-docs` project so agents can search Cerefox usage guidance (the same step `cerefox init` offers). It replaces the old `cerefox docs` / `sync-self-docs` / `sync-docs` commands.
+
+---
+
+### Setup & maintenance commands
+
+These flat commands handle install, configuration, and health. Run any with `--help` for details:
+
+| Command | Purpose |
+|---|---|
+| `cerefox init` | Interactive first-run setup; writes `~/.cerefox/.env`, offers `server deploy` + self-docs ingest. |
+| `cerefox doctor` | Diagnose the install (credentials, DB reachability, schema version). |
+| `cerefox status` | Show connection + schema status. |
+| `cerefox configure-agent --tool <client>` | Write MCP client config (`claude-code`, `claude-desktop`, `cursor`, `codex`, `gemini`). |
+| `cerefox self-update` | Update the installed `@cerefox/memory` package. |
+| `cerefox completion` | Emit a shell completion script. |
+| `cerefox backup create` / `cerefox backup restore` | File-system backup / restore of the knowledge base (see [`ops-scripts.md`](ops-scripts.md)). |
 
 ---
 
@@ -425,7 +567,7 @@ Precedence: **CLI flag > env var > built-in default**.
 |---|---|
 | `0` | Success |
 | `1` | Validation error, missing config, document-not-found, etc. — see error message |
-| `2` | Click argument-parsing error (invalid Choice value, missing required arg) |
+| `2` | Argument-parsing error (invalid choice value, missing required arg) |
 
 ## MCP tool ↔ CLI command mapping
 
@@ -439,7 +581,7 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type <t>` |
 | `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>"` (same flags) |
 | `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <id> --version-id <vid> --requestor <name>` |
-| `cerefox_list_versions(document_id, requestor)` | `cerefox version list <id> --requestor <name>` |
+| `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <id> --requestor <name>` |
 | `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
 | `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
@@ -453,7 +595,7 @@ None outstanding as of v0.1.17 (cerefox#27 — the `cerefox search` NameError �
 
 ### Bulk-import a directory with shared metadata
 ```bash
-cerefox document ingest-dir ./papers --recursive --pattern '*.pdf' \
+cerefox document ingest-dir ./papers --recursive --pattern '*.md' \
   --project-name "literature" \
   --metadata '{"type":"paper","status":"reviewed"}'
 ```
@@ -474,7 +616,7 @@ printf '%s' "$NEW_CONTENT" | cerefox document ingest --paste \
 ### Unattended sync job
 ```bash
 # In a cron job / launchd plist. Set CEREFOX_AUTHOR_NAME=sync-script in env.
-cd /path/to/cerefox && uv run cerefox document ingest-dir ~/notes --recursive --update-if-exists
+cerefox document ingest-dir ~/notes --recursive --update-if-exists
 ```
 
 ### Use the CLI from an agent's Bash tool

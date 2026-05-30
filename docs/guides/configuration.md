@@ -12,7 +12,7 @@ cp .env.example .env
 Resolved at process start, highest precedence wins:
 
 1. **`CEREFOX_CONFIG_DIR`** environment variable — explicit override; supports `~` expansion.
-2. **`./.env`** in the current working directory — dev mode. Wins for anyone running `cd /path/to/cerefox && uv run cerefox …`.
+2. **`./.env`** in the current working directory — dev mode. Wins for anyone running `cd /path/to/cerefox && cerefox …` from a repo clone.
 3. **`~/.cerefox/.env`** — the user-state root; default for installed setups.
 
 For most contributors, option 2 (repo-local `.env`) wins automatically. For an installed CLI (no repo checkout), option 3 is the default. Use option 1 to point a single machine at multiple Cerefox knowledge bases:
@@ -36,8 +36,8 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 | `CEREFOX_DATABASE_URL` | `""` | For scripts | Direct Postgres URL for deployment scripts. **Use the Session Pooler** (port `5432`) — Transaction Pooler (`6543`) does not support DDL. Username must include the project-ref suffix (`postgres.<project-ref>`). Append `?sslmode=require`. See [`setup-supabase.md` → Connection pooling (2026)](setup-supabase.md#connection-pooling-2026). |
 
 **When each is needed:**
-- `CEREFOX_SUPABASE_URL` + `CEREFOX_SUPABASE_KEY` — used by the Python app (ingestion, search, CLI, web UI) via supabase-py
-- `CEREFOX_DATABASE_URL` — used only by the deployment scripts (psycopg2 direct connection)
+- `CEREFOX_SUPABASE_URL` + `CEREFOX_SUPABASE_KEY` — used by the CLI, web UI, and local MCP server (ingestion, search) via the Supabase Data API
+- `CEREFOX_DATABASE_URL` — used only for schema deploys (`cerefox server deploy`, or the contributor scripts `bun scripts/db_*.ts`) via a direct Postgres connection
 
 ---
 
@@ -87,7 +87,7 @@ All embedding API calls (Python `CloudEmbedder` and Edge Functions) include auto
 - **Not retried**: HTTP 4xx client errors (invalid API key, bad request)
 - **Logged**: every retry attempt is logged with the failure reason and attempt number
 
-This handles intermittent OpenAI API errors (500s) that would otherwise cause search or ingestion failures. The retry logic is consistent across both the Python path (local MCP, web UI, CLI) and the Edge Function path (remote MCP, GPT Actions).
+This handles intermittent OpenAI API errors (500s) that would otherwise cause search or ingestion failures. The retry logic is consistent across both the local path (local MCP, web UI, CLI) and the Edge Function path (remote MCP, GPT Actions).
 
 ---
 
@@ -175,7 +175,7 @@ See `docs/guides/response-limits.md` for the full guide including behaviour deta
 
 ### RPC-level retrieval parameters
 
-Two retrieval parameters are configured directly in `src/cerefox/db/rpcs.sql` rather than in `.env`. They follow the same convention as `OPENAI_MODEL` and `EMBEDDING_DIMENSIONS` in the Edge Functions: they are system-level tuning knobs that rarely change, and changing them requires a SQL re-deploy (`python scripts/db_deploy.py`) rather than a restart.
+Two retrieval parameters are configured directly in `src/cerefox/db/rpcs.sql` rather than in `.env`. They follow the same convention as `OPENAI_MODEL` and `EMBEDDING_DIMENSIONS` in the Edge Functions: they are system-level tuning knobs that rarely change, and changing them requires a SQL re-deploy (`cerefox server deploy`) rather than a restart.
 
 | Parameter | Default | Location | Description |
 |-----------|---------|----------|-------------|
@@ -184,7 +184,7 @@ Two retrieval parameters are configured directly in `src/cerefox/db/rpcs.sql` ra
 
 To change these values, edit the `DEFAULT` values in `cerefox_search_docs` in `src/cerefox/db/rpcs.sql` and redeploy:
 ```bash
-python scripts/db_deploy.py
+cerefox server deploy        # contributors with a repo clone: bun scripts/db_deploy.ts
 ```
 
 ---
@@ -209,8 +209,8 @@ Metadata-only updates (same content, different title or project) do **not** crea
 
 To view and retrieve previous versions:
 ```bash
-uv run cerefox version list <document-id>
-uv run cerefox document get <document-id> --version <version-id>
+cerefox document version list <document-id>
+cerefox document get <document-id> --version-id <version-id>
 ```
 
 ---
@@ -228,7 +228,7 @@ uv run cerefox document get <document-id> --version <version-id>
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CEREFOX_LOG_LEVEL` | `INFO` | Python logging level. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `CEREFOX_LOG_LEVEL` | `INFO` | Logging level. Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 
 Set to `DEBUG` during development to see detailed operation logs.
 
@@ -269,7 +269,7 @@ Cerefox has **two independent access paths**, each with its own embedding config
 
 | Path | Where embedding happens | Config location |
 |------|------------------------|-----------------|
-| Local MCP server + CLI | Python `CloudEmbedder` | `.env` (`CEREFOX_OPENAI_EMBEDDING_MODEL`, etc.) |
+| Local MCP server + CLI + web UI | Local embedder (reads `.env`) | `.env` (`CEREFOX_OPENAI_EMBEDDING_MODEL`, etc.) |
 | Edge Functions (GPT Actions, curl) | TypeScript constants in Edge Function code | Hardcoded in `supabase/functions/*/index.ts` |
 
 When you change the embedding model, **both paths must be updated and kept in sync** — they must use the same model and dimensions, or search results will be incoherent (queries embedded by one model won't match chunks embedded by another).
@@ -281,7 +281,7 @@ Change `CEREFOX_OPENAI_EMBEDDING_MODEL` and `CEREFOX_OPENAI_EMBEDDING_DIMENSIONS
 ### Step 2 — Re-embed all stored chunks
 
 ```bash
-uv run cerefox server reindex
+cerefox server reindex
 ```
 
 This re-embeds every chunk in the database using the model now configured in `.env`.
@@ -302,13 +302,12 @@ const OPENAI_MODEL = "text-embedding-3-small";  // ← update this
 const EMBEDDING_DIMENSIONS = 768;               // ← and this if dimensions change
 ```
 
-Then redeploy via the Supabase CLI:
+Then redeploy the Edge Functions:
 ```bash
-supabase functions deploy cerefox-search
-supabase functions deploy cerefox-ingest
+cerefox server deploy --functions-only
 ```
 
-Or redeploy through the Supabase Dashboard → Edge Functions → Deploy.
+Contributors with a repo clone can instead redeploy individual functions with `npx supabase functions deploy cerefox-search` (and `cerefox-ingest`), or through the Supabase Dashboard → Edge Functions → Deploy.
 
 > **If you only use the local MCP server** (Claude Desktop, ChatGPT Desktop, Cursor), Step 3 is
 > optional — the Edge Functions are only used for GPT Actions and direct HTTP access.
@@ -360,15 +359,7 @@ cerefox config set usage_tracking_enabled false
 cerefox config get usage_tracking_enabled
 ```
 
-**Via REST API:**
-```bash
-# Enable
-curl -X PUT http://localhost:8000/api/v1/config/usage_tracking_enabled \
-  -H 'Content-Type: application/json' -d '{"value": "true"}'
-
-# Read
-curl http://localhost:8000/api/v1/config/usage_tracking_enabled
-```
+The canonical path is the CLI (`cerefox config set <key> <value>` / `cerefox config get <key>`) above; it works regardless of whether the web server is running. The web UI's JSON API exposes the same config under `/api/v1/config/<key>` if you need programmatic access while `cerefox web` is running.
 
 ### What gets logged
 
@@ -388,9 +379,9 @@ Each usage log entry records:
 The `access_path` is set by the caller layer (not the end user):
 - Edge Functions set `"edge-function"` (GPT Actions, direct HTTP callers)
 - `cerefox-mcp` tool handlers set `"remote-mcp"` (Claude Code, Cursor, Claude Desktop)
-- Python REST routes set `"webapp"` (the web UI)
+- The web UI's JSON API routes set `"webapp"`
 - Local MCP server sets `"local-mcp"`
-- CLI sets `"cli"` for search, get-doc, and list-versions commands
+- CLI sets `"cli"` for read/search commands
 
 ### Viewing and exporting usage data
 
@@ -451,10 +442,10 @@ This is the default state -- no configuration needed for backward compatibility.
 
 ## Checking Your Configuration
 
-Run the status script to verify everything is connected:
+Run the doctor to verify everything is connected (credentials, DB reachability, schema version):
 
 ```bash
-uv run python scripts/db_status.py
+cerefox doctor       # or: cerefox status
 ```
 
-If it exits successfully (code 0), your configuration is correct.
+If it reports all checks green, your configuration is correct.
