@@ -133,7 +133,7 @@ contributions compact. The response size limit then governs the total across all
 documents.
 
 See `docs/guides/configuration.md` → "RPC-level retrieval parameters" to change the
-threshold (it is a SQL DEFAULT in `rpcs.sql`, changed via `db_deploy.py`).
+threshold (it is a SQL DEFAULT in `rpcs.sql`, changed via `cerefox server deploy`).
 
 ---
 

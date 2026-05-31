@@ -26,6 +26,20 @@ Edge Function changes.
 - **Root README "Project status" was stale** — said "at v0.9.0" and left the
   "(current)" marker on the v0.7.0 roadmap row. Updated to the v0.9.x line and
   moved the marker to the current phase.
+- **Repo-wide documentation accuracy pass.** A full audit of the guides,
+  process docs, and internal specs caught and fixed: dead `uv run pytest` /
+  `uv run python scripts/*.py` commands (→ `bun test` / `bun scripts/*.ts` /
+  `cerefox server reindex`); lingering `cerefox deploy-server` → `cerefox
+  server deploy`; an incorrect "`cerefox-mcp` delegates to Edge Functions via
+  internal fetch" claim (it calls Postgres RPCs directly) in `CLAUDE.md` and
+  `solution-design.md`; the `CLAUDE.md` CLI-verb list (dropped `docs`/`sync-docs`,
+  added the `guides` group + newer verbs); `FastAPI`-serves-the-SPA statements
+  (→ `cerefox web` / Hono) in the requirements + design docs; the Python/Click/
+  pytest tech-stack table; a non-existent `cerefox_delete_document` MCP tool in
+  `AGENT_GUIDE.md`; the `connect-agents.md` small-to-big default (40000 → 20000);
+  and `migration-v0.9.md`'s version-verb (`document version list`).
+- **`docs/guides/setup-cloud-run.md`** now opens with an "aspirational — not
+  tested end-to-end" banner so readers treat it as guidance, not a verified runbook.
 
 ---
 

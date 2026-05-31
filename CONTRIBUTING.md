@@ -20,7 +20,7 @@ The most valuable contributions fall into these categories:
 
 **Performance and security improvements**: profiling, query optimization, security hardening, input validation.
 
-**Ingestion formats**: new document converters (e.g., HTML, EPUB, Notion exports, Obsidian vaults). Converters live in `src/cerefox/chunking/converters.py` and take a file path, returning a Markdown string.
+**Ingestion formats**: ingestion is Markdown/`.txt`-only as of v0.7 (PDF/DOCX converters were dropped). If you want to support new source formats (e.g., HTML, EPUB, Notion exports, Obsidian vaults), the conversion-to-Markdown step would need to be reintroduced — open an issue to discuss before starting.
 
 **Knowledge system integrations**: two-way sync with knowledge management systems (Obsidian, Logseq, Notion, etc.) is an area with significant potential. If you use Cerefox alongside another knowledge tool, an integration that keeps them in sync would be a meaningful contribution.
 
@@ -60,9 +60,11 @@ git clone https://github.com/fstamatelopoulos/cerefox.git
 cd cerefox
 uv sync
 
-# Run tests
-uv run pytest                     # Python unit tests
-uv run pytest -m e2e              # Python API e2e (needs live Supabase)
+# Run tests (`bun test` is the only runner; pytest is retired)
+cd _shared && bun test                                  # TS unit tests (mocked)
+cd packages/memory && bun run build && bun test         # CLI/MCP smokes + live read/write
+cd frontend && bun run test:e2e                         # UI e2e (Playwright)
+CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote  # live EF e2e (opt-in)
 
 # Lint and format
 uv run ruff check . && uv run ruff format .
@@ -216,15 +218,14 @@ If something needs fixing after a tag is published, **cut a new patch version**.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs on every PR targeting `main` and on every direct push to `main`. Three parallel jobs:
+`.github/workflows/ci.yml` runs on every PR targeting `main` and on every direct push to `main`. Two parallel jobs:
 
 | Job | What runs |
 |---|---|
-| **Python — unit tests** | `uv run pytest -q` (unit only; `-m e2e`/`-m ui` markers are deselected by default). |
 | **TS — `_shared/` unit tests** | `bun install` from the repo root (hoists workspace deps), then `cd _shared && bun test`. |
 | **TS — `@cerefox/memory` build + smoke** | Builds `dist/bin/cerefox.js`, verifies the three smoke invocations (`--version`, `--help`, `mcp --help`), checks the `cerefox_get_help` bundle stays in sync with `AGENT_QUICK_REFERENCE.md`, runs the package's tests (cli-smoke always; stdio-smoke + live read/write/lifecycle tests auto-skip when Supabase isn't reachable — same probe pattern). |
 
-PRs must pass all three jobs before merge. Cold-cache wall clock is ~60-90 seconds. Live e2e tests (`pytest -m e2e`, `scripts/check_ef_parity.ts`) need Supabase credentials and are run manually by the maintainer before each cut — see `docs/research/v0.7-manual-test-plan.md` (the rolling test plan that spans v0.5 → v0.7).
+PRs must pass these jobs before merge. Cold-cache wall clock is ~60-90 seconds. Live e2e tests (`CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote`, `scripts/check_ef_parity.ts`) need Supabase credentials and are run manually by the maintainer before each cut — see `docs/research/v0.7-manual-test-plan.md` (the rolling test plan that spans v0.5 → v0.7).
 
 **Lint enforcement** (`ruff check` + `ruff format --check`) is intentionally NOT in CI yet — `main` carries ~28 pre-existing warnings + ~28 files that would be reformatted, accumulated before lint was wired up. Adding it now would block every PR until that debt is cleaned. That cleanup deserves its own focused PR; once it lands, the ruff steps will be added to `ci.yml`.
 
@@ -247,5 +248,5 @@ PRs must pass all three jobs before merge. Cold-cache wall clock is ~60-90 secon
 
 - **Formatter/linter**: ruff (line length 100)
 - **Type hints**: required on all public functions
-- **Tests**: every new module in `src/cerefox/` gets corresponding tests in `tests/`
+- **Tests**: new code is TypeScript; add tests alongside it in `packages/memory/test/` or `_shared/__tests__/` (`bun test`)
 - **Imports**: lazy-import heavy dependencies inside functions

@@ -32,7 +32,7 @@ $ cerefox get-doc abc
 | `cerefox ingest-dir <dir>` | `cerefox document ingest-dir <dir>` |
 | `cerefox list-projects` | `cerefox project list` |
 | `cerefox delete-project <name>` | `cerefox project delete <name>` |
-| `cerefox list-versions <id>` | `cerefox version list <id>` |
+| `cerefox list-versions <id>` | `cerefox document version list <id>` |
 | `cerefox list-metadata-keys` | `cerefox metadata keys` |
 | `cerefox metadata-search …` | `cerefox metadata search …` |
 | `cerefox get-audit-log` | `cerefox audit list` |

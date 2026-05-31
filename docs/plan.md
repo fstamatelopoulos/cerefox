@@ -3209,6 +3209,14 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
 
 ## Current Focus
 
+**Status (v0.9.2)**: the resource-verb CLI has shipped; Python has been retired
+to a husk (only `uv run cerefox mcp` survives as a frozen fallback); the entire
+runtime — CLI, MCP server, web server, ingestion + retrieval — is TypeScript in
+the `@cerefox/memory` npm package. Near-term work is post-0.9.2 patches en route
+to the v1.0 stability commitment; currently cutting **v0.9.3**.
+
+The dated release notes below are kept as historical record.
+
 **Recent releases (May 2026)**:
 - **v0.1.19** (2026-05-18, updated 2026-05-24) — web UI link resolver + FTS query-parser
   fix (`websearch_to_tsquery` → `plainto_tsquery`) + agent-guidance refinement (doc-uuid
@@ -3241,18 +3249,24 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
   as a migration aid; no scheduled removal). `_shared/` cross-context TS module seeded with `config/`,
   `db-client/`, and `db-status/`. New introspection RPC
   `cerefox_pg_function_exists()`. Frontend `dist/` bundled into the wheel via
-  hatchling `force-include`. End-user redeploy required:
-  `uv run python scripts/db_deploy.py` (two new RPCs ship in v0.3.0).
+  hatchling `force-include`. End-user redeploy required (two new RPCs ship in
+  v0.3.0); today that is `cerefox server deploy` (contributor low-level path:
+  `bun scripts/db_deploy.ts`).
 
-**Test counts**: 569 Python unit tests + 14 Bun tests + 80 e2e tests pass.
+**Tests**: the suite is `bun test` across `_shared/__tests__/`,
+`packages/memory/test/`, and Playwright UI e2e (`frontend/tests/e2e/`). pytest is
+retired and `tests/**/*.py` has been deleted.
 
 **Strategic shift codified** (2026-05-24): pivoting from "Iteration 18 = narrow TS port
 of MCP server" to the broader **Polish & Distribution arc** covering v0.2.0 through v1.0.0
 via a Python → TypeScript strangler-fig migration. Design-of-record:
 [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
 
-**Next**: Iteration 22 (v0.4.0 — "TS MCP Server", supersedes old Iteration 18).
-Detailed 39-task breakdown landed in the Iteration 22 section above — 7 parts:
+**Next**: post-0.9.2 patch releases (cutting v0.9.3) on the path to the v1.0
+stability commitment. The strangler-fig migration that this snapshot was written
+during is complete — Iterations 22–27 (TS MCP server, TS CLI, script ports, web
+server, ingestion, Python removal) all shipped. The 7-part Iteration 22
+breakdown below is retained as historical record:
 
 - **22A** (8 tasks) — `_shared/mcp-tools/` extraction. Audit Python ↔ EF
   parity, factor the 8 current MCP tool handlers + the new `cerefox_get_help`

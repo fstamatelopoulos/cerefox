@@ -2,7 +2,7 @@
 
 Reference guide for the operational scripts in `scripts/`. Run these from the project root.
 
-> Looking for `cerefox <subcommand>` reference (ingest, search, get-doc, etc.)? See [`docs/guides/cli.md`](cli.md). This guide covers the `scripts/` directory only.
+> Looking for `cerefox <subcommand>` reference (`document ingest`, `search`, `document get`, etc.)? See [`docs/guides/cli.md`](cli.md). This guide covers the `scripts/` directory only.
 
 ## Who this guide is for
 

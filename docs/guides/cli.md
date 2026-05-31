@@ -486,7 +486,7 @@ cerefox config get KEY
 cerefox config set KEY VALUE
 ```
 
-Used for toggling features at runtime without a redeploy — see [Decision Log Q1 Part 2 — usage tracking opt-in](https://github.com/fstamatelopoulos/cerefox) entry.
+Used for toggling features at runtime without a redeploy — see the "Decision Log Q1 Part 2 — usage tracking opt-in" entry (stored in the Cerefox knowledge base).
 
 ---
 

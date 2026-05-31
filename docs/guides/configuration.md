@@ -80,7 +80,7 @@ The `cerefox-search` and `cerefox-ingest` Supabase Edge Functions handle embeddi
 
 ### Embedding API retry
 
-All embedding API calls (Python `CloudEmbedder` and Edge Functions) include automatic retry with exponential backoff for transient failures:
+All embedding API calls (TS embedder and Edge Functions) include automatic retry with exponential backoff for transient failures:
 
 - **3 attempts** with backoff: 500ms, 1s, 2s
 - **Retried**: HTTP 5xx server errors, network timeouts, connection failures

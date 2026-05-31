@@ -962,19 +962,23 @@ $$;
 
 ### 9.1 Technology Choice
 
-React + TypeScript SPA (Mantine UI, TanStack Query, React Router) served by FastAPI at `/app/`.
-FastAPI provides the JSON API backend at `/api/v1/`.
+React + TypeScript SPA (Mantine UI, TanStack Query, React Router) served by
+`cerefox web` (Hono on Bun/Node) at `/app/`. The same server provides the JSON
+API backend at `/api/v1/*`. (The former Python FastAPI web app is a husk as of
+v0.9.0.)
 
 Rationale:
-- FastAPI is already used for the API layer and MCP integration
+- The TS web server is part of the single `@cerefox/memory` runtime — one process serves the API, the SPA, and integrates with the MCP/ingestion layers
 - React SPA provides the interactive UI needed for governance workflows (review status, version promotion, audit log browsing)
 - Mantine UI provides a comprehensive component library with responsive layout and dark mode support
 - TanStack Query handles data fetching, caching, and cache invalidation
 - Vite handles the build pipeline with fast HMR during development
-- Production: FastAPI serves the built SPA as static assets (single process deployment)
+- Production: `cerefox web` serves the built SPA as static assets (single process deployment)
 
-The original Jinja2 + HTMX stack (v0.1.0-v0.1.6) was replaced in Iteration 14.
-See `docs/specs/ui-redesign-spa-python-api.md` for the migration design document.
+The original Jinja2 + HTMX stack (v0.1.0-v0.1.6) was replaced by a React SPA in
+Iteration 14 (then served by FastAPI); the web server itself was ported to
+Hono/Bun during the TS migration. See `docs/specs/ui-redesign-spa-python-api.md`
+for the SPA migration design document.
 
 ### 9.2 Pages/Features
 
@@ -996,9 +1000,10 @@ Cerefox exposes three access paths, serving different client types:
 Path 1 — Local stdio MCP (cerefox mcp)
   Desktop clients: Claude Desktop, Cursor, Claude Code
   └── cerefox mcp (local stdio subprocess)
-        └── Python SDK → Supabase DB + OpenAI embeddings
+        └── TS @cerefox/memory server → Supabase DB + OpenAI embeddings
               Tools: cerefox_search, cerefox_ingest, cerefox_get_document
-  Requires: Python + uv + local repo clone
+  Requires: Node ≥20 / Bun ≥1.0 (npx --package=@cerefox/memory cerefox mcp)
+  (Legacy fallback: frozen Python `uv run cerefox mcp`)
 
 Path 2 — Remote MCP Edge Function (cerefox-mcp) [RECOMMENDED]
   Claude Code: native --transport http
@@ -1031,7 +1036,7 @@ Path 3 — GPT Actions / HTTP (dedicated primitive Edge Functions)
 
 **Key constraint for Path 1**: `cerefox mcp` is a stdio process — it only runs on the local machine. Desktop clients launch it as a subprocess. Cloud clients cannot reach it.
 
-**Path 2 vs Path 1 trade-offs**: Path 2 (remote) requires no local install and works from any machine with just a URL + anon key. Path 1 (local) is slightly faster (no HTTPS round-trip to Supabase) and is preferable if Python + uv are already installed.
+**Path 2 vs Path 1 trade-offs**: Path 2 (remote) requires no local install and works from any machine with just a URL + anon key. Path 1 (local) is slightly faster (no HTTPS round-trip to Supabase) and avoids Edge Function billing; it runs the TS `@cerefox/memory` server via npx (Node/Bun). The frozen Python `uv run cerefox mcp` remains only as a legacy fallback.
 
 ### 10.2 MCP Tools
 
@@ -1156,14 +1161,14 @@ All search RPCs remain available for direct SQL execution via the Supabase MCP
 (spec 2025-03-26) as a Supabase Edge Function. It is a thin protocol adapter:
 
 - Handles MCP JSON-RPC 2.0 methods: `initialize`, `initialized`, `ping`, `tools/list`, `tools/call`
-- For `tools/call`, delegates to the appropriate dedicated Edge Function via internal fetch:
-  - `cerefox_search`             → `cerefox-search`
-  - `cerefox_ingest`             → `cerefox-ingest`
-  - `cerefox_list_metadata_keys` → `cerefox-metadata`
-  - `cerefox_get_document`       → `cerefox-get-document`
-  - `cerefox_list_versions`      → `cerefox-list-versions`
+- For `tools/call`, calls the corresponding Postgres RPC **directly** via the shared tool handlers in `_shared/mcp-tools/` (no delegation to the primitive Edge Functions). This halves billable invocations per MCP tool call and keeps behaviour identical to the local TS server, which imports the same handlers. For example:
+  - `cerefox_search`             → `cerefox_hybrid_search` / `cerefox_search_docs` RPC
+  - `cerefox_ingest`             → `cerefox_ingest_document` RPC
+  - `cerefox_list_metadata_keys` → `cerefox_list_metadata_keys` RPC
+  - `cerefox_get_document`       → `cerefox_get_document` RPC
+  - `cerefox_list_versions`      → `cerefox_list_document_versions` RPC
 - Stateless — no session tracking; each request is independent
-- Auth: Supabase API gateway validates the JWT (anon key); the caller's Authorization header is forwarded to internal Edge Function calls
+- Auth: Supabase API gateway validates the JWT (anon key); the Edge Function uses the service-role key internally to call the RPCs
 
 ## 11. Deployment Topologies
 

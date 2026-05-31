@@ -47,7 +47,7 @@ bun scripts/db_migrate.ts
 bun scripts/db_deploy.ts
 
 # 4. Build the web UI
-cd frontend && npm install && npm run build && cd ..
+cd frontend && bun install && bun run build && cd ..
 
 # 5. Deploy Edge Functions (if using Supabase-hosted)
 #    Run from the project root (where supabase/ directory is)
@@ -172,10 +172,10 @@ the new code does **not** apply it. After `git pull`, step 4 of the standard
 checklist (redeploy RPCs) is mandatory, not optional:
 
 ```bash
-uv run python scripts/db_deploy.py
+bun scripts/db_deploy.ts   # or: cerefox server deploy
 ```
 
-`db_deploy.py` is idempotent (`CREATE OR REPLACE FUNCTION`) and safe to
+`db_deploy.ts` is idempotent (`CREATE OR REPLACE FUNCTION`) and safe to
 re-run. **If you skip this step, searches for any title containing `-`
 (e.g. "Job Hunting - Opportunity Index", `setup-supabase`) will continue
 to return zero results until the RPCs are redeployed.** This is the
@@ -202,7 +202,7 @@ rationale lives in [`docs/solution-design.md` §5.2](../solution-design.md#52-ti
 - Drops the `GENERATED ALWAYS AS` expression on `cerefox_chunks.fts` (it can't cross-reference `cerefox_documents.title`)
 - Adds `cerefox_update_chunk_fts(p_document_id, p_new_title)` RPC for title-change FTS refresh
 
-Both are applied automatically by `db_migrate.py` (step 3). After the migration, also run `db_deploy.py` (step 4) to update the RPC definitions.
+Both are applied automatically by `bun scripts/db_migrate.ts` (step 3). After the migration, also run `bun scripts/db_deploy.ts` (step 4) to update the RPC definitions.
 
 **Redeploy Edge Functions**: `cerefox-ingest` and `cerefox-mcp` now prepend the document title to chunk embedding inputs. Redeploy both:
 
@@ -219,14 +219,14 @@ To upgrade existing chunks:
 
 ```bash
 # Preview what would be reindexed (no changes made)
-uv run python scripts/reindex_all.py --dry-run
+cerefox server reindex --all --dry-run
 
 # Reindex all chunks (re-embeds with title prefix, updates FTS)
 # Uses 50 chunks per API call by default; lower --batch if you hit rate limits
-uv run python scripts/reindex_all.py
-
-# Or run directly via the CLI (same effect)
 cerefox server reindex --all
+
+# Or run the contributor script directly (same effect)
+bun scripts/reindex_all.ts --all
 ```
 
 The reindex is **resumable**: if interrupted, re-running it skips chunks already embedded with the current model. Archived chunks (historical versions) are not reindexed -- they are not searched.
@@ -240,8 +240,8 @@ Cost estimate: ~$0.01-0.05 for a typical personal knowledge base (a few thousand
 - `0007_usage_log_requestor.sql` -- renames `reader` column to `requestor` in `cerefox_usage_log`
   and updates all 3 usage RPCs. Non-destructive (existing data preserved).
 
-Both are applied automatically by `db_migrate.py` (step 3 above). After migrations, also
-redeploy RPCs via `db_deploy.py` (step 4) to update the canonical function definitions.
+Both are applied automatically by `bun scripts/db_migrate.ts` (step 3 above). After migrations, also
+redeploy RPCs via `bun scripts/db_deploy.ts` (step 4) to update the canonical function definitions.
 
 **New REST API endpoints**: `/api/v1/usage-log`, `/api/v1/usage-log/export.csv`,
 `/api/v1/usage-log/summary`, `/api/v1/config/{key}`.
@@ -299,7 +299,7 @@ MCP clients pick up new tools automatically on the next connection.
 
 ### Upgrading to v0.1.4+ (from v0.1.0-v0.1.3)
 
-**Versioning schema**: Migration `0003_add_document_versions.sql` adds the `cerefox_document_versions` table and `version_id` column on `cerefox_chunks`. This is applied automatically by `db_migrate.py`.
+**Versioning schema**: Migration `0003_add_document_versions.sql` adds the `cerefox_document_versions` table and `version_id` column on `cerefox_chunks`. This is applied automatically by `bun scripts/db_migrate.ts`.
 
 ### Upgrading to v0.1.1+ (from v0.1.0)
 

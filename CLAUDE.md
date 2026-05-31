@@ -111,12 +111,14 @@ cerefox/
 
 ### CLI verb conventions (v0.9.0+)
 The CLI uses a **resource-verb** shape: `cerefox <resource> <verb> [args]`.
-Resource groups: `document` (get/list/delete/ingest/ingest-dir), `project`
-(list/delete), `version` (list), `metadata` (keys/search), `audit` (list),
-`config` (get/set), `backup` (create/restore), `server` (deploy/reindex). The
-primary verb `search` and lifecycle/server commands (`init`, `doctor`,
-`status`, `configure-agent`, `self-update`, `mcp`, `web`, `docs`, `completion`,
-`sync-docs`, `sync-self-docs`) stay **flat**.
+Resource groups: `document` (get/list/edit/delete/restore/ingest/ingest-dir),
+`document version` (list/archive/unarchive), `project`
+(list/create/edit/delete), `metadata` (keys/search), `audit` (list),
+`config` (list/get/set), `backup` (create/restore), `server` (deploy/reindex),
+`guides` (list/open/show/ingest). The primary verb `search` and
+lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
+`self-update`, `upgrade`, `mcp`, `web`, `completion`) stay **flat**.
+(`sync-docs` is now only `bun scripts/sync_docs.ts`, not a CLI command.)
 - **Adding a command**: register it under the right resource group in
   `program.ts` via `moveInto(group, registerX, "verb")`. The handler file keeps
   its existing `registerX(program)` shape; `moveInto` renames it under the
@@ -334,7 +336,7 @@ The migrate/deploy logic is shared with `scripts/db_migrate.ts` /
 3. **JSONB metadata** on both documents and chunks — evolvable without schema changes
 4. **Greedy section accumulation** — sections (H1/H2/H3) are accumulated into a buffer until adding the next would exceed `max_chunk_chars`; no hard heading-level boundaries
 5. **Cloud-only embeddings** (OpenAI / Fireworks) — local models (mpnet, Ollama) removed; they caused platform-specific failures and added install complexity
-6. **Edge Function per operation** — each operation has a dedicated Edge Function that is a thin HTTP adapter over a Postgres RPC; `cerefox-mcp` delegates to dedicated Edge Functions via internal fetch; single implementation principle (see above)
+6. **Edge Function per operation** — each operation has a dedicated Edge Function that is a thin HTTP adapter over a Postgres RPC; `cerefox-mcp` calls those same RPCs directly (no delegation/fan-out to other Edge Functions); single implementation principle (see above)
 7. **Chunks-anchored versioning** — `version_id IS NULL` = current version; `version_id = <uuid>` = archived; partial indexes automatically exclude archived chunks from search; no separate content table
 8. **Title boosting** — `cerefox_chunks.fts` is a regular `TSVECTOR` (not `GENERATED`) because `GENERATED` columns cannot cross-reference another table. The `cerefox_ingest_document` RPC computes `fts` inline using its `p_title` parameter: document title at weight A, chunk heading at weight A, body at weight B. Embeddings are similarly enriched: `# {doc_title}\n{chunk.content}` is the embedding input (stored content is unchanged). Title changes trigger `cerefox_update_chunk_fts` + re-embed of current chunks.
 

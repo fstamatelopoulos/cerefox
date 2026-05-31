@@ -62,8 +62,8 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 |----|-------------|----------|
 | FR-1.1 | Ingest Markdown files (.md) | P0 |
 | FR-1.2 | Ingest pasted text (treated as markdown) | P0 |
-| FR-1.3 | Convert PDF to markdown before ingestion | P1 |
-| FR-1.4 | Convert DOCX to markdown before ingestion | P1 |
+| FR-1.3 | Convert PDF to markdown before ingestion (dropped in v0.7; Markdown/.txt only) | P1 |
+| FR-1.4 | Convert DOCX to markdown before ingestion (dropped in v0.7; Markdown/.txt only) | P1 |
 | FR-1.5 | Deduplicate content by hash (skip re-ingestion of identical files) | P0 |
 | FR-1.6 | Associate ingested content with a project | P0 |
 | FR-1.7 | Attach metadata (tags, importance, custom fields) on ingest | P0 |
@@ -324,7 +324,7 @@ plain text snapshots for recovery purposes only.
 |----|-------------|
 | NFR-5.1 | Single-user system (no auth complexity in V1) |
 | NFR-5.2 | Minimal dependencies — prefer standard library when possible |
-| NFR-5.3 | Web UI is a React + TypeScript SPA with a standard build step (`npm run build`); FastAPI serves the built output |
+| NFR-5.3 | Web UI is a React + TypeScript SPA with a standard build step (`bun run build`); `cerefox web` (Hono on Bun/Node) serves the built output at `/app/` (the former FastAPI web app is a husk) |
 | NFR-5.4 | Docker Compose for full local deployment |
 
 ### NFR-7: Documentation & Onboarding
@@ -390,15 +390,15 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 
 | Component | Technology |
 |-----------|------------|
-| Language | Python 3.11+ |
-| Package management | uv |
-| Web framework | FastAPI (JSON API backend) |
+| Language | TypeScript on Bun/Node (the `@cerefox/memory` npm package). Python 3.11+ is **legacy/frozen** — only `uv run cerefox mcp` survives as a fallback |
+| Package management | Bun workspaces (TS); uv (frozen Python fallback) |
+| Web framework | Hono on Bun/Node, served by `cerefox web` (JSON API at `/api/v1/*`). The former Python FastAPI web app is a husk |
 | Frontend | React + TypeScript (Vite, Mantine UI, TanStack Query) |
-| CLI | Click |
-| Database client | supabase-py |
-| Embeddings | httpx, openai (cloud API) |
-| Testing | pytest |
-| Linting | ruff |
+| CLI | commander (TypeScript), resource-verb shape. The Python Click CLI is a husk |
+| Database client | Supabase JS client / RPC wrapper (`_shared/db-client/`); supabase-py only in the frozen Python fallback |
+| Embeddings | OpenAI / Fireworks (cloud API) via `_shared/embeddings/` |
+| Testing | `bun test` (the only runner; pytest is retired) |
+| Linting | biome / tsc (TS); ruff (frozen Python fallback) |
 | Containerization | Docker |
 | License | Apache 2.0 |
 
