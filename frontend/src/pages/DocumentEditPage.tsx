@@ -110,6 +110,24 @@ export function DocumentEditPage() {
     );
   }
 
+  // Shared Save/Cancel actions — rendered both between the metadata fields and
+  // the Content editor (so metadata-only edits don't require scrolling past the
+  // content) and at the bottom of the form.
+  const saveCancelButtons = (
+    <Group>
+      <Button type="submit" loading={mutation.isPending}>
+        Save
+      </Button>
+      <Button
+        type="button"
+        variant="subtle"
+        onClick={() => navigate(`/document/${id}`)}
+      >
+        Cancel
+      </Button>
+    </Group>
+  );
+
   return (
     <Container size="lg">
       <Title order={2} mb="md">
@@ -202,6 +220,8 @@ export function DocumentEditPage() {
             </Stack>
           </div>
 
+          {saveCancelButtons}
+
           <div>
             <Group justify="space-between" mb="xs">
               <Text size="sm" fw={500}>
@@ -246,22 +266,14 @@ export function DocumentEditPage() {
             )}
           </div>
 
-          <Group>
-            <Button type="submit" loading={mutation.isPending}>
-              Save
-            </Button>
-            <Button
-              variant="subtle"
-              onClick={() => navigate(`/document/${id}`)}
-            >
-              Cancel
-            </Button>
+          <Stack gap="xs">
+            {saveCancelButtons}
             {mutation.data && !mutation.data.success && (
               <Text c="red" size="sm">
                 {mutation.data.error}
               </Text>
             )}
-          </Group>
+          </Stack>
         </Stack>
       </form>
     </Container>

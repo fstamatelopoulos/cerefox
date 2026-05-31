@@ -9,7 +9,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.4 — agent retrieval guidance, Decision Log process docs, + a web-UI tweak.**
+
+### Added
+
+- **`AGENT_GUIDE.md`: "Choosing a retrieval tool" section.** Explains when to use
+  `cerefox_search` (relevance-ranked top-N; default `match_count` 5) vs
+  `cerefox_metadata_search` (exhaustive enumeration by criteria; metadata-only by
+  default; raise `limit`), with worked examples and the "find the newest in a
+  growing series via a `latest` metadata pointer, not text search" pattern.
+- **Web UI — second Save/Cancel on the Edit Document page.** A Save/Cancel row now
+  also sits between the metadata fields and the Content editor, so metadata-only
+  edits don't require scrolling past the (often long) content textarea.
+
+### Changed
+
+- **Rewrote the `CLAUDE.md` Decision Log section** with the new discovery +
+  maintenance process: a string-typed metadata convention (`type`, `seq`,
+  `quarter`, `latest`; the part number stays in the title), discovery via
+  `cerefox_metadata_search {type:"decision-log", latest:"true"}` instead of text
+  search, global `seq` ordering, and a split/transition protocol (create the new
+  part with `latest="true"` first, then clear the previous part). Reframed as a
+  maintainer practice that doesn't obligate forks' agents to write to their KB.
 
 ---
 

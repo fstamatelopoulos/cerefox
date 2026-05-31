@@ -252,7 +252,7 @@ Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functio
 
 Cerefox has three distinct access layers, each with its own credential:
 
-1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **legacy anon JWT** (`eyJ…`). The Supabase gateway validates it as a JWT; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. **Important (2026):** the new `sb_publishable_…` API key cannot be used here — the Edge Function gateway rejects non-JWT keys. The Data API (Layer 2) accepts the new key system; the Edge Function gateway does not. See `docs/guides/setup-supabase.md` → "Supabase API keys (2026)" and the Decision Log 2026 Q2 entry for context.
+1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **legacy anon JWT** (`eyJ…`). The Supabase gateway validates it as a JWT; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. **Important (2026):** the new `sb_publishable_…` API key cannot be used here — the Edge Function gateway rejects non-JWT keys. The Data API (Layer 2) accepts the new key system; the Edge Function gateway does not. See `docs/guides/setup-supabase.md` → "Supabase API keys (2026)" for context.
 2. **Python web app & CLI** — `CerefoxClient` authenticates via the Supabase REST API using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
 3. **Deployment scripts only** — `db_deploy.py` / `db_migrate.py` connect directly to Postgres via psycopg2 using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
 
@@ -361,31 +361,16 @@ Kept accurate and current at all times:
 
 **`docs/plan.md` is the primary cross-session hand-off artifact** — its main consumer is the *next* AI session continuing the work. Read its `## Current Focus` block (at the bottom) first to learn where the project is and what's next before touching code, and **keep it current as part of finishing any work** (update the relevant iteration entry + `Current Focus` in the same session). It tracks history/progress at a higher level than git; it is NOT a second changelog — release notes live in `CHANGELOG.md`, design rationale in `docs/specs/`. The doc's own header explains its structure and rules in full.
 
-### Cerefox Decision Log (lives in Cerefox, NOT in the repo)
+### Cerefox Decision Log (lives in the Cerefox KB, NOT in the repo)
 
-The **"Cerefox Decision Log"** document is stored in the Cerefox knowledge base (project: `cerefox`), not in the git repo. It contains operational details, lessons learned, and experiment outcomes that are useful as memory during future development that will not pollute the OSS project.
+The Cerefox maintainers keep a **"Cerefox Decision Log"** in their Cerefox knowledge base (project `Cerefox`) — the running record of decisions, tradeoffs, and lessons that would clutter the OSS repo. It is **not** in git. This section documents how the maintainers maintain it. (If you've forked Cerefox you're welcome to adopt the same pattern, but nothing here obligates your agent to write to your own KB — it's a maintainer practice, not a required step.)
 
-**Update it every session** by calling `cerefox_ingest` with `update_if_exists: true`:
-- Add new architectural or process decisions (with date, context, options, decision, outcome)
-- Add new experiments, failures, or platform gotchas to the "Lessons Learned" section
-- Search for it first with `cerefox_search` query `"Cerefox Decision Log"` to review current content
+The log is split across numbered parts (the part number lives in the **title**, e.g. "… (Part 6)", as a human label). Each part is tagged with metadata (**all values are JSON strings**): `type="decision-log"`, `seq` (global chronological order across all parts, e.g. `"8"`), `quarter`, and `latest` (`"true"` on exactly the current part, `"false"` on the rest). Strings are required — the MCP `metadata_filter` matches JSONB as strings (a boolean `latest:true` won't match `{latest:"true"}`); when setting via the CLI, force a string with `--set-meta latest='"false"'`. (There is deliberately no `part` metadata key — it would be per-quarter and non-unique; `seq` is the global ordering key.)
 
-**When to add an entry**:
-- A significant technical decision is made or revised
-- A platform behavior surprises us (MCP client compatibility, Supabase gotchas, etc.)
-- An experiment fails and we learn something worth remembering
-- A workaround is discovered for a third-party bug
-- **NEVER compress or summarize** existing entries when updating — always add new entries
-  and keep existing ones verbatim. Accidental compression causes data loss.
-- **Splitting policy**: when the document exceeds ~50,000 characters, create a new document
-  that continues the log (e.g., "Cerefox Decision Log — 2026 Q2"). Each part is a standalone
-  document in Cerefox with the same project and metadata tags. Do NOT try to split at an
-  exact boundary — finish the current entry, then start a new document for subsequent entries.
-- **Rolling summary** (future): a separate "Cerefox Decision Log — Current Summary" that's
-  a compressed digest of all active decisions and top lessons. Agents load this instead of
-  the full history.
-- The full log stays searchable even when split: `cerefox_search` finds entries by content
-  across all documents.
+- **Find the current part — via metadata, never text search**: `cerefox_metadata_search {type:"decision-log", latest:"true"}` → the one current part. (`cerefox_search "Cerefox Decision Log"` is unreliable: it returns only top-N ranked hits, and the current part is the one most likely to fall outside the window as the log grows.)
+- **Enumerate / order all parts**: `cerefox_metadata_search {type:"decision-log"}` (project `Cerefox`) with an explicit `limit`; order by `seq`.
+- **Append, never compress**: add entries via `cerefox_ingest` with the current part's `document_id`. **Keep existing entries verbatim** — accidental compression is data loss. Each entry: date, short title, Context, Decision/Lesson, optional Outcome. Add one when a significant decision is made/revised, a platform behavior surprises us, an experiment fails with a lesson, or a third-party workaround is found.
+- **Split protocol (~50K relaxed threshold)**: when the current part exceeds ~50,000 chars, the next entry starts a new part — **create the new part with `latest="true"` first; only after that write succeeds, set `latest="false"` on the previous part** (and bump `seq`). Never the reverse: that ordering guarantees exactly one current part — a brief two-latest transient is safe (pick the highest `seq`), a zero-latest window breaks discovery. Each part repeats a short metadata/process blurb at its top so it stands alone.
 
 ### User-Facing Docs (setup guides, how-tos)
 
