@@ -53,7 +53,7 @@ metadata_search(metadata_filter={"type": "decision-log"}, updated_since="2026-03
 
 If `cerefox_search` is not in your tool list, your user has likely installed the Cerefox CLI. The canonical invocation is plain **`cerefox <subcommand>`** (the TypeScript CLI, installed via `npm install -g @cerefox/memory`). It uses a resource-verb shape (`cerefox document get`, `cerefox project list`, …). The legacy Python `uv run cerefox` is now a frozen husk as of v0.9 — only `uv run cerefox mcp` still works.
 
-Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md). CLI flag names match MCP parameter names exactly (e.g. `metadata_filter` ↔ `--metadata-filter`); short forms (`--filter`, `--project`, `--count`, `--update`, `--version`) work as aliases.
+Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md). CLI flag names match MCP parameter names exactly (e.g. `metadata_filter` ↔ `--metadata-filter`); common flags also have single-letter short forms (`-f`, `-p`, `-c`, `-m`, `-u`, `-a`, `-r`). Use the canonical long name (what `--help` shows) or its short form — there are no long-form aliases like `--filter` or `--count`.
 
 | MCP tool | CLI |
 |---|---|

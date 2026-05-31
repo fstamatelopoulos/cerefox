@@ -146,7 +146,7 @@ cerefox web              # web UI → http://localhost:8000/app/
 enough) · an embedding API key (OpenAI `text-embedding-3-small` by default, or
 Fireworks AI).
 
-**Try it with sample data:** `cerefox document ingest-dir test-data/ --recursive`
+**Try it with sample data:** `cerefox document ingest-dir test-data/`
 (the repo's `test-data/` has six diverse markdown docs — or point it at any
 folder of your own `.md` files).
 

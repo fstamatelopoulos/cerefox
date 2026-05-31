@@ -58,6 +58,17 @@ Edge Function changes.
   runtime (`node` base → `@cerefox/memory` → `cerefox web`) with an "untested"
   banner; `docker-compose.yml` + `.env.example` updated to match (`cerefox
   server deploy` / `db_deploy.ts` instead of `db_deploy.py`, TS web not FastAPI).
+- **CLI reference advertised flags that don't exist.** A file-by-file pass
+  against the command source found `docs/guides/cli.md` (and the bundled
+  `AGENT_QUICK_REFERENCE.md`) promising long-form aliases — `--count`,
+  `--filter`, `--project`, `--update`, `--version`, `-y` — that were never
+  implemented (only the canonical long names + single-letter short forms
+  exist), plus `cerefox document ingest-dir` documenting nonexistent
+  `--pattern`, `--recursive`, and `--dry-run` flags (it always recurses; the
+  real selector is `--extensions`), and a wrong `search` surface (modes are
+  `docs`/`hybrid`/`fts` default `docs`, `--match-count` defaults to 5, not the
+  documented `hybrid`/10). Corrected the reference, the `--recursive` examples
+  in the README/quickstart, and regenerated the `cerefox_get_help` bundle.
 - **More stale READMEs/specs**: `test-data/README.md` used `uv run cerefox` +
   pre-v0.9 verbs and an invalid `--pattern` flag (→ `cerefox document …`,
   default `.md/.txt`); `_shared/README.md` was frozen at a v0.3.0 "seed only /
