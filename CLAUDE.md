@@ -361,6 +361,17 @@ Kept accurate and current at all times:
 
 **`docs/plan.md` is the primary cross-session hand-off artifact** — its main consumer is the *next* AI session continuing the work. Read its `## Current Focus` block (at the bottom) first to learn where the project is and what's next before touching code, and **keep it current as part of finishing any work** (update the relevant iteration entry + `Current Focus` in the same session). It tracks history/progress at a higher level than git; it is NOT a second changelog — release notes live in `CHANGELOG.md`, design rationale in `docs/specs/`. The doc's own header explains its structure and rules in full.
 
+### Cerefox Decision Log (lives in the Cerefox KB, NOT in the repo)
+
+The Cerefox maintainers keep a **"Cerefox Decision Log"** in their Cerefox knowledge base (project `Cerefox`) — the running record of decisions, tradeoffs, and lessons that would clutter the OSS repo. It is **not** in git. This section documents how the maintainers maintain it. (If you've forked Cerefox you're welcome to adopt the same pattern, but nothing here obligates your agent to write to your own KB — it's a maintainer practice, not a required step.)
+
+The log is split across numbered parts, each tagged with metadata (**all values are JSON strings**): `type="decision-log"`, `seq` (global chronological order, e.g. `"8"`), `quarter`, `part`, and `latest` (`"true"` on exactly the current part, `"false"` on the rest). Strings are required — the MCP `metadata_filter` matches JSONB as strings (a boolean `latest:true` won't match `{latest:"true"}`); when setting via the CLI, force a string with `--set-meta latest='"false"'`.
+
+- **Find the current part — via metadata, never text search**: `cerefox_metadata_search {type:"decision-log", latest:"true"}` → the one current part. (`cerefox_search "Cerefox Decision Log"` is unreliable: it returns only top-N ranked hits, and the current part is the one most likely to fall outside the window as the log grows.)
+- **Enumerate / order all parts**: `cerefox_metadata_search {type:"decision-log"}` (project `Cerefox`) with an explicit `limit`; order by `seq`.
+- **Append, never compress**: add entries via `cerefox_ingest` with the current part's `document_id`. **Keep existing entries verbatim** — accidental compression is data loss. Each entry: date, short title, Context, Decision/Lesson, optional Outcome. Add one when a significant decision is made/revised, a platform behavior surprises us, an experiment fails with a lesson, or a third-party workaround is found.
+- **Split protocol (~50K relaxed threshold)**: when the current part exceeds ~50,000 chars, the next entry starts a new part — **create the new part with `latest="true"` first; only after that write succeeds, set `latest="false"` on the previous part** (and bump `seq`). Never the reverse: that ordering guarantees exactly one current part — a brief two-latest transient is safe (pick the highest `seq`), a zero-latest window breaks discovery. Each part repeats a short metadata/process blurb at its top so it stands alone.
+
 ### User-Facing Docs (setup guides, how-tos)
 
 These live in `docs/guides/` and are written for someone who has never seen the codebase:

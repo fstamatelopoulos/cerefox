@@ -21,12 +21,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Changed
 
-- **Moved the Cerefox Decision Log maintenance ritual out of the committed
-  `CLAUDE.md`** into a gitignored `CLAUDE.local.md`. Shipping it in `CLAUDE.md`
-  meant any user who cloned the repo and ran an agent would have it write
-  "Cerefox Decision Log" docs into their *own* Cerefox instance. The committed
-  `CLAUDE.md` is OSS conventions only; maintainer-private agent directives now
-  live in `CLAUDE.local.md` (auto-loaded by Claude Code, never committed).
+- **Rewrote the `CLAUDE.md` Decision Log section** with the new discovery +
+  maintenance process: a string-typed metadata convention (`type`, `seq`,
+  `quarter`, `part`, `latest`), discovery via
+  `cerefox_metadata_search {type:"decision-log", latest:"true"}` instead of text
+  search, global `seq` ordering, and a split/transition protocol (create the new
+  part with `latest="true"` first, then clear the previous part). Reframed as a
+  maintainer practice that doesn't obligate forks' agents to write to their KB.
 
 ---
 
