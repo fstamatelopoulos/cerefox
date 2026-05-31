@@ -352,12 +352,14 @@ Kept accurate and current at all times:
 |------|-------|-------------|
 | `docs/requirements-and-specs.md` | Requirements | A requirement changes or is added/removed |
 | `docs/solution-design.md` | Architecture | A design decision is made or revised |
-| `docs/plan.md` | Progress | A task starts, completes, or is re-scoped |
+| `docs/plan.md` | Progress + **cross-session hand-off** | A task starts, completes, or is re-scoped |
 | `docs/TODO.md` | Backlog | A new idea or future task surfaces |
 | `docs/e2e-use-cases.md` | Testing | An e2e test is added, removed, or changes status |
 | `CLAUDE.md` | Conventions | Project conventions or structure changes |
 
 **Rule**: when implementing a feature, update the relevant docs in the same commit/session. Another developer or AI agent should be able to read these files at any point and have an accurate picture of what is built, what is planned, and why.
+
+**`docs/plan.md` is the primary cross-session hand-off artifact** — its main consumer is the *next* AI session continuing the work. Read its `## Current Focus` block (at the bottom) first to learn where the project is and what's next before touching code, and **keep it current as part of finishing any work** (update the relevant iteration entry + `Current Focus` in the same session). It tracks history/progress at a higher level than git; it is NOT a second changelog — release notes live in `CHANGELOG.md`, design rationale in `docs/specs/`. The doc's own header explains its structure and rules in full.
 
 ### Cerefox Decision Log (lives in Cerefox, NOT in the repo)
 

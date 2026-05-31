@@ -1,7 +1,25 @@
 # Cerefox Implementation Plan
 
-> **Approach**: Iterative and agile. Each iteration delivers working functionality.
-> Update this file as iterations are completed and new work is planned.
+> **What this doc is — read this first.** `plan.md` is the project's primary
+> **cross-session hand-off artifact** and high-level progress record. Its main
+> consumer is the *next* AI dev session (and any human adopter following along):
+> read it to understand where the project is and what's next *before* touching
+> code. It tracks history and progress at a higher level than git — the "why"
+> and "what next", not every commit.
+>
+> **How to use it:**
+> - **Read [`## Current Focus`](#current-focus) (at the very bottom) first.** It is
+>   the live status + what's next. Everything above it is the dated iteration log
+>   — newest work appended over time — kept as the high-level history record.
+> - **Keep it current — this is non-negotiable.** Whenever work starts, completes,
+>   or is re-scoped, update the relevant iteration entry **and** the `Current Focus`
+>   block in the same session. A stale `plan.md` silently breaks the next session's
+>   hand-off; treat updating it as part of finishing the work, not an afterthought.
+> - **It is not the changelog.** Release-by-release notes live in
+>   [`CHANGELOG.md`](../CHANGELOG.md); design rationale lives in `docs/specs/`.
+>   Link those rather than duplicating them here (duplicates rot).
+>
+> **Approach**: iterative and agile — each iteration delivers working functionality.
 
 ---
 
