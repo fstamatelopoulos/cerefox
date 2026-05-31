@@ -9,7 +9,33 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.2 — CLI completion + installer polish.** Client/CLI only — no schema,
+RPC, or Edge Function changes.
+
+### Fixed
+
+- **Shell tab-completion now completes the full resource-verb tree.** It
+  previously only completed top-level commands, so `cerefox document <TAB>`,
+  `cerefox document version <TAB>`, etc. offered nothing useful. The generated
+  bash/zsh/fish scripts now resolve the typed subcommand path and complete
+  nested verbs at any depth (including the 3-level `document version
+  {list|archive|unarchive}`), plus the current command's flags. Hidden husks
+  (old flat verbs) are excluded. Re-run `cerefox completion install` after
+  upgrading to refresh.
+- **Installer next-steps pointed at a renamed command** (`cerefox docs --list`
+  → `cerefox guides list`) and the wrong upgrade guide (the v0.5-specific
+  migration doc); it now links the evergreen `docs/guides/upgrading.md`.
+
+### Changed
+
+- **Clearer installer output on upgrade.** The shell-completion activation
+  reminder (`exec $SHELL`) moved to a prominent banner at the very end instead
+  of being buried under the next-steps block, and a note now reminds you to
+  restart any AI agent using the local MCP server so it picks up the freshly
+  installed `cerefox mcp` binary (a running agent keeps using the process it
+  spawned at startup until restarted).
+- **`cut_release.ts` confirmation prompt** now states the immutable-tags rule
+  inline and points at CONTRIBUTING.md, instead of only naming it.
 
 ---
 
