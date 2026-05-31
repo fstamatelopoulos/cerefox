@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.5] -- 2026-05-31
+
 **v0.9.5 — `deploy-server` rename fix + upgrade-doc simplification + DOCX upload (beta).**
 
 ### Added
