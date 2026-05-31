@@ -9,7 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.3 — docs/installer accuracy.** Client/CLI only — no schema, RPC, or
+Edge Function changes.
+
+### Fixed
+
+- **Installer "Wire up an AI agent" step listed only two clients.** It now
+  lists all five `configure-agent` targets (claude-code, claude-desktop,
+  cursor, codex, gemini) and notes that each writes a local `cerefox mcp`
+  server entry.
+- **npm package README (`@cerefox/memory`) was stale.** Replaced the
+  "clone required" server-side setup with the bundled `cerefox server deploy`
+  flow (no clone), and fixed the example commands that still used pre-v0.9 flat
+  verbs (`ingest`, `list-projects`, `metadata-search`, `get-audit-log`,
+  `ingest-dir`) and `cerefox docs --list` → `cerefox guides list`.
 
 ---
 
