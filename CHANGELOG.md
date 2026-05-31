@@ -53,8 +53,11 @@ Edge Function changes.
   reality throughout; and several SQL-grounded corrections (phantom version-row
   columns, `metadata` column name, `cerefox_context_expand`, `cerefox_ingest` vs
   the never-shipped `cerefox_save_note`, the full 10-tool list).
-
----
+- **Docker setup was broken/stale**: the `Dockerfile` built a Python image and
+  ran `uvicorn cerefox.api.app:app` — a removed husk. Rewrote it to the TS
+  runtime (`node` base → `@cerefox/memory` → `cerefox web`) with an "untested"
+  banner; `docker-compose.yml` + `.env.example` updated to match (`cerefox
+  server deploy` / `db_deploy.ts` instead of `db_deploy.py`, TS web not FastAPI).
 
 ## [v0.9.2] -- 2026-05-31
 
