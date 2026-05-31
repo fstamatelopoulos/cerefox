@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.4] -- 2026-05-31
+
 **v0.9.4 — agent retrieval guidance, Decision Log process docs, + a web-UI tweak.**
 
 ### Added
