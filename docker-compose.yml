@@ -1,8 +1,15 @@
 version: "3.9"
 
 # ── Cerefox local stack ────────────────────────────────────────────────────────
-# Runs Postgres+pgvector locally.  For cloud deployment (Supabase), only the
+# ⚠ UNTESTED end-to-end (tracked in docs/TODO.md). The `cerefox` service builds
+# the TypeScript web image (Dockerfile → `cerefox web`); the former Python/FastAPI
+# image was retired in v0.9.
+#
+# Runs Postgres+pgvector locally. For cloud deployment (Supabase), only the
 # `cerefox` service is needed — point it at your Supabase credentials.
+#
+# One-time schema deploy against the local DB is a separate step (NOT done by the
+# image): `cerefox server deploy`, or `bun scripts/db_deploy.ts` from a clone.
 #
 # Usage:
 #   docker compose up -d              # start everything
@@ -44,7 +51,7 @@ services:
       CEREFOX_SUPABASE_URL: ${CEREFOX_SUPABASE_URL:-}
       CEREFOX_SUPABASE_KEY: ${CEREFOX_SUPABASE_KEY:-}
 
-      # Direct Postgres URL — used by db_deploy.py.
+      # Direct Postgres URL — used by `cerefox server deploy` / db_deploy.ts.
       CEREFOX_DATABASE_URL: postgresql://cerefox:cerefox@postgres:5432/cerefox
 
       # Embedding model (cloud API, requires OPENAI_API_KEY).

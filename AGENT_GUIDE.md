@@ -359,7 +359,7 @@ If you're using Cerefox via the local CLI (Path C from `connect-agents.md`), the
 ## Governance
 
 - **Review status**: agent writes set `pending_review`; human edits set `approved`. Both are searchable.
-- **Soft delete**: deleted documents go to trash (recoverable). They are excluded from search. You can soft-delete via MCP (`cerefox_delete_document` if your client exposes it) or CLI (`cerefox document delete --yes --author <you> --author-type agent`).
+- **Soft delete**: deleted documents go to trash (recoverable). They are excluded from search. There is no delete MCP tool — soft-delete is done via the CLI (`cerefox document delete --yes --author <you> --author-type agent`) or the web UI.
 - **Permanent purge and restore-from-trash are web-UI-only**, by design. If you decide to delete something, **tell the user explicitly** that you soft-deleted it and that they can review or restore it via the Cerefox web UI. You cannot un-do your own soft-delete from agent code; only the human can. See [`docs/guides/access-paths.md` → Destructive operations and the trust model](docs/guides/access-paths.md#destructive-operations-and-the-trust-model).
 - **Versioning**: every update via `update_if_exists` creates an archived version. Old content is always recoverable.
 - **Audit log**: all write operations are recorded with author, timestamp, and size changes.
@@ -378,7 +378,7 @@ The Cerefox CLI is the TypeScript binary from `@cerefox/memory` (`npm install -g
 
 The legacy Python `uv run cerefox` is a frozen husk as of v0.9 — only `uv run cerefox mcp` (the standalone Python MCP fallback) still works; every other verb has moved to the TypeScript `cerefox` binary.
 
-> Full per-flag reference lives in [`docs/guides/cli.md`](docs/guides/cli.md). The mapping table below is the agent-facing summary. **CLI flag names match MCP parameter names exactly** (kebab-case); short forms like `--project`, `--filter`, `--count`, `--update`, `--version` are accepted as aliases.
+> Full per-flag reference lives in [`docs/guides/cli.md`](docs/guides/cli.md). The mapping table below is the agent-facing summary. **CLI flag names match MCP parameter names exactly** (kebab-case), each with a single-letter short form (`-p`, `-f`, `-c`, `-m`, `-u`, `-a`, `-r`). Use the canonical long name or its short form — there are no long-form aliases like `--project` or `--count`.
 
 ### MCP tool ↔ CLI command mapping
 
@@ -407,7 +407,7 @@ Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `C
 
 ### Behavioural differences worth knowing
 
-1. **CLI output is human-formatted by default.** `cerefox search` returns a numbered, indented text block with title, score, and a 300-char preview per result. To extract document IDs reliably, parse the `Doc: <title>  (<source>)` lines or fall back to `cerefox document list` for a clean tabular listing. `cerefox document get <id>` prints raw Markdown to stdout. **For scripted access to audit data**, use `cerefox audit list --json` — one JSON object per line, ideal for piping to `jq`.
+1. **CLI output is human-formatted by default.** In the default `docs` mode, `cerefox search` prints, per match, a header line `## <title> [id: <uuid>] · score · N chunks · M chars · partial|full` followed by the document body. Grab the document ID from the `[id: <uuid>]` tag, or use `cerefox document list` for a clean tabular listing. For structured output, `cerefox search --json` and `cerefox audit list --json` emit machine-readable JSON (the latter one object per line, ideal for `jq`). `cerefox document get <id>` prints raw Markdown to stdout.
 
 2. **Every invocation is independent.** With MCP, your tool framework can pass `requestor` once per session. With the CLI, every command is a separate process — pass `--requestor` / `--author` / `--author-type` on every relevant invocation, or set the env-var defaults once at the start.
 

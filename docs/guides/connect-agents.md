@@ -1022,7 +1022,7 @@ If the same content was already ingested (SHA-256 hash match), returns `"skipped
 | `full_content` | string | Reconstructed document content (may be partial — see `is_partial`) |
 | `chunk_count` | integer | Number of chunks in `full_content` |
 | `total_chars` | integer | Full document size in characters (always the whole doc, even when `is_partial` is true) |
-| `is_partial` | boolean | `true` when `full_content` contains only matched chunks + neighbours instead of the complete document. Triggered when the document exceeds the small-to-big threshold (default 40 000 chars). Use `getDocument` to retrieve the full text. |
+| `is_partial` | boolean | `true` when `full_content` contains only matched chunks + neighbours instead of the complete document. Triggered when the document exceeds the small-to-big threshold (default 20 000 chars). Use `getDocument` to retrieve the full text. |
 | `doc_updated_at` | string | ISO 8601 timestamp of the last document update |
 | `version_count` | integer | Number of archived versions (0 if never updated) |
 | `doc_project_ids` | string[] | Project UUIDs the document belongs to |
@@ -1124,7 +1124,7 @@ from the knowledge base.
 
 ### MCP tool ↔ CLI command mapping
 
-The agent docs are written around MCP tool names. **CLI flag names match MCP parameter names exactly** (kebab-cased) — short forms like `--project`, `--filter`, `--count`, `--update`, `--version` are accepted as aliases. Full per-flag reference: [`docs/guides/cli.md`](cli.md).
+The agent docs are written around MCP tool names. **CLI flag names match MCP parameter names exactly** (kebab-cased), each with a single-letter short form (`-p`, `-f`, `-c`, `-m`, `-u`, `-a`, `-r`). There are no long-form aliases like `--project` or `--count` — use the canonical long name or its short form. Full per-flag reference: [`docs/guides/cli.md`](cli.md).
 
 | MCP tool | CLI command |
 |---|---|
@@ -1344,7 +1344,7 @@ recommended RPC for agent use** — agents receive complete notes, not isolated 
 | `p_alpha` | FLOAT | 0.7 | Semantic weight |
 | `p_project_id` | UUID | null | Filter by project |
 | `p_min_score` | FLOAT | 0.0 | Minimum cosine similarity |
-| `p_small_to_big_threshold` | INT | 40000 | Documents larger than this return matched chunks + neighbours instead of the full document. Set to `0` to always return full content. Change the DEFAULT in `rpcs.sql` to apply server-wide. |
+| `p_small_to_big_threshold` | INT | 20000 | Documents larger than this return matched chunks + neighbours instead of the full document. Set to `0` to always return full content. Change the DEFAULT in `rpcs.sql` to apply server-wide. |
 | `p_context_window` | INT | 1 | Neighbour chunks on each side of each matched chunk. `1` → up to 3 contiguous chunks per hit. `0` → matched chunks only. |
 
 Returns: `document_id`, `doc_title`, `doc_source`, `doc_metadata`, `doc_project_ids`,

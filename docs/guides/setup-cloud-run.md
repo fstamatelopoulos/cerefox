@@ -1,5 +1,12 @@
 # Google Cloud Run Deployment
 
+> **⚠ Aspirational guidance — not yet tested end-to-end.** This deployment path
+> has not been validated against a live Cloud Run deploy. Treat it as a starting
+> point / design sketch rather than a verified runbook; expect to adapt the
+> `Dockerfile`, ports, and env wiring, and please report back what worked. For
+> paths we actively test, see `setup-supabase.md` (server side) and
+> `setup-local.md`.
+
 Deploy the Cerefox web UI to Google Cloud Run for a lightweight, serverless hosting option. This guide uses Supabase (free tier) for the database.
 
 > **Note (v0.9):** The Cerefox web UI is now the TypeScript server (`cerefox web` — Hono

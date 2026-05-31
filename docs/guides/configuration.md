@@ -80,7 +80,7 @@ The `cerefox-search` and `cerefox-ingest` Supabase Edge Functions handle embeddi
 
 ### Embedding API retry
 
-All embedding API calls (Python `CloudEmbedder` and Edge Functions) include automatic retry with exponential backoff for transient failures:
+All embedding API calls (TS embedder and Edge Functions) include automatic retry with exponential backoff for transient failures:
 
 - **3 attempts** with backoff: 500ms, 1s, 2s
 - **Retried**: HTTP 5xx server errors, network timeouts, connection failures
@@ -125,7 +125,7 @@ The `metadata_filter` search parameter (available in all search modes, all acces
 
 Access paths:
 - **MCP tool**: `metadata_filter` argument on `cerefox_search`
-- **CLI**: `cerefox search "query" --metadata-filter '{"type": "decision"}'` (alias: `--filter`, `-f`)
+- **CLI**: `cerefox search "query" --metadata-filter '{"type": "decision"}'` (short form: `-f`)
 - **Web UI**: Metadata Filter section (collapsible) in the Knowledge Browser
 - **GPT Actions**: `metadata_filter` field in `searchKnowledgeBase` request body (schema v1.4.0)
 - **HTTP API**: `metadata_filter` JSON key in the `cerefox-search` Edge Function POST body

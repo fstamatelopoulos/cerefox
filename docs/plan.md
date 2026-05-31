@@ -1,7 +1,25 @@
 # Cerefox Implementation Plan
 
-> **Approach**: Iterative and agile. Each iteration delivers working functionality.
-> Update this file as iterations are completed and new work is planned.
+> **What this doc is — read this first.** `plan.md` is the project's primary
+> **cross-session hand-off artifact** and high-level progress record. Its main
+> consumer is the *next* AI dev session (and any human adopter following along):
+> read it to understand where the project is and what's next *before* touching
+> code. It tracks history and progress at a higher level than git — the "why"
+> and "what next", not every commit.
+>
+> **How to use it:**
+> - **Read [`## Current Focus`](#current-focus) (at the very bottom) first.** It is
+>   the live status + what's next. Everything above it is the dated iteration log
+>   — newest work appended over time — kept as the high-level history record.
+> - **Keep it current — this is non-negotiable.** Whenever work starts, completes,
+>   or is re-scoped, update the relevant iteration entry **and** the `Current Focus`
+>   block in the same session. A stale `plan.md` silently breaks the next session's
+>   hand-off; treat updating it as part of finishing the work, not an afterthought.
+> - **It is not the changelog.** Release-by-release notes live in
+>   [`CHANGELOG.md`](../CHANGELOG.md); design rationale lives in `docs/specs/`.
+>   Link those rather than duplicating them here (duplicates rot).
+>
+> **Approach**: iterative and agile — each iteration delivers working functionality.
 
 ---
 
@@ -3209,84 +3227,26 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
 
 ## Current Focus
 
-**Recent releases (May 2026)**:
-- **v0.1.19** (2026-05-18, updated 2026-05-24) — web UI link resolver + FTS query-parser
-  fix (`websearch_to_tsquery` → `plainto_tsquery`) + agent-guidance refinement (doc-uuid
-  is the only recommended link form).
-- **v0.1.20** (2026-05-25) — issue #38 coordinated four-part fix: multi-project membership
-  preservation on content update. Non-destructive add for singular `project_name` on
-  update; new `project_names: string[]` parameter for explicit destructive replace; new
-  MCP tool `cerefox_set_document_projects` (tool count 8 → 9). All three paths (local
-  Python MCP, remote MCP, `cerefox-ingest` Edge Function) share one contract.
-- **v0.1.21** (2026-05-25) — three small web-UI quality-of-life fixes: dashboard project
-  counts no longer include trashed docs (now shows "5 (1 in trash)"); project documents
-  page paginated; trash page shows project membership chips per row.
-- **v0.2.0** (2026-05-26) — "Real Release". Foundations + first TS artifact.
-  VERSION file as single source of truth; `cerefox --version` shows the real
-  version (was stuck on `0.1.0`); web UI footer with `<VersionFooter>` and
-  `/api/v1/version` endpoint; `scripts/cut_release.ts` (first TS file outside
-  Edge Functions / frontend) implements the full release ritual including the
-  previously-missed `gh release create` step; OSS hygiene files; SemVer +
-  script-language policies in CONTRIBUTING.md; Bun added as a contributor
-  prerequisite (end users unaffected). Design-of-record promoted from
-  `docs/research/` to `docs/specs/`. **First-ever GitHub Release for Cerefox.**
-- **v0.3.0** (pending — cut post-merge of feat/v0.3.0-install-anywhere) —
-  "Install Anywhere". Config-state refactor with `~/.cerefox/` as the new
-  user-state root (backward-compat: repo-local `.env` still wins for dev mode);
-  bundled documentation surface (`cerefox docs [TOPIC]` CLI + `/app/help` web
-  UI page + `/api/v1/docs` endpoints); schema-version-mismatch banner that
-  closes the v0.1.19 redeploy footgun; first two Python → TS script ports
-  (`scripts/db_status.ts` + `scripts/sync_docs.ts`) per the §12f policy, with
-  the legacy `.py` files converted to **deprecation shims** (kept indefinitely
-  as a migration aid; no scheduled removal). `_shared/` cross-context TS module seeded with `config/`,
-  `db-client/`, and `db-status/`. New introspection RPC
-  `cerefox_pg_function_exists()`. Frontend `dist/` bundled into the wheel via
-  hatchling `force-include`. End-user redeploy required:
-  `uv run python scripts/db_deploy.py` (two new RPCs ship in v0.3.0).
+**Status (cutting v0.9.3)**: the resource-verb CLI has shipped; Python has been
+retired to a husk (only `uv run cerefox mcp` survives as a frozen fallback); the
+entire runtime — CLI, MCP server, web server, ingestion + retrieval — is
+TypeScript in the `@cerefox/memory` npm package.
 
-**Test counts**: 569 Python unit tests + 14 Bun tests + 80 e2e tests pass.
+**v0.9.3 is a documentation + artifact accuracy release** (no schema/RPC/Edge
+Function changes): a full file-by-file refresh of every doc against the
+post-Python-migration reality. Notably it corrected CLI docs that advertised
+flags/aliases which never existed (`--count`/`--filter`/`--project`/`--update`/
+`--version`/`-y`, ghost `ingest-dir --pattern`/`--recursive`/`--dry-run`, wrong
+`search` modes/defaults) — across `cli.md`, `AGENT_GUIDE.md`, the bundled
+`AGENT_QUICK_REFERENCE.md`/`cerefox_get_help`, and more — plus Mermaid diagrams
+in `solution-design.md`, an EF-invocation-limit fix in `operational-cost.md`, a
+TS-runtime Dockerfile, and historical-record READMEs for `docs/research` +
+`docs/specs`.
 
-**Strategic shift codified** (2026-05-24): pivoting from "Iteration 18 = narrow TS port
-of MCP server" to the broader **Polish & Distribution arc** covering v0.2.0 through v1.0.0
-via a Python → TypeScript strangler-fig migration. Design-of-record:
-[`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
+The Polish & Distribution arc — Iterations 22–27 (TS MCP server, TS CLI, script
+ports, web server, ingestion, Python removal) — shipped in full. **Next: v1.0**,
+the stability commitment (strict SemVer becomes binding).
 
-**Next**: Iteration 22 (v0.4.0 — "TS MCP Server", supersedes old Iteration 18).
-Detailed 39-task breakdown landed in the Iteration 22 section above — 7 parts:
-
-- **22A** (8 tasks) — `_shared/mcp-tools/` extraction. Audit Python ↔ EF
-  parity, factor the 8 current MCP tool handlers + the new `cerefox_get_help`
-  into runtime-neutral modules, grow `_shared/db-client/` to cover every
-  RPC the tools need.
-- **22B** (5 tasks) — `cerefox_get_help` MCP tool (Layer 3 of the MCP
-  discoverability response per design doc §10d). Bundles
-  `AGENT_QUICK_REFERENCE.md` whole; CI check enforces in-sync.
-- **22C** (8 tasks) — new `packages/memory/` TS stdio server (published as
-  `@cerefox/memory`, containing the `cerefox-mcp` bin in v0.4 + the
-  `cerefox` CLI bin from v0.5) using `@modelcontextprotocol/sdk`, repo-root
-  npm workspace setup, startup schema-version check.
-- **22D** (4 tasks) — refactor `supabase/functions/cerefox-mcp/` to import
-  from `_shared/mcp-tools/` instead of self-contained tools. Highest-risk
-  step; mitigated by snapshot parity tests + the full 80-test e2e gauntlet.
-- **22E** (3 tasks) — Python `cerefox mcp` becomes a *soft* wrapper: tries
-  `npx @cerefox/memory cerefox-mcp`, falls back to the legacy Python impl
-  with a stderr nudge if npm/Bun isn't available. No hard break of
-  existing MCP configs. (Refinement vs. the design doc's "shells out to npx".)
-- **22F** (4 tasks) — first npm publication for Cerefox. Adds the
-  `.github/workflows/release.yml` workflow (OIDC trusted publishing,
-  `--provenance` attestation). `--npm-publish` flag on `cut_release.ts`
-  defaults to `false` so tag-cutting and publishing are two distinct
-  confirmation surfaces. The maintainer-side bootstrap procedure is
-  tracked privately, not here.
-- **22G** (10 tasks) — docs (`migration-v0.4.md` for existing users,
-  `connect-agents.md` updates for new users, agent guides, CLAUDE.md,
-  CONTRIBUTING.md, setup-supabase note on OIDC), Decision Log, CHANGELOG,
-  release cut.
-
-Deferred to v0.5.0 / later (called out in the iter-22 section so they
-don't get smuggled in): `cerefox configure-agent`, `cerefox init` self-doc
-ingest (Layer 2 of discoverability), zero-chunk-create RPC refusal,
-`scripts/db_deploy.py` / `db_migrate.py` ports.
-
-**After Iteration 22**: Iterations 23–27 (TS CLI + remaining script ports,
-web server, ingestion, Python removal, v1.0 commitment).
+Release history lives in [`CHANGELOG.md`](../CHANGELOG.md); the design-of-record
+for the arc is [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
+The dated iteration log above this section remains the high-level progress record.

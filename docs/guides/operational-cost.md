@@ -14,7 +14,7 @@ and gives rough estimates for two common deployment scenarios.
 
 | Component | Cost driver |
 |-----------|-------------|
-| **Supabase** | Database storage and API calls. The free tier is generous and covers a typical personal knowledge base indefinitely. |
+| **Supabase** | Database storage and **Edge Function invocations** — the latter is the binding free-tier limit for cloud / remote-MCP usage (see below). Direct Data API requests are unlimited. The free tier covers typical personal use indefinitely. |
 | **OpenAI embeddings** | Charged per token when ingesting content or running searches. The default model (`text-embedding-3-small`) is among the cheapest available. |
 | **Cloud Run** (optional) | Compute for the web UI if you deploy it to GCP rather than running it locally. |
 | **Artifact Registry** (optional) | Docker image storage on GCP, if you deploy to Cloud Run. |
@@ -46,14 +46,38 @@ The web UI's built-in search bar and document browser make no embedding calls.
 
 ### Supabase free tier limits
 
-Supabase's free tier is sufficient for a personal knowledge base. Key limits as of early 2026:
+Supabase's free tier is sufficient for a personal knowledge base. Current limits
+(verify at [supabase.com/pricing](https://supabase.com/pricing)):
 
-- 500 MB database storage (text + vectors; a typical knowledge base is well under this)
-- 50,000 API calls/month (for queries via supabase-py)
-- 2 active projects
+- **500 MB database storage** — text + 768-dim vectors; a typical personal KB is well under this.
+- **500,000 Edge Function invocations / month** — *the limit that matters most for Cerefox* (see below).
+- **5 GB egress / month**.
+- **2 active projects**, paused after ~1 week of inactivity (a single request unpauses).
+- **Unlimited Data API (REST/PostgREST) requests** on all plans — direct database reads/writes are not metered.
 
-If you exceed these limits, Supabase's Pro plan is the next step — check
-[supabase.com/pricing](https://supabase.com/pricing) for current rates.
+(Supabase's "50,000 monthly active users" figure is an **Auth** limit; Cerefox
+doesn't use Supabase Auth, so it never applies.)
+
+#### Edge Function invocations are the real free-tier limiter
+
+Most of Cerefox runs against the **Data API** (unlimited), but the **remote** agent
+paths go through **Edge Functions**, which the free tier caps at 500,000/month:
+
+| Access path | Uses Edge Functions? | Cost per call |
+|---|---|---|
+| Remote MCP (`cerefox-mcp`) — Claude/Cursor/etc. over HTTP | **Yes** | ~1 invocation per agent tool call (calls the RPC directly — no fan-out) |
+| GPT Actions (Custom GPT) → primitive Edge Functions | **Yes** | 1 invocation per action call |
+| `cerefox doctor` | **Yes** | several (it calls the `/version?peers=true` aggregator) |
+| **Local stdio MCP (`cerefox mcp`)** | **No** | 0 — talks to the Data API directly |
+| `cerefox` CLI and `cerefox web` (web UI) | **No** | 0 — Data API directly |
+
+500K/month is generous for a single human-driven agent. But **automated or
+high-frequency agents on the remote path** can approach it. The lever: point those
+agents at the **local stdio MCP server** (`cerefox mcp`) instead of the remote Edge
+Function — it exposes the identical 10 tools, talks to the Data API directly, and
+costs **zero** Edge Function invocations (bonus: lower latency, and it works offline
+against a reachable database). If you do exceed the free EF quota, Supabase's Pro
+plan ($25/mo, 2M invocations included) is the next step.
 
 ---
 

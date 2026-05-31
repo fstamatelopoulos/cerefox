@@ -8,7 +8,7 @@ playbook, not an invitation for arbitrary contributors to publish.
 
 > Scope: this covers `@cerefox/memory` (the npm package) + the git tag +
 > the GitHub Release. The server side (Supabase schema / RPCs / Edge
-> Functions) deploys separately via `cerefox deploy-server` and is **not**
+> Functions) deploys separately via `cerefox server deploy` and is **not**
 > part of the npm release — but a release that changes the server surface
 > must tell users to redeploy (see "Server-surface changes" below).
 
@@ -43,7 +43,7 @@ redeploy their server.
    Edge Function's request/response shape changed this cycle, update the
    OpenAPI block and bump its `info.version`. (See the CLAUDE.md rule;
    ideally this already happened in the EF-changing PR.)
-6. **All tests green**: `uv run pytest`, `cd _shared && bun test`,
+6. **All tests green**: `cd _shared && bun test`,
    `cd packages/memory && bun run build && bun test`. Live/e2e suites
    auto-skip without credentials — run them against a real project when the
    release touches their surface.
@@ -85,11 +85,11 @@ guide must include the redeploy step prominently (not buried). For end users
 the single command covers everything:
 
 ```bash
-cerefox deploy-server   # fresh DB → deploy schema+RPCs+EFs;
+cerefox server deploy   # fresh DB → deploy schema+RPCs+EFs;
                         # existing DB → apply pending migrations, refresh RPCs+EFs
 ```
 
-`deploy-server` is the catch-all: on an existing database it applies any
+`server deploy` is the catch-all: on an existing database it applies any
 *pending* migrations and re-applies `rpcs.sql`, so a release that changes RPCs
 or adds a migration is shipped just by re-running it. The low-level scripts
 (`bun scripts/db_deploy.ts` for a fresh deploy, `bun scripts/db_migrate.ts` for

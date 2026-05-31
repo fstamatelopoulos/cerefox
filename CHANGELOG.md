@@ -9,9 +9,78 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.3 — docs/installer accuracy.** Client/CLI only — no schema, RPC, or
+Edge Function changes.
 
----
+### Fixed
+
+- **Installer "Wire up an AI agent" step listed only two clients.** It now
+  lists all five `configure-agent` targets (claude-code, claude-desktop,
+  cursor, codex, gemini) and notes that each writes a local `cerefox mcp`
+  server entry.
+- **npm package README (`@cerefox/memory`) was stale.** Replaced the
+  "clone required" server-side setup with the bundled `cerefox server deploy`
+  flow (no clone), and fixed the example commands that still used pre-v0.9 flat
+  verbs (`ingest`, `list-projects`, `metadata-search`, `get-audit-log`,
+  `ingest-dir`) and `cerefox docs --list` → `cerefox guides list`.
+- **Root README "Project status" was stale** — said "at v0.9.0" and left the
+  "(current)" marker on the v0.7.0 roadmap row. Updated to the v0.9.x line and
+  moved the marker to the current phase.
+- **Repo-wide documentation accuracy pass.** A full audit of the guides,
+  process docs, and internal specs caught and fixed: dead `uv run pytest` /
+  `uv run python scripts/*.py` commands (→ `bun test` / `bun scripts/*.ts` /
+  `cerefox server reindex`); lingering `cerefox deploy-server` → `cerefox
+  server deploy`; an incorrect "`cerefox-mcp` delegates to Edge Functions via
+  internal fetch" claim (it calls Postgres RPCs directly) in `CLAUDE.md` and
+  `solution-design.md`; the `CLAUDE.md` CLI-verb list (dropped `docs`/`sync-docs`,
+  added the `guides` group + newer verbs); `FastAPI`-serves-the-SPA statements
+  (→ `cerefox web` / Hono) in the requirements + design docs; the Python/Click/
+  pytest tech-stack table; a non-existent `cerefox_delete_document` MCP tool in
+  `AGENT_GUIDE.md`; the `connect-agents.md` small-to-big default (40000 → 20000);
+  and `migration-v0.9.md`'s version-verb (`document version list`).
+- **`docs/guides/setup-cloud-run.md`** now opens with an "aspirational — not
+  tested end-to-end" banner so readers treat it as guidance, not a verified runbook.
+- **`docs/guides/operational-cost.md`** corrected: the free tier's binding limit
+  for cloud usage is **Edge Function invocations (500k/mo)**, not a "50,000 API
+  calls" cap (that was the Auth MAU figure — Data API requests are unlimited).
+  Added a per-access-path EF-cost table and the local-MCP lever (the local stdio
+  server hits the Data API directly, so it costs zero invocations).
+- **`docs/examples/mcp-configs/`**: `local-stdio.json` no longer uses the legacy
+  Python `uv run cerefox mcp` path — it's now `npx --package=@cerefox/memory
+  cerefox mcp` (no clone, no Python); README leads with `cerefox configure-agent`.
+- **`docs/solution-design.md`** + **`requirements-and-specs.md`** brought current:
+  ASCII architecture diagrams converted to Mermaid (renders on GitHub); TS-runtime
+  reality throughout; and several SQL-grounded corrections (phantom version-row
+  columns, `metadata` column name, `cerefox_context_expand`, `cerefox_ingest` vs
+  the never-shipped `cerefox_save_note`, the full 10-tool list).
+- **Docker setup was broken/stale**: the `Dockerfile` built a Python image and
+  ran `uvicorn cerefox.api.app:app` — a removed husk. Rewrote it to the TS
+  runtime (`node` base → `@cerefox/memory` → `cerefox web`) with an "untested"
+  banner; `docker-compose.yml` + `.env.example` updated to match (`cerefox
+  server deploy` / `db_deploy.ts` instead of `db_deploy.py`, TS web not FastAPI).
+- **CLI reference advertised flags that don't exist.** A file-by-file pass
+  against the command source found `docs/guides/cli.md` (and the bundled
+  `AGENT_QUICK_REFERENCE.md`) promising long-form aliases — `--count`,
+  `--filter`, `--project`, `--update`, `--version`, `-y` — that were never
+  implemented (only the canonical long names + single-letter short forms
+  exist), plus `cerefox document ingest-dir` documenting nonexistent
+  `--pattern`, `--recursive`, and `--dry-run` flags (it always recurses; the
+  real selector is `--extensions`), and a wrong `search` surface (modes are
+  `docs`/`hybrid`/`fts` default `docs`, `--match-count` defaults to 5, not the
+  documented `hybrid`/10). Corrected the reference, the `--recursive` examples
+  in the README/quickstart, the same fake-alias claims in `configuration.md`,
+  `connect-agents.md`, and `AGENT_GUIDE.md`, and regenerated the
+  `cerefox_get_help` bundle.
+- **PR template still listed `uv run pytest`** in its test-plan checklist
+  (pytest retired) → `bun test` / `CEREFOX_LIVE_E2E=1 bun test`. Also fixed a
+  stale "`_shared/` will grow with `ingest/` (v0.7+)" line in CONTRIBUTING and
+  an `access-paths.md` `click.confirm` reference.
+- **More stale READMEs/specs**: `test-data/README.md` used `uv run cerefox` +
+  pre-v0.9 verbs and an invalid `--pattern` flag (→ `cerefox document …`,
+  default `.md/.txt`); `_shared/README.md` was frozen at a v0.3.0 "seed only /
+  future shape (v0.4+)" snapshot (→ current module list + rationale);
+  `docs/specs/ui-redesign-spa-python-api.md` got a SHIPPED/superseded banner
+  (the API it targeted is now Hono/TS, not FastAPI).
 
 ## [v0.9.2] -- 2026-05-31
 

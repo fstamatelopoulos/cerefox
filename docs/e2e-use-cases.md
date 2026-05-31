@@ -1,19 +1,22 @@
 # E2E Test Use Cases
 
 End-to-end tests that exercise the real Supabase backend and/or the web UI.
-These are **opt-in** — they are excluded from the default `uv run pytest` run.
+The test runner is **`bun test`** (pytest is retired). Live Edge Function /
+remote-MCP suites are opt-in and gated behind `CEREFOX_LIVE_E2E=1`.
 
 ## How to Run
 
 ```bash
-# API e2e tests (Supabase REST + Edge Functions)
-uv run pytest -m e2e
+# Live read/write command suites (hit the Data API; probe-and-skip when
+# Supabase is unreachable, self-clean [E2E …] data). Needs .env.
+cd packages/memory && bun run build && bun test
 
-# UI e2e tests (Playwright, requires web app running at http://127.0.0.1:8000)
-uv run pytest -m ui
+# Live Edge Function / remote-MCP e2e (opt-in — real EF calls, free-tier quota)
+CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts
+CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts
 
-# Both
-uv run pytest -m "e2e or ui"
+# UI e2e tests (Playwright, requires `cerefox web` running)
+cd frontend && bun run test:e2e
 ```
 
 All test data uses an `[E2E]` or `[E2E-UI]` prefix in titles and is cleaned up
@@ -23,7 +26,7 @@ after each run, even on failure.
 
 - **Supabase REST API tests**: Use credentials from `.env` (`CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`)
 - **Edge Function tests**: Need a JWT-format key. Set `CEREFOX_SUPABASE_ANON_KEY` in `.env` — use the **legacy anon JWT** (Project Settings → API Keys → Legacy → anon). The new `sb_publishable_…` key fails at the Edge Function gateway. See [`docs/guides/setup-supabase.md` → Supabase API keys (2026)](guides/setup-supabase.md#supabase-api-keys-2026). Tests are skipped if `CEREFOX_SUPABASE_ANON_KEY` is not set.
-- **UI tests**: Require the web app running (`uv run uvicorn cerefox.api.app:app`) and frontend built (`cd frontend && npm run build`). Tests target the React SPA at `http://127.0.0.1:8000/app/`.
+- **UI tests**: Require the web app running (`cerefox web`) and the frontend built (`cd frontend && bun run build`). Tests target the React SPA at `http://127.0.0.1:8000/app/`.
 
 ---
 
@@ -31,7 +34,7 @@ after each run, even on failure.
 
 ### 1. Supabase REST API — Document & Project Lifecycle
 
-File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
+TS suite: `packages/memory/test/{write,read}-commands.test.ts` (live, Data API).
 
 | Class | Test | Use Case | Status |
 |-------|------|----------|--------|
@@ -42,7 +45,7 @@ File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
 
 ### 2. Supabase REST API — Document Versioning
 
-File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
+TS suite: live command suites under `packages/memory/test/`.
 
 | Class | Test | Use Case | Status |
 |-------|------|----------|--------|
@@ -51,7 +54,8 @@ File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
 
 ### 3. Edge Functions (HTTP POST → Supabase Edge Functions)
 
-File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
+TS suite: `packages/memory/test/edge-functions/edge-functions.test.ts` — gated
+behind `CEREFOX_LIVE_E2E=1`.
 
 Requires `CEREFOX_SUPABASE_ANON_KEY` in `.env`. Skipped if not available.
 
@@ -63,7 +67,7 @@ Requires `CEREFOX_SUPABASE_ANON_KEY` in `.env`. Skipped if not available.
 
 ### 4. Small-to-Big Retrieval
 
-File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
+TS suite: live command suites under `packages/memory/test/`.
 
 | Class | Test | Use Case | Status |
 |-------|------|----------|--------|
@@ -74,7 +78,9 @@ File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
 
 ### 5. Metadata-Filtered Search
 
-File: `tests/e2e/test_api_e2e.py` — marker: `@pytest.mark.e2e`
+TS suite: live read-command suite under `packages/memory/test/` (Data API);
+Edge Function variant under `packages/memory/test/edge-functions/` (gated behind
+`CEREFOX_LIVE_E2E=1`).
 
 Two docs are ingested with different metadata; each test asserts only the matching doc is returned.
 
@@ -88,10 +94,11 @@ Two docs are ingested with different metadata; each test asserts only the matchi
 
 ### 6. Web UI (Playwright browser tests)
 
-File: `tests/e2e/test_ui_e2e.py` — marker: `@pytest.mark.ui`
+TS suite: `frontend/tests/e2e/ui.spec.ts` (`@playwright/test`).
 
-Requires: web app running at `http://127.0.0.1:8000/` and frontend built (`cd frontend && npm run build`).
-Tests target the React SPA at `/app/`.
+Requires: web app running (`cerefox web`) at `http://127.0.0.1:8000/` and the
+frontend built (`cd frontend && bun run build`). Tests target the React SPA at
+`/app/`. Run with `cd frontend && bun run test:e2e`.
 
 | Class | Test | Use Case | Status |
 |-------|------|----------|--------|
@@ -107,7 +114,9 @@ Tests target the React SPA at `/app/`.
 
 ### 6B. ID-Based Ingest (17B)
 
-Files: `tests/e2e/test_api_e2e.py`, `tests/e2e/test_mcp_e2e.py`, `tests/e2e/test_edge_functions_e2e.py` — marker: `@pytest.mark.e2e`
+TS suites: live write-command suite under `packages/memory/test/` (pipeline +
+MCP stdio paths) and `packages/memory/test/edge-functions/` (primitive EF,
+gated behind `CEREFOX_LIVE_E2E=1`).
 
 | Class | Test | Use Case | Status |
 |-------|------|----------|--------|
@@ -154,4 +163,4 @@ Files: `tests/e2e/test_api_e2e.py`, `tests/e2e/test_mcp_e2e.py`, `tests/e2e/test
 - Edit document metadata via UI (add/remove/rename metadata keys)
 - Document download (`.md` export) via UI
 - Metadata filter via web UI (filter row inputs)
-- Version retrieval via CLI (`cerefox get-doc --version`)
+- Version retrieval via CLI (`cerefox document get --version`)

@@ -100,7 +100,7 @@ for the legacy Python MCP fallback. See [`setup-local.md`](setup-local.md) and
 ## What's next
 
 - **Ingest your notes**: `cerefox document ingest my-notes.md`, or
-  `cerefox document ingest-dir ./notes/ --recursive`
+  `cerefox document ingest-dir ./notes/` (recurses into sub-directories automatically)
 - **Search from the CLI**: `cerefox search "your query"`
 - **Discover all commands**: `cerefox --help`
 - **Run the web UI**: `cerefox web` (TypeScript — Hono backend + React SPA); see [`setup-local.md`](setup-local.md)

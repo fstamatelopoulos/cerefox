@@ -227,8 +227,8 @@ If you're building tooling that uses the CLI (Path C) or any MCP/Edge Function p
 
 ### CLI delete-doc — interactive vs scripted
 
-`cerefox document delete` prompts for confirmation by default (since `click.confirm` requires
-a TTY, an agent's Bash tool will get an abort instead of accidentally deleting). Agents
+`cerefox document delete` prompts for confirmation by default (the prompt requires a TTY, so
+an agent's Bash tool gets an abort instead of accidentally deleting). Agents
 that legitimately need to soft-delete must pass `--yes` *and* set `--author` /
 `--author-type` so the audit log captures who acted:
 
