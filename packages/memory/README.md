@@ -57,25 +57,18 @@ You deploy the server side with this package's CLI — `cerefox server deploy` s
 
 ### One-time server-side setup (~10 min — no clone needed)
 
-This package's CLI stands up the whole server side — schema, RPCs, and all 9
-Edge Functions — from assets bundled in the npm package:
+The CLI stands up the whole server side — schema, RPCs, and all 9 Edge
+Functions — from bundled assets:
 
 ```bash
-cerefox init             # enter your Supabase URL/keys + embedding key (writes ~/.cerefox/.env)
-cerefox server deploy    # creates tables, indexes, RPCs + deploys the 9 Edge Functions
-npx supabase secrets set OPENAI_API_KEY=sk-...   # key the functions use at runtime
+cerefox init             # enter your Supabase URL/keys + embedding key
+cerefox server deploy    # schema + RPCs + Edge Functions
 ```
 
-`cerefox server deploy` shells out to the Supabase CLI (`npx supabase …`) for
-the function deploy, so log in once (`npx supabase login`) and have your project
-linked. Re-run it after upgrades — it applies pending migrations and refreshes
-the functions in place.
-
-Full walkthrough (connection-pooling quirks, Supabase API-key flavors, troubleshooting): [setup-supabase.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-supabase.md).
-
-*Working from a clone instead?* Contributors can deploy with `bun
-scripts/db_deploy.ts` + `npx supabase functions deploy` — see
-[CONTRIBUTING.md](https://github.com/fstamatelopoulos/cerefox/blob/main/CONTRIBUTING.md).
+Details (Supabase login/linking, connection-pooling quirks, API-key flavors,
+troubleshooting, and the contributor clone-and-deploy path) live in the
+[quickstart](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/quickstart.md)
+and [setup-supabase.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-supabase.md).
 
 If you don't yet have Supabase + an OpenAI key, the [Cerefox
 quickstart](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/quickstart.md)
