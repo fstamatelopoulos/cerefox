@@ -9,7 +9,32 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.5 — `deploy-server` rename fix + upgrade-doc simplification.**
+
+### Fixed
+
+- **Stale `cerefox deploy-server` references emitted the renamed husk.** After
+  the v0.9 rename to `cerefox server deploy`, several spots still named the old
+  verb (which now exits non-zero): `cerefox doctor`'s remediation, the
+  `server deploy` pre-flight/error output, the `cerefox web` compatibility
+  message, and the EF-predates-v0.8 banner. Worse, **`cerefox init`'s "deploy
+  the server now?" flow actually *spawned* `deploy-server`** and hit the husk —
+  now it spawns `server deploy`.
+- **`quickstart.md` install description was self-contradictory** ("detects Bun
+  or installs it *and* falls back to npm"). Now states the real behavior: prefer
+  Bun if present, else npm (Node ≥ 20), else bootstrap Bun.
+
+### Removed
+
+- **Deleted the per-version migration guides** (`migration-v0.4/v0.5/v0.9.md`).
+  The 0.1→0.9 arc happened within a week and is now reached by the installer +
+  `cerefox server deploy` (which applies all pending migrations in one shot),
+  so three version-specific guides were confusing clutter. `upgrading.md` is the
+  single upgrade reference — tightened and simplified: it folds in the v0.9
+  verb-rename note, adds the "old pre-installer clone → switch to the installer"
+  path, and collapses the obsolete per-`v0.1.x` redeploy notes into "`server
+  deploy` applies everything; reindex when a release says so." Inbound links
+  (README, CLAUDE.md, package README, connect-agents) repointed to `upgrading.md`.
 
 ---
 

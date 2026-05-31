@@ -111,7 +111,7 @@ duplicate what the CLI does, not capabilities only available from source.
 > **Upgrading to v0.9?** The CLI verbs were renamed to a resource-verb shape
 > (`cerefox get-doc X` → `cerefox document get X`; old names still run but
 > redirect) and the Python CLI/web were retired to husks. See
-> [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
+> [`docs/guides/upgrading.md`](docs/guides/upgrading.md).
 
 Cerefox has **two install paths**. Pick the one that fits you — both are
 first-class and kept in sync.
@@ -182,7 +182,7 @@ Full contributor setup, conventions, and the test matrix are in
 > `uv run cerefox mcp` — a frozen, offline / no-npm MCP fallback for repo-clone
 > users. It is unmaintained and slated for removal; everything else Python is a
 > husk that redirects to the TS CLI. See
-> [`docs/guides/migration-v0.9.md`](docs/guides/migration-v0.9.md).
+> [`docs/guides/upgrading.md`](docs/guides/upgrading.md).
 
 ---
 
@@ -258,8 +258,7 @@ Full setup for every client — plus a manual per-client config appendix for whe
 | `docs/guides/ops-scripts.md` | Backup, restore, migrate, sync docs |
 | `docs/guides/setup-cloud-run.md` | Google Cloud Run deployment |
 | `docs/guides/operational-cost.md` | Cost breakdown for all deployment options |
-| `docs/guides/upgrading.md` | Standard upgrade checklist, version-specific notes |
-| `docs/guides/migration-v0.9.md` | v0.9 CLI verb rename + Python retirement |
+| `docs/guides/upgrading.md` | Upgrade checklist + notable cross-version transitions |
 | `AGENT_GUIDE.md` | Reference for AI agents using Cerefox tools |
 | `CONTRIBUTING.md` | How to contribute to Cerefox |
 

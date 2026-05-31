@@ -16,7 +16,7 @@ _MESSAGE = (
     "The Cerefox Python web app was removed in v0.9.0. "
     "Use the TypeScript web server: `cerefox web` "
     "(install: npm install -g @cerefox/memory). "
-    "See docs/guides/migration-v0.9.md."
+    "See docs/guides/upgrading.md."
 )
 
 

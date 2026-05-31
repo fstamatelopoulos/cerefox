@@ -22,8 +22,8 @@ clone, no Python required.**
 curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh | sh
 ```
 
-Detects Bun (or installs it) and falls back to npm. After install,
-`cerefox` is on your PATH.
+Uses Bun if it's already installed, otherwise npm (Node ≥ 20); if neither is
+present, it bootstraps Bun. After install, `cerefox` is on your PATH.
 
 Direct alternatives:
 ```bash
