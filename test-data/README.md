@@ -19,24 +19,25 @@ correctly with a diverse corpus.
 ## Ingest all at once
 
 ```bash
-uv run cerefox ingest-dir test-data/ --pattern "*.md"
+cerefox document ingest-dir test-data/
 ```
 
-This skips `README.md` (it has no meaningful content to index). Ingest each
-file individually if you want to assign them to a project:
+This ingests every `.md` / `.txt` under `test-data/` (including this README —
+harmless for a test corpus). Ingest each file individually if you want to
+assign them to a project:
 
 ```bash
-uv run cerefox ingest test-data/cerefox-overview.md      --title "Cerefox Overview"
-uv run cerefox ingest test-data/knowledge-management.md  --title "Knowledge Management"
-uv run cerefox ingest test-data/espresso-guide.md        --title "Espresso Guide"
-uv run cerefox ingest test-data/ancient-rome.md          --title "Ancient Rome"
-uv run cerefox ingest test-data/python-concurrency.md    --title "Python Concurrency"
-uv run cerefox ingest test-data/creative-worldbuilding.md --title "Creative Worldbuilding"
+cerefox document ingest test-data/cerefox-overview.md      --title "Cerefox Overview"
+cerefox document ingest test-data/knowledge-management.md  --title "Knowledge Management"
+cerefox document ingest test-data/espresso-guide.md        --title "Espresso Guide"
+cerefox document ingest test-data/ancient-rome.md          --title "Ancient Rome"
+cerefox document ingest test-data/python-concurrency.md    --title "Python Concurrency"
+cerefox document ingest test-data/creative-worldbuilding.md --title "Creative Worldbuilding"
 ```
 
 ## Suggested search tests
 
-Once ingested, open the web UI (`uv run cerefox web`) and try these queries
+Once ingested, open the web UI (`cerefox web`) and try these queries
 to verify all three search modes work and return the expected top result:
 
 | Query | Mode | Expected top result |
@@ -60,7 +61,7 @@ the documents — this is the key test for vector search quality.
 ## Clean up
 
 ```bash
-uv run cerefox list-docs
+cerefox document list
 # then for each document ID:
-uv run cerefox delete-doc <id> --yes
+cerefox document delete <id> --yes
 ```

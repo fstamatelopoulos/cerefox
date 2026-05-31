@@ -1,11 +1,13 @@
 # Iteration 14A: Web Application Refactor - Detailed Design
 
-> **Status**: Design phase. This document specifies the architecture, tooling, and
-> migration plan for replacing the Jinja2 + HTMX frontend with a React + TypeScript
-> single-page application backed by the existing FastAPI API.
->
-> See [`docs/research/vision.md`](../research/vision.md) for the broader vision and
-> [`docs/plan.md`](../plan.md) for the phased iteration plan (14A, 14B, 14C).
+> **Status**: SHIPPED / historical (Iteration 14, 2026). The React + TypeScript
+> SPA described here was built and is current. **Superseded in one respect:** the
+> API backend it was "backed by FastAPI" against was itself ported off Python in
+> v0.6 — the web server is now **Hono on Bun/Node** (`cerefox web`), and the
+> Python FastAPI app is a frozen husk. Read this as the original SPA design
+> record; for the current architecture see
+> [`docs/solution-design.md`](../solution-design.md) §9 and
+> [`docs/plan.md`](../plan.md).
 
 ---
 

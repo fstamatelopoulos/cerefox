@@ -58,6 +58,12 @@ Edge Function changes.
   runtime (`node` base → `@cerefox/memory` → `cerefox web`) with an "untested"
   banner; `docker-compose.yml` + `.env.example` updated to match (`cerefox
   server deploy` / `db_deploy.ts` instead of `db_deploy.py`, TS web not FastAPI).
+- **More stale READMEs/specs**: `test-data/README.md` used `uv run cerefox` +
+  pre-v0.9 verbs and an invalid `--pattern` flag (→ `cerefox document …`,
+  default `.md/.txt`); `_shared/README.md` was frozen at a v0.3.0 "seed only /
+  future shape (v0.4+)" snapshot (→ current module list + rationale);
+  `docs/specs/ui-redesign-spa-python-api.md` got a SHIPPED/superseded banner
+  (the API it targeted is now Hono/TS, not FastAPI).
 
 ## [v0.9.2] -- 2026-05-31
 
