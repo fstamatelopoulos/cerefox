@@ -1124,7 +1124,7 @@ from the knowledge base.
 
 ### MCP tool ↔ CLI command mapping
 
-The agent docs are written around MCP tool names. **CLI flag names match MCP parameter names exactly** (kebab-cased) — short forms like `--project`, `--filter`, `--count`, `--update`, `--version` are accepted as aliases. Full per-flag reference: [`docs/guides/cli.md`](cli.md).
+The agent docs are written around MCP tool names. **CLI flag names match MCP parameter names exactly** (kebab-cased), each with a single-letter short form (`-p`, `-f`, `-c`, `-m`, `-u`, `-a`, `-r`). There are no long-form aliases like `--project` or `--count` — use the canonical long name or its short form. Full per-flag reference: [`docs/guides/cli.md`](cli.md).
 
 | MCP tool | CLI command |
 |---|---|
