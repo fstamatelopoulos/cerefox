@@ -23,7 +23,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 - **Rewrote the `CLAUDE.md` Decision Log section** with the new discovery +
   maintenance process: a string-typed metadata convention (`type`, `seq`,
-  `quarter`, `part`, `latest`), discovery via
+  `quarter`, `latest`; the part number stays in the title), discovery via
   `cerefox_metadata_search {type:"decision-log", latest:"true"}` instead of text
   search, global `seq` ordering, and a split/transition protocol (create the new
   part with `latest="true"` first, then clear the previous part). Reframed as a
