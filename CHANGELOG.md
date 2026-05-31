@@ -13,6 +13,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Web UI ingest page offered `.pdf` / `.docx` uploads** though PDF/DOCX ingest
+  was dropped in v0.7 — the file picker now accepts `.md` / `.txt` only.
 - **Stale `cerefox deploy-server` references emitted the renamed husk.** After
   the v0.9 rename to `cerefox server deploy`, several spots still named the old
   verb (which now exits non-zero): `cerefox doctor`'s remediation, the
