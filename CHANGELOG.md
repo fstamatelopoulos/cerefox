@@ -9,7 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-**v0.9.5 — `deploy-server` rename fix + upgrade-doc simplification.**
+**v0.9.5 — `deploy-server` rename fix + upgrade-doc simplification + DOCX upload.**
+
+### Added
+
+- **DOCX ingestion in the web upload + CLI** (first version). The web Ingest page
+  and `cerefox document ingest report.docx` now accept `.docx` and convert it to
+  Markdown on the way in (via `mammoth`), so Word heading styles map to headings
+  and the content chunks well. Markdown / `.txt` are unchanged. **PDF is
+  intentionally not supported** — convert it to Markdown upstream first (PDF
+  layout has no reliable heading structure). The MCP path is unaffected by
+  design: agents read and ingest the extracted Markdown themselves, so the
+  conversion is purely a human "ingest this file for me" convenience.
 
 ### Fixed
 
