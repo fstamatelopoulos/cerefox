@@ -3227,15 +3227,25 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
 
 ## Current Focus
 
-**Status (v0.9.2)**: the resource-verb CLI has shipped; Python has been retired
-to a husk (only `uv run cerefox mcp` survives as a frozen fallback); the entire
-runtime — CLI, MCP server, web server, ingestion + retrieval — is TypeScript in
-the `@cerefox/memory` npm package. Near-term work is post-0.9.2 patches en route
-to the v1.0 stability commitment; currently cutting **v0.9.3**.
+**Status (cutting v0.9.3)**: the resource-verb CLI has shipped; Python has been
+retired to a husk (only `uv run cerefox mcp` survives as a frozen fallback); the
+entire runtime — CLI, MCP server, web server, ingestion + retrieval — is
+TypeScript in the `@cerefox/memory` npm package.
+
+**v0.9.3 is a documentation + artifact accuracy release** (no schema/RPC/Edge
+Function changes): a full file-by-file refresh of every doc against the
+post-Python-migration reality. Notably it corrected CLI docs that advertised
+flags/aliases which never existed (`--count`/`--filter`/`--project`/`--update`/
+`--version`/`-y`, ghost `ingest-dir --pattern`/`--recursive`/`--dry-run`, wrong
+`search` modes/defaults) — across `cli.md`, `AGENT_GUIDE.md`, the bundled
+`AGENT_QUICK_REFERENCE.md`/`cerefox_get_help`, and more — plus Mermaid diagrams
+in `solution-design.md`, an EF-invocation-limit fix in `operational-cost.md`, a
+TS-runtime Dockerfile, and historical-record READMEs for `docs/research` +
+`docs/specs`.
 
 The Polish & Distribution arc — Iterations 22–27 (TS MCP server, TS CLI, script
-ports, web server, ingestion, Python removal) — shipped in full; what remains is
-the run-up to the v1.0 stability commitment.
+ports, web server, ingestion, Python removal) — shipped in full. **Next: v1.0**,
+the stability commitment (strict SemVer becomes binding).
 
 Release history lives in [`CHANGELOG.md`](../CHANGELOG.md); the design-of-record
 for the arc is [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
