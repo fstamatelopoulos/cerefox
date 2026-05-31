@@ -40,6 +40,19 @@ Edge Function changes.
   and `migration-v0.9.md`'s version-verb (`document version list`).
 - **`docs/guides/setup-cloud-run.md`** now opens with an "aspirational — not
   tested end-to-end" banner so readers treat it as guidance, not a verified runbook.
+- **`docs/guides/operational-cost.md`** corrected: the free tier's binding limit
+  for cloud usage is **Edge Function invocations (500k/mo)**, not a "50,000 API
+  calls" cap (that was the Auth MAU figure — Data API requests are unlimited).
+  Added a per-access-path EF-cost table and the local-MCP lever (the local stdio
+  server hits the Data API directly, so it costs zero invocations).
+- **`docs/examples/mcp-configs/`**: `local-stdio.json` no longer uses the legacy
+  Python `uv run cerefox mcp` path — it's now `npx --package=@cerefox/memory
+  cerefox mcp` (no clone, no Python); README leads with `cerefox configure-agent`.
+- **`docs/solution-design.md`** + **`requirements-and-specs.md`** brought current:
+  ASCII architecture diagrams converted to Mermaid (renders on GitHub); TS-runtime
+  reality throughout; and several SQL-grounded corrections (phantom version-row
+  columns, `metadata` column name, `cerefox_context_expand`, `cerefox_ingest` vs
+  the never-shipped `cerefox_save_note`, the full 10-tool list).
 
 ---
 

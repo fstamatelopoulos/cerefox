@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "cerefox": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
+      "command": "npx",
+      "args": ["-y", "--package=@cerefox/memory", "cerefox", "mcp"]
     }
   }
 }

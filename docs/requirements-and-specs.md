@@ -120,16 +120,16 @@ Cerefox exposes both **read** (search/retrieve) and **write** (ingest) capabilit
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FR-5.1 | Expose search functions as Supabase MCP tools | P0 |
-| FR-5.2 | Expose document reconstruction as MCP tool | P0 |
-| FR-5.3 | Expose an ingest tool (`cerefox_save_note`) so agents can write content into the knowledge base | P1 |
+| FR-5.1 | Expose search functions as MCP tools (shipped: `cerefox_search`/`cerefox_metadata_search`, via both the remote `cerefox-mcp` Edge Function and the local `@cerefox/memory` stdio server) | P0 |
+| FR-5.2 | Expose document reconstruction as MCP tool (`cerefox_get_document`) | P0 |
+| FR-5.3 | Expose an ingest tool (shipped as `cerefox_ingest`) so agents can write content into the knowledge base | P1 |
 | FR-5.4 | Agent-authored content is tagged with standardized metadata distinguishing it from human-authored content | P1 |
-| FR-5.5 | Agents can query without needing to compute embeddings server-side | P2 |
-| FR-5.6 | Custom MCP server for enhanced capabilities (embedding on server, smarter context assembly) | P2 |
+| FR-5.5 | Agents can query without needing to compute embeddings server-side (shipped: Edge Functions / RPCs embed the query server-side) | P2 |
+| FR-5.6 | Custom MCP server for enhanced capabilities, embedding on server, smarter context assembly (shipped: remote `cerefox-mcp` Edge Function + local `@cerefox/memory` stdio server, sharing `_shared/mcp-tools/` handlers) | P2 |
 
 #### Agent Write Metadata Convention
 
-When an agent calls `cerefox_save_note`, the following metadata fields are set automatically or by the agent:
+When an agent calls `cerefox_ingest`, the following metadata fields are set automatically or by the agent:
 
 | Field | Set by | Example |
 |-------|--------|---------|
@@ -156,13 +156,19 @@ This makes it easy to filter, audit, or exclude agent-authored content from sear
 
 ### FR-7: CLI
 
+The CLI is the TypeScript commander program in `@cerefox/memory` and uses a
+**resource-verb** shape as of v0.9.0 (`cerefox <resource> <verb>`). The flat
+pre-v0.9 verbs below survive only as hidden husks that exit non-zero with a
+pointer to the new form. (The Python Click CLI is a husk that redirects to the
+TS CLI.)
+
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FR-7.1 | `cerefox ingest <file>` — ingest a markdown file | P0 |
-| FR-7.2 | `cerefox search <query>` — search the knowledge base | P0 |
-| FR-7.3 | `cerefox list-docs` — list documents | P0 |
-| FR-7.4 | `cerefox delete-doc <id>` — delete a document and its chunks | P0 |
-| FR-7.5 | `cerefox projects` — list/manage projects | P1 |
+| FR-7.1 | `cerefox document ingest <file>` (was `cerefox ingest`) — ingest a markdown file | P0 |
+| FR-7.2 | `cerefox search <query>` — search the knowledge base (stays flat) | P0 |
+| FR-7.3 | `cerefox document list` (was `cerefox list-docs`) — list documents | P0 |
+| FR-7.4 | `cerefox document delete <id>` (was `cerefox delete-doc`) — delete a document and its chunks | P0 |
+| FR-7.5 | `cerefox project list` / `cerefox project delete` (was `cerefox projects`) — list/manage projects | P1 |
 
 ### FR-10: Provenance & Trust
 
@@ -188,15 +194,22 @@ As multiple agents write to the same knowledge base, trust requires clear attrib
 
 ### FR-9: Deployment & Operations Scripts
 
-Scripts that a developer or operator can run to set up, update, and maintain the storage system. These live in `scripts/` and are documented in the setup guide.
+Scripts that a developer or operator can run to set up, update, and maintain the
+storage system. These live in `scripts/` and are documented in the setup guide.
+The canonical implementations are now the TypeScript ports run with `bun`; the
+`.py` files of the same name are **legacy shims** superseded by the `.ts`
+versions. **End users** do not run these directly — they use the bundled
+`cerefox server deploy` (schema + RPCs + 9 Edge Functions from the npm bundle,
+fresh-vs-existing aware) and `cerefox backup create|restore`. The raw scripts
+are contributor/operator tooling.
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FR-9.1 | `scripts/db_deploy.py` — apply full schema (tables, indexes, RPCs) to a fresh Supabase/Postgres instance | P0 |
-| FR-9.2 | `scripts/db_migrate.py` — apply incremental schema migrations (idempotent) | P0 |
-| FR-9.3 | `scripts/db_status.py` — verify schema version, check extensions, report table stats | P0 |
-| FR-9.4 | `scripts/backup_create.py` — export all documents and chunks to local markdown files | P0 |
-| FR-9.5 | `scripts/backup_restore.py` — re-ingest a backup directory into a fresh database | P0 |
+| FR-9.1 | `scripts/db_deploy.ts` — apply full schema (tables, indexes, RPCs) to a fresh Supabase/Postgres instance (legacy: `db_deploy.py`; end users: `cerefox server deploy`) | P0 |
+| FR-9.2 | `scripts/db_migrate.ts` — apply incremental schema migrations (idempotent) (legacy: `db_migrate.py`) | P0 |
+| FR-9.3 | `scripts/db_status.ts` — verify schema version, check extensions, report table stats (legacy: `db_status.py`) | P0 |
+| FR-9.4 | `scripts/backup_create.ts` — export all documents and chunks to local markdown files (legacy: `backup_create.py`; end users: `cerefox backup create`) | P0 |
+| FR-9.5 | `scripts/backup_restore.ts` — re-ingest a backup directory into a fresh database (legacy: `backup_restore.py`; end users: `cerefox backup restore`) | P0 |
 | FR-9.6 | All scripts accept `--dry-run` flag for safe verification before applying changes | P1 |
 | FR-9.7 | All scripts print a clear summary of what was done / what would be done | P0 |
 
