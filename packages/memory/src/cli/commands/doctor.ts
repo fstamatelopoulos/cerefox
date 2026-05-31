@@ -80,11 +80,11 @@ async function action(options: { json?: boolean }): Promise<void> {
     const needsEf = stale("edge functions");
     let remediation: string | null = null;
     if (needsSchema && needsEf) {
-      remediation = "Update the server (schema + RPCs + Edge Functions): cerefox deploy-server";
+      remediation = "Update the server (schema + RPCs + Edge Functions): cerefox server deploy";
     } else if (needsSchema) {
-      remediation = "Update the schema + RPCs: cerefox deploy-server --schema-only";
+      remediation = "Update the schema + RPCs: cerefox server deploy --schema-only";
     } else if (needsEf) {
-      remediation = "Update the Edge Functions: cerefox deploy-server --functions-only";
+      remediation = "Update the Edge Functions: cerefox server deploy --functions-only";
     }
     if (remediation) {
       println(cErr.yellow("→ " + remediation));

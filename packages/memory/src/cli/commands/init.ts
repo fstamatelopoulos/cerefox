@@ -368,9 +368,9 @@ async function probeSchemaVersion(url: string, key: string): Promise<string | nu
   }
 }
 
-/** Spawn `cerefox deploy-server` (inherit stdio) and await it. */
+/** Spawn `cerefox server deploy` (inherit stdio) and await it. */
 function launchDeployServer(extraArgs: string[] = []): number {
-  const r = spawnSync(process.execPath, [process.argv[1], "deploy-server", ...extraArgs], {
+  const r = spawnSync(process.execPath, [process.argv[1], "server", "deploy", ...extraArgs], {
     stdio: "inherit",
   });
   return r.status ?? 1;
@@ -396,7 +396,7 @@ async function maybeOfferServerDeploy(): Promise<void> {
     println(c.dim("  No Cerefox schema detected on this Supabase project."));
     const yes = await confirm("  Deploy the server now (schema + RPCs + Edge Functions)?", false);
     if (yes) launchDeployServer();
-    else println(c.dim("  Skipped. Run `cerefox deploy-server` later (or `cerefox doctor` to recheck)."));
+    else println(c.dim("  Skipped. Run `cerefox server deploy` later (or `cerefox doctor` to recheck)."));
     println("");
     return;
   }
@@ -410,7 +410,7 @@ async function maybeOfferServerDeploy(): Promise<void> {
     );
     const yes = await confirm("  Update the server now (applies pending migrations, refreshes RPCs + EFs)?", true);
     if (yes) launchDeployServer();
-    else println(c.dim("  Skipped. Run `cerefox deploy-server` when ready."));
+    else println(c.dim("  Skipped. Run `cerefox server deploy` when ready."));
     println("");
     return;
   }
@@ -424,7 +424,7 @@ async function maybeOfferServerDeploy(): Promise<void> {
  * is in place. Shared by all three branches. */
 async function postWriteLifecycle(envPath: string, options: InitOptions): Promise<void> {
   // Schema deploy (iter-26 Part 26E): probe the deployed schema version and
-  // offer to run `cerefox deploy-server` when it's missing or below the
+  // offer to run `cerefox server deploy` when it's missing or below the
   // client's minimum. Existing, compatible installs see no prompt.
   if (!options.skipSchema) {
     await maybeOfferServerDeploy();
