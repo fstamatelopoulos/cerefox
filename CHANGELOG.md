@@ -9,7 +9,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-**v0.9.4 — agent retrieval guidance + maintainer-doc hygiene.** Docs only.
+**v0.9.4 — agent retrieval guidance, Decision Log process docs, + a web-UI tweak.**
 
 ### Added
 
@@ -18,6 +18,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   `cerefox_metadata_search` (exhaustive enumeration by criteria; metadata-only by
   default; raise `limit`), with worked examples and the "find the newest in a
   growing series via a `latest` metadata pointer, not text search" pattern.
+- **Web UI — second Save/Cancel on the Edit Document page.** A Save/Cancel row now
+  also sits between the metadata fields and the Content editor, so metadata-only
+  edits don't require scrolling past the (often long) content textarea.
 
 ### Changed
 
