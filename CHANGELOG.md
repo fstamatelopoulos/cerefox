@@ -37,6 +37,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   path, and collapses the obsolete per-`v0.1.x` redeploy notes into "`server
   deploy` applies everything; reindex when a release says so." Inbound links
   (README, CLAUDE.md, package README, connect-agents) repointed to `upgrading.md`.
+- **Dropped the dead `pdf` / `docx` / `converters` optional-dependency extras**
+  from `pyproject.toml` (and `pypdf` / `python-docx` / `lxml` from `uv.lock`) —
+  the converter code they supported was removed in v0.7.
 
 ---
 
