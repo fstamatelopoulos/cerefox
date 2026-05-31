@@ -1,11 +1,20 @@
 /**
  * `cerefox completion <shell>` — emit a tab-completion script.
  *
- * Generates a shell-specific script that completes subcommand names
- * (the first arg after `cerefox`) and the long-form flag names of each
- * subcommand. Doesn't try to complete flag *values* (file paths, UUIDs,
- * etc.) — those vary per command and would need per-flag completers
- * that aren't worth maintaining at v0.5.
+ * Generates a shell-specific script that completes the full resource-verb
+ * command tree — top-level commands (`document`, `search`, …), nested verbs
+ * (`document get`, `document version`, …) at any depth, and the long-form
+ * flag names of whichever command the cursor is in. Hidden husks (the old
+ * flat verbs) are excluded so completion only ever suggests current names.
+ * Doesn't complete flag *values* (file paths, UUIDs, etc.) — those vary per
+ * flag and aren't worth maintaining.
+ *
+ * The scripts resolve the typed subcommand path at completion time: they walk
+ * the words after `cerefox`, consuming each one that's a known subcommand
+ * (stopping at the first flag or non-command), then offer that command node's
+ * children + flags. A generated lookup (`_cerefox_candidates` / `_is_path`)
+ * encodes the tree, so a `cerefox completion install` after an upgrade picks
+ * up new commands automatically.
  *
  * Usage:
  *   cerefox completion bash  > ~/.cerefox-completion.bash
@@ -26,119 +35,208 @@ import type { Command } from "commander";
 import { c, confirm, eprintln, println, userError } from "../../../../../_shared/cli-core/index.ts";
 import { buildProgram } from "../program.ts";
 
-interface CompletionInfo {
-  subcommands: Array<{ name: string; flags: string[] }>;
+/**
+ * One node of the command tree: `path` is the space-joined subcommand path
+ * from the root (e.g. "" for the bin itself, "document", "document version"),
+ * and `candidates` is what to offer when the cursor sits at that path — child
+ * subcommand names followed by the node's own long flags.
+ */
+interface CompletionNode {
+  path: string;
+  candidates: string[];
+}
+
+function isHidden(cmd: Command): boolean {
+  return Boolean((cmd as unknown as { _hidden?: boolean })._hidden);
+}
+
+/** Visible child subcommands (skips the implicit `help` and hidden husks). */
+function visibleSubs(cmd: Command): Command[] {
+  return cmd.commands.filter((c) => c.name() !== "help" && !isHidden(c));
+}
+
+function longFlags(cmd: Command): string[] {
+  const flags: string[] = [];
+  for (const opt of cmd.options) {
+    if (opt.long) flags.push(opt.long);
+  }
+  return flags;
 }
 
 /**
- * Walk the commander tree and extract the completion-relevant info.
- * Skips the bin's built-in commands like `help`.
+ * Recursively walk the commander tree into a flat list of nodes — one per
+ * command (including the root and every leaf), keyed by its subcommand path.
  */
-function collectCompletionInfo(): CompletionInfo {
+function collectNodes(): CompletionNode[] {
   const program = buildProgram();
-  const subcommands: Array<{ name: string; flags: string[] }> = [];
-  for (const cmd of program.commands) {
-    if (cmd.name() === "help") continue;
-    const flags: string[] = [];
-    for (const opt of cmd.options) {
-      // commander exposes flags like "-c, --match-count <n>" or "--json"
-      // Extract the long form.
-      const long = opt.long;
-      if (long) flags.push(long);
+  const nodes: CompletionNode[] = [];
+  const walk = (cmd: Command, path: string): void => {
+    const subs = visibleSubs(cmd);
+    const candidates = [...subs.map((s) => s.name()), ...longFlags(cmd), "--help"];
+    nodes.push({ path, candidates });
+    for (const s of subs) {
+      walk(s, path === "" ? s.name() : `${path} ${s.name()}`);
     }
-    flags.push("--help");
-    subcommands.push({ name: cmd.name(), flags });
-  }
-  subcommands.sort((a, b) => a.name.localeCompare(b.name));
-  return { subcommands };
+  };
+  walk(program, "");
+  nodes.sort((a, b) => a.path.localeCompare(b.path));
+  return nodes;
 }
 
-function bashScript(info: CompletionInfo): string {
-  const cmdNames = info.subcommands.map((s) => s.name).join(" ");
-  const cases = info.subcommands
-    .map((s) => `        ${s.name})\n            opts="${s.flags.join(" ")}"\n            ;;`)
+function bashScript(nodes: CompletionNode[]): string {
+  const candCases = nodes
+    .map((n) => `        "${n.path}") echo "${n.candidates.join(" ")}" ;;`)
     .join("\n");
+  const pathPatterns = nodes
+    .filter((n) => n.path !== "")
+    .map((n) => `"${n.path}"`)
+    .join("|");
   return `# Cerefox bash completion. Source from ~/.bashrc:
 #   source <(cerefox completion bash)
 #
+_cerefox_candidates() {
+    case "$1" in
+${candCases}
+        *) echo "--help" ;;
+    esac
+}
+_cerefox_is_path() {
+    case "$1" in
+        ${pathPatterns}) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 _cerefox_completion() {
-    local cur prev cmd opts
+    local cur path trial w i
     COMPREPLY=()
     cur="\${COMP_WORDS[COMP_CWORD]}"
-    cmd="\${COMP_WORDS[1]}"
-    if [ "\${COMP_CWORD}" -eq 1 ]; then
-        opts="${cmdNames}"
-        COMPREPLY=( $(compgen -W "\${opts}" -- "\${cur}") )
-        return 0
-    fi
-    case "\${cmd}" in
-${cases}
-        *)
-            opts="--help"
-            ;;
-    esac
-    COMPREPLY=( $(compgen -W "\${opts}" -- "\${cur}") )
+    path=""
+    i=1
+    while [ "$i" -lt "\${COMP_CWORD}" ]; do
+        w="\${COMP_WORDS[$i]}"
+        case "$w" in -*) break ;; esac
+        if [ -z "$path" ]; then trial="$w"; else trial="$path $w"; fi
+        if _cerefox_is_path "$trial"; then
+            path="$trial"; i=$((i + 1))
+        else
+            break
+        fi
+    done
+    COMPREPLY=( $(compgen -W "$(_cerefox_candidates "$path")" -- "$cur") )
     return 0
 }
 complete -F _cerefox_completion cerefox
 `;
 }
 
-function zshScript(info: CompletionInfo): string {
-  // zsh: use the simpler compdef syntax that just lists commands + flags.
-  const cmdNames = info.subcommands.map((s) => `'${s.name}'`).join(" ");
-  const cases = info.subcommands
-    .map((s) => {
-      const flagList = s.flags.map((f) => `'${f}'`).join(" ");
-      return `        ${s.name}) flags=(${flagList}) ;;`;
-    })
+function zshScript(nodes: CompletionNode[]): string {
+  const candCases = nodes
+    .map((n) => `        "${n.path}") REPLY="${n.candidates.join(" ")}" ;;`)
     .join("\n");
+  const pathPatterns = nodes
+    .filter((n) => n.path !== "")
+    .map((n) => `"${n.path}"`)
+    .join("|");
   return `#compdef cerefox
 # Cerefox zsh completion. Save and source from ~/.zshrc:
 #   source <(cerefox completion zsh)
 #
-_cerefox() {
-    local -a cmds flags
-    cmds=(${cmdNames})
-    if (( CURRENT == 2 )); then
-        _values 'cerefox subcommand' $cmds
-        return
-    fi
-    case "$words[2]" in
-${cases}
-        *) flags=() ;;
+_cerefox_candidates() {
+    case "$1" in
+${candCases}
+        *) REPLY="--help" ;;
     esac
-    _values 'flag' $flags
+}
+_cerefox_is_path() {
+    case "$1" in
+        ${pathPatterns}) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+_cerefox() {
+    local path trial w i REPLY
+    path=""
+    i=2
+    while (( i < CURRENT )); do
+        w="\${words[i]}"
+        case "$w" in -*) break ;; esac
+        if [[ -z "$path" ]]; then trial="$w"; else trial="$path $w"; fi
+        if _cerefox_is_path "$trial"; then
+            path="$trial"; (( i++ ))
+        else
+            break
+        fi
+    done
+    _cerefox_candidates "$path"
+    compadd -- \${=REPLY}
 }
 compdef _cerefox cerefox
 `;
 }
 
-function fishScript(info: CompletionInfo): string {
-  const lines: string[] = [
-    "# Cerefox fish completion. Save to ~/.config/fish/completions/cerefox.fish",
-    "",
-  ];
-  for (const sub of info.subcommands) {
-    lines.push(`complete -c cerefox -n '__fish_use_subcommand' -a '${sub.name}'`);
-    for (const flag of sub.flags) {
-      lines.push(`complete -c cerefox -n '__fish_seen_subcommand_from ${sub.name}' -l '${flag.replace(/^--/, "")}'`);
-    }
-  }
-  return lines.join("\n") + "\n";
+function fishScript(nodes: CompletionNode[]): string {
+  const candCases = nodes
+    .map((n) => `        case "${n.path}"\n            echo "${n.candidates.join(" ")}"`)
+    .join("\n");
+  const pathList = nodes
+    .filter((n) => n.path !== "")
+    .map((n) => `"${n.path}"`)
+    .join(" ");
+  return `# Cerefox fish completion. Save to ~/.config/fish/completions/cerefox.fish
+function __cerefox_candidates
+    switch "$argv[1]"
+${candCases}
+        case '*'
+            echo "--help"
+    end
+end
+function __cerefox_is_path
+    for p in ${pathList}
+        if test "$argv[1]" = "$p"
+            return 0
+        end
+    end
+    return 1
+end
+function __cerefox_complete
+    set -l tokens (commandline -opc)
+    set -l path ""
+    set -l i 2
+    while test $i -le (count $tokens)
+        set -l w $tokens[$i]
+        if string match -q -- '-*' $w
+            break
+        end
+        set -l trial
+        if test -z "$path"
+            set trial $w
+        else
+            set trial "$path $w"
+        end
+        if __cerefox_is_path "$trial"
+            set path "$trial"
+            set i (math $i + 1)
+        else
+            break
+        end
+    end
+    string split ' ' -- (__cerefox_candidates "$path")
+end
+complete -c cerefox -f -a '(__cerefox_complete)'
+`;
 }
 
 type Shell = "bash" | "zsh" | "fish";
 
 function scriptFor(shell: Shell): string {
-  const info = collectCompletionInfo();
+  const nodes = collectNodes();
   switch (shell) {
     case "bash":
-      return bashScript(info);
+      return bashScript(nodes);
     case "zsh":
-      return zshScript(info);
+      return zshScript(nodes);
     case "fish":
-      return fishScript(info);
+      return fishScript(nodes);
   }
 }
 
