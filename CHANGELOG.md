@@ -68,7 +68,13 @@ Edge Function changes.
   real selector is `--extensions`), and a wrong `search` surface (modes are
   `docs`/`hybrid`/`fts` default `docs`, `--match-count` defaults to 5, not the
   documented `hybrid`/10). Corrected the reference, the `--recursive` examples
-  in the README/quickstart, and regenerated the `cerefox_get_help` bundle.
+  in the README/quickstart, the same fake-alias claims in `configuration.md`,
+  `connect-agents.md`, and `AGENT_GUIDE.md`, and regenerated the
+  `cerefox_get_help` bundle.
+- **PR template still listed `uv run pytest`** in its test-plan checklist
+  (pytest retired) → `bun test` / `CEREFOX_LIVE_E2E=1 bun test`. Also fixed a
+  stale "`_shared/` will grow with `ingest/` (v0.7+)" line in CONTRIBUTING and
+  an `access-paths.md` `click.confirm` reference.
 - **More stale READMEs/specs**: `test-data/README.md` used `uv run cerefox` +
   pre-v0.9 verbs and an invalid `--pattern` flag (→ `cerefox document …`,
   default `.md/.txt`); `_shared/README.md` was frozen at a v0.3.0 "seed only /

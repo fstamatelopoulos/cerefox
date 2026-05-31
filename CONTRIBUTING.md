@@ -166,7 +166,7 @@ _shared/
   __tests__/   Bun tests — run `cd _shared && bun test`
 ```
 
-It's at the repo root (not under `src/`) so it doesn't tangle with hatchling's Python wheel build or pytest discovery. As of v0.4.0 it is part of an npm workspace alongside `packages/memory/`. The directory will grow with `ingest/` (v0.7+).
+It's at the repo root (not under `src/`) because it's imported by both the Deno Edge Functions and the Node/Bun `@cerefox/memory` package — it can't live inside either. It's part of an npm workspace alongside `packages/memory/`, and now spans config, db-client, db-status, db-deploy, embeddings, mcp-tools, ingest, cli-core, ef-meta, compatibility, backup, schemas, and server-assets (see `_shared/README.md`).
 
 ### `packages/memory/` — the `@cerefox/memory` npm package
 

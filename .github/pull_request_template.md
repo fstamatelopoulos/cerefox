@@ -28,8 +28,8 @@ If no, write "no contract surface touched".
 
 <!--
 Bulleted checklist of how you verified this works. Examples:
-  - [ ] `uv run pytest` passes
-  - [ ] `uv run pytest -m e2e` passes against live Supabase
+  - [ ] `bun test` passes (run in `_shared/` and `packages/memory/`)
+  - [ ] `CEREFOX_LIVE_E2E=1 bun test …` passes against live Supabase (if EF code changed)
   - [ ] Manually tried `cerefox <command>` and confirmed output
   - [ ] Web UI: walked through the change in Chrome at /app/...
 -->
