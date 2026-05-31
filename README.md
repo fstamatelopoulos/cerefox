@@ -60,12 +60,13 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 
 ## Project status
 
-Cerefox is a single-maintainer open-source project, at **v0.9.0** and wrapping up
-its **"Polish & Distribution" arc** — the work that takes it from "runnable from a
-git clone" to "installable like any other modern CLI" (v0.8 shipped the
-production-ready installer + `cerefox server deploy`; v0.9 hardens the CLI surface
-before the v1.0 contract). Highlights of what's already shipped (full history in
-[`CHANGELOG.md`](CHANGELOG.md)):
+Cerefox is a single-maintainer open-source project, in the **v0.9.x** line and
+wrapping up its **"Polish & Distribution" arc** — the work that takes it from
+"runnable from a git clone" to "installable like any other modern CLI" (v0.8
+shipped the production-ready installer + `cerefox server deploy`; v0.9 hardened
+the CLI surface into a resource-verb shape and retired the Python runtime to a
+frozen husk, ahead of the v1.0 contract). Highlights of what's already shipped
+(full history in [`CHANGELOG.md`](CHANGELOG.md)):
 
 - A complete Cerefox feature surface: hybrid search, metadata-filtered search,
   small-to-big retrieval, implicit versioning with a per-document audit log,
@@ -87,9 +88,9 @@ before the v1.0 contract). Highlights of what's already shipped (full history in
 | v0.4.x | TS MCP server | Local `cerefox mcp` becomes a TypeScript Bun/Node process, published as [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) on npm · 10th MCP tool `cerefox_get_help` · `_shared/mcp-tools/` shared by remote EF + local server · OIDC trusted publishing |
 | v0.5.0 | TS CLI | `cerefox` binary added to `@cerefox/memory` (same package, growing surface) — callable from any directory, no Python install needed · 6 new lifecycle commands (`init`, `doctor`, `status`, `configure-agent`, `self-update`, `sync-self-docs`) · automatic self-doc ingest (Layer 2 of MCP discoverability) · tab completion for bash/zsh/fish · documented exit codes · Python CLI deprecated (functional through v0.7) |
 | v0.6.0 | TS web server | FastAPI → Hono on Bun · all `/api/v1/*` endpoints + bundled SPA served by `cerefox web` from the same `@cerefox/memory` package · `configure-agent` adds Cursor + Codex + Gemini writers |
-| **v0.7.0** (current) | TS ingestion pipeline | Chunking + embedding orchestration + version snapshotting move to TS · `cerefox document ingest` / `ingest-dir` / `reindex` use the in-process pipeline (no Edge Function round-trip) · PDF/DOCX support dropped · `scripts/db_deploy.ts` + `db_migrate.ts` ported · Python web prints a deprecation banner at startup; Python MCP server unchanged |
-| v0.8.0 – v0.9.0 | Python retirement | Deprecation banners → removal (MCP server + CLI husks survive through v0.9; pytest as a test runner retires) |
-| **v1.0.0** | Stability commitment | Strict SemVer becomes binding; long-lived API contract |
+| v0.7.0 | TS ingestion pipeline | Chunking + embedding orchestration + version snapshotting move to TS · `cerefox document ingest` / `ingest-dir` / `reindex` use the in-process pipeline (no Edge Function round-trip) · PDF/DOCX support dropped · `scripts/db_deploy.ts` + `db_migrate.ts` ported · Python web prints a deprecation banner at startup; Python MCP server unchanged |
+| **v0.8.0 – v0.9.x** (current) | Python retirement + CLI redesign | Deprecation banners → removal (Python CLI + web are husks; only `uv run cerefox mcp` survives, frozen); pytest retired in favor of `bun test`; CLI moved to a resource-verb shape (old flat verbs are husks); resource-verb tab-completion |
+| **v1.0.0** (next) | Stability commitment | Strict SemVer becomes binding; long-lived API contract |
 
 Until v1.0.0 the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
 aspirational — breaking changes can land in minor versions when there's a good

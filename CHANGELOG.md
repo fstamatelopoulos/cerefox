@@ -23,6 +23,9 @@ Edge Function changes.
   flow (no clone), and fixed the example commands that still used pre-v0.9 flat
   verbs (`ingest`, `list-projects`, `metadata-search`, `get-audit-log`,
   `ingest-dir`) and `cerefox docs --list` → `cerefox guides list`.
+- **Root README "Project status" was stale** — said "at v0.9.0" and left the
+  "(current)" marker on the v0.7.0 roadmap row. Updated to the v0.9.x line and
+  moved the marker to the current phase.
 
 ---
 
