@@ -366,8 +366,8 @@ export function IngestPage() {
             <Stack gap="md">
               <FileInput
                 label="File"
-                placeholder="Select a .md, .txt, .pdf, or .docx file"
-                accept=".md,.txt,.pdf,.docx"
+                placeholder="Select a .md, .txt, or .docx file"
+                accept=".md,.txt,.docx"
                 value={file}
                 onChange={handleFileChange}
                 required

@@ -1,5 +1,5 @@
 /**
- * `cerefox deploy-server` — the catch-all for standing up *and updating*
+ * `cerefox server deploy` — the catch-all for standing up *and updating*
  * the Cerefox server side on your Supabase project: the Postgres schema +
  * RPCs (in-process) and the 9 Edge Functions (via `npx supabase functions
  * deploy`).
@@ -151,7 +151,7 @@ async function action(options: DeployServerOptions): Promise<void> {
       ok: commandSucceeds("npx", ["--yes", "supabase", "--version"]),
       remediation:
         "Install Node 20+ (npx ships with it) from nodejs.org, then re-run. " +
-        "`cerefox deploy-server` shells out to the Supabase CLI via npx.",
+        "`cerefox server deploy` shells out to the Supabase CLI via npx.",
     });
     // Project ref: we pass it explicitly to `functions deploy`, so we DON'T
     // need a per-directory `supabase link` (that state lives in the dir you
@@ -170,7 +170,7 @@ async function action(options: DeployServerOptions): Promise<void> {
   }
 
   const failed = checks.filter((ch) => !ch.ok);
-  println(c.bold("Cerefox deploy-server — pre-flight"));
+  println(c.bold("Cerefox server deploy — pre-flight"));
   for (const ch of checks) {
     println(`  ${ch.ok ? c.green("✓") : c.red("✗")} ${ch.label}`);
   }
@@ -181,7 +181,7 @@ async function action(options: DeployServerOptions): Promise<void> {
       eprintln(`\n  ${c.red("✗")} ${ch.label}`);
       eprintln(c.dim(`    → ${ch.remediation}`));
     }
-    eprintln("\nFix the above and re-run `cerefox deploy-server` (it's idempotent).");
+    eprintln("\nFix the above and re-run `cerefox server deploy` (it's idempotent).");
     process.exit(1);
   }
   println(c.green("\n✓ All prerequisites satisfied."));
@@ -310,7 +310,7 @@ async function action(options: DeployServerOptions): Promise<void> {
     }
     if (efFailed.length > 0) {
       eprintln(c.red(`\n✗ ${efFailed.length} Edge Function(s) failed: ${efFailed.join(", ")}`));
-      eprintln(c.dim("   Re-run `cerefox deploy-server --functions-only` after fixing the cause."));
+      eprintln(c.dim("   Re-run `cerefox server deploy --functions-only` after fixing the cause."));
       process.exit(1);
     }
     println(c.green(`   ✓ Deployed ${efOk} Edge Function(s).`));

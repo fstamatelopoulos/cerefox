@@ -38,9 +38,6 @@ import { contentHash } from "../../../../../_shared/ingest/index.ts";
 import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 import type { WebContext } from "../context.ts";
 
-const V07_MIGRATION_URL =
-  "https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-v0.5.md#v06";
-
 // `normaliseForHash` + `contentHash` promoted to `_shared/ingest/pipeline-
 // helpers.ts` in iter-25 Part 25C so the TS ingestion pipeline (v0.7) and
 // the v0.6 /edit content-hash short-circuit share one implementation.

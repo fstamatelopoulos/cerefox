@@ -22,6 +22,7 @@
 
 import { Hono } from "hono";
 
+import { fileToMarkdown } from "../../ingestion/file-to-markdown.ts";
 import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 import type { WebContext } from "../context.ts";
 
@@ -112,7 +113,12 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     const file = form.file as File | undefined;
     if (!file) return c.json(notReady("file field is required."), 400);
 
-    const text = await file.text();
+    let text: string;
+    try {
+      text = await fileToMarkdown(file.name, Buffer.from(await file.arrayBuffer()));
+    } catch (err) {
+      return c.json(notReady(err instanceof Error ? err.message : String(err)), 400);
+    }
     const titleField = String(form.title ?? "").trim();
     const docTitle = titleField || file.name || "Untitled";
     const updateExisting = String(form.update_existing ?? "false") === "true";
@@ -184,7 +190,12 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     const file = form.file as File | undefined;
     if (!file) return c.json(notReady("file field is required."), 400);
 
-    const text = await file.text();
+    let text: string;
+    try {
+      text = await fileToMarkdown(file.name, Buffer.from(await file.arrayBuffer()));
+    } catch (err) {
+      return c.json(notReady(err instanceof Error ? err.message : String(err)), 400);
+    }
 
     // Fetch the existing doc so we can preserve its title if the upload
     // doesn't provide one (matches Python: keeps existing.title or

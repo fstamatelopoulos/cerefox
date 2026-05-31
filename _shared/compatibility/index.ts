@@ -169,7 +169,7 @@ export async function checkServerCompatibility(
         // pre-0.8 it returns 405 on every GET). Other statuses are unexpected.
         result.efSkipReason =
           resp.status === 404 || resp.status === 405
-            ? "Edge Functions predate v0.8 (no /version route). Redeploy with `cerefox deploy-server --functions-only` to enable version checks."
+            ? "Edge Functions predate v0.8 (no /version route). Redeploy with `cerefox server deploy --functions-only` to enable version checks."
             : `Aggregator returned HTTP ${resp.status}; Edge Function version check skipped.`;
       }
     } finally {

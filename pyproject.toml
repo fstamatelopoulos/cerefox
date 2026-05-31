@@ -22,13 +22,6 @@ dependencies = [
     "mcp>=1.0.0",
 ]
 
-[project.optional-dependencies]
-# No optional deps for embeddings — CloudEmbedder uses httpx (already a core dep).
-# File format converters are still optional:
-pdf = ["pypdf>=4.0.0"]
-docx = ["python-docx>=1.1.0"]
-converters = ["pypdf>=4.0.0", "python-docx>=1.1.0"]
-
 [project.scripts]
 cerefox = "cerefox.cli:cli"
 

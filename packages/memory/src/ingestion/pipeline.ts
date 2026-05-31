@@ -34,6 +34,7 @@ import {
   IngestionDbBridge,
   type ChunkInsertRow,
 } from "./client-bridge.ts";
+import { fileToMarkdown } from "./file-to-markdown.ts";
 import {
   DEFAULT_PIPELINE_SETTINGS,
   type IngestResult,
@@ -504,7 +505,7 @@ export class IngestionPipeline {
       source?: string;
     } = {},
   ): Promise<IngestResult> {
-    const text = readFileSync(path, "utf8");
+    const text = await fileToMarkdown(path, readFileSync(path));
     const absPath = resolve(path);
     const stem = basename(absPath, extname(absPath));
     return this.ingestText({

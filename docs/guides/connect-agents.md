@@ -126,9 +126,9 @@ separate. Pick one explicitly in your MCP client config.)
 - Works offline except for the OpenAI embedding API call per query
 - One setup, all compatible local clients (Claude Desktop, Cursor, Claude Code, Codex CLI, …)
 
-See [`docs/guides/migration-v0.5.md`](migration-v0.5.md) and
-[`docs/guides/migration-v0.9.md`](migration-v0.9.md) for the per-client config snippets and
-the upgrade path.
+`cerefox configure-agent --tool <client>` writes the per-client config for you
+(manual snippets are in the appendix below); for the upgrade path see
+[`docs/guides/upgrading.md`](upgrading.md).
 
 > **Why not `mcp-server-fetch`?** The generic fetch MCP only supports GET requests and cannot
 > make authenticated POST calls to the Edge Functions. The built-in local server is

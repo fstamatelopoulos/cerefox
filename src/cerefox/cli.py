@@ -9,7 +9,7 @@ is now a husk that points at the canonical TypeScript CLI shipped as
 The only command that still does real work here is ``cerefox mcp`` — the
 in-tree Python MCP server, kept as a repo-clone fallback for people migrating
 to the TS world. It is unmaintained and frozen; new development happens in the
-TS implementation. See ``docs/guides/migration-v0.9.md``.
+TS implementation. See ``docs/guides/upgrading.md``.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def cli() -> None:
        The Python CLI is retired. All subcommands except ``mcp`` are husks
        that redirect to the TypeScript CLI (``@cerefox/memory`` on npm). The
        Python MCP server (``cerefox mcp``) stays as a frozen repo-clone
-       fallback. See ``docs/guides/migration-v0.9.md``.
+       fallback. See ``docs/guides/upgrading.md``.
     """
 
 
@@ -68,7 +68,7 @@ def _make_husk(old_name: str, new_form: str) -> click.Command:
             f"   Install it once:         npm install -g @cerefox/memory\n"
             f"   (The Python MCP server still works: `uv run cerefox mcp`.)\n"
             f"   Migration guide: "
-            f"https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-v0.9.md",
+            f"https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/upgrading.md",
             err=True,
         )
         raise SystemExit(1)

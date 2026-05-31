@@ -20,7 +20,7 @@ The CLI is the TypeScript `@cerefox/memory` package. Invoke any command as plain
 
 ### `cerefox document ingest`
 
-**Purpose**: ingest a markdown / plain-text file (or stdin) into the knowledge base. (PDF/DOCX conversion was dropped in v0.7 — markdown/text only.)
+**Purpose**: ingest a Markdown, plain-text, or `.docx` file (or stdin) into the knowledge base. `.docx` support is **beta** — converted to Markdown on ingest (via mammoth; fidelity varies with document complexity); PDF is **not** supported — convert it to Markdown first, then ingest the `.md`.
 
 **Synopsis**:
 ```

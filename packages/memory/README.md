@@ -115,9 +115,9 @@ already provisioned (see "Before you install").
 > **Upgrading from the Python `cerefox` CLI?** If you have a working
 > `.env` in your repo clone, init detects it and offers to **copy** it to
 > `~/.cerefox/.env` so the TS CLI uses the new home while Python keeps
-> reading the repo file unchanged. See the migration-v0.5 guide for the
-> three-choice prompt. Existing users with no `~/.cerefox/.env` see zero
-> behavior change until they opt in.
+> reading the repo file unchanged (`cerefox init` walks you through the choice).
+> Existing users with no `~/.cerefox/.env` see zero behavior change until they
+> opt in.
 
 ---
 
@@ -193,7 +193,7 @@ its own. The rest of the `cerefox` CLI is useful for:
 - **Project README + roadmap**: <https://github.com/fstamatelopoulos/cerefox>
 - **Architecture overview**: [`CLAUDE.md`](https://github.com/fstamatelopoulos/cerefox/blob/main/CLAUDE.md)
 - **Setup guides**: [`docs/guides/`](https://github.com/fstamatelopoulos/cerefox/tree/main/docs/guides)
-- **Migration from v0.4.x**: [`docs/guides/migration-v0.5.md`](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-v0.5.md)
+- **Upgrading**: [`docs/guides/upgrading.md`](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/upgrading.md)
 - **For AI agents using Cerefox**: [`AGENT_GUIDE.md`](https://github.com/fstamatelopoulos/cerefox/blob/main/AGENT_GUIDE.md), [`AGENT_QUICK_REFERENCE.md`](https://github.com/fstamatelopoulos/cerefox/blob/main/AGENT_QUICK_REFERENCE.md), or run `cerefox guides list`.
 - **Changelog**: [`CHANGELOG.md`](https://github.com/fstamatelopoulos/cerefox/blob/main/CHANGELOG.md)
 

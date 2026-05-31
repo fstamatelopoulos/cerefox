@@ -200,7 +200,7 @@ async function assertServerCompatible(): Promise<void> {
   throw new CompatibilityError(
     `Refusing to start: the deployed Cerefox server is incompatible with this client (v${PKG_VERSION}).\n` +
       parts.join("\n") +
-      `\n\nRedeploy your server:  cerefox deploy-server\n` +
+      `\n\nRedeploy your server:  cerefox server deploy\n` +
       `(or downgrade the client to match the deployed server).`,
   );
 }
