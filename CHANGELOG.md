@@ -9,7 +9,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**v0.9.4 — agent retrieval guidance + maintainer-doc hygiene.** Docs only.
+
+### Added
+
+- **`AGENT_GUIDE.md`: "Choosing a retrieval tool" section.** Explains when to use
+  `cerefox_search` (relevance-ranked top-N; default `match_count` 5) vs
+  `cerefox_metadata_search` (exhaustive enumeration by criteria; metadata-only by
+  default; raise `limit`), with worked examples and the "find the newest in a
+  growing series via a `latest` metadata pointer, not text search" pattern.
+
+### Changed
+
+- **Moved the Cerefox Decision Log maintenance ritual out of the committed
+  `CLAUDE.md`** into a gitignored `CLAUDE.local.md`. Shipping it in `CLAUDE.md`
+  meant any user who cloned the repo and ran an agent would have it write
+  "Cerefox Decision Log" docs into their *own* Cerefox instance. The committed
+  `CLAUDE.md` is OSS conventions only; maintainer-private agent directives now
+  live in `CLAUDE.local.md` (auto-loaded by Claude Code, never committed).
 
 ---
 

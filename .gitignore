@@ -258,3 +258,6 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 frontend/.playwright/
+
+# Maintainer-private Claude Code instructions (never ship to OSS)
+CLAUDE.local.md

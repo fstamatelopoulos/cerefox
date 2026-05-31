@@ -229,6 +229,36 @@ Cheap and idempotent. Call it any time you're uncertain about a convention (link
 
 ---
 
+## Choosing a retrieval tool: `cerefox_search` vs `cerefox_metadata_search`
+
+These two tools have **different contracts**. Picking the wrong one is the most common retrieval mistake.
+
+| Reach for `cerefox_search` when… | Reach for `cerefox_metadata_search` when… |
+|---|---|
+| You want the *most relevant* docs for a topic or question | You want *every* doc matching exact criteria |
+| The query is fuzzy or conceptual (it blends full-text + semantic) | You're filtering by structured metadata (`type`/`status`/tags), project, or date |
+| Top-N ranked hits are enough to answer | You need a complete, exhaustive set (e.g. an inventory or a catch-up) |
+
+- **`cerefox_search` is relevance-ranked top-N.** It returns the best `match_count` matches (**default 5** — raise it via `match_count`). It is **not** an enumeration tool: if more docs match than `match_count`, the rest sit silently below the cutoff — and the one you most want (e.g. the *newest*) may be exactly the one dropped.
+- **`cerefox_metadata_search` is exhaustive enumeration by criteria.** No text query. Filters by `metadata_filter` (plus `project_name`, `updated_since` / `created_since`). It returns **metadata only by default** (`include_content=false`) — ids + titles + tags, which is cheap — so raise `limit` (**default 10**) freely to get the whole set. Discover available keys with `cerefox_list_metadata_keys`.
+
+### Examples
+
+- *"Find our OAuth design notes"* (relevance) → `cerefox_search(query="OAuth design", match_count=5)`
+- *"List every decision-log doc"* (enumeration) → `cerefox_metadata_search(metadata_filter={"type":"decision-log"}, limit=50, include_content=false)`
+- *"What changed since I last looked?"* → `cerefox_metadata_search(metadata_filter={"type":"decision-log"}, updated_since="2026-05-01T00:00:00Z")`
+- *"Just the ids of all active research docs"* → `cerefox_metadata_search(metadata_filter={"type":"research","status":"active"}, limit=100)`
+
+### Pattern: finding the newest item in a growing series
+
+Don't lean on `cerefox_search` ranking to find "the latest X" — as the series grows, the newest item is the one most likely to fall outside the top-N window. Instead, tag exactly one doc with a pointer (e.g. `latest:"true"`) and fetch it directly:
+```
+cerefox_metadata_search(metadata_filter={"type":"<your-type>", "latest":"true"})
+```
+Metadata is matched as **strings**, so store the flag as the string `"true"` (not a boolean). When the current item is superseded, set the new one's flag first, then clear the old one's — so a reader never sees zero matches.
+
+---
+
 ## Key Workflows
 
 ### Search then update (ID-based -- preferred)

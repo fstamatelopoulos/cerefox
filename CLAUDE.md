@@ -252,7 +252,7 @@ Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functio
 
 Cerefox has three distinct access layers, each with its own credential:
 
-1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **legacy anon JWT** (`eyJ…`). The Supabase gateway validates it as a JWT; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. **Important (2026):** the new `sb_publishable_…` API key cannot be used here — the Edge Function gateway rejects non-JWT keys. The Data API (Layer 2) accepts the new key system; the Edge Function gateway does not. See `docs/guides/setup-supabase.md` → "Supabase API keys (2026)" and the Decision Log 2026 Q2 entry for context.
+1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **legacy anon JWT** (`eyJ…`). The Supabase gateway validates it as a JWT; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. **Important (2026):** the new `sb_publishable_…` API key cannot be used here — the Edge Function gateway rejects non-JWT keys. The Data API (Layer 2) accepts the new key system; the Edge Function gateway does not. See `docs/guides/setup-supabase.md` → "Supabase API keys (2026)" for context.
 2. **Python web app & CLI** — `CerefoxClient` authenticates via the Supabase REST API using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
 3. **Deployment scripts only** — `db_deploy.py` / `db_migrate.py` connect directly to Postgres via psycopg2 using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
 
@@ -360,32 +360,6 @@ Kept accurate and current at all times:
 **Rule**: when implementing a feature, update the relevant docs in the same commit/session. Another developer or AI agent should be able to read these files at any point and have an accurate picture of what is built, what is planned, and why.
 
 **`docs/plan.md` is the primary cross-session hand-off artifact** — its main consumer is the *next* AI session continuing the work. Read its `## Current Focus` block (at the bottom) first to learn where the project is and what's next before touching code, and **keep it current as part of finishing any work** (update the relevant iteration entry + `Current Focus` in the same session). It tracks history/progress at a higher level than git; it is NOT a second changelog — release notes live in `CHANGELOG.md`, design rationale in `docs/specs/`. The doc's own header explains its structure and rules in full.
-
-### Cerefox Decision Log (lives in Cerefox, NOT in the repo)
-
-The **"Cerefox Decision Log"** document is stored in the Cerefox knowledge base (project: `cerefox`), not in the git repo. It contains operational details, lessons learned, and experiment outcomes that are useful as memory during future development that will not pollute the OSS project.
-
-**Update it every session** by calling `cerefox_ingest` with `update_if_exists: true`:
-- Add new architectural or process decisions (with date, context, options, decision, outcome)
-- Add new experiments, failures, or platform gotchas to the "Lessons Learned" section
-- Search for it first with `cerefox_search` query `"Cerefox Decision Log"` to review current content
-
-**When to add an entry**:
-- A significant technical decision is made or revised
-- A platform behavior surprises us (MCP client compatibility, Supabase gotchas, etc.)
-- An experiment fails and we learn something worth remembering
-- A workaround is discovered for a third-party bug
-- **NEVER compress or summarize** existing entries when updating — always add new entries
-  and keep existing ones verbatim. Accidental compression causes data loss.
-- **Splitting policy**: when the document exceeds ~50,000 characters, create a new document
-  that continues the log (e.g., "Cerefox Decision Log — 2026 Q2"). Each part is a standalone
-  document in Cerefox with the same project and metadata tags. Do NOT try to split at an
-  exact boundary — finish the current entry, then start a new document for subsequent entries.
-- **Rolling summary** (future): a separate "Cerefox Decision Log — Current Summary" that's
-  a compressed digest of all active decisions and top lessons. Agents load this instead of
-  the full history.
-- The full log stays searchable even when split: `cerefox_search` finds entries by content
-  across all documents.
 
 ### User-Facing Docs (setup guides, how-tos)
 
