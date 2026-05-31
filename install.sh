@@ -106,21 +106,44 @@ echo "✓ Cerefox ${VERSION_OUT} installed at $(command -v cerefox)"
 # script (so new commands appear on upgrade) and adds a sentinel-marked source
 # line to your shell rc. --yes because this runs non-interactively (curl | sh).
 # Remove the `# >>> cerefox shell completion >>>` block from your rc to undo.
+# The activation reminder is deferred to the very end of this script so it
+# isn't buried under the "Next steps" block.
 if cerefox completion install --yes >/dev/null 2>&1; then
-  echo "✓ Shell completion installed (run 'exec \$SHELL' or open a new terminal to activate)."
+  COMPLETION_STATUS="ok"
+  echo "✓ Shell completion installed."
 else
-  echo "ℹ Shell completion not set up automatically — run 'cerefox completion install' later."
+  COMPLETION_STATUS="failed"
+  echo "ℹ Shell completion not set up automatically."
 fi
 
 echo ""
 echo "Next steps:"
 echo "  1. cerefox init                 # interactive setup (~2 min)"
 echo "  2. cerefox doctor               # verify the install"
-echo "  3. cerefox docs --list          # see bundled docs offline"
+echo "  3. cerefox guides list          # see bundled docs offline"
 echo ""
 echo "Wire up an AI agent (run the ones that apply):"
 echo "  cerefox configure-agent --tool claude-code"
 echo "  cerefox configure-agent --tool claude-desktop"
 echo ""
-echo "Upgrading from an earlier version? https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-v0.5.md"
+echo "Upgrading from an earlier version?"
+echo "  • Upgrade guide: https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/upgrading.md"
+echo "  • If any AI agent uses the local MCP server, restart it so it picks up"
+echo "    the version you just installed. A running agent keeps executing the"
+echo "    'cerefox mcp' process it spawned at startup until it's restarted."
+
+# Activation reminder LAST, as a prominent banner, so it isn't missed.
+echo ""
+echo "════════════════════════════════════════════════════════════"
+if [ "${COMPLETION_STATUS}" = "ok" ]; then
+  echo "  ⚡ Shell completion is installed but NOT active in this"
+  echo "     terminal yet. To activate it now, run:"
+  echo ""
+  echo "         exec \$SHELL          # or just open a new terminal"
+else
+  echo "  ⚡ To enable shell tab-completion, run:"
+  echo ""
+  echo "         cerefox completion install"
+fi
+echo "════════════════════════════════════════════════════════════"
 echo ""
