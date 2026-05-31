@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { fileToMarkdown, needsConversion } from "../src/ingestion/file-to-markdown.ts";
+import {
+  fileToMarkdown,
+  needsConversion,
+  stripDocxAnchors,
+} from "../src/ingestion/file-to-markdown.ts";
 
 describe("fileToMarkdown", () => {
   const md = "# Title\n\nbody text\n";
@@ -22,6 +26,16 @@ describe("fileToMarkdown", () => {
 
   test("legacy .doc is rejected, pointing at .docx", async () => {
     await expect(fileToMarkdown("old.doc", Buffer.from("x"))).rejects.toThrow(/\.docx/);
+  });
+
+  test("stripDocxAnchors removes mammoth bookmark anchors, keeps heading text + real links", () => {
+    expect(stripDocxAnchors('## <a id="_rxvmg6o6b2nt"></a>2026 Baseline')).toBe("## 2026 Baseline");
+    expect(stripDocxAnchors('# <a id="_x"></a>Title \\(IPS\\)')).toBe("# Title \\(IPS\\)");
+    // Real Markdown links are untouched.
+    const withLink = "See [the guide](https://example.com) for details.";
+    expect(stripDocxAnchors(withLink)).toBe(withLink);
+    // No anchors → unchanged.
+    expect(stripDocxAnchors("plain text")).toBe("plain text");
   });
 
   test("needsConversion is true only for .docx", () => {

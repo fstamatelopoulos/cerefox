@@ -26,6 +26,17 @@ export function needsConversion(filename: string): boolean {
   return extname(filename).toLowerCase() === ".docx";
 }
 
+/**
+ * Strip mammoth's empty HTML bookmark anchors (`<a id="_xxx"></a>`) that it
+ * emits before each heading from Word's internal bookmark ids. They're noise
+ * and would otherwise leak into the chunk `heading_path` (and the title-boost
+ * FTS weight). Real links survive — mammoth renders those as Markdown links,
+ * not bare `<a id>` tags.
+ */
+export function stripDocxAnchors(markdown: string): string {
+  return markdown.replace(/<a id="[^"]*"\s*><\/a>/g, "");
+}
+
 /** Convert a file's bytes to Markdown based on its extension. Throws a
  *  user-facing error for unsupported formats (PDF, legacy .doc). */
 export async function fileToMarkdown(filename: string, data: Buffer): Promise<string> {
@@ -33,12 +44,13 @@ export async function fileToMarkdown(filename: string, data: Buffer): Promise<st
 
   if (ext === ".docx") {
     const { value } = await mammoth.convertToMarkdown({ buffer: data });
-    if (value.trim() === "") {
+    const markdown = stripDocxAnchors(value);
+    if (markdown.trim() === "") {
       throw new Error(
         `Converted "${filename}" to empty Markdown — the .docx may be image-only or use no recognizable text styles.`,
       );
     }
-    return value;
+    return markdown;
   }
 
   if (ext === ".pdf") {

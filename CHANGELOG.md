@@ -16,7 +16,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - **DOCX ingestion in the web upload + CLI** (first version). The web Ingest page
   and `cerefox document ingest report.docx` now accept `.docx` and convert it to
   Markdown on the way in (via `mammoth`), so Word heading styles map to headings
-  and the content chunks well. Markdown / `.txt` are unchanged. **PDF is
+  and the content chunks well (mammoth's empty Word-bookmark `<a id>` anchors are
+  stripped so the heading path stays clean). Markdown / `.txt` are unchanged. **PDF is
   intentionally not supported** — convert it to Markdown upstream first (PDF
   layout has no reliable heading structure). The MCP path is unaffected by
   design: agents read and ingest the extracted Markdown themselves, so the
