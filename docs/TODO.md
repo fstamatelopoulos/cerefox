@@ -1,5 +1,11 @@
 # Cerefox TODO & Ideas Backlog
 
+> **⚠ Outdated — pending a full cleanup pass.** This backlog has only been
+> partially reconciled against the code (most recently during the v0.9.3 doc
+> sweep, when the clearly-shipped entries were removed). Some remaining items
+> may already be implemented or obsolete. Verify against the current codebase
+> and `plan.md` before picking anything up.
+
 > Active work is tracked in `plan.md`. This file captures ideas, future enhancements,
 > and tasks that aren't yet scheduled into an iteration.
 
@@ -13,7 +19,6 @@
 - [ ] Query embedding caching (avoid re-embedding repeated queries)
 - [ ] Search result re-ranking with cross-encoder models or LLM-based reranking (see vision doc)
 - [ ] Multi-language FTS support (beyond English tsvector config)
-- [ ] Return matched chunk count per document in docs-mode search results (requires RPC change)
 
 ### Embeddings
 - [ ] Vertex AI text-embedding-005 embedder (add as another cloud provider)
@@ -57,9 +62,7 @@ These are "input adapters" -- Cerefox is the backend, these tools are the author
 ### Infrastructure
 - [ ] Row-Level Security (RLS) policies for multi-user future
 - [ ] Rate limiting on API endpoints
-- [x] Health check endpoint — superseded by per-EF `GET /version` + cerefox-mcp aggregator design (iter-26 / v0.8.0; see plan.md § Iteration 26 Parts 26B + 26C)
 - [ ] Usage statistics (docs stored, searches performed, storage used)
-- [ ] CI/CD pipeline (GitHub Actions: lint, test, build)
 - [ ] **Local Supabase dev environment** -- set up a full local Supabase stack for offline development and Edge Function testing. Moved from iteration plan to backlog.
 - [ ] **Validate Docker/local deployment** -- `Dockerfile` and `docker-compose.yml` have never been tested end-to-end. Low priority.
 - [ ] **Standalone binaries** (`cerefox`, `cerefox.exe`) per design doc §6d "Phase 2". Bundle Bun/Node runtime + JS code into a single executable per OS/arch (macOS-arm64, macOS-x86_64, Linux-x86_64, Windows-x86_64). ~70 MB per binary, ~280 MB total per release. Eliminates the Node/Bun install step for end users. **Deferred** beyond v1.0 per 2026-05-29 maintainer call (Fotis-23): the complexity (cross-compile gotchas, code-signing — $99/year Apple Developer Program for macOS, security concerns around bundling runtimes) doesn't justify the friction reduction for Cerefox's tech-savvy user base. Revisit if a real demand surfaces post-v1.0.
@@ -67,7 +70,6 @@ These are "input adapters" -- Cerefox is the backend, these tools are the author
 ### Backup & Sync
 - [ ] Scheduled automatic backups
 - [ ] Backup verification (compare DB state with backup)
-- [x] Export knowledge base as a folder of markdown files — scheduled as `scripts/cerefox_export.ts` (iter-26 / v0.8.0 Part 26N)
 - [ ] Sync between local Postgres and Supabase
 
 ### MCP & Agent Integration
