@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.7] -- 2026-06-01
+
 **Schema version now signals required server redeploys, enforced by the
 release tooling.**
 
