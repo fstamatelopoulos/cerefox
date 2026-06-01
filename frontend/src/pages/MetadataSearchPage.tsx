@@ -115,7 +115,8 @@ export function MetadataSearchPage() {
           <Title order={2}>Metadata Search</Title>
         </div>
         <CliHint
-          command={`cerefox metadata search -f '${JSON.stringify(
+          cmd="cerefox metadata search"
+          args={`-f '${JSON.stringify(
             (() => {
               const mf: Record<string, string> = {};
               for (const f of filters) if (f.key.trim() && f.value.trim()) mf[f.key.trim()] = f.value.trim();

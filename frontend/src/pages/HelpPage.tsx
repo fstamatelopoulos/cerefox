@@ -8,11 +8,12 @@ import {
   NavLink,
   Stack,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
-import { IconBook, IconRobot, IconFileText } from "@tabler/icons-react";
+import { IconBook, IconRobot, IconFileText, IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { fetchDocContent, fetchDocsIndex, type DocEntry } from "../api/docs";
@@ -44,6 +45,14 @@ export function HelpPage() {
   });
 
   const docs = indexQuery.data ?? [];
+  const [filter, setFilter] = useState("");
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return docs;
+    return docs.filter(
+      (d) => d.title.toLowerCase().includes(q) || d.path.toLowerCase().includes(q),
+    );
+  }, [docs, filter]);
 
   // Default to README on first visit
   const selectedPath = docPath && docPath.length > 0 ? docPath : docs[0]?.path;
@@ -57,11 +66,11 @@ export function HelpPage() {
 
   const grouped = useMemo(() => {
     const out: Record<string, DocEntry[]> = {};
-    for (const entry of docs) {
+    for (const entry of filtered) {
       (out[entry.category] ??= []).push(entry);
     }
     return out;
-  }, [docs]);
+  }, [filtered]);
 
   if (indexQuery.isLoading) {
     return (
@@ -103,6 +112,19 @@ export function HelpPage() {
             <Title order={5} mb="xs">
               Help
             </Title>
+            <TextInput
+              placeholder="Filter guides…"
+              value={filter}
+              onChange={(e) => setFilter(e.currentTarget.value)}
+              leftSection={<IconSearch size={14} />}
+              size="xs"
+              mb="sm"
+            />
+            {filtered.length === 0 && (
+              <Text size="xs" c="dimmed">
+                No guides match "{filter}".
+              </Text>
+            )}
             {CATEGORY_ORDER.filter((cat) => grouped[cat]?.length).map((cat) => (
               <Stack key={cat} gap={0} mb="sm">
                 <Group gap={6} mb={4} mt={6}>

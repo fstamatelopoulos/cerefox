@@ -53,7 +53,8 @@ export function SearchPage() {
             </span>
           )}
           <CliHint
-            command={`cerefox search "${state.q || "query"}"${state.mode !== "docs" ? ` --mode ${state.mode}` : ""}`}
+            cmd="cerefox search"
+            args={`"${state.q || "query"}"${state.mode !== "docs" ? ` --mode ${state.mode}` : ""}`}
           />
         </div>
       </div>
