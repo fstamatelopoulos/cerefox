@@ -12,7 +12,8 @@ import { formatDate } from "../utils/dates";
 import ui from "../styles/redesign.module.css";
 import lp from "../components/ListPage.module.css";
 
-const PAGE_SIZE = 50;
+// Match the other list views (ListPage default is 10).
+const PAGE_SIZE = 10;
 
 export function ProjectDocumentsPage() {
   const { id } = useParams<{ id: string }>();
