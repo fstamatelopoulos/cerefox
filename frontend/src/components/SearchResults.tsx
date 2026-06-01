@@ -1,23 +1,35 @@
+import { Alert, Loader } from "@mantine/core";
 import {
-  Accordion,
-  Alert,
-  Anchor,
-  Badge,
-  Code,
-  Group,
-  Loader,
-  Stack,
-  Text,
-} from "@mantine/core";
-import { IconAlertCircle } from "@tabler/icons-react";
+  IconAlertCircle,
+  IconChevronDown,
+  IconChevronRight,
+  IconFileText,
+  IconLink,
+  IconSearch,
+  IconTerminal2,
+} from "@tabler/icons-react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type {
-  ChunkSearchResult,
-  DocSearchResult,
-  SearchResponse,
-} from "../api/types";
+import type { ChunkSearchResult, DocSearchResult, SearchMode, SearchResponse } from "../api/types";
 import { isDocResult } from "../api/types";
+import { ScoreRing } from "./ScoreRing";
+import ui from "../styles/redesign.module.css";
+import styles from "../pages/SearchPage.module.css";
+
+const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
+function colorForProject(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return `var(${PROJECT_COLORS[h % PROJECT_COLORS.length]})`;
+}
+
+const MODE_LABEL: Record<SearchMode, string> = {
+  docs: "documents",
+  hybrid: "hybrid",
+  fts: "keyword",
+  semantic: "semantic",
+};
 
 interface SearchResultsProps {
   data: SearchResponse | undefined;
@@ -26,194 +38,198 @@ interface SearchResultsProps {
   hasQuery: boolean;
 }
 
-export function SearchResults({
-  data,
-  isLoading,
-  error,
-  hasQuery,
-}: SearchResultsProps) {
+export function SearchResults({ data, isLoading, error, hasQuery }: SearchResultsProps) {
+  const navigate = useNavigate();
+  const [expanded, setExpanded] = useState<string | null>(null);
+
   if (!hasQuery) {
     return (
-      <Text c="dimmed" ta="center" mt="xl">
-        Enter a query or select a project to browse.
-      </Text>
+      <div className={`${ui.card} ${styles.emptyState}`} style={{ marginTop: 22 }}>
+        <IconSearch size={28} />
+        <p style={{ marginTop: 10 }}>Enter a query or pick a project to browse your memory.</p>
+      </div>
     );
   }
-
   if (isLoading) {
     return (
-      <Group justify="center" mt="xl">
-        <Loader />
-        <Text c="dimmed">Searching...</Text>
-      </Group>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 40 }}>
+        <Loader size="sm" />
+        <span className={ui.dim}>Searching…</span>
+      </div>
     );
   }
-
   if (error) {
     return (
-      <Alert
-        icon={<IconAlertCircle size={16} />}
-        title="Search failed"
-        color="red"
-        mt="md"
-      >
+      <Alert icon={<IconAlertCircle size={16} />} title="Search failed" color="red" mt="md">
         {error.message}
       </Alert>
     );
   }
-
   if (!data || data.results.length === 0) {
     return (
-      <Text c="dimmed" ta="center" mt="xl">
-        No results found.
-      </Text>
+      <div className={`${ui.card} ${styles.emptyState}`} style={{ marginTop: 22 }}>
+        <IconSearch size={28} />
+        <p style={{ marginTop: 10 }}>No results. Try widening your search or switching mode.</p>
+      </div>
     );
   }
 
-  const isDocView = data.results.length > 0 && isDocResult(data.results[0]);
+  const kb = (data.response_bytes / 1024).toFixed(1);
 
-  return (
-    <Stack gap="md" mt="md">
-      <Group justify="space-between">
-        <Text size="sm" c="dimmed">
-          {data.total_found} result{data.total_found !== 1 ? "s" : ""} found
-        </Text>
-        {data.truncated && (
-          <Badge color="yellow" variant="light" size="sm">
-            Results truncated
-          </Badge>
-        )}
-      </Group>
-
-      {isDocView ? (
-        <DocResults results={data.results as DocSearchResult[]} />
-      ) : (
-        <ChunkResults results={data.results as ChunkSearchResult[]} />
-      )}
-    </Stack>
+  // Docs/FTS scores aren't 0–1 (raw rank can exceed 1); semantic/hybrid are.
+  // Normalize relative to the set only when the scale is clearly >1, so the
+  // ring shows ranking strength without inflating already-normalized scores.
+  const rawScores = data.results.map((r) =>
+    isDocResult(r) ? (r as DocSearchResult).best_score : (r as ChunkSearchResult).score,
   );
-}
+  const maxScore = Math.max(0, ...rawScores);
+  const normScore = (s: number) => (maxScore > 1 ? s / maxScore : Math.max(0, Math.min(1, s)));
 
-function DocResults({ results }: { results: DocSearchResult[] }) {
-  const navigate = useNavigate();
   return (
-    <Accordion variant="separated" multiple>
-      {results.map((r) => (
-        <Accordion.Item key={r.document_id} value={r.document_id}>
-          <Accordion.Control>
-            <Group justify="space-between" wrap="nowrap" gap="sm">
-              <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                <ScoreBadge score={r.best_score} />
-                <Anchor
-                  href={`/app/document/${r.document_id}`}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/document/${r.document_id}`); }}
-                  fw={600}
-                  size="sm"
-                  truncate
-                >
-                  {r.doc_title || "Untitled"}
-                </Anchor>
-              </Group>
-              <Group gap="xs" wrap="nowrap">
-                {r.is_partial ? (
-                  <Badge color="yellow" variant="light" size="xs">
-                    Excerpt
-                  </Badge>
-                ) : (
-                  <Badge color="green" variant="light" size="xs">
-                    Full
-                  </Badge>
-                )}
-              </Group>
-            </Group>
-            <Group gap="xs" mt={4}>
-              <Text size="xs" c="dimmed">
-                {r.chunk_count} chunks | {r.total_chars.toLocaleString()} chars
-              </Text>
-              {r.doc_updated_at && (
-                <Text size="xs" c="dimmed">
-                  Updated {new Date(r.doc_updated_at).toLocaleDateString()}
-                </Text>
+    <>
+      <div className={styles.resultMeta}>
+        <span>
+          <b className={ui.mono} style={{ color: "var(--text)" }}>
+            {data.total_found}
+          </b>{" "}
+          result{data.total_found !== 1 ? "s" : ""} · ranked by{" "}
+          <span className={ui.mono} style={{ color: "var(--primary)" }}>
+            {MODE_LABEL[data.mode]}
+          </span>{" "}
+          relevance
+        </span>
+        <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 12 }}>
+          {data.truncated ? "truncated · " : ""}
+          {kb} KB
+        </span>
+      </div>
+
+      <div className={styles.results}>
+        {data.results.map((r) => {
+          const isDoc = isDocResult(r);
+          const id = isDoc ? (r as DocSearchResult).document_id : (r as ChunkSearchResult).chunk_id;
+          const docId = r.document_id;
+          const score = isDoc ? (r as DocSearchResult).best_score : (r as ChunkSearchResult).score;
+          const title = r.doc_title || "Untitled";
+          const headingPath = isDoc
+            ? (r as DocSearchResult).best_chunk_heading_path
+            : (r as ChunkSearchResult).heading_path;
+          const snippet = isDoc
+            ? (r as DocSearchResult).full_content
+            : (r as ChunkSearchResult).content;
+          const projectNames = r.doc_project_names ?? [];
+          const open = expanded === id;
+
+          return (
+            <article
+              key={id}
+              className={`${ui.card} ${styles.resultCard} ${open ? styles.resultCardOpen : ""} ${ui.rise}`}
+            >
+              <div className={styles.resultHead} onClick={() => setExpanded(open ? null : id)}>
+                <ScoreRing score={normScore(score)} />
+                <div className={styles.resultTitleWrap}>
+                  <div className={ui.row} style={{ gap: 8, marginBottom: 5 }}>
+                    <h3 className={styles.resultTitle}>{title}</h3>
+                    {isDoc ? (
+                      (r as DocSearchResult).is_partial ? (
+                        <span className={`${ui.badge} ${ui.bYellow}`}>excerpt</span>
+                      ) : (
+                        <span className={`${ui.badge} ${ui.bGreen}`}>full</span>
+                      )
+                    ) : (
+                      <span className={`${ui.badge} ${ui.bNeutral}`}>chunk</span>
+                    )}
+                  </div>
+                  {headingPath.length > 0 && (
+                    <div className={styles.breadcrumb}>
+                      {headingPath.map((h, j) => (
+                        <span key={j}>
+                          {j > 0 && <IconChevronRight size={11} />}
+                          <span>{h}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.resultMetaR}>
+                  {projectNames.map((pn) => (
+                    <span key={pn} className={`${ui.badge} ${ui.bNeutral}`}>
+                      <span
+                        className={styles.dot}
+                        style={{ background: colorForProject(pn), width: 6, height: 6 }}
+                      />
+                      {pn}
+                    </span>
+                  ))}
+                  <span className={`${styles.chev} ${open ? styles.chevOpen : ""}`}>
+                    <IconChevronDown size={16} />
+                  </span>
+                </div>
+              </div>
+
+              <div className={`${styles.resultSnippet} ${open ? styles.resultSnippetOpen : ""}`}>
+                {snippet.slice(0, open ? 4000 : 600)}
+              </div>
+
+              {open && (
+                <div className={styles.resultExpand}>
+                  <div className={styles.resultStats}>
+                    {isDoc ? (
+                      <>
+                        <span>{(r as DocSearchResult).chunk_count} chunks</span>
+                        <span>·</span>
+                        <span>{(r as DocSearchResult).total_chars.toLocaleString()} chars</span>
+                        {(r as DocSearchResult).doc_updated_at && (
+                          <>
+                            <span>·</span>
+                            <span>
+                              updated{" "}
+                              {new Date(
+                                (r as DocSearchResult).doc_updated_at as string,
+                              ).toLocaleDateString()}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span>chunk #{(r as ChunkSearchResult).chunk_index}</span>
+                        <span>·</span>
+                        <span>{(r as ChunkSearchResult).content.length.toLocaleString()} chars</span>
+                      </>
+                    )}
+                  </div>
+                  <div className={ui.row} style={{ gap: 8 }}>
+                    <button
+                      type="button"
+                      className={`${ui.btn} ${ui.btnGhost}`}
+                      onClick={() => navigate(`/document/${docId}`)}
+                    >
+                      <IconFileText size={14} />
+                      Open document
+                    </button>
+                    <button
+                      type="button"
+                      className={`${ui.btn} ${ui.btnSubtle}`}
+                      onClick={() => navigator.clipboard?.writeText(`cerefox document get ${docId}`)}
+                    >
+                      <IconLink size={14} />
+                      Copy reference
+                    </button>
+                    <span
+                      className={`${ui.mono} ${ui.faint}`}
+                      style={{ marginLeft: "auto", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
+                      <IconTerminal2 size={14} />
+                      cerefox document get {docId.slice(0, 8)}…
+                    </span>
+                  </div>
+                </div>
               )}
-              {r.best_chunk_heading_path.length > 0 && (
-                <Text size="xs" c="dimmed" fs="italic">
-                  Best match: {r.best_chunk_heading_path.join(" > ")}
-                </Text>
-              )}
-            </Group>
-            {r.doc_project_names && r.doc_project_names.length > 0 && (
-              <Group gap={4} mt={4}>
-                {r.doc_project_names.map((name) => (
-                  <Badge key={name} size="xs" variant="filled" color="blue">
-                    {name}
-                  </Badge>
-                ))}
-              </Group>
-            )}
-          </Accordion.Control>
-          <Accordion.Panel>
-            <Code block style={{ whiteSpace: "pre-wrap", maxHeight: 400, overflow: "auto" }}>
-              {r.full_content || "(no content)"}
-            </Code>
-          </Accordion.Panel>
-        </Accordion.Item>
-      ))}
-    </Accordion>
-  );
-}
-
-function ChunkResults({ results }: { results: ChunkSearchResult[] }) {
-  const navigate = useNavigate();
-  return (
-    <Stack gap="sm">
-      {results.map((r) => (
-        <div
-          key={r.chunk_id}
-          style={{
-            border: "1px solid var(--mantine-color-gray-3)",
-            borderRadius: 8,
-            padding: 12,
-          }}
-        >
-          <Group gap="xs" mb={4}>
-            {r.heading_path.length > 0 && (
-              <Text size="xs" c="dimmed" style={{ fontFamily: "monospace" }}>
-                {r.heading_path.join(" > ")}
-              </Text>
-            )}
-          </Group>
-          <Group gap="xs" mb={8}>
-            <ScoreBadge score={r.score} />
-            <Anchor href={`/app/document/${r.document_id}`}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/document/${r.document_id}`); }} fw={600} size="sm">
-              {r.doc_title || "Untitled"}
-            </Anchor>
-            {r.title && r.title !== r.doc_title && (
-              <Text size="sm" c="dimmed">
-                / {r.title}
-              </Text>
-            )}
-          </Group>
-          <Text
-            size="sm"
-            lineClamp={4}
-            style={{ whiteSpace: "pre-wrap" }}
-          >
-            {r.content.slice(0, 400)}
-          </Text>
-        </div>
-      ))}
-    </Stack>
-  );
-}
-
-function ScoreBadge({ score }: { score: number }) {
-  if (score <= 0) return null;
-  const pct = Math.round(score * 100);
-  const color = pct >= 70 ? "green" : pct >= 40 ? "yellow" : "gray";
-  return (
-    <Badge color={color} variant="light" size="xs">
-      {pct}%
-    </Badge>
+            </article>
+          );
+        })}
+      </div>
+    </>
   );
 }
