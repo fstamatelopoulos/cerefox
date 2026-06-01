@@ -19,7 +19,7 @@ Three version surfaces move independently:
 | Surface | Where | Bumped by |
 |---|---|---|
 | **Client** (`PKG_VERSION`) | `packages/memory/src/meta.ts` + every `package.json` | `cut_release.ts`, every release |
-| **Schema** (schema + RPCs) | `@version:` marker in `src/cerefox/db/schema.sql` | by hand, when `schema.sql`/`rpcs.sql` change |
+| **Schema** (schema + RPCs) | `@version:` marker in `src/cerefox/db/schema.sql` **and** the `cerefox_schema_version()` literal in `rpcs.sql` (kept in lockstep) | by hand, when `schema.sql`/`rpcs.sql`/migrations change — **gated by `cut_release.ts`** |
 | **Edge Functions** (`EF_VERSION`) | `_shared/ef-meta/index.ts` | `cut_release.ts`, only when EF source changed since the last tag |
 
 The client carries a **compatibility matrix** (`_shared/compatibility/index.ts`,
@@ -37,8 +37,18 @@ redeploy their server.
    release's client needs a newer server, raise `minSchema` /
    `minEdgeFunctions` and confirm the CHANGELOG calls out "redeploy
    required".
-4. **Schema version** — if `schema.sql` / `rpcs.sql` changed, bump the
-   `@version:` marker by hand.
+4. **Schema version** — if anything under `src/cerefox/db/` changed
+   (`schema.sql`, `rpcs.sql`, or a migration), bump the schema version in
+   **two** places, in lockstep: the `-- @version:` marker in `schema.sql`
+   (the *bundled* value the client compares against) **and** the literal in
+   `cerefox_schema_version()` at the bottom of `rpcs.sql` (the *deployed*
+   value). Schema and RPCs deploy together via `cerefox server deploy`, so this
+   one version is the single "redeploy required" signal — bumping it makes
+   `doctor` / the web banner tell users to redeploy. **`cut_release.ts` fails
+   the cut** if `db/` changed without a bump, or if the two literals disagree.
+   (Raise `minSchema` in the compat matrix only if the client *hard-requires*
+   the new surface; if it degrades gracefully, the version bump alone is the
+   nudge.)
 5. **GPT Actions OpenAPI block** (`docs/guides/connect-agents.md`) — if any
    Edge Function's request/response shape changed this cycle, update the
    OpenAPI block and bump its `info.version`. (See the CLAUDE.md rule;

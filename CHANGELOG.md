@@ -9,7 +9,38 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Schema version now signals required server redeploys, enforced by the
+release tooling.**
+
+> **Upgrade:** run `cerefox server deploy` (this re-applies `rpcs.sql`).
+> `cerefox doctor` / the web banner now correctly report "newer server
+> available" until you do.
+
+### Fixed
+
+- **`cerefox doctor` / the schema banner under-reported after v0.9.6.** v0.9.6
+  added two RPCs (`cerefox_corpus_totals`, `cerefox_recent_doc_authors`) — which
+  require `cerefox server deploy` — but left `schema_version` at `0.3.1`, so a
+  client upgraded *without* redeploying was told "schema up to date" while the
+  dashboard's new RPC-backed features silently fell back. Bumped `schema_version`
+  **0.3.1 → 0.4.0** (the `@version:` marker in `schema.sql` and the
+  `cerefox_schema_version()` literal in `rpcs.sql`, in lockstep). An
+  un-redeployed server now reports "newer server available — run
+  `cerefox server deploy`." (`minSchema` stays `0.3.1`: the routes degrade
+  gracefully, so this is a nudge, not a hard requirement.)
+
+### Changed
+
+- **`cut_release.ts` now enforces the schema version** (the symmetric
+  counterpart to the existing `EF_VERSION` guard): if anything under
+  `src/cerefox/db/` changed since the last tag, the cut **fails** unless
+  `schema_version` was bumped — and the two literals (`schema.sql @version:` and
+  `cerefox_schema_version()`) must agree. This turns the previously-manual
+  RELEASING.md step into a hard gate, so the v0.9.6 miss can't recur.
+- **Docs:** RELEASING.md (step 4 + the versioning table) now names *both*
+  literals and the new gate; CLAUDE.md instructs agents to follow the
+  RELEASING.md pre-release checklist on any release-intent PR and to bump
+  `schema_version` on any `src/cerefox/db/` change.
 
 ---
 
