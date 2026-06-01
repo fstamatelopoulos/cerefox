@@ -149,6 +149,9 @@ export interface DashboardDoc {
   review_status: string;
   updated_at: string | null;
   project_ids: string[];
+  /** Latest audit author (who last touched the doc); null until deployed/known. */
+  author?: string | null;
+  author_type?: string | null;
 }
 
 export interface DashboardResponse {

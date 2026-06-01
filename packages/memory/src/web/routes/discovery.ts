@@ -174,6 +174,24 @@ async function getCorpusTotals(
   };
 }
 
+async function getRecentDocAuthors(
+  ctx: WebContext,
+  docIds: string[],
+): Promise<Record<string, { author: string; author_type: string }>> {
+  if (docIds.length === 0) return {};
+  // Degrade to {} if the RPC isn't deployed yet — the Author column then
+  // falls back to the document's source channel.
+  const { data, error } = await ctx.supabase.rpc("cerefox_recent_doc_authors", {
+    p_doc_ids: docIds,
+  });
+  if (error) return {};
+  const out: Record<string, { author: string; author_type: string }> = {};
+  for (const r of (data ?? []) as Array<{ document_id: string; author: string; author_type: string }>) {
+    out[String(r.document_id)] = { author: r.author, author_type: r.author_type };
+  }
+  return out;
+}
+
 async function countDocumentsForProject(
   ctx: WebContext,
   projectId: string,
@@ -549,15 +567,21 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     ]);
     const projectIds = projects.map((p) => String(p.id));
     const docIds = recentDocs.map((d) => String(d.id));
-    const [docProjectsMap, counts] = await Promise.all([
+    const [docProjectsMap, counts, authors] = await Promise.all([
       getProjectsForDocuments(ctx, docIds, projects),
       getProjectDocCounts(ctx, projectIds),
+      getRecentDocAuthors(ctx, docIds),
     ]);
 
     const recent = recentDocs.map((d) => {
       const id = String(d.id);
       const pids = (docProjectsMap[id] ?? []).map((p) => String(p.id));
-      return dashboardDocFromRow(d, pids);
+      const a = authors[id];
+      return {
+        ...dashboardDocFromRow(d, pids),
+        author: a?.author ?? null,
+        author_type: a?.author_type ?? null,
+      };
     });
 
     const projectsOut = projects.map((p) => ({

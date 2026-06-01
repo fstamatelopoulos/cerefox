@@ -225,7 +225,7 @@ export function DashboardPage() {
               <thead>
                 <tr>
                   <th>Document</th>
-                  <th>Origin</th>
+                  <th>Author</th>
                   <th className={styles.alignRight}>Chunks</th>
                   <th className={styles.alignRight}>Size</th>
                   <th className={styles.alignRight}>Updated</th>
@@ -233,7 +233,13 @@ export function DashboardPage() {
               </thead>
               <tbody>
                 {(data?.recent_docs ?? []).map((doc) => {
-                  const chip = sourceChip(doc.source);
+                  const chip = doc.author
+                    ? {
+                        icon: doc.author_type === "agent" ? IconSparkles : IconMapPin,
+                        label: doc.author,
+                        agent: doc.author_type === "agent",
+                      }
+                    : sourceChip(doc.source);
                   const ChipIcon = chip.icon;
                   const pending = doc.review_status !== "approved";
                   return (

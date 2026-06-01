@@ -107,6 +107,8 @@ export const DashboardDoc = z.object({
   review_status: z.string(),
   updated_at: z.string(),
   project_ids: z.array(z.string()).default([]),
+  author: z.string().nullable().default(null),
+  author_type: z.string().nullable().default(null),
 });
 export type DashboardDoc = z.infer<typeof DashboardDoc>;
 

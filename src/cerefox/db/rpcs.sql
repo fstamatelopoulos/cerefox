@@ -1749,3 +1749,26 @@ AS $$
            FROM cerefox_documents
           WHERE deleted_at IS NULL)::BIGINT AS total_chars;
 $$;
+
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Recent-doc authors (dashboard "Author" column)
+-- ─────────────────────────────────────────────────────────────────────────
+-- The latest audit author (+ type) per document, for the given doc ids.
+-- "Latest editor" — used by the /dashboard recent-docs list so the Author
+-- column can show who last touched a doc (agent vs human). Read-only.
+
+CREATE OR REPLACE FUNCTION cerefox_recent_doc_authors(p_doc_ids UUID[])
+RETURNS TABLE (document_id UUID, author TEXT, author_type TEXT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+    SELECT DISTINCT ON (a.document_id)
+        a.document_id, a.author, a.author_type
+    FROM cerefox_audit_log a
+    WHERE a.document_id = ANY(p_doc_ids)
+    ORDER BY a.document_id, a.created_at DESC;
+$$;
