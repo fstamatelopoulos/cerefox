@@ -15,7 +15,79 @@ Open roadmap.
 
 ## [v0.9.6] -- 2026-06-01
 
-Open roadmap.
+**v0.9.6 — web UI redesign: a distinct visual identity, all core pages
+rebuilt, a theme switcher, a reusable list/table pattern, and small
+read-only backend additions.**
+
+> **Upgrade:** run `cerefox server deploy` after upgrading — this release adds
+> two new **read-only** RPCs (`cerefox_corpus_totals`, `cerefox_recent_doc_authors`)
+> that the dashboard uses. The web routes degrade gracefully until they're
+> deployed (totals show 0, the Author column falls back to the source channel).
+> **No Edge Function changes** (no `EF_VERSION` bump). Restart `cerefox web` so
+> the new routes (`/api/v1/preferences`, the dashboard fields) take effect. No
+> reindex required.
+
+### Added
+
+- **A real visual identity for the web client.** Replaces the stock-Mantine
+  look with a Cerefox theme drawn from the fox logo: deep-indigo ground,
+  fox-orange as the action color, violet/steel-blue/green accents; geometric
+  display type (**Space Grotesk**), **Geist** for UI, **JetBrains Mono** for
+  machine data. Implemented as a Mantine theme plus a semantic token layer
+  (`tokens.css`, accents derived from Mantine's vars so there's one source of
+  truth) and a shared primitives module reused across pages.
+- **Light / dark / system theme switcher** in the header, persisted durably to
+  `~/.cerefox/web-prefs.json` via a new file-based `GET/PUT /api/v1/preferences`
+  endpoint (works without Supabase). Mantine's `localStorage` is the no-flash
+  fast path; the file is reconciled on mount so the choice survives a cache clear.
+- **Redesigned Dashboard** — eyebrow + greeting hero with quick-search and an
+  Ingest action; a 4-card stat strip (Documents, Indexed chunks + total chars,
+  Projects + docs-in-trash, **Agent activity over the last 30 days** from the
+  usage log with a graceful "why no data?" state); a "Recently changed
+  documents" table with an **Author** column (the real last editor, with an
+  agent/human chip); a scrollable Projects rail with fill bars; and a CLI-mirror
+  card.
+- **Redesigned Search** — split the conflated mode control into a **granularity**
+  toggle (Documents / Chunks) and a **ranker** dropdown (Hybrid / Keyword /
+  Semantic); result cards with a **score ring**, heading-path breadcrumb, snippet
+  clamp, and an expand panel. Result titles link straight to the document.
+- **Redesigned Document view** — header with project chips, origin/author chip,
+  meta, and a clickable review pill; a Rendered / Source / Chunks content card
+  with its own scroll; and a sticky right rail (Contents TOC with anchor scroll,
+  Details + metadata tags, Versions with a per-version actions menu, and an
+  Activity timeline from the audit log).
+- **Redesigned Ingest** — Paste / Upload tabs that no longer reshuffle the form,
+  a drag-and-drop zone, project toggle chips with a filter for large lists,
+  metadata key/value rows, an Edit/Preview editor, and a Pipeline + CLI rail.
+- **Reusable list/table pattern (`ListPage`)** now drives **Audit Log**, **Trash**,
+  **Projects**, and **Metadata Search**: a consistent header, search box,
+  filter toolbar, styled table, row actions, and client-side pagination.
+  - **Audit Log** gains from/to **date filters** and a max-entries selector
+    (was hard-capped at 100).
+  - **Trash** gains a show-up-to limit selector plus inline restore / purge.
+  - **Projects** gains document-count columns (with fill bars) and create/edit
+    in modals.
+  - **Metadata Search** keeps its multi-field filter builder and renders results
+    in the new table (row → document).
+- **Per-page CLI-parity hints** — a compact terminal snippet (themed like the
+  dashboard CLI card) that shows the equivalent `cerefox …` command for the
+  current page/query, copies it on click, and links to the CLI docs (Search,
+  Metadata Search, Projects, Audit Log, Trash, Help).
+- **Dashboard read-only aggregates** — `GET /api/v1/dashboard` now returns
+  global `total_chunks` / `total_chars` (`cerefox_corpus_totals`) and the latest
+  audit author per recent document (`cerefox_recent_doc_authors`).
+- **Analytics:** the usage-tracking toggle moved to the page header and now
+  fires a confirmation toast when flipped.
+
+### Fixed
+
+- **Help guide content returned 404 in source/dev mode** — the docs index
+  listed guides but `readDoc` resolved guide paths against the wrong root.
+  Guide content now loads (and the Help page gained a sidebar guide filter and a
+  viewport-height content pane).
+- The Help page no longer requires the full prototype "help center" landing
+  (fictional topic counts / popular lists that don't map to the bundled guides);
+  the embedded docs reader is kept and lightly enhanced.
 
 ---
 
