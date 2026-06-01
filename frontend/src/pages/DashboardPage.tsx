@@ -20,6 +20,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchUsageSummary } from "../api/analytics";
+import { CliCard } from "../components/CliCard";
 import { fetchDashboard } from "../api/dashboard";
 import type { DashboardDoc } from "../api/types";
 import ui from "../styles/redesign.module.css";
@@ -360,35 +361,13 @@ export function DashboardPage() {
             </div>
           </section>
 
-          <section className={`${ui.card} ${ui.cliCard} ${ui.rise}`}>
-            <div className={ui.row} style={{ gap: 8, marginBottom: 10 }}>
-              <IconTerminal2 size={15} />
-              <span style={{ fontWeight: 600, fontSize: 13.5 }}>Same memory, your terminal</span>
-              <button
-                type="button"
-                className={ui.whatis}
-                style={{ marginLeft: "auto" }}
-                onClick={() => navigate("/help/guides/cli.md")}
-              >
-                cli docs
-              </button>
-            </div>
-            <div className={ui.cliBlock}>
-              <div>
-                <span className={ui.cliP}>$</span> cerefox search{" "}
-                <span className={ui.cliS}>"retry backoff"</span>
-              </div>
-              <div className={ui.cliOut}>→ 5 results · top 92% match</div>
-              <div style={{ marginTop: 6 }}>
-                <span className={ui.cliP}>$</span> cerefox document ingest ./rfc-018.md
-              </div>
-              <div className={ui.cliOut}>→ staged in research-notes</div>
-            </div>
-            <p className={ui.faint} style={{ fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
-              The same memory from your terminal or any MCP agent — most actions
-              have CLI, MCP, and web parity.
-            </p>
-          </section>
+          <CliCard
+            title="Same memory, your terminal"
+            commands={[
+              { cmd: "cerefox search", args: '"retry backoff" --mode hybrid' },
+              { cmd: "cerefox document ingest", args: "./rfc-018.md --project-name infra" },
+            ]}
+          />
         </aside>
       </div>
     </div>
