@@ -1,0 +1,140 @@
+/* Reusable list/table page — toolbar + styled table + pagination.
+   Shared primitives in styles/redesign.module.css; tokens in tokens.css. */
+
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 8px 24px 80px;
+}
+
+/* ---- toolbar ---- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 38px;
+  padding: 0 13px;
+  flex: 1;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-faint);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--text);
+}
+.search input::placeholder {
+  color: var(--text-faint);
+}
+.count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-left: 2px;
+  white-space: nowrap;
+}
+
+/* ---- table ---- */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tbl th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.tbl td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13.5px;
+  vertical-align: middle;
+}
+.tbl tbody tr {
+  transition: background 0.12s;
+}
+.tbl tbody tr:hover {
+  background: var(--surface-2);
+}
+.tbl tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---- row actions (reveal on hover) ---- */
+.actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tbl tbody tr:hover .actions {
+  opacity: 1;
+}
+
+/* ---- pagination foot ---- */
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.pgBtn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.pgBtn:hover:not(:disabled) {
+  border-color: var(--border);
+  color: var(--text);
+}
+.pgBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.emptyRow {
+  text-align: center;
+  padding: 44px;
+  color: var(--text-faint);
+}
+.faint {
+  color: var(--text-faint);
+}

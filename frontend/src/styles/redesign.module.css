@@ -128,6 +128,7 @@
 .bBlue { background: var(--blue-soft); color: var(--blue); }
 .bGreen { background: var(--green-soft); color: var(--green); }
 .bYellow { background: var(--yellow-soft); color: var(--yellow); }
+.bRed { background: var(--red-soft); color: var(--red); }
 .bNeutral { background: var(--surface-2); color: var(--text-dim); }
 
 /* ---- section heads ---- */
@@ -232,6 +233,28 @@
   color: var(--text);
   border-color: var(--border);
   background: var(--surface-hover);
+}
+.iconBtnSm {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.14s;
+}
+.iconBtnSm:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+.iconBtnDanger:hover {
+  color: var(--red);
+  border-color: var(--red-soft);
+  background: var(--red-soft);
 }
 
 /* ---- segmented control ---- */

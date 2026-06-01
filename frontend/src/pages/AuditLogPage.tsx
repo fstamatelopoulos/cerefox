@@ -1,23 +1,15 @@
-import {
-  Anchor,
-  Badge,
-  Container,
-  Group,
-  Loader,
-  Select,
-  Table,
-  Text,
-  TextInput,
-  Title,
-} from "@mantine/core";
-import ui from "../styles/redesign.module.css";
-import { IconSearch } from "@tabler/icons-react";
+import { Select, TextInput } from "@mantine/core";
+import { IconMapPin, IconSparkles } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import type { AuditEntry } from "../api/types";
 import { fetchAuditLog } from "../api/audit";
+import { CliHint } from "../components/CliHint";
+import { ListPage, type ListColumn } from "../components/ListPage";
 import { formatDateTime } from "../utils/dates";
+import ui from "../styles/redesign.module.css";
 
 const OPERATIONS = [
   { value: "", label: "All operations" },
@@ -30,23 +22,32 @@ const OPERATIONS = [
   { value: "unarchive", label: "Unarchive" },
 ];
 
+const OP_TONE: Record<string, string> = {
+  create: ui.bGreen,
+  "update-content": ui.bBlue,
+  "update-metadata": ui.bViolet,
+  "status-change": ui.bYellow,
+  archive: ui.bPrimary,
+  unarchive: ui.bPrimary,
+  delete: ui.bRed,
+};
+
 export function AuditLogPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [operation, setOperation] = useState(searchParams.get("operation") || "");
-  const [author, setAuthor] = useState(searchParams.get("author") || "");
   const [documentId] = useState(searchParams.get("document_id") || "");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [limit, setLimit] = useState("100");
+  const [query, setQuery] = useState("");
 
   const { data: entries, isLoading } = useQuery({
-    queryKey: ["audit-log", operation, author, documentId, fromDate, toDate, limit],
+    queryKey: ["audit-log", operation, documentId, fromDate, toDate, limit],
     queryFn: () =>
       fetchAuditLog({
         operation: operation || undefined,
-        author: author || undefined,
         document_id: documentId || undefined,
         since: fromDate ? `${fromDate}T00:00:00` : undefined,
         until: toDate ? `${toDate}T23:59:59` : undefined,
@@ -54,161 +55,124 @@ export function AuditLogPage() {
       }),
   });
 
-  const operationColor = (op: string) => {
-    switch (op) {
-      case "create": return "green";
-      case "update-content": return "blue";
-      case "update-metadata": return "cyan";
-      case "delete": return "red";
-      case "status-change": return "yellow";
-      case "archive": return "violet";
-      case "unarchive": return "orange";
-      default: return "gray";
-    }
-  };
+  const columns: ListColumn<AuditEntry>[] = [
+    {
+      key: "time",
+      label: "Time",
+      width: 150,
+      render: (e) => (
+        <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+          {formatDateTime(e.created_at)}
+        </span>
+      ),
+    },
+    {
+      key: "op",
+      label: "Operation",
+      width: 150,
+      render: (e) => (
+        <span className={`${ui.badge} ${OP_TONE[e.operation] ?? ui.bNeutral}`}>{e.operation}</span>
+      ),
+    },
+    {
+      key: "author",
+      label: "Author",
+      width: 170,
+      render: (e) => (
+        <span className={`${ui.srcChip} ${e.author_type === "agent" ? ui.srcChipAgent : ""}`}>
+          {e.author_type === "agent" ? <IconSparkles size={12} /> : <IconMapPin size={12} />}
+          {e.author}
+        </span>
+      ),
+    },
+    {
+      key: "doc",
+      label: "Document",
+      render: (e) =>
+        e.document_id ? (
+          <span className={`${ui.link}`} style={{ fontSize: 13 }}>
+            {e.doc_title || `${e.document_id.slice(0, 8)}…`}
+          </span>
+        ) : (
+          <span className={ui.faint} style={{ fontSize: 12 }}>
+            (deleted)
+          </span>
+        ),
+    },
+    {
+      key: "delta",
+      label: "Change",
+      width: 110,
+      align: "right",
+      render: (e) => {
+        if (e.size_before == null && e.size_after == null) {
+          return <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 12 }}>—</span>;
+        }
+        const d = (e.size_after ?? 0) - (e.size_before ?? 0);
+        const color = d > 0 ? "var(--green)" : d < 0 ? "var(--red)" : "var(--text-faint)";
+        return (
+          <span className={ui.mono} style={{ fontSize: 12, color }}>
+            {d > 0 ? "+" : ""}
+            {d.toLocaleString()}
+          </span>
+        );
+      },
+    },
+  ];
 
   return (
-    <Container size="lg">
-      <p className={ui.eyebrow}>History</p>
-      <Title order={2} mb="md">
-        Audit Log
-      </Title>
-
-      <Group mb="md" gap="sm" align="flex-end">
-        <Select
-          label="Operation"
-          placeholder="All operations"
-          data={OPERATIONS}
-          value={operation}
-          onChange={(v) => setOperation(v || "")}
-          clearable
-          w={180}
-          size="sm"
-        />
-        <TextInput
-          label="Author"
-          placeholder="Filter by author"
-          value={author}
-          onChange={(e) => setAuthor(e.currentTarget.value)}
-          leftSection={<IconSearch size={14} />}
-          w={180}
-          size="sm"
-        />
-        <TextInput
-          label="From"
-          type="date"
-          value={fromDate}
-          onChange={(e) => setFromDate(e.currentTarget.value)}
-          w={150}
-          size="sm"
-        />
-        <TextInput
-          label="To"
-          type="date"
-          value={toDate}
-          onChange={(e) => setToDate(e.currentTarget.value)}
-          w={150}
-          size="sm"
-        />
-        <Select
-          label="Max entries"
-          data={["100", "250", "500", "1000"]}
-          value={limit}
-          onChange={(v) => setLimit(v || "100")}
-          w={120}
-          size="sm"
-        />
-        <Text size="sm" c="dimmed" pb={6}>
-          {entries?.length ?? 0} shown
-        </Text>
-      </Group>
-
-      {isLoading ? (
-        <Group justify="center" mt="xl">
-          <Loader />
-        </Group>
-      ) : !entries || entries.length === 0 ? (
-        <Text c="dimmed">No audit log entries found.</Text>
-      ) : (
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Time</Table.Th>
-              <Table.Th>Operation</Table.Th>
-              <Table.Th>Author</Table.Th>
-              <Table.Th>Document</Table.Th>
-              <Table.Th>Description</Table.Th>
-              <Table.Th>Size</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {entries.map((e) => (
-              <Table.Tr key={e.id}>
-                <Table.Td>
-                  <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                    {formatDateTime(e.created_at)}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Badge
-                    variant="light"
-                    size="sm"
-                    color={operationColor(e.operation)}
-                  >
-                    {e.operation}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>
-                  <Group gap={4}>
-                    <Text size="sm">{e.author}</Text>
-                    <Badge
-                      variant="dot"
-                      size="xs"
-                      color={e.author_type === "agent" ? "violet" : "green"}
-                    >
-                      {e.author_type}
-                    </Badge>
-                  </Group>
-                </Table.Td>
-                <Table.Td>
-                  {e.document_id ? (
-                    <Anchor
-                      size="xs"
-                      onClick={(ev) => {
-                        ev.preventDefault();
-                        navigate(`/document/${e.document_id}`);
-                      }}
-                      href={`/app/document/${e.document_id}`}
-                    >
-                      {e.doc_title || e.document_id.slice(0, 8) + "..."}
-                    </Anchor>
-                  ) : (
-                    <Text size="xs" c="dimmed">
-                      (deleted)
-                    </Text>
-                  )}
-                </Table.Td>
-                <Table.Td>
-                  <Text size="xs" lineClamp={2}>
-                    {e.description}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  {e.size_before != null && e.size_after != null ? (
-                    <Text size="xs" c="dimmed">
-                      {e.size_before.toLocaleString()} {"->"} {e.size_after.toLocaleString()}
-                    </Text>
-                  ) : e.size_after != null ? (
-                    <Text size="xs" c="dimmed">
-                      {e.size_after.toLocaleString()}
-                    </Text>
-                  ) : null}
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      )}
-    </Container>
+    <ListPage<AuditEntry>
+      eyebrow="Every read & write"
+      title="Audit Log"
+      subtitle="A complete trail of changes — by human and agent alike."
+      headerRight={<CliHint cmd="cerefox audit list" />}
+      searchValue={query}
+      onSearchChange={setQuery}
+      searchPlaceholder="Filter by document or description…"
+      searchText={(e) => `${e.doc_title ?? ""} ${e.description ?? ""} ${e.author ?? ""}`}
+      toolbarExtra={
+        <>
+          <Select
+            data={OPERATIONS}
+            value={operation}
+            onChange={(v) => setOperation(v || "")}
+            placeholder="All operations"
+            size="sm"
+            w={170}
+            clearable
+          />
+          <TextInput
+            type="date"
+            aria-label="From"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.currentTarget.value)}
+            size="sm"
+            w={150}
+          />
+          <TextInput
+            type="date"
+            aria-label="To"
+            value={toDate}
+            onChange={(e) => setToDate(e.currentTarget.value)}
+            size="sm"
+            w={150}
+          />
+          <Select
+            data={["100", "250", "500", "1000"]}
+            value={limit}
+            onChange={(v) => setLimit(v || "100")}
+            size="sm"
+            w={100}
+          />
+        </>
+      }
+      columns={columns}
+      rows={entries ?? []}
+      rowKey={(e) => e.id}
+      rowClick={(e) => e.document_id && navigate(`/document/${e.document_id}`)}
+      loading={isLoading}
+      emptyText="No audit log entries found."
+      pageSize={12}
+    />
   );
 }
