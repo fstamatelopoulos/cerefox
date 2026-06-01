@@ -149,10 +149,17 @@ export interface DashboardDoc {
   review_status: string;
   updated_at: string | null;
   project_ids: string[];
+  /** Latest audit author (who last touched the doc); null until deployed/known. */
+  author?: string | null;
+  author_type?: string | null;
 }
 
 export interface DashboardResponse {
   doc_count: number;
+  /** Global count of current (non-archived) chunks across active documents. */
+  total_chunks: number;
+  /** Sum of total_chars across active (non-deleted) documents. */
+  total_chars: number;
   project_count: number;
   recent_docs: DashboardDoc[];
   projects: Project[];

@@ -107,11 +107,17 @@ export const DashboardDoc = z.object({
   review_status: z.string(),
   updated_at: z.string(),
   project_ids: z.array(z.string()).default([]),
+  author: z.string().nullable().default(null),
+  author_type: z.string().nullable().default(null),
 });
 export type DashboardDoc = z.infer<typeof DashboardDoc>;
 
 export const DashboardResponse = z.object({
   doc_count: z.number().int(),
+  // TS-only additions (the live route always sends them); default keeps the
+  // schema parsing older/Python-parity payloads that predate these fields.
+  total_chunks: z.number().int().default(0),
+  total_chars: z.number().int().default(0),
   project_count: z.number().int(),
   recent_docs: z.array(DashboardDoc),
   projects: z.array(ProjectResponse),

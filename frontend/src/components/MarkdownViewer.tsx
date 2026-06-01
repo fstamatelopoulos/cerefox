@@ -11,7 +11,7 @@ interface MarkdownViewerProps {
   /** Which tab to show by default: "rendered" or "raw". */
   defaultView?: "rendered" | "raw";
   /** Max height for the content area (overflows with scroll). */
-  maxHeight?: number;
+  maxHeight?: number | string;
   /** Whether to show the Rendered/Raw toggle. Defaults to true. */
   showToggle?: boolean;
   /**

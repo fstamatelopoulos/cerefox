@@ -1,0 +1,76 @@
+/* ============================================================
+   Cerefox — semantic design tokens (redesign).
+   Accents derive from Mantine's generated vars so theme.ts is
+   the single source of truth for brand hues. Only the neutral
+   surfaces/text (which Mantine doesn't express semantically)
+   are bespoke, scoped to the resolved color-scheme so "auto"
+   works. Targeted CSS modules consume these.
+   ============================================================ */
+
+:root {
+  --font-ui: "Geist", system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-pill: 999px;
+  --radius-card: 14px;
+  --radius-ctrl: 10px;
+  --radius-sm: 8px;
+}
+
+/* ---- neutrals + elevation (bespoke; no clean Mantine equivalent) ---- */
+[data-mantine-color-scheme="dark"] {
+  --bg: oklch(0.165 0.026 285);
+  --surface: oklch(0.215 0.028 285);
+  --surface-2: oklch(0.255 0.03 285);
+  --surface-hover: oklch(0.275 0.032 285);
+  --border: oklch(0.32 0.03 285);
+  --border-soft: oklch(0.27 0.026 285);
+
+  --text: oklch(0.965 0.008 285);
+  --text-dim: oklch(0.73 0.02 285);
+  --text-faint: oklch(0.56 0.022 285);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-md: 0 8px 24px -8px oklch(0 0 0 / 0.55);
+  --shadow-lg: 0 24px 60px -16px oklch(0 0 0 / 0.65);
+  --scrim: oklch(0.1 0.02 285 / 0.66);
+}
+
+[data-mantine-color-scheme="light"] {
+  --bg: oklch(0.972 0.006 280);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.005 285);
+  --surface-hover: oklch(0.955 0.008 285);
+  --border: oklch(0.905 0.01 285);
+  --border-soft: oklch(0.935 0.008 285);
+
+  --text: oklch(0.235 0.032 285);
+  --text-dim: oklch(0.47 0.025 285);
+  --text-faint: oklch(0.62 0.02 285);
+
+  --shadow-sm: 0 1px 2px oklch(0.4 0.03 285 / 0.1);
+  --shadow-md: 0 10px 30px -12px oklch(0.4 0.05 285 / 0.18);
+  --shadow-lg: 0 28px 64px -20px oklch(0.35 0.06 285 / 0.28);
+  --scrim: oklch(0.3 0.03 285 / 0.32);
+}
+
+/* ---- accents: derived from Mantine (already scheme-aware) ---- */
+[data-mantine-color-scheme] {
+  --primary: var(--mantine-primary-color-filled);
+  --primary-strong: var(--mantine-primary-color-filled-hover);
+  --on-primary: var(--mantine-primary-color-contrast);
+  --primary-soft: var(--mantine-primary-color-light);
+  --primary-line: color-mix(in oklab, var(--primary) 35%, transparent);
+
+  --violet: var(--mantine-color-violet-filled);
+  --violet-soft: var(--mantine-color-violet-light);
+  --blue: var(--mantine-color-blue-filled);
+  --blue-soft: var(--mantine-color-blue-light);
+  --green: var(--mantine-color-green-filled);
+  --green-soft: var(--mantine-color-green-light);
+  --yellow: var(--mantine-color-yellow-filled);
+  --yellow-soft: var(--mantine-color-yellow-light);
+  --red: var(--mantine-color-red-filled);
+  --red-soft: var(--mantine-color-red-light);
+}

@@ -1,0 +1,415 @@
+/* Shared redesign primitives — reused across redesigned pages.
+   Page-specific layout lives in each page's own *.module.css.
+   Consumes the semantic tokens in tokens.css. */
+
+/* ---- typography bits ---- */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin: 0 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.eyebrow::before {
+  content: "";
+  width: 16px;
+  height: 1.5px;
+  background: var(--primary);
+  display: inline-block;
+}
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-size: 30px;
+  line-height: 1.1;
+  margin: 0;
+  color: var(--text);
+}
+.pageSub {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 6px 0 0;
+}
+.pageSub b {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.mono { font-family: var(--font-mono); }
+.dim { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.col { display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; }
+.link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.14s;
+}
+.link:hover { color: var(--primary); }
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 9px 15px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btnPrimary {
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-sm);
+}
+.btnPrimary:hover {
+  background: var(--primary-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.btnGhost {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border-soft);
+}
+.btnGhost:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+.btnSubtle {
+  background: transparent;
+  color: var(--text-dim);
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+.btnSubtle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ---- cards ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+}
+.cardPad { padding: 18px; }
+
+/* ---- badges + accent fills ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.bPrimary { background: var(--primary-soft); color: var(--primary); }
+.bViolet { background: var(--violet-soft); color: var(--violet); }
+.bBlue { background: var(--blue-soft); color: var(--blue); }
+.bGreen { background: var(--green-soft); color: var(--green); }
+.bYellow { background: var(--yellow-soft); color: var(--yellow); }
+.bRed { background: var(--red-soft); color: var(--red); }
+.bNeutral { background: var(--surface-2); color: var(--text-dim); }
+
+/* ---- section heads ---- */
+.secHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.secTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+.secTitle svg { color: var(--text-dim); }
+.countPill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border-soft);
+}
+
+/* ---- source/author chip ---- */
+.srcChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border-soft);
+  color: var(--text-dim);
+  background: var(--surface-2);
+}
+.srcChipAgent {
+  color: var(--violet);
+  background: var(--violet-soft);
+  border-color: transparent;
+}
+
+/* ---- "why no data?" inline link ---- */
+.whatis {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--text-faint);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  padding: 0;
+}
+.whatis:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* ---- page head (eyebrow + title + right meta) ---- */
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+/* ---- divider ---- */
+.divider {
+  height: 1px;
+  background: var(--border-soft);
+  border: 0;
+  margin: 0;
+}
+
+/* ---- icon button ---- */
+.iconBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.iconBtn:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+.iconBtnSm {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.14s;
+}
+.iconBtnSm:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+.iconBtnDanger:hover {
+  color: var(--red);
+  border-color: var(--red-soft);
+  background: var(--red-soft);
+}
+
+/* ---- segmented control ---- */
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+}
+.segBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  padding: 6px 13px;
+  border-radius: 8px;
+  transition: all 0.14s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.segBtn:hover {
+  color: var(--text);
+}
+.segBtnOn {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- chip (toggle) ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.14s;
+}
+.chip:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+.chipOn {
+  background: var(--primary-soft);
+  border-color: var(--primary-line);
+  color: var(--primary);
+}
+
+/* ---- compact native select ---- */
+.selectWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  height: 32px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.selectWrap:hover {
+  border-color: var(--border);
+}
+.selectEl {
+  appearance: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  padding-right: 2px;
+  max-width: 180px;
+}
+.selectEl option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* ---- CLI-mirror card ---- */
+.cliCard {
+  background: linear-gradient(160deg, var(--surface), var(--surface-2));
+  padding: 18px;
+}
+.cliBlock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  padding: 12px 13px;
+}
+.cliP {
+  color: var(--primary);
+  margin-right: 7px;
+}
+.cliS {
+  color: var(--green);
+}
+.cliOut {
+  color: var(--text-faint);
+  padding-left: 17px;
+}
+
+/* compact inline terminal snippet (CliHint) — same theming as cliBlock */
+.cliHintBlock {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 5px 10px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.14s;
+  max-width: 440px;
+}
+.cliHintBlock:hover {
+  border-color: var(--border);
+}
+.cliHintArgs {
+  color: var(--green);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- entrance ---- */
+.rise {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes rise {
+  from { transform: translateY(9px); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: none; }
+}

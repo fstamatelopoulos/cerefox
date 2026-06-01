@@ -156,19 +156,25 @@ export function listBundledDocs(): DocEntry[] {
  * the resolved absolute path escapes the docs roots (path-traversal).
  */
 export function readDoc(docPath: string): string | null {
-  const { pkgTopLevel, repoTopLevel } = resolveDocsRoots();
-  const roots = [pkgTopLevel, repoTopLevel].filter((r): r is string => r !== null);
-  for (const root of roots) {
-    const candidate = resolve(root, docPath);
-    if (!candidate.startsWith(resolve(root) + "/") && candidate !== resolve(root)) {
-      continue;
-    }
-    if (existsSync(candidate) && statSync(candidate).isFile()) {
-      try {
-        return readFileSync(candidate, "utf8");
-      } catch {
-        return null;
-      }
+  const { pkgGuides, pkgTopLevel, repoGuides, repoTopLevel } = resolveDocsRoots();
+  // Resolve against the same roots listBundledDocs emits paths from: guide
+  // paths (`guides/<name>`) live under the guides dir (which is itself under
+  // `<root>/docs/guides`), top-level docs (README.md, …) under the doc root.
+  const isGuide = docPath.startsWith("guides/");
+  const root = isGuide ? (pkgGuides ?? repoGuides) : (pkgTopLevel ?? repoTopLevel);
+  if (!root) return null;
+  const rel = isGuide ? docPath.slice("guides/".length) : docPath;
+  const rootResolved = resolve(root);
+  const candidate = resolve(rootResolved, rel);
+  // Path-traversal guard: the resolved file must stay inside the root.
+  if (!candidate.startsWith(rootResolved + "/") && candidate !== rootResolved) {
+    return null;
+  }
+  if (existsSync(candidate) && statSync(candidate).isFile()) {
+    try {
+      return readFileSync(candidate, "utf8");
+    } catch {
+      return null;
     }
   }
   return null;

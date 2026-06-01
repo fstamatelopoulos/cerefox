@@ -29,6 +29,8 @@ import {
   type UsageSummary,
 } from "../api/analytics";
 import { fetchProjects } from "../api/projects";
+import { showSuccess } from "../utils/notifications";
+import ui from "../styles/redesign.module.css";
 import { WordCloudChart } from "../components/WordCloudChart";
 import { HEBChart } from "../components/HEBChart";
 import { HEBOperationChart } from "../components/HEBOperationChart";
@@ -144,8 +146,14 @@ export function AnalyticsPage() {
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) =>
       setConfig("usage_tracking_enabled", enabled ? "true" : "false"),
-    onSuccess: () => {
+    onSuccess: (_, enabled) => {
       queryClient.invalidateQueries({ queryKey: ["config"] });
+      showSuccess(
+        `Usage tracking ${enabled ? "enabled" : "disabled"}`,
+        enabled
+          ? "Reads and writes will now be recorded in the usage log."
+          : "Operations will no longer be recorded.",
+      );
     },
   });
 
@@ -167,9 +175,18 @@ export function AnalyticsPage() {
 
   return (
     <Container size="xl">
+      <p className={ui.eyebrow}>Usage</p>
       <Group justify="space-between" mb="md">
         <Title order={2}>Analytics</Title>
-        <Group gap="xs">
+        <Group gap="md">
+          <Switch
+            label="Usage tracking"
+            checked={isEnabled}
+            onChange={(e) => toggleMutation.mutate(e.currentTarget.checked)}
+            size="sm"
+            color="green"
+            disabled={toggleMutation.isPending}
+          />
           <Button
             variant="subtle"
             leftSection={<IconDownload size={16} />}
@@ -228,15 +245,6 @@ export function AnalyticsPage() {
             w={150}
             clearable
           />
-          <Stack gap={2} justify="flex-end" style={{ paddingTop: 20 }}>
-            <Switch
-              label="Tracking"
-              checked={isEnabled}
-              onChange={(e) => toggleMutation.mutate(e.currentTarget.checked)}
-              size="sm"
-              color={isEnabled ? "green" : "gray"}
-            />
-          </Stack>
           <Stack gap={2} justify="flex-end" style={{ paddingTop: 20 }}>
             <Button
               leftSection={<IconPlayerPlay size={16} />}

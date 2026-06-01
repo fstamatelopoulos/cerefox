@@ -1,0 +1,180 @@
+/* Ingest (redesign) — page-specific layout.
+   Shared primitives in src/styles/redesign.module.css; tokens in tokens.css. */
+
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 8px 24px 80px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 28px;
+  align-items: start;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---- fields ---- */
+.field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.input {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 13px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+.input::placeholder {
+  color: var(--text-faint);
+}
+.input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.textarea {
+  min-height: 280px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.preview {
+  min-height: 280px;
+}
+
+/* ---- drop zone ---- */
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 36px 20px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dropZone:hover,
+.dropZoneOver {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.dropZoneHas {
+  border-style: solid;
+  border-color: var(--primary-line);
+}
+.dropIco {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+/* ---- toggle switch ---- */
+.toggleRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+}
+.toggle {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--surface-hover);
+  padding: 2px;
+  cursor: pointer;
+  transition: background 0.16s;
+  flex-shrink: 0;
+}
+.toggle span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform 0.16s, background 0.16s;
+}
+.toggleOn {
+  background: var(--primary);
+}
+.toggleOn span {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+/* ---- pipeline steps ---- */
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.steps li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.steps li div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.steps li b {
+  font-size: 13px;
+}
+.steps li span.faint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+.stepN {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 4px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}

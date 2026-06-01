@@ -8,15 +8,18 @@ import {
   NavLink,
   Stack,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
-import { IconBook, IconRobot, IconFileText } from "@tabler/icons-react";
+import { IconBook, IconRobot, IconFileText, IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { fetchDocContent, fetchDocsIndex, type DocEntry } from "../api/docs";
+import { CliHint } from "../components/CliHint";
 import { MarkdownViewer } from "../components/MarkdownViewer";
+import ui from "../styles/redesign.module.css";
 
 const CATEGORY_LABELS: Record<string, string> = {
   readme: "Project overview",
@@ -43,6 +46,14 @@ export function HelpPage() {
   });
 
   const docs = indexQuery.data ?? [];
+  const [filter, setFilter] = useState("");
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return docs;
+    return docs.filter(
+      (d) => d.title.toLowerCase().includes(q) || d.path.toLowerCase().includes(q),
+    );
+  }, [docs, filter]);
 
   // Default to README on first visit
   const selectedPath = docPath && docPath.length > 0 ? docPath : docs[0]?.path;
@@ -56,11 +67,11 @@ export function HelpPage() {
 
   const grouped = useMemo(() => {
     const out: Record<string, DocEntry[]> = {};
-    for (const entry of docs) {
+    for (const entry of filtered) {
       (out[entry.category] ??= []).push(entry);
     }
     return out;
-  }, [docs]);
+  }, [filtered]);
 
   if (indexQuery.isLoading) {
     return (
@@ -94,13 +105,27 @@ export function HelpPage() {
   }
 
   return (
-    <Container fluid py="md">
+    <Container fluid py="xs">
+      <p className={ui.eyebrow}>Reference</p>
       <Grid gutter="md">
         <Grid.Col span={{ base: 12, md: 3 }}>
           <Stack gap={2}>
             <Title order={5} mb="xs">
               Help
             </Title>
+            <TextInput
+              placeholder="Filter guides…"
+              value={filter}
+              onChange={(e) => setFilter(e.currentTarget.value)}
+              leftSection={<IconSearch size={14} />}
+              size="xs"
+              mb="sm"
+            />
+            {filtered.length === 0 && (
+              <Text size="xs" c="dimmed">
+                No guides match "{filter}".
+              </Text>
+            )}
             {CATEGORY_ORDER.filter((cat) => grouped[cat]?.length).map((cat) => (
               <Stack key={cat} gap={0} mb="sm">
                 <Group gap={6} mb={4} mt={6}>
@@ -132,21 +157,28 @@ export function HelpPage() {
           )}
           {contentQuery.data && (
             <Stack gap="sm">
-              <Group justify="space-between" align="flex-end">
+              <Group justify="space-between" align="flex-end" wrap="nowrap">
                 <Title order={3}>
                   {docs.find((d) => d.path === selectedPath)?.title ?? selectedPath}
                 </Title>
-                <Anchor
-                  size="xs"
-                  c="dimmed"
-                  href={`/api/v1/docs/${selectedPath}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  raw
-                </Anchor>
+                <Group gap="sm" wrap="nowrap">
+                  <CliHint cmd="cerefox guides show" args={selectedPath} />
+                  <Anchor
+                    size="xs"
+                    c="dimmed"
+                    href={`/api/v1/docs/${selectedPath}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    raw
+                  </Anchor>
+                </Group>
               </Group>
-              <MarkdownViewer content={contentQuery.data} showToggle={false} />
+              <MarkdownViewer
+                content={contentQuery.data}
+                showToggle={false}
+                maxHeight="calc(100vh - 170px)"
+              />
             </Stack>
           )}
         </Grid.Col>

@@ -1,85 +1,71 @@
-import {
-  Alert,
-  Button,
-  Container,
-  FileInput,
-  Group,
-  MultiSelect,
-  Stack,
-  Tabs,
-  TextInput,
-  Textarea,
-  Title,
-  Text,
-  ActionIcon,
-  Select,
-  SegmentedControl,
-} from "@mantine/core";
-import { IconCheck, IconFileUpload, IconPlus, IconTextSize, IconX } from "@tabler/icons-react";
+import { Alert } from "@mantine/core";
+import { IconCheck, IconFileText, IconPlus, IconSearch, IconTerminal2, IconUpload, IconX } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { MarkdownViewer } from "../components/MarkdownViewer";
-
-import { ingestPaste, checkFilename } from "../api/documents";
 import { detectV07FromResponse } from "../api/client";
-import { useMetadataKeys, useProjects } from "../hooks/useProjects";
+import { checkFilename, ingestPaste } from "../api/documents";
 import type { FilenameCheckResponse, IngestResponse } from "../api/types";
+import { MarkdownViewer } from "../components/MarkdownViewer";
+import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import { showError, showV07DeferredToast } from "../utils/notifications";
+import ui from "../styles/redesign.module.css";
+import styles from "./IngestPage.module.css";
+
+const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
+
+type Tab = "paste" | "file";
 
 export function IngestPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: projects } = useProjects();
   const { data: metadataKeys } = useMetadataKeys();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Paste mode state
+  const [tab, setTab] = useState<Tab>("paste");
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [projectIds, setProjectIds] = useState<string[]>([]);
-  const [updateExisting, setUpdateExisting] = useState(false);
+  const [projFilter, setProjFilter] = useState("");
   const [metaPairs, setMetaPairs] = useState<{ key: string; value: string }[]>([]);
-  const [contentView, setContentView] = useState<string>("edit");
-
-  // File mode state
+  const [updateExisting, setUpdateExisting] = useState(false);
+  const [content, setContent] = useState("");
+  const [contentView, setContentView] = useState<"edit" | "preview">("edit");
   const [file, setFile] = useState<File | null>(null);
-  const [fileTitle, setFileTitle] = useState("");
-  const [fileProjectIds, setFileProjectIds] = useState<string[]>([]);
-  const [fileUpdateExisting, setFileUpdateExisting] = useState(false);
-  const [fileMetaPairs, setFileMetaPairs] = useState<{ key: string; value: string }[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const [filenameCheck, setFilenameCheck] = useState<FilenameCheckResponse | null>(null);
-
-  // Shared result
   const [result, setResult] = useState<IngestResponse | null>(null);
 
+  const collectMeta = () => {
+    const metadata: Record<string, string> = {};
+    for (const p of metaPairs) {
+      if (p.key.trim() && p.value.trim()) metadata[p.key.trim()] = p.value.trim();
+    }
+    return metadata;
+  };
+
+  const onIngestSuccess = (res: IngestResponse) => {
+    setResult(res);
+    if (res.success) queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  };
+  const onIngestError = (err: unknown) => {
+    if (!showV07DeferredToast(err)) {
+      showError("Ingest failed", err instanceof Error ? err.message : String(err));
+    }
+  };
+
   const pasteMutation = useMutation({
-    mutationFn: () => {
-      const metadata: Record<string, string> = {};
-      for (const pair of metaPairs) {
-        if (pair.key.trim() && pair.value.trim()) {
-          metadata[pair.key.trim()] = pair.value.trim();
-        }
-      }
-      return ingestPaste({
+    mutationFn: () =>
+      ingestPaste({
         title,
         content,
         update_existing: updateExisting,
         project_ids: projectIds,
-        metadata,
-      });
-    },
-    onSuccess: (res) => {
-      setResult(res);
-      if (res.success) {
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-    },
-    onError: (err) => {
-      if (!showV07DeferredToast(err)) {
-        showError("Ingest failed", err instanceof Error ? err.message : String(err));
-      }
-    },
+        metadata: collectMeta(),
+      }),
+    onSuccess: onIngestSuccess,
+    onError: onIngestError,
   });
 
   const fileMutation = useMutation({
@@ -87,25 +73,12 @@ export function IngestPage() {
       if (!file) throw new Error("No file selected");
       const formData = new FormData();
       formData.append("file", file);
-      if (fileTitle.trim()) formData.append("title", fileTitle.trim());
-      formData.append("update_existing", String(fileUpdateExisting));
-      if (fileProjectIds.length > 0) {
-        formData.append("project_ids", fileProjectIds.join(","));
-      }
-      const fileMeta: Record<string, string> = {};
-      for (const pair of fileMetaPairs) {
-        if (pair.key.trim() && pair.value.trim()) {
-          fileMeta[pair.key.trim()] = pair.value.trim();
-        }
-      }
-      if (Object.keys(fileMeta).length > 0) {
-        formData.append("metadata", JSON.stringify(fileMeta));
-      }
-
-      const resp = await fetch("/api/v1/ingest/file", {
-        method: "POST",
-        body: formData,
-      });
+      if (title.trim()) formData.append("title", title.trim());
+      formData.append("update_existing", String(updateExisting));
+      if (projectIds.length > 0) formData.append("project_ids", projectIds.join(","));
+      const meta = collectMeta();
+      if (Object.keys(meta).length > 0) formData.append("metadata", JSON.stringify(meta));
+      const resp = await fetch("/api/v1/ingest/file", { method: "POST", body: formData });
       if (!resp.ok) {
         const v07 = await detectV07FromResponse(resp);
         if (v07) throw v07;
@@ -113,104 +86,55 @@ export function IngestPage() {
       }
       return resp.json() as Promise<IngestResponse>;
     },
-    onSuccess: (res) => {
-      setResult(res);
-      if (res.success) {
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-    },
-    onError: (err) => {
-      if (!showV07DeferredToast(err)) {
-        showError("File ingest failed", err instanceof Error ? err.message : String(err));
-      }
-    },
+    onSuccess: onIngestSuccess,
+    onError: onIngestError,
   });
 
-  const handleFileChange = async (f: File | null) => {
+  const handleFile = async (f: File | null) => {
     setFile(f);
     setFilenameCheck(null);
     if (f?.name) {
       try {
         const check = await checkFilename(f.name);
         setFilenameCheck(check);
-        if (check.exists) setFileUpdateExisting(true);
+        if (check.exists) setUpdateExisting(true);
       } catch {
-        // ignore check errors
+        /* ignore check errors */
       }
     }
   };
 
-  const projectOptions =
-    projects?.map((p) => ({ value: p.id, label: p.name })) || [];
+  const toggleProject = (id: string) =>
+    setProjectIds((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
-  const keyOptions =
-    metadataKeys?.map((mk) => ({
-      value: mk.key,
-      label: `${mk.key} (${mk.doc_count})`,
-    })) || [];
+  const submit = () => (tab === "file" ? fileMutation.mutate() : pasteMutation.mutate());
+  const pending = pasteMutation.isPending || fileMutation.isPending;
+  const canSubmit =
+    tab === "file" ? !!file : title.trim().length > 0 && content.trim().length > 0;
 
-  const renderMetaFields = (
-    pairs: { key: string; value: string }[],
-    setPairs: (p: { key: string; value: string }[]) => void,
-  ) => (
-    <div>
-      <Text size="sm" fw={500} mb="xs">
-        Metadata (optional)
-      </Text>
-      <Stack gap="xs">
-        {pairs.map((pair, idx) => (
-          <Group key={idx} gap="xs">
-            <Select
-              placeholder="Key"
-              data={keyOptions}
-              value={pair.key}
-              onChange={(v) => {
-                const updated = [...pairs];
-                updated[idx] = { ...pair, key: v || "" };
-                setPairs(updated);
-              }}
-              searchable
-              w={200}
-              size="sm"
-            />
-            <TextInput
-              placeholder="Value"
-              value={pair.value}
-              onChange={(e) => {
-                const updated = [...pairs];
-                updated[idx] = { ...pair, value: e.currentTarget.value };
-                setPairs(updated);
-              }}
-              w={250}
-              size="sm"
-            />
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => setPairs(pairs.filter((_, i) => i !== idx))}
-            >
-              <IconX size={14} />
-            </ActionIcon>
-          </Group>
-        ))}
-        <Button
-          variant="light"
-          size="xs"
-          w={140}
-          leftSection={<IconPlus size={14} />}
-          onClick={() => setPairs([...pairs, { key: "", value: "" }])}
-        >
-          Add field
-        </Button>
-      </Stack>
-    </div>
-  );
+  const chunkEstimate =
+    tab === "paste"
+      ? Math.round(content.length / 700)
+      : file
+        ? Math.round(file.size / 700)
+        : 0;
+
+  const firstProjectName =
+    projects?.find((p) => p.id === projectIds[0])?.name ?? "core-platform";
+
+  const allProjects = projects ?? [];
+  const visibleProjects = projFilter
+    ? allProjects.filter((p) => p.name.toLowerCase().includes(projFilter.toLowerCase()))
+    : allProjects;
 
   return (
-    <Container size="md">
-      <Title order={2} mb="md">
-        Ingest Content
-      </Title>
+    <div className={styles.wrap}>
+      <div className={ui.pageHead}>
+        <div>
+          <p className={ui.eyebrow}>Add to memory</p>
+          <h1 className={ui.pageTitle}>Ingest content</h1>
+        </div>
+      </div>
 
       {result?.success && (
         <Alert
@@ -223,24 +147,17 @@ export function IngestPage() {
         >
           {result.updated
             ? `"${result.title}" updated and re-indexed.`
-            : `"${result.title}" ingested successfully.`}
+            : `"${result.title}" ingested successfully.`}{" "}
           {result.document_id && (
-            <>
-              {" "}
-              <Text
-                component="span"
-                size="sm"
-                c="blue"
-                style={{ cursor: "pointer", textDecoration: "underline" }}
-                onClick={() => navigate(`/document/${result.document_id}`)}
-              >
-                View document
-              </Text>
-            </>
+            <span
+              style={{ cursor: "pointer", textDecoration: "underline", color: "var(--primary)" }}
+              onClick={() => navigate(`/document/${result.document_id}`)}
+            >
+              View document
+            </span>
           )}
         </Alert>
       )}
-
       {result && !result.success && result.error && (
         <Alert
           icon={<IconX size={16} />}
@@ -254,178 +171,330 @@ export function IngestPage() {
         </Alert>
       )}
 
-      <Tabs defaultValue="paste">
-        <Tabs.List mb="md">
-          <Tabs.Tab value="paste" leftSection={<IconTextSize size={16} />}>
-            Paste Content
-          </Tabs.Tab>
-          <Tabs.Tab value="file" leftSection={<IconFileUpload size={16} />}>
-            Upload File
-          </Tabs.Tab>
-        </Tabs.List>
+      <div className={ui.seg} style={{ marginBottom: 20 }}>
+        <button
+          type="button"
+          className={`${ui.segBtn} ${tab === "paste" ? ui.segBtnOn : ""}`}
+          onClick={() => setTab("paste")}
+        >
+          <IconFileText size={14} />
+          Paste content
+        </button>
+        <button
+          type="button"
+          className={`${ui.segBtn} ${tab === "file" ? ui.segBtnOn : ""}`}
+          onClick={() => setTab("file")}
+        >
+          <IconUpload size={14} />
+          Upload file
+        </button>
+      </div>
 
-        <Tabs.Panel value="paste">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              pasteMutation.mutate();
-            }}
-          >
-            <Stack gap="md">
-              <TextInput
-                label="Title"
-                value={title}
-                onChange={(e) => setTitle(e.currentTarget.value)}
-                required
-                placeholder="Document title"
-              />
+      <form
+        className={styles.split}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canSubmit) submit();
+        }}
+      >
+        <div className={styles.col}>
+          {/* common fields stay put across tabs */}
+          <div className={styles.field}>
+            <label>
+              Title
+              {tab === "file" && <span className={ui.faint}> (optional — defaults to filename)</span>}
+            </label>
+            <input
+              className={styles.input}
+              value={title}
+              onChange={(e) => setTitle(e.currentTarget.value)}
+              placeholder="Document title"
+            />
+          </div>
 
-              {projectOptions.length > 0 && (
-                <MultiSelect
-                  label="Projects"
-                  data={projectOptions}
-                  value={projectIds}
-                  onChange={setProjectIds}
-                  clearable
-                  searchable
-                  placeholder="Assign to projects (optional)"
-                />
+          {allProjects.length > 0 && (
+            <div className={styles.field}>
+              <label>Projects</label>
+              {allProjects.length > 8 && (
+                <div className={ui.selectWrap} style={{ width: "100%", marginBottom: 8, height: 34 }}>
+                  <IconSearch size={14} />
+                  <input
+                    className={ui.selectEl}
+                    style={{ maxWidth: "none", flex: 1 }}
+                    placeholder={`Filter ${allProjects.length} projects…`}
+                    value={projFilter}
+                    onChange={(e) => setProjFilter(e.currentTarget.value)}
+                  />
+                </div>
               )}
-
-              {renderMetaFields(metaPairs, setMetaPairs)}
-
-              <div>
-                <Group justify="space-between" mb="xs">
-                  <Text size="sm" fw={500}>
-                    Content
-                  </Text>
-                  <SegmentedControl
-                    size="xs"
-                    value={contentView}
-                    onChange={setContentView}
-                    data={[
-                      { label: "Edit", value: "edit" },
-                      { label: "Preview", value: "preview" },
-                    ]}
-                    w={160}
-                  />
-                </Group>
-                {contentView === "edit" ? (
-                  <Textarea
-                    value={content}
-                    onChange={(e) => setContent(e.currentTarget.value)}
-                    minRows={10}
-                    autosize
-                    required
-                    placeholder="Paste your Markdown content here..."
-                    styles={{ input: { fontFamily: "monospace", fontSize: 13 } }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      border: "1px solid var(--mantine-color-gray-3)",
-                      borderRadius: 8,
-                      padding: 12,
-                      minHeight: 200,
-                    }}
-                  >
-                    <MarkdownViewer
-                      content={content}
-                      defaultView="rendered"
-                      maxHeight={400}
-                      showToggle={false}
-                    />
-                  </div>
+              <div className={ui.row} style={{ gap: 7, flexWrap: "wrap" }}>
+                {visibleProjects.map((p) => {
+                  const idx = allProjects.indexOf(p);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`${ui.chip} ${projectIds.includes(p.id) ? ui.chipOn : ""}`}
+                      onClick={() => toggleProject(p.id)}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: `var(${PROJECT_COLORS[idx % PROJECT_COLORS.length]})`,
+                        }}
+                      />
+                      {p.name}
+                    </button>
+                  );
+                })}
+                {visibleProjects.length === 0 && (
+                  <span className={ui.faint} style={{ fontSize: 12.5 }}>
+                    No projects match "{projFilter}".
+                  </span>
                 )}
               </div>
+            </div>
+          )}
 
-              <Group>
-                <Button type="submit" loading={pasteMutation.isPending}>
-                  Ingest
-                </Button>
-                <Button
-                  variant={updateExisting ? "filled" : "light"}
-                  color={updateExisting ? "yellow" : "gray"}
-                  size="sm"
-                  onClick={() => setUpdateExisting(!updateExisting)}
-                >
-                  {updateExisting ? "Update existing: ON" : "Update existing: OFF"}
-                </Button>
-              </Group>
-            </Stack>
-          </form>
-        </Tabs.Panel>
+          <div className={styles.field}>
+            <label>
+              Metadata <span className={ui.faint}>(optional)</span>
+            </label>
+            <datalist id="cerefox-meta-keys">
+              {metadataKeys?.map((mk) => (
+                <option key={mk.key} value={mk.key} />
+              ))}
+            </datalist>
+            <div className={ui.col} style={{ gap: 8 }}>
+              {metaPairs.map((p, i) => (
+                <div key={i} className={ui.row} style={{ gap: 8 }}>
+                  <input
+                    className={styles.input}
+                    style={{ flex: 1 }}
+                    list="cerefox-meta-keys"
+                    placeholder="key"
+                    value={p.key}
+                    onChange={(e) =>
+                      setMetaPairs((m) =>
+                        m.map((x, idx) => (idx === i ? { ...x, key: e.currentTarget.value } : x)),
+                      )
+                    }
+                  />
+                  <input
+                    className={styles.input}
+                    style={{ flex: 1 }}
+                    placeholder="value"
+                    value={p.value}
+                    onChange={(e) =>
+                      setMetaPairs((m) =>
+                        m.map((x, idx) => (idx === i ? { ...x, value: e.currentTarget.value } : x)),
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    className={ui.iconBtn}
+                    aria-label="Remove"
+                    onClick={() => setMetaPairs((m) => m.filter((_, idx) => idx !== i))}
+                  >
+                    <IconX size={15} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className={`${ui.btn} ${ui.btnSubtle}`}
+                style={{ alignSelf: "flex-start" }}
+                onClick={() => setMetaPairs((m) => [...m, { key: "", value: "" }])}
+              >
+                <IconPlus size={14} />
+                Add field
+              </button>
+            </div>
+          </div>
 
-        <Tabs.Panel value="file">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              fileMutation.mutate();
-            }}
-          >
-            <Stack gap="md">
-              <FileInput
-                label="File"
-                placeholder="Select a .md, .txt, or .docx file"
+          {/* tab-specific primary input (same slot for both tabs) */}
+          {tab === "file" ? (
+            <div className={styles.field}>
+              <label>File</label>
+              <input
+                ref={fileInputRef}
+                type="file"
                 accept=".md,.txt,.docx"
-                value={file}
-                onChange={handleFileChange}
-                required
+                style={{ display: "none" }}
+                onChange={(e) => handleFile(e.currentTarget.files?.[0] ?? null)}
               />
-
+              <div
+                className={`${styles.dropZone} ${dragOver ? styles.dropZoneOver : ""} ${file ? styles.dropZoneHas : ""}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) handleFile(f);
+                }}
+              >
+                <span className={styles.dropIco}>
+                  <IconUpload size={20} />
+                </span>
+                {file ? (
+                  <>
+                    <div className={ui.mono} style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>
+                      {file.name}
+                    </div>
+                    <span className={ui.faint} style={{ fontSize: 12.5 }}>
+                      Ready to ingest · click to replace
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>
+                      Drop a file or click to browse
+                    </div>
+                    <span className={ui.faint} style={{ fontSize: 12.5 }}>
+                      .md · .txt · .docx
+                    </span>
+                  </>
+                )}
+              </div>
               {filenameCheck?.exists && (
-                <Alert color="blue" variant="light">
-                  <Text size="sm">
-                    A document with filename "{filenameCheck.title}" already
-                    exists (last updated{" "}
-                    {filenameCheck.updated_at
-                      ? new Date(filenameCheck.updated_at).toLocaleDateString()
-                      : "unknown"}
-                    ).
-                  </Text>
+                <Alert color="blue" variant="light" mt="sm">
+                  A document named "{filenameCheck.title}" already exists (updated{" "}
+                  {filenameCheck.updated_at
+                    ? new Date(filenameCheck.updated_at).toLocaleDateString()
+                    : "unknown"}
+                  ). Enable "Update existing" to overwrite it.
                 </Alert>
               )}
-
-              <TextInput
-                label="Title (optional)"
-                value={fileTitle}
-                onChange={(e) => setFileTitle(e.currentTarget.value)}
-                placeholder="Defaults to filename if empty"
-              />
-
-              {projectOptions.length > 0 && (
-                <MultiSelect
-                  label="Projects"
-                  data={projectOptions}
-                  value={fileProjectIds}
-                  onChange={setFileProjectIds}
-                  clearable
-                  searchable
-                  placeholder="Assign to projects (optional)"
+            </div>
+          ) : (
+            <div className={styles.field}>
+              <div className={ui.row} style={{ justifyContent: "space-between", marginBottom: 8 }}>
+                <label style={{ margin: 0 }}>Content</label>
+                <div className={ui.seg} style={{ padding: 2 }}>
+                  <button
+                    type="button"
+                    className={`${ui.segBtn} ${contentView === "edit" ? ui.segBtnOn : ""}`}
+                    style={{ padding: "4px 10px" }}
+                    onClick={() => setContentView("edit")}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className={`${ui.segBtn} ${contentView === "preview" ? ui.segBtnOn : ""}`}
+                    style={{ padding: "4px 10px" }}
+                    onClick={() => setContentView("preview")}
+                  >
+                    Preview
+                  </button>
+                </div>
+              </div>
+              {contentView === "edit" ? (
+                <textarea
+                  className={`${styles.input} ${styles.textarea}`}
+                  value={content}
+                  onChange={(e) => setContent(e.currentTarget.value)}
+                  placeholder="# Paste your Markdown here…"
                 />
+              ) : (
+                <div className={`${ui.card} ${ui.cardPad} ${styles.preview}`}>
+                  {content.trim() ? (
+                    <MarkdownViewer content={content} defaultView="rendered" maxHeight={400} showToggle={false} />
+                  ) : (
+                    <span className={ui.faint}>Nothing to preview yet.</span>
+                  )}
+                </div>
               )}
+            </div>
+          )}
 
-              {renderMetaFields(fileMetaPairs, setFileMetaPairs)}
+          <div className={styles.actions}>
+            <button type="submit" className={`${ui.btn} ${ui.btnPrimary}`} disabled={!canSubmit || pending}>
+              <IconCheck size={16} />
+              {tab === "file" ? "Upload & ingest" : "Ingest"}
+            </button>
+            <label className={styles.toggleRow}>
+              <button
+                type="button"
+                className={`${styles.toggle} ${updateExisting ? styles.toggleOn : ""}`}
+                role="switch"
+                aria-checked={updateExisting}
+                onClick={() => setUpdateExisting((v) => !v)}
+              >
+                <span />
+              </button>
+              <span style={{ fontSize: 13 }}>Update existing if title matches</span>
+            </label>
+          </div>
+        </div>
 
-              <Group>
-                <Button type="submit" loading={fileMutation.isPending}>
-                  Upload &amp; Ingest
-                </Button>
-                <Button
-                  variant={fileUpdateExisting ? "filled" : "light"}
-                  color={fileUpdateExisting ? "yellow" : "gray"}
-                  size="sm"
-                  onClick={() => setFileUpdateExisting(!fileUpdateExisting)}
-                >
-                  {fileUpdateExisting
-                    ? "Update existing: ON"
-                    : "Update existing: OFF"}
-                </Button>
-              </Group>
-            </Stack>
-          </form>
-        </Tabs.Panel>
-      </Tabs>
-    </Container>
+        {/* rail */}
+        <aside className={styles.col}>
+          <div className={`${ui.card} ${ui.cardPad} ${ui.rise}`}>
+            <div className={ui.mono} style={{ fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 12 }}>
+              Pipeline
+            </div>
+            <ol className={styles.steps}>
+              <li>
+                <span className={styles.stepN}>1</span>
+                <div>
+                  <b>Chunked</b>
+                  <span className="faint">
+                    Split on headings into ~{chunkEstimate || "—"} semantic chunks.
+                  </span>
+                </div>
+              </li>
+              <li>
+                <span className={styles.stepN}>2</span>
+                <div>
+                  <b>Embedded</b>
+                  <span className="faint">Each chunk vectorized for semantic search.</span>
+                </div>
+              </li>
+              <li>
+                <span className={styles.stepN}>3</span>
+                <div>
+                  <b>Staged</b>
+                  <span className="faint">Indexed and discoverable by your agents.</span>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <div className={`${ui.card} ${ui.cliCard} ${ui.rise}`}>
+            <div className={ui.row} style={{ gap: 8, marginBottom: 10 }}>
+              <IconTerminal2 size={15} />
+              <span style={{ fontWeight: 600, fontSize: 13.5 }}>CLI equivalent</span>
+              <button
+                type="button"
+                className={ui.whatis}
+                style={{ marginLeft: "auto" }}
+                onClick={() => navigate("/help/guides/cli.md")}
+              >
+                cli docs
+              </button>
+            </div>
+            <div className={ui.cliBlock}>
+              <div>
+                <span className={ui.cliP}>$</span> cerefox document ingest{" "}
+                <span className={ui.cliS}>./{file?.name ?? "doc.md"}</span> \
+              </div>
+              <div style={{ paddingLeft: 16 }}>
+                --project-name <span className={ui.cliS}>{firstProjectName}</span>
+              </div>
+              <div className={ui.cliOut}>→ ~{chunkEstimate || "?"} chunks · staged</div>
+            </div>
+          </div>
+        </aside>
+      </form>
+    </div>
   );
 }
