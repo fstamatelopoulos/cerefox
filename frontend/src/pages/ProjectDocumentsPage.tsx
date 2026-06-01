@@ -1,5 +1,5 @@
 import { Loader } from "@mantine/core";
-import { IconArrowLeft, IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import { IconArrowLeft } from "@tabler/icons-react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -7,13 +7,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client";
 import type { ProjectDocumentsResponse } from "../api/types";
 import { CliHint } from "../components/CliHint";
+import { PaginationFoot } from "../components/PaginationFoot";
 import { useProjects } from "../hooks/useProjects";
+import { useRowsPerPage } from "../hooks/useRowsPerPage";
 import { formatDate } from "../utils/dates";
 import ui from "../styles/redesign.module.css";
 import lp from "../components/ListPage.module.css";
-
-// Match the other list views (ListPage default is 10).
-const PAGE_SIZE = 10;
 
 export function ProjectDocumentsPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,13 +23,14 @@ export function ProjectDocumentsPage() {
   const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
 
   const [page, setPage] = useState(1);
-  const offset = (page - 1) * PAGE_SIZE;
+  const [pageSize, setPageSize] = useRowsPerPage();
+  const offset = (page - 1) * pageSize;
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["project-documents", id, page],
+    queryKey: ["project-documents", id, page, pageSize],
     queryFn: () =>
       apiFetch<ProjectDocumentsResponse>(
-        `/projects/${id}/documents?limit=${PAGE_SIZE}&offset=${offset}`,
+        `/projects/${id}/documents?limit=${pageSize}&offset=${offset}`,
       ),
     enabled: !!id,
     placeholderData: keepPreviousData,
@@ -38,9 +38,7 @@ export function ProjectDocumentsPage() {
 
   const docs = data?.documents ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const firstOnPage = total === 0 ? 0 : offset + 1;
-  const lastOnPage = Math.min(offset + docs.length, total);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className={lp.wrap}>
@@ -125,35 +123,18 @@ export function ProjectDocumentsPage() {
               })}
             </tbody>
           </table>
-          <div className={lp.foot}>
-            <span className={lp.faint}>
-              {total === 0 ? "0" : `${firstOnPage}–${lastOnPage}`} of {total}
-              {isFetching && !isLoading ? " · loading…" : ""}
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button
-                type="button"
-                className={lp.pgBtn}
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-                aria-label="Previous page"
-              >
-                <IconChevronLeft size={14} />
-              </button>
-              <span className={lp.faint}>
-                page {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className={lp.pgBtn}
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                aria-label="Next page"
-              >
-                <IconChevronRight size={14} />
-              </button>
-            </div>
-          </div>
+          <PaginationFoot
+            page={page}
+            pageCount={totalPages}
+            total={total}
+            pageSize={pageSize}
+            onPage={setPage}
+            onPageSize={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+            loading={isFetching && !isLoading}
+          />
         </div>
       )}
     </div>

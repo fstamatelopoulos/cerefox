@@ -1,6 +1,8 @@
-import { IconChevronLeft, IconChevronRight, IconSearch } from "@tabler/icons-react";
+import { IconSearch } from "@tabler/icons-react";
 import { type ReactNode, useMemo, useState } from "react";
 
+import { useRowsPerPage } from "../hooks/useRowsPerPage";
+import { PaginationFoot } from "./PaginationFoot";
 import ui from "../styles/redesign.module.css";
 import styles from "./ListPage.module.css";
 
@@ -30,7 +32,6 @@ interface ListPageProps<T> {
   rowKey: (row: T) => string;
   rowClick?: (row: T) => void;
   actions?: (row: T) => ReactNode;
-  pageSize?: number;
   loading?: boolean;
   emptyText?: string;
 }
@@ -50,11 +51,11 @@ export function ListPage<T>({
   rowKey,
   rowClick,
   actions,
-  pageSize = 10,
   loading = false,
   emptyText = "No matching rows.",
 }: ListPageProps<T>) {
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useRowsPerPage();
 
   const filtered = useMemo(() => {
     const q = searchValue.trim().toLowerCase();
@@ -145,23 +146,17 @@ export function ListPage<T>({
             )}
           </tbody>
         </table>
-        <div className={styles.foot}>
-          <span className={styles.faint}>
-            {total === 0 ? "0" : `${cur * pageSize + 1}–${Math.min(total, cur * pageSize + pageSize)}`} of{" "}
-            {total}
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button type="button" className={styles.pgBtn} disabled={cur === 0} onClick={() => setPage(cur - 1)} aria-label="Previous page">
-              <IconChevronLeft size={14} />
-            </button>
-            <span className={styles.faint}>
-              page {cur + 1} / {pages}
-            </span>
-            <button type="button" className={styles.pgBtn} disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)} aria-label="Next page">
-              <IconChevronRight size={14} />
-            </button>
-          </div>
-        </div>
+        <PaginationFoot
+          page={cur + 1}
+          pageCount={pages}
+          total={total}
+          pageSize={pageSize}
+          onPage={(p) => setPage(p - 1)}
+          onPageSize={(n) => {
+            setPageSize(n);
+            setPage(0);
+          }}
+        />
       </div>
     </div>
   );

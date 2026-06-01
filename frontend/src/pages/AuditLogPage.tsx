@@ -172,7 +172,6 @@ export function AuditLogPage() {
       rowClick={(e) => e.document_id && navigate(`/document/${e.document_id}`)}
       loading={isLoading}
       emptyText="No audit log entries found."
-      pageSize={12}
     />
   );
 }
