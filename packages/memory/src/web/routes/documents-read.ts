@@ -171,6 +171,7 @@ export function registerDocumentReadRoutes(app: Hono, ctx: WebContext): void {
         : "approved",
       created_at: meta ? ((meta.created_at as string | null) ?? null) : null,
       updated_at: meta ? ((meta.updated_at as string | null) ?? null) : null,
+      deleted_at: meta ? ((meta.deleted_at as string | null) ?? null) : null,
       versions: versions.map((v) => ({
         version_id: v.version_id,
         version_number: v.version_number,

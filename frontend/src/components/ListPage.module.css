@@ -87,15 +87,12 @@
 }
 
 /* ---- row actions (reveal on hover) ---- */
+/* Row actions are always visible (the row's background still highlights on
+   hover for focus); previously they were hover-reveal, which hid affordances. */
 .actions {
   display: flex;
   gap: 6px;
   justify-content: flex-end;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.tbl tbody tr:hover .actions {
-  opacity: 1;
 }
 
 /* ---- pagination foot ---- */

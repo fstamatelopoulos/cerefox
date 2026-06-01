@@ -1,4 +1,4 @@
-import { Loader, Menu, Modal, Popover, Text } from "@mantine/core";
+import { Loader, Menu, Modal, Popover, Text, Tooltip } from "@mantine/core";
 import {
   IconArrowLeft,
   IconArrowsDiff,
@@ -282,36 +282,43 @@ export function DocumentPage() {
           </div>
           <h1 className={styles.docTitle}>{doc.doc_title || "Untitled"}</h1>
           <div className={styles.docMeta}>
-            <span
-              className={`${ui.srcChip} ${chip.agent ? ui.srcChipAgent : ""}`}
-              title="Origin — how this document was added"
+            <Tooltip
+              label="Origin — how this document was added"
+              openDelay={120}
+              withArrow
+              position="top"
             >
-              <ChipIcon size={12} />
-              {chip.label}
-            </span>
+              <span className={`${ui.srcChip} ${chip.agent ? ui.srcChipAgent : ""}`}>
+                <ChipIcon size={12} />
+                {chip.label}
+              </span>
+            </Tooltip>
             <span className={`${ui.mono} ${ui.faint}`}>{doc.chunk_count} chunks</span>
             <span className={`${ui.mono} ${ui.faint}`}>{doc.total_chars.toLocaleString()} chars</span>
             {doc.updated_at && (
               <span className={`${ui.mono} ${ui.faint}`}>updated {formatDateTime(doc.updated_at)}</span>
             )}
-            <button
-              type="button"
-              className={styles.reviewPill}
-              title="Click to toggle review status"
-              onClick={() => reviewMutation.mutate(approved ? "pending_review" : "approved")}
-              disabled={reviewMutation.isPending}
-            >
-              <span
-                className="dot"
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: approved ? "var(--green)" : "var(--yellow)",
-                }}
-              />
-              {approved ? "Approved" : "Pending"}
-            </button>
+            {/* Review status is an optional gate — irrelevant for a trashed doc, so hide the pill + toggle there. */}
+            {!doc.deleted_at && (
+              <button
+                type="button"
+                className={styles.reviewPill}
+                title="Click to toggle review status"
+                onClick={() => reviewMutation.mutate(approved ? "pending_review" : "approved")}
+                disabled={reviewMutation.isPending}
+              >
+                <span
+                  className="dot"
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: approved ? "var(--green)" : "var(--yellow)",
+                  }}
+                />
+                {approved ? "Approved" : "Pending"}
+              </button>
+            )}
           </div>
         </div>
         <div className={ui.row} style={{ gap: 8, flexShrink: 0 }}>
