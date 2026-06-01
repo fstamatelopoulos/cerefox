@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { fetchDocContent, fetchDocsIndex, type DocEntry } from "../api/docs";
+import { CliHint } from "../components/CliHint";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 import ui from "../styles/redesign.module.css";
 
@@ -156,19 +157,22 @@ export function HelpPage() {
           )}
           {contentQuery.data && (
             <Stack gap="sm">
-              <Group justify="space-between" align="flex-end">
+              <Group justify="space-between" align="flex-end" wrap="nowrap">
                 <Title order={3}>
                   {docs.find((d) => d.path === selectedPath)?.title ?? selectedPath}
                 </Title>
-                <Anchor
-                  size="xs"
-                  c="dimmed"
-                  href={`/api/v1/docs/${selectedPath}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  raw
-                </Anchor>
+                <Group gap="sm" wrap="nowrap">
+                  <CliHint cmd="cerefox guides show" args={selectedPath} />
+                  <Anchor
+                    size="xs"
+                    c="dimmed"
+                    href={`/api/v1/docs/${selectedPath}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    raw
+                  </Anchor>
+                </Group>
               </Group>
               <MarkdownViewer
                 content={contentQuery.data}
