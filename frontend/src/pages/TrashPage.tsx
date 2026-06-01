@@ -131,7 +131,7 @@ export function TrashPage() {
       title="Trash"
       subtitle="Soft-deleted documents — excluded from search until restored or purged."
       headerRight={
-        <div style={{ width: 320, maxWidth: "100%" }}>
+        <div style={{ width: 400, maxWidth: "100%" }}>
           <CliCard
             title="CLI equivalent"
             commands={[

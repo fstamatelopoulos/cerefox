@@ -155,7 +155,7 @@ export function ProjectsPage() {
         title="Projects"
         subtitle="Scoped collections your agents read from and write to."
         headerRight={
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, width: 320, maxWidth: "100%" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, width: 400, maxWidth: "100%" }}>
             <button
               type="button"
               className={`${ui.btn} ${ui.btnPrimary}`}
