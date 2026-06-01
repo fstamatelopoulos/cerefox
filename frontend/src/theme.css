@@ -1,0 +1,27 @@
+/* Ambient brand ground: two soft radial glows behind everything.
+   No markup needed — painted on <body>, scoped to Mantine's color scheme.
+   Orange glow top-right, violet glow top-left, low opacity. */
+
+body {
+  background-attachment: fixed;
+}
+
+[data-mantine-color-scheme="dark"] body {
+  background-image:
+    radial-gradient(60% 50% at 100% 0%,
+      color-mix(in oklab, var(--mantine-color-fox-5) 10%, transparent),
+      transparent 70%),
+    radial-gradient(55% 45% at 0% 0%,
+      color-mix(in oklab, var(--mantine-color-violet-6) 9%, transparent),
+      transparent 70%);
+}
+
+[data-mantine-color-scheme="light"] body {
+  background-image:
+    radial-gradient(60% 50% at 100% 0%,
+      color-mix(in oklab, var(--mantine-color-fox-6) 7%, transparent),
+      transparent 70%),
+    radial-gradient(55% 45% at 0% 0%,
+      color-mix(in oklab, var(--mantine-color-violet-6) 6%, transparent),
+      transparent 70%);
+}
