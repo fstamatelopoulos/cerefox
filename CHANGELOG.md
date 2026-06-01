@@ -9,7 +9,45 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Web UI polish + a CLI parity addition. Client-only — no server deploy.**
+
+### Added
+
+- **`cerefox document list --deleted`** — list soft-deleted (trashed) documents
+  from the CLI (newest-deleted first, with a `deleted_at` column), closing the
+  loop with `document restore` / `document delete`. Documented in `cli.md`;
+  shell completion picks it up automatically.
+- **Reusable multi-line CLI card** on the Dashboard, Ingest, Trash, and Projects
+  pages — the `cerefox …` commands equivalent to each page, each independently
+  copyable (with a ✓ confirmation), no fake example-output lines.
+- **In-trash document view** — opening a trashed document now shows a clear
+  "In trash" banner and swaps the header actions to **Restore / Purge** (Edit,
+  Delete, and the review pill are hidden); `/documents/{id}` now returns
+  `deleted_at` so the UI can detect it.
+- **Pagination controls** on all list views: a **rows-per-page** dropdown
+  (10/25/50/100, persisted in `localStorage` as one global preference) and
+  **first / prev / next / last** arrows.
+
+### Changed
+
+- **Project documents view** (`/projects/:id/documents`) rebuilt to match the
+  redesigned list pattern (styled table, eyebrow, CLI hint, consistent
+  pagination footer), keeping its server-side paging.
+- **Copy buttons** (CLI cards, search result reference) flip to a green ✓ for
+  ~1.2s on click as clipboard confirmation.
+- **Delete affordances** are consistent — every delete/purge highlights red on
+  hover (shared `.btnDanger`); the Document page's Delete is a labelled ghost
+  button matching Edit/Download. Trash/Projects row actions are always visible
+  (no longer hover-only).
+- **Document page**: project tags above the title are clickable (open the
+  project's document list); the origin chip now has a prompt Mantine tooltip.
+- **Analytics**: a tooltip on the usage-tracking toggle explaining what it logs.
+
+### Fixed
+
+- The slow native `title` tooltip on the Document origin chip (easy to miss) is
+  now a Mantine tooltip; the Trash/Projects CLI cards were widened so commands
+  aren't clipped.
 
 ---
 
