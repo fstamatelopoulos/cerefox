@@ -1,6 +1,7 @@
 import { Alert, Loader } from "@mantine/core";
 import {
   IconAlertCircle,
+  IconCheck,
   IconChevronDown,
   IconChevronRight,
   IconCopy,
@@ -8,7 +9,7 @@ import {
   IconSearch,
   IconTerminal2,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { ChunkSearchResult, DocSearchResult, SearchMode, SearchResponse } from "../api/types";
@@ -41,6 +42,17 @@ interface SearchResultsProps {
 export function SearchResults({ data, isLoading, error, hasQuery }: SearchResultsProps) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+  }, []);
+  const copyRef = (id: string, text: string) => {
+    navigator.clipboard?.writeText(text);
+    setCopiedId(id);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopiedId(null), 1200);
+  };
 
   if (!hasQuery) {
     return (
@@ -223,14 +235,18 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
                       type="button"
                       className={`${ui.btn} ${ui.btnSubtle}`}
                       style={{ marginLeft: "auto" }}
-                      title="Copy CLI command to clipboard"
-                      onClick={() => navigator.clipboard?.writeText(`cerefox document get ${docId}`)}
+                      title={copiedId === id ? "Copied!" : "Copy CLI command to clipboard"}
+                      onClick={() => copyRef(id, `cerefox document get ${docId}`)}
                     >
                       <IconTerminal2 size={14} />
                       <span className={ui.mono} style={{ fontSize: 12 }}>
                         cerefox document get {docId.slice(0, 8)}…
                       </span>
-                      <IconCopy size={13} />
+                      {copiedId === id ? (
+                        <IconCheck size={13} style={{ color: "var(--green)" }} />
+                      ) : (
+                        <IconCopy size={13} />
+                      )}
                     </button>
                   </div>
                 </div>

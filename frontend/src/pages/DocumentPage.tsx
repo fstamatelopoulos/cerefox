@@ -266,9 +266,16 @@ export function DocumentPage() {
             {doc.project_ids
               .filter((pid) => projectMap.has(pid))
               .map((pid) => (
-                <span key={pid} className={`${ui.badge} ${ui.bNeutral}`}>
+                <button
+                  key={pid}
+                  type="button"
+                  className={`${ui.badge} ${ui.bNeutral}`}
+                  style={{ cursor: "pointer", border: "1px solid transparent" }}
+                  title={`View documents in ${projectMap.get(pid)}`}
+                  onClick={() => navigate(`/projects/${pid}/documents`)}
+                >
                   {projectMap.get(pid)}
-                </span>
+                </button>
               ))}
           </div>
           <h1 className={styles.docTitle}>{doc.doc_title || "Untitled"}</h1>
@@ -318,12 +325,12 @@ export function DocumentPage() {
           {!confirmDelete ? (
             <button
               type="button"
-              className={`${ui.btn} ${ui.btnSubtle}`}
-              style={{ color: "var(--text-faint)" }}
-              title="Delete"
+              className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
+              title="Delete document"
               onClick={() => setConfirmDelete(true)}
             >
               <IconTrash size={14} />
+              Delete
             </button>
           ) : (
             <div className={ui.row} style={{ gap: 6 }}>
