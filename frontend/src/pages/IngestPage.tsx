@@ -473,6 +473,14 @@ export function IngestPage() {
             <div className={ui.row} style={{ gap: 8, marginBottom: 10 }}>
               <IconTerminal2 size={15} />
               <span style={{ fontWeight: 600, fontSize: 13.5 }}>CLI equivalent</span>
+              <button
+                type="button"
+                className={ui.whatis}
+                style={{ marginLeft: "auto" }}
+                onClick={() => navigate("/help/guides/cli.md")}
+              >
+                cli docs
+              </button>
             </div>
             <div className={ui.cliBlock}>
               <div>

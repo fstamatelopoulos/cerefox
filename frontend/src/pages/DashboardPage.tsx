@@ -101,9 +101,6 @@ export function DashboardPage() {
         <div style={{ minWidth: 0 }}>
           <p className={ui.eyebrow}>Memory layer · online</p>
           <h1 className={ui.pageTitle}>{greeting()}, operator.</h1>
-          <p className={ui.pageSub}>
-            Asynchronous shared memory for your agents — one store across CLI, MCP, and web.
-          </p>
         </div>
         <div className={styles.dashHeroActions}>
           <form
@@ -361,6 +358,14 @@ export function DashboardPage() {
             <div className={ui.row} style={{ gap: 8, marginBottom: 10 }}>
               <IconTerminal2 size={15} />
               <span style={{ fontWeight: 600, fontSize: 13.5 }}>Same memory, your terminal</span>
+              <button
+                type="button"
+                className={ui.whatis}
+                style={{ marginLeft: "auto" }}
+                onClick={() => navigate("/help/guides/cli.md")}
+              >
+                cli docs
+              </button>
             </div>
             <div className={ui.cliBlock}>
               <div>

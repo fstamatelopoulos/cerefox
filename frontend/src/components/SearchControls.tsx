@@ -5,6 +5,7 @@ import {
   IconChevronDown,
   IconFileText,
   IconFolder,
+  IconList,
   IconSearch,
   IconSparkles,
   IconStack2,
@@ -17,8 +18,13 @@ import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import ui from "../styles/redesign.module.css";
 import styles from "../pages/SearchPage.module.css";
 
-const MODES: { v: SearchMode; label: string; icon: typeof IconSearch; desc: string }[] = [
-  { v: "docs", label: "Documents", icon: IconFileText, desc: "Full documents, ranked" },
+type Granularity = "documents" | "chunks";
+type Ranker = "hybrid" | "fts" | "semantic";
+
+// Granularity and ranker are separate concerns. The API encodes them in one
+// SearchMode: "docs" = whole documents (hybrid-ranked, one entry per doc);
+// the other three return matching chunks with the chosen ranker.
+const RANKERS: { v: Ranker; label: string; icon: typeof IconSearch; desc: string }[] = [
   { v: "hybrid", label: "Hybrid", icon: IconStack2, desc: "BM25 + embeddings" },
   { v: "fts", label: "Keyword", icon: IconSearch, desc: "Exact full-text" },
   { v: "semantic", label: "Semantic", icon: IconSparkles, desc: "Meaning-based" },
@@ -58,7 +64,10 @@ export function SearchControls({
   onSearch,
 }: SearchControlsProps) {
   const [localQuery, setLocalQuery] = useState(query);
-  const [localMode, setLocalMode] = useState<SearchMode>(mode);
+  const [localGranularity, setLocalGranularity] = useState<Granularity>(
+    mode === "docs" ? "documents" : "chunks",
+  );
+  const [localRanker, setLocalRanker] = useState<Ranker>(mode === "docs" ? "hybrid" : mode);
   const [localProjectId, setLocalProjectId] = useState(projectId);
   const [localCount, setLocalCount] = useState(count);
   const [localReviewStatus, setLocalReviewStatus] = useState(reviewStatus);
@@ -80,9 +89,10 @@ export function SearchControls({
 
   const apply = useCallback(
     (overrides: Partial<{ q: string; mode: SearchMode; projectId: string; count: number; reviewStatus: string }>) => {
+      const mode: SearchMode = localGranularity === "documents" ? "docs" : localRanker;
       onSearch({
         q: localQuery,
-        mode: localMode,
+        mode,
         projectId: localProjectId,
         count: localCount,
         reviewStatus: localReviewStatus,
@@ -90,12 +100,17 @@ export function SearchControls({
         ...overrides,
       });
     },
-    [localQuery, localMode, localProjectId, localCount, localReviewStatus, buildMf, onSearch],
+    [localQuery, localGranularity, localRanker, localProjectId, localCount, localReviewStatus, buildMf, onSearch],
   );
 
-  const changeMode = (m: SearchMode) => {
-    setLocalMode(m);
-    apply({ mode: m });
+  const changeGranularity = (g: Granularity) => {
+    setLocalGranularity(g);
+    apply({ mode: g === "documents" ? "docs" : localRanker });
+  };
+  const changeRanker = (r: Ranker) => {
+    setLocalRanker(r);
+    setLocalGranularity("chunks");
+    apply({ mode: r });
   };
   const changeProject = (id: string) => {
     setLocalProjectId(id);
@@ -152,22 +167,49 @@ export function SearchControls({
 
       <div className={styles.searchControls}>
         <div className={ui.seg}>
-          {MODES.map((m) => {
-            const Ico = m.icon;
-            return (
-              <button
-                key={m.v}
-                type="button"
-                title={m.desc}
-                className={`${ui.segBtn} ${localMode === m.v ? ui.segBtnOn : ""}`}
-                onClick={() => changeMode(m.v)}
-              >
-                <Ico size={14} />
-                {m.label}
-              </button>
-            );
-          })}
+          <button
+            type="button"
+            title="Whole documents — one entry per document, hybrid-ranked"
+            className={`${ui.segBtn} ${localGranularity === "documents" ? ui.segBtnOn : ""}`}
+            onClick={() => changeGranularity("documents")}
+          >
+            <IconFileText size={14} />
+            Documents
+          </button>
+          <button
+            type="button"
+            title="Matching chunks — pick a ranker"
+            className={`${ui.segBtn} ${localGranularity === "chunks" ? ui.segBtnOn : ""}`}
+            onClick={() => changeGranularity("chunks")}
+          >
+            <IconList size={14} />
+            Chunks
+          </button>
         </div>
+
+        {localGranularity === "chunks" ? (
+          <div className={ui.seg}>
+            {RANKERS.map((m) => {
+              const Ico = m.icon;
+              return (
+                <button
+                  key={m.v}
+                  type="button"
+                  title={m.desc}
+                  className={`${ui.segBtn} ${localRanker === m.v ? ui.segBtnOn : ""}`}
+                  onClick={() => changeRanker(m.v)}
+                >
+                  <Ico size={14} />
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 11.5 }}>
+            whole documents · hybrid-ranked
+          </span>
+        )}
 
         <div className={styles.controlsRight}>
           <span className={ui.selectWrap}>
