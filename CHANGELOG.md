@@ -13,6 +13,12 @@ Open roadmap.
 
 ---
 
+## [v0.9.6] -- 2026-06-01
+
+Open roadmap.
+
+---
+
 ## [v0.9.5] -- 2026-05-31
 
 **v0.9.5 — `deploy-server` rename fix + upgrade-doc simplification + DOCX upload (beta).**
