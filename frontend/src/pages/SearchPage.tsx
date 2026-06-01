@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { fetchDashboard } from "../api/dashboard";
 import type { SearchMode } from "../api/types";
+import { CliHint } from "../components/CliHint";
 import { SearchControls } from "../components/SearchControls";
 import { SearchResults } from "../components/SearchResults";
 import { serializeMfParam, useSearchQuery, useSearchState } from "../hooks/useSearch";
@@ -45,11 +46,16 @@ export function SearchPage() {
           <p className={ui.eyebrow}>Knowledge base</p>
           <h1 className={ui.pageTitle}>Search memory</h1>
         </div>
-        {dash && (
-          <span className={`${ui.mono} ${ui.faint}`} style={{ fontSize: 12 }}>
-            {dash.doc_count.toLocaleString()} docs · {dash.total_chunks.toLocaleString()} chunks
-          </span>
-        )}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+          {dash && (
+            <span className={`${ui.mono} ${ui.faint}`} style={{ fontSize: 12 }}>
+              {dash.doc_count.toLocaleString()} docs · {dash.total_chunks.toLocaleString()} chunks
+            </span>
+          )}
+          <CliHint
+            command={`cerefox search "${state.q || "query"}"${state.mode !== "docs" ? ` --mode ${state.mode}` : ""}`}
+          />
+        </div>
       </div>
 
       <SearchControls

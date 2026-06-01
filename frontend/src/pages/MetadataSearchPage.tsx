@@ -15,6 +15,7 @@ import {
   Title,
 } from "@mantine/core";
 import ui from "../styles/redesign.module.css";
+import { CliHint } from "../components/CliHint";
 import { IconPlus, IconSearch, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
@@ -108,10 +109,21 @@ export function MetadataSearchPage() {
 
   return (
     <Container size="lg">
-      <p className={ui.eyebrow}>Knowledge base</p>
-      <Title order={2} mb="md">
-        Metadata Search
-      </Title>
+      <Group justify="space-between" align="flex-start" mb="md" wrap="nowrap">
+        <div>
+          <p className={ui.eyebrow}>Knowledge base</p>
+          <Title order={2}>Metadata Search</Title>
+        </div>
+        <CliHint
+          command={`cerefox metadata search -f '${JSON.stringify(
+            (() => {
+              const mf: Record<string, string> = {};
+              for (const f of filters) if (f.key.trim() && f.value.trim()) mf[f.key.trim()] = f.value.trim();
+              return Object.keys(mf).length ? mf : { key: "value" };
+            })(),
+          )}'`}
+        />
+      </Group>
 
       {/* ── Controls ──────────────────────────────────────────────────── */}
       <Card withBorder mb="md" p="md">
