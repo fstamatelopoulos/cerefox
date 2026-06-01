@@ -198,9 +198,10 @@ cerefox document list [OPTIONS]
 |---|---|---|---|
 | `--project <name>` (`-p`) | str | _none_ | Filter by project name. |
 | `--limit <n>` (`-l`) | int | `100` | Max rows. |
+| `--deleted` | flag | off | List soft-deleted (trashed) documents instead of active ones, newest-deleted first. Pair the ids with `cerefox document restore` / `cerefox document delete`. |
 | `--json` | flag | off | Machine-readable JSON output. |
 
-**Output**: tabular `id | chunk_count | total_chars | title` listing. CLI-only — there is no MCP equivalent.
+**Output**: tabular `id | title | source | status | updated_at` listing (or `deleted_at` with `--deleted`). CLI-only — there is no MCP equivalent.
 
 ---
 

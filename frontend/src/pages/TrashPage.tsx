@@ -130,7 +130,7 @@ export function TrashPage() {
       eyebrow="Recoverable"
       title="Trash"
       subtitle="Soft-deleted documents — excluded from search until restored or purged."
-      headerRight={<CliHint cmd="cerefox document restore" args="<id>" />}
+      headerRight={<CliHint cmd="cerefox document list" args="--deleted" />}
       searchValue={query}
       onSearchChange={setQuery}
       searchPlaceholder="Filter trashed documents…"

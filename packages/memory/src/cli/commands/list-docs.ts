@@ -25,9 +25,16 @@ interface DocRow {
   created_at: string;
   updated_at: string | null;
   review_status: string | null;
+  deleted_at: string | null;
 }
 
-async function action(options: { project?: string; limit?: string; json?: boolean }): Promise<void> {
+async function action(options: {
+  project?: string;
+  limit?: string;
+  json?: boolean;
+  deleted?: boolean;
+}): Promise<void> {
+  const deleted = !!options.deleted;
   const limit = parsePositiveInt(options.limit, "--limit", 100);
   const client = getClient();
 
@@ -51,9 +58,10 @@ async function action(options: { project?: string; limit?: string; json?: boolea
   let query = client.raw
     .from("cerefox_documents")
     .select("id, title, source, metadata, created_at, updated_at, review_status, deleted_at")
-    .is("deleted_at", null)
-    .order("updated_at", { ascending: false, nullsFirst: false })
     .limit(limit);
+  query = deleted
+    ? query.not("deleted_at", "is", null).order("deleted_at", { ascending: false, nullsFirst: false })
+    : query.is("deleted_at", null).order("updated_at", { ascending: false, nullsFirst: false });
 
   if (projectId) {
     // PostgREST embedding: filter docs through the M2M junction.
@@ -89,18 +97,22 @@ async function action(options: { project?: string; limit?: string; json?: boolea
   }
 
   if (rows.length === 0) {
-    process.stdout.write("(no documents)\n");
+    process.stdout.write(deleted ? "(trash is empty)\n" : "(no documents)\n");
     return;
   }
 
   printTable(
-    rows.map((doc) => ({
-      id: doc.id.slice(0, 8) + "…",
-      title: doc.title.length > 60 ? doc.title.slice(0, 57) + "…" : doc.title,
-      source: doc.source ?? "",
-      status: doc.review_status ?? "",
-      updated_at: (doc.updated_at ?? doc.created_at).slice(0, 19).replace("T", " "),
-    })),
+    rows.map((doc) => {
+      const base = {
+        id: doc.id.slice(0, 8) + "…",
+        title: doc.title.length > 60 ? doc.title.slice(0, 57) + "…" : doc.title,
+        source: doc.source ?? "",
+        status: doc.review_status ?? "",
+      };
+      return deleted
+        ? { ...base, deleted_at: (doc.deleted_at ?? "").slice(0, 19).replace("T", " ") }
+        : { ...base, updated_at: (doc.updated_at ?? doc.created_at).slice(0, 19).replace("T", " ") };
+    }),
   );
 }
 
@@ -110,6 +122,7 @@ export function registerListDocs(program: Command): void {
     .description("List documents in the knowledge base.")
     .option("-p, --project <name>", "Filter to a specific project.")
     .option("-l, --limit <n>", "Maximum docs to return.", "100")
+    .option("--deleted", "List soft-deleted (trashed) documents instead of active ones.")
     .option("--json", "Emit machine-readable JSON.")
     .action(action);
 }
