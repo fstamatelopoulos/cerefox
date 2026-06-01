@@ -173,8 +173,8 @@ export function TrashPage() {
           <>
             <button
               type="button"
-              className={`${ui.btn} ${ui.btnGhost}`}
-              title="Restore"
+              className={`${ui.btn} ${ui.btnGhost} ${ui.btnWarn}`}
+              title="Restore from trash"
               onClick={() => restoreMut.mutate(d.id)}
             >
               <IconArrowBackUp size={14} />
@@ -182,11 +182,12 @@ export function TrashPage() {
             </button>
             <button
               type="button"
-              className={`${ui.iconBtnSm} ${ui.iconBtnDanger}`}
-              title="Delete permanently"
+              className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
+              title="Permanently delete (cannot be undone)"
               onClick={() => setConfirmId(d.id)}
             >
               <IconTrash size={14} />
+              Purge
             </button>
           </>
         )

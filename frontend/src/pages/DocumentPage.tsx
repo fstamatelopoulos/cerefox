@@ -3,6 +3,7 @@ import {
   IconArrowLeft,
   IconArrowsDiff,
   IconDots,
+  IconArrowBackUp,
   IconDownload,
   IconEdit,
   IconFileText,
@@ -109,6 +110,7 @@ export function DocumentPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
   const [view, setView] = useState<View>("rendered");
 
   const { data: doc, isLoading, error } = useQuery({
@@ -280,7 +282,10 @@ export function DocumentPage() {
           </div>
           <h1 className={styles.docTitle}>{doc.doc_title || "Untitled"}</h1>
           <div className={styles.docMeta}>
-            <span className={`${ui.srcChip} ${chip.agent ? ui.srcChipAgent : ""}`}>
+            <span
+              className={`${ui.srcChip} ${chip.agent ? ui.srcChipAgent : ""}`}
+              title="Origin — how this document was added"
+            >
               <ChipIcon size={12} />
               {chip.label}
             </span>
@@ -310,46 +315,94 @@ export function DocumentPage() {
           </div>
         </div>
         <div className={ui.row} style={{ gap: 8, flexShrink: 0 }}>
-          <button
-            type="button"
-            className={`${ui.btn} ${ui.btnGhost}`}
-            onClick={() => navigate(`/document/${id}/edit`)}
-          >
-            <IconEdit size={14} />
-            Edit
-          </button>
+          {/* Download is useful either way. Edit/Delete only for live docs;
+              deleted docs get Restore/Purge instead. */}
           <a className={`${ui.btn} ${ui.btnGhost}`} href={getDownloadUrl(id!)}>
             <IconDownload size={14} />
             Download
           </a>
-          {!confirmDelete ? (
-            <button
-              type="button"
-              className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
-              title="Delete document"
-              onClick={() => setConfirmDelete(true)}
-            >
-              <IconTrash size={14} />
-              Delete
-            </button>
+
+          {doc.deleted_at ? (
+            <>
+              <button
+                type="button"
+                className={`${ui.btn} ${ui.btnGhost} ${ui.btnWarn}`}
+                title="Restore from trash"
+                onClick={() => restoreMutation.mutate()}
+              >
+                <IconArrowBackUp size={14} />
+                Restore
+              </button>
+              {!confirmPurge ? (
+                <button
+                  type="button"
+                  className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
+                  title="Permanently delete (cannot be undone)"
+                  onClick={() => setConfirmPurge(true)}
+                >
+                  <IconTrash size={14} />
+                  Purge
+                </button>
+              ) : (
+                <div className={ui.row} style={{ gap: 6 }}>
+                  <button
+                    type="button"
+                    className={ui.btn}
+                    style={{ background: "var(--red)", color: "#fff" }}
+                    onClick={() => purgeMutation.mutate()}
+                  >
+                    Confirm purge
+                  </button>
+                  <button
+                    type="button"
+                    className={`${ui.btn} ${ui.btnSubtle}`}
+                    onClick={() => setConfirmPurge(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
-            <div className={ui.row} style={{ gap: 6 }}>
+            <>
               <button
                 type="button"
-                className={ui.btn}
-                style={{ background: "var(--red)", color: "#fff" }}
-                onClick={() => deleteMutation.mutate()}
+                className={`${ui.btn} ${ui.btnGhost}`}
+                onClick={() => navigate(`/document/${id}/edit`)}
               >
-                Confirm
+                <IconEdit size={14} />
+                Edit
               </button>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnSubtle}`}
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </button>
-            </div>
+              {!confirmDelete ? (
+                <button
+                  type="button"
+                  className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
+                  title="Delete document"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <IconTrash size={14} />
+                  Delete
+                </button>
+              ) : (
+                <div className={ui.row} style={{ gap: 6 }}>
+                  <button
+                    type="button"
+                    className={ui.btn}
+                    style={{ background: "var(--red)", color: "#fff" }}
+                    onClick={() => deleteMutation.mutate()}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className={`${ui.btn} ${ui.btnSubtle}`}
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -357,25 +410,16 @@ export function DocumentPage() {
       {doc.deleted_at && (
         <div className={styles.trashBanner}>
           <div className={ui.row} style={{ gap: 8 }}>
-            <span className={`${ui.badge} ${ui.bNeutral}`} style={{ background: "var(--red)", color: "#fff" }}>
-              Deleted
+            <span
+              className={`${ui.badge} ${ui.bNeutral}`}
+              style={{ background: "var(--red)", color: "#fff" }}
+            >
+              In trash
             </span>
             <span style={{ fontSize: 13 }}>
-              In trash (deleted {doc.deleted_at.slice(0, 10)}) — excluded from search.
+              Deleted {doc.deleted_at.slice(0, 10)} — excluded from search until restored. Use
+              Restore or Purge above.
             </span>
-          </div>
-          <div className={ui.row} style={{ gap: 8 }}>
-            <button type="button" className={`${ui.btn} ${ui.btnGhost}`} onClick={() => restoreMutation.mutate()}>
-              Restore
-            </button>
-            <button
-              type="button"
-              className={ui.btn}
-              style={{ background: "var(--red)", color: "#fff" }}
-              onClick={() => purgeMutation.mutate()}
-            >
-              Delete permanently
-            </button>
           </div>
         </div>
       )}

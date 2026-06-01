@@ -107,6 +107,15 @@
   border-color: var(--red);
   background: var(--red-soft);
 }
+/* Warn/restore modifier — yellow at rest + hover (distinct, recoverable). */
+.btnWarn {
+  color: var(--yellow);
+}
+.btnWarn:hover {
+  color: var(--yellow);
+  border-color: var(--yellow);
+  background: var(--yellow-soft);
+}
 
 /* ---- cards ---- */
 .card {
