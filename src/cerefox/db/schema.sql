@@ -5,12 +5,14 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.3.1
+-- @version: 0.4.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
--- (see /api/v1/schema-version). Bump it whenever schema.sql or rpcs.sql
--- changes in a way that requires `python scripts/db_deploy.py` to be re-run.
--- The deployed value is exposed via the `cerefox_schema_version()` RPC at
--- the bottom of rpcs.sql.
+-- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
+-- changes in a way that requires `cerefox server deploy` to be re-run —
+-- schema and RPCs deploy together, so this version covers both. You MUST
+-- bump it in lockstep with the `cerefox_schema_version()` literal at the
+-- bottom of rpcs.sql (the deployed value); `cut_release.ts` fails the cut if
+-- `src/cerefox/db/` changed without this bump, or if the two disagree.
 
 -- ── Projects ──────────────────────────────────────────────────────────────────
 -- Lightweight user-defined categories. No predefined taxonomy.

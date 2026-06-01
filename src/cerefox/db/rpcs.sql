@@ -1692,7 +1692,9 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
-    SELECT '0.3.1'::TEXT;
+    -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
+    -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    SELECT '0.4.0'::TEXT;
 $$;
 
 

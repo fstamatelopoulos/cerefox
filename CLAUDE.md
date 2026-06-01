@@ -314,6 +314,29 @@ The migrate/deploy logic is shared with `scripts/db_migrate.ts` /
 
 **When you change an Edge Function's request body or response shape, update the GPT Actions OpenAPI block in `docs/guides/connect-agents.md` in the same PR, and bump its `info.version` per SemVer.** That block is what ChatGPT users paste into a Custom GPT's Actions config; if it drifts from what the EFs actually accept/return, those GPTs silently break. There is no CI gate for this (a path-diff heuristic was too lossy) — the discipline lives here + in the release playbook (`RELEASING.md`). When an EF's `EF_VERSION` surface changes, also consider whether the client compatibility matrix (`_shared/compatibility/index.ts`) needs a `minEdgeFunctions` bump (see CONTRIBUTING.md).
 
+### Rule: bump `schema_version` on any `src/cerefox/db/` change
+
+**Whenever you change `schema.sql`, `rpcs.sql`, or add a migration, bump the
+schema version in two places, in lockstep:** the `-- @version:` marker in
+`src/cerefox/db/schema.sql` (the *bundled* value the client compares against)
+**and** the literal in `cerefox_schema_version()` at the bottom of `rpcs.sql`
+(the *deployed* value). Schema and RPCs deploy together via `cerefox server
+deploy`, so this single version is the "redeploy required" signal — bumping it
+is what makes `cerefox doctor` / the web banner tell users to redeploy.
+`cut_release.ts` **fails the cut** if `db/` changed without a bump or if the two
+literals disagree (the symmetric counterpart to the `EF_VERSION` guard). It's an
+independent semver line — do **not** sync it to the npm package version. This
+was missed in v0.9.6 (added RPCs without bumping); the gate exists so it can't
+recur.
+
+### Rule: before opening a release-intent PR, follow `RELEASING.md`
+
+**Any PR meant to ship a release (or that a release will be cut from) must run
+the `RELEASING.md` pre-release checklist** — CHANGELOG `[Unreleased]` populated,
+`schema_version` bumped if `db/` changed, compat-matrix minimums reviewed, GPT
+Actions OpenAPI block synced if EFs changed, tests green. `RELEASING.md` is the
+authoritative release playbook; read it at the start of any release work.
+
 ### Client Compatibility
 
 | Client | How to connect | Notes |

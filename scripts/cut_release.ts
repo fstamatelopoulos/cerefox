@@ -121,6 +121,70 @@ function efsChangedSinceLastTag(): boolean {
   return diff.stdout.trim().length > 0;
 }
 
+/**
+ * Schema/RPC version guard (the symmetric counterpart to the EF_VERSION
+ * mechanism). Schema and RPCs deploy together via `cerefox server deploy`, so
+ * `schema_version` is the single "redeploy required" signal for both. Unlike
+ * EF_VERSION (auto-bumped to the release version), the schema version is an
+ * independent semver chosen by hand — so this GATES the cut rather than
+ * auto-bumping: if anything under `src/cerefox/db/` changed since the last
+ * tag, the version must have been bumped, and the two literals must agree.
+ */
+const SCHEMA_SOURCE_PATHS = [
+  "src/cerefox/db/schema.sql",
+  "src/cerefox/db/rpcs.sql",
+  "src/cerefox/db/migrations",
+];
+const SCHEMA_SQL_PATH = join(REPO_ROOT, "src", "cerefox", "db", "schema.sql");
+const RPCS_SQL_PATH = join(REPO_ROOT, "src", "cerefox", "db", "rpcs.sql");
+
+/** Parse the `-- @version: X.Y.Z` marker from schema.sql text. */
+function parseSchemaMarker(text: string): string | null {
+  const m = text.match(/^--\s*@version:\s*([0-9][^\s]*)/m);
+  return m ? m[1] : null;
+}
+/** Parse the version literal from the `cerefox_schema_version()` body. */
+function parseRpcsSchemaVersion(text: string): string | null {
+  const m = text.match(/cerefox_schema_version[\s\S]*?SELECT\s*'([0-9][^']*)'/);
+  return m ? m[1] : null;
+}
+
+function assertSchemaVersionGuard(): void {
+  const marker = parseSchemaMarker(readFileSync(SCHEMA_SQL_PATH, "utf8"));
+  const deployedLit = parseRpcsSchemaVersion(readFileSync(RPCS_SQL_PATH, "utf8"));
+  if (!marker || !deployedLit) {
+    die(
+      "Could not read schema_version — expected a `-- @version:` marker in " +
+        "schema.sql and a literal in cerefox_schema_version() in rpcs.sql.",
+    );
+  }
+  if (marker !== deployedLit) {
+    die(
+      `schema_version mismatch: schema.sql @version=${marker} but ` +
+        `cerefox_schema_version()=${deployedLit}. Bump both in lockstep ` +
+        "(RELEASING.md step 4) — doctor compares bundled (schema.sql) vs " +
+        "deployed (the RPC), so they must agree.",
+    );
+  }
+  const lastTag = run("git", ["describe", "--tags", "--abbrev=0"]).stdout.trim();
+  if (!lastTag) return;
+  const dbChanged =
+    run("git", ["diff", "--name-only", `${lastTag}..HEAD`, "--", ...SCHEMA_SOURCE_PATHS])
+      .stdout.trim().length > 0;
+  if (!dbChanged) return;
+  const prevMarker = parseSchemaMarker(
+    run("git", ["show", `${lastTag}:src/cerefox/db/schema.sql`]).stdout,
+  );
+  if (prevMarker && prevMarker === marker) {
+    die(
+      `src/cerefox/db/ changed since ${lastTag} but schema_version is still ` +
+        `${marker}. Schema + RPCs deploy together — bump the @version marker in ` +
+        "schema.sql AND cerefox_schema_version() in rpcs.sql (RELEASING.md step 4) " +
+        "so doctor / the banner tells users to run `cerefox server deploy`.",
+    );
+  }
+}
+
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[.-][A-Za-z0-9.-]+)?$/;
 
 // ── tiny shell helper ────────────────────────────────────────────────────
@@ -513,6 +577,11 @@ async function main(): Promise<void> {
     newVersion,
   );
   ok("CHANGELOG sections parsed; [Unreleased] has content.");
+
+  // Schema/RPC version guard: any src/cerefox/db/ change since the last tag
+  // requires a schema_version bump (and the two literals must agree).
+  assertSchemaVersionGuard();
+  ok("schema_version guard passed.");
 
   // EF_VERSION bumps only when EF code changed since the last tag.
   const bumpEf = efsChangedSinceLastTag();
