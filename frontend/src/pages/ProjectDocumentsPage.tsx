@@ -1,22 +1,16 @@
-import {
-  Anchor,
-  Badge,
-  Container,
-  Group,
-  Loader,
-  Pagination,
-  Table,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { Loader } from "@mantine/core";
+import { IconArrowLeft, IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { apiFetch } from "../api/client";
 import type { ProjectDocumentsResponse } from "../api/types";
+import { CliHint } from "../components/CliHint";
 import { useProjects } from "../hooks/useProjects";
 import { formatDate } from "../utils/dates";
+import ui from "../styles/redesign.module.css";
+import lp from "../components/ListPage.module.css";
 
 const PAGE_SIZE = 50;
 
@@ -38,8 +32,6 @@ export function ProjectDocumentsPage() {
         `/projects/${id}/documents?limit=${PAGE_SIZE}&offset=${offset}`,
       ),
     enabled: !!id,
-    // Keep current data visible while the next page loads — avoids a
-    // full-page loader flicker on every page-link click.
     placeholderData: keepPreviousData,
   });
 
@@ -50,110 +42,119 @@ export function ProjectDocumentsPage() {
   const lastOnPage = Math.min(offset + docs.length, total);
 
   return (
-    <Container size="lg">
-      <Group gap="xs" mb="md">
-        <Anchor size="sm" onClick={() => navigate("/projects")}>
-          Projects
-        </Anchor>
-        <Text size="sm" c="dimmed">
-          /
-        </Text>
-        <Title order={2}>{project?.name || "Project"}</Title>
-      </Group>
+    <div className={lp.wrap}>
+      <button
+        type="button"
+        className={`${ui.btn} ${ui.btnSubtle}`}
+        style={{ marginBottom: 12, paddingLeft: 6 }}
+        onClick={() => navigate("/projects")}
+      >
+        <IconArrowLeft size={15} />
+        Projects
+      </button>
 
-      {project?.description && (
-        <Text size="sm" c="dimmed" mb="md">
-          {project.description}
-        </Text>
-      )}
+      <div className={ui.pageHead}>
+        <div>
+          <p className={ui.eyebrow}>Memory space</p>
+          <h1 className={ui.pageTitle}>{project?.name || "Project"}</h1>
+          {project?.description && <p className={ui.pageSub}>{project.description}</p>}
+        </div>
+        <CliHint cmd="cerefox document list" args={`--project "${project?.name ?? "<name>"}"`} />
+      </div>
 
       {isLoading ? (
-        <Group justify="center" mt="xl">
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 40 }}>
           <Loader />
-        </Group>
+        </div>
       ) : total === 0 ? (
-        <Text c="dimmed" ta="center" mt="xl">
-          No documents in this project.
-        </Text>
+        <div className={`${ui.card} ${lp.emptyRow}`}>No documents in this project.</div>
       ) : (
-        <>
-          <Group justify="space-between" mb="sm">
-            <Text size="sm" c="dimmed">
-              {total === 1
-                ? "1 document"
-                : `${total} documents — showing ${firstOnPage}–${lastOnPage}`}
-            </Text>
-            {isFetching && !isLoading && <Loader size="xs" />}
-          </Group>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Title</Table.Th>
-                <Table.Th>Chunks</Table.Th>
-                <Table.Th>Size</Table.Th>
-                <Table.Th>Updated</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {docs.map((doc) => (
-                <Table.Tr key={doc.id}>
-                  <Table.Td>
-                    <Group gap="xs">
-                      <Anchor
-                        href={`/app/document/${doc.id}`}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          navigate(`/document/${doc.id}`);
-                        }}
-                        fw={500}
-                        size="sm"
-                      >
-                        {doc.title || "Untitled"}
-                      </Anchor>
-                      {doc.project_ids
-                        .filter((pid) => pid !== id && projectMap.has(pid))
-                        .map((pid) => (
-                          <Badge key={pid} variant="light" size="xs">
-                            {projectMap.get(pid)}
-                          </Badge>
-                        ))}
-                      <Badge
-                        variant="light"
-                        size="xs"
-                        color={doc.review_status === "approved" ? "green" : "yellow"}
-                      >
-                        {doc.review_status === "approved" ? "Approved" : "Pending"}
-                      </Badge>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{doc.chunk_count}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{doc.total_chars.toLocaleString()}</Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" c="dimmed">
+        <div className={`${ui.card} ${ui.rise}`} style={{ overflow: "hidden" }}>
+          <table className={lp.tbl}>
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th style={{ width: 90, textAlign: "right" }}>Chunks</th>
+                <th style={{ width: 110, textAlign: "right" }}>Size</th>
+                <th style={{ width: 120, textAlign: "right" }}>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((doc) => {
+                const pending = doc.review_status !== "approved";
+                return (
+                  <tr
+                    key={doc.id}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => navigate(`/document/${doc.id}`)}
+                  >
+                    <td>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span className={ui.link} style={{ fontSize: 13.5 }}>
+                          {doc.title || "Untitled"}
+                        </span>
+                        {doc.project_ids
+                          .filter((pid) => pid !== id && projectMap.has(pid))
+                          .map((pid) => (
+                            <span key={pid} className={`${ui.badge} ${ui.bNeutral}`}>
+                              {projectMap.get(pid)}
+                            </span>
+                          ))}
+                        {pending && (
+                          <span className={`${ui.badge} ${ui.bYellow}`}>
+                            <span
+                              style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }}
+                            />
+                            pending review
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className={`${ui.mono} ${ui.dim}`} style={{ textAlign: "right" }}>
+                      {doc.chunk_count}
+                    </td>
+                    <td className={`${ui.mono} ${ui.dim}`} style={{ textAlign: "right" }}>
+                      {doc.total_chars.toLocaleString()}
+                    </td>
+                    <td className={`${ui.faint}`} style={{ textAlign: "right" }}>
                       {formatDate(doc.updated_at)}
-                    </Text>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-          {totalPages > 1 && (
-            <Group justify="center" mt="md">
-              <Pagination
-                value={page}
-                onChange={setPage}
-                total={totalPages}
-                size="sm"
-                withEdges
-              />
-            </Group>
-          )}
-        </>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className={lp.foot}>
+            <span className={lp.faint}>
+              {total === 0 ? "0" : `${firstOnPage}–${lastOnPage}`} of {total}
+              {isFetching && !isLoading ? " · loading…" : ""}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                type="button"
+                className={lp.pgBtn}
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+                aria-label="Previous page"
+              >
+                <IconChevronLeft size={14} />
+              </button>
+              <span className={lp.faint}>
+                page {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className={lp.pgBtn}
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                aria-label="Next page"
+              >
+                <IconChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </Container>
+    </div>
   );
 }
