@@ -36,15 +36,20 @@ export function AuditLogPage() {
   const [operation, setOperation] = useState(searchParams.get("operation") || "");
   const [author, setAuthor] = useState(searchParams.get("author") || "");
   const [documentId] = useState(searchParams.get("document_id") || "");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [limit, setLimit] = useState("100");
 
   const { data: entries, isLoading } = useQuery({
-    queryKey: ["audit-log", operation, author, documentId],
+    queryKey: ["audit-log", operation, author, documentId, fromDate, toDate, limit],
     queryFn: () =>
       fetchAuditLog({
         operation: operation || undefined,
         author: author || undefined,
         document_id: documentId || undefined,
-        limit: 100,
+        since: fromDate ? `${fromDate}T00:00:00` : undefined,
+        until: toDate ? `${toDate}T23:59:59` : undefined,
+        limit: Number(limit),
       }),
   });
 
@@ -67,26 +72,52 @@ export function AuditLogPage() {
         Audit Log
       </Title>
 
-      <Group mb="md" gap="sm">
+      <Group mb="md" gap="sm" align="flex-end">
         <Select
-          placeholder="Filter by operation"
+          label="Operation"
+          placeholder="All operations"
           data={OPERATIONS}
           value={operation}
           onChange={(v) => setOperation(v || "")}
           clearable
-          w={200}
+          w={180}
           size="sm"
         />
         <TextInput
+          label="Author"
           placeholder="Filter by author"
           value={author}
           onChange={(e) => setAuthor(e.currentTarget.value)}
           leftSection={<IconSearch size={14} />}
-          w={200}
+          w={180}
           size="sm"
         />
-        <Text size="sm" c="dimmed">
-          {entries?.length ?? 0} entries
+        <TextInput
+          label="From"
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.currentTarget.value)}
+          w={150}
+          size="sm"
+        />
+        <TextInput
+          label="To"
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.currentTarget.value)}
+          w={150}
+          size="sm"
+        />
+        <Select
+          label="Max entries"
+          data={["100", "250", "500", "1000"]}
+          value={limit}
+          onChange={(v) => setLimit(v || "100")}
+          w={120}
+          size="sm"
+        />
+        <Text size="sm" c="dimmed" pb={6}>
+          {entries?.length ?? 0} shown
         </Text>
       </Group>
 

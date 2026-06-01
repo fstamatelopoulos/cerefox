@@ -5,6 +5,7 @@ import {
   Container,
   Group,
   Loader,
+  Select,
   Stack,
   Text,
   Title,
@@ -23,12 +24,14 @@ export function TrashPage() {
   // Junction rows are preserved across soft-delete, so the trash UI can
   // still show which projects a deleted document belonged to.
   const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
+  const [limit, setLimit] = useState("50");
 
   const { data: docs, isLoading, error } = useQuery({
-    queryKey: ["trash"],
-    queryFn: () => fetchTrash(),
+    queryKey: ["trash", limit],
+    queryFn: () => fetchTrash(Number(limit)),
     staleTime: 10_000,
   });
+  const atCap = !!docs && docs.length === Number(limit);
 
   const restoreMut = useMutation({
     mutationFn: restoreDocument,
@@ -51,9 +54,24 @@ export function TrashPage() {
   return (
     <Container size="lg">
       <Title order={2} mb="md">Trash</Title>
-      <Text c="dimmed" size="sm" mb="md">
-        Deleted documents are recoverable until permanently purged.
-      </Text>
+      <Group justify="space-between" align="flex-end" mb="md">
+        <Text c="dimmed" size="sm">
+          Deleted documents are recoverable until permanently purged.
+        </Text>
+        <Select
+          label="Show up to"
+          data={["50", "100", "200", "500"]}
+          value={limit}
+          onChange={(v) => setLimit(v || "50")}
+          w={120}
+          size="xs"
+        />
+      </Group>
+      {atCap && (
+        <Text c="dimmed" size="xs" mb="sm">
+          Showing the first {limit} — raise the limit to see more.
+        </Text>
+      )}
 
       {isLoading && (
         <Group justify="center" mt="xl"><Loader /></Group>
