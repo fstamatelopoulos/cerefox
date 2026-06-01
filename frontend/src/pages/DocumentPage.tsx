@@ -1,4 +1,4 @@
-import { Loader, Menu, Modal } from "@mantine/core";
+import { Loader, Menu, Modal, Popover, Text } from "@mantine/core";
 import {
   IconArrowLeft,
   IconArrowsDiff,
@@ -261,6 +261,7 @@ export function DocumentPage() {
       {/* header */}
       <div className={`${styles.docHeader} ${ui.rise}`}>
         <div style={{ minWidth: 0, flex: 1 }}>
+          <p className={ui.eyebrow}>Document</p>
           <div className={ui.row} style={{ gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
             {doc.project_ids
               .filter((pid) => projectMap.has(pid))
@@ -409,6 +410,7 @@ export function DocumentPage() {
             </div>
             <div className={ui.divider} />
 
+            <div className={styles.contentScroll}>
             {view === "rendered" && (
               <div className={styles.mdBody}>
                 <div className={md.markdown}>
@@ -440,6 +442,7 @@ export function DocumentPage() {
                 )}
               </div>
             )}
+            </div>
           </div>
         </div>
 
@@ -490,7 +493,7 @@ export function DocumentPage() {
                 <div className={styles.metaTags}>
                   {metaEntries.map(([k, v]) => (
                     <span key={k} className={styles.metaTag}>
-                      <b>{k}</b>
+                      <b>{k}:</b>
                       {String(v)}
                     </span>
                   ))}
@@ -503,6 +506,20 @@ export function DocumentPage() {
             <div className={`${ui.card} ${ui.cardPad} ${ui.rise}`}>
               <div className={styles.railTitle}>
                 Versions <span className={ui.countPill}>{doc.versions.length}</span>
+                <Popover width={240} position="bottom-end" withArrow shadow="md">
+                  <Popover.Target>
+                    <button type="button" className={ui.whatis} style={{ marginLeft: "auto" }}>
+                      what's protection?
+                    </button>
+                  </Popover.Target>
+                  <Popover.Dropdown>
+                    <Text size="xs" c="dimmed">
+                      Archived (protected) versions are kept indefinitely and excluded from
+                      automatic cleanup. Unprotected older versions may be pruned by retention.
+                      Toggle protection from a version's ⋯ menu.
+                    </Text>
+                  </Popover.Dropdown>
+                </Popover>
               </div>
               <div className={styles.verList}>
                 {doc.versions.map((v) => (

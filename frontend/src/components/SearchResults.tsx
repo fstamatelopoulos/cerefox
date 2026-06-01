@@ -3,8 +3,8 @@ import {
   IconAlertCircle,
   IconChevronDown,
   IconChevronRight,
+  IconCopy,
   IconFileText,
-  IconLink,
   IconSearch,
   IconTerminal2,
 } from "@tabler/icons-react";
@@ -129,7 +129,18 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
                 <ScoreRing score={normScore(score)} />
                 <div className={styles.resultTitleWrap}>
                   <div className={ui.row} style={{ gap: 8, marginBottom: 5 }}>
-                    <h3 className={styles.resultTitle}>{title}</h3>
+                    <h3 className={styles.resultTitle}>
+                      <span
+                        className={ui.link}
+                        style={{ cursor: "pointer" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/document/${docId}`);
+                        }}
+                      >
+                        {title}
+                      </span>
+                    </h3>
                     {isDoc ? (
                       (r as DocSearchResult).is_partial ? (
                         <span className={`${ui.badge} ${ui.bYellow}`}>excerpt</span>
@@ -211,18 +222,16 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
                     <button
                       type="button"
                       className={`${ui.btn} ${ui.btnSubtle}`}
+                      style={{ marginLeft: "auto" }}
+                      title="Copy CLI command to clipboard"
                       onClick={() => navigator.clipboard?.writeText(`cerefox document get ${docId}`)}
                     >
-                      <IconLink size={14} />
-                      Copy reference
-                    </button>
-                    <span
-                      className={`${ui.mono} ${ui.faint}`}
-                      style={{ marginLeft: "auto", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
-                    >
                       <IconTerminal2 size={14} />
-                      cerefox document get {docId.slice(0, 8)}…
-                    </span>
+                      <span className={ui.mono} style={{ fontSize: 12 }}>
+                        cerefox document get {docId.slice(0, 8)}…
+                      </span>
+                      <IconCopy size={13} />
+                    </button>
                   </div>
                 </div>
               )}

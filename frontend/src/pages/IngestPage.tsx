@@ -1,5 +1,5 @@
 import { Alert } from "@mantine/core";
-import { IconCheck, IconFileText, IconPlus, IconTerminal2, IconUpload, IconX } from "@tabler/icons-react";
+import { IconCheck, IconFileText, IconPlus, IconSearch, IconTerminal2, IconUpload, IconX } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -27,6 +27,7 @@ export function IngestPage() {
   const [tab, setTab] = useState<Tab>("paste");
   const [title, setTitle] = useState("");
   const [projectIds, setProjectIds] = useState<string[]>([]);
+  const [projFilter, setProjFilter] = useState("");
   const [metaPairs, setMetaPairs] = useState<{ key: string; value: string }[]>([]);
   const [updateExisting, setUpdateExisting] = useState(false);
   const [content, setContent] = useState("");
@@ -121,6 +122,11 @@ export function IngestPage() {
   const firstProjectName =
     projects?.find((p) => p.id === projectIds[0])?.name ?? "core-platform";
 
+  const allProjects = projects ?? [];
+  const visibleProjects = projFilter
+    ? allProjects.filter((p) => p.name.toLowerCase().includes(projFilter.toLowerCase()))
+    : allProjects;
+
   return (
     <div className={styles.wrap}>
       <div className={ui.pageHead}>
@@ -192,65 +198,7 @@ export function IngestPage() {
         }}
       >
         <div className={styles.col}>
-          {tab === "file" && (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".md,.txt,.docx"
-                style={{ display: "none" }}
-                onChange={(e) => handleFile(e.currentTarget.files?.[0] ?? null)}
-              />
-              <div
-                className={`${styles.dropZone} ${dragOver ? styles.dropZoneOver : ""} ${file ? styles.dropZoneHas : ""}`}
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOver(false);
-                  const f = e.dataTransfer.files?.[0];
-                  if (f) handleFile(f);
-                }}
-              >
-                <span className={styles.dropIco}>
-                  <IconUpload size={20} />
-                </span>
-                {file ? (
-                  <>
-                    <div className={ui.mono} style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>
-                      {file.name}
-                    </div>
-                    <span className={ui.faint} style={{ fontSize: 12.5 }}>
-                      Ready to ingest · click to replace
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>
-                      Drop a file or click to browse
-                    </div>
-                    <span className={ui.faint} style={{ fontSize: 12.5 }}>
-                      .md · .txt · .docx
-                    </span>
-                  </>
-                )}
-              </div>
-              {filenameCheck?.exists && (
-                <Alert color="blue" variant="light">
-                  A document named "{filenameCheck.title}" already exists (updated{" "}
-                  {filenameCheck.updated_at
-                    ? new Date(filenameCheck.updated_at).toLocaleDateString()
-                    : "unknown"}
-                  ). Enable "Update existing" to overwrite it.
-                </Alert>
-              )}
-            </>
-          )}
-
+          {/* common fields stay put across tabs */}
           <div className={styles.field}>
             <label>
               Title
@@ -264,28 +212,48 @@ export function IngestPage() {
             />
           </div>
 
-          {projects && projects.length > 0 && (
+          {allProjects.length > 0 && (
             <div className={styles.field}>
               <label>Projects</label>
+              {allProjects.length > 8 && (
+                <div className={ui.selectWrap} style={{ width: "100%", marginBottom: 8, height: 34 }}>
+                  <IconSearch size={14} />
+                  <input
+                    className={ui.selectEl}
+                    style={{ maxWidth: "none", flex: 1 }}
+                    placeholder={`Filter ${allProjects.length} projects…`}
+                    value={projFilter}
+                    onChange={(e) => setProjFilter(e.currentTarget.value)}
+                  />
+                </div>
+              )}
               <div className={ui.row} style={{ gap: 7, flexWrap: "wrap" }}>
-                {projects.map((p, i) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={`${ui.chip} ${projectIds.includes(p.id) ? ui.chipOn : ""}`}
-                    onClick={() => toggleProject(p.id)}
-                  >
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: "50%",
-                        background: `var(${PROJECT_COLORS[i % PROJECT_COLORS.length]})`,
-                      }}
-                    />
-                    {p.name}
-                  </button>
-                ))}
+                {visibleProjects.map((p) => {
+                  const idx = allProjects.indexOf(p);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`${ui.chip} ${projectIds.includes(p.id) ? ui.chipOn : ""}`}
+                      onClick={() => toggleProject(p.id)}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: `var(${PROJECT_COLORS[idx % PROJECT_COLORS.length]})`,
+                        }}
+                      />
+                      {p.name}
+                    </button>
+                  );
+                })}
+                {visibleProjects.length === 0 && (
+                  <span className={ui.faint} style={{ fontSize: 12.5 }}>
+                    No projects match "{projFilter}".
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -347,7 +315,66 @@ export function IngestPage() {
             </div>
           </div>
 
-          {tab === "paste" && (
+          {/* tab-specific primary input (same slot for both tabs) */}
+          {tab === "file" ? (
+            <div className={styles.field}>
+              <label>File</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".md,.txt,.docx"
+                style={{ display: "none" }}
+                onChange={(e) => handleFile(e.currentTarget.files?.[0] ?? null)}
+              />
+              <div
+                className={`${styles.dropZone} ${dragOver ? styles.dropZoneOver : ""} ${file ? styles.dropZoneHas : ""}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) handleFile(f);
+                }}
+              >
+                <span className={styles.dropIco}>
+                  <IconUpload size={20} />
+                </span>
+                {file ? (
+                  <>
+                    <div className={ui.mono} style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>
+                      {file.name}
+                    </div>
+                    <span className={ui.faint} style={{ fontSize: 12.5 }}>
+                      Ready to ingest · click to replace
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginTop: 10 }}>
+                      Drop a file or click to browse
+                    </div>
+                    <span className={ui.faint} style={{ fontSize: 12.5 }}>
+                      .md · .txt · .docx
+                    </span>
+                  </>
+                )}
+              </div>
+              {filenameCheck?.exists && (
+                <Alert color="blue" variant="light" mt="sm">
+                  A document named "{filenameCheck.title}" already exists (updated{" "}
+                  {filenameCheck.updated_at
+                    ? new Date(filenameCheck.updated_at).toLocaleDateString()
+                    : "unknown"}
+                  ). Enable "Update existing" to overwrite it.
+                </Alert>
+              )}
+            </div>
+          ) : (
             <div className={styles.field}>
               <div className={ui.row} style={{ justifyContent: "space-between", marginBottom: 8 }}>
                 <label style={{ margin: 0 }}>Content</label>
@@ -453,7 +480,7 @@ export function IngestPage() {
                 <span className={ui.cliS}>./{file?.name ?? "doc.md"}</span> \
               </div>
               <div style={{ paddingLeft: 16 }}>
-                --project <span className={ui.cliS}>{firstProjectName}</span>
+                --project-name <span className={ui.cliS}>{firstProjectName}</span>
               </div>
               <div className={ui.cliOut}>→ ~{chunkEstimate || "?"} chunks · staged</div>
             </div>

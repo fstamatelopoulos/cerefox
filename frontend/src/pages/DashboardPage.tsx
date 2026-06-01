@@ -102,8 +102,7 @@ export function DashboardPage() {
           <p className={ui.eyebrow}>Memory layer · online</p>
           <h1 className={ui.pageTitle}>{greeting()}, operator.</h1>
           <p className={ui.pageSub}>
-            Indexing <b>{(data?.total_chunks ?? 0).toLocaleString()}</b> chunks across{" "}
-            <b>{data?.project_count ?? 0}</b> projects.
+            Asynchronous shared memory for your agents — one store across CLI, MCP, and web.
           </p>
         </div>
         <div className={styles.dashHeroActions}>
@@ -142,6 +141,9 @@ export function DashboardPage() {
             <span className={`${styles.statIco} ${ui.bPrimary}`}>
               <IconDatabase size={18} />
             </span>
+            {trashTotal > 0 && (
+              <span className={`${ui.badge} ${ui.bNeutral}`}>{trashTotal} docs in trash</span>
+            )}
           </div>
           <div className={styles.statValue}>{(data?.doc_count ?? 0).toLocaleString()}</div>
           <div className={styles.statLabel}>Documents</div>
@@ -165,9 +167,6 @@ export function DashboardPage() {
             <span className={`${styles.statIco} ${ui.bBlue}`}>
               <IconFolder size={18} />
             </span>
-            {trashTotal > 0 && (
-              <span className={`${ui.badge} ${ui.bBlue}`}>{trashTotal} docs in trash</span>
-            )}
           </div>
           <div className={styles.statValue}>{data?.project_count ?? 0}</div>
           <div className={styles.statLabel}>Projects</div>

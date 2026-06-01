@@ -4,11 +4,11 @@
 .wrap {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 24px 24px 80px;
+  padding: 14px 24px 80px;
 }
 
 .backBtn {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   padding-left: 6px;
 }
 
@@ -95,6 +95,11 @@
   gap: 12px;
   flex-wrap: wrap;
 }
+/* scrollable content region (own scrollbar, independent of the rail) */
+.contentScroll {
+  max-height: calc(100vh - 210px);
+  overflow-y: auto;
+}
 .docSource {
   margin: 0;
   padding: 18px;
@@ -103,7 +108,6 @@
   line-height: 1.7;
   color: var(--text-dim);
   white-space: pre-wrap;
-  overflow: auto;
 }
 .mdBody {
   padding: 8px 22px 24px;
@@ -113,13 +117,14 @@
 .chunkList {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  padding: 14px;
 }
 .chunkItem {
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border-soft);
-}
-.chunkItem:last-child {
-  border-bottom: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-2);
 }
 .chunkHead {
   display: flex;
@@ -160,34 +165,34 @@
 }
 .tocLink {
   font-size: 13px;
+  line-height: 1.35;
   color: var(--text-dim);
   text-decoration: none;
   padding: 5px 10px;
   border-radius: 7px;
-  border-left: 2px solid transparent;
   cursor: pointer;
   transition: all 0.12s;
   text-align: left;
   background: transparent;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  white-space: nowrap;
+  border: 0;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .tocLink:hover {
   color: var(--text);
   background: var(--surface-2);
 }
 .tocLvl2 {
-  padding-left: 22px;
+  padding-left: 18px;
   font-size: 12.5px;
-  color: var(--text-faint);
 }
 .tocLvl3 {
-  padding-left: 34px;
-  font-size: 12px;
+  padding-left: 28px;
+  font-size: 12.5px;
   color: var(--text-faint);
 }
 
