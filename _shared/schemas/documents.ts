@@ -37,6 +37,8 @@ export const DocumentDetailResponse = z.object({
   review_status: z.string().default("approved"),
   created_at: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
+  /** Set when the document is soft-deleted (in trash); null/absent otherwise. */
+  deleted_at: z.string().nullable().optional(),
   versions: z.array(DocumentVersionResponse).default([]),
 });
 export type DocumentDetailResponse = z.infer<typeof DocumentDetailResponse>;

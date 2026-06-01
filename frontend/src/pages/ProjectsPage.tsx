@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchDashboard } from "../api/dashboard";
 import { createProject, deleteProject, updateProject } from "../api/projects";
 import type { Project } from "../api/types";
-import { CliHint } from "../components/CliHint";
+import { CliCard } from "../components/CliCard";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { useProjects } from "../hooks/useProjects";
 import { showError, showSuccess } from "../utils/notifications";
@@ -155,12 +155,23 @@ export function ProjectsPage() {
         title="Projects"
         subtitle="Scoped collections your agents read from and write to."
         headerRight={
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-            <CliHint cmd="cerefox project list" />
-            <button type="button" className={`${ui.btn} ${ui.btnPrimary}`} onClick={() => setCreateOpen(true)}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, width: 400, maxWidth: "100%" }}>
+            <button
+              type="button"
+              className={`${ui.btn} ${ui.btnPrimary}`}
+              style={{ alignSelf: "flex-end" }}
+              onClick={() => setCreateOpen(true)}
+            >
               <IconPlus size={16} />
               New project
             </button>
+            <CliCard
+              title="CLI equivalent"
+              commands={[
+                { cmd: "cerefox project list" },
+                { cmd: "cerefox project create", args: "<name>" },
+              ]}
+            />
           </div>
         }
         searchValue={query}

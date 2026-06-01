@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchTrash, purgeDocument, restoreDocument, type DeletedDocument } from "../api/trash";
-import { CliHint } from "../components/CliHint";
+import { CliCard } from "../components/CliCard";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { useProjects } from "../hooks/useProjects";
 import { showError, showSuccess } from "../utils/notifications";
@@ -130,7 +130,17 @@ export function TrashPage() {
       eyebrow="Recoverable"
       title="Trash"
       subtitle="Soft-deleted documents — excluded from search until restored or purged."
-      headerRight={<CliHint cmd="cerefox document restore" args="<id>" />}
+      headerRight={
+        <div style={{ width: 400, maxWidth: "100%" }}>
+          <CliCard
+            title="CLI equivalent"
+            commands={[
+              { cmd: "cerefox document list", args: "--deleted" },
+              { cmd: "cerefox document restore", args: "<id>" },
+            ]}
+          />
+        </div>
+      }
       searchValue={query}
       onSearchChange={setQuery}
       searchPlaceholder="Filter trashed documents…"
@@ -173,8 +183,8 @@ export function TrashPage() {
           <>
             <button
               type="button"
-              className={`${ui.btn} ${ui.btnGhost}`}
-              title="Restore"
+              className={`${ui.btn} ${ui.btnGhost} ${ui.btnWarn}`}
+              title="Restore from trash"
               onClick={() => restoreMut.mutate(d.id)}
             >
               <IconArrowBackUp size={14} />
@@ -182,11 +192,12 @@ export function TrashPage() {
             </button>
             <button
               type="button"
-              className={`${ui.iconBtnSm} ${ui.iconBtnDanger}`}
-              title="Delete permanently"
+              className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
+              title="Permanently delete (cannot be undone)"
               onClick={() => setConfirmId(d.id)}
             >
               <IconTrash size={14} />
+              Purge
             </button>
           </>
         )

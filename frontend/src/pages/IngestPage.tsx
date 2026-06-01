@@ -1,5 +1,5 @@
 import { Alert } from "@mantine/core";
-import { IconCheck, IconFileText, IconPlus, IconSearch, IconTerminal2, IconUpload, IconX } from "@tabler/icons-react";
+import { IconCheck, IconFileText, IconPlus, IconSearch, IconUpload, IconX } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { detectV07FromResponse } from "../api/client";
 import { checkFilename, ingestPaste } from "../api/documents";
 import type { FilenameCheckResponse, IngestResponse } from "../api/types";
+import { CliCard } from "../components/CliCard";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import { showError, showV07DeferredToast } from "../utils/notifications";
@@ -469,30 +470,15 @@ export function IngestPage() {
             </ol>
           </div>
 
-          <div className={`${ui.card} ${ui.cliCard} ${ui.rise}`}>
-            <div className={ui.row} style={{ gap: 8, marginBottom: 10 }}>
-              <IconTerminal2 size={15} />
-              <span style={{ fontWeight: 600, fontSize: 13.5 }}>CLI equivalent</span>
-              <button
-                type="button"
-                className={ui.whatis}
-                style={{ marginLeft: "auto" }}
-                onClick={() => navigate("/help/guides/cli.md")}
-              >
-                cli docs
-              </button>
-            </div>
-            <div className={ui.cliBlock}>
-              <div>
-                <span className={ui.cliP}>$</span> cerefox document ingest{" "}
-                <span className={ui.cliS}>./{file?.name ?? "doc.md"}</span> \
-              </div>
-              <div style={{ paddingLeft: 16 }}>
-                --project-name <span className={ui.cliS}>{firstProjectName}</span>
-              </div>
-              <div className={ui.cliOut}>→ ~{chunkEstimate || "?"} chunks · staged</div>
-            </div>
-          </div>
+          <CliCard
+            title="CLI equivalent"
+            commands={[
+              {
+                cmd: "cerefox document ingest",
+                args: `./${file?.name ?? "doc.md"} --project-name ${firstProjectName}`,
+              },
+            ]}
+          />
         </aside>
       </form>
     </div>

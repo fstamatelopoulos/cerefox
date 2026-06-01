@@ -100,6 +100,22 @@
   background: var(--surface-2);
   color: var(--text);
 }
+/* Danger modifier — combine with .btn/.btnGhost; red on hover, matching the
+   icon-only .iconBtnDanger so every delete/trash affordance highlights alike. */
+.btnDanger:hover {
+  color: var(--red);
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+/* Warn/restore modifier — yellow at rest + hover (distinct, recoverable). */
+.btnWarn {
+  color: var(--yellow);
+}
+.btnWarn:hover {
+  color: var(--yellow);
+  border-color: var(--yellow);
+  background: var(--yellow-soft);
+}
 
 /* ---- cards ---- */
 .card {
@@ -374,6 +390,37 @@
 .cliOut {
   color: var(--text-faint);
   padding-left: 17px;
+}
+
+/* one copyable command line inside a CliCard's cliBlock */
+.cliLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cliLine + .cliLine {
+  margin-top: 4px;
+}
+.cliLineCmd {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cliCopyBtn {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 4px;
+}
+.cliCopyBtn:hover {
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 /* compact inline terminal snippet (CliHint) — same theming as cliBlock */
