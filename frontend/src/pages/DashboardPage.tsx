@@ -203,7 +203,7 @@ export function DashboardPage() {
           <div className={agentOps > 0 ? styles.statValue : styles.emptyVal}>
             {agentOps > 0 ? agentOps.toLocaleString() : "—"}
           </div>
-          <div className={styles.statLabel}>Agent activity · 30d</div>
+          <div className={styles.statLabel}>Agent operations · 30d</div>
         </div>
       </div>
 

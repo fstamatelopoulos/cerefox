@@ -40,6 +40,7 @@ import { registerDocumentReadRoutes } from "./routes/documents-read.ts";
 import { registerDocumentWriteRoutes } from "./routes/documents-write.ts";
 import { registerIngestRoutes } from "./routes/ingest.ts";
 import { registerMetaRoutes } from "./routes/meta.ts";
+import { registerPreferencesRoutes } from "./routes/preferences.ts";
 import { registerProjectsRoutes } from "./routes/projects.ts";
 import {
   ROOT_REDIRECT_HTML,
@@ -80,6 +81,8 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
 
   // (1) JSON API — registered first.
   registerMetaRoutes(app, ctx);
+  // Machine-local UI prefs (file-based; no DB) — works without Supabase.
+  registerPreferencesRoutes(app);
   if (ctx) {
     registerDiscoveryRoutes(app, ctx);
     registerDocumentReadRoutes(app, ctx);
