@@ -264,24 +264,6 @@
   border-top: 1px solid var(--border-soft);
 }
 
-/* ---- CLI mirror ---- */
-.cliCard {
-  background: linear-gradient(160deg, var(--surface), var(--surface-2));
-  padding: 18px;
-}
-.cliBlock {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.7;
-  background: var(--bg);
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  padding: 12px 13px;
-}
-.cliP { color: var(--primary); margin-right: 7px; }
-.cliS { color: var(--green); }
-.cliOut { color: var(--text-faint); padding-left: 17px; }
-
 /* ---- responsive ---- */
 @media (max-width: 920px) {
   .statGrid { grid-template-columns: repeat(2, 1fr); }

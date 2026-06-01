@@ -358,21 +358,21 @@ export function DashboardPage() {
             </div>
           </section>
 
-          <section className={`${ui.card} ${styles.cliCard} ${ui.rise}`}>
+          <section className={`${ui.card} ${ui.cliCard} ${ui.rise}`}>
             <div className={ui.row} style={{ gap: 8, marginBottom: 10 }}>
               <IconTerminal2 size={15} />
               <span style={{ fontWeight: 600, fontSize: 13.5 }}>Same memory, your terminal</span>
             </div>
-            <div className={styles.cliBlock}>
+            <div className={ui.cliBlock}>
               <div>
-                <span className={styles.cliP}>$</span> cerefox search{" "}
-                <span className={styles.cliS}>"retry backoff"</span>
+                <span className={ui.cliP}>$</span> cerefox search{" "}
+                <span className={ui.cliS}>"retry backoff"</span>
               </div>
-              <div className={styles.cliOut}>→ 5 results · top 92% match</div>
+              <div className={ui.cliOut}>→ 5 results · top 92% match</div>
               <div style={{ marginTop: 6 }}>
-                <span className={styles.cliP}>$</span> cerefox document ingest ./rfc-018.md
+                <span className={ui.cliP}>$</span> cerefox document ingest ./rfc-018.md
               </div>
-              <div className={styles.cliOut}>→ staged in research-notes</div>
+              <div className={ui.cliOut}>→ staged in research-notes</div>
             </div>
             <p className={ui.faint} style={{ fontSize: 12, margin: "10px 0 0", lineHeight: 1.5 }}>
               The same memory from your terminal or any MCP agent — most actions
