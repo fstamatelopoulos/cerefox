@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.8] -- 2026-06-01
+
 **Web UI polish + a CLI parity addition. Client-only — no server deploy.**
 
 ### Added
