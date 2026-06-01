@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsivePie } from "@nivo/pie";
@@ -179,14 +180,23 @@ export function AnalyticsPage() {
       <Group justify="space-between" mb="md">
         <Title order={2}>Analytics</Title>
         <Group gap="md">
-          <Switch
-            label="Usage tracking"
-            checked={isEnabled}
-            onChange={(e) => toggleMutation.mutate(e.currentTarget.checked)}
-            size="sm"
-            color="green"
-            disabled={toggleMutation.isPending}
-          />
+          <Tooltip
+            label="Opt-in. Logs each read/write (operation metadata only — no content) to the usage log, powering these charts and the dashboard's agent-activity card."
+            multiline
+            w={300}
+            withArrow
+            openDelay={120}
+            position="bottom"
+          >
+            <Switch
+              label="Usage tracking"
+              checked={isEnabled}
+              onChange={(e) => toggleMutation.mutate(e.currentTarget.checked)}
+              size="sm"
+              color="green"
+              disabled={toggleMutation.isPending}
+            />
+          </Tooltip>
           <Button
             variant="subtle"
             leftSection={<IconDownload size={16} />}
