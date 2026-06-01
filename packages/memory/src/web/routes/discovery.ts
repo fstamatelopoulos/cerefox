@@ -158,6 +158,22 @@ async function countActiveDocuments(ctx: WebContext): Promise<number> {
   return count ?? 0;
 }
 
+async function getCorpusTotals(
+  ctx: WebContext,
+): Promise<{ total_chunks: number; total_chars: number }> {
+  // Degrade to zeros if the RPC isn't deployed yet (upgrade window: the web
+  // server may be updated before `cerefox server deploy` applies rpcs.sql).
+  const { data, error } = await ctx.supabase.rpc("cerefox_corpus_totals");
+  if (error) return { total_chunks: 0, total_chars: 0 };
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { total_chunks: number | string; total_chars: number | string }
+    | undefined;
+  return {
+    total_chunks: Number(row?.total_chunks ?? 0),
+    total_chars: Number(row?.total_chars ?? 0),
+  };
+}
+
 async function countDocumentsForProject(
   ctx: WebContext,
   projectId: string,
@@ -525,10 +541,11 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
 
   // ── /dashboard ─────────────────────────────────────────────────────────────
   app.get("/api/v1/dashboard", async (c) => {
-    const [recentDocs, projects, docCount] = await Promise.all([
+    const [recentDocs, projects, docCount, totals] = await Promise.all([
       listDocuments(ctx, { limit: 10 }),
       listAllProjects(ctx),
       countActiveDocuments(ctx),
+      getCorpusTotals(ctx),
     ]);
     const projectIds = projects.map((p) => String(p.id));
     const docIds = recentDocs.map((d) => String(d.id));
@@ -553,6 +570,8 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
 
     return c.json({
       doc_count: docCount,
+      total_chunks: totals.total_chunks,
+      total_chars: totals.total_chars,
       project_count: projects.length,
       recent_docs: recent,
       projects: projectsOut,

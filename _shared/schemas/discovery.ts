@@ -112,6 +112,8 @@ export type DashboardDoc = z.infer<typeof DashboardDoc>;
 
 export const DashboardResponse = z.object({
   doc_count: z.number().int(),
+  total_chunks: z.number().int(),
+  total_chars: z.number().int(),
   project_count: z.number().int(),
   recent_docs: z.array(DashboardDoc),
   projects: z.array(ProjectResponse),

@@ -1721,3 +1721,31 @@ AS $$
           AND p.proname = p_name
     );
 $$;
+
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Corpus totals (dashboard aggregates)
+-- ─────────────────────────────────────────────────────────────────────────
+-- Cheap global aggregates for the dashboard stat strip: total current chunks
+-- (version_id IS NULL, on non-deleted documents) and total characters across
+-- active documents. SUM cannot be expressed over the Data API, so it lives
+-- here as a single STABLE function the /dashboard route calls once.
+
+CREATE OR REPLACE FUNCTION cerefox_corpus_totals()
+RETURNS TABLE (total_chunks BIGINT, total_chars BIGINT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+    SELECT
+        (SELECT COUNT(*)
+           FROM cerefox_chunks c
+           JOIN cerefox_documents d ON d.id = c.document_id
+          WHERE c.version_id IS NULL
+            AND d.deleted_at IS NULL)::BIGINT AS total_chunks,
+        (SELECT COALESCE(SUM(total_chars), 0)
+           FROM cerefox_documents
+          WHERE deleted_at IS NULL)::BIGINT AS total_chars;
+$$;
