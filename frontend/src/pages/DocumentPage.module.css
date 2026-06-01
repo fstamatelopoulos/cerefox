@@ -4,7 +4,7 @@
 .wrap {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 14px 24px 80px;
+  padding: 6px 24px 80px;
 }
 
 .backBtn {
@@ -164,23 +164,22 @@
   overflow-y: auto;
 }
 .tocLink {
+  display: block;
+  width: 100%;
+  font-family: var(--font-ui);
   font-size: 13px;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--text-dim);
   text-decoration: none;
   padding: 5px 10px;
   border-radius: 7px;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: background 0.12s, color 0.12s;
   text-align: left;
   background: transparent;
   border: 0;
   white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  word-break: break-word;
 }
 .tocLink:hover {
   color: var(--text);

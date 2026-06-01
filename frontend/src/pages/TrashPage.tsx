@@ -10,6 +10,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import ui from "../styles/redesign.module.css";
 import { IconRestore, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -53,6 +54,7 @@ export function TrashPage() {
 
   return (
     <Container size="lg">
+      <p className={ui.eyebrow}>Recoverable</p>
       <Title order={2} mb="md">Trash</Title>
       <Group justify="space-between" align="flex-end" mb="md">
         <Text c="dimmed" size="sm">

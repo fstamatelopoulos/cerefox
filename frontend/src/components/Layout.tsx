@@ -38,7 +38,7 @@ export function Layout() {
     theme === "light" ? IconSun : theme === "dark" ? IconMoon : IconDeviceDesktop;
 
   return (
-    <AppShell header={{ height: 56 }} padding="md">
+    <AppShell header={{ height: 56 }} padding="xs">
       <AppShell.Header style={{ position: "relative" }}>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="sm">

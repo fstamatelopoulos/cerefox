@@ -188,23 +188,20 @@ export function SearchControls({
         </div>
 
         {localGranularity === "chunks" ? (
-          <div className={ui.seg}>
-            {RANKERS.map((m) => {
-              const Ico = m.icon;
-              return (
-                <button
-                  key={m.v}
-                  type="button"
-                  title={m.desc}
-                  className={`${ui.segBtn} ${localRanker === m.v ? ui.segBtnOn : ""}`}
-                  onClick={() => changeRanker(m.v)}
-                >
-                  <Ico size={14} />
+          <span className={ui.selectWrap} title="Ranking method">
+            <select
+              className={ui.selectEl}
+              value={localRanker}
+              onChange={(e) => changeRanker(e.currentTarget.value as Ranker)}
+            >
+              {RANKERS.map((m) => (
+                <option key={m.v} value={m.v}>
                   {m.label}
-                </button>
-              );
-            })}
-          </div>
+                </option>
+              ))}
+            </select>
+            <IconChevronDown size={14} />
+          </span>
         ) : (
           <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 11.5 }}>
             whole documents · hybrid-ranked

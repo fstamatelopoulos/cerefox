@@ -17,6 +17,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { fetchDocContent, fetchDocsIndex, type DocEntry } from "../api/docs";
 import { MarkdownViewer } from "../components/MarkdownViewer";
+import ui from "../styles/redesign.module.css";
 
 const CATEGORY_LABELS: Record<string, string> = {
   readme: "Project overview",
@@ -94,7 +95,8 @@ export function HelpPage() {
   }
 
   return (
-    <Container fluid py="md">
+    <Container fluid py="xs">
+      <p className={ui.eyebrow}>Reference</p>
       <Grid gutter="md">
         <Grid.Col span={{ base: 12, md: 3 }}>
           <Stack gap={2}>
@@ -146,7 +148,11 @@ export function HelpPage() {
                   raw
                 </Anchor>
               </Group>
-              <MarkdownViewer content={contentQuery.data} showToggle={false} />
+              <MarkdownViewer
+                content={contentQuery.data}
+                showToggle={false}
+                maxHeight="calc(100vh - 170px)"
+              />
             </Stack>
           )}
         </Grid.Col>

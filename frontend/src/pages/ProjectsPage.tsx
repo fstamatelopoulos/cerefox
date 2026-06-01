@@ -12,6 +12,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import ui from "../styles/redesign.module.css";
 import { IconEdit, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -81,6 +82,7 @@ export function ProjectsPage() {
 
   return (
     <Container size="lg">
+      <p className={ui.eyebrow}>Organize</p>
       <Title order={2} mb="md">
         Projects
       </Title>

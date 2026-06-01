@@ -10,6 +10,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import ui from "../styles/redesign.module.css";
 import { IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -68,6 +69,7 @@ export function AuditLogPage() {
 
   return (
     <Container size="lg">
+      <p className={ui.eyebrow}>History</p>
       <Title order={2} mb="md">
         Audit Log
       </Title>

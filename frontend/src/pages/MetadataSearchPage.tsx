@@ -14,6 +14,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import ui from "../styles/redesign.module.css";
 import { IconPlus, IconSearch, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
@@ -107,6 +108,7 @@ export function MetadataSearchPage() {
 
   return (
     <Container size="lg">
+      <p className={ui.eyebrow}>Knowledge base</p>
       <Title order={2} mb="md">
         Metadata Search
       </Title>

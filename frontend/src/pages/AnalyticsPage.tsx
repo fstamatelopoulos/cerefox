@@ -30,6 +30,7 @@ import {
 } from "../api/analytics";
 import { fetchProjects } from "../api/projects";
 import { showSuccess } from "../utils/notifications";
+import ui from "../styles/redesign.module.css";
 import { WordCloudChart } from "../components/WordCloudChart";
 import { HEBChart } from "../components/HEBChart";
 import { HEBOperationChart } from "../components/HEBOperationChart";
@@ -174,6 +175,7 @@ export function AnalyticsPage() {
 
   return (
     <Container size="xl">
+      <p className={ui.eyebrow}>Usage</p>
       <Group justify="space-between" mb="md">
         <Title order={2}>Analytics</Title>
         <Group gap="md">

@@ -2,9 +2,9 @@
    Shared primitives in src/styles/redesign.module.css; tokens in tokens.css. */
 
 .wrap {
-  max-width: 860px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 20px 24px 80px;
+  padding: 8px 24px 80px;
 }
 
 .split {
