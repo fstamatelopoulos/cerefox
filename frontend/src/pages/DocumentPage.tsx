@@ -468,7 +468,7 @@ export function DocumentPage() {
           <div className={ui.row} style={{ gap: 8 }}>
             <span className={`${ui.badge} ${ui.bBlue}`}>
               <IconHistory size={12} />
-              Previous version: v{viewedVersion!.version_number}
+              This is a previous version: v{viewedVersion!.version_number}
             </span>
             <span style={{ fontSize: 13 }}>
               Read-only snapshot from {new Date(viewedVersion!.created_at).toLocaleDateString()}.

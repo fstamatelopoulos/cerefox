@@ -18,6 +18,21 @@ install and setup below is about 5 minutes.
 
 ---
 
+## 0. Create a Supabase project
+
+Cerefox stores everything in your own Supabase (Postgres + pgvector), so create
+a free project first — provisioning takes a few minutes:
+
+1. Sign up / log in at [supabase.com](https://supabase.com) and create a new project.
+2. Keep its **Project URL**, **API keys**, and **database password** handy —
+   `cerefox init` (Step 2) prompts for these.
+
+A fresh, empty project is all you need; `cerefox init` / `cerefox server deploy`
+deploy the schema, RPCs, and Edge Functions for you. Full walkthrough (keys,
+where to find them, what each is for): [`setup-supabase.md`](setup-supabase.md).
+
+---
+
 ## 1. Install
 
 ```bash

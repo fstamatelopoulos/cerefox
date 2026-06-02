@@ -29,8 +29,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   completion system has been initialized yet, so cerefox completion registers
   even on a bare shell. It's a no-op when `compinit` already ran (no double
   init).
-- **Quickstart** title no longer claims "5 Minutes"; the intro states up front
-  that a Supabase project is the one prerequisite.
+- **Quickstart** title no longer claims "5 Minutes"; adds a dedicated **Step 0:
+  Create a Supabase project** (linking `setup-supabase.md`) so the prerequisite
+  is explicit rather than buried.
 
 ---
 
