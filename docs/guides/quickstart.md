@@ -1,7 +1,9 @@
-# Quickstart -- Zero to First Document in 5 Minutes
+# Quickstart -- Zero to First Document
 
 Get Cerefox running on your machine via the npm install path. **No source
-clone, no Python required.**
+clone, no Python required.** Once you have a Supabase project (the one
+prerequisite — provisioning a free one takes a few minutes), the Cerefox
+install and setup below is about 5 minutes.
 
 > **Upgrading from an earlier version?** See [`upgrading.md`](upgrading.md)
 > for migration steps instead.
@@ -13,6 +15,21 @@ clone, no Python required.**
 - **Node.js 20+** (`node --version`) or **Bun 1.0+** (`bun --version`)
 - A **Supabase account** -- [supabase.com](https://supabase.com) (free tier works). A fresh project is fine — `cerefox server deploy` (Step 2) deploys the schema for you.
 - An **OpenAI API key** -- [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+
+---
+
+## 0. Create a Supabase project
+
+Cerefox stores everything in your own Supabase (Postgres + pgvector), so create
+a free project first — provisioning takes a few minutes:
+
+1. Sign up / log in at [supabase.com](https://supabase.com) and create a new project.
+2. Keep its **Project URL**, **API keys**, and **database password** handy —
+   `cerefox init` (Step 2) prompts for these.
+
+A fresh, empty project is all you need; `cerefox init` / `cerefox server deploy`
+deploy the schema, RPCs, and Edge Functions for you. Full walkthrough (keys,
+where to find them, what each is for): [`setup-supabase.md`](setup-supabase.md).
 
 ---
 

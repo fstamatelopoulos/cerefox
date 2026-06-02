@@ -9,7 +9,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Document version UX + docs/completion polish. Client-only — no server deploy.**
+
+### Added
+
+- **View an archived version in place** — clicking a version number (or "Open
+  this version" in its ⋯ menu) opens that snapshot read-only at
+  `/document/:id?version=<id>`, with a "Previous version: vN" banner and a
+  "View current version" link back. In version view the header offers only
+  **Download** and a **Protect / Unprotect** toggle (the version's
+  archive/cleanup-protection flag); Edit, Delete, the review pill, and the
+  Chunks tab are hidden.
+- **Per-version size** in the Versions card — each row now shows
+  `N chunks · M chars`, and the actively-viewed version is highlighted.
+
+### Changed
+
+- **`cerefox completion install` (zsh)** now self-bootstraps `compinit` if no
+  completion system has been initialized yet, so cerefox completion registers
+  even on a bare shell. It's a no-op when `compinit` already ran (no double
+  init).
+- **Quickstart** title no longer claims "5 Minutes"; adds a dedicated **Step 0:
+  Create a Supabase project** (linking `setup-supabase.md`) so the prerequisite
+  is explicit rather than buried.
 
 ---
 

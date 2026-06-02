@@ -237,16 +237,49 @@
 .verList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .verRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+.verRowActive {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+}
+.verRowTop {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+.verLink {
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 0.12s;
+}
+.verLink:hover {
+  filter: brightness(1.08);
+  text-decoration: underline;
+}
+.verMeta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  padding-left: 2px;
+}
 .verLock {
   color: var(--blue);
   display: inline-flex;
+}
+
+/* version-view banner — blue accent variant of the (red) trash banner */
+.versionBanner {
+  border-color: var(--blue);
+  background: var(--blue-soft);
 }
 
 .actList {

@@ -170,6 +170,12 @@ _cerefox() {
     _cerefox_candidates "$path"
     compadd -- \${=REPLY}
 }
+# Self-bootstrap the completion system if no \`compinit\` has run yet (e.g. this
+# file is sourced from an rc that never initialized completions). No-op when
+# \`compdef\` already exists, so it never re-runs compinit unnecessarily.
+if ! whence compdef >/dev/null 2>&1; then
+    autoload -Uz compinit && compinit
+fi
 compdef _cerefox cerefox
 `;
 }
