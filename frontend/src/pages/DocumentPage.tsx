@@ -7,7 +7,9 @@ import {
   IconDownload,
   IconEdit,
   IconFileText,
+  IconHistory,
   IconLock,
+  IconLockOpen,
   IconMapPin,
   IconSparkles,
   IconStack2,
@@ -17,7 +19,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 
 import { fetchAuditLog, setReviewStatus, setVersionArchived } from "../api/audit";
@@ -107,6 +109,8 @@ function originChip(source: string | null): { icon: typeof IconMapPin; label: st
 
 export function DocumentPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const versionParam = searchParams.get("version");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -114,8 +118,8 @@ export function DocumentPage() {
   const [view, setView] = useState<View>("rendered");
 
   const { data: doc, isLoading, error } = useQuery({
-    queryKey: ["document", id],
-    queryFn: () => fetchDocument(id!),
+    queryKey: ["document", id, versionParam],
+    queryFn: () => fetchDocument(id!, versionParam ?? undefined),
     enabled: !!id,
   });
   const { data: chunks, isLoading: chunksLoading } = useQuery({
@@ -249,6 +253,16 @@ export function DocumentPage() {
   const chip = originChip(doc.doc_source);
   const ChipIcon = chip.icon;
 
+  // Viewing an archived snapshot (?version=<id>): read-only mode that only
+  // offers Download + Protect/Unprotect for that version.
+  const viewedVersion = versionParam
+    ? doc.versions.find((v) => v.version_id === versionParam)
+    : undefined;
+  const isVersionView = !!viewedVersion;
+  // The chunks tab fetches the *current* chunks, so it's meaningless for an
+  // archived snapshot — fall back to rendered while in version view.
+  const effectiveView: View = isVersionView && view === "chunks" ? "rendered" : view;
+
   return (
     <div className={styles.wrap}>
       <button
@@ -298,8 +312,9 @@ export function DocumentPage() {
             {doc.updated_at && (
               <span className={`${ui.mono} ${ui.faint}`}>updated {formatDateTime(doc.updated_at)}</span>
             )}
-            {/* Review status is an optional gate — irrelevant for a trashed doc, so hide the pill + toggle there. */}
-            {!doc.deleted_at && (
+            {/* Review status is an optional gate — irrelevant for a trashed doc or an
+                archived-version snapshot, so hide the pill + toggle there. */}
+            {!doc.deleted_at && !isVersionView && (
               <button
                 type="button"
                 className={styles.reviewPill}
@@ -322,6 +337,38 @@ export function DocumentPage() {
           </div>
         </div>
         <div className={ui.row} style={{ gap: 8, flexShrink: 0 }}>
+          {isVersionView ? (
+            /* Older-version view: only Download + Protect/Unprotect for this snapshot. */
+            <>
+              <a
+                className={`${ui.btn} ${ui.btnGhost}`}
+                href={getDownloadUrl(id!, viewedVersion!.version_id)}
+              >
+                <IconDownload size={14} />
+                Download
+              </a>
+              <button
+                type="button"
+                className={`${ui.btn} ${ui.btnGhost} ${viewedVersion!.archived ? ui.btnWarn : ""}`}
+                title={
+                  viewedVersion!.archived
+                    ? "Remove protection — this version becomes eligible for cleanup"
+                    : "Protect this version from automatic cleanup"
+                }
+                onClick={() =>
+                  archiveMutation.mutate({
+                    versionId: viewedVersion!.version_id,
+                    archived: !viewedVersion!.archived,
+                  })
+                }
+                disabled={archiveMutation.isPending}
+              >
+                {viewedVersion!.archived ? <IconLockOpen size={14} /> : <IconLock size={14} />}
+                {viewedVersion!.archived ? "Unprotect" : "Protect"}
+              </button>
+            </>
+          ) : (
+          <>
           {/* Download is useful either way. Edit/Delete only for live docs;
               deleted docs get Restore/Purge instead. */}
           <a className={`${ui.btn} ${ui.btnGhost}`} href={getDownloadUrl(id!)}>
@@ -411,8 +458,32 @@ export function DocumentPage() {
               )}
             </>
           )}
+          </>
+          )}
         </div>
       </div>
+
+      {isVersionView && (
+        <div className={`${styles.trashBanner} ${styles.versionBanner}`}>
+          <div className={ui.row} style={{ gap: 8 }}>
+            <span className={`${ui.badge} ${ui.bBlue}`}>
+              <IconHistory size={12} />
+              Previous version: v{viewedVersion!.version_number}
+            </span>
+            <span style={{ fontSize: 13 }}>
+              Read-only snapshot from {new Date(viewedVersion!.created_at).toLocaleDateString()}.
+              {viewedVersion!.archived ? " Protected from cleanup." : ""}
+            </span>
+          </div>
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnSubtle}`}
+            onClick={() => navigate(`/document/${id}`)}
+          >
+            View current version
+          </button>
+        </div>
+      )}
 
       {doc.deleted_at && (
         <div className={styles.trashBanner}>
@@ -439,7 +510,7 @@ export function DocumentPage() {
               <div className={ui.seg}>
                 <button
                   type="button"
-                  className={`${ui.segBtn} ${view === "rendered" ? ui.segBtnOn : ""}`}
+                  className={`${ui.segBtn} ${effectiveView === "rendered" ? ui.segBtnOn : ""}`}
                   onClick={() => setView("rendered")}
                 >
                   <IconFileText size={14} />
@@ -447,20 +518,23 @@ export function DocumentPage() {
                 </button>
                 <button
                   type="button"
-                  className={`${ui.segBtn} ${view === "source" ? ui.segBtnOn : ""}`}
+                  className={`${ui.segBtn} ${effectiveView === "source" ? ui.segBtnOn : ""}`}
                   onClick={() => setView("source")}
                 >
                   <IconTerminal2 size={14} />
                   Source
                 </button>
-                <button
-                  type="button"
-                  className={`${ui.segBtn} ${view === "chunks" ? ui.segBtnOn : ""}`}
-                  onClick={() => setView("chunks")}
-                >
-                  <IconStack2 size={14} />
-                  Chunks
-                </button>
+                {/* Chunks reflect the current version only — hide for archived snapshots. */}
+                {!isVersionView && (
+                  <button
+                    type="button"
+                    className={`${ui.segBtn} ${effectiveView === "chunks" ? ui.segBtnOn : ""}`}
+                    onClick={() => setView("chunks")}
+                  >
+                    <IconStack2 size={14} />
+                    Chunks
+                  </button>
+                )}
               </div>
               <span className={`${ui.mono} ${ui.faint}`} style={{ fontSize: 12 }}>
                 {doc.total_chars.toLocaleString()} chars
@@ -469,7 +543,7 @@ export function DocumentPage() {
             <div className={ui.divider} />
 
             <div className={styles.contentScroll}>
-            {view === "rendered" && (
+            {effectiveView === "rendered" && (
               <div className={styles.mdBody}>
                 <div className={md.markdown}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
@@ -478,8 +552,8 @@ export function DocumentPage() {
                 </div>
               </div>
             )}
-            {view === "source" && <pre className={styles.docSource}>{doc.full_content}</pre>}
-            {view === "chunks" && (
+            {effectiveView === "source" && <pre className={styles.docSource}>{doc.full_content}</pre>}
+            {effectiveView === "chunks" && (
               <div className={styles.chunkList}>
                 {chunksLoading ? (
                   <div style={{ padding: 18 }}>
@@ -580,55 +654,79 @@ export function DocumentPage() {
                 </Popover>
               </div>
               <div className={styles.verList}>
-                {doc.versions.map((v) => (
-                  <div key={v.version_id} className={styles.verRow}>
-                    <span className={`${ui.badge} ${ui.bNeutral} ${ui.mono}`}>v{v.version_number}</span>
-                    <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 11 }}>
-                      {new Date(v.created_at).toLocaleDateString()}
-                    </span>
-                    {v.archived && (
-                      <span className={styles.verLock} title="Archived — protected from cleanup">
-                        <IconLock size={12} />
+                {doc.versions.map((v) => {
+                  const active = v.version_id === versionParam;
+                  return (
+                  <div
+                    key={v.version_id}
+                    className={`${styles.verRow} ${active ? styles.verRowActive : ""}`}
+                  >
+                    <div className={styles.verRowTop}>
+                      <button
+                        type="button"
+                        className={`${ui.badge} ${active ? ui.bPrimary : ui.bNeutral} ${ui.mono} ${styles.verLink}`}
+                        title={active ? "Currently viewing this version" : `View version v${v.version_number}`}
+                        onClick={() => navigate(`/document/${id}?version=${v.version_id}`)}
+                      >
+                        v{v.version_number}
+                      </button>
+                      <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 11 }}>
+                        {new Date(v.created_at).toLocaleDateString()}
                       </span>
-                    )}
-                    <Menu position="bottom-end" withinPortal shadow="md" width={180}>
-                      <Menu.Target>
-                        <button
-                          type="button"
-                          className={ui.iconBtn}
-                          style={{ width: 26, height: 26, marginLeft: "auto" }}
-                          aria-label="Version actions"
-                        >
-                          <IconDots size={14} />
-                        </button>
-                      </Menu.Target>
-                      <Menu.Dropdown>
-                        <Menu.Item
-                          leftSection={<IconArrowsDiff size={14} />}
-                          onClick={() => openDiff(v.version_id, v.version_number)}
-                        >
-                          Diff vs current
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconDownload size={14} />}
-                          component="a"
-                          href={getDownloadUrl(id!, v.version_id)}
-                        >
-                          Download
-                        </Menu.Item>
-                        <Menu.Item
-                          leftSection={<IconLock size={14} />}
-                          color={v.archived ? "yellow" : undefined}
-                          onClick={() =>
-                            archiveMutation.mutate({ versionId: v.version_id, archived: !v.archived })
-                          }
-                        >
-                          {v.archived ? "Remove protection" : "Archive (protect)"}
-                        </Menu.Item>
-                      </Menu.Dropdown>
-                    </Menu>
+                      {v.archived && (
+                        <span className={styles.verLock} title="Archived — protected from cleanup">
+                          <IconLock size={12} />
+                        </span>
+                      )}
+                      <Menu position="bottom-end" withinPortal shadow="md" width={180}>
+                        <Menu.Target>
+                          <button
+                            type="button"
+                            className={ui.iconBtn}
+                            style={{ width: 26, height: 26, marginLeft: "auto" }}
+                            aria-label="Version actions"
+                          >
+                            <IconDots size={14} />
+                          </button>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Menu.Item
+                            leftSection={<IconHistory size={14} />}
+                            onClick={() => navigate(`/document/${id}?version=${v.version_id}`)}
+                          >
+                            Open this version
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconArrowsDiff size={14} />}
+                            onClick={() => openDiff(v.version_id, v.version_number)}
+                          >
+                            Diff vs current
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconDownload size={14} />}
+                            component="a"
+                            href={getDownloadUrl(id!, v.version_id)}
+                          >
+                            Download
+                          </Menu.Item>
+                          <Menu.Item
+                            leftSection={<IconLock size={14} />}
+                            color={v.archived ? "yellow" : undefined}
+                            onClick={() =>
+                              archiveMutation.mutate({ versionId: v.version_id, archived: !v.archived })
+                            }
+                          >
+                            {v.archived ? "Remove protection" : "Archive (protect)"}
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    </div>
+                    <span className={styles.verMeta}>
+                      {v.chunk_count} chunks · {v.total_chars.toLocaleString()} chars
+                    </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

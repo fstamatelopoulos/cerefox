@@ -1,7 +1,9 @@
-# Quickstart -- Zero to First Document in 5 Minutes
+# Quickstart -- Zero to First Document
 
 Get Cerefox running on your machine via the npm install path. **No source
-clone, no Python required.**
+clone, no Python required.** Once you have a Supabase project (the one
+prerequisite — provisioning a free one takes a few minutes), the Cerefox
+install and setup below is about 5 minutes.
 
 > **Upgrading from an earlier version?** See [`upgrading.md`](upgrading.md)
 > for migration steps instead.
