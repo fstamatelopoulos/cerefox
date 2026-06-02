@@ -9,7 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Installer/upgrade reliability. Client-only — no server deploy.**
+
+### Fixed
+
+- **Stale-manifest-cache upgrades** — `install.sh` and `cerefox self-update`
+  now bypass the package manager's cached registry manifest (`--no-cache` for
+  bun, `--prefer-online` for npm) when installing/upgrading. Previously, if a
+  new version was published soon after a prior install, bun could reuse a
+  still-"fresh" cached manifest that didn't list the new version — so a
+  re-install resolved `@latest` to the old version (and even an explicit
+  `@<new>` failed with "No version matching"). Forcing a fresh manifest fetch
+  makes upgrades deterministic regardless of release cadence.
 
 ---
 

@@ -52,10 +52,15 @@ function detectRuntime(): ResolvedRuntime {
   // availability).
   const bin = (process.argv[1] ?? "").toLowerCase();
 
+  // `--no-cache` (bun) / `--prefer-online` (npm) force a fresh registry
+  // manifest fetch. We already resolved the real target version from the
+  // registry above, but bun/npm may hold a stale cached manifest that doesn't
+  // list it yet — without these flags `bun install …@<new>` can fail with
+  // "No version matching" until the cache expires. (pnpm/yarn left as-is.)
   if (bin.includes(".bun") || bin.includes("/bun/")) {
     return {
       command: "bun",
-      args: (v) => ["install", "-g", `@cerefox/memory@${v}`],
+      args: (v) => ["install", "-g", "--no-cache", `@cerefox/memory@${v}`],
       description: "Bun",
     };
   }
@@ -75,7 +80,7 @@ function detectRuntime(): ResolvedRuntime {
   }
   return {
     command: "npm",
-    args: (v) => ["install", "-g", `@cerefox/memory@${v}`],
+    args: (v) => ["install", "-g", "--prefer-online", `@cerefox/memory@${v}`],
     description: "npm",
   };
 }
