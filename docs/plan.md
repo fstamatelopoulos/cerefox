@@ -3225,28 +3225,96 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
 
 ---
 
+## Iteration 30: Local / Self-Hosted Cerefox Backend (D1) — target v0.10.0
+
+**Status: Designed, not started.** Design of record:
+[`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md) — **read
+it first**: topology, the data-access audit, the D1 decision, the supabase-js↔PostgREST
+version-coupling caveat, and the phase breakdown. Work lands on `feat/local-cerefox`.
+
+**Goal**: a fully local / self-hosted Cerefox backend so a single user (and their
+agents) can run Cerefox with no cloud dependency — **Postgres+pgvector + PostgREST +
+the existing cerefox-server**, shipped as one container.
+
+**Core decision (locked): D1 — ship PostgREST in the container.** The local backend
+exposes the same Data API (PostgREST) as the cloud, so the **CLI, local MCP server,
+and web app are unchanged** (only `.env` URL+key differ). No CLI/MCP fork, no new
+data-access code; PostgREST is a stock OSS component we configure. A pg-driver shim
+that drops PostgREST is a captured **future option**, not in scope.
+
+**Version target — maintainer decision (recommend v0.10.0).** This is a substantial
+*additive* feature (a new deployment mode) → a **minor** bump, **not** a v0.9.x patch.
+Two sequencing options:
+- **v0.10.0 (recommended): ship before v1.0** — land + stabilize local in 0.x (breaking
+  changes still allowed) so the v1.0 stability commitment (Iteration 28) covers *both*
+  cloud and local. Pushes v1.0 out by this work.
+- **Post-v1.0 (v1.1): ship cloud-first 1.0, add local after** — mirrors the Iteration-29
+  rationale (keep v1.0 focused). Local is contract-light either way (same schema / RPCs /
+  tools — only packaging + a config switch), so risk to the v1.0 contract is low.
+
+### Phases (map 1:1 to design doc §12)
+
+- **P0 — spike (½–1 day):** compose `pgvector/pgvector:pg16` + a **pinned** `postgrest`;
+  first-boot `bun scripts/db_deploy.ts` + a least-privilege PostgREST DB role; point
+  `CEREFOX_SUPABASE_URL`/key at local PostgREST (anonymous, localhost). **Acceptance:**
+  ingest, hybrid search, version list/view, and the web UI all work with **zero code
+  change**; retire the stale `cerefox-web` compose service.
+- **P1 — all-in-one image + hardening:** Dockerfile (`pgvector` base + PostgREST +
+  cerefox-server + s6-overlay; **app code as the top layer**); mounted **PGDATA volume**;
+  entrypoint wait-for-PG → first-boot deploy (+ role/grants) → serve; healthchecks;
+  `OPENAI_API_KEY` env. **Version-coupling CI suite**: run read/write/MCP tests against the
+  **pinned local PostgREST** (not just cloud); pin PostgREST next to `postgrest-js`; a
+  `supabase-js` bump must run it; add a `RELEASING.md` line; optionally extend
+  `_shared/compatibility` + `cerefox doctor`. Test on laptop + workstation + a 4 GB NAS.
+  **Acceptance:** `docker run` + volume → working local Cerefox that survives container
+  recreate; CI compat suite green.
+- **P2 — distribution + installer + init:** multi-arch (`amd64`+`arm64`) build + push to
+  **ghcr.io** via `release.yml` (`docker buildx`); 2-service split compose (official
+  pgvector + app image) for independent app updates; **thin installer wrapper** (extend
+  `install.sh`/`cerefox init` to optionally set up the Local Server — pull image, wire
+  volume + key + port, never build); `cerefox init` "local server" mode (host `server.env`
+  + client URL); `docs/guides/setup-local-server.md`. **Acceptance:** one-command install
+  on a fresh machine → working local Cerefox; ghcr.io image for amd64+arm64.
+- **P3 (roadmap) — local embedder:** transformers.js/ONNX, 768-dim (e.g.
+  `nomic-embed-text`), opt-in behind the `Embedder` protocol; reindex-on-change docs →
+  fully offline. Separate sub-iteration.
+- **Later (v2 of this feature) — remote HTTP-MCP** in cerefox-server (mount the
+  `cerefox-mcp` handlers over HTTP) for LAN/remote agents. Deferred per "build/test
+  everything else first."
+
+### Risks / build-time decisions
+- **Version coupling** (supabase-js ↔ pinned PostgREST) — CI compat suite is the
+  mitigation (design §6-coupling).
+- **Untested `docker-compose.yml`** — P0 replaces/validates it.
+- **Security** — localhost-bound by default; `PGRST_JWT_SECRET` + token (and/or reverse
+  proxy) for LAN; least-privilege PostgREST DB role.
+- **Open (resolve during build)**: exact PostgREST version pin; anon-vs-JWT for localhost;
+  ship the 2-service split day one?; `cerefox init` local-server UX (design §11).
+
+**Detailed P0 task breakdown to be created when the iteration starts.**
+
+---
+
 ## Current Focus
 
-**Status (cutting v0.9.3)**: the resource-verb CLI has shipped; Python has been
-retired to a husk (only `uv run cerefox mcp` survives as a frozen fallback); the
-entire runtime — CLI, MCP server, web server, ingestion + retrieval — is
-TypeScript in the `@cerefox/memory` npm package.
+**Status (2026-06-02, `main` at v0.9.10):** the resource-verb CLI shipped; Python is
+a husk (`uv run cerefox mcp` only); the entire runtime is TypeScript in
+`@cerefox/memory`. Since the v0.9.3 doc-accuracy release, v0.9.4–v0.9.10 patches
+landed — notably the web-UI redesign + pagination, the schema-version release gate
+(`cut_release.ts` now fails a `db/` change without a lockstep `schema_version` bump),
+in-place archived-version viewing, and an installer/`self-update` fix that bypasses
+stale package-manager **manifest** caches (`--no-cache` for bun, `--prefer-online`
+for npm) so re-installs always resolve the newest published version.
 
-**v0.9.3 is a documentation + artifact accuracy release** (no schema/RPC/Edge
-Function changes): a full file-by-file refresh of every doc against the
-post-Python-migration reality. Notably it corrected CLI docs that advertised
-flags/aliases which never existed (`--count`/`--filter`/`--project`/`--update`/
-`--version`/`-y`, ghost `ingest-dir --pattern`/`--recursive`/`--dry-run`, wrong
-`search` modes/defaults) — across `cli.md`, `AGENT_GUIDE.md`, the bundled
-`AGENT_QUICK_REFERENCE.md`/`cerefox_get_help`, and more — plus Mermaid diagrams
-in `solution-design.md`, an EF-invocation-limit fix in `operational-cost.md`, a
-TS-runtime Dockerfile, and historical-record READMEs for `docs/research` +
-`docs/specs`.
-
-The Polish & Distribution arc — Iterations 22–27 (TS MCP server, TS CLI, script
-ports, web server, ingestion, Python removal) — shipped in full. **Next: v1.0**,
-the stability commitment (strict SemVer becomes binding).
+**Two near-term tracks:**
+1. **Iteration 30 — Local / Self-Hosted Cerefox Backend (D1)**, target **v0.10.0**
+   (version/sequencing-vs-v1.0 is a maintainer decision — see the iteration above).
+   Design of record: [`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md).
+   In progress on `feat/local-cerefox` (design + plan only so far).
+2. **Iteration 28 — v1.0**, the stability commitment (strict SemVer becomes binding)
+   + security audit. Trigger: ~2–3 months of v0.9 in the wild + an outside user
+   installing unaided.
 
 Release history lives in [`CHANGELOG.md`](../CHANGELOG.md); the design-of-record
-for the arc is [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
+for the polish arc is [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
 The dated iteration log above this section remains the high-level progress record.
