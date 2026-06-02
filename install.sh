@@ -20,8 +20,9 @@ PACKAGE="@cerefox/memory"
 # Default to the `latest` dist-tag (not a bare name). A bare
 # `bun install -g @cerefox/memory` treats an already-installed global as
 # satisfied and skips the upgrade, so a re-install kept the old version;
-# pinning `@latest` forces bun/npm to re-resolve and upgrade. Overridden by
-# the VERSION env below.
+# pinning `@latest` re-resolves the dist-tag (and the install below bypasses
+# the stale manifest cache — see the note there). Overridden by the VERSION
+# env below.
 VERSION_HINT="@latest"
 
 # Allow opting into a specific version via env: VERSION=0.5.0-rc.1 sh install.sh
@@ -82,12 +83,18 @@ fi
 echo "→ Using ${INSTALLER_DESCRIPTION} to install ${PACKAGE}${VERSION_HINT}…"
 echo ""
 
+# Force a fresh registry manifest fetch. `@latest` alone is not enough: bun
+# (and npm) cache the package *manifest* locally and may reuse a stale copy
+# that predates a just-published version — so a re-install soon after the
+# previous one can resolve `@latest` to the OLD version, or fail to find a
+# pinned new version. `--no-cache` (bun) / `--prefer-online` (npm) bypass that
+# manifest cache so the newly published version is always seen.
 case "${INSTALLER}" in
   bun)
-    bun install -g "${PACKAGE}${VERSION_HINT}"
+    bun install -g --no-cache "${PACKAGE}${VERSION_HINT}"
     ;;
   npm)
-    npm install -g "${PACKAGE}${VERSION_HINT}"
+    npm install -g --prefer-online "${PACKAGE}${VERSION_HINT}"
     ;;
 esac
 
