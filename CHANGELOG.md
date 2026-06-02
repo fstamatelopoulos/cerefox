@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.10] -- 2026-06-02
+
 **Installer/upgrade reliability. Client-only — no server deploy.**
 
 ### Fixed
