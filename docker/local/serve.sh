@@ -23,10 +23,17 @@ case "$JWT" in
   *) echo "✗ JWT mint failed (got: '$JWT'). Is bun on PATH?"; exit 1 ;;
 esac
 
+# Embedder key: prefer the environment; otherwise pull ONLY the OPENAI_API_KEY line
+# from ~/.cerefox/.env (never the Supabase creds — those are forced to local below).
+if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "$HOME/.cerefox/.env" ]; then
+  OPENAI_API_KEY=$(grep -E '^OPENAI_API_KEY=' "$HOME/.cerefox/.env" | head -1 | sed -E 's/^OPENAI_API_KEY=//; s/^["'\'']//; s/["'\'']$//') || true
+  [ -n "$OPENAI_API_KEY" ] && echo "  (picked up OPENAI_API_KEY from ~/.cerefox/.env for embeddings)"
+fi
+
 echo "→ cerefox-server (local gateway) on http://localhost:$PORT/app/"
 echo "  upstream PostgREST: $PGRST   |   Ctrl-C to stop"
-echo "  LOCAL creds only — your cloud Cerefox is untouched."
-[ -n "${OPENAI_API_KEY:-}" ] || echo "  (no OPENAI_API_KEY in env → ingest/embeddings disabled; reads/FTS still work)"
+echo "  LOCAL Supabase creds forced — your cloud Cerefox is untouched."
+[ -n "${OPENAI_API_KEY:-}" ] || echo "  (no OPENAI_API_KEY in env or ~/.cerefox/.env → ingest disabled; reads/FTS still work)"
 
 exec env \
   CEREFOX_POSTGREST_UPSTREAM="$PGRST" \
