@@ -3259,7 +3259,12 @@ Two sequencing options:
   + web validated end-to-end (project create/list, ingest w/ 768-dim embeddings, hybrid
   + FTS search, web UI). Surfaced 3 findings (design §5.6) — corrected the earlier
   anon-localhost assumption to **JWT-always + a `/rest/v1` gateway**.
-- **P1 — all-in-one image + hardening:** Dockerfile (`pgvector` base + PostgREST +
+- **P1 — all-in-one image + hardening:** *(status 2026-06-02, unattended: the
+  config-gated **`/rest/v1` proxy route is ✅ DONE + validated** and committed
+  (`registerPostgrestProxy`); `docker/local/{smoke.sh,entrypoint.sh}` + the image
+  build recipe (README) are scaffolded; **the all-in-one Dockerfile + s6 build and the
+  version-coupling CI wiring remain — next session.**)*
+  Dockerfile (`pgvector` base + PostgREST +
   cerefox-server + s6-overlay; **app code as the top layer**); mounted **PGDATA volume**;
   entrypoint creates **roles BEFORE PostgREST starts** (ordering — design §5.6) →
   first-boot deploy → serve; healthchecks; `OPENAI_API_KEY` env. **New code: a

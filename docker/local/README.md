@@ -97,3 +97,29 @@ docker-compose -f docker/local/compose.yml down -v   # stop + WIPE the spike vol
 3. **Role ordering.** PostgREST exits if `authenticator` is missing at boot →
    the all-in-one entrypoint must create roles **before** starting PostgREST (or set
    `restart: on-failure`).
+
+## P1 image build recipe (next session)
+
+Scaffolding present + validated where possible: the **`/rest/v1` proxy** in
+cerefox-server (✅ validated), **`smoke.sh`** (version-coupling seed, ✅ runs),
+**`roles.sql`** (✅ applied), **`entrypoint.sh`** (db-init oneshot — logic mirrors the
+validated P0 steps, ⚠ not yet run inside an image). **Not built yet: the all-in-one
+Dockerfile + s6 wiring.** Recipe:
+
+- **Base:** `FROM pgvector/pgvector:pg16` (Debian; Postgres + pgvector).
+- **PostgREST:** multi-stage `COPY --from=postgrest/postgrest:v14.12 /bin/postgrest
+  /usr/local/bin/postgrest` (arch-correct under buildx; matches the pinned version).
+- **App (build from source — includes the unreleased /rest/v1 proxy):** a builder
+  stage runs `cd frontend && bun run build` + bundles docs/server-assets + the bin,
+  then copy into `/opt/cerefox`; install `bun` (or Node 20) in the final image.
+- **Supervisor:** s6-overlay. Service order: `postgres` (base) → **`db-init` oneshot
+  (`entrypoint.sh`)** → `postgrest` + `cerefox-server` (both depend on db-init; §5.6).
+- **Env:** `PGRST_JWT_SECRET` (installer-generated — P2); `PGRST_DB_URI` (authenticator);
+  `PGRST_DB_ANON_ROLE=anon`; server: `CEREFOX_POSTGREST_UPSTREAM=http://127.0.0.1:3000`,
+  `CEREFOX_SUPABASE_URL=http://127.0.0.1:8000` (itself), `CEREFOX_SUPABASE_KEY=<service_role
+  JWT>`, `OPENAI_API_KEY`.
+- **Volume:** PGDATA. **Ports:** expose only the cerefox-server port (8000); keep
+  Postgres + PostgREST internal.
+- **Deferred (need review / external effects):** ghcr.io multi-arch publish via
+  `release.yml`; the installer's per-install JWT generation + injection; the CI
+  version-coupling job.
