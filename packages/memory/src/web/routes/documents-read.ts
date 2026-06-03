@@ -21,6 +21,7 @@
 import { Hono } from "hono";
 
 import type { WebContext } from "../context.ts";
+import { logWebUsage } from "../usage.ts";
 
 interface DocReconRow {
   document_id?: string;
@@ -152,6 +153,8 @@ export function registerDocumentReadRoutes(app: Hono, ctx: WebContext): void {
     const meta = await getDocumentRow(ctx, documentId);
     const projectIds = await listDocumentProjectIds(ctx, documentId);
     const versions = await listDocumentVersions(ctx, documentId);
+
+    logWebUsage(ctx, { operation: "get-document", document_id: documentId });
 
     return c.json({
       document_id: documentId,

@@ -25,6 +25,7 @@ import { Hono } from "hono";
 import { fileToMarkdown } from "../../ingestion/file-to-markdown.ts";
 import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 import type { WebContext } from "../context.ts";
+import { logWebUsage } from "../usage.ts";
 
 interface IngestResponse {
   success: boolean;
@@ -86,6 +87,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         updated: result.reindexed,
       };
       if (result.note) resp.note = result.note;
+      logWebUsage(ctx, { operation: "ingest", document_id: result.documentId });
       return c.json(resp, 200);
     } catch (err) {
       return c.json(
@@ -153,6 +155,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         authorType: "user",
       });
       const skipped = result.action === "skipped";
+      logWebUsage(ctx, { operation: "ingest", document_id: result.documentId });
       return c.json(
         {
           success: !skipped,
@@ -223,6 +226,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         author: "web-ui",
         authorType: "user",
       });
+      logWebUsage(ctx, { operation: "ingest", document_id: result.documentId });
       return c.json(
         {
           success: true,
