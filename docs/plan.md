@@ -3306,7 +3306,8 @@ in-place archived-version viewing, and an installer/`self-update` fix that bypas
 stale package-manager **manifest** caches (`--no-cache` for bun, `--prefer-online`
 for npm) so re-installs always resolve the newest published version.
 
-**Two near-term tracks:**
+**Two near-term tracks** (iteration numbers are planning IDs, **not** ship order;
+ship order by version: **iter-30 `v0.10.0` → iter-28 `v1.0` → iter-29 `v1.1`**):
 1. **Iteration 30 — Local / Self-Hosted Cerefox Backend (D1)**, target **v0.10.0**
    (version/sequencing-vs-v1.0 is a maintainer decision — see the iteration above).
    Design of record: [`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md).
