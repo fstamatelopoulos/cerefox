@@ -3254,15 +3254,18 @@ Two sequencing options:
 
 ### Phases (map 1:1 to design doc §12)
 
-- **P0 — spike (½–1 day):** compose `pgvector/pgvector:pg16` + a **pinned** `postgrest`;
-  first-boot `bun scripts/db_deploy.ts` + a least-privilege PostgREST DB role; point
-  `CEREFOX_SUPABASE_URL`/key at local PostgREST (anonymous, localhost). **Acceptance:**
-  ingest, hybrid search, version list/view, and the web UI all work with **zero code
-  change**; retire the stale `cerefox-web` compose service.
+- **P0 — spike: ✅ DONE (2026-06-02).** `docker/local/` (pgvector + pinned PostgREST
+  `v14.12` + Caddy gateway) + first-boot `db_deploy.ts` + roles; the **unmodified** CLI
+  + web validated end-to-end (project create/list, ingest w/ 768-dim embeddings, hybrid
+  + FTS search, web UI). Surfaced 3 findings (design §5.6) — corrected the earlier
+  anon-localhost assumption to **JWT-always + a `/rest/v1` gateway**.
 - **P1 — all-in-one image + hardening:** Dockerfile (`pgvector` base + PostgREST +
   cerefox-server + s6-overlay; **app code as the top layer**); mounted **PGDATA volume**;
-  entrypoint wait-for-PG → first-boot deploy (+ role/grants) → serve; healthchecks;
-  `OPENAI_API_KEY` env. **Version-coupling CI suite**: run read/write/MCP tests against the
+  entrypoint creates **roles BEFORE PostgREST starts** (ordering — design §5.6) →
+  first-boot deploy → serve; healthchecks; `OPENAI_API_KEY` env. **New code: a
+  config-gated, local-only `/rest/v1` reverse-proxy route in cerefox-server → PostgREST**
+  (no separate Caddy; inert in cloud — design §5.2).
+  **Version-coupling CI suite**: run read/write/MCP tests against the
   **pinned local PostgREST** (not just cloud); pin PostgREST next to `postgrest-js`; a
   `supabase-js` bump must run it; add a `RELEASING.md` line; optionally extend
   `_shared/compatibility` + `cerefox doctor`. Test on laptop + workstation + a 4 GB NAS.
@@ -3272,9 +3275,12 @@ Two sequencing options:
   **ghcr.io** via `release.yml` (`docker buildx`); 2-service split compose (official
   pgvector + app image) for independent app updates; **thin installer wrapper** (extend
   `install.sh`/`cerefox init` to optionally set up the Local Server — pull image, wire
-  volume + key + port, never build); `cerefox init` "local server" mode (host `server.env`
-  + client URL); `docs/guides/setup-local-server.md`. **Acceptance:** one-command install
-  on a fresh machine → working local Cerefox; ghcr.io image for amd64+arm64.
+  volume + port, never build). **Installer JWT logic (design §5.2):** generate a
+  per-install `PGRST_JWT_SECRET`, inject into the container, mint a `service_role` JWT,
+  and write it into the clients' env (`CEREFOX_SUPABASE_KEY`); rotate + re-write clients
+  on reinstall. `cerefox init` "local server" mode (host `server.env` + client URL);
+  `docs/guides/setup-local-server.md`. **Acceptance:** one-command install on a fresh
+  machine → working local Cerefox; ghcr.io image for amd64+arm64.
 - **P3 (roadmap) — local embedder:** transformers.js/ONNX, 768-dim (e.g.
   `nomic-embed-text`), opt-in behind the `Embedder` protocol; reindex-on-change docs →
   fully offline. Separate sub-iteration.

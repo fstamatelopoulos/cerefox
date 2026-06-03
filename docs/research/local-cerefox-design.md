@@ -108,24 +108,25 @@ flowchart LR
 
     subgraph appliance["Cerefox Local Server — single container (default)"]
         direction TB
-        server["cerefox-server (Hono)<br/>React SPA + REST /api/v1<br/>embeddings (_shared/embeddings)<br/>[v2: HTTP-MCP for remote agents]"]
-        postgrest["PostgREST<br/>(the Data API — same as cloud)"]
+        server["cerefox-server (Hono) — single gateway<br/>React SPA + REST /api/v1<br/>proxies /rest/v1 → PostgREST<br/>embeddings (_shared/embeddings)<br/>[v2: HTTP-MCP for remote agents]"]
+        postgrest["PostgREST<br/>(Data API; same as cloud)"]
         db[("Postgres + pgvector<br/>schema + 22 RPCs")]
         vol[["PGDATA<br/>(mounted volume)"]]
-        server -->|supabase-js| postgrest
+        server -->|"/rest/v1 proxy + supabase-js"| postgrest
         postgrest --> db
         db -. persists .-> vol
     end
 
-    cli -->|supabase-js| postgrest
-    lmcp -->|supabase-js| postgrest
-    browser --> server
+    cli -->|"supabase-js → /rest/v1"| server
+    lmcp -->|"supabase-js → /rest/v1"| server
+    browser -->|"SPA + /api/v1"| server
 ```
 
 Everything reaches the RPCs/tables through **PostgREST** — exactly as in the cloud,
-just locally. The CLI and stdio MCP use `supabase-js` → local PostgREST directly
-(**thick, unchanged**); the browser uses the server's `/api/v1` (**thin**, as today)
-which itself calls PostgREST. The dashed box is the default single-container
+just locally. The CLI and stdio MCP use `supabase-js` **unchanged**, pointed at the
+**cerefox-server** URL, which proxies `/rest/v1` → PostgREST (the spike used a
+standalone Caddy for this; the shipped server does it — §5.2/§5.6). The browser uses
+`/api/v1` + the SPA as today. The dashed box is the default single-container
 packaging (§5.5).
 
 ### 5.2 Why D1 (PostgREST in the container)
@@ -137,15 +138,27 @@ PostgREST: it makes the local backend a **drop-in** for the cloud Data API, with
 **no fork and no maintained data-access code** (PostgREST is a stock OSS binary we
 configure, not code we own).
 
-Setup specifics:
-- **Auth:** for a **localhost-bound** deploy, run PostgREST with anonymous access
-  (no JWT to mint); `supabase-js`'s `apikey`/Bearer headers are simply accepted. For
-  **LAN** exposure, set `PGRST_JWT_SECRET` and mint one long-lived token used as the
-  key. (v1 is localhost-first.)
-- **DB role/grants:** PostgREST connects as a role that can execute the RPCs +
-  read/write the 5 tables. Created as part of first-boot deploy.
-- **First-boot deploy:** the container entrypoint runs the existing `db_deploy.ts`
-  (direct pg connection) against the bundled Postgres before serving.
+Setup specifics (validated by the P0 spike — §5.6):
+- **Gateway (`/rest/v1`) — new, LOCAL-ONLY code in cerefox-server.** supabase-js calls
+  `/rest/v1/*`; PostgREST serves at root (Supabase bridges this with Kong). The shipped
+  server mounts a `/rest/v1` → PostgREST **reverse-proxy route that is gated by config**
+  (e.g. a `CEREFOX_POSTGREST_UPSTREAM` env, set only in the local image). Cloud
+  deployments don't set it, so the route is **inert there** — it does not leak into or
+  change cloud behavior. Result: one URL for clients, no separate Kong/Caddy. (The
+  spike used a standalone Caddy as a stand-in.)
+- **Auth — JWT ALWAYS required.** supabase-js always sends `Authorization: Bearer
+  <key>`, so PostgREST needs `PGRST_JWT_SECRET` + a `{"role":"service_role"}` JWT as the
+  key — **even on localhost** (anonymous/no-JWT does *not* work with a real supabase-js
+  client). The **installer generates a per-install secret, injects it into the
+  container, mints the service_role JWT, and writes it into the clients' env**
+  (`CEREFOX_SUPABASE_KEY`); on reinstall it rotates the secret + re-writes the clients.
+  Mirrors the cloud (the service key *is* a service_role JWT).
+- **DB roles/grants:** create Supabase-like roles (`authenticator`/`anon`/
+  `authenticated`/`service_role`); `service_role` = BYPASSRLS + full grants; clients use
+  the `service_role` JWT. Roles must be created **before** PostgREST starts (it exits
+  otherwise — §5.6).
+- **First-boot deploy:** the entrypoint runs the existing `db_deploy.ts` (direct pg) +
+  the roles SQL against the bundled Postgres before serving.
 
 ### 5.3 Clients & the agent path (v1 vs v2)
 
@@ -201,6 +214,23 @@ image — dev runs the app **from source** against a **standalone Postgres + Pos
 PostgREST** (both stateless app-tier). Recreating the app container leaves PG
 running. Still one `docker compose up`; 2 pods in k8s. The app can also point at an
 external/existing Postgres.
+
+### 5.6 P0 spike — VALIDATED (2026-06-02)
+
+Stood up Postgres+pgvector + pinned PostgREST (`v14.12`, matched to `postgrest-js`) +
+a Caddy gateway via `docker/local/`; deployed schema/RPCs; pointed the **unmodified**
+CLI + web at it. **Result:** `project create`/`list`, `document ingest` (768-dim OpenAI
+embeddings), **hybrid search (pgvector)**, FTS search, and the web UI (`/app/`,
+`/api/v1/{projects,dashboard,schema-version}`) all worked with **zero code change** —
+only `CEREFOX_SUPABASE_URL`/key differed. Three findings, now folded into §5.2 + P1:
+
+1. **Gateway needed** for `/rest/v1` → ship as a config-gated, local-only reverse-proxy
+   route in cerefox-server (no separate component; inert in cloud).
+2. **JWT always required** (supabase-js sends Bearer) → installer generates a
+   per-install secret + mints a `service_role` JWT into the clients' env.
+3. **Roles before PostgREST** — it exits if `authenticator` is missing at boot.
+
+Runbook + working artifacts: `docker/local/` (compose, roles.sql, Caddyfile, README).
 
 ## 6. Embeddings
 
@@ -331,18 +361,23 @@ drop a compose file + `up`) → wire the **mounted volume**, `OPENAI_API_KEY`, p
 
 ## 12. Phased plan (this maps to the plan.md iteration)
 
-- **P0 — spike (½–1 day):** compose with `pgvector` + pinned `postgrest`; first-boot
-  `db_deploy.ts`; point CLI / web / `cerefox mcp` at local PostgREST (anon, localhost).
-  Confirm ingest + hybrid search + versions + web UI work **unmodified**. Decommission
-  the stale `cerefox-web` compose service.
+- **P0 — spike: ✅ DONE (2026-06-02).** `docker/local/` (pgvector + pinned PostgREST
+  `v14.12` + Caddy gateway); first-boot `db_deploy.ts` + roles; unmodified CLI + web
+  validated end-to-end (ingest, hybrid/FTS search, web UI). Surfaced the 3 findings
+  (§5.6) — corrected the earlier anon-localhost assumption to JWT-always + a gateway.
 - **P1 — all-in-one image + hardening:** Dockerfile (`pgvector/pgvector:pg16` +
-  PostgREST + cerefox-server + s6-overlay), mounted PGDATA volume, first-boot deploy +
-  PostgREST role/grants, healthchecks, `OPENAI_API_KEY` env. **Version-coupling CI
-  suite** (read/write/MCP tests vs the pinned local PostgREST). Test on
-  laptop/workstation/NAS.
-- **P2 — distribution:** multi-arch build + push to **ghcr.io** via `release.yml`;
-  the 2-service split (compose); the **thin installer wrapper**; `cerefox init`
-  local-server mode; user docs (`docs/guides/`).
+  PostgREST + cerefox-server + s6-overlay), mounted PGDATA volume; entrypoint creates
+  **roles BEFORE PostgREST starts** (ordering, §5.6), runs first-boot deploy;
+  healthchecks; `OPENAI_API_KEY` env. **New: cerefox-server `/rest/v1` reverse-proxy
+  route → PostgREST, config-gated (local-only; inert in cloud — §5.2)** so a separate
+  Caddy isn't needed. **Version-coupling CI suite** (read/write/MCP tests vs the pinned
+  local PostgREST). Test on laptop/workstation/NAS.
+- **P2 — distribution + installer:** multi-arch build + push to **ghcr.io** via
+  `release.yml`; the 2-service split (compose); the **thin installer wrapper**. **New:
+  installer JWT logic** — generate a per-install `PGRST_JWT_SECRET`, inject it into the
+  container, mint a `service_role` JWT, and write it into the clients' env
+  (`CEREFOX_SUPABASE_KEY`); rotate + re-write on reinstall. `cerefox init` local-server
+  mode; user docs (`docs/guides/`).
 - **P3 (roadmap) — local embedder:** transformers.js/ONNX (768-dim, e.g.
   `nomic-embed-text`), opt-in, reindex-on-change docs → fully offline.
 - **Later (v2 of feature) — remote HTTP-MCP** in cerefox-server for LAN/remote agents.

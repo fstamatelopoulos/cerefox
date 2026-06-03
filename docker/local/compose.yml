@@ -32,10 +32,11 @@ services:
       retries: 10
 
   postgrest:
-    # PIN — verify this tag exists AND is matched to the shipped `postgrest-js`
-    # (inside supabase-js) before relying on it. See design §6-coupling: a
-    # supabase-js bump can outpace a too-old PostgREST. Bump deliberately + test.
-    image: postgrest/postgrest:v12.2.3
+    # PIN matched to the shipped postgrest-js (inside supabase-js 2.106.2): its
+    # README targets PostgREST v14+ (Supabase's current major) with v12 backward-
+    # compat. v14.12 = latest v14, same major as the cloud → minimal coupling risk.
+    # On a supabase-js bump, re-check this against the new postgrest-js (design §6-coupling).
+    image: postgrest/postgrest:v14.12
     container_name: cfx-spike-postgrest
     depends_on:
       postgres:
@@ -43,14 +44,30 @@ services:
     environment:
       PGRST_DB_URI: postgresql://authenticator:authenticator@postgres:5432/cerefox
       PGRST_DB_SCHEMAS: public
-      # LOCALHOST SPIKE: anonymous requests act as service_role (full access,
-      # bypasses RLS) — mirrors how the CLI/MCP/web use the service key today.
-      # LAN / production: set PGRST_DB_ANON_ROLE=anon + PGRST_JWT_SECRET and send a
-      # `{"role":"service_role"}` JWT as the key instead.
-      PGRST_DB_ANON_ROLE: service_role
+      # supabase-js ALWAYS sends `Authorization: Bearer <key>`, so PostgREST needs a
+      # JWT secret (without it: "Server lacks JWT secret"). This mirrors the cloud
+      # exactly — the service key IS a `{"role":"service_role"}` JWT. Unauthenticated
+      # requests fall back to the (RLS-denied) anon role.
+      # DEV-ONLY secret; localhost-bound. For LAN, use a strong secret + bind/proxy.
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: "cerefox-local-dev-secret-change-me-please-0123456789"
       PGRST_DB_USE_LEGACY_GUCS: "false"
     ports:
       - "33000:3000" # non-default host port for the local Data API
+
+  # Gateway: presents the Supabase URL layout (`/rest/v1/*`) that supabase-js
+  # expects, mapping it onto PostgREST's root. Supabase uses Kong for this; here a
+  # tiny Caddy stands in. SHIPPED PRODUCT: fold this into cerefox-server (Hono) so
+  # it is the single gateway (UI + /api/v1 + /rest/v1) — no separate proxy.
+  gateway:
+    image: caddy:2-alpine
+    container_name: cfx-spike-gateway
+    depends_on:
+      - postgrest
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "33001:33001" # ← point CEREFOX_SUPABASE_URL here
 
 volumes:
   cfx_spike_pgdata:
