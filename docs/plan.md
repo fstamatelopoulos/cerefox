@@ -3259,11 +3259,13 @@ Two sequencing options:
   + web validated end-to-end (project create/list, ingest w/ 768-dim embeddings, hybrid
   + FTS search, web UI). Surfaced 3 findings (design §5.6) — corrected the earlier
   anon-localhost assumption to **JWT-always + a `/rest/v1` gateway**.
-- **P1 — all-in-one image + hardening:** *(status 2026-06-02, unattended: the
-  config-gated **`/rest/v1` proxy route is ✅ DONE + validated** and committed
-  (`registerPostgrestProxy`); `docker/local/{smoke.sh,entrypoint.sh}` + the image
-  build recipe (README) are scaffolded; **the all-in-one Dockerfile + s6 build and the
-  version-coupling CI wiring remain — next session.**)*
+- **P1 — all-in-one image + hardening:** *(status 2026-06-02: ✅ **DONE + validated** —
+  `docker/local/Dockerfile` + `image-entrypoint.sh` build a single-container local
+  Cerefox; one `docker run` → `/app/` + project CRUD + ingest (OpenAI→pgvector) +
+  hybrid search all work, data in a named volume. The `/rest/v1` proxy is in
+  cerefox-server (`registerPostgrestProxy`). **Remaining: s6-overlay supervision (MVP
+  uses a shell entrypoint), the version-coupling CI wiring, and a
+  `schema-version.bundled=null` cosmetic.**)*
   Dockerfile (`pgvector` base + PostgREST +
   cerefox-server + s6-overlay; **app code as the top layer**); mounted **PGDATA volume**;
   entrypoint creates **roles BEFORE PostgREST starts** (ordering — design §5.6) →
@@ -3276,7 +3278,13 @@ Two sequencing options:
   `_shared/compatibility` + `cerefox doctor`. Test on laptop + workstation + a 4 GB NAS.
   **Acceptance:** `docker run` + volume → working local Cerefox that survives container
   recreate; CI compat suite green.
-- **P2 — distribution + installer + init:** multi-arch (`amd64`+`arm64`) build + push to
+- **P2 — distribution + installer + init:** *(status 2026-06-02: the installer is ✅
+  validated — `docker/local/install-local.sh`, Model B: per-install openssl secret →
+  inject (`-e PGRST_JWT_SECRET`) → mint `service_role` JWT → SEPARATE `~/.cerefox-local`
+  client config so cloud + local coexist (cloud `.env` untouched). CLI-against-local
+  confirmed. **Remaining: ghcr.io multi-arch publish; fold into the shared install.sh /
+  cerefox init.**)*
+  multi-arch (`amd64`+`arm64`) build + push to
   **ghcr.io** via `release.yml` (`docker buildx`); 2-service split compose (official
   pgvector + app image) for independent app updates; **thin installer wrapper** (extend
   `install.sh`/`cerefox init` to optionally set up the Local Server — pull image, wire

@@ -232,6 +232,29 @@ only `CEREFOX_SUPABASE_URL`/key differed. Three findings, now folded into §5.2 
 
 Runbook + working artifacts: `docker/local/` (compose, roles.sql, Caddyfile, README).
 
+### 5.7 P1 image + P2 installer — VALIDATED (2026-06-02)
+
+- **P1 all-in-one image** (`docker/local/Dockerfile` + `image-entrypoint.sh`): one
+  `docker run` → working local Cerefox. Validated end-to-end: `/app/`, project CRUD,
+  ingest (768-dim OpenAI embeddings), hybrid search — all in a single container, data
+  in a named volume. MVP is shell-orchestrated; **s6-overlay supervision is the
+  follow-up.** (Minor: `schema-version.bundled` reads null in the image — benign, no
+  false banner; cosmetic cleanup.)
+- **P2 installer** (`docker/local/install-local.sh`, "Model B"): generates a
+  per-install secret (openssl — no bun/node needed), injects it (`-e
+  PGRST_JWT_SECRET`), mints the matching `service_role` JWT, and writes a **separate**
+  client config (`~/.cerefox-local/.env`) so local + cloud coexist — **cloud
+  `~/.cerefox/.env` is never touched.** Validated: CLI against the local config
+  connects (openssl JWT accepted). **Remaining:** ghcr.io publish, fold into the
+  shared `install.sh` / `cerefox init`.
+
+**JWT distribution (resolves the open question):** the **web UI never needs the JWT**
+— the browser talks to cerefox-server, which holds the JWT server-side for its own
+data calls. **CLI/MCP** clients *do* need it — that's the installer's job (Model B).
+The image self-generates a secret only as the no-installer fallback (web-UI-only
+appliance). Local clients use a separate `CEREFOX_CONFIG_DIR` so they never collide
+with the cloud config.
+
 ## 6. Embeddings
 
 - **v1 default: OpenAI** (`text-embedding-3-small`, 768-dim) via `_shared/embeddings`.
