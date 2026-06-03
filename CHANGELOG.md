@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.9.11] -- 2026-06-03
+
 ### Fixed
 
 - **Web UI analytics now records usage.** The `/api/v1` web routes never called the
