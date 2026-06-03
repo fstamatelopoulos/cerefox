@@ -105,13 +105,32 @@ docker-compose -f docker/local/compose.yml down -v   # stop + WIPE the spike vol
    the all-in-one entrypoint must create roles **before** starting PostgREST (or set
    `restart: on-failure`).
 
-## P1 image build recipe (next session)
+## All-in-one image (P1) + installer (P2) — ✅ BUILT + VALIDATED
 
-Scaffolding present + validated where possible: the **`/rest/v1` proxy** in
-cerefox-server (✅ validated), **`smoke.sh`** (version-coupling seed, ✅ runs),
-**`roles.sql`** (✅ applied), **`entrypoint.sh`** (db-init oneshot — logic mirrors the
-validated P0 steps, ⚠ not yet run inside an image). **Not built yet: the all-in-one
-Dockerfile + s6 wiring.** Recipe:
+The single-container image and the Model-B installer are done. Quickstart:
+
+```sh
+# Build the image (from repo root):
+docker build -f docker/local/Dockerfile -t cerefox-local:dev .
+
+# Install + run (generates a per-install JWT secret, writes a SEPARATE client
+# config at ~/.cerefox-local, never touches your cloud ~/.cerefox/.env):
+PORT=8000 OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
+#   → http://localhost:8000/app/
+#   CLI/MCP against local:  CEREFOX_CONFIG_DIR=~/.cerefox-local cerefox <cmd>
+
+# Or a bare run (self-generates the JWT; web UI works, external CLI needs the installer):
+docker run -d --name cerefox -p 8000:8000 -v cerefox_pgdata:/var/lib/postgresql/data \
+  -e OPENAI_API_KEY=sk-... cerefox-local:dev
+```
+
+Validated: `/app/`, project CRUD, ingest (768-dim OpenAI embeddings), and hybrid
+search all work in one container; data persists in the named volume.
+**Remaining (deferred):** s6-overlay supervision (MVP uses a shell entrypoint),
+ghcr.io multi-arch publish, folding the installer into the shared `install.sh` /
+`cerefox init`, and a `schema-version.bundled=null` cosmetic.
+
+How the image is built (reference):
 
 - **Base:** `FROM pgvector/pgvector:pg16` (Debian; Postgres + pgvector).
 - **PostgREST:** multi-stage `COPY --from=postgrest/postgrest:v14.12 /bin/postgrest
