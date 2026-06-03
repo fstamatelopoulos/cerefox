@@ -67,6 +67,13 @@ env $SPIKE "${bun[@]}" document list
 env $SPIKE "${bun[@]}" web --port 8011    # → http://localhost:8011/app/
 ```
 
+> **Easiest (after steps 1–3): `sh docker/local/serve.sh`** → http://localhost:8012/app/.
+> It mints the `service_role` JWT for you and starts the gateway, avoiding the
+> hand-minting footgun. (Symptom of a bad/empty/mismatched JWT: every `/rest/v1`
+> call 401s — `/api/v1/projects` etc. return **500**, ingest fails with *"No suitable
+> key or wrong key type"*. Run `serve.sh` and they become 200.) Set `OPENAI_API_KEY`
+> first to enable ingest.
+
 ## Acceptance criteria (P0 — all ✅ on 2026-06-02)
 
 - [x] `document ingest` (chunks + 768-dim embeddings via the RPC).
