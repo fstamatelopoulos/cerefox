@@ -40,6 +40,7 @@ import { registerDocumentReadRoutes } from "./routes/documents-read.ts";
 import { registerDocumentWriteRoutes } from "./routes/documents-write.ts";
 import { registerIngestRoutes } from "./routes/ingest.ts";
 import { registerMetaRoutes } from "./routes/meta.ts";
+import { registerPostgrestProxy } from "./routes/postgrest-proxy.ts";
 import { registerPreferencesRoutes } from "./routes/preferences.ts";
 import { registerProjectsRoutes } from "./routes/projects.ts";
 import {
@@ -111,6 +112,10 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
     app.post("/api/v1/ingest/file", ingest503);
     app.post("/api/v1/documents/:document_id/upload", ingest503);
   }
+
+  // (1b) Local self-hosted gateway: proxy /rest/v1/* → PostgREST. Self-gated by
+  // CEREFOX_POSTGREST_UPSTREAM (set only in the local image) — inert in cloud.
+  registerPostgrestProxy(app);
 
   // (2) Repo /static — logo/favicon.
   const staticDir = resolveStaticDir();

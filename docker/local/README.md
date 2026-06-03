@@ -85,8 +85,11 @@ docker-compose -f docker/local/compose.yml down -v   # stop + WIPE the spike vol
 ## Findings → fold into P1 (design §5)
 
 1. **Gateway required.** supabase-js calls `/rest/v1/*`; PostgREST serves at root.
-   Ship it by having **cerefox-server proxy `/rest/v1` → PostgREST** (one URL, no
-   separate Kong/Caddy). The Caddy here is the spike stand-in.
+   ✅ **Implemented + validated in cerefox-server** (`registerPostgrestProxy`, gated by
+   `CEREFOX_POSTGREST_UPSTREAM`; inert in cloud). To use it instead of Caddy: run the
+   server with `CEREFOX_POSTGREST_UPSTREAM=http://localhost:33000` + `CEREFOX_SUPABASE_URL`
+   pointed at the server itself, then point clients at the server. The Caddy service
+   here is now just a convenience for CLI-only testing without running the server.
 2. **JWT always required.** supabase-js sends `Authorization: Bearer`, so a
    `PGRST_JWT_SECRET` + a `service_role` JWT are needed even on localhost. The
    **installer generates a per-install secret + mints the JWT into the clients' env**
