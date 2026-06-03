@@ -15,6 +15,7 @@ import { Hono } from "hono";
 
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
 import type { WebContext } from "../context.ts";
+import { logWebUsage } from "../usage.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -480,6 +481,8 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
         );
       }
     }
+
+    logWebUsage(ctx, { operation: "search", query_text: q, result_count: results.length });
 
     return c.json({
       results,

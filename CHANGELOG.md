@@ -9,7 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Web UI analytics now records usage.** The `/api/v1` web routes never called the
+  usage-logging RPC, so the Analytics page stayed empty even with usage tracking
+  enabled (only the CLI and MCP tools logged). The web layer now logs `search`,
+  `get-document`, and `ingest` operations (`access_path = "webapp"`, fire-and-forget,
+  best-effort — never blocks the response). The `cerefox_log_usage` RPC, config gate,
+  and report query were all already correct; this closes the missing call sites.
 
 ---
 
