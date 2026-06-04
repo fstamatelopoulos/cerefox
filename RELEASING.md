@@ -59,6 +59,12 @@ redeploy their server.
    release touches their surface.
 7. **Docs current**: `docs/plan.md`, migration guide, and the npm
    `packages/memory/README.md` reflect what's shipping.
+8. **supabase-js ↔ PostgREST pin** (local self-hosted backend): if this cycle
+   bumped `@supabase/supabase-js` (→ `postgrest-js`), re-check the PostgREST
+   version pinned in `docker/local/{compose.yml,Dockerfile}` against what the new
+   `postgrest-js` targets, and run the **Version coupling** workflow (or
+   `docker/local/smoke.sh` against the pinned stack). The cloud's managed PostgREST
+   masks a too-old local pin, so this is the only guard. (Design §6-coupling.)
 
 ## Cutting the release
 

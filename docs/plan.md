@@ -3264,8 +3264,12 @@ Two sequencing options:
   Cerefox; one `docker run` → `/app/` + project CRUD + ingest (OpenAI→pgvector) +
   hybrid search all work, data in a named volume. The `/rest/v1` proxy is in
   cerefox-server (`registerPostgrestProxy`); the stack is **supervised by s6-overlay**
-  (auto-respawn of a killed service validated). **Remaining: the version-coupling CI
-  wiring + a `schema-version.bundled=null` cosmetic.**)*
+  (auto-respawn of a killed service validated). The **ghcr publish** workflow
+  (`.github/workflows/local-image.yml`) and the **version-coupling** workflow
+  (`.github/workflows/version-coupling.yml`, runs `smoke.sh` vs the pinned PostgREST)
+  are drafted + locally validated; they need a CI run + (ghcr) the package set Public.
+  **Remaining: those CI runs, install.sh/init integration, and a
+  `schema-version.bundled=null` cosmetic.**)*
   Dockerfile (`pgvector` base + PostgREST +
   cerefox-server + s6-overlay; **app code as the top layer**); mounted **PGDATA volume**;
   entrypoint creates **roles BEFORE PostgREST starts** (ordering — design §5.6) →
