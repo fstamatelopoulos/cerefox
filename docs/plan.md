@@ -3259,13 +3259,13 @@ Two sequencing options:
   + web validated end-to-end (project create/list, ingest w/ 768-dim embeddings, hybrid
   + FTS search, web UI). Surfaced 3 findings (design §5.6) — corrected the earlier
   anon-localhost assumption to **JWT-always + a `/rest/v1` gateway**.
-- **P1 — all-in-one image + hardening:** *(status 2026-06-02: ✅ **DONE + validated** —
-  `docker/local/Dockerfile` + `image-entrypoint.sh` build a single-container local
+- **P1 — all-in-one image + hardening:** *(status 2026-06-04: ✅ **DONE + validated** —
+  `docker/local/Dockerfile` + `docker/local/s6/` build a single-container local
   Cerefox; one `docker run` → `/app/` + project CRUD + ingest (OpenAI→pgvector) +
   hybrid search all work, data in a named volume. The `/rest/v1` proxy is in
-  cerefox-server (`registerPostgrestProxy`). **Remaining: s6-overlay supervision (MVP
-  uses a shell entrypoint), the version-coupling CI wiring, and a
-  `schema-version.bundled=null` cosmetic.**)*
+  cerefox-server (`registerPostgrestProxy`); the stack is **supervised by s6-overlay**
+  (auto-respawn of a killed service validated). **Remaining: the version-coupling CI
+  wiring + a `schema-version.bundled=null` cosmetic.**)*
   Dockerfile (`pgvector` base + PostgREST +
   cerefox-server + s6-overlay; **app code as the top layer**); mounted **PGDATA volume**;
   entrypoint creates **roles BEFORE PostgREST starts** (ordering — design §5.6) →

@@ -234,12 +234,14 @@ Runbook + working artifacts: `docker/local/` (compose, roles.sql, Caddyfile, REA
 
 ### 5.7 P1 image + P2 installer — VALIDATED (2026-06-02)
 
-- **P1 all-in-one image** (`docker/local/Dockerfile` + `image-entrypoint.sh`): one
+- **P1 all-in-one image** (`docker/local/Dockerfile` + `docker/local/s6/`): one
   `docker run` → working local Cerefox. Validated end-to-end: `/app/`, project CRUD,
   ingest (768-dim OpenAI embeddings), hybrid search — all in a single container, data
-  in a named volume. MVP is shell-orchestrated; **s6-overlay supervision is the
-  follow-up.** (Minor: `schema-version.bundled` reads null in the image — benign, no
-  false banner; cosmetic cleanup.)
+  in a named volume. **Supervised by s6-overlay** (db-init oneshot → postgres /
+  postgrest / cerefox-server longruns; secret/JWT shared via a `/run` env file;
+  auto-respawn of a killed service validated). The shell-MVP entrypoint
+  (`image-entrypoint.sh`) is kept as a fallback reference. (Minor:
+  `schema-version.bundled` reads null in the image — benign, no false banner.)
 - **P2 installer** (`docker/local/install-local.sh`, "Model B"): generates a
   per-install secret (openssl — no bun/node needed), injects it (`-e
   PGRST_JWT_SECRET`), mints the matching `service_role` JWT, and writes a **separate**

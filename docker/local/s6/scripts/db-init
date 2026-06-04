@@ -1,0 +1,24 @@
+#!/command/with-contenv bash
+set -euo pipefail
+SECRET_FILE=/var/lib/postgresql/data/.cerefox_jwt_secret
+RUNTIME_ENV=/run/cerefox-runtime.env
+log(){ echo "[db-init] $*"; }
+
+log "waiting for postgres…"
+until pg_isready -h 127.0.0.1 -U cerefox -d cerefox >/dev/null 2>&1; do sleep 1; done
+
+# JWT secret: injected env > persisted (volume) > generate
+if [ -n "${PGRST_JWT_SECRET:-}" ]; then SECRET="$PGRST_JWT_SECRET"; log "using injected secret";
+elif [ -f "$SECRET_FILE" ]; then SECRET="$(cat "$SECRET_FILE")"; log "loaded persisted secret";
+else SECRET="$(bun -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"; printf '%s' "$SECRET" > "$SECRET_FILE"; chmod 600 "$SECRET_FILE" || true; log "generated secret"; fi
+
+# mint the service_role JWT and hand both to the longrun services via a /run env file
+JWT="$(SECRET="$SECRET" bun -e 'const c=require("node:crypto");const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");const h=b({alg:"HS256",typ:"JWT"});const p=b({role:"service_role"});process.stdout.write(h+"."+p+"."+c.createHmac("sha256",process.env.SECRET).update(h+"."+p).digest("base64url"))')"
+umask 077
+{ printf 'PGRST_JWT_SECRET=%s\n' "$SECRET"; printf 'CEREFOX_SUPABASE_KEY=%s\n' "$JWT"; } > "$RUNTIME_ENV"
+
+log "deploying schema + RPCs (idempotent)…"
+echo y | bun /opt/cerefox/dist/bin/cerefox.js server deploy --schema-only
+log "applying PostgREST roles…"
+psql "$CEREFOX_DATABASE_URL" -v ON_ERROR_STOP=1 -f /opt/cerefox/roles.sql >/dev/null
+log "done."

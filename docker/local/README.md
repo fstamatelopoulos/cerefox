@@ -125,10 +125,11 @@ docker run -d --name cerefox -p 8000:8000 -v cerefox_pgdata:/var/lib/postgresql/
 ```
 
 Validated: `/app/`, project CRUD, ingest (768-dim OpenAI embeddings), and hybrid
-search all work in one container; data persists in the named volume.
-**Remaining (deferred):** s6-overlay supervision (MVP uses a shell entrypoint),
-ghcr.io multi-arch publish, folding the installer into the shared `install.sh` /
-`cerefox init`, and a `schema-version.bundled=null` cosmetic.
+search all work in one container; data persists in the named volume. Supervised by
+**s6-overlay** (db-init oneshot → postgres/postgrest/cerefox-server longruns;
+auto-respawns a crashed service — validated).
+**Remaining (deferred):** ghcr.io multi-arch publish, folding the installer into the
+shared `install.sh` / `cerefox init`, and a `schema-version.bundled=null` cosmetic.
 
 How the image is built (reference):
 

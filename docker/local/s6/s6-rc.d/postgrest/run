@@ -1,0 +1,3 @@
+#!/command/with-contenv sh
+set -a; . /run/cerefox-runtime.env; set +a
+exec postgrest
