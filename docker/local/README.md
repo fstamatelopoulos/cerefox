@@ -114,10 +114,10 @@ The single-container image and the Model-B installer are done. Quickstart:
 docker build -f docker/local/Dockerfile -t cerefox-local:dev .
 
 # Install + run (generates a per-install JWT secret, writes a SEPARATE client
-# config at ~/.cerefox-local, never touches your cloud ~/.cerefox/.env):
+# config at ~/.cerefox/local, never touches your cloud ~/.cerefox/.env):
 PORT=8000 OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
 #   → http://localhost:8000/app/
-#   CLI/MCP against local:  CEREFOX_CONFIG_DIR=~/.cerefox-local cerefox <cmd>
+#   CLI/MCP against local:  CEREFOX_CONFIG_DIR=~/.cerefox/local cerefox <cmd>
 
 # Or a bare run (self-generates the JWT; web UI works, external CLI needs the installer):
 docker run -d --name cerefox -p 8000:8000 -v cerefox_pgdata:/var/lib/postgresql/data \

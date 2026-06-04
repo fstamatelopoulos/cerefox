@@ -243,7 +243,7 @@ Runbook + working artifacts: `docker/local/` (compose, roles.sql, Caddyfile, REA
 - **P2 installer** (`docker/local/install-local.sh`, "Model B"): generates a
   per-install secret (openssl — no bun/node needed), injects it (`-e
   PGRST_JWT_SECRET`), mints the matching `service_role` JWT, and writes a **separate**
-  client config (`~/.cerefox-local/.env`) so local + cloud coexist — **cloud
+  client config (`~/.cerefox/local/.env`) so local + cloud coexist — **cloud
   `~/.cerefox/.env` is never touched.** Validated: CLI against the local config
   connects (openssl JWT accepted). **Remaining:** ghcr.io publish, fold into the
   shared `install.sh` / `cerefox init`.

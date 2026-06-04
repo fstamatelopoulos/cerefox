@@ -3280,7 +3280,7 @@ Two sequencing options:
   recreate; CI compat suite green.
 - **P2 — distribution + installer + init:** *(status 2026-06-02: the installer is ✅
   validated — `docker/local/install-local.sh`, Model B: per-install openssl secret →
-  inject (`-e PGRST_JWT_SECRET`) → mint `service_role` JWT → SEPARATE `~/.cerefox-local`
+  inject (`-e PGRST_JWT_SECRET`) → mint `service_role` JWT → SEPARATE `~/.cerefox/local`
   client config so cloud + local coexist (cloud `.env` untouched). CLI-against-local
   confirmed. **Remaining: ghcr.io multi-arch publish; fold into the shared install.sh /
   cerefox init.**)*

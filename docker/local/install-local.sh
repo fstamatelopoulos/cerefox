@@ -9,7 +9,7 @@
 #   PORT=8000 OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
 #
 # Then use the CLI/MCP against local by pointing at the separate config dir:
-#   CEREFOX_CONFIG_DIR=~/.cerefox-local cerefox search "…"
+#   CEREFOX_CONFIG_DIR=~/.cerefox/local cerefox search "…"
 #
 # NOTE (P2 scaffolding): standalone + validated. Folding this into the shared
 # `install.sh` / `cerefox init` is deferred for review (it's the user-facing path).
@@ -17,7 +17,7 @@ set -eu
 
 IMAGE="${CEREFOX_LOCAL_IMAGE:-cerefox-local:dev}"
 PORT="${PORT:-8000}"
-CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox-local}"
+CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
 CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
 
@@ -42,6 +42,12 @@ PAYLOAD=$(printf '%s' '{"role":"service_role"}'      | b64url)
 SIG=$(printf '%s' "$HEADER.$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" -binary | b64url)
 JWT="$HEADER.$PAYLOAD.$SIG"
 
+# Embedder key: prefer the env; else pull ONLY the OPENAI_API_KEY line from the cloud
+# ~/.cerefox/.env so CLI/web ingest + search work. We never read its Supabase creds.
+if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "$HOME/.cerefox/.env" ]; then
+  OPENAI_API_KEY=$(grep -E '^OPENAI_API_KEY=' "$HOME/.cerefox/.env" | head -1 | sed -E 's/^OPENAI_API_KEY=//; s/^["'\'']//; s/["'\'']$//') || true
+fi
+
 # 3. (Re)start the container with the INJECTED secret (entrypoint uses env over self-gen).
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 # shellcheck disable=SC2086
@@ -55,12 +61,14 @@ docker run -d --name "$CONTAINER" -p "$PORT:8000" \
 umask 077
 cat > "$CONFIG_DIR/.env" <<EOF
 # Cerefox LOCAL client config — separate from ~/.cerefox/.env so cloud + local coexist.
-# Use it via:  CEREFOX_CONFIG_DIR=$CONFIG_DIR cerefox <cmd>
+# Generated fresh (never copied from the cloud .env). Use it via:
+#   CEREFOX_CONFIG_DIR=$CONFIG_DIR cerefox <cmd>
 CEREFOX_SUPABASE_URL=http://localhost:$PORT
 CEREFOX_SUPABASE_KEY=$JWT
 EOF
+[ -n "${OPENAI_API_KEY:-}" ] && printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> "$CONFIG_DIR/.env"
 
 echo "✓ Cerefox Local Server starting → http://localhost:$PORT/app/"
 echo "  CLI/MCP against local:  CEREFOX_CONFIG_DIR=$CONFIG_DIR cerefox <cmd>"
 echo "  Client config: $CONFIG_DIR/.env   (your cloud ~/.cerefox/.env is untouched)"
-[ -n "${OPENAI_API_KEY:-}" ] || echo "  (no OPENAI_API_KEY → ingest disabled; re-run with OPENAI_API_KEY set to enable it)"
+[ -n "${OPENAI_API_KEY:-}" ] || echo "  (no OPENAI_API_KEY in env or ~/.cerefox/.env → ingest/search disabled until set)"
