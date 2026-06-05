@@ -3282,12 +3282,13 @@ Two sequencing options:
   `_shared/compatibility` + `cerefox doctor`. Test on laptop + workstation + a 4 GB NAS.
   **Acceptance:** `docker run` + volume → working local Cerefox that survives container
   recreate; CI compat suite green.
-- **P2 — distribution + installer + init:** *(status 2026-06-02: the installer is ✅
-  validated — `docker/local/install-local.sh`, Model B: per-install openssl secret →
-  inject (`-e PGRST_JWT_SECRET`) → mint `service_role` JWT → SEPARATE `~/.cerefox/local`
-  client config so cloud + local coexist (cloud `.env` untouched). CLI-against-local
-  confirmed. **Remaining: ghcr.io multi-arch publish; fold into the shared install.sh /
-  cerefox init.**)*
+- **P2 — distribution + installer + init:** *(status 2026-06-05: the first-cut
+  installer is ✅ validated — `docker/local/install-local.sh`, Model B: per-install
+  openssl secret → inject (`-e PGRST_JWT_SECRET`) → mint `service_role` JWT → SEPARATE
+  `~/.cerefox/local` client config. **SUPERSEDED by the "P2 finalized" subsection below
+  (2026-06-05): host-side JWT minting is dropped — the JWT never leaves the container —
+  and the local world gets its own `cerefox-local` host script instead of reusing the
+  npm CLI.** ghcr.io multi-arch publish is ✅ done + validated.)*
   multi-arch (`amd64`+`arm64`) build + push to
   **ghcr.io** via `release.yml` (`docker buildx`); 2-service split compose (official
   pgvector + app image) for independent app updates; **thin installer wrapper** (extend
@@ -3305,9 +3306,74 @@ Two sequencing options:
   `cerefox-mcp` handlers over HTTP) for LAN/remote agents. Deferred per "build/test
   everything else first."
 
+### P2 finalized (2026-06-05): two parallel install "worlds" — design locked
+
+**Framing (maintainer):** cloud (Supabase) and local are **mutually exclusive worlds** —
+practically nobody runs both. Don't blend them: two separate installers, two separate
+command names, so they can't collide *even if* one person runs both (e.g. local for
+opencaw/nemo/hermes, cloud for other work).
+
+- **World A — cloud/Supabase (UNCHANGED):** existing `install.sh` one-liner → npm
+  `@cerefox/memory` → `cerefox` (CLI + local web + local MCP) → talks to Supabase.
+- **World B — local/self-hosted (NEW):** a *separate* one-liner installs the all-in-one
+  container **plus a host `cerefox-local` script**. **Docker-only — no Node/Bun on the
+  host** (the image already bundles the `cerefox` binary at `/usr/local/bin/cerefox`).
+
+**Key simplification vs. the first-cut Model-B installer — the JWT never leaves the
+container.** Every JWT consumer (web server, CLI, MCP) runs *inside* the container, so:
+- db-init **self-generates** `PGRST_JWT_SECRET` on boot and mints the `service_role`
+  JWT into `/run/cerefox-runtime.env` (tmpfs). No host openssl mint, no
+  `-e PGRST_JWT_SECRET`, no JWT persisted anywhere — regenerated + re-consumed
+  in-container each boot.
+- The **only** host-side secret is `OPENAI_API_KEY`, kept in a minimal
+  `~/.cerefox/local/.env` (OPENAI-only) so `upgrade` can re-pass it on container recreate.
+
+**`cerefox-local` — one host script; handles host concerns, proxies KB verbs into the
+container** (the host-vs-in-container split):
+- **Host-handled verbs:** `start|up`, `stop|down`, `restart`, `upgrade` (pull + recreate,
+  re-pass OPENAI), `uninstall` (`rm -f`; `--purge` for the volume), `status`, `logs [-f]`,
+  and **`configure-agent`** (must write the *host's* MCP client config — the in-container
+  CLI can't reach `~/.claude.json`).
+- **Proxied (everything KB-touching):**
+  `docker exec -i <container> sh -c '. /run/cerefox-runtime.env; exec cerefox "$@"'` — so
+  `cerefox-local search/ingest/document/project/.../mcp` run the in-container binary
+  against the local server, JWT sourced at exec time. MCP stdio passes through
+  `docker exec -i`.
+
+**Program name:** the bin reads `CEREFOX_PROG_NAME` →
+`program.name(process.env.CEREFOX_PROG_NAME ?? "cerefox")`; the shim sets
+`-e CEREFOX_PROG_NAME=cerefox-local` so help/usage/completion read `cerefox-local`. **One
+binary, no fork.** Gap: host-only verbs aren't in the container's commander → the shim
+prints a short preamble for them and delegates the rest of `--help` to the container.
+Completion = deferred polish.
+
+**Installer (path-2; replaces host-mint Model B):** (1) `docker pull` + `docker run` the
+image (`-e OPENAI_API_KEY`, `-p PORT:8000`, named volume) — container self-gens the JWT;
+(2) write `~/.cerefox/local/{.env (OPENAI only), cerefox-local}` + put the script on PATH
+(symlink into `~/.local/bin`); (3) optional `cerefox-local configure-agent`; (4) ships as
+a Release asset → `curl -fsSL …/releases/latest/download/install-local.sh | sh`.
+
+**`cut_release.ts`:** upload `install-local.sh` as a Release asset (mirrors `install.sh`).
+The ghcr image build+push **already auto-fires** via `local-image.yml` on
+`release: published` (no build step belongs in the script) — just add a post-cut note
+pointing at the Actions run.
+
+**Docs:** rewrite `docs/guides/setup-local.md` around World B (one-liner + `cerefox-local`
+lifecycle + MCP wiring); pointer from `quickstart.md`; include in the **bundled** guides
+(so `cerefox guides` + the Help page show it).
+
+**Scope + validation:** all of the above is **in v0.10.0** (decision 2026-06-05).
+Validation requires cutting v0.10.0 and publishing to **both** npm + ghcr, then running
+**both** one-liners on a clean machine.
+
+**Open micro-decisions (resolve during build):** `--help` preamble vs. accept-partial
+help; whether `configure-agent` gets a first-class in-bin `--local` (docker-exec) mode or
+stays installer-written; PATH mechanism (`~/.local/bin` symlink vs. shell-rc export).
+
 ### Risks / build-time decisions
 - **Version coupling** (supabase-js ↔ pinned PostgREST) — CI compat suite is the
-  mitigation (design §6-coupling).
+  mitigation (design §6-coupling). **Note:** World B mitigates this *by construction* —
+  CLI/web/server/PostgREST/schema all ship in one versioned image, so they can't drift.
 - **Untested `docker-compose.yml`** — P0 replaces/validates it.
 - **Security** — localhost-bound by default; `PGRST_JWT_SECRET` + token (and/or reverse
   proxy) for LAN; least-privilege PostgREST DB role.
@@ -3331,10 +3397,16 @@ for npm) so re-installs always resolve the newest published version.
 
 **Two near-term tracks** (iteration numbers are planning IDs, **not** ship order;
 ship order by version: **iter-30 `v0.10.0` → iter-28 `v1.0` → iter-29 `v1.1`**):
-1. **Iteration 30 — Local / Self-Hosted Cerefox Backend (D1)**, target **v0.10.0**
-   (version/sequencing-vs-v1.0 is a maintainer decision — see the iteration above).
+1. **Iteration 30 — Local / Self-Hosted Cerefox Backend (D1)**, target **v0.10.0**.
    Design of record: [`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md).
-   In progress on `feat/local-cerefox` (design + plan only so far).
+   On `feat/local-cerefox`: P0 spike, the all-in-one s6 image, the `/rest/v1` proxy, and
+   the **ghcr multi-arch publish** are ✅ done + validated. **Next (this is the remaining
+   v0.10.0 work — see "P2 finalized" above): the World-B user workflow** — the
+   `cerefox-local` host script (lifecycle + KB-proxy via `docker exec`), container
+   self-generated JWT (drop host minting), `CEREFOX_PROG_NAME` in the bin, simplified
+   `install-local.sh` as a Release asset, `cut_release.ts` asset upload, and the rewritten
+   `setup-local.md` (bundled). Then **cut v0.10.0** (publishes npm + ghcr) and test **both**
+   one-liners on a clean machine.
 2. **Iteration 28 — v1.0**, the stability commitment (strict SemVer becomes binding)
    + security audit. Trigger: ~2–3 months of v0.9 in the wild + an outside user
    installing unaided.
