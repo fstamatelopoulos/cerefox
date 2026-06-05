@@ -9,7 +9,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed — `.env` overrides dropped in the Python→TS migration
+
+Several documented `CEREFOX_*` options were silently no-ops in the TS runtime. Each now
+has a single default honored consistently by the CLI, MCP, and web — and forwarded into
+the local/World-B container:
+
+- **`CEREFOX_MIN_SEARCH_SCORE`** (default `0.5`). The web API previously passed `0.0`, so
+  the web UI surfaced irrelevant low-similarity results; it now matches CLI/MCP.
+- **`CEREFOX_MAX_RESPONSE_BYTES`** (MCP/Edge-Function ceiling; web + CLI stay unlimited).
+- **`CEREFOX_MAX_CHUNK_CHARS` / `CEREFOX_MIN_CHUNK_CHARS` / `CEREFOX_VERSION_RETENTION_HOURS`
+  / `CEREFOX_VERSION_CLEANUP_ENABLED`** (ingestion).
+- **`CEREFOX_BACKUP_DIR`** (`cerefox backup` default).
+- **OpenAI embedding overrides** `CEREFOX_OPENAI_BASE_URL` / `_EMBEDDING_MODEL` /
+  `_EMBEDDING_DIMENSIONS`. ⚠ changing model/dimensions is breaking — requires
+  `cerefox server reindex` (DB column is `vector(768)`); documented loudly.
+- A `bun test` guard now fails if any `.env.example` var isn't referenced in the TS source
+  (cheap regression guard against future migration drift). `.env.example` cleaned up:
+  removed the no-op `CEREFOX_LOG_LEVEL`; marked Fireworks as not-yet-implemented in TS.
+
+### Changed — local backend (World B) polish
+
+- `install-local.sh` **auto-selects a free host port** (steps `+10` past a busy port, and
+  past `8000` when a cloud install shares that default) instead of silently colliding.
+- Detect-and-guide when Docker is missing or its daemon is stopped (no auto-install).
+- World-B users can put the `CEREFOX_*` tuning overrides above in `~/.cerefox/local/.env`;
+  they're forwarded into the container (apply with `cerefox-local init`).
+
+### Docs
+
+- README presents cloud vs local as two backend options; trimmed "Project status".
+- Fixed stale items: `.docx` ingest **is** supported (mammoth; only PDF dropped); CLI old
+  flat verbs are husks (not "removed"); `--mode hybrid` (not `semantic`); quickstart
+  timing + `setup-local.md` mis-links; "Python CLI/web" framing.
 
 ---
 
