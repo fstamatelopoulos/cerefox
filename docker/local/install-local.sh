@@ -97,6 +97,23 @@ if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "$HOME/.cerefox/.env" ]; then
   [ -n "${OPENAI_API_KEY:-}" ] && OPENAI_FROM_CLOUD_ENV=true
 fi
 
+# Preserve any config overrides the user added to a prior local .env (we only manage
+# OPENAI + port), and forward them into the container. Same whitelist cerefox-local uses;
+# never the container-managed SUPABASE/DB/JWT vars.
+PASSTHROUGH_VARS="CEREFOX_MIN_SEARCH_SCORE CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_VERSION_RETENTION_HOURS CEREFOX_VERSION_CLEANUP_ENABLED CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
+PRESERVED_OVERRIDES=""
+ENV_ARGS=""
+if [ -f "$CONFIG_DIR/.env" ]; then
+  for v in $PASSTHROUGH_VARS; do
+    line=$(grep -E "^${v}=" "$CONFIG_DIR/.env" | head -1)
+    if [ -n "$line" ]; then
+      PRESERVED_OVERRIDES="${PRESERVED_OVERRIDES}${line}
+"
+      ENV_ARGS="$ENV_ARGS -e $line"
+    fi
+  done
+fi
+
 # 1. Pull + (re)start the container. It self-generates PGRST_JWT_SECRET on first boot
 #    (persisted in the volume) and mints the service_role JWT internally — no host minting.
 echo "Pulling $IMAGE …"
@@ -110,16 +127,19 @@ docker run -d --name "$CONTAINER" -p "$PORT:8000" \
   --restart unless-stopped \
   -v "$VOLUME:/var/lib/postgresql/data" \
   ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
+  $ENV_ARGS \
   "$IMAGE" >/dev/null
 
-# 2. Write the host config (OPENAI key + the port, for `cerefox-local upgrade`).
-#    NO JWT/URL here — those live in the container. Cloud ~/.cerefox/.env is untouched.
+# 2. Write the host config (OPENAI key + port + any preserved overrides). NO JWT/URL here
+#    — those live in the container. Cloud ~/.cerefox/.env is untouched.
 umask 077
 {
   echo "# Cerefox LOCAL host config. The access token lives in the container, not here;"
-  echo "# only the OpenAI key + port are stored. Manage with: cerefox-local init"
+  echo "# only the OpenAI key + port + optional CEREFOX_* tuning overrides are stored."
+  echo "# Add overrides (see docs/guides/configuration.md), then: cerefox-local init"
   echo "CEREFOX_LOCAL_PORT=$PORT"
   [ -n "${OPENAI_API_KEY:-}" ] && echo "OPENAI_API_KEY=$OPENAI_API_KEY"
+  [ -n "$PRESERVED_OVERRIDES" ] && printf '%s' "$PRESERVED_OVERRIDES"
 } > "$CONFIG_DIR/.env"
 
 # 3. Extract the host `cerefox-local` script from the image (single source of truth) and
