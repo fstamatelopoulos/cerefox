@@ -79,7 +79,7 @@ case "$cmd" in
     if [ "$cmd" != "" ] && is_running; then
       echo; echo "--- knowledge-base verbs (from the container) ---"
       docker exec -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" \
-        sh -c '. /run/cerefox-runtime.env 2>/dev/null; exec cerefox --help' 2>/dev/null || true
+        sh -c 'set -a; . /run/cerefox-runtime.env 2>/dev/null; set +a; exec cerefox --help' 2>/dev/null || true
     fi
     ;;
 
@@ -145,6 +145,6 @@ EOF
     # -i so stdio (notably `mcp`) passes through; -t only when attached to a TTY.
     tflag=""; [ -t 0 ] && [ -t 1 ] && tflag="-t"
     exec docker exec -i $tflag -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" \
-      sh -c '. /run/cerefox-runtime.env 2>/dev/null; exec cerefox "$@"' cerefox "$cmd" "$@"
+      sh -c 'set -a; . /run/cerefox-runtime.env 2>/dev/null; set +a; exec cerefox "$@"' cerefox "$cmd" "$@"
     ;;
 esac
