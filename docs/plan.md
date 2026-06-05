@@ -3378,17 +3378,33 @@ self-refreshing on `upgrade`), simplified `install-local.sh` (no host JWT mintin
 `--restart unless-stopped` + readiness wait), `cut_release.ts` asset upload, rewritten
 `setup-local.md` + quickstart pointer.
 
-**Pending items for THIS iteration (decided to defer, not drop):**
+**Added to v0.10.0 after the build (real gaps, not polish):**
+- [x] **`cerefox-local init`** — post-install OpenAI-key setup (the `curl | sh` installer
+  can't prompt; stdin is the piped script). Prompts or `--openai-key`/`--port`, persists to
+  `~/.cerefox/local/.env`, recreates to apply. Also key rotation / port change.
+- [x] **Gate cloud-`.env` messaging** — neutral host-config comment; only mention
+  `~/.cerefox/.env` when it exists and we borrowed its OpenAI key (a pure-local user never
+  had a Supabase install). Dropped the old "your cloud .env is untouched" line.
+- ~~Fold `install-local.sh` into `install.sh` / `cerefox init`~~ — **dropped**: contradicts
+  the two-separate-worlds framing (World B is Docker-only; there is no host `cerefox init`).
+
+**Pending → defer to v0.10.1 (polish, not blockers):**
 - [ ] `cerefox-local --help`: merge the host-verb preamble + the in-container KB `--help`
-  more cleanly (today it prints two sections). Decision pending.
+  more cleanly (today it prints two sections).
 - [ ] `configure-agent`: a first-class in-bin `--local` (docker-exec) mode so non-Claude
   clients (Cursor, Codex, Gemini) get auto-wired config, vs. today's `claude mcp add` /
   printed-snippet host path.
 - [ ] Shell completion for `cerefox-local`: `cerefox completion` hardcodes the root
   binding (`complete -F _cerefox_completion cerefox`, `#compdef cerefox`); parameterize it
-  off the prog name so `cerefox-local completion` emits a `cerefox-local` script.
-- [ ] Decide whether to fold `install-local.sh` into the shared `install.sh` / a
-  `cerefox init` local mode (deferred from the first-cut P2).
+  off the prog name.
+- [ ] Local live-test wiring: point the read/write suites at the local container (extract
+  its in-container JWT for the test) so the same suite runs against cloud **and** local.
+
+**Testing convention (local):** use the **single** default local container
+(`cerefox-local` / volume `cerefox_local_pgdata`) — the local analogue of the maintainer's
+"production" cloud install. Treat it as carefully as cloud; **do not** spin up a second
+DB; self-clean `[E2E …]`-prefixed artifacts after each run (same discipline as the cloud
+live suites).
 
 **Captured risk — transient PostgREST first-boot segfault.** PostgREST (Haskell/GHC) can
 crash with signal 11 once on a *fresh* first boot; `S6_BEHAVIOUR_IF_STAGE2_FAILS=2` makes
