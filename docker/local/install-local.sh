@@ -20,7 +20,11 @@
 set -eu
 
 IMAGE="${CEREFOX_LOCAL_IMAGE:-ghcr.io/fstamatelopoulos/cerefox-local:latest}"
-PORT="${PORT:-8000}"
+DEFAULT_PORT=8000
+# Track whether the user set PORT explicitly (we respect it) vs. took the default
+# (we may auto-select a free one). Must check before applying the default.
+if [ -n "${PORT:-}" ]; then PORT_EXPLICIT=true; else PORT_EXPLICIT=false; fi
+PORT="${PORT:-$DEFAULT_PORT}"
 CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
 CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
@@ -52,19 +56,37 @@ fi
 
 mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
 
-# Port sanity. The cloud `cerefox web` ALSO defaults to 8000, so a machine running both
-# worlds will collide. Warn on the shared default when a cloud install is present, and
-# fail fast (with guidance) if the chosen port is already bound — better than the
-# container silently grabbing it (or `docker run` erroring opaquely later).
-if [ "$PORT" = "8000" ] && [ -f "$HOME/.cerefox/.env" ]; then
-  echo "⚠ A cloud Cerefox install (~/.cerefox/.env) is present and BOTH default to port 8000."
-  echo "  Running 'cerefox web' (cloud) and this local server at once will collide on 8000."
-  echo "  If you use both, pick a distinct local port: PORT=8787 sh install-local.sh"
-fi
-if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "✗ Port $PORT is already in use on this host. Re-run with a free port, e.g.:"
-  echo "    PORT=8787 sh install-local.sh"
-  exit 1
+# Port selection. The cloud `cerefox web` ALSO defaults to 8000, so a machine running
+# both worlds collides. `port_busy` is best-effort (needs lsof; if absent we can't probe
+# and let `docker run` fail loudly). An explicit PORT= is respected (error if busy); the
+# default auto-steps by +10 past busy ports — and past 8000 itself when a cloud install
+# (same default) is present, to avoid a latent `cerefox web` collision.
+port_busy() {
+  command -v lsof >/dev/null 2>&1 || return 1   # no lsof → can't probe; treat as free
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+if [ "$PORT_EXPLICIT" = true ]; then
+  if port_busy "$PORT"; then
+    echo "✗ Port $PORT is already in use (you set PORT=$PORT). Choose a free port and re-run."
+    exit 1
+  fi
+else
+  cloud_present=false; [ -f "$HOME/.cerefox/.env" ] && cloud_present=true
+  attempts=0
+  while port_busy "$PORT" || { [ "$cloud_present" = true ] && [ "$PORT" = "$DEFAULT_PORT" ]; }; do
+    PORT=$((PORT + 10)); attempts=$((attempts + 1))
+    if [ "$attempts" -gt 50 ]; then
+      echo "✗ Couldn't find a free port near $DEFAULT_PORT. Re-run with an explicit PORT=."
+      exit 1
+    fi
+  done
+  if [ "$PORT" != "$DEFAULT_PORT" ]; then
+    if [ "$cloud_present" = true ]; then
+      echo "ℹ Port $DEFAULT_PORT is the cloud Cerefox default (and/or busy) — using $PORT for local."
+    else
+      echo "ℹ Port $DEFAULT_PORT was busy — using $PORT for local."
+    fi
+  fi
 fi
 
 # Embedder key: prefer the env; else, ONLY if a cloud ~/.cerefox/.env happens to exist,
