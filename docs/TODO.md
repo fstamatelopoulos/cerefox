@@ -67,22 +67,6 @@ These are "input adapters" -- Cerefox is the backend, these tools are the author
 - [ ] **Validate Docker/local deployment** -- `Dockerfile` and `docker-compose.yml` have never been tested end-to-end. Low priority.
 - [ ] **Standalone binaries** (`cerefox`, `cerefox.exe`) per design doc §6d "Phase 2". Bundle Bun/Node runtime + JS code into a single executable per OS/arch (macOS-arm64, macOS-x86_64, Linux-x86_64, Windows-x86_64). ~70 MB per binary, ~280 MB total per release. Eliminates the Node/Bun install step for end users. **Deferred** beyond v1.0 per 2026-05-29 maintainer call (Fotis-23): the complexity (cross-compile gotchas, code-signing — $99/year Apple Developer Program for macOS, security concerns around bundling runtimes) doesn't justify the friction reduction for Cerefox's tech-savvy user base. Revisit if a real demand surfaces post-v1.0.
 
-### Local / self-hosted (World B) — polish
-Deferred from the v0.10.0 World-B build (2026-06-05); the core flow shipped without them.
-- [ ] **`cerefox-local --help` preamble vs. accept-partial** — the host script intercepts
-  lifecycle verbs the in-container commander doesn't know, so a single `--help` can't list
-  both natively. Current: the shim prints its own host-verb usage and appends the
-  container's KB `--help`. Decide whether to merge them more cleanly (e.g. inject a synthetic
-  command group) or leave the two-section help as-is.
-- [ ] **`configure-agent` first-class `--local` mode** — currently the host `cerefox-local
-  configure-agent` shells out to `claude mcp add` (or prints a snippet). Consider a proper
-  in-bin `configure-agent --local`/docker-exec mode so other clients (Cursor, Codex, Gemini)
-  get auto-wired config too, instead of manual snippets.
-- [ ] **Shell completion for `cerefox-local`** — `cerefox completion` hardcodes the root
-  binding (`complete -F _cerefox_completion cerefox`, `#compdef cerefox`), so completion is
-  cloud-only. Parameterize the binding name (read the prog name) so `cerefox-local completion`
-  emits a `cerefox-local` script.
-
 ### Backup & Sync
 - [ ] Scheduled automatic backups
 - [ ] Backup verification (compare DB state with backup)

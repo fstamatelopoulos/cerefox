@@ -3370,6 +3370,33 @@ Validation requires cutting v0.10.0 and publishing to **both** npm + ghcr, then 
 help; whether `configure-agent` gets a first-class in-bin `--local` (docker-exec) mode or
 stays installer-written; PATH mechanism (`~/.local/bin` symlink vs. shell-rc export).
 
+**Status 2026-06-05: World-B core BUILT + validated end-to-end** (against an isolated
+test container: install → `cerefox-local` proxy KB round-trip with real embeddings → MCP
+handshake 10 tools → lifecycle verbs). Commits on `feat/local-cerefox`. Shipped:
+`CEREFOX_PROG_NAME`, the `cerefox-local` host script (bundled + `docker cp`'d out,
+self-refreshing on `upgrade`), simplified `install-local.sh` (no host JWT minting;
+`--restart unless-stopped` + readiness wait), `cut_release.ts` asset upload, rewritten
+`setup-local.md` + quickstart pointer.
+
+**Pending items for THIS iteration (decided to defer, not drop):**
+- [ ] `cerefox-local --help`: merge the host-verb preamble + the in-container KB `--help`
+  more cleanly (today it prints two sections). Decision pending.
+- [ ] `configure-agent`: a first-class in-bin `--local` (docker-exec) mode so non-Claude
+  clients (Cursor, Codex, Gemini) get auto-wired config, vs. today's `claude mcp add` /
+  printed-snippet host path.
+- [ ] Shell completion for `cerefox-local`: `cerefox completion` hardcodes the root
+  binding (`complete -F _cerefox_completion cerefox`, `#compdef cerefox`); parameterize it
+  off the prog name so `cerefox-local completion` emits a `cerefox-local` script.
+- [ ] Decide whether to fold `install-local.sh` into the shared `install.sh` / a
+  `cerefox init` local mode (deferred from the first-cut P2).
+
+**Captured risk — transient PostgREST first-boot segfault.** PostgREST (Haskell/GHC) can
+crash with signal 11 once on a *fresh* first boot; `S6_BEHAVIOUR_IF_STAGE2_FAILS=2` makes
+that fatal to the container. Mitigated by `--restart unless-stopped` (Docker re-runs it;
+the 2nd boot is clean) — intermittent, not deterministic, in local testing. If it proves
+more frequent, revisit: a postgrest run-script retry/backoff or `S6_…FAILS=1` (warn +
+in-place supervise-restart) instead of relying on the Docker restart cycle.
+
 ### Risks / build-time decisions
 - **Version coupling** (supabase-js ↔ pinned PostgREST) — CI compat suite is the
   mitigation (design §6-coupling). **Note:** World B mitigates this *by construction* —
