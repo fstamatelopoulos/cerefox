@@ -26,7 +26,29 @@ CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
 BIN_DIR="${CEREFOX_LOCAL_BIN_DIR:-$HOME/.local/bin}"
 
-command -v docker >/dev/null 2>&1 || { echo "✗ docker not found — install Docker (or Colima) first"; exit 1; }
+# Docker is a hard prerequisite. Unlike the cloud installer (which can drop Bun into
+# user space), Docker is system infrastructure (daemon + admin install), so we detect +
+# guide rather than auto-install.
+if ! command -v docker >/dev/null 2>&1; then
+  echo "✗ Docker is required but not found. Install it, then re-run this installer:"
+  case "$(uname -s)" in
+    Darwin) echo "    • Docker Desktop:  https://www.docker.com/products/docker-desktop/"
+            echo "    • or Colima (CLI): brew install colima docker && colima start" ;;
+    Linux)  echo "    • Your distro's package, or: curl -fsSL https://get.docker.com | sh"
+            echo "      (then add yourself to the 'docker' group + start the service)" ;;
+    *)      echo "    • https://docs.docker.com/get-docker/" ;;
+  esac
+  exit 1
+fi
+# Installed but the daemon may be stopped (Docker Desktop quit / Colima not started).
+if ! docker info >/dev/null 2>&1; then
+  echo "✗ Docker is installed but the daemon isn't running. Start it, then re-run:"
+  case "$(uname -s)" in
+    Darwin) echo "    • Start Docker Desktop, or run: colima start" ;;
+    *)      echo "    • Start the Docker service (e.g. sudo systemctl start docker)" ;;
+  esac
+  exit 1
+fi
 
 mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
 

@@ -60,13 +60,13 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 
 ## Project status
 
-Cerefox is a single-maintainer open-source project. As of **v0.10.0** it runs
-two ways: against a hosted **Supabase** project, or **fully local / self-hosted**
-in a single Docker container (no cloud, no account). The whole runtime — CLI,
-MCP server, web UI, ingestion, and server-side deploy — ships in the
+As of **v0.10.0** Cerefox runs two ways: against a hosted **Supabase** project,
+or **fully local / self-hosted** in a single Docker container (no cloud, no
+account). The whole runtime — CLI, MCP server, web UI, ingestion, and
+server-side deploy — ships in the
 [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) npm package
-(no Python, no repo clone); the local backend bundles that same runtime plus
-Postgres + pgvector into one image.
+(no repo clone); the local backend bundles that same runtime plus Postgres +
+pgvector into one image.
 
 Until **v1.0.0** the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
 aspirational — breaking changes can land in minor versions when there's a good
