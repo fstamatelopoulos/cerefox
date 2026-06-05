@@ -1,0 +1,73 @@
+# Local Cerefox — P0 spike stack: Postgres + pgvector + PostgREST (the Data API).
+#
+# This proves the D1 architecture (design: docs/research/local-cerefox-design.md):
+# the existing CLI / MCP / web run UNCHANGED against a local PostgREST — only the
+# .env URL+key differ. See README.md in this dir for the runbook.
+#
+# Self-contained + isolated: a dedicated project name, NON-DEFAULT host ports, and
+# its own volume. It does NOT touch ~/.cerefox/.env or any running `cerefox web`.
+# Folds into the single all-in-one image in P1 (design §5.5 / plan.md Iteration 30).
+#
+# Dev-only credentials. Localhost-bound only — do NOT expose these ports on a LAN
+# without switching PostgREST to JWT auth (see README "LAN / production" note).
+
+name: cerefox-local-spike
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: cfx-spike-postgres
+    environment:
+      POSTGRES_USER: cerefox
+      POSTGRES_PASSWORD: cerefox
+      POSTGRES_DB: cerefox
+    ports:
+      - "55432:5432" # non-default host port → won't clash with a local Postgres on 5432
+    volumes:
+      - cfx_spike_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cerefox -d cerefox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgrest:
+    # PIN matched to the shipped postgrest-js (inside supabase-js 2.106.2): its
+    # README targets PostgREST v14+ (Supabase's current major) with v12 backward-
+    # compat. v14.12 = latest v14, same major as the cloud → minimal coupling risk.
+    # On a supabase-js bump, re-check this against the new postgrest-js (design §6-coupling).
+    image: postgrest/postgrest:v14.12
+    container_name: cfx-spike-postgrest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgresql://authenticator:authenticator@postgres:5432/cerefox
+      PGRST_DB_SCHEMAS: public
+      # supabase-js ALWAYS sends `Authorization: Bearer <key>`, so PostgREST needs a
+      # JWT secret (without it: "Server lacks JWT secret"). This mirrors the cloud
+      # exactly — the service key IS a `{"role":"service_role"}` JWT. Unauthenticated
+      # requests fall back to the (RLS-denied) anon role.
+      # DEV-ONLY secret; localhost-bound. For LAN, use a strong secret + bind/proxy.
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: "cerefox-local-dev-secret-change-me-please-0123456789"
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    ports:
+      - "33000:3000" # non-default host port for the local Data API
+
+  # Gateway: presents the Supabase URL layout (`/rest/v1/*`) that supabase-js
+  # expects, mapping it onto PostgREST's root. Supabase uses Kong for this; here a
+  # tiny Caddy stands in. SHIPPED PRODUCT: fold this into cerefox-server (Hono) so
+  # it is the single gateway (UI + /api/v1 + /rest/v1) — no separate proxy.
+  gateway:
+    image: caddy:2-alpine
+    container_name: cfx-spike-gateway
+    depends_on:
+      - postgrest
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "33001:33001" # ← point CEREFOX_SUPABASE_URL here
+
+volumes:
+  cfx_spike_pgdata:

@@ -1,0 +1,60 @@
+# Version-coupling guard: supabase-js (→ postgrest-js) ↔ the PINNED local PostgREST.
+#
+# Why: a routine supabase-js bump can start expecting PostgREST behavior newer than
+# the version the local image pins (docker/local/compose.yml + Dockerfile). The cloud
+# (Supabase's always-current PostgREST) would keep working and MASK the break; only the
+# local stack would fail. This job runs our supabase-js `.from`/`.rpc` smoke against
+# the pinned PostgREST so such a break fails CI. (Design §6-coupling.)
+#
+# Path-filtered so it only runs when something that could affect the coupling changes.
+# Draft: runs in CI on a matching PR or manual dispatch (not validated by a CI run yet,
+# but the script it runs — docker/local/smoke.sh — is locally validated).
+
+name: Version coupling (supabase-js ↔ pinned PostgREST)
+
+on:
+  pull_request:
+    paths:
+      - "packages/memory/package.json"   # supabase-js / postgrest-js bumps
+      - "_shared/**"
+      - "packages/memory/src/web/**"      # the /rest/v1 proxy + data client
+      - "docker/local/**"                 # the pinned PostgREST + stack
+      - ".github/workflows/version-coupling.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile || bun install
+
+      - name: Bring up Postgres + pinned PostgREST + gateway
+        run: docker compose -f docker/local/compose.yml up -d
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            docker exec cfx-spike-postgres pg_isready -U cerefox -d cerefox && break
+            sleep 2
+          done
+
+      - name: Deploy schema + RPCs
+        run: CEREFOX_DATABASE_URL=postgresql://cerefox:cerefox@localhost:55432/cerefox bun scripts/db_deploy.ts
+
+      - name: PostgREST roles + restart
+        run: |
+          docker exec -i cfx-spike-postgres psql -U cerefox -d cerefox < docker/local/roles.sql
+          docker restart cfx-spike-postgrest
+          sleep 5
+
+      - name: Smoke — supabase-js .from/.rpc against the pinned PostgREST
+        run: sh docker/local/smoke.sh   # no OPENAI_API_KEY → non-embedding paths (the coupling surface)
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker/local/compose.yml down -v

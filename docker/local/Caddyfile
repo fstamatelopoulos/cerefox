@@ -1,0 +1,16 @@
+# Spike gateway: present the Supabase URL layout that supabase-js expects.
+# supabase-js calls `<url>/rest/v1/<table|rpc>`; standalone PostgREST serves at
+# root. Supabase uses Kong for this mapping; here a tiny Caddy stands in.
+#
+# Design note: in the shipped product, fold this into cerefox-server (Hono) so it
+# is the single gateway (UI + /api/v1 + /rest/v1 → PostgREST) — no separate proxy.
+{
+	admin off
+	auto_https off
+}
+
+:33001 {
+	handle_path /rest/v1/* {
+		reverse_proxy postgrest:3000
+	}
+}

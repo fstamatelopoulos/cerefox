@@ -1,0 +1,13 @@
+# Keep the Docker build context lean (the builder runs a clean `bun install`).
+node_modules
+**/node_modules
+.git
+**/dist
+frontend/dist
+packages/memory/dist
+**/*.log
+.env
+**/.env
+.DS_Store
+supabase/.temp
+.claude
