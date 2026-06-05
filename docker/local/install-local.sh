@@ -41,8 +41,12 @@ fi
 echo "Pulling $IMAGE …"
 docker pull "$IMAGE" 2>/dev/null || true
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+# `--restart unless-stopped`: survive host reboots AND a transient first-boot PostgREST
+# crash (a known GHC-startup segfault) — Docker re-runs the container and the 2nd boot is
+# clean. It does NOT override a manual `cerefox-local stop`.
 # shellcheck disable=SC2086
 docker run -d --name "$CONTAINER" -p "$PORT:8000" \
+  --restart unless-stopped \
   -v "$VOLUME:/var/lib/postgresql/data" \
   ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
   "$IMAGE" >/dev/null
@@ -64,7 +68,17 @@ chmod +x "$CONFIG_DIR/cerefox-local"
 mkdir -p "$BIN_DIR"
 ln -sf "$CONFIG_DIR/cerefox-local" "$BIN_DIR/cerefox-local"
 
-echo "✓ Cerefox Local Server starting → http://localhost:$PORT/app/"
+# 4. Wait for the web server to actually answer (a fresh first boot initializes Postgres
+#    + deploys the schema, and may take one restart cycle), so the URL we print is live.
+printf "Waiting for the server to come up"
+i=0
+until curl -fsS -o /dev/null "http://localhost:$PORT/api/v1/projects" 2>/dev/null; do
+  i=$((i + 1)); [ "$i" -gt 45 ] && { echo " — still starting; check 'cerefox-local logs'."; break; }
+  printf "."; sleep 2
+done
+[ "$i" -le 45 ] && echo " ready."
+
+echo "✓ Cerefox Local Server → http://localhost:$PORT/app/"
 echo "  Command:  cerefox-local <verb>   (installed at $BIN_DIR/cerefox-local)"
 echo "  e.g.      cerefox-local status | search \"…\" | document ingest notes.md"
 echo "  MCP:      cerefox-local configure-agent"
