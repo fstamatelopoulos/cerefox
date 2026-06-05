@@ -30,10 +30,12 @@ command -v docker >/dev/null 2>&1 || { echo "✗ docker not found — install Do
 
 mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
 
-# Embedder key: prefer the env; else pull ONLY the OPENAI_API_KEY line from the cloud
-# ~/.cerefox/.env if present (convenience). We never read its Supabase creds.
+# Embedder key: prefer the env; else, ONLY if a cloud ~/.cerefox/.env happens to exist,
+# borrow its OPENAI_API_KEY line as a convenience (we never read its Supabase creds).
+OPENAI_FROM_CLOUD_ENV=false
 if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "$HOME/.cerefox/.env" ]; then
   OPENAI_API_KEY=$(grep -E '^OPENAI_API_KEY=' "$HOME/.cerefox/.env" | head -1 | sed -E 's/^OPENAI_API_KEY=//; s/^["'\'']//; s/["'\'']$//') || true
+  [ -n "${OPENAI_API_KEY:-}" ] && OPENAI_FROM_CLOUD_ENV=true
 fi
 
 # 1. Pull + (re)start the container. It self-generates PGRST_JWT_SECRET on first boot
@@ -55,8 +57,8 @@ docker run -d --name "$CONTAINER" -p "$PORT:8000" \
 #    NO JWT/URL here — those live in the container. Cloud ~/.cerefox/.env is untouched.
 umask 077
 {
-  echo "# Cerefox LOCAL host config — separate from ~/.cerefox/.env (cloud)."
-  echo "# The JWT lives in the container, not here. Only OPENAI + the port are stored."
+  echo "# Cerefox LOCAL host config. The access token lives in the container, not here;"
+  echo "# only the OpenAI key + port are stored. Manage with: cerefox-local init"
   echo "CEREFOX_LOCAL_PORT=$PORT"
   [ -n "${OPENAI_API_KEY:-}" ] && echo "OPENAI_API_KEY=$OPENAI_API_KEY"
 } > "$CONFIG_DIR/.env"
@@ -87,4 +89,8 @@ case ":$PATH:" in
   *) echo "  ⚠ $BIN_DIR is not on your PATH — add it:";
      echo "      echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc  &&  source ~/.zshrc" ;;
 esac
-[ -n "${OPENAI_API_KEY:-}" ] || echo "  (no OPENAI_API_KEY set → ingest/search disabled; re-run with OPENAI_API_KEY=sk-...)"
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+  [ "$OPENAI_FROM_CLOUD_ENV" = true ] && echo "  (used the OPENAI_API_KEY found in your existing ~/.cerefox/.env)"
+else
+  echo "  ▸ Set your OpenAI key to enable ingest + search:  cerefox-local init"
+fi

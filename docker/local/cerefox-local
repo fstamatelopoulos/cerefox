@@ -52,6 +52,7 @@ usage() {
 cerefox-local — manage + use your local (Docker) Cerefox.
 
 Lifecycle (handled on the host):
+  init                  set/update the OpenAI API key (+ port), then (re)start
   start | up            start the stopped container
   stop  | down          stop the container (data persists in the volume)
   restart               restart the container
@@ -82,6 +83,52 @@ case "$cmd" in
       docker exec -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" \
         sh -c 'set -a; . /run/cerefox-runtime.env 2>/dev/null; set +a; exec cerefox --help' 2>/dev/null || true
     fi
+    ;;
+
+  init)
+    # Post-install setup: set/update the OpenAI API key (+ optional port), persist to the
+    # host config, then recreate the container so it picks up the key. Interactive when a
+    # TTY is available; otherwise pass --openai-key / --port. Embeddings (ingest + semantic
+    # search) need the key; without it the server still runs (FTS only).
+    need_docker
+    key=""; port=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --openai-key) key="${2:-}"; shift 2 ;;
+        --openai-key=*) key="${1#*=}"; shift ;;
+        --port) port="${2:-}"; shift 2 ;;
+        --port=*) port="${1#*=}"; shift ;;
+        *) die "unknown init option: $1 (use --openai-key / --port)" ;;
+      esac
+    done
+    mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
+    cur_key=""; cur_port="8000"
+    if [ -f "$ENV_FILE" ]; then
+      # shellcheck disable=SC1090
+      cur_key="$(. "$ENV_FILE"; echo "${OPENAI_API_KEY:-}")"
+      # shellcheck disable=SC1090
+      cur_port="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_PORT:-8000}")"
+    fi
+    if [ -z "$key" ] && [ -r /dev/tty ]; then
+      if [ -n "$cur_key" ]; then
+        printf 'OpenAI API key [Enter to keep current …%s]: ' "$(printf '%s' "$cur_key" | tail -c 4)" >/dev/tty
+      else
+        printf 'OpenAI API key (sk-…, Enter to skip): ' >/dev/tty
+      fi
+      read -r key </dev/tty || true
+    fi
+    [ -z "$key" ] && key="$cur_key"     # keep current when left blank
+    [ -z "$port" ] && port="$cur_port"
+    umask 077
+    {
+      echo "# Cerefox LOCAL host config. The access token lives in the container, not here;"
+      echo "# only the OpenAI key + port are stored. Manage with: cerefox-local init"
+      echo "CEREFOX_LOCAL_PORT=$port"
+      [ -n "$key" ] && echo "OPENAI_API_KEY=$key"
+    } > "$ENV_FILE"
+    echo "✓ saved config to $ENV_FILE"
+    [ -n "$key" ] || echo "  (no OpenAI key set — ingest + semantic search stay disabled; re-run 'cerefox-local init' to add one)"
+    recreate
     ;;
 
   start|up)      need_docker; docker start "$CONTAINER" >/dev/null && echo "✓ started → http://localhost:$(host_port)/app/" ;;
