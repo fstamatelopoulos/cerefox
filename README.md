@@ -45,7 +45,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and anon key; no Python install needed |
 | **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. (A frozen Python MCP server also ships for repo-clone users: `uv run cerefox mcp`.) |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
-| **Markdown-first ingest** | `.md` / `.txt` (Markdown is the storage format; PDF/DOCX conversion was dropped in v0.7 — convert upstream) |
+| **Markdown-first ingest** | `.md` / `.txt` / `.docx` (Markdown is the storage format; `.docx` is converted via `mammoth` on ingest, fidelity varies. PDF is not supported — convert upstream) |
 | **Batch ingest** | `cerefox document ingest-dir` recurses directories |
 | **Deduplication** | SHA-256 content hash; re-ingesting the same file is a no-op |
 | **Backup and restore** | JSON snapshots, optional git commit |

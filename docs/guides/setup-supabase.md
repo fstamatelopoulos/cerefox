@@ -47,7 +47,7 @@ You need three values from Supabase: a URL, an API key, and a direct Postgres co
 
 See the **[Supabase API keys (2026)](#supabase-api-keys-2026)** section near the end of this guide for the full picture. The short version:
 
-- For `CEREFOX_SUPABASE_KEY` (this guide, Python web app, CLI): use the new **secret key** (`sb_secret_…`) from **Project Settings → API Keys → Secret key**. The legacy `service_role` JWT also still works during the transition.
+- For `CEREFOX_SUPABASE_KEY` (this guide, the web UI, and the CLI): use the new **secret key** (`sb_secret_…`) from **Project Settings → API Keys → Secret key**. The legacy `service_role` JWT also still works during the transition.
 - For `CEREFOX_SUPABASE_ANON_KEY` (only if you'll use Edge Functions / MCP / GPT Actions; not needed for this guide's deployment step): you must use the **legacy anon JWT** (`eyJ…`). The new `sb_publishable_…` key fails at the Edge Function gateway. See the reference section for why.
 
 Either way: keep this key secret — it bypasses Row Level Security and grants full database access.
