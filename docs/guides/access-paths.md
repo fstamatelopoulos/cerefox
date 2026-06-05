@@ -147,6 +147,32 @@ operations.
 
 ---
 
+## Local / self-hosted (World B) — a different access model
+
+Everything above describes the **cloud / Supabase** deployment. The **local / self-hosted**
+backend ([`setup-local.md`](setup-local.md)) runs Postgres + PostgREST + the Cerefox server
+in one Docker container, and its access model is deliberately simpler:
+
+- **No Layer 1 (Edge Functions) and no anon-JWT.** There are no Edge Functions; the
+  `cerefox-server` inside the container exposes `/rest/v1` (a reverse-proxy to the in-container
+  PostgREST) plus `/app` + `/api/v1`. Remote agents over HTTP are not a goal of World B.
+- **The access token never leaves the container.** db-init self-generates the PostgREST JWT
+  secret on boot and mints a `service_role` token into the container's runtime env. The web
+  UI (served by the container) and the in-container CLI/MCP read it internally — nothing on
+  the host holds it.
+- **Agents use stdio over `docker exec`, not a network credential.** `cerefox-local mcp`
+  runs `cerefox mcp` inside the container via `docker exec -i`; the MCP client launches that
+  as a local subprocess. No URL, no bearer token in the client config.
+- **The only host-side secret is `OPENAI_API_KEY`** (in `~/.cerefox/local/.env`), used for
+  embeddings — the same as every deployment.
+- By default the container publishes on **`127.0.0.1`** (loopback only); set
+  `CEREFOX_LOCAL_BIND=0.0.0.0` to expose it on the LAN.
+
+So Layers 1–3 below apply to the cloud deployment; the local backend collapses them into a
+single container with an internally-held token.
+
+---
+
 ## Summary
 
 | Caller | Transport | Auth credential | Typical use |
