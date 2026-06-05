@@ -51,6 +51,7 @@ recreate() {
   [ -f "$ENV_FILE" ] || die "no config at $ENV_FILE — run install-local.sh first"
   # shellcheck disable=SC1090
   PORT="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_PORT:-8000}")"
+  BIND_ADDR="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_BIND:-127.0.0.1}")"
   OPENAI_API_KEY="$(. "$ENV_FILE"; echo "${OPENAI_API_KEY:-}")"
   # Ensure the image is available BEFORE removing the running container, so a failed pull
   # (offline, or a tag that doesn't exist yet) can't leave us with no container at all.
@@ -58,7 +59,7 @@ recreate() {
     || die "image '$IMAGE' not present locally and pull failed — container left running"
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   # shellcheck disable=SC2086
-  docker run -d --name "$CONTAINER" -p "$PORT:8000" \
+  docker run -d --name "$CONTAINER" -p "$BIND_ADDR:$PORT:8000" \
     --restart unless-stopped \
     -v "$VOLUME:/var/lib/postgresql/data" \
     ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
@@ -122,12 +123,14 @@ case "$cmd" in
       esac
     done
     mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
-    cur_key=""; cur_port="8000"
+    cur_key=""; cur_port="8000"; cur_bind="127.0.0.1"
     if [ -f "$ENV_FILE" ]; then
       # shellcheck disable=SC1090
       cur_key="$(. "$ENV_FILE"; echo "${OPENAI_API_KEY:-}")"
       # shellcheck disable=SC1090
       cur_port="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_PORT:-8000}")"
+      # shellcheck disable=SC1090
+      cur_bind="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_BIND:-127.0.0.1}")"
     fi
     if [ -z "$key" ] && [ -t 0 ]; then
       if [ -n "$cur_key" ]; then
@@ -153,6 +156,7 @@ case "$cmd" in
       echo "# Cerefox LOCAL host config. The access token lives in the container, not here;"
       echo "# only the OpenAI key + port + optional CEREFOX_* tuning overrides are stored."
       echo "CEREFOX_LOCAL_PORT=$port"
+      echo "CEREFOX_LOCAL_BIND=$cur_bind"
       [ -n "$key" ] && echo "OPENAI_API_KEY=$key"
       [ -n "$preserved" ] && printf '%s' "$preserved"
     } > "$ENV_FILE"

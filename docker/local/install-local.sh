@@ -25,6 +25,9 @@ DEFAULT_PORT=8000
 # (we may auto-select a free one). Must check before applying the default.
 if [ -n "${PORT:-}" ]; then PORT_EXPLICIT=true; else PORT_EXPLICIT=false; fi
 PORT="${PORT:-$DEFAULT_PORT}"
+# Bind to loopback by default — a single-user local backend shouldn't be exposed on the
+# LAN. Set CEREFOX_LOCAL_BIND=0.0.0.0 to publish on all interfaces (e.g. LAN access).
+BIND_ADDR="${CEREFOX_LOCAL_BIND:-127.0.0.1}"
 CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
 CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
@@ -123,7 +126,7 @@ docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 # crash (a known GHC-startup segfault) — Docker re-runs the container and the 2nd boot is
 # clean. It does NOT override a manual `cerefox-local stop`.
 # shellcheck disable=SC2086
-docker run -d --name "$CONTAINER" -p "$PORT:8000" \
+docker run -d --name "$CONTAINER" -p "$BIND_ADDR:$PORT:8000" \
   --restart unless-stopped \
   -v "$VOLUME:/var/lib/postgresql/data" \
   ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
@@ -138,6 +141,7 @@ umask 077
   echo "# only the OpenAI key + port + optional CEREFOX_* tuning overrides are stored."
   echo "# Add overrides (see docs/guides/configuration.md), then: cerefox-local init"
   echo "CEREFOX_LOCAL_PORT=$PORT"
+  echo "CEREFOX_LOCAL_BIND=$BIND_ADDR"
   [ -n "${OPENAI_API_KEY:-}" ] && echo "OPENAI_API_KEY=$OPENAI_API_KEY"
   [ -n "$PRESERVED_OVERRIDES" ] && printf '%s' "$PRESERVED_OVERRIDES"
 } > "$CONFIG_DIR/.env"

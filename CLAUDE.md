@@ -420,4 +420,4 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 - **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 8 tools, key rules, workflows)
 - **Schema**: `src/cerefox/db/schema.sql`
 - **Config**: `.env` file or environment variables (see `src/cerefox/config.py`)
-- **Max response size**: defaults to 200000 bytes (MCP/Edge Function paths only; web UI and CLI are unlimited; configurable via `CEREFOX_MAX_RESPONSE_BYTES`)
+- **Max response size**: defaults to 200000 bytes, configurable via `CEREFOX_MAX_RESPONSE_BYTES`. Enforced on the MCP / Edge Function paths **and the CLI** (the CLI also accepts a per-call `--max-bytes`). The **web UI is unlimited** (no byte budget).

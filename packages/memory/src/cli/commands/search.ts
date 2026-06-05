@@ -26,7 +26,7 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { getMinSearchScore } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { getMaxResponseBytes, getMinSearchScore } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
 
@@ -77,7 +77,7 @@ async function action(
   const matchCount = parsePositiveInt(options.matchCount, "--match-count", 5);
   const alpha = parseFloat01(options.alpha, "--alpha", 0.7);
   const minScore = parseFloat01(options.minScore, "--min-score", getMinSearchScore());
-  const maxBytes = parseNonNegativeInt(options.maxBytes, "--max-bytes", 200_000);
+  const maxBytes = parseNonNegativeInt(options.maxBytes, "--max-bytes", getMaxResponseBytes());
   const mode = options.mode ?? "docs";
   if (!["docs", "hybrid", "fts"].includes(mode)) {
     throw userError(`--mode "${mode}": expected "docs", "hybrid", or "fts".`);
@@ -279,7 +279,7 @@ export function registerSearch(program: Command): void {
     .option("--mode <mode>", "Search mode: docs (default), hybrid, fts.", "docs")
     .option("--alpha <float>", "Semantic weight 0..1 (default: 0.7).", "0.7")
     .option("--min-score <float>", "Minimum cosine similarity threshold (default: CEREFOX_MIN_SEARCH_SCORE or 0.5).")
-    .option("--max-bytes <n>", "Response size budget in bytes.", "200000")
+    .option("--max-bytes <n>", "Response size budget in bytes (default: CEREFOX_MAX_RESPONSE_BYTES or 200000).")
     .option("-r, --requestor <name>", "Agent / user name (recorded in usage log).")
     .option("--json", "Emit machine-readable JSON instead of the default text.")
     .option(
