@@ -91,3 +91,34 @@ export const DEFAULT_PIPELINE_SETTINGS: PipelineSettings = {
   versionRetentionHours: 48,
   versionCleanupEnabled: true,
 };
+
+/**
+ * Pipeline settings with `.env` overrides applied over the defaults. The Python
+ * runtime read these; the TS migration dropped them. Honors
+ * CEREFOX_MAX_CHUNK_CHARS, CEREFOX_MIN_CHUNK_CHARS, CEREFOX_VERSION_RETENTION_HOURS,
+ * and CEREFOX_VERSION_CLEANUP_ENABLED. Used as the pipeline's default settings.
+ */
+export function loadPipelineSettings(): PipelineSettings {
+  const env =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+  const intMin = (raw: string | undefined, def: number, min: number): number => {
+    if (raw === undefined || raw === "") return def;
+    const n = Number.parseInt(raw, 10);
+    return Number.isNaN(n) || n < min ? def : n;
+  };
+  const bool = (raw: string | undefined, def: boolean): boolean =>
+    raw === undefined || raw === "" ? def : !/^(false|0|no|off)$/i.test(raw.trim());
+  return {
+    maxChunkChars: intMin(env.CEREFOX_MAX_CHUNK_CHARS, DEFAULT_PIPELINE_SETTINGS.maxChunkChars, 1),
+    minChunkChars: intMin(env.CEREFOX_MIN_CHUNK_CHARS, DEFAULT_PIPELINE_SETTINGS.minChunkChars, 0),
+    versionRetentionHours: intMin(
+      env.CEREFOX_VERSION_RETENTION_HOURS,
+      DEFAULT_PIPELINE_SETTINGS.versionRetentionHours,
+      0,
+    ),
+    versionCleanupEnabled: bool(
+      env.CEREFOX_VERSION_CLEANUP_ENABLED,
+      DEFAULT_PIPELINE_SETTINGS.versionCleanupEnabled,
+    ),
+  };
+}

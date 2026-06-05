@@ -18,7 +18,7 @@
 import type { MCPSupabaseClient } from "./types.ts";
 
 import { getEmbedding } from "../embeddings/index.ts";
-import { applyByteBudget, getMinSearchScore, logUsage, MAX_RESPONSE_BYTES } from "./_utils.ts";
+import { applyByteBudget, getMaxResponseBytes, getMinSearchScore, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
@@ -37,7 +37,8 @@ async function handler(
     (args.metadata_filter as Record<string, string> | null | undefined) ?? null;
   const requested_max_bytes = args.max_bytes as number | undefined;
 
-  const max_bytes = Math.min(requested_max_bytes ?? MAX_RESPONSE_BYTES, MAX_RESPONSE_BYTES);
+  const ceiling = getMaxResponseBytes();
+  const max_bytes = Math.min(requested_max_bytes ?? ceiling, ceiling);
 
   if (
     metadata_filter !== null &&

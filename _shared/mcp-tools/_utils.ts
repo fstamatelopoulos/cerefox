@@ -14,9 +14,23 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-/** Server-enforced response-size ceiling for MCP results. Agents can request
- *  smaller budgets via `max_bytes`; values above this are capped. */
+/** Built-in default response-size ceiling for MCP/EF results. */
 export const MAX_RESPONSE_BYTES = 200_000;
+
+/**
+ * Server-enforced response-size ceiling for MCP/Edge-Function results (agents
+ * can request smaller via `max_bytes`; larger is capped). Overridable via
+ * `CEREFOX_MAX_RESPONSE_BYTES`. Read by the Python runtime; restored after the
+ * TS migration. The web UI + CLI are intentionally unlimited and do not use this.
+ * Runtime-agnostic env read (Deno EF safely falls back to the default).
+ */
+export function getMaxResponseBytes(): number {
+  const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env?.CEREFOX_MAX_RESPONSE_BYTES;
+  if (raw === undefined || raw === "") return MAX_RESPONSE_BYTES;
+  const n = Number.parseInt(raw, 10);
+  return Number.isNaN(n) || n <= 0 ? MAX_RESPONSE_BYTES : n;
+}
 
 /** Built-in default cosine-similarity floor for hybrid/semantic search. */
 export const DEFAULT_MIN_SEARCH_SCORE = 0.5;
