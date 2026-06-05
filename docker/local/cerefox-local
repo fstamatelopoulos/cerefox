@@ -37,6 +37,10 @@ recreate() {
   # shellcheck disable=SC1090
   PORT="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_PORT:-8000}")"
   OPENAI_API_KEY="$(. "$ENV_FILE"; echo "${OPENAI_API_KEY:-}")"
+  # Ensure the image is available BEFORE removing the running container, so a failed pull
+  # (offline, or a tag that doesn't exist yet) can't leave us with no container at all.
+  docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull "$IMAGE" \
+    || die "image '$IMAGE' not present locally and pull failed — container left running"
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   # shellcheck disable=SC2086
   docker run -d --name "$CONTAINER" -p "$PORT:8000" \
