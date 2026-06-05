@@ -1,8 +1,11 @@
 # Build + publish the all-in-one LOCAL Cerefox image to GitHub Container Registry.
 #
-# Triggers ONLY on a published GitHub Release or a manual dispatch — never on push,
-# so it can't fire from a feature branch. Uses the built-in GITHUB_TOKEN (with
-# `packages: write`); no PAT/secret to install.
+# Triggers ONLY on a manual dispatch — never on push and never on `release: published`.
+# Publishing the image is an EXPLICIT opt-in: `cut_release.ts --docker-publish` dispatches
+# this (or run it from the Actions tab). This mirrors the npm `release.yml` policy — a
+# GitHub Release is a git milestone; shipping a user artifact is a separate decision — so
+# you can cut a Release without rebuilding + pushing a multi-arch image. Uses the built-in
+# GITHUB_TOKEN (`packages: write`); no PAT/secret to install.
 #
 # After the FIRST publish, set the package visibility to Public in its GitHub package
 # settings so users can `docker pull` without auth (one-time).
@@ -10,7 +13,7 @@
 # Note: amd64 is built under QEMU emulation on the ubuntu (amd64) runner, so the
 # arm64 build is the emulated/slow one — if build time becomes a problem, switch to a
 # native arm64 runner or split per-arch jobs. Pulls the image to:
-#   ghcr.io/<owner>/cerefox-local:<tag>   (+ :latest on releases)
+#   ghcr.io/<owner>/cerefox-local:<tag>   (+ :latest when publish_latest=true)
 
 name: Publish local image (ghcr.io)
 
@@ -21,8 +24,10 @@ on:
         description: "Image tag (e.g. v0.10.0 or dev)"
         required: true
         default: dev
-  release:
-    types: [published]
+      publish_latest:
+        description: "Also tag :latest (use for a stable release)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,8 +55,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/cerefox-local
           tags: |
-            type=raw,value=${{ github.event.inputs.tag || github.ref_name }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ github.event.inputs.tag }}
+            type=raw,value=latest,enable=${{ github.event.inputs.publish_latest == 'true' }}
 
       - name: Build + push (multi-arch)
         uses: docker/build-push-action@v6
@@ -62,5 +67,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Drop the SLSA provenance/SBOM attestation manifests (the "unknown/unknown"
+          # entries) for a clean 2-arch manifest. Optional supply-chain metadata; the
+          # image is unaffected. Re-enable (provenance: mode=max) if attestations are wanted.
+          provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -117,9 +117,13 @@ function registerRenameHusks(program: Command): void {
  * programs).
  */
 export function buildProgram(): Command {
-  const program = new Command("cerefox")
+  // Program name is overridable so the local (Docker) flavor can present itself
+  // as `cerefox-local` in help/usage/completion while reusing this one binary.
+  // The `cerefox-local` host script sets CEREFOX_PROG_NAME via `docker exec -e`.
+  const progName = process.env.CEREFOX_PROG_NAME || "cerefox";
+  const program = new Command(progName)
     .description("Cerefox — user-owned shared memory for AI agents.")
-    .version(PKG_VERSION, "-v, --version", "Print the cerefox version and exit.")
+    .version(PKG_VERSION, "-v, --version", `Print the ${progName} version and exit.`)
     .addOption(
       new Option(
         "--json",
@@ -127,11 +131,11 @@ export function buildProgram(): Command {
           "Available on read commands; ignored on commands without a JSON shape.",
       ).hideHelp(),
     )
-    .showHelpAfterError("(run `cerefox --help` for usage)")
+    .showHelpAfterError(`(run \`${progName} --help\` for usage)`)
     .enablePositionalOptions()
     .addHelpText(
       "after",
-      "\nResource groups (run `cerefox <group> --help`):\n" +
+      `\nResource groups (run \`${progName} <group> --help\`):\n` +
         "  document   get · list · edit · delete · restore · ingest · ingest-dir · version {list·archive·unarchive}\n" +
         "  project    list · create · edit · delete\n" +
         "  metadata   keys · search\n" +
@@ -150,8 +154,8 @@ export function buildProgram(): Command {
         "  0  success            2  system error (unreachable Supabase, RPC failure, …)\n" +
         "  1  user error         3  not found (document / version / project)\n" +
         "\nLearn more:\n" +
-        "  cerefox docs --list                     # bundled docs (offline)\n" +
-        "  cerefox doctor                          # diagnose your install\n" +
+        `  ${progName} guides list                  # bundled docs (offline)\n` +
+        `  ${progName} doctor                       # diagnose your install\n` +
         "  https://github.com/fstamatelopoulos/cerefox\n",
     );
 

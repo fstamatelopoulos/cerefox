@@ -447,6 +447,7 @@ interface Args {
   check: boolean;
   yes: boolean;
   npmPublish: boolean;
+  dockerPublish: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -456,18 +457,21 @@ function parseArgs(argv: string[]): Args {
     check: false,
     yes: false,
     npmPublish: false,
+    dockerPublish: false,
   };
   for (const a of argv) {
     if (a === "--dry-run") out.dryRun = true;
     else if (a === "--check") out.check = true;
     else if (a === "--yes" || a === "-y") out.yes = true;
     else if (a === "--npm-publish") out.npmPublish = true;
+    else if (a === "--docker-publish") out.dockerPublish = true;
     else if (a === "--help" || a === "-h") {
       console.log(
         [
           "Usage:",
           "  bun scripts/cut_release.ts <version>                       cut tag + GitHub Release",
           "  bun scripts/cut_release.ts <version> --npm-publish         + trigger npm publish workflow",
+          "  bun scripts/cut_release.ts <version> --docker-publish      + trigger ghcr image publish workflow",
           "  bun scripts/cut_release.ts <version> --dry-run             show actions only",
           "  bun scripts/cut_release.ts --check                         report current version",
           "",
@@ -478,6 +482,10 @@ function parseArgs(argv: string[]): Args {
           "                   workflow with publish_to_npm=true so it ships to npm.",
           "                   Default off — cut a tag without immediately publishing",
           "                   (lets you spot a problem in the staging window).",
+          "  --docker-publish After the tag + GitHub Release, trigger local-image.yml to",
+          "                   build + push the all-in-one image to ghcr.io (+ :latest for a",
+          "                   stable, non-prerelease version). Default off — same policy as",
+          "                   --npm-publish: a Release is a milestone, shipping is opt-in.",
           "  --check          Report the current VERSION; suggest the next obvious bump.",
         ].join("\n"),
       );
@@ -603,11 +611,17 @@ async function main(): Promise<void> {
   // tag that tripped the `checkTagDoesNotExist` preflight on the next run.)
   if (!args.dryRun && !args.yes) {
     console.log("");
-    info(
-      `About to cut ${tag}: bump VERSION/CHANGELOG/package.json + version literals, ` +
-        `commit, create an annotated tag, push to origin, and create a GitHub Release` +
-        (args.npmPublish ? ", then trigger the npm-publish workflow." : "."),
-    );
+    {
+      const extras = [
+        args.npmPublish ? "the npm-publish workflow" : null,
+        args.dockerPublish ? "the ghcr image-publish workflow" : null,
+      ].filter(Boolean);
+      info(
+        `About to cut ${tag}: bump VERSION/CHANGELOG/package.json + version literals, ` +
+          `commit, create an annotated tag, push to origin, and create a GitHub Release` +
+          (extras.length ? `, then trigger ${extras.join(" + ")}.` : "."),
+      );
+    }
     info(
       `Note: release tags are immutable here. Once this tag is pushed it never ` +
         `moves — any later fix ships as a NEW patch version, not a re-tag. ` +
@@ -699,6 +713,13 @@ async function main(): Promise<void> {
     info(`DRY-RUN: would 'git push origin main'`);
     info(`DRY-RUN: would 'git push origin ${tag}'`);
     info(`DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>'`);
+    info(`DRY-RUN: would upload install.sh + docker/local/install-local.sh as Release assets`);
+    if (args.dockerPublish) {
+      const publishLatest = !newVersion.includes("-");
+      info(`DRY-RUN: would 'gh workflow run local-image.yml -f tag=${tag} -f publish_latest=${publishLatest}'`);
+    } else {
+      info("DRY-RUN: --docker-publish not set; no ghcr image would be published.");
+    }
     if (args.npmPublish) {
       info(`DRY-RUN: would 'gh workflow run release.yml -f tag=${tag} -f publish_to_npm=true'`);
     } else {
@@ -744,6 +765,46 @@ async function main(): Promise<void> {
     } else {
       warn(`Could not upload install.sh: ${upload.stderr.trim() || "unknown error"}. Upload manually with: gh release upload ${tag} install.sh`);
     }
+  }
+
+  // Attach install-local.sh too (the LOCAL/self-hosted world's one-liner), so its
+  // `latest/download/install-local.sh` URL stays current. The Docker image itself is
+  // published separately + opt-in via `--docker-publish` (handled below) — NOT on the
+  // Release event.
+  const installLocalSh = join(REPO_ROOT, "docker", "local", "install-local.sh");
+  if (existsSync(installLocalSh)) {
+    info("Attaching install-local.sh to the GitHub Release…");
+    const upLocal = run("gh", ["release", "upload", tag, installLocalSh, "--clobber"]);
+    if (upLocal.status === 0) {
+      ok("install-local.sh uploaded to the release.");
+    } else {
+      warn(`Could not upload install-local.sh: ${upLocal.stderr.trim() || "unknown error"}. Upload manually with: gh release upload ${tag} docker/local/install-local.sh`);
+    }
+  }
+
+  // Docker (ghcr) publish — opt-in via --docker-publish, mirroring --npm-publish. The
+  // local-image.yml workflow no longer fires on `release: published`. Tag :latest only
+  // for a stable (non-prerelease) version.
+  if (args.dockerPublish) {
+    const publishLatest = !newVersion.includes("-");
+    info(`Triggering local-image.yml to publish the ghcr image (publish_latest=${publishLatest})…`);
+    runOrDie("gh", [
+      "workflow",
+      "run",
+      "local-image.yml",
+      "-f",
+      `tag=${tag}`,
+      "-f",
+      `publish_latest=${publishLatest}`,
+    ]);
+    ok(`Workflow triggered. Watch at: gh run list --workflow=local-image.yml`);
+  } else {
+    info(
+      "--docker-publish not set; no ghcr image published.\n" +
+        "  When ready: gh workflow run local-image.yml -f tag=" +
+        tag +
+        " -f publish_latest=true",
+    );
   }
 
   if (args.npmPublish) {

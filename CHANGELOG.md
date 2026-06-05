@@ -9,7 +9,52 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Local / self-hosted Cerefox backend (new deployment mode — "World B").** Run Cerefox
+entirely on your own machine — Postgres + pgvector + PostgREST + cerefox-server in one
+Docker container — with **no cloud dependency and no Node/Bun on the host**. It reuses
+the existing schema, RPCs, MCP handlers, web app, and supabase-js data client unchanged
+(config-only); cloud (Supabase) deployments are completely unaffected. Cloud and local
+are independent worlds — **separate installers, separate command names** (`cerefox` vs
+`cerefox-local`).
+
+### Added
+
+- **All-in-one Docker image** (`docker/local/Dockerfile`): pgvector + pinned PostgREST +
+  the bundled app + the `cerefox-local` host script, supervised by **s6-overlay**
+  (db-init → postgres/postgrest/cerefox-server). The container **self-generates its JWT
+  secret on boot and mints the access token internally — the token never leaves the
+  container.** Published multi-arch (amd64+arm64) to **ghcr.io/.../cerefox-local** by
+  `.github/workflows/local-image.yml` — opt-in via `cut_release.ts --docker-publish`
+  (decoupled from cutting a Release, same policy as the npm publish).
+- **One-line local installer** (`docker/local/install-local.sh`, shipped as a Release
+  asset): `curl -fsSL …/install-local.sh | sh`. Docker-only — pulls the image, runs it
+  with `--restart unless-stopped`, waits for readiness, and installs a `cerefox-local`
+  command on PATH. The only host-side secret is `OPENAI_API_KEY` (in
+  `~/.cerefox/local/.env`); the cloud `~/.cerefox/.env` is never touched.
+- **`cerefox-local` command**: host-side lifecycle (`init`, `start`/`stop`/`restart`,
+  `upgrade`, `uninstall [--purge]`, `status`, `logs`, `configure-agent`) plus a proxy that
+  runs every KB verb (`search`, `document`, `project`, `mcp`, …) inside the container via
+  `docker exec` — so MCP stdio works and the same bundled binary serves the local backend.
+  **`cerefox-local init`** sets/rotates the OpenAI key after install.
+- **`CEREFOX_PROG_NAME`**: the bundled bin presents as `cerefox-local` in help/usage when
+  the shim sets it (one binary, no fork).
+- **`/rest/v1` reverse-proxy in cerefox-server** (`registerPostgrestProxy`), mounted only
+  when `CEREFOX_POSTGREST_UPSTREAM` is set — so it is **inert in cloud**. Makes the server
+  the single local gateway (UI + `/api/v1` + `/rest/v1`).
+- **`cut_release.ts`** now uploads `install-local.sh` as a Release asset (next to
+  `install.sh`).
+- **Version-coupling CI** (`.github/workflows/version-coupling.yml`): runs the read/write
+  smoke against the pinned PostgREST so a `supabase-js` bump that breaks the local stack
+  fails CI.
+
+### Fixed
+
+- **Local image Help page**: bundle the docs + agent guides into the image so `/app/help`
+  renders offline (was "No bundled docs available").
+
+Design: `docs/research/local-cerefox-design.md`; plan: `docs/plan.md` (Iteration 30).
+Polish deferred to v0.10.1: `cerefox-local --help` merge, in-bin `configure-agent
+--local` for non-Claude clients, and `cerefox-local` shell completion.
 
 ---
 

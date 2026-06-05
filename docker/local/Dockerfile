@@ -53,7 +53,11 @@ COPY --from=builder /src/packages/memory/docs /opt/cerefox/docs
 COPY --from=builder /src/packages/memory/AGENT_GUIDE.md /opt/cerefox/AGENT_GUIDE.md
 COPY --from=builder /src/packages/memory/AGENT_QUICK_REFERENCE.md /opt/cerefox/AGENT_QUICK_REFERENCE.md
 COPY docker/local/roles.sql /opt/cerefox/roles.sql
-RUN printf '#!/bin/sh\nexec bun /opt/cerefox/dist/bin/cerefox.js "$@"\n' > /usr/local/bin/cerefox \
+# The host-side `cerefox-local` script is bundled here so the installer can `docker cp`
+# it onto the host (single source of truth; `cerefox-local upgrade` refreshes it).
+COPY docker/local/cerefox-local /opt/cerefox/cerefox-local
+RUN chmod +x /opt/cerefox/cerefox-local \
+ && printf '#!/bin/sh\nexec bun /opt/cerefox/dist/bin/cerefox.js "$@"\n' > /usr/local/bin/cerefox \
  && chmod +x /usr/local/bin/cerefox
 
 # s6 service tree: db-init (oneshot) → postgres / postgrest / cerefox-server (longruns).
