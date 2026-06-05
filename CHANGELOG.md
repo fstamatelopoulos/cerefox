@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.10.0] -- 2026-06-05
+
 **Local / self-hosted Cerefox backend (new deployment mode — "World B").** Run Cerefox
 entirely on your own machine — Postgres + pgvector + PostgREST + cerefox-server in one
 Docker container — with **no cloud dependency and no Node/Bun on the host**. It reuses
