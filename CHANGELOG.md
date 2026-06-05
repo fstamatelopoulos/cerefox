@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.10.1] -- 2026-06-05
+
 ### Fixed — `.env` overrides dropped in the Python→TS migration
 
 Several documented `CEREFOX_*` options were silently no-ops in the TS runtime. Each now
