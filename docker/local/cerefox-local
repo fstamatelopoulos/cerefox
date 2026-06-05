@@ -109,13 +109,13 @@ case "$cmd" in
       # shellcheck disable=SC1090
       cur_port="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_PORT:-8000}")"
     fi
-    if [ -z "$key" ] && [ -r /dev/tty ]; then
+    if [ -z "$key" ] && [ -t 0 ]; then
       if [ -n "$cur_key" ]; then
-        printf 'OpenAI API key [Enter to keep current …%s]: ' "$(printf '%s' "$cur_key" | tail -c 4)" >/dev/tty
+        printf 'OpenAI API key [Enter to keep current …%s]: ' "$(printf '%s' "$cur_key" | tail -c 4)"
       else
-        printf 'OpenAI API key (sk-…, Enter to skip): ' >/dev/tty
+        printf 'OpenAI API key (sk-…, Enter to skip): '
       fi
-      read -r key </dev/tty || true
+      read -r key || true
     fi
     [ -z "$key" ] && key="$cur_key"     # keep current when left blank
     [ -z "$port" ] && port="$cur_port"
