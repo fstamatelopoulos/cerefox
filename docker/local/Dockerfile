@@ -44,8 +44,14 @@ RUN set -eux; \
 COPY --from=postgrest/postgrest:v14.12 /bin/postgrest /usr/local/bin/postgrest
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 
-# App = the self-contained bundled dist (bin + frontend + docs + server-assets).
+# App = the self-contained bundled dist (bin + frontend + server-assets).
 COPY --from=builder /src/packages/memory/dist /opt/cerefox/dist
+# Bundled docs + agent guides — the /api/v1/docs (Help) resolver looks for these at
+# <install>/docs/guides and <install>/AGENT_*.md (SIBLINGS of dist/, not inside it).
+# bundle-docs (run by prepublishOnly in the builder) produces them at the package root.
+COPY --from=builder /src/packages/memory/docs /opt/cerefox/docs
+COPY --from=builder /src/packages/memory/AGENT_GUIDE.md /opt/cerefox/AGENT_GUIDE.md
+COPY --from=builder /src/packages/memory/AGENT_QUICK_REFERENCE.md /opt/cerefox/AGENT_QUICK_REFERENCE.md
 COPY docker/local/roles.sql /opt/cerefox/roles.sql
 RUN printf '#!/bin/sh\nexec bun /opt/cerefox/dist/bin/cerefox.js "$@"\n' > /usr/local/bin/cerefox \
  && chmod +x /usr/local/bin/cerefox
