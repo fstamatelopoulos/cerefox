@@ -14,7 +14,7 @@ Every command reads configuration from `.env` in the working directory (or envir
 
 The CLI is the TypeScript `@cerefox/memory` package. Invoke any command as plain `cerefox <subcommand>` (installed via the installer or `npm install -g @cerefox/memory` — see [`quickstart.md`](quickstart.md#1-install)).
 
-> **v0.9 verb rename**: commands now follow a `resource verb` shape (e.g. `cerefox document get`, `cerefox project list`). The old flat verbs (`get-doc`, `list-docs`, `ingest`, `list-versions`, `config-get`, `deploy-server`, `docs`, …) are husks and have been removed — use the new forms below.
+> **v0.9 verb rename**: commands now follow a `resource verb` shape (e.g. `cerefox document get`, `cerefox project list`). The old flat verbs (`get-doc`, `list-docs`, `ingest`, `list-versions`, `config-get`, `deploy-server`, `docs`, …) survive as hidden husks — they still run but print a pointer to the new form and exit non-zero (removed only at v1.0). Use the new forms below.
 
 ## Commands
 
@@ -141,7 +141,7 @@ cerefox search [OPTIONS] QUERY
 ```bash
 cerefox search "OAuth design"
 cerefox search "decisions" --metadata-filter '{"type":"decision-log"}' --match-count 5
-cerefox search "what we tried" --mode semantic --requestor "claude-code"
+cerefox search "what we tried" --mode hybrid --requestor "claude-code"
 cerefox search "design docs" --only-metadata
 ```
 

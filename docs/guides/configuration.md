@@ -24,6 +24,13 @@ CEREFOX_CONFIG_DIR=~/.cerefox-personal cerefox search "…"
 
 Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../specs/polish-and-distribution-design.md).
 
+> **Local / self-hosted (World B).** For the Docker backend (`cerefox-local`), do **not**
+> set the Supabase or `CEREFOX_DATABASE_URL` vars below — the container generates and owns
+> them. Put `OPENAI_API_KEY` plus any of the `CEREFOX_*` **tuning** options on this page
+> (search, chunking, retrieval, versioning, embedding base-url/model, caller identity) in
+> `~/.cerefox/local/.env`; the installer + `cerefox-local` forward them into the container.
+> Apply changes with `cerefox-local init`. See [`setup-local.md`](setup-local.md).
+
 ---
 
 ## Supabase / Database
@@ -45,34 +52,27 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 
 Cerefox uses cloud-based embedding APIs. Local models (mpnet, Ollama) are not supported — they require large downloads, fail on some hardware, and add installation complexity.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CEREFOX_EMBEDDER` | `openai` | Embedding provider. Valid values: `openai`, `fireworks` |
+> **TS runtime: OpenAI only (today).** The current TypeScript runtime implements the
+> OpenAI embedder. `CEREFOX_EMBEDDER` and the `CEREFOX_FIREWORKS_*` variables are
+> documented (they worked in the retired Python runtime) but are **not yet wired in TS** —
+> they're currently no-ops, tracked for a future release.
 
 ### OpenAI (default, recommended)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | `""` | OpenAI API key. Also accepted as `CEREFOX_OPENAI_API_KEY`. Get one at [platform.openai.com/api-keys](https://platform.openai.com/api-keys). |
-| `CEREFOX_OPENAI_BASE_URL` | `https://api.openai.com/v1` | API base URL. Override for proxies or OpenAI-compatible providers. |
-| `CEREFOX_OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model. |
-| `CEREFOX_OPENAI_EMBEDDING_DIMENSIONS` | `768` | Output dimensions. Must match the database schema (VECTOR(768)). |
+| `CEREFOX_OPENAI_BASE_URL` | `https://api.openai.com/v1` | API base URL. Safe to override for proxies or OpenAI-compatible gateways. |
+| `CEREFOX_OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model. ⚠ see warning below. |
+| `CEREFOX_OPENAI_EMBEDDING_DIMENSIONS` | `768` | Output dimensions. Must match the DB schema (`VECTOR(768)`). ⚠ see warning below. |
+
+> **⚠ Changing the model or dimensions is breaking.** Query vectors must match the stored
+> vectors. After changing `CEREFOX_OPENAI_EMBEDDING_MODEL` you MUST re-embed the whole
+> corpus (`cerefox server reindex`); changing `CEREFOX_OPENAI_EMBEDDING_DIMENSIONS` away
+> from 768 also requires a schema change. `CEREFOX_OPENAI_BASE_URL` is the only one safe to
+> flip on an existing knowledge base.
 
 For cost estimates see `docs/guides/operational-cost.md`.
-
-### Fireworks AI (alternative, lower cost)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CEREFOX_FIREWORKS_API_KEY` | `""` | Fireworks AI API key. |
-| `CEREFOX_FIREWORKS_BASE_URL` | `https://api.fireworks.ai/inference/v1` | Fireworks API base URL. |
-| `CEREFOX_FIREWORKS_EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Fireworks model. Must natively output 768-dim vectors. |
-
-To use Fireworks:
-```env
-CEREFOX_EMBEDDER=fireworks
-CEREFOX_FIREWORKS_API_KEY=fw_...
-```
 
 ### Edge Functions (for agents)
 

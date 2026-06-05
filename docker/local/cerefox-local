@@ -29,8 +29,23 @@ host_port() {
   docker inspect -f '{{range $p, $c := .NetworkSettings.Ports}}{{if eq $p "8000/tcp"}}{{(index $c 0).HostPort}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null || true
 }
 
-# Recreate the container from the persisted config (used by `upgrade`). Reads the
-# host port + OPENAI key from $ENV_FILE so an upgrade preserves them.
+# Config overrides forwarded from the host .env into the container. Deliberately
+# EXCLUDES container-managed vars (SUPABASE_URL/KEY, DATABASE_URL, POSTGREST_UPSTREAM,
+# the JWT secret) — those are generated/owned inside the container. The single codebase
+# reads these the same way in-container as it does for the cloud CLI.
+PASSTHROUGH_VARS="CEREFOX_MIN_SEARCH_SCORE CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_VERSION_RETENTION_HOURS CEREFOX_VERSION_CLEANUP_ENABLED CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
+
+# Emit `-e VAR=value` for each passthrough var present in $ENV_FILE.
+config_env_args() {
+  [ -f "$ENV_FILE" ] || return 0
+  for v in $PASSTHROUGH_VARS; do
+    val=$(grep -E "^${v}=" "$ENV_FILE" | head -1 | sed -E "s/^${v}=//")
+    [ -n "$val" ] && printf ' -e %s=%s' "$v" "$val"
+  done
+}
+
+# Recreate the container from the persisted config (used by `upgrade`/`init`). Reads the
+# host port + OPENAI key + any config overrides from $ENV_FILE so they survive a recreate.
 recreate() {
   need_docker
   [ -f "$ENV_FILE" ] || die "no config at $ENV_FILE — run install-local.sh first"
@@ -47,6 +62,7 @@ recreate() {
     --restart unless-stopped \
     -v "$VOLUME:/var/lib/postgresql/data" \
     ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
+    $(config_env_args) \
     "$IMAGE" >/dev/null
   echo "✓ container (re)started → http://localhost:$PORT/app/"
 }
@@ -123,12 +139,22 @@ case "$cmd" in
     fi
     [ -z "$key" ] && key="$cur_key"     # keep current when left blank
     [ -z "$port" ] && port="$cur_port"
+    # Preserve any CEREFOX_* tuning overrides already in the file (we only manage key+port).
+    preserved=""
+    if [ -f "$ENV_FILE" ]; then
+      for v in $PASSTHROUGH_VARS; do
+        line=$(grep -E "^${v}=" "$ENV_FILE" | head -1)
+        [ -n "$line" ] && preserved="${preserved}${line}
+"
+      done
+    fi
     umask 077
     {
       echo "# Cerefox LOCAL host config. The access token lives in the container, not here;"
-      echo "# only the OpenAI key + port are stored. Manage with: cerefox-local init"
+      echo "# only the OpenAI key + port + optional CEREFOX_* tuning overrides are stored."
       echo "CEREFOX_LOCAL_PORT=$port"
       [ -n "$key" ] && echo "OPENAI_API_KEY=$key"
+      [ -n "$preserved" ] && printf '%s' "$preserved"
     } > "$ENV_FILE"
     echo "✓ saved config to $ENV_FILE"
     [ -n "$key" ] || echo "  (no OpenAI key set — ingest + semantic search stay disabled; re-run 'cerefox-local init' to add one)"

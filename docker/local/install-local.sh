@@ -20,15 +20,74 @@
 set -eu
 
 IMAGE="${CEREFOX_LOCAL_IMAGE:-ghcr.io/fstamatelopoulos/cerefox-local:latest}"
-PORT="${PORT:-8000}"
+DEFAULT_PORT=8000
+# Track whether the user set PORT explicitly (we respect it) vs. took the default
+# (we may auto-select a free one). Must check before applying the default.
+if [ -n "${PORT:-}" ]; then PORT_EXPLICIT=true; else PORT_EXPLICIT=false; fi
+PORT="${PORT:-$DEFAULT_PORT}"
 CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
 CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
 BIN_DIR="${CEREFOX_LOCAL_BIN_DIR:-$HOME/.local/bin}"
 
-command -v docker >/dev/null 2>&1 || { echo "✗ docker not found — install Docker (or Colima) first"; exit 1; }
+# Docker is a hard prerequisite. Unlike the cloud installer (which can drop Bun into
+# user space), Docker is system infrastructure (daemon + admin install), so we detect +
+# guide rather than auto-install.
+if ! command -v docker >/dev/null 2>&1; then
+  echo "✗ Docker is required but not found. Install it, then re-run this installer:"
+  case "$(uname -s)" in
+    Darwin) echo "    • Docker Desktop:  https://www.docker.com/products/docker-desktop/"
+            echo "    • or Colima (CLI): brew install colima docker && colima start" ;;
+    Linux)  echo "    • Your distro's package, or: curl -fsSL https://get.docker.com | sh"
+            echo "      (then add yourself to the 'docker' group + start the service)" ;;
+    *)      echo "    • https://docs.docker.com/get-docker/" ;;
+  esac
+  exit 1
+fi
+# Installed but the daemon may be stopped (Docker Desktop quit / Colima not started).
+if ! docker info >/dev/null 2>&1; then
+  echo "✗ Docker is installed but the daemon isn't running. Start it, then re-run:"
+  case "$(uname -s)" in
+    Darwin) echo "    • Start Docker Desktop, or run: colima start" ;;
+    *)      echo "    • Start the Docker service (e.g. sudo systemctl start docker)" ;;
+  esac
+  exit 1
+fi
 
 mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
+
+# Port selection. The cloud `cerefox web` ALSO defaults to 8000, so a machine running
+# both worlds collides. `port_busy` is best-effort (needs lsof; if absent we can't probe
+# and let `docker run` fail loudly). An explicit PORT= is respected (error if busy); the
+# default auto-steps by +10 past busy ports — and past 8000 itself when a cloud install
+# (same default) is present, to avoid a latent `cerefox web` collision.
+port_busy() {
+  command -v lsof >/dev/null 2>&1 || return 1   # no lsof → can't probe; treat as free
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+if [ "$PORT_EXPLICIT" = true ]; then
+  if port_busy "$PORT"; then
+    echo "✗ Port $PORT is already in use (you set PORT=$PORT). Choose a free port and re-run."
+    exit 1
+  fi
+else
+  cloud_present=false; [ -f "$HOME/.cerefox/.env" ] && cloud_present=true
+  attempts=0
+  while port_busy "$PORT" || { [ "$cloud_present" = true ] && [ "$PORT" = "$DEFAULT_PORT" ]; }; do
+    PORT=$((PORT + 10)); attempts=$((attempts + 1))
+    if [ "$attempts" -gt 50 ]; then
+      echo "✗ Couldn't find a free port near $DEFAULT_PORT. Re-run with an explicit PORT=."
+      exit 1
+    fi
+  done
+  if [ "$PORT" != "$DEFAULT_PORT" ]; then
+    if [ "$cloud_present" = true ]; then
+      echo "ℹ Port $DEFAULT_PORT is the cloud Cerefox default (and/or busy) — using $PORT for local."
+    else
+      echo "ℹ Port $DEFAULT_PORT was busy — using $PORT for local."
+    fi
+  fi
+fi
 
 # Embedder key: prefer the env; else, ONLY if a cloud ~/.cerefox/.env happens to exist,
 # borrow its OPENAI_API_KEY line as a convenience (we never read its Supabase creds).
@@ -36,6 +95,23 @@ OPENAI_FROM_CLOUD_ENV=false
 if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "$HOME/.cerefox/.env" ]; then
   OPENAI_API_KEY=$(grep -E '^OPENAI_API_KEY=' "$HOME/.cerefox/.env" | head -1 | sed -E 's/^OPENAI_API_KEY=//; s/^["'\'']//; s/["'\'']$//') || true
   [ -n "${OPENAI_API_KEY:-}" ] && OPENAI_FROM_CLOUD_ENV=true
+fi
+
+# Preserve any config overrides the user added to a prior local .env (we only manage
+# OPENAI + port), and forward them into the container. Same whitelist cerefox-local uses;
+# never the container-managed SUPABASE/DB/JWT vars.
+PASSTHROUGH_VARS="CEREFOX_MIN_SEARCH_SCORE CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_VERSION_RETENTION_HOURS CEREFOX_VERSION_CLEANUP_ENABLED CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
+PRESERVED_OVERRIDES=""
+ENV_ARGS=""
+if [ -f "$CONFIG_DIR/.env" ]; then
+  for v in $PASSTHROUGH_VARS; do
+    line=$(grep -E "^${v}=" "$CONFIG_DIR/.env" | head -1)
+    if [ -n "$line" ]; then
+      PRESERVED_OVERRIDES="${PRESERVED_OVERRIDES}${line}
+"
+      ENV_ARGS="$ENV_ARGS -e $line"
+    fi
+  done
 fi
 
 # 1. Pull + (re)start the container. It self-generates PGRST_JWT_SECRET on first boot
@@ -51,16 +127,19 @@ docker run -d --name "$CONTAINER" -p "$PORT:8000" \
   --restart unless-stopped \
   -v "$VOLUME:/var/lib/postgresql/data" \
   ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
+  $ENV_ARGS \
   "$IMAGE" >/dev/null
 
-# 2. Write the host config (OPENAI key + the port, for `cerefox-local upgrade`).
-#    NO JWT/URL here — those live in the container. Cloud ~/.cerefox/.env is untouched.
+# 2. Write the host config (OPENAI key + port + any preserved overrides). NO JWT/URL here
+#    — those live in the container. Cloud ~/.cerefox/.env is untouched.
 umask 077
 {
   echo "# Cerefox LOCAL host config. The access token lives in the container, not here;"
-  echo "# only the OpenAI key + port are stored. Manage with: cerefox-local init"
+  echo "# only the OpenAI key + port + optional CEREFOX_* tuning overrides are stored."
+  echo "# Add overrides (see docs/guides/configuration.md), then: cerefox-local init"
   echo "CEREFOX_LOCAL_PORT=$PORT"
   [ -n "${OPENAI_API_KEY:-}" ] && echo "OPENAI_API_KEY=$OPENAI_API_KEY"
+  [ -n "$PRESERVED_OVERRIDES" ] && printf '%s' "$PRESERVED_OVERRIDES"
 } > "$CONFIG_DIR/.env"
 
 # 3. Extract the host `cerefox-local` script from the image (single source of truth) and

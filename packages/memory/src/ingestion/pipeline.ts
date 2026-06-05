@@ -36,7 +36,7 @@ import {
 } from "./client-bridge.ts";
 import { fileToMarkdown } from "./file-to-markdown.ts";
 import {
-  DEFAULT_PIPELINE_SETTINGS,
+  loadPipelineSettings,
   type IngestResult,
   type IngestTextOptions,
   type PipelineSettings,
@@ -64,7 +64,7 @@ export class IngestionPipeline {
     this.db = new IngestionDbBridge(deps.supabase);
     this.apiKey = deps.openAiApiKey;
     this.embedderModel = deps.embedderModel ?? "text-embedding-3-small";
-    this.settings = { ...DEFAULT_PIPELINE_SETTINGS, ...(deps.settings ?? {}) };
+    this.settings = { ...loadPipelineSettings(), ...(deps.settings ?? {}) };
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

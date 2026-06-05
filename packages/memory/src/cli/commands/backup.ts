@@ -51,7 +51,9 @@ function utcStamp(): string {
 }
 
 async function action(options: BackupOptions): Promise<void> {
-  const outDir = resolve(expandHome(options.outputDir ?? "~/.cerefox/backups"));
+  const outDir = resolve(
+    expandHome(options.outputDir ?? process.env.CEREFOX_BACKUP_DIR ?? "~/.cerefox/backups"),
+  );
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
   const stamp = utcStamp();
@@ -123,8 +125,7 @@ export function registerBackup(program: Command): void {
     .description("Write a JSON snapshot of the knowledge base.")
     .option(
       "-o, --output-dir <dir>",
-      "Snapshot output directory.",
-      "~/.cerefox/backups",
+      "Snapshot output directory (default: CEREFOX_BACKUP_DIR or ~/.cerefox/backups).",
     )
     .option("-l, --label <label>", "Optional suffix added to the filename.")
     .option("--include-versions", "Include archived versions in the snapshot. (v0.5: ignored — current chunks only.)")

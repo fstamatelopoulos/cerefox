@@ -14,9 +14,45 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-/** Server-enforced response-size ceiling for MCP results. Agents can request
- *  smaller budgets via `max_bytes`; values above this are capped. */
+/** Built-in default response-size ceiling for MCP/EF results. */
 export const MAX_RESPONSE_BYTES = 200_000;
+
+/**
+ * Server-enforced response-size ceiling for MCP/Edge-Function results (agents
+ * can request smaller via `max_bytes`; larger is capped). Overridable via
+ * `CEREFOX_MAX_RESPONSE_BYTES`. Read by the Python runtime; restored after the
+ * TS migration. The web UI + CLI are intentionally unlimited and do not use this.
+ * Runtime-agnostic env read (Deno EF safely falls back to the default).
+ */
+export function getMaxResponseBytes(): number {
+  const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env?.CEREFOX_MAX_RESPONSE_BYTES;
+  if (raw === undefined || raw === "") return MAX_RESPONSE_BYTES;
+  const n = Number.parseInt(raw, 10);
+  return Number.isNaN(n) || n <= 0 ? MAX_RESPONSE_BYTES : n;
+}
+
+/** Built-in default cosine-similarity floor for hybrid/semantic search. */
+export const DEFAULT_MIN_SEARCH_SCORE = 0.5;
+
+/**
+ * Resolve the minimum cosine-similarity floor for hybrid/semantic search
+ * (vector-only matches below this are dropped; FTS matches always pass).
+ * Overridable via the `CEREFOX_MIN_SEARCH_SCORE` env var (0.0–1.0). The Python
+ * runtime read this; the TS migration dropped it — restored here as the single
+ * default used by the CLI, local/remote MCP, and the web API.
+ *
+ * Runtime-agnostic env read: works in Node/Bun; in the Deno Edge Function
+ * `process` may be absent, so it falls back to the built-in default (the cloud
+ * EF path doesn't use the host `.env` anyway).
+ */
+export function getMinSearchScore(): number {
+  const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env?.CEREFOX_MIN_SEARCH_SCORE;
+  if (raw === undefined || raw === "") return DEFAULT_MIN_SEARCH_SCORE;
+  const n = Number.parseFloat(raw);
+  return Number.isNaN(n) || n < 0 || n > 1 ? DEFAULT_MIN_SEARCH_SCORE : n;
+}
 
 export function applyByteBudget(
   rows: unknown[],

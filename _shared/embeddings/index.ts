@@ -17,25 +17,52 @@ export const OPENAI_EMBEDDING_URL = "https://api.openai.com/v1/embeddings";
 export const OPENAI_MODEL = "text-embedding-3-small";
 export const EMBEDDING_DIMENSIONS = 768;
 
+/**
+ * Resolve the OpenAI embedding endpoint/model/dimensions, applying `.env`
+ * overrides over the built-in defaults. These were configurable in the Python
+ * runtime; the TS migration hardcoded them.
+ *
+ * ⚠ Overriding the MODEL or DIMENSIONS is a BREAKING change: query vectors must
+ * match the stored vectors and the DB column is `vector(768)`. Changing either
+ * requires re-embedding the whole corpus (`cerefox server reindex`) and, for a
+ * non-768 model, a schema change. `CEREFOX_OPENAI_BASE_URL` (proxy/gateway) is
+ * the only safe one to flip on an existing KB.
+ *
+ * Runtime-agnostic env read; the Deno Edge Function (no host env) keeps the
+ * constants — matching the EF's "model config is a constant" design.
+ */
+export function openaiEmbeddingConfig(): { url: string; model: string; dimensions: number } {
+  const env =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+  const base = env.CEREFOX_OPENAI_BASE_URL?.replace(/\/+$/, "");
+  const dims = Number.parseInt(env.CEREFOX_OPENAI_EMBEDDING_DIMENSIONS ?? "", 10);
+  return {
+    url: base ? `${base}/embeddings` : OPENAI_EMBEDDING_URL,
+    model: env.CEREFOX_OPENAI_EMBEDDING_MODEL || OPENAI_MODEL,
+    dimensions: Number.isNaN(dims) || dims <= 0 ? EMBEDDING_DIMENSIONS : dims,
+  };
+}
+
 const EMBEDDING_MAX_RETRIES = 3;
 const EMBEDDING_INITIAL_BACKOFF_MS = 500; // 500ms → 1s → 2s
 
 /** Embed a single string. Used for the query vector in `cerefox_search`. */
 export async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
   let lastError: Error | null = null;
+  const cfg = openaiEmbeddingConfig();
 
   for (let attempt = 0; attempt < EMBEDDING_MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(OPENAI_EMBEDDING_URL, {
+      const response = await fetch(cfg.url, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: OPENAI_MODEL,
+          model: cfg.model,
           input: text,
-          dimensions: EMBEDDING_DIMENSIONS,
+          dimensions: cfg.dimensions,
         }),
       });
 
@@ -93,19 +120,20 @@ async function embedBatchSingleCall(
   apiKey: string,
 ): Promise<number[][]> {
   let lastError: Error | null = null;
+  const cfg = openaiEmbeddingConfig();
 
   for (let attempt = 0; attempt < EMBEDDING_MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(OPENAI_EMBEDDING_URL, {
+      const response = await fetch(cfg.url, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: OPENAI_MODEL,
+          model: cfg.model,
           input: texts,
-          dimensions: EMBEDDING_DIMENSIONS,
+          dimensions: cfg.dimensions,
         }),
       });
 

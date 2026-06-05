@@ -1,9 +1,9 @@
 # Quickstart -- Zero to First Document
 
-Get Cerefox running on your machine via the npm install path. **No source
-clone, no Python required.** Once you have a Supabase project (the one
-prerequisite — provisioning a free one takes a few minutes), the Cerefox
-install and setup below is about 5 minutes.
+Get Cerefox running on your machine via the npm install path (the **cloud /
+Supabase** backend). **No source clone required.** Once you have a Supabase
+project (the one prerequisite — provisioning a free one takes a few minutes),
+the Cerefox install and setup below takes ~15 minutes.
 
 > **Upgrading from an earlier version?** See [`upgrading.md`](upgrading.md)
 > for migration steps instead.
@@ -114,8 +114,9 @@ You should see results from the bundled self-docs.
 The path above is for **end users** (no clone). If you want to hack on Cerefox,
 clone the repo, run `bun install`, and use the contributor scripts
 (`bun scripts/db_deploy.ts`, `bun scripts/db_migrate.ts`). `uv` is only needed
-for the legacy Python MCP fallback. See [`setup-local.md`](setup-local.md) and
-`CONTRIBUTING.md`.
+for the legacy Python MCP fallback. See [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+(Want a no-cloud install instead? That's the self-hosted Docker backend —
+[`setup-local.md`](setup-local.md).)
 
 ---
 
@@ -125,7 +126,7 @@ for the legacy Python MCP fallback. See [`setup-local.md`](setup-local.md) and
   `cerefox document ingest-dir ./notes/` (recurses into sub-directories automatically)
 - **Search from the CLI**: `cerefox search "your query"`
 - **Discover all commands**: `cerefox --help`
-- **Run the web UI**: `cerefox web` (TypeScript — Hono backend + React SPA); see [`setup-local.md`](setup-local.md)
+- **Run the web UI**: `cerefox web` (TypeScript — Hono backend + React SPA); see [`cli.md`](cli.md)
 - **Connect more AI clients** (Cursor, Codex, ChatGPT GPT Actions, etc.):
   [`connect-agents.md`](connect-agents.md)
 - **Configuration reference**: [`configuration.md`](configuration.md)

@@ -14,6 +14,7 @@
 import { Hono } from "hono";
 
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
+import { getMinSearchScore } from "../../../../../_shared/mcp-tools/_utils.js";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
 
@@ -350,7 +351,7 @@ async function runSearch(
       p_alpha: 0.7,
       p_use_upgrade: false,
       p_project_id: projectId,
-      p_min_score: 0.0,
+      p_min_score: getMinSearchScore(),
     };
     if (metadataFilter) params.p_metadata_filter = metadataFilter;
     const { data, error } = await ctx.supabase.rpc(

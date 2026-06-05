@@ -37,7 +37,7 @@ jobs / CI / make targets that invoke them.
 
 ### TS scripts and `.env` resolution
 
-`bun scripts/<name>.ts` reads the same `.env` the Python CLI does. Precedence:
+`bun scripts/<name>.ts` reads the same `.env` the `cerefox` CLI does. Precedence:
 
 1. `CEREFOX_CONFIG_DIR` env var (explicit override; supports `~`).
 2. `./.env` in the current working directory (dev mode).

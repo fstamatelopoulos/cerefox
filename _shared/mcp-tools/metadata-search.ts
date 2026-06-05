@@ -7,7 +7,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { applyByteBudget, logUsage, MAX_RESPONSE_BYTES } from "./_utils.ts";
+import { applyByteBudget, getMaxResponseBytes, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
@@ -39,8 +39,9 @@ async function handler(
   }
 
   // Enforce byte ceiling for content mode
+  const ceiling = getMaxResponseBytes();
   const max_bytes = include_content
-    ? Math.min(requested_max_bytes ?? MAX_RESPONSE_BYTES, MAX_RESPONSE_BYTES)
+    ? Math.min(requested_max_bytes ?? ceiling, ceiling)
     : null;
 
   const params: Record<string, unknown> = {

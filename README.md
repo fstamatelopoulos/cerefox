@@ -45,7 +45,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and anon key; no Python install needed |
 | **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. (A frozen Python MCP server also ships for repo-clone users: `uv run cerefox mcp`.) |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
-| **Markdown-first ingest** | `.md` / `.txt` (Markdown is the storage format; PDF/DOCX conversion was dropped in v0.7 — convert upstream) |
+| **Markdown-first ingest** | `.md` / `.txt` / `.docx` (Markdown is the storage format; `.docx` is converted via `mammoth` on ingest, fidelity varies. PDF is not supported — convert upstream) |
 | **Batch ingest** | `cerefox document ingest-dir` recurses directories |
 | **Deduplication** | SHA-256 content hash; re-ingesting the same file is a no-op |
 | **Backup and restore** | JSON snapshots, optional git commit |
@@ -60,13 +60,13 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 
 ## Project status
 
-Cerefox is a single-maintainer open-source project. As of **v0.10.0** it runs
-two ways: against a hosted **Supabase** project, or **fully local / self-hosted**
-in a single Docker container (no cloud, no account). The whole runtime — CLI,
-MCP server, web UI, ingestion, and server-side deploy — ships in the
+As of **v0.10.0** Cerefox runs two ways: against a hosted **Supabase** project,
+or **fully local / self-hosted** in a single Docker container (no cloud, no
+account). The whole runtime — CLI, MCP server, web UI, ingestion, and
+server-side deploy — ships in the
 [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory) npm package
-(no Python, no repo clone); the local backend bundles that same runtime plus
-Postgres + pgvector into one image.
+(no repo clone); the local backend bundles that same runtime plus Postgres +
+pgvector into one image.
 
 Until **v1.0.0** the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
 aspirational — breaking changes can land in minor versions when there's a good
