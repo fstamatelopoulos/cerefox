@@ -18,6 +18,28 @@ import type { MCPSupabaseClient } from "./types.ts";
  *  smaller budgets via `max_bytes`; values above this are capped. */
 export const MAX_RESPONSE_BYTES = 200_000;
 
+/** Built-in default cosine-similarity floor for hybrid/semantic search. */
+export const DEFAULT_MIN_SEARCH_SCORE = 0.5;
+
+/**
+ * Resolve the minimum cosine-similarity floor for hybrid/semantic search
+ * (vector-only matches below this are dropped; FTS matches always pass).
+ * Overridable via the `CEREFOX_MIN_SEARCH_SCORE` env var (0.0–1.0). The Python
+ * runtime read this; the TS migration dropped it — restored here as the single
+ * default used by the CLI, local/remote MCP, and the web API.
+ *
+ * Runtime-agnostic env read: works in Node/Bun; in the Deno Edge Function
+ * `process` may be absent, so it falls back to the built-in default (the cloud
+ * EF path doesn't use the host `.env` anyway).
+ */
+export function getMinSearchScore(): number {
+  const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env?.CEREFOX_MIN_SEARCH_SCORE;
+  if (raw === undefined || raw === "") return DEFAULT_MIN_SEARCH_SCORE;
+  const n = Number.parseFloat(raw);
+  return Number.isNaN(n) || n < 0 || n > 1 ? DEFAULT_MIN_SEARCH_SCORE : n;
+}
+
 export function applyByteBudget(
   rows: unknown[],
   maxBytes: number,
