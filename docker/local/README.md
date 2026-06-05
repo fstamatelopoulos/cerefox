@@ -135,8 +135,9 @@ works and the JWT is sourced in-container). The bin reads `CEREFOX_PROG_NAME`, s
 `cerefox-local` by the shim, so help/usage read the right name.
 
 Default image: `ghcr.io/fstamatelopoulos/cerefox-local:latest` (published by
-`.github/workflows/local-image.yml` on a GitHub Release; pin via
-`CEREFOX_LOCAL_IMAGE=…:v0.10.0`). The one-liner ships as a Release asset:
+`.github/workflows/local-image.yml`, opt-in via `cut_release.ts --docker-publish`
+or a manual dispatch; pin via `CEREFOX_LOCAL_IMAGE=…:v0.10.0`). The one-liner ships as a
+Release asset:
 `curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh`.
 
 Validated: `/app/` + Help docs, project CRUD, ingest (768-dim OpenAI embeddings), and

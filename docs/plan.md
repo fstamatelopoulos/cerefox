@@ -3353,10 +3353,12 @@ image (`-e OPENAI_API_KEY`, `-p PORT:8000`, named volume) — container self-gen
 (symlink into `~/.local/bin`); (3) optional `cerefox-local configure-agent`; (4) ships as
 a Release asset → `curl -fsSL …/releases/latest/download/install-local.sh | sh`.
 
-**`cut_release.ts`:** upload `install-local.sh` as a Release asset (mirrors `install.sh`).
-The ghcr image build+push **already auto-fires** via `local-image.yml` on
-`release: published` (no build step belongs in the script) — just add a post-cut note
-pointing at the Actions run.
+**`cut_release.ts`:** uploads `install-local.sh` as a Release asset (mirrors `install.sh`)
+and gates the ghcr image build+push behind **`--docker-publish`** (off by default,
+mirroring `--npm-publish`) — it dispatches `local-image.yml` (`publish_latest=true` for a
+stable version). `local-image.yml` is **dispatch-only** (no `release: published` trigger):
+a GitHub Release is a milestone; shipping npm/ghcr artifacts is a uniform opt-in. So a
+full v0.10.0 cut is `bun scripts/cut_release.ts 0.10.0 --npm-publish --docker-publish`.
 
 **Docs:** rewrite `docs/guides/setup-local.md` around World B (one-liner + `cerefox-local`
 lifecycle + MCP wiring); pointer from `quickstart.md`; include in the **bundled** guides

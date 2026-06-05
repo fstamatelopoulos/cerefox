@@ -24,7 +24,8 @@ are independent worlds — **separate installers, separate command names** (`cer
   (db-init → postgres/postgrest/cerefox-server). The container **self-generates its JWT
   secret on boot and mints the access token internally — the token never leaves the
   container.** Published multi-arch (amd64+arm64) to **ghcr.io/.../cerefox-local** by
-  `.github/workflows/local-image.yml` on release.
+  `.github/workflows/local-image.yml` — opt-in via `cut_release.ts --docker-publish`
+  (decoupled from cutting a Release, same policy as the npm publish).
 - **One-line local installer** (`docker/local/install-local.sh`, shipped as a Release
   asset): `curl -fsSL …/install-local.sh | sh`. Docker-only — pulls the image, runs it
   with `--restart unless-stopped`, waits for readiness, and installs a `cerefox-local`
