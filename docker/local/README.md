@@ -107,23 +107,37 @@ docker-compose -f docker/local/compose.yml down -v   # stop + WIPE the spike vol
 
 ## All-in-one image (P1) + installer (P2) — ✅ BUILT + VALIDATED
 
-The single-container image and the Model-B installer are done. Quickstart:
+The single-container image and the **World-B installer** are done. World B is the
+**Docker-only** local world: no Node/Bun on the host, its own `cerefox-local` command,
+and the JWT **never leaves the container** (db-init self-generates the secret + mints the
+`service_role` JWT into `/run` on boot; the host stores only `OPENAI_API_KEY`).
 
 ```sh
-# End-user path — installs + runs from the PUBLISHED multi-arch ghcr image
-# (pulled automatically; generates a per-install JWT secret; writes a SEPARATE client
-# config at ~/.cerefox/local; never touches your cloud ~/.cerefox/.env):
+# End-user path — installs + runs from the PUBLISHED multi-arch ghcr image and drops a
+# host `cerefox-local` command (symlinked into ~/.local/bin). Never touches cloud
+# ~/.cerefox/.env (only reads its OPENAI_API_KEY line as a convenience):
 OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
 #   → http://localhost:8000/app/   (PORT=8017 etc. to change)
-#   CLI/MCP against local:  CEREFOX_CONFIG_DIR=~/.cerefox/local cerefox <cmd>
+#   Then:  cerefox-local status | search "…" | document ingest notes.md
+#          cerefox-local configure-agent       # wire an MCP client
+#          cerefox-local upgrade | stop | start | uninstall [--purge]
 
 # Contributor / pre-release — build locally and point the installer at it:
 docker build -f docker/local/Dockerfile -t cerefox-local:dev .
 CEREFOX_LOCAL_IMAGE=cerefox-local:dev sh docker/local/install-local.sh
 ```
 
-Default image: `ghcr.io/fstamatelopoulos/cerefox-local:latest` (published by the
-release workflow on a GitHub Release; pin a tag via `CEREFOX_LOCAL_IMAGE=…:v0.10.0`).
+`cerefox-local` is a host script bundled in the image at `/opt/cerefox/cerefox-local`;
+the installer `docker cp`s it out (single source of truth). It handles lifecycle verbs on
+the host and proxies KB verbs into the container via
+`docker exec -i … sh -c '. /run/cerefox-runtime.env; exec cerefox "$@"'` (so MCP stdio
+works and the JWT is sourced in-container). The bin reads `CEREFOX_PROG_NAME`, set to
+`cerefox-local` by the shim, so help/usage read the right name.
+
+Default image: `ghcr.io/fstamatelopoulos/cerefox-local:latest` (published by
+`.github/workflows/local-image.yml` on a GitHub Release; pin via
+`CEREFOX_LOCAL_IMAGE=…:v0.10.0`). The one-liner ships as a Release asset:
+`curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh`.
 
 Validated: `/app/` + Help docs, project CRUD, ingest (768-dim OpenAI embeddings), and
 hybrid search all work in one container; data persists in the named volume. Supervised

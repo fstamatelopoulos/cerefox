@@ -746,6 +746,22 @@ async function main(): Promise<void> {
     }
   }
 
+  // Attach install-local.sh too (the LOCAL/self-hosted world's one-liner), so its
+  // `latest/download/install-local.sh` URL stays current. The local Docker image
+  // itself is built + pushed to ghcr by `.github/workflows/local-image.yml`, which
+  // fires automatically on this published Release — NOT here.
+  const installLocalSh = join(REPO_ROOT, "docker", "local", "install-local.sh");
+  if (existsSync(installLocalSh)) {
+    info("Attaching install-local.sh to the GitHub Release…");
+    const upLocal = run("gh", ["release", "upload", tag, installLocalSh, "--clobber"]);
+    if (upLocal.status === 0) {
+      ok("install-local.sh uploaded to the release.");
+    } else {
+      warn(`Could not upload install-local.sh: ${upLocal.stderr.trim() || "unknown error"}. Upload manually with: gh release upload ${tag} docker/local/install-local.sh`);
+    }
+  }
+  info("Note: the ghcr local image publishes via the 'Publish local image' workflow on this Release — track it under Actions.");
+
   if (args.npmPublish) {
     info("Triggering release.yml workflow with publish_to_npm=true…");
     // `gh workflow run` queues the workflow; we don't block on its completion

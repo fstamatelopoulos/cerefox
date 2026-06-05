@@ -8,6 +8,11 @@ install and setup below is about 5 minutes.
 > **Upgrading from an earlier version?** See [`upgrading.md`](upgrading.md)
 > for migration steps instead.
 
+> **Want no cloud at all?** Cerefox also runs **fully local** — one Docker
+> container, no Supabase account, no Node/Bun on the host. See
+> [`setup-local.md`](setup-local.md). This quickstart covers the hosted-Supabase
+> path.
+
 ---
 
 ## Prerequisites

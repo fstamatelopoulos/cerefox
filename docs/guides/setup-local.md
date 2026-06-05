@@ -1,184 +1,149 @@
-# Local Setup Guide
+# Local / Self-Hosted Setup (Docker)
 
-Run the Cerefox web server and database on your own machine using Docker for Postgres+pgvector. Embeddings use the OpenAI API — an `OPENAI_API_KEY` is required even for local setups.
+Run Cerefox **fully on your own machine** — no hosted Supabase, no cloud database. One
+Docker container bundles everything: Postgres + pgvector, the PostgREST Data API, and the
+Cerefox web server. You get the same web UI, CLI, and MCP server as the cloud setup.
 
-This guide is aimed at **contributors** who want a fully local stack (no hosted Supabase). End users on a hosted Supabase project should follow [`quickstart.md`](quickstart.md) instead.
+> **Embeddings still use the OpenAI API.** An `OPENAI_API_KEY` is required even for a
+> local setup (the database and web server are local; embedding generation is not). A
+> fully offline embedder is on the roadmap.
+
+## Cloud vs. Local — pick one
+
+Cerefox has two independent "worlds". Most people run **one or the other**:
+
+| | Cloud / Supabase | **Local / self-hosted (this guide)** |
+|---|---|---|
+| Install | `curl … install.sh \| sh` (npm) | `curl … install-local.sh \| sh` (Docker) |
+| Command | `cerefox` | `cerefox-local` |
+| Backend | hosted Supabase | a Docker container on your machine |
+| Host runtime | Node/Bun | **Docker only** |
+
+The two never collide — different installer, different command name — so even if you run
+both, your cloud `~/.cerefox/.env` is never touched by the local installer.
 
 ---
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- **Node.js 20+** or **Bun 1.0+** (the CLI runtime)
-- An OpenAI API key (for embeddings — [platform.openai.com/api-keys](https://platform.openai.com/api-keys))
+- **Docker** (Docker Desktop, or [Colima](https://github.com/abiosoft/colima): `colima start`).
+- An **OpenAI API key** — [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
 
-> The Python implementation is legacy and slated for removal in a future release; only the Python MCP server remains as a fallback. `uv` is only needed if you intend to run that fallback (`uv run cerefox mcp`).
-
----
-
-## Step 1 — Clone and install
-
-```bash
-git clone https://github.com/fstamatelopoulos/cerefox.git
-cd cerefox
-bun install
-```
+That's it. No Node, Bun, Postgres, or repo clone needed.
 
 ---
 
-## Step 2 — Start Postgres with pgvector
-
-The included `docker-compose.yml` spins up a Postgres 16 instance with the pgvector extension pre-installed:
+## Step 1 — Install
 
 ```bash
-docker compose up -d postgres
+OPENAI_API_KEY=sk-... sh -c "$(curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh)"
 ```
 
-Default connection details (overridable in `.env`):
+This pulls the published multi-arch image (`amd64` + `arm64`), starts the container, and
+installs a `cerefox-local` command (symlinked into `~/.local/bin`). Pick a different port
+with `PORT=8017 …`.
 
-| Setting | Default |
-|---------|---------|
-| Host | `localhost` |
-| Port | `5432` |
-| User | `cerefox` |
-| Password | `cerefox` |
-| Database | `cerefox` |
+> If the installer warns that `~/.local/bin` isn't on your `PATH`, add it:
+> ```bash
+> echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+> ```
+
+The web UI is now at **http://localhost:8000/app/** (or your chosen port).
+
+**How the credential works:** the container generates its own JWT secret on first boot and
+mints the access token internally — the token never leaves the container. The only secret
+stored on your host is `OPENAI_API_KEY` (in `~/.cerefox/local/.env`), so `upgrade` can
+re-supply it.
 
 ---
 
-## Step 3 — Create a `.env` file
+## Step 2 — Use the CLI
+
+`cerefox-local` runs the same commands as the cloud `cerefox`, but against your local
+container:
 
 ```bash
-cp .env.example .env
+cerefox-local status                                   # is it running? what URL?
+cerefox-local document ingest my-notes.md --project-name personal
+cerefox-local search "what did I write about planning?"
+cerefox-local document list
 ```
 
-Edit `.env` for local Docker:
-
-```env
-# Local Postgres (Docker)
-CEREFOX_DATABASE_URL=postgresql://cerefox:cerefox@localhost:5432/cerefox
-
-# For local-only use, Supabase keys are not required.
-# The web UI and CLI will work without them if you skip the Supabase MCP integration.
-CEREFOX_SUPABASE_URL=
-CEREFOX_SUPABASE_KEY=
-
-# OpenAI API key for embeddings (text-embedding-3-small)
-OPENAI_API_KEY=sk-...
-```
+KB verbs (`search`, `document`, `project`, `metadata`, `audit`, `config`, `guides`, `mcp`)
+run inside the container; lifecycle verbs run on the host (next section).
 
 ---
 
-## Step 4 — Deploy the schema
+## Step 3 — Connect an AI agent (MCP)
 
 ```bash
-bun scripts/db_deploy.ts
+cerefox-local configure-agent
 ```
 
-This creates all tables, indexes, and RPC functions. Run with `--dry-run` to preview SQL without executing.
-
-To start fresh:
-
-```bash
-bun scripts/db_deploy.ts --reset   # drops all cerefox_ tables first (typed-`yes` guard)
-```
-
-> End users on a hosted Supabase project use `cerefox server deploy` instead (no clone). The `bun scripts/db_*.ts` scripts are the low-level contributor path.
+If the `claude` CLI is present this registers an MCP server named `cerefox-local` with
+Claude Code automatically. Otherwise it prints the snippet to add to your client — the MCP
+command is simply `cerefox-local mcp` (stdio), which the client launches per session. The
+client never needs a token; the container holds it.
 
 ---
 
-## Step 5 — Verify the setup
+## Managing the container
+
+All host-side, via `cerefox-local`:
 
 ```bash
-bun scripts/db_migrate.ts --status
+cerefox-local start          # start a stopped container
+cerefox-local stop           # stop it (your data persists in the Docker volume)
+cerefox-local restart
+cerefox-local logs -f        # follow the logs
+cerefox-local upgrade        # pull the latest image + recreate (keeps data + OPENAI key)
+cerefox-local uninstall          # remove the container, KEEP the data volume
+cerefox-local uninstall --purge  # remove the container AND delete the data volume
 ```
 
-You should see the schema reported as up to date with all migrations applied.
+`upgrade` is the single update path: it pulls the newest image, recreates the container,
+and refreshes the `cerefox-local` script itself. Because the CLI, web server, PostgREST,
+and database schema all ship together in one versioned image, they never drift out of
+sync.
 
 ---
 
-## Step 6 — Ingest your first document
+## Where things live
 
-```bash
-# Ingest a markdown file
-cerefox document ingest my-notes.md --project-name "personal"
-
-# Or paste content from stdin
-echo "# Quick Note\n\nThis is a quick note." | cerefox document ingest --paste --title "Quick Note"
-```
-
-Each ingest calls the OpenAI embedding API once per batch of chunks (fast, typically under a second).
-
----
-
-## Step 7 — Start the web UI
-
-```bash
-cerefox web
-```
-
-Open [http://localhost:8000](http://localhost:8000) in your browser.
-
-For development with auto-reload:
-
-```bash
-cerefox web --reload
-```
-
----
-
-## Step 8 — Search from the CLI
-
-```bash
-# Hybrid search (recommended)
-cerefox search "what did I write about project planning?"
-
-# Keyword-only search
-cerefox search "meeting notes" --mode fts
-
-# Semantic search
-cerefox search "ideas about creativity" --mode semantic
-```
-
----
-
-## Running everything at once
-
-The `docker-compose.yml` also includes a `cerefox` service that runs the web UI:
-
-```bash
-docker compose up -d
-```
-
-Web UI will be at [http://localhost:8000](http://localhost:8000).
-
----
-
-## Stopping services
-
-```bash
-docker compose down          # stop, keep data
-docker compose down -v       # stop and delete database volume
-```
-
----
-
-## Updating the schema
-
-When a new version of Cerefox introduces schema changes, run:
-
-```bash
-bun scripts/db_migrate.ts            # --status to preview, --dry-run to see SQL
-```
-
-This applies incremental migrations without losing data. Always back up first (see `ops-scripts.md`). End users on a hosted Supabase project run `cerefox server deploy` instead.
+| Thing | Location |
+|---|---|
+| Container | name `cerefox-local` (override: `CEREFOX_LOCAL_CONTAINER`) |
+| Your data | Docker volume `cerefox_local_pgdata` (survives `stop`/`upgrade`) |
+| Host config | `~/.cerefox/local/.env` (OPENAI key + port only — **no token**) |
+| Host command | `~/.cerefox/local/cerefox-local`, symlinked to `~/.local/bin/cerefox-local` |
 
 ---
 
 ## Troubleshooting
 
-**pgvector extension not found**
-Make sure you're using the `pgvector/pgvector:pg16` Docker image (included in `docker-compose.yml`). Raw Postgres images do not include pgvector.
+**`docker not found` / can't connect** — start Docker Desktop, or `colima start`.
 
-**"Supabase is not configured" error**
-The CLI and web UI show this error if `CEREFOX_SUPABASE_URL` / `CEREFOX_SUPABASE_KEY` are empty. For local Docker setups, the app uses the direct Postgres URL (`CEREFOX_DATABASE_URL`) for schema deployment but the Supabase client for queries. Set up a local Supabase instance or use the hosted free tier (see `setup-supabase.md`).
+**`cerefox-local: command not found`** — `~/.local/bin` isn't on your `PATH` (see Step 1).
+
+**`container 'cerefox-local' is not running`** — `cerefox-local start` (or `status` to
+check). After a reboot the container may be stopped depending on your Docker settings.
+
+**Ingest/search fail with no embeddings** — `OPENAI_API_KEY` wasn't set at install time.
+Re-run the installer with the key, or set it and `cerefox-local upgrade`.
+
+**Port already in use** — re-install with a free port: `PORT=8017 sh -c "$(curl -fsSL …/install-local.sh)"`.
+
+---
+
+## Contributor notes
+
+To build + test the image from a checkout (instead of pulling ghcr):
+
+```bash
+docker build -f docker/local/Dockerfile -t cerefox-local:dev .
+CEREFOX_LOCAL_IMAGE=cerefox-local:dev sh docker/local/install-local.sh
+```
+
+See [`docker/local/README.md`](../../docker/local/README.md) for the image internals
+(s6-overlay supervision, the `/rest/v1` proxy, the pinned PostgREST version) and
+`docs/research/local-cerefox-design.md` for the design of record.

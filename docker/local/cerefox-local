@@ -1,0 +1,150 @@
+#!/usr/bin/env sh
+# cerefox-local — the host-side command for the LOCAL (Docker) Cerefox world.
+#
+# Two kinds of verbs:
+#   1. HOST verbs (handled here) — manage the container + the host's MCP config:
+#        start | stop | restart | upgrade | uninstall | status | logs | configure-agent
+#   2. EVERYTHING ELSE — proxied INTO the container's bundled `cerefox` binary via
+#      `docker exec`, sourcing the in-container runtime env (the service_role JWT lives
+#      ONLY in the container; it never touches the host). So:
+#        cerefox-local search "…"      → in-container `cerefox search "…"`
+#        cerefox-local document list   → in-container `cerefox document list`
+#        cerefox-local mcp             → in-container `cerefox mcp` (stdio over docker exec -i)
+#
+# Installed by docker/local/install-local.sh. The cloud/Supabase world keeps using the
+# separate npm `cerefox` command — the two never collide.
+set -eu
+
+CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
+CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
+IMAGE="${CEREFOX_LOCAL_IMAGE:-ghcr.io/fstamatelopoulos/cerefox-local:latest}"
+VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
+ENV_FILE="$CONFIG_DIR/.env"
+
+die() { echo "✗ $*" >&2; exit 1; }
+need_docker() { command -v docker >/dev/null 2>&1 || die "docker not found"; }
+is_running() { [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo false)" = "true" ]; }
+host_port() {
+  # The published host port for container :8000 (so we can print the right URL).
+  docker inspect -f '{{range $p, $c := .NetworkSettings.Ports}}{{if eq $p "8000/tcp"}}{{(index $c 0).HostPort}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null || true
+}
+
+# Recreate the container from the persisted config (used by `upgrade`). Reads the
+# host port + OPENAI key from $ENV_FILE so an upgrade preserves them.
+recreate() {
+  need_docker
+  [ -f "$ENV_FILE" ] || die "no config at $ENV_FILE — run install-local.sh first"
+  # shellcheck disable=SC1090
+  PORT="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_PORT:-8000}")"
+  OPENAI_API_KEY="$(. "$ENV_FILE"; echo "${OPENAI_API_KEY:-}")"
+  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  # shellcheck disable=SC2086
+  docker run -d --name "$CONTAINER" -p "$PORT:8000" \
+    -v "$VOLUME:/var/lib/postgresql/data" \
+    ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
+    "$IMAGE" >/dev/null
+  echo "✓ container (re)started → http://localhost:$PORT/app/"
+}
+
+usage() {
+  cat <<EOF
+cerefox-local — manage + use your local (Docker) Cerefox.
+
+Lifecycle (handled on the host):
+  start | up            start the stopped container
+  stop  | down          stop the container (data persists in the volume)
+  restart               restart the container
+  upgrade               pull the latest image + recreate (keeps your data + OPENAI key)
+  uninstall [--purge]   remove the container (--purge also DELETES the data volume)
+  status                show container state + URL
+  logs [-f]             show container logs
+  configure-agent       wire an MCP client to this local server (Claude Code, etc.)
+
+Knowledge base (run inside the container — same as the cloud CLI):
+  search · document · project · metadata · audit · config · guides · mcp · …
+  e.g.  cerefox-local search "release process"
+        cerefox-local document ingest notes.md --project-name personal
+
+Run 'cerefox-local <group> --help' for KB verbs.
+EOF
+}
+
+cmd="${1:-}"; [ "$#" -gt 0 ] && shift || true
+
+case "$cmd" in
+  ""|-h|--help|help)
+    usage
+    # Append the in-container KB help when the container is up, so a single
+    # `--help` shows both worlds. (The container's commander knows only the KB verbs.)
+    if [ "$cmd" != "" ] && is_running; then
+      echo; echo "--- knowledge-base verbs (from the container) ---"
+      docker exec -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" \
+        sh -c '. /run/cerefox-runtime.env 2>/dev/null; exec cerefox --help' 2>/dev/null || true
+    fi
+    ;;
+
+  start|up)      need_docker; docker start "$CONTAINER" >/dev/null && echo "✓ started → http://localhost:$(host_port)/app/" ;;
+  stop|down)     need_docker; docker stop "$CONTAINER"  >/dev/null && echo "✓ stopped (data kept)" ;;
+  restart)       need_docker; docker restart "$CONTAINER" >/dev/null && echo "✓ restarted → http://localhost:$(host_port)/app/" ;;
+  status)
+    need_docker
+    if is_running; then echo "● running   $CONTAINER   → http://localhost:$(host_port)/app/";
+    elif docker inspect "$CONTAINER" >/dev/null 2>&1; then echo "○ stopped   $CONTAINER   (run: cerefox-local start)";
+    else echo "✗ not installed   (run install-local.sh)"; fi
+    ;;
+  logs)          need_docker; docker logs "$@" "$CONTAINER" ;;
+
+  upgrade)
+    need_docker
+    echo "Pulling $IMAGE …"; docker pull "$IMAGE"
+    recreate
+    # Refresh this host script from the new image (atomic rename → safe mid-run).
+    dst="$CONFIG_DIR/cerefox-local"; tmp="$CONFIG_DIR/.cerefox-local.new"
+    if docker cp "$CONTAINER:/opt/cerefox/cerefox-local" "$tmp" 2>/dev/null; then
+      chmod +x "$tmp"; mv "$tmp" "$dst" && echo "✓ refreshed cerefox-local from the new image"
+    fi
+    ;;
+
+  uninstall)
+    need_docker
+    purge=false; [ "${1:-}" = "--purge" ] && purge=true
+    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    echo "✓ container removed"
+    if [ "$purge" = true ]; then
+      docker volume rm "$VOLUME" >/dev/null 2>&1 || true
+      echo "✓ data volume '$VOLUME' DELETED"
+    else
+      echo "  data volume '$VOLUME' kept (use --purge to delete it)"
+    fi
+    ;;
+
+  configure-agent)
+    # Host-side: wire an MCP client to the local server. The MCP server runs INSIDE
+    # the container, launched per-session via `docker exec -i`. We register the host
+    # `cerefox-local mcp` wrapper so the client never needs the JWT.
+    self="$(command -v cerefox-local || echo "$CONFIG_DIR/cerefox-local")"
+    if command -v claude >/dev/null 2>&1; then
+      claude mcp add cerefox-local -- "$self" mcp && echo "✓ added MCP server 'cerefox-local' to Claude Code"
+    else
+      cat <<EOF
+Add this MCP server to your client (command + args form):
+
+  command: $self
+  args:    ["mcp"]
+
+For Claude Code:  claude mcp add cerefox-local -- $self mcp
+The container holds the credential; the client needs no token.
+EOF
+    fi
+    ;;
+
+  *)
+    # Proxy any other verb into the container's bundled cerefox binary.
+    need_docker
+    is_running || die "container '$CONTAINER' is not running — run: cerefox-local start"
+    # -i so stdio (notably `mcp`) passes through; -t only when attached to a TTY.
+    tflag=""; [ -t 0 ] && [ -t 1 ] && tflag="-t"
+    exec docker exec -i $tflag -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" \
+      sh -c '. /run/cerefox-runtime.env 2>/dev/null; exec cerefox "$@"' cerefox "$cmd" "$@"
+    ;;
+esac
