@@ -52,6 +52,21 @@ fi
 
 mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
 
+# Port sanity. The cloud `cerefox web` ALSO defaults to 8000, so a machine running both
+# worlds will collide. Warn on the shared default when a cloud install is present, and
+# fail fast (with guidance) if the chosen port is already bound — better than the
+# container silently grabbing it (or `docker run` erroring opaquely later).
+if [ "$PORT" = "8000" ] && [ -f "$HOME/.cerefox/.env" ]; then
+  echo "⚠ A cloud Cerefox install (~/.cerefox/.env) is present and BOTH default to port 8000."
+  echo "  Running 'cerefox web' (cloud) and this local server at once will collide on 8000."
+  echo "  If you use both, pick a distinct local port: PORT=8787 sh install-local.sh"
+fi
+if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "✗ Port $PORT is already in use on this host. Re-run with a free port, e.g.:"
+  echo "    PORT=8787 sh install-local.sh"
+  exit 1
+fi
+
 # Embedder key: prefer the env; else, ONLY if a cloud ~/.cerefox/.env happens to exist,
 # borrow its OPENAI_API_KEY line as a convenience (we never read its Supabase creds).
 OPENAI_FROM_CLOUD_ENV=false
