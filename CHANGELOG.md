@@ -9,7 +9,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Local / self-hosted Cerefox backend (new deployment mode).** Run Cerefox entirely
+on your own machine — Postgres + pgvector + PostgREST + cerefox-server in one
+container — with no cloud dependency. Reuses the existing schema, RPCs, MCP handlers,
+web app, and supabase-js data client unchanged (config-only); cloud deployments are
+unaffected.
+
+### Added
+
+- **All-in-one Docker image** (`docker/local/Dockerfile`): pgvector + pinned PostgREST
+  + the bundled app, supervised by **s6-overlay** (db-init → postgres/postgrest/
+  cerefox-server; auto-restart). Published multi-arch (amd64+arm64) to
+  **ghcr.io/.../cerefox-local** by `.github/workflows/local-image.yml` on release.
+- **`docker/local/install-local.sh`** — one-command local install: pulls the published
+  image, generates a per-install JWT secret, writes a **separate `~/.cerefox/local`
+  client config** (cloud `~/.cerefox/.env` untouched), and propagates the OpenAI key.
+- **`/rest/v1` reverse-proxy in cerefox-server** (`registerPostgrestProxy`), mounted
+  only when `CEREFOX_POSTGREST_UPSTREAM` is set — so it is **inert in cloud**. Makes the
+  server the single local gateway (UI + `/api/v1` + `/rest/v1`).
+- **Version-coupling CI** (`.github/workflows/version-coupling.yml`): runs the
+  read/write smoke against the pinned PostgREST so a `supabase-js` bump that breaks the
+  local stack fails CI.
+
+Design: `docs/research/local-cerefox-design.md`. Remaining (post-v0.10.0): fold the
+installer into the shared `install.sh`/`cerefox init`; minor `schema-version.bundled`
+cosmetic in the image.
 
 ---
 

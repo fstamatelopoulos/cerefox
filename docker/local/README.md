@@ -110,26 +110,28 @@ docker-compose -f docker/local/compose.yml down -v   # stop + WIPE the spike vol
 The single-container image and the Model-B installer are done. Quickstart:
 
 ```sh
-# Build the image (from repo root):
-docker build -f docker/local/Dockerfile -t cerefox-local:dev .
-
-# Install + run (generates a per-install JWT secret, writes a SEPARATE client
-# config at ~/.cerefox/local, never touches your cloud ~/.cerefox/.env):
-PORT=8000 OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
-#   → http://localhost:8000/app/
+# End-user path — installs + runs from the PUBLISHED multi-arch ghcr image
+# (pulled automatically; generates a per-install JWT secret; writes a SEPARATE client
+# config at ~/.cerefox/local; never touches your cloud ~/.cerefox/.env):
+OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
+#   → http://localhost:8000/app/   (PORT=8017 etc. to change)
 #   CLI/MCP against local:  CEREFOX_CONFIG_DIR=~/.cerefox/local cerefox <cmd>
 
-# Or a bare run (self-generates the JWT; web UI works, external CLI needs the installer):
-docker run -d --name cerefox -p 8000:8000 -v cerefox_pgdata:/var/lib/postgresql/data \
-  -e OPENAI_API_KEY=sk-... cerefox-local:dev
+# Contributor / pre-release — build locally and point the installer at it:
+docker build -f docker/local/Dockerfile -t cerefox-local:dev .
+CEREFOX_LOCAL_IMAGE=cerefox-local:dev sh docker/local/install-local.sh
 ```
 
-Validated: `/app/`, project CRUD, ingest (768-dim OpenAI embeddings), and hybrid
-search all work in one container; data persists in the named volume. Supervised by
-**s6-overlay** (db-init oneshot → postgres/postgrest/cerefox-server longruns;
-auto-respawns a crashed service — validated).
-**Remaining (deferred):** ghcr.io multi-arch publish, folding the installer into the
-shared `install.sh` / `cerefox init`, and a `schema-version.bundled=null` cosmetic.
+Default image: `ghcr.io/fstamatelopoulos/cerefox-local:latest` (published by the
+release workflow on a GitHub Release; pin a tag via `CEREFOX_LOCAL_IMAGE=…:v0.10.0`).
+
+Validated: `/app/` + Help docs, project CRUD, ingest (768-dim OpenAI embeddings), and
+hybrid search all work in one container; data persists in the named volume. Supervised
+by **s6-overlay** (db-init oneshot → postgres/postgrest/cerefox-server longruns;
+auto-respawns a crashed service — validated). The published multi-arch image
+(amd64+arm64) pulls + runs from ghcr.
+**Remaining (deferred):** folding the installer into the shared `install.sh` /
+`cerefox init`, and a `schema-version.bundled=null` cosmetic.
 
 How the image is built (reference):
 

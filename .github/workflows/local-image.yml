@@ -62,5 +62,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Drop the SLSA provenance/SBOM attestation manifests (the "unknown/unknown"
+          # entries) for a clean 2-arch manifest. Optional supply-chain metadata; the
+          # image is unaffected. Re-enable (provenance: mode=max) if attestations are wanted.
+          provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max

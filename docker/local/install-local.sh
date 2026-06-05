@@ -4,9 +4,14 @@
 # matching service_role JWT is written to a SEPARATE client config so the local
 # setup coexists with any cloud setup. Your cloud ~/.cerefox/.env is NEVER touched.
 #
-# Usage:
+# Usage (pulls the published ghcr image by default):
 #   sh docker/local/install-local.sh
 #   PORT=8000 OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
+#
+# Default image: ghcr.io/fstamatelopoulos/cerefox-local:latest (published by the
+# release workflow on a GitHub Release). Override for local builds / pinned tags:
+#   CEREFOX_LOCAL_IMAGE=cerefox-local:dev sh ...    # after `docker build -f docker/local/Dockerfile -t cerefox-local:dev .`
+#   CEREFOX_LOCAL_IMAGE=ghcr.io/fstamatelopoulos/cerefox-local:v0.10.0 sh ...
 #
 # Then use the CLI/MCP against local by pointing at the separate config dir:
 #   CEREFOX_CONFIG_DIR=~/.cerefox/local cerefox search "…"
@@ -15,7 +20,7 @@
 # `install.sh` / `cerefox init` is deferred for review (it's the user-facing path).
 set -eu
 
-IMAGE="${CEREFOX_LOCAL_IMAGE:-cerefox-local:dev}"
+IMAGE="${CEREFOX_LOCAL_IMAGE:-ghcr.io/fstamatelopoulos/cerefox-local:latest}"
 PORT="${PORT:-8000}"
 CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
 CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
@@ -49,6 +54,9 @@ if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "$HOME/.cerefox/.env" ]; then
 fi
 
 # 3. (Re)start the container with the INJECTED secret (entrypoint uses env over self-gen).
+# Refresh the image first: pulls the newest published tag so a re-run picks up updates;
+# harmless (|| true) for a locally-built tag that isn't in a registry.
+docker pull "$IMAGE" 2>/dev/null || true
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 # shellcheck disable=SC2086
 docker run -d --name "$CONTAINER" -p "$PORT:8000" \
