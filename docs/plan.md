@@ -3390,15 +3390,27 @@ self-refreshing on `upgrade`), simplified `install-local.sh` (no host JWT mintin
 - ~~Fold `install-local.sh` into `install.sh` / `cerefox init`~~ — **dropped**: contradicts
   the two-separate-worlds framing (World B is Docker-only; there is no host `cerefox init`).
 
-**Pending → defer to v0.10.1 (polish, not blockers):**
-- [ ] `cerefox-local --help`: merge the host-verb preamble + the in-container KB `--help`
-  more cleanly (today it prints two sections).
+**Shipped in v0.10.1** (PR #82, released 2026-06-05): the resource-verb min-search-score
+regression + the full `.env`-override restoration (min-search-score, max-response-bytes,
+chunking, versioning, backup-dir, OpenAI embedding base-url/model/dims), the phantom-config
+guard test, port auto-select, Docker detect-and-guide, the World-B config passthrough, and
+the doc quick-fixes.
+
+**Shipped in v0.10.2** (PR #83, on `feat/local-cerefox`): CLI `--max-bytes` honors
+`CEREFOX_MAX_RESPONSE_BYTES`; **local container binds `127.0.0.1` by default** (LAN opt-in
+via `CEREFOX_LOCAL_BIND`); World-B doc sections (access-paths, connect-agents, upgrading,
+operational-cost).
+
+**Still deferred (polish — judged too fiddly/risky to do unattended):**
+- [ ] Shell completion for `cerefox-local`: parameterize `cerefox completion`'s root binding
+  (`complete -F _cerefox_completion cerefox`, `#compdef cerefox`, fish `complete -c cerefox`)
+  + the `_cerefox_*` fn names off the prog name. Cross-cuts 3 shell generators + RC-install
+  management; do it attended to avoid breaking the working cloud completion.
+- [ ] `cerefox-local --help`: merge the host-verb preamble + in-container KB `--help` more
+  cleanly (cosmetic; today it prints two sections, which works).
 - [ ] `configure-agent`: a first-class in-bin `--local` (docker-exec) mode so non-Claude
   clients (Cursor, Codex, Gemini) get auto-wired config, vs. today's `claude mcp add` /
   printed-snippet host path.
-- [ ] Shell completion for `cerefox-local`: `cerefox completion` hardcodes the root
-  binding (`complete -F _cerefox_completion cerefox`, `#compdef cerefox`); parameterize it
-  off the prog name.
 - [ ] Local live-test wiring: point the read/write suites at the local container (extract
   its in-container JWT for the test) so the same suite runs against cloud **and** local.
 

@@ -9,7 +9,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **CLI honors `CEREFOX_MAX_RESPONSE_BYTES`.** The CLI enforces a response byte budget
+  (`--max-bytes`) but ignored the env var; its default now reads
+  `CEREFOX_MAX_RESPONSE_BYTES` (200000 fallback). Corrected CLAUDE.md: the budget applies
+  to MCP/EF **and** the CLI; only the web UI is unlimited.
+
+### Security
+
+- **Local container binds to `127.0.0.1` by default** (was `0.0.0.0`), so a single-user
+  self-hosted backend isn't exposed on the LAN. Opt in with `CEREFOX_LOCAL_BIND=0.0.0.0`.
+
+### Docs
+
+- World-B (local/self-hosted) coverage across the guides: `upgrading.md`
+  (`cerefox-local upgrade`), `operational-cost.md` (fully-local scenario — no Supabase/EF
+  cost), `access-paths.md` (in-container PostgREST + docker-exec MCP; token never leaves
+  the container), `connect-agents.md` (`cerefox-local configure-agent` / `cerefox-local mcp`).
+
+### Deferred (tracked for a later patch)
+
+- `cerefox-local` shell completion (parameterize `cerefox completion`'s root binding off
+  the program name) and a cleaner merged `cerefox-local --help`.
+- A first-class in-bin `configure-agent --local` (docker-exec) mode for non-Claude clients.
 
 ---
 
