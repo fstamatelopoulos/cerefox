@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.10.3] -- 2026-06-06
+
 ### Fixed
 
 - **`cerefox server deploy` Edge Functions now deploy via the Supabase Management API
