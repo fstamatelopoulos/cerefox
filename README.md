@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/static/cerefox_logo.jpg" alt="Cerefox" width="160">
+  <img src="web/static/cerefox_logo.jpg" alt="Cerefox" width="220">
 </p>
 
 # Cerefox
