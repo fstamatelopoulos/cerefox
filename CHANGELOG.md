@@ -41,10 +41,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   config writers via a one-shot `docker run` (the bin gains a `--local` flag that points
   the MCP entry at the `cerefox-local mcp` shim); Claude Code still goes through
   `claude mcp add` on the host.
-- **Shell completion is program-name aware.** `cerefox completion <shell>` now emits a
-  script bound to the actual program name, so `cerefox-local completion <shell>` produces
-  a working `cerefox-local` completion that doesn't clash with the cloud `cerefox` one
-  (function names + bindings are namespaced). Cloud output is unchanged.
+- **Shell completion is program-name aware + auto-installed.** `cerefox completion <shell>`
+  emits a script bound to the actual program name, so `cerefox-local completion <shell>`
+  produces a working `cerefox-local` completion that doesn't clash with the cloud `cerefox`
+  one (functions + bindings namespaced; cloud output unchanged). `install-local.sh` now
+  wires it up host-side (best-effort, idempotent) — generating the script from the
+  container and sourcing it from your shell rc, mirroring the cloud installer + printing an
+  "exec $shell" hint. (The `completion install` subcommand itself can't be used for World B
+  — proxied into the container, it would write inside it — hence the host-side wiring.)
 
 ---
 

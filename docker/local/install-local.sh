@@ -165,6 +165,39 @@ until curl -fsS -o /dev/null "http://localhost:$PORT/api/v1/projects" 2>/dev/nul
 done
 [ "$i" -le 45 ] && echo " ready."
 
+# 5. Shell tab-completion (best-effort, idempotent; mirrors the cloud installer). Generate
+#    the cerefox-local-namespaced script from the container and source it from the shell rc.
+#    `completion install` can't be proxied (it would write inside the container), so we do
+#    the host-side wiring here. Failures never abort the install.
+COMPLETION_MSG=""
+comp_shell="$(basename "${SHELL:-}")"
+case "$comp_shell" in
+  bash|zsh|fish)
+    comp_file="$HOME/.cerefox-local-completion.$comp_shell"
+    if docker exec -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" cerefox completion "$comp_shell" \
+         > "$comp_file" 2>/dev/null && [ -s "$comp_file" ]; then
+      if [ "$comp_shell" = "fish" ]; then
+        fishdir="$HOME/.config/fish/completions"
+        if mkdir -p "$fishdir" 2>/dev/null && cp "$comp_file" "$fishdir/cerefox-local.fish" 2>/dev/null; then
+          COMPLETION_MSG="  ✓ shell completion (fish) installed — restart fish to activate."
+        fi
+      else
+        rc="$HOME/.${comp_shell}rc"
+        marker="# >>> cerefox-local shell completion >>>"
+        if [ -f "$rc" ] && grep -qF "$marker" "$rc" 2>/dev/null; then
+          COMPLETION_MSG="  ✓ shell completion already wired (in $rc)."
+        else
+          printf '\n%s\n[ -s "%s" ] && source "%s"\n# <<< cerefox-local shell completion <<<\n' \
+            "$marker" "$comp_file" "$comp_file" >> "$rc" 2>/dev/null || true
+          if grep -qF "$marker" "$rc" 2>/dev/null; then
+            COMPLETION_MSG="  ✓ shell completion installed → activate now: exec $comp_shell"
+          fi
+        fi
+      fi
+    fi
+    ;;
+esac
+
 echo "✓ Cerefox Local Server → http://localhost:$PORT/app/"
 echo "  Command:  cerefox-local <verb>   (installed at $BIN_DIR/cerefox-local)"
 echo "  e.g.      cerefox-local status | search \"…\" | document ingest notes.md"
@@ -179,3 +212,4 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
 else
   echo "  ▸ Set your OpenAI key to enable ingest + search:  cerefox-local init"
 fi
+[ -n "$COMPLETION_MSG" ] && echo "$COMPLETION_MSG"

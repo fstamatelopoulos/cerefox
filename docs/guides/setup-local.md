@@ -54,6 +54,9 @@ The web UI is now at **http://localhost:8000/app/** — **or the port the instal
 (it auto-steps to 8010/8020/… if 8000 is busy or you also run the cloud `cerefox web`, which
 defaults to 8000). The installer prints the actual URL; `cerefox-local status` shows it too.
 
+The installer also wires **shell tab-completion** for `cerefox-local` (best-effort) — run
+`exec $SHELL` or open a new terminal to activate it.
+
 **How the credential works:** the container generates its own JWT secret on first boot and
 mints the access token internally — the token never leaves the container. The only secret
 stored on your host is `OPENAI_API_KEY` (in `~/.cerefox/local/.env`), so `upgrade` can
