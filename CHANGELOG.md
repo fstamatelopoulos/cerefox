@@ -11,6 +11,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Web search now actually applies `CEREFOX_MIN_SEARCH_SCORE`.** The v0.10.1 fix was
+  incomplete: the web UI defaults to `docs` mode, but only the `hybrid` branch in
+  `discovery.ts` was updated — the `docs` branch still passed `p_min_score: 0.0` (a
+  `replace_all` missed it due to a different indent). The default web search therefore
+  applied no threshold. Both branches now use `getMinSearchScore()`. (Note: in hybrid/docs,
+  the threshold filters *vector-only* matches; FTS keyword matches still pass by design.)
 - **CLI honors `CEREFOX_MAX_RESPONSE_BYTES`.** The CLI enforces a response byte budget
   (`--max-bytes`) but ignored the env var; its default now reads
   `CEREFOX_MAX_RESPONSE_BYTES` (200000 fallback). Corrected CLAUDE.md: the budget applies
