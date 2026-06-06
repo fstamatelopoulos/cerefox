@@ -28,6 +28,25 @@ host_port() {
   # The published host port for container :8000 (so we can print the right URL).
   docker inspect -f '{{range $p, $c := .NetworkSettings.Ports}}{{if eq $p "8000/tcp"}}{{(index $c 0).HostPort}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null || true
 }
+# True if some process is LISTENing on TCP $1 (best-effort; needs lsof → if absent we
+# can't probe and just let docker surface a bind error).
+port_busy() {
+  command -v lsof >/dev/null 2>&1 || return 1
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+# Echo the first free port stepping +10 from $1 (capped to avoid an infinite loop).
+free_port_from() {
+  _p="$1"; _n=0
+  while port_busy "$_p"; do _p=$((_p + 10)); _n=$((_n + 1)); [ "$_n" -gt 50 ] && break; done
+  echo "$_p"
+}
+# Persist CEREFOX_LOCAL_PORT=<$1> in $ENV_FILE in place (portable; no `sed -i`).
+set_env_port() {
+  [ -f "$ENV_FILE" ] || return 0
+  _tmp="$ENV_FILE.tmp.$$"
+  awk -v p="$1" '/^CEREFOX_LOCAL_PORT=/{print "CEREFOX_LOCAL_PORT=" p; next} {print}' \
+    "$ENV_FILE" > "$_tmp" && chmod 600 "$_tmp" && mv "$_tmp" "$ENV_FILE"
+}
 
 # Config overrides forwarded from the host .env into the container. Deliberately
 # EXCLUDES container-managed vars (SUPABASE_URL/KEY, DATABASE_URL, POSTGREST_UPSTREAM,
@@ -58,6 +77,15 @@ recreate() {
   docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull "$IMAGE" \
     || die "image '$IMAGE' not present locally and pull failed — container left running"
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  # Our own container's port is now freed, so a busy port here means an EXTERNAL
+  # conflict (e.g. cloud `cerefox web` grabbed it). Step +10 to a free one and persist.
+  if port_busy "$PORT"; then
+    _newport=$(free_port_from "$PORT")
+    if [ "$_newport" != "$PORT" ]; then
+      echo "ℹ Port $PORT is in use by another process — moving local to $_newport."
+      PORT="$_newport"; set_env_port "$PORT"
+    fi
+  fi
   # shellcheck disable=SC2086
   docker run -d --name "$CONTAINER" -p "$BIND_ADDR:$PORT:8000" \
     --restart unless-stopped \
@@ -165,7 +193,18 @@ case "$cmd" in
     recreate
     ;;
 
-  start|up)      need_docker; docker start "$CONTAINER" >/dev/null && echo "✓ started → http://localhost:$(host_port)/app/" ;;
+  start|up)
+    need_docker
+    # The container is stopped (so it isn't holding its port). If the stored port is busy,
+    # it's an external conflict — recreate on a free port (docker start can't rebind).
+    _sp="$(. "$ENV_FILE" 2>/dev/null; echo "${CEREFOX_LOCAL_PORT:-8000}")"
+    if port_busy "$_sp"; then
+      echo "ℹ Stored port $_sp is in use by another process — recreating on a free port."
+      recreate
+    else
+      docker start "$CONTAINER" >/dev/null && echo "✓ started → http://localhost:$(host_port)/app/"
+    fi
+    ;;
   stop|down)     need_docker; docker stop "$CONTAINER"  >/dev/null && echo "✓ stopped (data kept)" ;;
   restart)       need_docker; docker restart "$CONTAINER" >/dev/null && echo "✓ restarted → http://localhost:$(host_port)/app/" ;;
   status)

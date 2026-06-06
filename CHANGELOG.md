@@ -66,7 +66,12 @@ the local/World-B container:
 ### Changed — local backend (World B) polish
 
 - `install-local.sh` **auto-selects a free host port** (steps `+10` past a busy port, and
-  past `8000` when a cloud install shares that default) instead of silently colliding.
+  past `8000` when a cloud install shares that default) instead of silently colliding;
+  clearer message distinguishing "in use" from "avoiding the cloud default".
+- **`cerefox-local start`/`upgrade`/`init` re-check the port at bring-up time** and step
+  `+10` to a free one (persisting it to `~/.cerefox/local/.env`) if the stored port was
+  taken since last run — so a port grabbed by something else doesn't leave the server
+  failing to bind. Only the container-(re)starting verbs do this; proxied KB commands don't.
 - Detect-and-guide when Docker is missing or its daemon is stopped (no auto-install).
 - World-B users can put the `CEREFOX_*` tuning overrides above in `~/.cerefox/local/.env`;
   they're forwarded into the container (apply with `cerefox-local init`).
