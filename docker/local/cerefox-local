@@ -109,7 +109,7 @@ Lifecycle (handled on the host):
   uninstall [--purge]   remove the container (--purge also DELETES the data volume)
   status                show container state + URL
   logs [-f]             show container logs
-  configure-agent       wire an MCP client to this local server (Claude Code, etc.)
+  configure-agent [--tool X]  wire an MCP client (claude-code default; also claude-desktop|cursor|codex|gemini)
 
 Knowledge base (run inside the container — same as the cloud CLI):
   search · document · project · metadata · audit · config · guides · mcp · …
@@ -240,23 +240,60 @@ case "$cmd" in
     ;;
 
   configure-agent)
-    # Host-side: wire an MCP client to the local server. The MCP server runs INSIDE
-    # the container, launched per-session via `docker exec -i`. We register the host
-    # `cerefox-local mcp` wrapper so the client never needs the JWT.
-    self="$(command -v cerefox-local || echo "$CONFIG_DIR/cerefox-local")"
-    if command -v claude >/dev/null 2>&1; then
-      claude mcp add cerefox-local -- "$self" mcp && echo "✓ added MCP server 'cerefox-local' to Claude Code"
-    else
-      cat <<EOF
-Add this MCP server to your client (command + args form):
-
-  command: $self
-  args:    ["mcp"]
-
-For Claude Code:  claude mcp add cerefox-local -- $self mcp
-The container holds the credential; the client needs no token.
-EOF
-    fi
+    # Wire an MCP client to the LOCAL server. The MCP server runs INSIDE the container,
+    # launched per session as `cerefox-local mcp` (stdio over docker exec) — so the client
+    # never needs the JWT. Default tool: claude-code. Override with --tool.
+    need_docker
+    self="$(command -v cerefox-local 2>/dev/null || echo "$CONFIG_DIR/cerefox-local")"
+    tool="claude-code"
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --tool) tool="${2:-}"; shift 2 ;;
+        --tool=*) tool="${1#*=}"; shift ;;
+        *) die "unknown configure-agent option: $1 (use --tool <client>)" ;;
+      esac
+    done
+    case "$tool" in
+      claude-code)
+        # Claude Code's `claude` CLI lives on the HOST, so register here (not in-container).
+        command -v claude >/dev/null 2>&1 \
+          || die "claude CLI not found. Install Claude Code, or use --tool cursor|codex|gemini|claude-desktop."
+        claude mcp add cerefox-local -- "$self" mcp \
+          && echo "✓ added MCP server 'cerefox-local' to Claude Code (command: $self mcp)"
+        ;;
+      cursor|codex|gemini|claude-desktop)
+        # Reuse the bundled bin's config writers: run it one-shot in a throwaway container
+        # (--entrypoint bypasses s6) with ONLY this client's config dir mounted, so the
+        # writer edits the HOST file. The Linux container can't compute a macOS/Windows
+        # path, so we compute the target here and pass --config-path.
+        case "$tool" in
+          cursor)  cfg="$HOME/.cursor/mcp.json" ;;
+          codex)   cfg="$HOME/.codex/config.toml" ;;
+          gemini)  cfg="$HOME/.gemini/settings.json" ;;
+          claude-desktop)
+            case "$(uname -s)" in
+              Darwin) cfg="$HOME/Library/Application Support/Claude/claude_desktop_config.json" ;;
+              *)      cfg="$HOME/.config/Claude/claude_desktop_config.json" ;;
+            esac ;;
+        esac
+        cfgdir=$(dirname "$cfg")
+        mkdir -p "$cfgdir"
+        if docker run --rm --entrypoint /usr/local/bin/cerefox \
+             -e CEREFOX_LOCAL_CMD="$self" \
+             -v "$cfgdir:$cfgdir" \
+             "$IMAGE" \
+             configure-agent --tool "$tool" --local --config-path "$cfg"; then
+          echo "✓ configured $tool → $cfg (command: $self mcp). Restart $tool to pick it up."
+        else
+          echo "✗ auto-config failed. Add this MCP server to $tool manually:"
+          echo "    command: $self"
+          echo "    args:    [\"mcp\"]"
+        fi
+        ;;
+      *)
+        die "unknown --tool '$tool' (claude-code | claude-desktop | cursor | codex | gemini)"
+        ;;
+    esac
     ;;
 
   *)

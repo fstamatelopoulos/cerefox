@@ -80,7 +80,7 @@ export interface ConfigWriter {
    * the server. The first element is the executable; remaining elements
    * are its arguments. Resolved into a full command line at run time.
    */
-  delegated?: () => { cmd: string; args: string[] };
+  delegated?: (entry: { command: string; args: string[] }) => { cmd: string; args: string[] };
 }
 
 /**
@@ -98,6 +98,20 @@ function defaultCerefoxEntry(): { command: string; args: string[] } {
   return {
     command: "npx",
     args: ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
+  };
+}
+
+/**
+ * MCP server entry for the LOCAL / self-hosted (World-B) backend: launch the
+ * host `cerefox-local` shim, which proxies `mcp` (stdio) into the Docker
+ * container. The command path is overridable via `CEREFOX_LOCAL_CMD` (the
+ * `cerefox-local configure-agent` host path passes the resolved absolute path so
+ * MCP clients with a minimal PATH still find it). Used when `--local` is passed.
+ */
+export function localCerefoxEntry(): { command: string; args: string[] } {
+  return {
+    command: process.env.CEREFOX_LOCAL_CMD || "cerefox-local",
+    args: ["mcp"],
   };
 }
 
@@ -120,8 +134,7 @@ function claudeDesktopConfigPath(): string {
 }
 
 /** Build the `claude mcp add ...` argv for the Claude Code delegation. */
-function claudeCodeDelegated(): { cmd: string; args: string[] } {
-  const entry = defaultCerefoxEntry();
+function claudeCodeDelegated(entry: { command: string; args: string[] }): { cmd: string; args: string[] } {
   // `claude mcp add <name> --scope user -- <cmd> [args...]`
   return {
     cmd: "claude",
@@ -201,10 +214,15 @@ export interface WriteResult {
  * `customPath` — the override is treated as "write here, skip the
  * delegated CLI". This keeps the legacy test path working.
  */
-export function writeMcpConfig(
-  writer: ConfigWriter,
-  opts: { customPath?: string; noBackup?: boolean; dryRun?: boolean } = {},
-): WriteResult {
+export interface WriteOpts {
+  customPath?: string;
+  noBackup?: boolean;
+  dryRun?: boolean;
+  /** Override the MCP server entry (e.g. the local `cerefox-local mcp` shim). */
+  entry?: { command: string; args: string[] };
+}
+
+export function writeMcpConfig(writer: ConfigWriter, opts: WriteOpts = {}): WriteResult {
   // --config-path always wins. If the writer is delegated but the user
   // (or a test) asked for a specific file, do a direct write there.
   if (opts.customPath) {
@@ -219,9 +237,9 @@ export function writeMcpConfig(
 function directWrite(
   writer: ConfigWriter,
   configPath: string,
-  opts: { noBackup?: boolean; dryRun?: boolean },
+  opts: WriteOpts,
 ): WriteResult {
-  const entry = writer.buildServerEntry();
+  const entry = opts.entry ?? writer.buildServerEntry();
   const format = writer.format ?? "json";
 
   if (!opts.dryRun) mkdirSync(dirname(configPath), { recursive: true });
@@ -294,13 +312,13 @@ function hasCerefoxEntry(
  */
 function delegatedWrite(
   writer: ConfigWriter,
-  opts: { noBackup?: boolean; dryRun?: boolean },
+  opts: WriteOpts,
 ): WriteResult {
   if (!writer.delegated) {
     throw new Error(`${writer.label}: kind=delegated but no delegated() factory`);
   }
-  const { cmd, args } = writer.delegated();
-  const entry = writer.buildServerEntry();
+  const entry = opts.entry ?? writer.buildServerEntry();
+  const { cmd, args } = writer.delegated(entry);
   const delegatedCommand = `${cmd} ${args.join(" ")}`;
 
   if (opts.dryRun) {

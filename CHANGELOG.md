@@ -34,11 +34,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   cost), `access-paths.md` (in-container PostgREST + docker-exec MCP; token never leaves
   the container), `connect-agents.md` (`cerefox-local configure-agent` / `cerefox-local mcp`).
 
-### Deferred (tracked for a later patch)
+### Added — local backend (World B), continued
 
-- `cerefox-local` shell completion (parameterize `cerefox completion`'s root binding off
-  the program name) and a cleaner merged `cerefox-local --help`.
-- A first-class in-bin `configure-agent --local` (docker-exec) mode for non-Claude clients.
+- **`cerefox-local configure-agent --tool <client>`** now wires non-Claude clients too
+  (Claude Desktop, Cursor, Codex, Gemini), not just Claude Code. It reuses the bundled
+  config writers via a one-shot `docker run` (the bin gains a `--local` flag that points
+  the MCP entry at the `cerefox-local mcp` shim); Claude Code still goes through
+  `claude mcp add` on the host.
+- **Shell completion is program-name aware.** `cerefox completion <shell>` now emits a
+  script bound to the actual program name, so `cerefox-local completion <shell>` produces
+  a working `cerefox-local` completion that doesn't clash with the cloud `cerefox` one
+  (function names + bindings are namespaced). Cloud output is unchanged.
 
 ---
 
