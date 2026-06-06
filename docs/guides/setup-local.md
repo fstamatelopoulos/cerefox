@@ -36,11 +36,13 @@ That's it. No Node, Bun, Postgres, or repo clone needed.
 ## Step 1 — Install
 
 ```bash
-OPENAI_API_KEY=sk-... sh -c "$(curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh)"
+curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh
 ```
 
 This pulls the published multi-arch image (`amd64` + `arm64`), starts the container, and
-installs a `cerefox-local` command (symlinked into `~/.local/bin`). Pick a different port
+installs a `cerefox-local` command (symlinked into `~/.local/bin`). To set your OpenAI key
+inline at install instead of via `cerefox-local init` (Step 2), use the command-substitution
+form: `OPENAI_API_KEY=sk-... sh -c "$(curl -fsSL …/install-local.sh)"`. Pick a specific port
 with `PORT=8017 …`.
 
 > If the installer warns that `~/.local/bin` isn't on your `PATH`, add it:
@@ -48,7 +50,9 @@ with `PORT=8017 …`.
 > echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 > ```
 
-The web UI is now at **http://localhost:8000/app/** (or your chosen port).
+The web UI is now at **http://localhost:8000/app/** — **or the port the installer chose**
+(it auto-steps to 8010/8020/… if 8000 is busy or you also run the cloud `cerefox web`, which
+defaults to 8000). The installer prints the actual URL; `cerefox-local status` shows it too.
 
 **How the credential works:** the container generates its own JWT secret on first boot and
 mints the access token internally — the token never leaves the container. The only secret

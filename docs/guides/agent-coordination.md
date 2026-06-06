@@ -23,6 +23,8 @@ Within a single runtime (e.g., Claude Code's agent teams feature, or a LangGraph
 
 Cerefox sits in a unique position: it is vendor-neutral, protocol-native (MCP + REST), and designed for persistent storage. Any agent that can make an HTTP call can read and write to Cerefox.
 
+> **Cross-machine coordination assumes the cloud / Supabase backend** (a shared network endpoint). The default **local / self-hosted (Docker) backend is single-machine** — it binds `127.0.0.1` and agents reach it via `cerefox-local mcp` (stdio). To coordinate agents across machines with a local backend, expose it on your LAN (`CEREFOX_LOCAL_BIND=0.0.0.0`) or use the cloud backend.
+
 The coordination model is **asynchronous and knowledge-based**:
 
 1. **Agent A writes** a finding, decision, or task breakdown to Cerefox. It does not need to know which agent will consume it.

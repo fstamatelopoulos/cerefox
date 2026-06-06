@@ -142,8 +142,8 @@ embedding costs" below.
 
 If you want to keep costs as low as possible:
 
-- **Fireworks AI** is an OpenAI-compatible alternative that offers competitive embedding prices.
-  See `docs/guides/configuration.md` for how to switch.
+- **Cheaper embedding models**: a lower-cost OpenAI-compatible provider (e.g. Fireworks AI)
+  is on the roadmap — **not yet wired in the TS runtime** (OpenAI only today).
 - **Batch ingest, don't re-ingest**: Cerefox deduplicates by content hash — re-ingesting the
   same file twice costs nothing. Only new or changed content triggers embedding calls.
 - **`cerefox server reindex`**: Re-embeds all existing chunks if you switch embedders. Run this once

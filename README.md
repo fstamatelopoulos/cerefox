@@ -7,7 +7,6 @@
 **User-owned shared memory for AI agents.** A persistent, curated knowledge layer that multiple AI tools can read and write, backed by Postgres + pgvector.
 
 [![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![Node 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org)
 
 ---
@@ -41,7 +40,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 | **Metadata search** | Standalone metadata-only search (no text query needed); find documents by key-value criteria, project, and date range; optional content inclusion with byte budget; dedicated MCP tool, CLI command, and web UI page |
 | **Project discovery** | `cerefox_list_projects` MCP tool for agents to discover available projects; all search results include human-readable `project_names` alongside UUIDs |
 | **Heading-aware chunking** | Greedy section accumulation — H1/H2/H3 sections accumulate until MAX_CHUNK_CHARS; heading breadcrumb preserved per chunk |
-| **Cloud embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API — or swap to Fireworks AI |
+| **Cloud embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API (the only embedder wired in the TS runtime today) |
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and anon key; no Python install needed |
 | **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. (A frozen Python MCP server also ships for repo-clone users: `uv run cerefox mcp`.) |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
@@ -113,7 +112,7 @@ cerefox web              # web UI → http://localhost:8000/app/
 ```
 
 **Prerequisites:** Node 20+ or Bun 1.0+ · a Supabase account (free tier) · an
-embedding API key (OpenAI `text-embedding-3-small` by default, or Fireworks AI).
+embedding API key (OpenAI `text-embedding-3-small`).
 
 > **Full walkthrough:** [`docs/guides/quickstart.md`](docs/guides/quickstart.md)
 > (~15 min). Supabase specifics: [`docs/guides/setup-supabase.md`](docs/guides/setup-supabase.md).
@@ -135,7 +134,8 @@ cerefox-local configure-agent      # wire an MCP client (e.g. Claude Code)
 # 3. Use it:
 cerefox-local document ingest my-notes.md --title "My notes"
 cerefox-local search "what did I decide about auth?"
-#    web UI → http://localhost:8000/app/   (manage: cerefox-local status | upgrade | stop)
+#    web UI → http://localhost:8000/app/  (or the port the installer chose — it auto-steps
+#    to 8010/… if 8000 is busy; `cerefox-local status` shows the URL. Manage: status | upgrade | stop)
 ```
 
 **Prerequisites:** Docker (Docker Desktop or [Colima](https://github.com/abiosoft/colima))

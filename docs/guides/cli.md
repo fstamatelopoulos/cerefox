@@ -4,12 +4,18 @@ Comprehensive reference for every `cerefox` subcommand. For tutorials and walkth
 
 > `--help` is canonical. If anything in this document disagrees with `cerefox <subcommand> --help`, trust `--help` and file an issue against this guide.
 
+> **Local / self-hosted (Docker) backend?** Every KB verb below is identical, but you run it
+> as **`cerefox-local <verb>`** (it proxies into the container via `docker exec`); lifecycle
+> is different (`cerefox-local init/start/stop/upgrade/uninstall/status/logs/configure-agent`).
+> A local user sets **only `OPENAI_API_KEY`** — the Supabase/database vars below do **not**
+> apply (the container owns them). See [`setup-local.md`](setup-local.md).
+
 ## Setup
 
-Every command reads configuration from `.env` in the working directory (or environment variables — see [`configuration.md`](configuration.md)). Required at minimum:
+This section is for the **cloud / Supabase** backend. Every command reads configuration from `.env` in the working directory (or environment variables — see [`configuration.md`](configuration.md)). Required at minimum:
 
 - `CEREFOX_SUPABASE_URL` and `CEREFOX_SUPABASE_KEY` for any command that talks to Supabase
-- `OPENAI_API_KEY` (or `CEREFOX_FIREWORKS_API_KEY`) for any command that embeds (ingest, search)
+- `OPENAI_API_KEY` for any command that embeds (ingest, search)
 - `CEREFOX_DATABASE_URL` for `cerefox server deploy` and the contributor scripts (`bun scripts/db_*.ts`)
 
 The CLI is the TypeScript `@cerefox/memory` package. Invoke any command as plain `cerefox <subcommand>` (installed via the installer or `npm install -g @cerefox/memory` — see [`quickstart.md`](quickstart.md#1-install)).
@@ -86,7 +92,7 @@ Walks `DIRECTORY` **recursively** (always — there is no recurse toggle) and in
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--extensions <list>` (`-e`) | comma list | `.md,.txt` | File extensions to ingest, e.g. `--extensions .md`. |
+| `--extensions <list>` (`-e`) | comma list | `.md,.txt` | File extensions to ingest, e.g. `--extensions .md`. `.docx` is **not** in the default set — opt in with `--extensions .md,.txt,.docx` (converted via mammoth, same as single-file ingest). |
 | `--project-name <name>` (`-p`) | str | _none_ | Project to assign every document to. |
 | `--update-if-exists` (`-u`) | flag | off | Update existing documents by source path / title. |
 | `--metadata <json>` (`-m`) | JSON | `{}` | JSON metadata applied to every file in the run. |
