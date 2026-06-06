@@ -297,7 +297,15 @@ async function action(options: DeployServerOptions): Promise<void> {
       // (link state lives in whatever dir the user ran `supabase link`), so a
       // bare deploy here couldn't resolve the target project.
       const workdir = assets.functionsDir.replace(/\/functions$/, "").replace(/\/supabase$/, "");
-      const args = ["--yes", "supabase", "functions", "deploy", ef];
+      // `--use-api`: bundle + deploy via the Supabase Management API instead of the local
+      // Docker bundler. The Docker bundler bind-mounts the function source dir into a
+      // container; when the npm package is installed under a path Docker Desktop won't share
+      // (e.g. /usr/local — not on its default file-sharing allowlist), the mount is empty and
+      // every function fails with "entrypoint path does not exist" (issue #84). The API path
+      // is Docker-independent (it's the same fallback the CLI uses when Docker is off) and is
+      // the right path for an end-user deploying to their cloud Supabase — no local Docker
+      // bundler needed. Requires a reasonably current Supabase CLI (we resolve latest via npx).
+      const args = ["--yes", "supabase", "functions", "deploy", ef, "--use-api"];
       if (projectRef) args.push("--project-ref", projectRef);
       const r = spawnSync("npx", args, {
         encoding: "utf8",
