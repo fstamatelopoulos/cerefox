@@ -13,6 +13,10 @@
 
 ## What is Cerefox?
 
+<p align="center">
+  <img src="web/static/what_is_cerefox.png" alt="Cerefox is one shared memory that every AI tool reads from and writes to: knowledge captured once in any agent (Claude, ChatGPT, Cursor, Codex, Gemini) or by you in the web UI/CLI is recallable from every other, across sessions and time — and it's yours, living in your own Supabase or a local Docker container." width="820">
+</p>
+
 Cerefox is a **user-owned knowledge memory layer**: a persistent, curated knowledge base that sits between you and the AI tools you use.
 
 The primary use case is **shared memory across AI agents**: knowledge written by one tool (Claude, ChatGPT, Cursor, or a custom agent) becomes immediately available to all others. This prevents context fragmentation, so the same information doesn't have to be re-explained in every session.
