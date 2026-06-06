@@ -244,21 +244,21 @@ Full setup for every client — plus a manual per-client config appendix for whe
 
 | Guide | Description |
 |-------|-------------|
-| `docs/guides/quickstart.md` | Zero to first document in 15 minutes |
-| `docs/guides/setup-supabase.md` | Supabase project setup |
-| `docs/guides/configuration.md` | All configuration options |
-| `docs/guides/connect-agents.md` | MCP agent integration |
-| `docs/guides/cli.md` | Complete CLI reference (all `cerefox` subcommands) |
-| `docs/guides/agent-coordination.md` | Multi-agent coordination patterns and best practices |
-| `docs/guides/response-limits.md` | Response size limits: per-path behaviour and tuning |
-| `docs/guides/access-paths.md` | All access layers, credentials, and integration paths |
-| `docs/guides/setup-local.md` | Local / self-hosted (Docker) backend — install, `cerefox-local`, MCP |
-| `docs/guides/ops-scripts.md` | Backup, restore, migrate, sync docs |
-| `docs/guides/setup-cloud-run.md` | Google Cloud Run deployment |
-| `docs/guides/operational-cost.md` | Cost breakdown for all deployment options |
-| `docs/guides/upgrading.md` | Upgrade checklist + notable cross-version transitions |
-| `AGENT_GUIDE.md` | Reference for AI agents using Cerefox tools |
-| `CONTRIBUTING.md` | How to contribute to Cerefox |
+| [`docs/guides/quickstart.md`](docs/guides/quickstart.md) | Zero to first document in 15 minutes |
+| [`docs/guides/setup-supabase.md`](docs/guides/setup-supabase.md) | Supabase project setup |
+| [`docs/guides/configuration.md`](docs/guides/configuration.md) | All configuration options |
+| [`docs/guides/connect-agents.md`](docs/guides/connect-agents.md) | MCP agent integration |
+| [`docs/guides/cli.md`](docs/guides/cli.md) | Complete CLI reference (all `cerefox` subcommands) |
+| [`docs/guides/agent-coordination.md`](docs/guides/agent-coordination.md) | Multi-agent coordination patterns and best practices |
+| [`docs/guides/response-limits.md`](docs/guides/response-limits.md) | Response size limits: per-path behaviour and tuning |
+| [`docs/guides/access-paths.md`](docs/guides/access-paths.md) | All access layers, credentials, and integration paths |
+| [`docs/guides/setup-local.md`](docs/guides/setup-local.md) | Local / self-hosted (Docker) backend — install, `cerefox-local`, MCP |
+| [`docs/guides/ops-scripts.md`](docs/guides/ops-scripts.md) | Backup, restore, migrate, sync docs |
+| [`docs/guides/setup-cloud-run.md`](docs/guides/setup-cloud-run.md) | Google Cloud Run deployment |
+| [`docs/guides/operational-cost.md`](docs/guides/operational-cost.md) | Cost breakdown for all deployment options |
+| [`docs/guides/upgrading.md`](docs/guides/upgrading.md) | Upgrade checklist + notable cross-version transitions |
+| [`AGENT_GUIDE.md`](AGENT_GUIDE.md) | Reference for AI agents using Cerefox tools |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute to Cerefox |
 
 ---
 
