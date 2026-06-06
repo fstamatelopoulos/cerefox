@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`cerefox server deploy` Edge Functions now deploy via the Supabase Management API
+  (`--use-api`)** instead of the local Docker bundler. The Docker bundler bind-mounts the
+  function source dir, which fails (`entrypoint path does not exist`) when the npm package
+  is installed under a path Docker Desktop won't file-share — notably **`/usr/local`** (the
+  classic Homebrew/`npm config set prefix /usr/local` location) — *and* Docker Desktop is
+  running. The API path is Docker-independent, so the deploy works regardless of where npm
+  placed the package or whether Docker is up. (Thanks @tdebasis — [#84].)
+
+[#84]: https://github.com/fstamatelopoulos/cerefox/issues/84
 
 ---
 
