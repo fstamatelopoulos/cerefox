@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.10.2] -- 2026-06-06
+
 ### Fixed
 
 - **Web search now actually applies `CEREFOX_MIN_SEARCH_SCORE`.** The v0.10.1 fix was
