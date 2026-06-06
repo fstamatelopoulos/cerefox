@@ -84,10 +84,12 @@ else
     fi
   done
   if [ "$PORT" != "$DEFAULT_PORT" ]; then
-    if [ "$cloud_present" = true ]; then
-      echo "ℹ Port $DEFAULT_PORT is the cloud Cerefox default (and/or busy) — using $PORT for local."
+    if port_busy "$DEFAULT_PORT"; then
+      echo "ℹ Port $DEFAULT_PORT is in use — using $PORT for local."
     else
-      echo "ℹ Port $DEFAULT_PORT was busy — using $PORT for local."
+      echo "ℹ A cloud Cerefox install is present (~/.cerefox/.env), and \`cerefox web\` also"
+      echo "  defaults to $DEFAULT_PORT — using $PORT for local to avoid a future collision."
+      echo "  (Pass PORT=$DEFAULT_PORT to force $DEFAULT_PORT, or any port you prefer.)"
     fi
   fi
 fi
