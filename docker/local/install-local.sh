@@ -25,6 +25,9 @@ DEFAULT_PORT=8000
 # (we may auto-select a free one). Must check before applying the default.
 if [ -n "${PORT:-}" ]; then PORT_EXPLICIT=true; else PORT_EXPLICIT=false; fi
 PORT="${PORT:-$DEFAULT_PORT}"
+# Bind to loopback by default — a single-user local backend shouldn't be exposed on the
+# LAN. Set CEREFOX_LOCAL_BIND=0.0.0.0 to publish on all interfaces (e.g. LAN access).
+BIND_ADDR="${CEREFOX_LOCAL_BIND:-127.0.0.1}"
 CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
 CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
@@ -81,10 +84,12 @@ else
     fi
   done
   if [ "$PORT" != "$DEFAULT_PORT" ]; then
-    if [ "$cloud_present" = true ]; then
-      echo "ℹ Port $DEFAULT_PORT is the cloud Cerefox default (and/or busy) — using $PORT for local."
+    if port_busy "$DEFAULT_PORT"; then
+      echo "ℹ Port $DEFAULT_PORT is in use — using $PORT for local."
     else
-      echo "ℹ Port $DEFAULT_PORT was busy — using $PORT for local."
+      echo "ℹ A cloud Cerefox install is present (~/.cerefox/.env), and \`cerefox web\` also"
+      echo "  defaults to $DEFAULT_PORT — using $PORT for local to avoid a future collision."
+      echo "  (Pass PORT=$DEFAULT_PORT to force $DEFAULT_PORT, or any port you prefer.)"
     fi
   fi
 fi
@@ -123,7 +128,7 @@ docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 # crash (a known GHC-startup segfault) — Docker re-runs the container and the 2nd boot is
 # clean. It does NOT override a manual `cerefox-local stop`.
 # shellcheck disable=SC2086
-docker run -d --name "$CONTAINER" -p "$PORT:8000" \
+docker run -d --name "$CONTAINER" -p "$BIND_ADDR:$PORT:8000" \
   --restart unless-stopped \
   -v "$VOLUME:/var/lib/postgresql/data" \
   ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
@@ -138,6 +143,7 @@ umask 077
   echo "# only the OpenAI key + port + optional CEREFOX_* tuning overrides are stored."
   echo "# Add overrides (see docs/guides/configuration.md), then: cerefox-local init"
   echo "CEREFOX_LOCAL_PORT=$PORT"
+  echo "CEREFOX_LOCAL_BIND=$BIND_ADDR"
   [ -n "${OPENAI_API_KEY:-}" ] && echo "OPENAI_API_KEY=$OPENAI_API_KEY"
   [ -n "$PRESERVED_OVERRIDES" ] && printf '%s' "$PRESERVED_OVERRIDES"
 } > "$CONFIG_DIR/.env"
@@ -159,6 +165,39 @@ until curl -fsS -o /dev/null "http://localhost:$PORT/api/v1/projects" 2>/dev/nul
 done
 [ "$i" -le 45 ] && echo " ready."
 
+# 5. Shell tab-completion (best-effort, idempotent; mirrors the cloud installer). Generate
+#    the cerefox-local-namespaced script from the container and source it from the shell rc.
+#    `completion install` can't be proxied (it would write inside the container), so we do
+#    the host-side wiring here. Failures never abort the install.
+COMPLETION_MSG=""
+comp_shell="$(basename "${SHELL:-}")"
+case "$comp_shell" in
+  bash|zsh|fish)
+    comp_file="$HOME/.cerefox-local-completion.$comp_shell"
+    if docker exec -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" cerefox completion "$comp_shell" \
+         > "$comp_file" 2>/dev/null && [ -s "$comp_file" ]; then
+      if [ "$comp_shell" = "fish" ]; then
+        fishdir="$HOME/.config/fish/completions"
+        if mkdir -p "$fishdir" 2>/dev/null && cp "$comp_file" "$fishdir/cerefox-local.fish" 2>/dev/null; then
+          COMPLETION_MSG="  ✓ shell completion (fish) installed — restart fish to activate."
+        fi
+      else
+        rc="$HOME/.${comp_shell}rc"
+        marker="# >>> cerefox-local shell completion >>>"
+        if [ -f "$rc" ] && grep -qF "$marker" "$rc" 2>/dev/null; then
+          COMPLETION_MSG="  ✓ shell completion already wired (in $rc)."
+        else
+          printf '\n%s\n[ -s "%s" ] && source "%s"\n# <<< cerefox-local shell completion <<<\n' \
+            "$marker" "$comp_file" "$comp_file" >> "$rc" 2>/dev/null || true
+          if grep -qF "$marker" "$rc" 2>/dev/null; then
+            COMPLETION_MSG="  ✓ shell completion installed → activate now: exec $comp_shell"
+          fi
+        fi
+      fi
+    fi
+    ;;
+esac
+
 echo "✓ Cerefox Local Server → http://localhost:$PORT/app/"
 echo "  Command:  cerefox-local <verb>   (installed at $BIN_DIR/cerefox-local)"
 echo "  e.g.      cerefox-local status | search \"…\" | document ingest notes.md"
@@ -173,3 +212,4 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
 else
   echo "  ▸ Set your OpenAI key to enable ingest + search:  cerefox-local init"
 fi
+[ -n "$COMPLETION_MSG" ] && echo "$COMPLETION_MSG"

@@ -250,16 +250,9 @@ OPENAI_API_KEY=sk-...
 # All other settings use defaults
 ```
 
-## Example: Fireworks Embedder `.env`
-
-```bash
-CEREFOX_SUPABASE_URL=https://abcdefghijkl.supabase.co
-CEREFOX_SUPABASE_KEY=eyJhbGciOiJIUzI1NiIs...
-CEREFOX_DATABASE_URL=postgresql://...
-
-CEREFOX_EMBEDDER=fireworks
-CEREFOX_FIREWORKS_API_KEY=fw_...
-```
+> **Fireworks is not wired in the TS runtime yet** — `CEREFOX_EMBEDDER=fireworks` /
+> `CEREFOX_FIREWORKS_*` are documented for the retired Python runtime but are currently
+> no-ops (OpenAI is the only embedder implemented today). Tracked for a future release.
 
 ---
 

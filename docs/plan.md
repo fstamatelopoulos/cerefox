@@ -3390,17 +3390,35 @@ self-refreshing on `upgrade`), simplified `install-local.sh` (no host JWT mintin
 - ~~Fold `install-local.sh` into `install.sh` / `cerefox init`~~ — **dropped**: contradicts
   the two-separate-worlds framing (World B is Docker-only; there is no host `cerefox init`).
 
-**Pending → defer to v0.10.1 (polish, not blockers):**
-- [ ] `cerefox-local --help`: merge the host-verb preamble + the in-container KB `--help`
-  more cleanly (today it prints two sections).
-- [ ] `configure-agent`: a first-class in-bin `--local` (docker-exec) mode so non-Claude
-  clients (Cursor, Codex, Gemini) get auto-wired config, vs. today's `claude mcp add` /
-  printed-snippet host path.
-- [ ] Shell completion for `cerefox-local`: `cerefox completion` hardcodes the root
-  binding (`complete -F _cerefox_completion cerefox`, `#compdef cerefox`); parameterize it
-  off the prog name.
+**Shipped in v0.10.1** (PR #82, released 2026-06-05): the resource-verb min-search-score
+regression + the full `.env`-override restoration (min-search-score, max-response-bytes,
+chunking, versioning, backup-dir, OpenAI embedding base-url/model/dims), the phantom-config
+guard test, port auto-select, Docker detect-and-guide, the World-B config passthrough, and
+the doc quick-fixes.
+
+**Shipped in v0.10.2** (PR #83, on `feat/local-cerefox`): CLI `--max-bytes` honors
+`CEREFOX_MAX_RESPONSE_BYTES`; web docs-mode `min_score` fix (the v0.10.1 fix missed the
+default mode); **local container binds `127.0.0.1` by default** (LAN opt-in via
+`CEREFOX_LOCAL_BIND`); **`cerefox-local` runtime port re-check + auto-step**; World-B doc
+sections; **program-name-aware shell completion** (`cerefox-local completion` works,
+non-clashing); **`cerefox-local configure-agent --tool X` for all clients** (bin `--local`
+flag + one-shot `docker run --entrypoint` writer reuse); and a **comprehensive doc sanity
+sweep** (killed Fireworks-as-working claims, de-Pythonized CONTRIBUTING, cloud-vs-local
+correctness across the guides).
+
+**Done (were deferred polish, now completed attended in v0.10.2):**
+- [x] `cerefox-local` shell completion — parameterized off the program name; cloud output
+  byte-identical, `cerefox-local` namespaced. (`completion.ts`)
+- [x] `configure-agent --local` — bin flag + host auto-wire for Claude Desktop / Cursor /
+  Codex / Gemini via `docker run --entrypoint` (Claude Code via host `claude mcp add`).
+- [~] `cerefox-local --help` "merge" — left as the two-section output (host verbs + the
+  in-container KB `--help`); it works and reads clearly, so not worth a fragile merge.
+
+**Still deferred (lower-value / heavier):**
 - [ ] Local live-test wiring: point the read/write suites at the local container (extract
   its in-container JWT for the test) so the same suite runs against cloud **and** local.
+- [ ] `schema-version.bundled=null` image cosmetic (doctor shows a null bundled-schema in
+  the container context). Cosmetic only.
 
 **Testing convention (local):** use the **single** default local container
 (`cerefox-local` / volume `cerefox_local_pgdata`) — the local analogue of the maintainer's

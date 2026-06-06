@@ -83,7 +83,7 @@ function collectNodes(): CompletionNode[] {
   return nodes;
 }
 
-function bashScript(nodes: CompletionNode[]): string {
+function bashScript(nodes: CompletionNode[], prog: string, fn: string): string {
   const candCases = nodes
     .map((n) => `        "${n.path}") echo "${n.candidates.join(" ")}" ;;`)
     .join("\n");
@@ -92,21 +92,21 @@ function bashScript(nodes: CompletionNode[]): string {
     .map((n) => `"${n.path}"`)
     .join("|");
   return `# Cerefox bash completion. Source from ~/.bashrc:
-#   source <(cerefox completion bash)
+#   source <(${prog} completion bash)
 #
-_cerefox_candidates() {
+_${fn}_candidates() {
     case "$1" in
 ${candCases}
         *) echo "--help" ;;
     esac
 }
-_cerefox_is_path() {
+_${fn}_is_path() {
     case "$1" in
         ${pathPatterns}) return 0 ;;
         *) return 1 ;;
     esac
 }
-_cerefox_completion() {
+_${fn}_completion() {
     local cur path trial w i
     COMPREPLY=()
     cur="\${COMP_WORDS[COMP_CWORD]}"
@@ -116,20 +116,20 @@ _cerefox_completion() {
         w="\${COMP_WORDS[$i]}"
         case "$w" in -*) break ;; esac
         if [ -z "$path" ]; then trial="$w"; else trial="$path $w"; fi
-        if _cerefox_is_path "$trial"; then
+        if _${fn}_is_path "$trial"; then
             path="$trial"; i=$((i + 1))
         else
             break
         fi
     done
-    COMPREPLY=( $(compgen -W "$(_cerefox_candidates "$path")" -- "$cur") )
+    COMPREPLY=( $(compgen -W "$(_${fn}_candidates "$path")" -- "$cur") )
     return 0
 }
-complete -F _cerefox_completion cerefox
+complete -F _${fn}_completion ${prog}
 `;
 }
 
-function zshScript(nodes: CompletionNode[]): string {
+function zshScript(nodes: CompletionNode[], prog: string, fn: string): string {
   const candCases = nodes
     .map((n) => `        "${n.path}") REPLY="${n.candidates.join(" ")}" ;;`)
     .join("\n");
@@ -137,23 +137,23 @@ function zshScript(nodes: CompletionNode[]): string {
     .filter((n) => n.path !== "")
     .map((n) => `"${n.path}"`)
     .join("|");
-  return `#compdef cerefox
+  return `#compdef ${prog}
 # Cerefox zsh completion. Save and source from ~/.zshrc:
-#   source <(cerefox completion zsh)
+#   source <(${prog} completion zsh)
 #
-_cerefox_candidates() {
+_${fn}_candidates() {
     case "$1" in
 ${candCases}
         *) REPLY="--help" ;;
     esac
 }
-_cerefox_is_path() {
+_${fn}_is_path() {
     case "$1" in
         ${pathPatterns}) return 0 ;;
         *) return 1 ;;
     esac
 }
-_cerefox() {
+_${fn}() {
     local path trial w i REPLY
     path=""
     i=2
@@ -161,13 +161,13 @@ _cerefox() {
         w="\${words[i]}"
         case "$w" in -*) break ;; esac
         if [[ -z "$path" ]]; then trial="$w"; else trial="$path $w"; fi
-        if _cerefox_is_path "$trial"; then
+        if _${fn}_is_path "$trial"; then
             path="$trial"; (( i++ ))
         else
             break
         fi
     done
-    _cerefox_candidates "$path"
+    _${fn}_candidates "$path"
     compadd -- \${=REPLY}
 }
 # Self-bootstrap the completion system if no \`compinit\` has run yet (e.g. this
@@ -176,11 +176,11 @@ _cerefox() {
 if ! whence compdef >/dev/null 2>&1; then
     autoload -Uz compinit && compinit
 fi
-compdef _cerefox cerefox
+compdef _${fn} ${prog}
 `;
 }
 
-function fishScript(nodes: CompletionNode[]): string {
+function fishScript(nodes: CompletionNode[], prog: string, fn: string): string {
   const candCases = nodes
     .map((n) => `        case "${n.path}"\n            echo "${n.candidates.join(" ")}"`)
     .join("\n");
@@ -188,15 +188,15 @@ function fishScript(nodes: CompletionNode[]): string {
     .filter((n) => n.path !== "")
     .map((n) => `"${n.path}"`)
     .join(" ");
-  return `# Cerefox fish completion. Save to ~/.config/fish/completions/cerefox.fish
-function __cerefox_candidates
+  return `# Cerefox fish completion. Save to ~/.config/fish/completions/${prog}.fish
+function __${fn}_candidates
     switch "$argv[1]"
 ${candCases}
         case '*'
             echo "--help"
     end
 end
-function __cerefox_is_path
+function __${fn}_is_path
     for p in ${pathList}
         if test "$argv[1]" = "$p"
             return 0
@@ -204,7 +204,7 @@ function __cerefox_is_path
     end
     return 1
 end
-function __cerefox_complete
+function __${fn}_complete
     set -l tokens (commandline -opc)
     set -l path ""
     set -l i 2
@@ -219,30 +219,41 @@ function __cerefox_complete
         else
             set trial "$path $w"
         end
-        if __cerefox_is_path "$trial"
+        if __${fn}_is_path "$trial"
             set path "$trial"
             set i (math $i + 1)
         else
             break
         end
     end
-    string split ' ' -- (__cerefox_candidates "$path")
+    string split ' ' -- (__${fn}_candidates "$path")
 end
-complete -c cerefox -f -a '(__cerefox_complete)'
+complete -c ${prog} -f -a '(__${fn}_complete)'
 `;
 }
 
 type Shell = "bash" | "zsh" | "fish";
 
+/** The bin's program name (honors CEREFOX_PROG_NAME, e.g. "cerefox-local"). */
+function progName(): string {
+  return buildProgram().name();
+}
+/** A safe shell-function identifier derived from the program name. */
+function fnId(prog: string): string {
+  return prog.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
 function scriptFor(shell: Shell): string {
   const nodes = collectNodes();
+  const prog = progName();
+  const fn = fnId(prog);
   switch (shell) {
     case "bash":
-      return bashScript(nodes);
+      return bashScript(nodes, prog, fn);
     case "zsh":
-      return zshScript(nodes);
+      return zshScript(nodes, prog, fn);
     case "fish":
-      return fishScript(nodes);
+      return fishScript(nodes, prog, fn);
   }
 }
 
@@ -253,8 +264,12 @@ function detectShell(): Shell | null {
   return null;
 }
 
-const RC_BEGIN = "# >>> cerefox shell completion (managed by `cerefox completion install`) >>>";
-const RC_END = "# <<< cerefox shell completion <<<";
+function rcBeginFor(prog: string): string {
+  return `# >>> ${prog} shell completion (managed by \`${prog} completion install\`) >>>`;
+}
+function rcEndFor(prog: string): string {
+  return `# <<< ${prog} shell completion <<<`;
+}
 
 /**
  * `cerefox completion install [--shell <s>] [--yes]` — write the completion
@@ -275,23 +290,26 @@ async function installMode(options: { shell?: string; yes?: boolean }): Promise<
   }
 
   const home = homedir();
-  const scriptPath = join(home, `.cerefox-completion.${shell}`);
+  const prog = progName();
+  const rcBegin = rcBeginFor(prog);
+  const rcEnd = rcEndFor(prog);
+  const scriptPath = join(home, `.${prog}-completion.${shell}`);
   // Always (re)write the script so upgrades pick up new commands/flags.
   writeFileSync(scriptPath, scriptFor(shell), "utf8");
   println(c.green(`✓ Wrote completion script: ${scriptPath}`));
 
   // fish: drop-in dir, no rc edit needed.
   if (shell === "fish") {
-    println(c.dim("  For fish, also copy it into ~/.config/fish/completions/cerefox.fish (or `source` it)."));
+    println(c.dim(`  For fish, also copy it into ~/.config/fish/completions/${prog}.fish (or \`source\` it).`));
     return;
   }
 
   const rcPath = join(home, shell === "zsh" ? ".zshrc" : ".bashrc");
   const sourceLine = `[ -s "${scriptPath}" ] && source "${scriptPath}"`;
-  const block = `${RC_BEGIN}\n${sourceLine}\n${RC_END}\n`;
+  const block = `${rcBegin}\n${sourceLine}\n${rcEnd}\n`;
   const existing = existsSync(rcPath) ? readFileSync(rcPath, "utf8") : "";
 
-  if (existing.includes(RC_BEGIN)) {
+  if (existing.includes(rcBegin)) {
     println(c.dim(`  ${rcPath} already sources the completion (left as-is).`));
   } else {
     // Editing the user's rc — confirm unless --yes or non-interactive.

@@ -369,7 +369,7 @@ async function runSearch(
     p_match_count: Math.min(count, 5),
     p_alpha: 0.7,
     p_project_id: projectId,
-    p_min_score: 0.0,
+    p_min_score: getMinSearchScore(),
   };
   if (metadataFilter) params.p_metadata_filter = metadataFilter;
   const { data, error } = await ctx.supabase.rpc("cerefox_search_docs", params);

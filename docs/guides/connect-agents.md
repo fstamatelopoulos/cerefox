@@ -59,6 +59,20 @@ Three top-level paths plus a few special cases:
 > available in [`examples/mcp-configs/`](../examples/mcp-configs/). Pick the one for your
 > client, replace the placeholders, and you're connected.
 
+### Local / self-hosted (World B)
+
+If you run the **Docker backend** ([`setup-local.md`](setup-local.md)) instead of cloud, the
+MCP path is different: the server runs **inside the container**, launched per session over
+`docker exec`. There's no URL or bearer token in the client config — the access token stays
+in the container.
+
+- **Easiest:** `cerefox-local configure-agent` wires it up (registers an MCP server named
+  `cerefox-local` with Claude Code if the `claude` CLI is present, else prints the snippet).
+- **Manual:** point the client at `command: cerefox-local, args: ["mcp"]` (stdio). That proxies
+  to `cerefox mcp` in the container; the same 10 tools, identical behavior to every other path.
+- The cloud paths above (remote Edge Function, GPT Actions) **do not apply** to a local-only
+  install — there are no Edge Functions.
+
 ---
 
 ## Prerequisites

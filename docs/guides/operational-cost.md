@@ -116,12 +116,34 @@ These limits comfortably cover personal-use traffic. Check
 
 ---
 
+## Scenario C — Fully local / self-hosted (Docker)
+
+The whole backend runs in one Docker container on your machine — Postgres + pgvector +
+the Cerefox server — with **no Supabase and no Edge Functions** ([`setup-local.md`](setup-local.md)).
+
+```
+Your machine
+└── Docker container       (free)
+    └── Postgres + pgvector + cerefox web/MCP
+        Embeddings via OpenAI API  (pay-per-use)
+```
+
+**Typical cost for personal use**: just the **OpenAI embedding spend** (the same pay-per-use
+as every scenario — fractions of a cent per document) plus local compute/electricity. There
+is **no Supabase tier and no Edge-Function invocation limit** to worry about — the binding
+free-tier constraint from Scenarios A/B (500K EF calls/month) simply doesn't exist here, and
+agents using the local MCP server make zero billable cloud calls. The only ongoing cost is
+embeddings (and only when you ingest or run semantic/hybrid search) — see "Controlling
+embedding costs" below.
+
+---
+
 ## Controlling embedding costs
 
 If you want to keep costs as low as possible:
 
-- **Fireworks AI** is an OpenAI-compatible alternative that offers competitive embedding prices.
-  See `docs/guides/configuration.md` for how to switch.
+- **Cheaper embedding models**: a lower-cost OpenAI-compatible provider (e.g. Fireworks AI)
+  is on the roadmap — **not yet wired in the TS runtime** (OpenAI only today).
 - **Batch ingest, don't re-ingest**: Cerefox deduplicates by content hash — re-ingesting the
   same file twice costs nothing. Only new or changed content triggers embedding calls.
 - **`cerefox server reindex`**: Re-embeds all existing chunks if you switch embedders. Run this once

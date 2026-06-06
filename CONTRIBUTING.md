@@ -20,7 +20,7 @@ The most valuable contributions fall into these categories:
 
 **Performance and security improvements**: profiling, query optimization, security hardening, input validation.
 
-**Ingestion formats**: ingestion is Markdown/`.txt`-only as of v0.7 (PDF/DOCX converters were dropped). If you want to support new source formats (e.g., HTML, EPUB, Notion exports, Obsidian vaults), the conversion-to-Markdown step would need to be reintroduced — open an issue to discuss before starting.
+**Ingestion formats**: Markdown / `.txt` / `.docx` (`.docx` is converted to Markdown via `mammoth` on ingest; fidelity varies). **PDF is not supported** (dropped in v0.7 — convert to Markdown upstream). To add new source formats (HTML, EPUB, Notion exports, Obsidian vaults), extend the conversion step in `packages/memory/src/ingestion/file-to-markdown.ts` — open an issue to discuss before starting.
 
 **Knowledge system integrations**: two-way sync with knowledge management systems (Obsidian, Logseq, Notion, etc.) is an area with significant potential. If you use Cerefox alongside another knowledge tool, an integration that keeps them in sync would be a meaningful contribution.
 
@@ -32,11 +32,11 @@ The most valuable contributions fall into these categories:
 
 All contributions must follow Cerefox's architecture:
 
-**Single implementation principle**: business logic lives in Postgres RPCs (`src/cerefox/db/rpcs.sql`). Python, Edge Functions, and the MCP server are thin adapters that call RPCs. Do not duplicate logic across access paths.
+**Single implementation principle**: business logic lives in Postgres RPCs (`src/cerefox/db/rpcs.sql` — still the live SQL source of truth). The TS client (`packages/memory`), the Edge Functions, and the shared MCP tool handlers (`_shared/mcp-tools/`) are thin adapters that call those RPCs. Do not duplicate logic across access paths.
 
 **Markdown-first**: all content is stored as Markdown documents. Derived structures (embeddings, indexes, metadata) are regenerable from the document corpus.
 
-**Cloud embeddings**: Cerefox uses cloud embedding APIs (OpenAI, Fireworks AI). New embedders must implement the `Embedder` protocol in `src/cerefox/embeddings/base.py` and output 768-dimensional vectors.
+**Cloud embeddings**: Cerefox uses cloud embedding APIs. The live embedder is TypeScript in `_shared/embeddings/` (OpenAI `text-embedding-3-small`, 768-dim — the only one wired today; a Fireworks/OpenAI-compatible option is roadmap, not implemented). Any embedder must output **768-dim** vectors to match the `vector(768)` schema; changing the model/dimensions is a breaking change requiring `cerefox server reindex`.
 
 See `docs/solution-design.md` and `docs/research/vision.md` for the full architecture and project direction.
 
@@ -44,21 +44,27 @@ See `docs/solution-design.md` and `docs/research/vision.md` for the full archite
 
 ## Development Setup
 
-Cerefox is a Python + TypeScript project. As of v0.2.0, contributors need **three** runtimes installed locally:
+Cerefox is a **TypeScript** project (Bun/Node). The entire runtime — CLI, MCP server, web
+server, and ingestion pipeline — is TypeScript in [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)
+as of v0.9. Python survives **only** as a frozen, unmaintained MCP fallback (`uv run cerefox
+mcp`); `uv` is optional and only needed if you want to touch that husk.
 
 | Tool | Why | Install |
 |---|---|---|
-| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | Backend, CLI, MCP server, ingestion pipeline | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| **Node 20+** with `npm` | Frontend (React + Vite), Supabase Edge Functions | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
-| **[Bun](https://bun.sh) 1.x** | TypeScript scripts (`scripts/*.ts`, starting with `cut_release.ts` in v0.2.0) | `curl -fsSL https://bun.sh/install \| bash` |
+| **[Bun](https://bun.sh) 1.x** | The whole TS runtime + `scripts/*.ts` + tests (`bun test`) | `curl -fsSL https://bun.sh/install \| bash` |
+| **Node 20+** with `npm` | Frontend (React + Vite) build + npm publish; an alternative TS runtime | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
+| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | **Optional** — only for the legacy `uv run cerefox mcp` fallback | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 
-The Bun requirement is new in v0.2.0 — see [Script-language policy](#script-language-policy-effective-from-v020) below. From v0.5.0 the local MCP server **and** the main CLI both ship as bins inside the npm package [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory); end users install via `npm`/`bun install -g` and don't need uv or a clone. Contributors still need all three runtimes (Python for the schema deploy + web server + ingestion pipeline until v0.6/v0.7, Node for the frontend + npm publish, Bun for TS scripts and `_shared/`/`packages/memory/` tests).
+End users install via `npm`/`bun install -g @cerefox/memory` (or the one-liner installer) and
+need neither `uv` nor a clone. The **local / self-hosted (Docker) backend** is separate again
+— see [`docs/guides/setup-local.md`](docs/guides/setup-local.md).
 
 ```bash
-# Clone and install
+# Clone and install (TS deps for root + packages/memory + frontend)
 git clone https://github.com/fstamatelopoulos/cerefox.git
 cd cerefox
-uv sync
+bun install
+# uv sync   # OPTIONAL — only for the legacy `uv run cerefox mcp` fallback
 
 # Run tests (`bun test` is the only runner; pytest is retired)
 cd _shared && bun test                                  # TS unit tests (mocked)
@@ -131,7 +137,7 @@ export const COMPATIBILITY = {
 - **Client patch releases never raise a minimum.** A patch must run against the same server range as the minor it patches.
 - Each bump is intentional and reviewed at PR time — don't raise a minimum "just because" the server moved. The minimum is the *oldest server this client still works with*, not *the newest server available*.
 
-Two versions track the server side: the **schema version** (`@version:` marker in `src/cerefox/db/schema.sql`, covers schema + RPCs since they deploy atomically) and **`EF_VERSION`** (`_shared/ef-meta/index.ts`, covers all Edge Functions). `cut_release.ts` bumps `EF_VERSION` only when EF source changed since the last tag; the schema version is bumped by hand when `schema.sql`/`rpcs.sql` change.
+Two versions track the server side: the **schema version** (`@version:` marker in `src/cerefox/db/schema.sql`, covers schema + RPCs since they deploy atomically) and **`EF_VERSION`** (`_shared/ef-meta/index.ts`, covers all Edge Functions). `cut_release.ts` bumps `EF_VERSION` automatically when EF source changed since the last tag, and **gates** the schema version: it fails the cut if `schema.sql`/`rpcs.sql` changed without a matching `@version:` bump (both the `schema.sql` marker and the `cerefox_schema_version()` literal in `rpcs.sql` must move together).
 
 ---
 

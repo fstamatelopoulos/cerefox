@@ -8,7 +8,7 @@ import {
   printJson,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
+import { localCerefoxEntry, WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
 
 interface ConfigureAgentOptions {
   tool: string;
@@ -16,6 +16,7 @@ interface ConfigureAgentOptions {
   backup: boolean;
   dryRun?: boolean;
   json?: boolean;
+  local?: boolean;
 }
 
 function action(options: ConfigureAgentOptions): void {
@@ -31,6 +32,10 @@ function action(options: ConfigureAgentOptions): void {
     customPath: options.configPath,
     noBackup: !options.backup,
     dryRun: options.dryRun,
+    // --local: point the client at the host `cerefox-local mcp` shim (World B)
+    // instead of `npx … cerefox mcp` (cloud). Usually set by `cerefox-local
+    // configure-agent`, which also exports CEREFOX_LOCAL_CMD with the abs path.
+    entry: options.local ? localCerefoxEntry() : undefined,
   });
 
   if (options.json) {
@@ -92,5 +97,6 @@ export function registerConfigureAgent(program: Command): void {
     .option("--no-backup", "Skip the .pre-cerefox.bak backup of any existing config.")
     .option("--dry-run", "Print the planned write without modifying any file.")
     .option("--json", "Emit JSON describing the result.")
+    .option("--local", "Wire the local/self-hosted backend (`cerefox-local mcp`) instead of npx. Used by `cerefox-local configure-agent`.")
     .action(action);
 }

@@ -10,6 +10,7 @@ to re-run.
 |---|---|
 | **Installer / npm** (end user, no repo clone) | `cerefox self-update` (or re-run the [installer](quickstart.md#1-install), or `bun/npm update -g @cerefox/memory`). Then `cerefox server deploy` **if the release notes flag a server-side change**. `cerefox doctor` verifies. |
 | **Source checkout** (`git clone`, contributor) | `git pull`, then `cerefox server deploy` (or the lower-level `bun scripts/db_*.ts` + `npx supabase functions deploy`). Rebuild the SPA if you run `cerefox web` from source. |
+| **Local / self-hosted (Docker, World B)** | `cerefox-local upgrade` — pulls the new image and recreates the container (data persists in the volume; OpenAI key + tuning overrides preserved). **No separate `server deploy`/`reindex`**: the CLI, web, PostgREST, and schema all ship together in one versioned image, so they can't drift. See [`setup-local.md`](setup-local.md). |
 
 > **On an old pre-installer clone (0.1.x)?** The cleanest upgrade is to stop
 > running from the repo and install the package: follow the

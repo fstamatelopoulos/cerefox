@@ -9,7 +9,46 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Web search now actually applies `CEREFOX_MIN_SEARCH_SCORE`.** The v0.10.1 fix was
+  incomplete: the web UI defaults to `docs` mode, but only the `hybrid` branch in
+  `discovery.ts` was updated — the `docs` branch still passed `p_min_score: 0.0` (a
+  `replace_all` missed it due to a different indent). The default web search therefore
+  applied no threshold. Both branches now use `getMinSearchScore()`. (Note: in hybrid/docs,
+  the threshold filters *vector-only* matches; FTS keyword matches still pass by design.)
+- **CLI honors `CEREFOX_MAX_RESPONSE_BYTES`.** The CLI enforces a response byte budget
+  (`--max-bytes`) but ignored the env var; its default now reads
+  `CEREFOX_MAX_RESPONSE_BYTES` (200000 fallback). Corrected CLAUDE.md: the budget applies
+  to MCP/EF **and** the CLI; only the web UI is unlimited.
+
+### Security
+
+- **Local container binds to `127.0.0.1` by default** (was `0.0.0.0`), so a single-user
+  self-hosted backend isn't exposed on the LAN. Opt in with `CEREFOX_LOCAL_BIND=0.0.0.0`.
+
+### Docs
+
+- World-B (local/self-hosted) coverage across the guides: `upgrading.md`
+  (`cerefox-local upgrade`), `operational-cost.md` (fully-local scenario — no Supabase/EF
+  cost), `access-paths.md` (in-container PostgREST + docker-exec MCP; token never leaves
+  the container), `connect-agents.md` (`cerefox-local configure-agent` / `cerefox-local mcp`).
+
+### Added — local backend (World B), continued
+
+- **`cerefox-local configure-agent --tool <client>`** now wires non-Claude clients too
+  (Claude Desktop, Cursor, Codex, Gemini), not just Claude Code. It reuses the bundled
+  config writers via a one-shot `docker run` (the bin gains a `--local` flag that points
+  the MCP entry at the `cerefox-local mcp` shim); Claude Code still goes through
+  `claude mcp add` on the host.
+- **Shell completion is program-name aware + auto-installed.** `cerefox completion <shell>`
+  emits a script bound to the actual program name, so `cerefox-local completion <shell>`
+  produces a working `cerefox-local` completion that doesn't clash with the cloud `cerefox`
+  one (functions + bindings namespaced; cloud output unchanged). `install-local.sh` now
+  wires it up host-side (best-effort, idempotent) — generating the script from the
+  container and sourcing it from your shell rc, mirroring the cloud installer + printing an
+  "exec $shell" hint. (The `completion install` subcommand itself can't be used for World B
+  — proxied into the container, it would write inside it — hence the host-side wiring.)
 
 ---
 
@@ -37,7 +76,12 @@ the local/World-B container:
 ### Changed — local backend (World B) polish
 
 - `install-local.sh` **auto-selects a free host port** (steps `+10` past a busy port, and
-  past `8000` when a cloud install shares that default) instead of silently colliding.
+  past `8000` when a cloud install shares that default) instead of silently colliding;
+  clearer message distinguishing "in use" from "avoiding the cloud default".
+- **`cerefox-local start`/`upgrade`/`init` re-check the port at bring-up time** and step
+  `+10` to a free one (persisting it to `~/.cerefox/local/.env`) if the stored port was
+  taken since last run — so a port grabbed by something else doesn't leave the server
+  failing to bind. Only the container-(re)starting verbs do this; proxied KB commands don't.
 - Detect-and-guide when Docker is missing or its daemon is stopped (no auto-install).
 - World-B users can put the `CEREFOX_*` tuning overrides above in `~/.cerefox/local/.env`;
   they're forwarded into the container (apply with `cerefox-local init`).
