@@ -33,6 +33,21 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 - **Any agent, anywhere**: remote MCP via Supabase Edge Functions; ChatGPT via Custom GPT + GPT Actions
 - **Keep it cheap**: Supabase free tier + low-cost cloud embeddings; see `docs/guides/operational-cost.md`
 
+### Example use cases
+
+Cerefox isn't bound to one tool or one workflow — anything that can run a shell command or speak MCP can read and write your memory, pointed at either a shared **cloud** deployment or a private **local** one:
+
+| What you're doing | Example agents (any CLI- or MCP-capable) | How it connects | Memory it uses |
+|---|---|---|---|
+| **Curate & review by hand** | You | Web UI + `cerefox` CLI | Cloud or Local |
+| **Interactive coding** | Claude Code, Cursor, Codex (CLI or desktop), opencode | Local / remote MCP, or shell CLI | Cloud or Local |
+| **Autonomous local harnesses** | OpenClaw, Hermes, Nemo, custom agents | MCP or shell CLI | **Cloud** (shared across all your agentic systems) or **Local** (private on-device MD memory) |
+| **Chat & research** | ChatGPT | GPT Actions | Cloud |
+| | Claude Desktop | Remote MCP | Cloud |
+| **Custom automation & scripts** | your code, cron jobs, curl | REST Edge Functions, or MCP | Cloud or Local |
+
+See [Connecting AI agents](#connecting-ai-agents) for the how-to per client.
+
 ---
 
 ## Features
