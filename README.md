@@ -44,7 +44,7 @@ Cerefox isn't bound to one tool or one workflow — anything that can run a shel
 | **Autonomous local harnesses** | OpenClaw, Hermes, Nemo, custom agents | MCP or shell CLI | **Cloud** (shared across all your agentic systems) or **Local** (private on-device MD memory) |
 | **Chat & research** | ChatGPT | GPT Actions | Cloud |
 | | Claude Desktop | Remote MCP | Cloud |
-| **Custom automation & scripts** | your code, cron jobs, curl | REST Edge Functions, or MCP | Cloud or Local |
+| **Custom automation & scripts** | your code, cron jobs, curl | REST Edge Functions (cloud), or `cerefox_*` RPCs via the Data API (cloud or local) | Cloud or Local |
 
 See [Connecting AI agents](#connecting-ai-agents) for the how-to per client.
 
