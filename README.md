@@ -8,6 +8,7 @@
 
 [![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org)
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/5dnBVeqs9c)
 
 ---
 
@@ -42,6 +43,12 @@ Cerefox isn't bound to one tool or one workflow — anything that can run a shel
 </p>
 
 See [Connecting AI agents](#connecting-ai-agents) for the how-to per client.
+
+---
+
+## Community
+
+Questions, ideas, or want to follow development? **[Join the Cerefox Discord](https://discord.gg/5dnBVeqs9c)** — setup & usage help for Cerefox and cf², release news, and a place to share what you're building.
 
 ---
 
