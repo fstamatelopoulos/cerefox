@@ -663,7 +663,7 @@ surface).
 | `document delete` (soft-delete) | — | 🔒 destructive; trust model keeps delete/restore on CLI + web only |
 | `document restore` | — | 🔒 trust model (CLI + web only) |
 | `document version list` | `cerefox_list_versions` | ✅ |
-| `document version archive` / `unarchive` | — | ⚠️ minor gap: version-retention protection is CLI/web only |
+| `document version archive` / `unarchive` | — | 🔒 intentional: version-retention protection is exposed only to CLI + web (a maintenance concern, not an agent primitive) |
 | `document set-projects` | `cerefox_set_document_projects` | ✅ full-set replace of a document's project memberships (shared core; `--clear` to remove all) |
 | `project list` | `cerefox_list_projects` | ✅ |
 | `project create` / `edit` / `delete` | — | 🔒 project mutations CLI + web only |
@@ -687,8 +687,9 @@ surface).
 3. `document edit` (metadata/title-only edit) → **intentional non-gap**: a
    human/web-parity convenience; agents use `cerefox_ingest` for content+metadata
    updates. Revisit only if a concrete agent workflow needs metadata-only edits.
-4. `document version archive` / `unarchive` → remaining minor gap; low-value for
-   agents (version-retention is a maintenance concern). Left open.
+4. `document version archive` / `unarchive` → **intentional non-gap**: version-retention
+   protection is exposed only to CLI + web (a maintenance concern, deliberately not on
+   the MCP/agent surface).
 
 ## Known issues
 
