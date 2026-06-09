@@ -57,6 +57,14 @@ jobs:
           tags: |
             type=raw,value=${{ github.event.inputs.tag }}
             type=raw,value=latest,enable=${{ github.event.inputs.publish_latest == 'true' }}
+          # Override metadata-action's defaults (which derive the description from the
+          # repo blurb) with install-focused text. GHCR shows org.opencontainers.image.
+          # description as the package's "About"; steer users to the install script, not
+          # a raw `docker pull` (which won't provision the volume + host helper).
+          labels: |
+            org.opencontainers.image.title=Cerefox Local
+            org.opencontainers.image.description=Self-hosted, all-in-one Cerefox knowledge-memory backend for AI agents (Postgres+pgvector, PostgREST, and the Cerefox server + web UI supervised in one container). Don't pull this image directly — install with the one-liner, which provisions the container, data volume, and host helper: curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh — full guide: https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-local.md
+            org.opencontainers.image.documentation=https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-local.md
 
       - name: Build + push (multi-arch)
         uses: docker/build-push-action@v6
