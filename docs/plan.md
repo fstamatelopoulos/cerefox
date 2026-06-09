@@ -3449,30 +3449,45 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
-**Status (2026-06-02, `main` at v0.9.10):** the resource-verb CLI shipped; Python is
-a husk (`uv run cerefox mcp` only); the entire runtime is TypeScript in
-`@cerefox/memory`. Since the v0.9.3 doc-accuracy release, v0.9.4–v0.9.10 patches
-landed — notably the web-UI redesign + pagination, the schema-version release gate
-(`cut_release.ts` now fails a `db/` change without a lockstep `schema_version` bump),
-in-place archived-version viewing, and an installer/`self-update` fix that bypasses
-stale package-manager **manifest** caches (`--no-cache` for bun, `--prefer-online`
-for npm) so re-installs always resolve the newest published version.
+**Update (2026-06-09, `main` at v0.10.3):** Iteration 30 (Local / Self-Hosted Cerefox,
+World B) shipped across v0.10.0–v0.10.2; v0.10.3 fixed the `cerefox server deploy` Edge
+Function bundler (`--use-api`, issue #84). Two active branches:
+- **`feat/local-embedder`** — design for a local ONNX embedder (fully-offline World B),
+  target **v0.11.0**. Design committed; implementation pending review.
+- **`feat/mcp-list-documents`** — closes the CLI↔MCP parity gap where
+  `cerefox document list --project` had no MCP form. `cerefox_metadata_search` now accepts
+  an empty `metadata_filter` when another scope (`project_name` / time) is supplied, so it
+  lists a project's documents. Handler + EF twin + GPT Actions OpenAPI (v1.9.0) relaxed in
+  lockstep; **no `schema_version` bump** (the RPC's `metadata @> '{}'` already match-alls,
+  so no `rpcs.sql` change). Added a CLI↔MCP parity matrix to `docs/guides/cli.md` that
+  surfaced two further gaps: `cerefox_set_document_projects` had no CLI verb (**now
+  closed** — added `cerefox document set-projects`, sharing a `replaceDocumentProjects`
+  core with the MCP tool), and metadata-only `document edit` has no MCP tool (left as an
+  intentional non-gap — a human/web convenience; agents use `cerefox_ingest`).
 
-**Two near-term tracks** (iteration numbers are planning IDs, **not** ship order;
-ship order by version: **iter-30 `v0.10.0` → iter-28 `v1.0` → iter-29 `v1.1`**):
-1. **Iteration 30 — Local / Self-Hosted Cerefox Backend (D1)**, target **v0.10.0**.
-   Design of record: [`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md).
-   On `feat/local-cerefox`: P0 spike, the all-in-one s6 image, the `/rest/v1` proxy, and
-   the **ghcr multi-arch publish** are ✅ done + validated. **Next (this is the remaining
-   v0.10.0 work — see "P2 finalized" above): the World-B user workflow** — the
-   `cerefox-local` host script (lifecycle + KB-proxy via `docker exec`), container
-   self-generated JWT (drop host minting), `CEREFOX_PROG_NAME` in the bin, simplified
-   `install-local.sh` as a Release asset, `cut_release.ts` asset upload, and the rewritten
-   `setup-local.md` (bundled). Then **cut v0.10.0** (publishes npm + ghcr) and test **both**
-   one-liners on a clean machine.
+**Baseline:** the resource-verb CLI shipped; Python is a husk (`uv run cerefox mcp`
+only); the entire runtime is TypeScript in `@cerefox/memory`. **Iteration 30 —
+Local / Self-Hosted Cerefox Backend (World B) is ✅ DONE and shipped** across
+v0.10.0–v0.10.2: the all-in-one s6 image, the `/rest/v1` proxy, ghcr multi-arch
+publish, the `cerefox-local` host script (lifecycle + KB-proxy via `docker exec`),
+container self-generated JWT, `install-local.sh` as a Release asset, completion +
+`configure-agent` for both bins, port auto-selection, and the World-B guide rewrite
+all landed and were validated. v0.10.3 then fixed the `cerefox server deploy` EF
+bundler (`--use-api`, issue #84). Design of record:
+[`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md).
+
+**Near-term tracks** (iteration numbers are planning IDs, not ship order):
+1. **Iteration 31 — Local ONNX embedder** (fully-offline World B), target **v0.11.0**,
+   on `feat/local-embedder`. **This is the only remaining Iteration-30-family build.**
+   Design committed; P0 implementation pending review. See iter-31 in the log above.
 2. **Iteration 28 — v1.0**, the stability commitment (strict SemVer becomes binding)
-   + security audit. Trigger: ~2–3 months of v0.9 in the wild + an outside user
+   + security audit. Trigger: ~2–3 months of v0.10 in the wild + an outside user
    installing unaided.
+3. **Iteration 29 — Document Relations & Semantic Graph** (post-v1.0, target **v1.1+**),
+   pending — design only. Design of record:
+   [`docs/research/document-relations-and-semantic-graph.md`](research/document-relations-and-semantic-graph.md).
+   (The early semantic-graph exploration branch was already merged to main;
+   implementation is future work.)
 
 Release history lives in [`CHANGELOG.md`](../CHANGELOG.md); the design-of-record
 for the polish arc is [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).

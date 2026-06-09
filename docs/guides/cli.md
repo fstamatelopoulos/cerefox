@@ -207,7 +207,9 @@ cerefox document list [OPTIONS]
 | `--deleted` | flag | off | List soft-deleted (trashed) documents instead of active ones, newest-deleted first. Pair the ids with `cerefox document restore` / `cerefox document delete`. |
 | `--json` | flag | off | Machine-readable JSON output. |
 
-**Output**: tabular `id | title | source | status | updated_at` listing (or `deleted_at` with `--deleted`). CLI-only — there is no MCP equivalent.
+**Output**: tabular `id | title | source | status | updated_at` listing (or `deleted_at` with `--deleted`).
+
+**MCP equivalent**: scope-by-project / metadata / time listing maps to [`cerefox_metadata_search`](../../AGENT_GUIDE.md) — e.g. `cerefox_metadata_search(project_name="research")` lists that project's documents (the `metadata_filter` may be empty when another scope is supplied). The `--deleted` (trash) view and unscoped whole-KB listing remain CLI-only.
 
 ---
 
@@ -237,6 +239,43 @@ Metadata-only edits do **not** create a new version. A title change re-derives t
 cerefox document edit <doc-id> --title "Renamed Doc"
 cerefox document edit <doc-id> --set-meta status=archived --unset-meta draft
 ```
+
+---
+
+### `cerefox document set-projects`
+
+**Purpose**: replace a document's project memberships with **exactly** the given set (full-set replace — any project not listed is removed). This is the CLI equivalent of the `cerefox_set_document_projects` MCP tool; both share one membership-replace core, so they behave identically. Content is untouched; the change is logged as an `update-metadata` audit entry.
+
+**Synopsis**:
+```
+cerefox document set-projects [OPTIONS] DOCUMENT_ID [PROJECT_NAMES...]
+```
+
+**Options**:
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `[project-names...]` | variadic args | _none_ | One or more project names. Each is created if missing; order preserved; case-insensitively de-duplicated. |
+| `--clear` | flag | off | Remove the document from **all** projects. Mutually exclusive with passing names. |
+| `--author <name>` (`-a`) | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Identity recorded in the audit log. |
+| `--author-type <type>` | `user`\|`agent` | `user` | Caller type recorded in the audit log. |
+
+To set memberships **and** update content in one shot, use `cerefox document ingest --document-id <id> --project-name …` instead. Use this command when you only need to change membership.
+
+**Examples**:
+```bash
+# Set the document to belong to exactly these two projects (replaces any others)
+cerefox document set-projects <doc-id> research archive
+
+# Remove the document from all projects
+cerefox document set-projects <doc-id> --clear
+```
+
+**Output**: a confirmation line with the document title and the resulting project set (or a "cleared all memberships" line), plus a reminder that the previous set was replaced.
+
+**Exit codes**: `0` on success; `1` on validation error (no names and no `--clear`, or both) or if the document is missing / soft-deleted.
+
+**MCP equivalent**: [`cerefox_set_document_projects`](../../AGENT_GUIDE.md).
 
 ---
 
@@ -599,9 +638,57 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 | `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <id> --requestor <name>` |
 | `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
+| `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <id> <name...> --author <a> --author-type <t>` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
 | `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
 | `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --requestor <name>` |
+
+## CLI ↔ MCP parity matrix
+
+The table above is MCP-first (it lists the tools that *have* a CLI form). This
+one is **CLI-first** — every `cerefox` command, with its MCP equivalent or an
+explicit reason it has none. It exists to make parity gaps visible. Legend:
+**✅ mapped** · **⚠️ gap** (a capability one surface has and the other lacks,
+arguably worth closing) · **🔒 intentional** (deliberately not on the MCP/agent
+surface).
+
+| CLI command | MCP equivalent | Status |
+|---|---|---|
+| `document ingest` | `cerefox_ingest` | ✅ |
+| `document ingest-dir` | — (agents loop `cerefox_ingest`) | 🔒 bulk filesystem walk; no server-side dir access from MCP |
+| `search` | `cerefox_search` | ✅ (CLI adds `--mode`/`--alpha`/`--min-score`/`--only-metadata`) |
+| `document get` | `cerefox_get_document` | ✅ |
+| `document list` | `cerefox_metadata_search` (scope by `project_name` / metadata / time) | ✅ as of this change. Unscoped whole-KB listing has no MCP path by design (scope it) |
+| `document edit` (title / metadata in place) | — | 🔒 intentional: a human/web-parity convenience. Agents update title+metadata deterministically via `cerefox_ingest` (with `document_id`); a metadata-only edit isn't a needed agent primitive |
+| `document delete` (soft-delete) | — | 🔒 destructive; trust model keeps delete/restore on CLI + web only |
+| `document restore` | — | 🔒 trust model (CLI + web only) |
+| `document version list` | `cerefox_list_versions` | ✅ |
+| `document version archive` / `unarchive` | — | ⚠️ minor gap: version-retention protection is CLI/web only |
+| `document set-projects` | `cerefox_set_document_projects` | ✅ full-set replace of a document's project memberships (shared core; `--clear` to remove all) |
+| `project list` | `cerefox_list_projects` | ✅ |
+| `project create` / `edit` / `delete` | — | 🔒 project mutations CLI + web only |
+| `metadata keys` | `cerefox_list_metadata_keys` | ✅ |
+| `metadata search` | `cerefox_metadata_search` | ✅ |
+| `audit list` | `cerefox_get_audit_log` | ✅ |
+| `guides list` / `show` / `open` / `ingest` | `cerefox_get_help` (partial) | ✅~ `get_help` returns the bundled quick-reference; `guides` is the richer CLI form |
+| `server deploy` / `server reindex` | — | 🔒 operator/deploy surface |
+| `config list` / `get` / `set` | — | 🔒 runtime config; operator surface |
+| `web` / `mcp` | — | 🔒 lifecycle (`mcp` *is* the MCP server) |
+| `init` / `doctor` / `status` / `configure-agent` / `self-update` / `completion` / `backup *` | — | 🔒 install / health / ops |
+
+**Gap status** (the 🔒 rows are deliberate and out of scope):
+
+1. `document list` → **closed**: project/metadata/time-scoped listing now routes
+   through `cerefox_metadata_search` (it accepts an empty `metadata_filter` when
+   another scope is supplied).
+2. `cerefox_set_document_projects` → **closed**: added `cerefox document
+   set-projects` (full-set replace, `--clear` to remove all), sharing the
+   membership-replace core with the MCP tool.
+3. `document edit` (metadata/title-only edit) → **intentional non-gap**: a
+   human/web-parity convenience; agents use `cerefox_ingest` for content+metadata
+   updates. Revisit only if a concrete agent workflow needs metadata-only edits.
+4. `document version archive` / `unarchive` → remaining minor gap; low-value for
+   agents (version-retention is a maintenance concern). Left open.
 
 ## Known issues
 

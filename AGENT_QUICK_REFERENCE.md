@@ -10,7 +10,7 @@ Cerefox is a persistent, shared knowledge base. You have **10 MCP tools** (9 of 
 | `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata`, `author` |
 | `cerefox_get_document` | Get full document by ID | `document_id` (required) |
 | `cerefox_list_versions` | Version history of a document | `document_id` (required) |
-| `cerefox_metadata_search` | Find docs by metadata (no text query) | `metadata_filter` (required), `include_content`, `updated_since` |
+| `cerefox_metadata_search` | Find or list docs by metadata, project, or time (no text query) | `metadata_filter`, `project_name` (list a project's docs), `updated_since`, `include_content` — **at least one** of metadata_filter/project_name/updated_since/created_since |
 | `cerefox_list_metadata_keys` | Discover available metadata keys | (none required) |
 | `cerefox_list_projects` | List all projects | (none required) |
 | `cerefox_set_document_projects` | Set doc's project memberships to exactly the given list (destructive replace; metadata-only, no content change) | `document_id`, `project_names` (required) |
@@ -64,8 +64,8 @@ Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/g
 | `cerefox_list_versions` | `cerefox document version list <id> --requestor "<your-name>"` |
 | `cerefox_list_projects` | `cerefox project list --requestor "<your-name>"` |
 | `cerefox_list_metadata_keys` | `cerefox metadata keys` |
-| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --requestor "<your-name>"` |
-| `cerefox_set_document_projects` | _MCP-only; a CLI command will be added in a future release. Until then, run via MCP if available._ |
+| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --requestor "<your-name>"` (list a project: `cerefox document list --project <name>`) |
+| `cerefox_set_document_projects` | `cerefox document set-projects <id> <name...> --author "<your-name>" --author-type agent` (or `--clear` to remove all) |
 | `cerefox_get_audit_log` | `cerefox audit list --requestor "<your-name>"` (add `--json` for scripted access) |
 | `cerefox_get_help` | `cerefox guides show agent-quick-reference` (or `cerefox guides list` for the full bundled-docs index) |
 

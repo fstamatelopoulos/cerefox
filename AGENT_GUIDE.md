@@ -149,16 +149,18 @@ Find documents by metadata criteria without a text search query.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `metadata_filter` | Yes | JSON key-value pairs (AND semantics). Example: `{"type": "decision-log"}` |
-| `project_name` | No | Restrict to a project. |
+| `metadata_filter` | No† | JSON key-value pairs (AND semantics). Example: `{"type": "decision-log"}` |
+| `project_name` | No† | Restrict to a project. Sufficient on its own to **list that project's documents**. |
 | `include_content` | No | Include full text (default false). |
 | `limit` | No | Max results (default 10). |
-| `updated_since` | No | ISO-8601 timestamp. Only docs updated on/after. |
-| `created_since` | No | ISO-8601 timestamp. Only docs created on/after. |
+| `updated_since` | No† | ISO-8601 timestamp. Only docs updated on/after. |
+| `created_since` | No† | ISO-8601 timestamp. Only docs created on/after. |
 | `max_bytes` | No | Response size budget when include_content is true. |
 | `requestor` | No | Your agent name. |
 
-Use for browsing by category, catching up on recent changes (`updated_since`), or finding all documents of a specific type.
+† **At least one** of `metadata_filter`, `project_name`, `updated_since`, or `created_since` must be supplied (so this never becomes an unbounded whole-KB dump). An empty `metadata_filter` plus `project_name` lists that project's documents.
+
+Use for browsing by category, catching up on recent changes (`updated_since`), listing all documents in a project (`project_name` alone), or finding all documents of a specific type. Results are ordered newest-updated first.
 
 ---
 
@@ -240,7 +242,7 @@ These two tools have **different contracts**. Picking the wrong one is the most 
 | Top-N ranked hits are enough to answer | You need a complete, exhaustive set (e.g. an inventory or a catch-up) |
 
 - **`cerefox_search` is relevance-ranked top-N.** It returns the best `match_count` matches (**default 5** — raise it via `match_count`). It is **not** an enumeration tool: if more docs match than `match_count`, the rest sit silently below the cutoff — and the one you most want (e.g. the *newest*) may be exactly the one dropped.
-- **`cerefox_metadata_search` is exhaustive enumeration by criteria.** No text query. Filters by `metadata_filter` (plus `project_name`, `updated_since` / `created_since`). It returns **metadata only by default** (`include_content=false`) — ids + titles + tags, which is cheap — so raise `limit` (**default 10**) freely to get the whole set. Discover available keys with `cerefox_list_metadata_keys`.
+- **`cerefox_metadata_search` is exhaustive enumeration by criteria.** No text query. Filters by `metadata_filter`, `project_name`, `updated_since` / `created_since` — supply **at least one** (an empty `metadata_filter` plus `project_name` lists that project's documents). It returns **metadata only by default** (`include_content=false`) — ids + titles + tags, which is cheap — so raise `limit` (**default 10**) freely to get the whole set. Discover available keys with `cerefox_list_metadata_keys`.
 
 ### Examples
 
@@ -248,6 +250,7 @@ These two tools have **different contracts**. Picking the wrong one is the most 
 - *"List every decision-log doc"* (enumeration) → `cerefox_metadata_search(metadata_filter={"type":"decision-log"}, limit=50, include_content=false)`
 - *"What changed since I last looked?"* → `cerefox_metadata_search(metadata_filter={"type":"decision-log"}, updated_since="2026-05-01T00:00:00Z")`
 - *"Just the ids of all active research docs"* → `cerefox_metadata_search(metadata_filter={"type":"research","status":"active"}, limit=100)`
+- *"List everything in the Cerefox project"* → `cerefox_metadata_search(project_name="Cerefox", limit=100)` (no `metadata_filter` needed)
 
 ### Pattern: finding the newest item in a growing series
 
@@ -420,6 +423,7 @@ The legacy Python `uv run cerefox` is a frozen husk as of v0.9 — only `uv run 
 | `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <document-id> --requestor <name>` |
 | `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
+| `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
 | `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
 | `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |

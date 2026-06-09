@@ -181,7 +181,7 @@ describe("input validation throws McpInvalidParams", () => {
     expect(err).toBeInstanceOf(McpInvalidParams);
   });
 
-  test("cerefox_metadata_search rejects missing metadata_filter", async () => {
+  test("cerefox_metadata_search rejects no criteria at all (no filter, no scope)", async () => {
     const tool = TOOLS_BY_NAME["cerefox_metadata_search"];
     let err: unknown;
     try {
@@ -192,7 +192,7 @@ describe("input validation throws McpInvalidParams", () => {
     expect(err).toBeInstanceOf(McpInvalidParams);
   });
 
-  test("cerefox_metadata_search rejects empty metadata_filter", async () => {
+  test("cerefox_metadata_search rejects empty metadata_filter with no other scope", async () => {
     const tool = TOOLS_BY_NAME["cerefox_metadata_search"];
     let err: unknown;
     try {
@@ -203,6 +203,16 @@ describe("input validation throws McpInvalidParams", () => {
     expect(err).toBeInstanceOf(McpInvalidParams);
   });
 
+  test("cerefox_metadata_search rejects a non-object metadata_filter", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_metadata_search"];
+    let err: unknown;
+    try {
+      await tool.handler(noopClient(), { metadata_filter: "nope" }, FAKE_CTX);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(McpInvalidParams);
+  });
   test("cerefox_set_document_projects rejects missing document_id", async () => {
     const tool = TOOLS_BY_NAME["cerefox_set_document_projects"];
     let err: unknown;
@@ -223,6 +233,41 @@ describe("input validation throws McpInvalidParams", () => {
       err = e;
     }
     expect(err).toBeInstanceOf(McpInvalidParams);
+  });
+});
+
+describe("cerefox_metadata_search listing (empty filter + scope)", () => {
+  // A mock client that resolves any project name → "proj-1" and records the
+  // params passed to the cerefox_metadata_search RPC.
+  function listingClient(captured: { params?: Record<string, unknown> }): SupabaseClient {
+    const projectChain = {
+      select: () => projectChain,
+      ilike: () => projectChain,
+      limit: () => ({ data: [{ id: "proj-1" }], error: null }),
+    };
+    return {
+      rpc: (name: string, params: Record<string, unknown>) => {
+        if (name === "cerefox_metadata_search") captured.params = params;
+        return { data: [], error: null };
+      },
+      from: () => projectChain,
+    } as unknown as SupabaseClient;
+  }
+
+  test("project_name alone lists docs (empty filter → RPC gets {} + resolved project_id)", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_metadata_search"];
+    const captured: { params?: Record<string, unknown> } = {};
+    await tool.handler(listingClient(captured), { project_name: "Cerefox" }, FAKE_CTX);
+    expect(captured.params?.p_metadata_filter).toEqual({});
+    expect(captured.params?.p_project_id).toBe("proj-1");
+  });
+
+  test("updated_since alone is a sufficient scope (no throw)", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_metadata_search"];
+    const captured: { params?: Record<string, unknown> } = {};
+    await tool.handler(listingClient(captured), { updated_since: "2026-01-01" }, FAKE_CTX);
+    expect(captured.params?.p_metadata_filter).toEqual({});
+    expect(captured.params?.p_updated_since).toBe("2026-01-01");
   });
 });
 

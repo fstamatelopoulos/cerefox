@@ -9,7 +9,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **`cerefox_metadata_search` can now list a project's documents** — closing a CLI↔MCP
+  parity gap (the CLI's `cerefox document list --project <name>` had no MCP equivalent).
+  `metadata_filter` is now **optional**: supply `project_name` (and/or `updated_since` /
+  `created_since`) alone to list documents by scope, ordered newest-updated first. At
+  least one of `metadata_filter` / `project_name` / `updated_since` / `created_since` is
+  still required, so the tool never becomes an unbounded whole-KB dump. Backward
+  compatible — existing non-empty-filter callers are unaffected. The twin
+  `cerefox-metadata-search` Edge Function and the GPT Actions OpenAPI block
+  (`info.version` → 1.9.0) were relaxed in lockstep. A new **CLI ↔ MCP parity matrix** in
+  [`docs/guides/cli.md`](docs/guides/cli.md) documents the full surface and the remaining
+  (intentional vs. actionable) gaps.
+- **`cerefox document set-projects <document-id> [names…]`** — new CLI command
+  closing the reverse parity gap (the `cerefox_set_document_projects` MCP tool
+  had no CLI form). Full-set replace of a document's project memberships
+  (`--clear` removes all); created-if-missing, case-insensitively de-duplicated,
+  logged as an `update-metadata` audit entry. Shares the membership-replace core
+  with the MCP tool (`_shared/mcp-tools/_projects.ts → replaceDocumentProjects`)
+  so both behave identically.
 
 ---
 
