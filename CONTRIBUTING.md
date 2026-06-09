@@ -186,7 +186,7 @@ packages/memory/
     bin/cerefox.ts                the package's bin — top-level error handler + commander dispatch
     cli/
       program.ts                  commander program assembly; one registerXyz() per subcommand
-      commands/                   28 subcommand files (including `mcp` which runs buildServer())
+      commands/                   35 subcommand files (including `mcp` which runs buildServer())
       util/                       checks (doctor/status), mcp-config-writers, bundled-docs, client, embed
   test/
     stdio-smoke.test.ts           spawn `cerefox mcp` and walk an MCP handshake

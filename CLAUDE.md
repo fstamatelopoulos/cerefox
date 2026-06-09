@@ -65,7 +65,7 @@ cerefox/
 │   └── memory/                    # @cerefox/memory npm package — both bins (v0.5+)
 │       ├── src/
 │       │   ├── bin/cerefox.ts      # single bin (v0.5.1+); commander dispatch + error handler
-│       │   ├── cli/                # commander program + 28 subcommand files
+│       │   ├── cli/                # commander program + 35 subcommand files
 │       │   │   ├── commands/       # one file per subcommand (including `mcp` which runs buildServer())
 │       │   │   └── util/           # checks, mcp-config-writers, bundled-docs
 │       │   ├── server.ts           # buildServer() factory (called by the `mcp` subcommand)

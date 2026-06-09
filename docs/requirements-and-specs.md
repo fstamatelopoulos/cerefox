@@ -63,7 +63,7 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 | FR-1.1 | Ingest Markdown files (.md) | P0 |
 | FR-1.2 | Ingest pasted text (treated as markdown) | P0 |
 | FR-1.3 | Convert PDF to markdown before ingestion (dropped in v0.7; Markdown/.txt only) | P1 |
-| FR-1.4 | Convert DOCX to markdown before ingestion (dropped in v0.7; Markdown/.txt only) | P1 |
+| FR-1.4 | Convert DOCX to markdown before ingestion (supported, beta — converted via mammoth on ingest) | P1 |
 | FR-1.5 | Deduplicate content by hash (skip re-ingestion of identical files) | P0 |
 | FR-1.6 | Associate ingested content with a project | P0 |
 | FR-1.7 | Attach metadata (tags, importance, custom fields) on ingest | P0 |
@@ -433,6 +433,6 @@ All parameters use `CEREFOX_` prefix and can be set via environment variables or
 | `CEREFOX_BACKUP_DIR` | `./backups` | Directory for file system backups |
 | `CEREFOX_VECTOR_DIMENSIONS` | `768` | Embedding vector dimensions |
 | `CEREFOX_LOG_LEVEL` | `INFO` | Logging level |
-| `CEREFOX_SMALL_TO_BIG_THRESHOLD` | `40000` | Doc size (chars) above which search returns chunks + neighbors instead of full document |
+| `CEREFOX_SMALL_TO_BIG_THRESHOLD` | `20000` | Doc size (chars) above which search returns chunks + neighbors instead of full document |
 | `CEREFOX_CONTEXT_WINDOW` | `1` | Number of neighbor chunks on each side of matched chunks in small-to-big retrieval |
 | `CEREFOX_VERSION_RETENTION_HOURS` | `48` | Hours to retain all document versions before lazy cleanup |

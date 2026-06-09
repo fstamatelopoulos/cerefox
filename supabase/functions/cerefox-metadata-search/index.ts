@@ -15,8 +15,11 @@ import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/inde
  * Note: cerefox-mcp calls the RPC directly (not this Edge Function).
  *
  * Request body (JSON):
- *   metadata_filter  object       required  Key-value pairs (AND semantics)
+ *   metadata_filter  object       optional  Key-value pairs (AND semantics)
  *   project_id       string       optional  Project UUID filter
+ *
+ * At least one of metadata_filter / project_id / updated_since / created_since
+ * must be supplied (an empty filter + project_id lists that project's docs).
  *   updated_since    string       optional  ISO-8601 lower bound for updated_at
  *   created_since    string       optional  ISO-8601 lower bound for created_at
  *   limit            number       optional  Max results (default: 10)
@@ -53,13 +56,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const metadata_filter = body.metadata_filter;
 
     if (
-      !metadata_filter ||
-      typeof metadata_filter !== "object" ||
-      Array.isArray(metadata_filter) ||
-      Object.keys(metadata_filter).length === 0
+      metadata_filter !== undefined &&
+      metadata_filter !== null &&
+      (typeof metadata_filter !== "object" || Array.isArray(metadata_filter))
     ) {
       return new Response(
-        JSON.stringify({ error: "metadata_filter is required and must be a non-empty JSON object" }),
+        JSON.stringify({ error: "metadata_filter must be a JSON object when provided" }),
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
@@ -67,6 +69,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const project_id = body.project_id ?? null;
     const updated_since = body.updated_since ?? null;
     const created_since = body.created_since ?? null;
+
+    // metadata_filter is optional, but at least one narrowing criterion is
+    // required so this never becomes an unbounded whole-KB dump. An empty
+    // filter + project_id lists a project's documents (the RPC's
+    // `metadata @> '{}'` matches every row; the project predicate narrows it).
+    const has_metadata =
+      metadata_filter && typeof metadata_filter === "object" &&
+      Object.keys(metadata_filter).length > 0;
+    if (!has_metadata && !project_id && !updated_since && !created_since) {
+      return new Response(
+        JSON.stringify({
+          error: "Provide at least one of: metadata_filter, project_id, updated_since, or created_since.",
+        }),
+        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      );
+    }
     const limit = body.limit ?? 10;
     const include_content = body.include_content ?? false;
     const requested_max_bytes = body.max_bytes;
@@ -102,7 +120,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const params: Record<string, unknown> = {
-      p_metadata_filter: metadata_filter,
+      p_metadata_filter: has_metadata ? metadata_filter : {},
       p_project_id: project_id,
       p_updated_since: updated_since,
       p_created_since: created_since,

@@ -604,7 +604,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 1.8.0
+  version: 1.9.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -895,15 +895,17 @@ paths:
     post:
       operationId: metadataSearch
       summary: >
-        Find documents by metadata key-value criteria without a text search term.
-        Use to discover documents tagged with specific attributes or browse by taxonomy.
+        Find or list documents by metadata key-value criteria without a text
+        search term. Use to discover documents tagged with specific attributes,
+        browse by taxonomy, or list a project's documents (pass project_id alone).
+        At least one of metadata_filter, project_id, updated_since, or
+        created_since must be supplied.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [metadata_filter]
               properties:
                 metadata_filter:
                   type: object
@@ -912,10 +914,14 @@ paths:
                   description: >
                     Key-value pairs; ALL must match (AND semantics).
                     Example: {"type": "decision", "status": "active"}.
+                    Optional — omit (or pass {}) to list by project_id / time
+                    range alone. At least one filter (metadata_filter, project_id,
+                    updated_since, or created_since) is required.
                 project_id:
                   type: string
                   description: >
-                    Filter by project UUID (optional). NOTE: this is the project
+                    Filter by project UUID (optional). Sufficient on its own to
+                    list that project's documents. NOTE: this is the project
                     UUID, not its name — unlike searchKnowledgeBase / ingestNote
                     which take project_name. Get UUIDs from listProjects.
                 updated_since:
@@ -1148,6 +1154,7 @@ The agent docs are written around MCP tool names. **CLI flag names match MCP par
 | `cerefox_get_document` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions` | `cerefox document version list <document-id> --requestor <name>` |
 | `cerefox_list_projects` | `cerefox project list --requestor <name>` |
+| `cerefox_set_document_projects` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear`) |
 | `cerefox_list_metadata_keys` | `cerefox metadata keys` |
 | `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
 | `cerefox_get_audit_log` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |

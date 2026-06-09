@@ -436,7 +436,7 @@ Returns: list of version rows — `id`, `version_number`, `total_chars`, `chunk_
 
 **REST API**: `GET /api/v1/documents/{id}` and `GET /api/v1/documents/{id}/versions` — same semantics as the MCP tools, served by the TS web server (`cerefox web`) for the web UI and scripting.
 
-**CLI** (resource-verb shape, v0.9.0+): `cerefox document get <id>` (current content) and `cerefox document get <id> --version <version-id>` (specific version). `cerefox version list <id>` lists version history.
+**CLI** (resource-verb shape, v0.9.0+): `cerefox document get <id>` (current content) and `cerefox document get <id> --version <version-id>` (specific version). `cerefox document version list <id>` lists version history.
 
 ### 5.4 Response Size Management
 

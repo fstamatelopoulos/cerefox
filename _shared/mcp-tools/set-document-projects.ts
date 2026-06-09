@@ -11,7 +11,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.ts";
+import { replaceDocumentProjects } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
@@ -42,80 +42,15 @@ async function handler(
     throw new McpInvalidParams("project_names must contain only strings.");
   }
 
-  // Strip empties; preserve order; dedup case-insensitively.
-  const seenLower = new Set<string>();
-  const cleanNames: string[] = [];
-  for (const n of project_names_raw as string[]) {
-    const stripped = n.trim();
-    if (!stripped) continue;
-    const key = stripped.toLowerCase();
-    if (seenLower.has(key)) continue;
-    seenLower.add(key);
-    cleanNames.push(stripped);
-  }
-
-  // Verify the document exists and isn't soft-deleted.
-  const { data: doc } = await supabase
-    .from("cerefox_documents")
-    .select("id, title")
-    .eq("id", document_id)
-    .is("deleted_at", null)
-    .limit(1);
-  if (!doc?.length) {
-    throw new Error(`Document not found (or soft-deleted): ${document_id}`);
-  }
-
-  // Resolve each name → project_id (create if absent). Preserve order.
-  const projectIds: string[] = [];
-  for (const name of cleanNames) {
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", name)
-      .limit(1);
-    if (proj?.length) {
-      projectIds.push(proj[0].id);
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name })
-        .select("id");
-      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
-    }
-  }
-
-  // DELETE-then-INSERT replace (matches Python assign_document_projects).
-  await supabase.from("cerefox_document_projects").delete().eq("document_id", document_id);
-  if (projectIds.length > 0) {
-    const rows = projectIds.map((pid) => ({ document_id, project_id: pid }));
-    await supabase.from("cerefox_document_projects").insert(rows);
-  }
-
-  // Audit entry — project membership is metadata, not content.
-  try {
-    await supabase.rpc("cerefox_create_audit_entry", {
-      p_document_id: document_id,
-      p_version_id: null,
-      p_operation: "update-metadata",
-      p_author: author,
-      p_author_type: "agent",
-      p_size_before: null,
-      p_size_after: null,
-      p_description:
-        cleanNames.length > 0
-          ? `Set document projects to [${cleanNames.join(", ")}]`
-          : "Cleared all project memberships",
-    });
-  } catch (err) {
-    console.warn("set-document-projects: audit entry failed", err);
-  }
-
-  logUsage(supabase, {
-    operation: "set-document-projects",
+  // The clean/dedup, existence check, name→id resolution, DELETE-then-INSERT
+  // replace, audit entry, and usage log all live in the shared core so the
+  // `cerefox document set-projects` CLI command behaves identically.
+  const { cleanNames, projectIds } = await replaceDocumentProjects(supabase, {
+    documentId: document_id,
+    projectNames: project_names_raw as string[],
+    author,
+    authorType: "agent",
     accessPath: ctx.accessPath,
-    requestor: author,
-    document_id,
-    result_count: projectIds.length,
   });
 
   if (cleanNames.length === 0) {

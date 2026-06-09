@@ -33,6 +33,7 @@ import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
 import { registerDocumentEdit } from "./commands/document-edit.ts";
 import { registerDocumentRestore } from "./commands/document-restore.ts";
+import { registerDocumentSetProjects } from "./commands/document-set-projects.ts";
 import { registerGuides } from "./commands/guides.ts";
 import { registerProjectCreate } from "./commands/project-create.ts";
 import { registerProjectEdit } from "./commands/project-edit.ts";
@@ -179,6 +180,7 @@ export function buildProgram(): Command {
   moveInto(document, registerDeleteDoc, "delete");
   registerDocumentRestore(document); // v0.9.0: new command (no old flat verb)
   registerDocumentEdit(document); // v0.9.1: non-destructive title/metadata patch
+  registerDocumentSetProjects(document); // CLI parity with cerefox_set_document_projects
   moveInto(document, registerIngest, "ingest");
   moveInto(document, registerIngestDir, "ingest-dir");
 

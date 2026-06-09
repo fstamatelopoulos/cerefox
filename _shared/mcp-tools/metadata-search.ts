@@ -24,11 +24,18 @@ async function handler(
   const include_content = (args.include_content as boolean | undefined) ?? false;
   const requested_max_bytes = args.max_bytes as number | undefined;
 
-  if (!metadata_filter || typeof metadata_filter !== "object" || Array.isArray(metadata_filter)) {
-    throw new McpInvalidParams("metadata_filter is required and must be a JSON object");
+  if (metadata_filter !== undefined && (typeof metadata_filter !== "object" || Array.isArray(metadata_filter))) {
+    throw new McpInvalidParams("metadata_filter must be a JSON object when provided");
   }
-  if (Object.keys(metadata_filter).length === 0) {
-    throw new McpInvalidParams("metadata_filter must contain at least one key-value pair");
+  const has_metadata = !!metadata_filter && Object.keys(metadata_filter).length > 0;
+  // metadata_filter is optional, but at least one narrowing criterion is
+  // required so this can never become an unbounded whole-KB dump. An empty
+  // filter + project_name lists a project's documents: the RPC's
+  // `metadata @> '{}'` matches every row and the project predicate narrows it.
+  if (!has_metadata && !project_name && !updated_since && !created_since) {
+    throw new McpInvalidParams(
+      "Provide at least one of: metadata_filter, project_name, updated_since, or created_since.",
+    );
   }
 
   // Resolve project name to UUID if provided
@@ -45,7 +52,7 @@ async function handler(
     : null;
 
   const params: Record<string, unknown> = {
-    p_metadata_filter: metadata_filter,
+    p_metadata_filter: metadata_filter ?? {},
     p_project_id: projectId,
     p_updated_since: updated_since ?? null,
     p_created_since: created_since ?? null,
@@ -78,12 +85,12 @@ async function handler(
     operation: "metadata_search",
     accessPath: ctx.accessPath,
     requestor: args.requestor as string | undefined,
-    query_text: JSON.stringify(metadata_filter),
+    query_text: JSON.stringify(metadata_filter ?? {}),
     project_id: projectId,
     result_count: rows.length,
   });
 
-  if (rows.length === 0) return "No documents match the metadata filter.";
+  if (rows.length === 0) return "No documents match the given criteria.";
 
   // Note: when include_content is true the RPC already respects p_max_bytes
   // server-side. The applyByteBudget helper is retained here only for
@@ -114,18 +121,17 @@ async function handler(
 export const metadataSearchTool: ToolDefinition = {
   name: "cerefox_metadata_search",
   description:
-    "Find documents by metadata key-value criteria without a text search term. Use to discover documents tagged with specific attributes, browse by taxonomy, or retrieve messages/tasks by type and status.",
+    "Find or list documents by metadata key-value criteria without a text search term. Use to discover documents tagged with specific attributes, browse by taxonomy, retrieve messages/tasks by type and status, or list all documents in a project (pass project_name alone). At least one of metadata_filter, project_name, updated_since, or created_since must be supplied; results are ordered newest-updated first.",
   inputSchema: {
     type: "object",
-    required: ["metadata_filter"],
     properties: {
       metadata_filter: {
         type: "object",
         description:
-          'Key-value pairs; ALL must match (AND semantics). Example: {"type": "decision", "status": "active"}. Call cerefox_list_metadata_keys first to discover available keys.',
+          'Key-value pairs; ALL must match (AND semantics). Example: {"type": "decision", "status": "active"}. Call cerefox_list_metadata_keys first to discover available keys. Optional — omit (or pass {}) to list by project_name / time range alone.',
         additionalProperties: { type: "string" },
       },
-      project_name: { type: "string", description: "Restrict to a project by name (optional)" },
+      project_name: { type: "string", description: "Restrict to a project by name. Sufficient on its own to list that project's documents (optional)." },
       updated_since: {
         type: "string",
         description: "ISO-8601 timestamp; only docs updated on/after (optional)",
