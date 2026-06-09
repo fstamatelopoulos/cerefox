@@ -1,5 +1,13 @@
 # CLI ↔ Web parity audit (iter-27 / v0.9.0)
 
+> **Historical snapshot (v0.9.0).** Parity as of the v0.9.0 CLI rename. The gaps
+> deferred below have since **shipped**: `cerefox document edit`, `cerefox document
+> restore`, and `cerefox project create/edit/delete` (v0.9.1), and later `cerefox
+> document set-projects` (CLI parity with the `cerefox_set_document_projects` MCP
+> tool); `cerefox_metadata_search` can now also list a project's documents. Treat
+> the tables below as a point-in-time record — the live parity reference is the
+> CLI↔MCP matrix in [`docs/guides/cli.md`](../guides/cli.md).
+
 Produced for the v0.9.0 rename-only CLI redesign. Maps every web-UI surface to
 its CLI equivalent and vice-versa, and records the gaps. Conclusion up front:
 **the only real web→CLI gaps map to the new commands already deferred to

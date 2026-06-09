@@ -53,7 +53,7 @@ A living document where agents record decisions, experiment outcomes, and lesson
 
 **Example**: A coding agent working on a project records "Chose PostgreSQL RPC approach over application-level logic because..." in a decision log document. Next week, a different agent working on a related feature searches Cerefox, finds the decision log, and understands the rationale without re-deriving it.
 
-**How it works**: Create a document with a structured format (date, context, decision, outcome). Use a consistent title or project tag so agents can find it. Use `update_if_exists: true` to append new entries.
+**How it works**: Create a document with a structured format (date, context, decision, outcome). Use a consistent title or project tag so agents can find it. To add entries over time, re-ingest with `update_if_exists: true` (or `document_id`) — this replaces the document in place, so build the new full content by appending to the prior content you fetched.
 
 **Best for**: Project-level institutional memory, avoiding repeated decisions, onboarding new agent sessions.
 

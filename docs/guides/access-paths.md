@@ -209,7 +209,7 @@ paths.
 | Tier | Operations | Reversible? | Where exposed |
 |---|---|---|---|
 | 1. Reads + soft mutations | search, get, list-*, ingest (create/update), metadata-search, get-audit-log | n/a (reads) / yes (versioned) | All paths — MCP, Edge Functions, CLI, web UI |
-| 2. Soft-destructive | `delete_document` (soft delete to trash), `set_review_status` | yes — restorable via web UI | All paths (CLI: `cerefox document delete`; web UI; Python; **not** MCP or Edge Functions today) |
+| 2. Soft-destructive | `delete_document` (soft delete to trash), `set_review_status` | yes — restorable via web UI | All paths (CLI: `cerefox document delete`; web UI; **not** MCP or Edge Functions today) |
 | 3. **Hard-destructive** | `purge_document` (permanent), `restore_document` (un-trash), `set_version_archived` (toggle version retention) | no (purge) / yes (restore, but recovers from a destructive action) | **Web UI only** |
 
 ### Why purge / restore are web-UI-only

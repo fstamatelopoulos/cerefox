@@ -1,73 +1,44 @@
-# React + TypeScript + Vite
+# Cerefox Web UI (frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The Cerefox web UI — a React + TypeScript single-page app (Mantine UI, TanStack
+Query, Vite), served at `/app/` by the TypeScript web server (`cerefox web`).
 
-Currently, two official plugins are available:
+## Develop
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+bun install
+bun run dev        # Vite dev server with HMR (point it at a running `cerefox web` backend)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Use the Vite dev server for iterative UI work — a from-source `cerefox web` reads
+`index.html` into memory at startup, so it serves stale hashed assets until
+restarted after a rebuild.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Build
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+bun run build      # tsc -b && vite build → production SPA bundle (base: /app/)
 ```
+
+Installed users never build this: the bundle ships inside the `@cerefox/memory`
+npm package and is served by `cerefox web`. Rebuild only when changing the
+frontend from source.
+
+## Lint & test
+
+```bash
+bun run lint       # eslint
+bunx playwright install chromium
+bun run test:e2e   # Playwright browser tests against a local `cerefox web`
+```
+
+## Layout
+
+- `src/pages/` — route pages (Search, Document, Ingest, Projects, Metadata
+  Search, Audit Log, Analytics, Dashboard, Help, Trash).
+- `src/components/` — shared UI (charts, banners, layout).
+- `src/api/` — typed client for the `cerefox web` JSON API.
+- `vite.config.ts` — build config (`base: /app/`).
+
+Design history: [`docs/specs/ui-redesign-spa-python-api.md`](../docs/specs/ui-redesign-spa-python-api.md).
+The serving command is documented in [`docs/guides/cli.md`](../docs/guides/cli.md) (`cerefox web`).
