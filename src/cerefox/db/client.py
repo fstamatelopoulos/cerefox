@@ -763,6 +763,11 @@ class CerefoxClient:
             "p_source_label": source_label,
             "p_retention_hours": retention_hours,
             "p_cleanup_enabled": cleanup_enabled,
+            # iter-32 (optimistic concurrency): the frozen Python fallback
+            # predates the expected_content_hash contract, so it explicitly
+            # declares last-write-wins to preserve its historical behavior.
+            # This is the one deliberate exception to "Python is frozen".
+            "p_last_write_wins": True,
         }
 
         rows = self.rpc("cerefox_ingest_document", params)

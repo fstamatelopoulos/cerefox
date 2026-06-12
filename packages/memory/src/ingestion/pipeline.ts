@@ -36,6 +36,7 @@ import {
 } from "./client-bridge.ts";
 import { fileToMarkdown } from "./file-to-markdown.ts";
 import {
+  ConcurrencyConflictError,
   loadPipelineSettings,
   type IngestResult,
   type IngestTextOptions,
@@ -96,6 +97,8 @@ export class IngestionPipeline {
       documentId,
       author = "unknown",
       authorType = "user",
+      expectedContentHash,
+      lastWriteWins = false,
     } = opts;
 
     const listFormProvided =
@@ -125,6 +128,8 @@ export class IngestionPipeline {
         metadata,
         author,
         authorType,
+        expectedContentHash,
+        lastWriteWins,
       });
       if (!listFormProvided && (projectId || projectName)) {
         const singular = await resolveProjectIds(
@@ -169,6 +174,8 @@ export class IngestionPipeline {
           metadata,
           author,
           authorType,
+          expectedContentHash,
+          lastWriteWins,
         });
         if (!listFormProvided && (projectId || projectName)) {
           const singular = await resolveProjectIds(
@@ -311,6 +318,8 @@ export class IngestionPipeline {
       metadata,
       author = "unknown",
       authorType = "user",
+      expectedContentHash,
+      lastWriteWins = false,
     } = opts;
 
     // ── (1) Verify document exists ───────────────────────────────────────
@@ -324,6 +333,25 @@ export class IngestionPipeline {
     const contentUnchanged = newHash === existing.content_hash;
 
     if (!contentUnchanged) {
+      // Optimistic-concurrency fast-fail (iter-32): a stale token fails here,
+      // BEFORE the embedding spend. Advisory only — the authoritative,
+      // race-free check is inside the cerefox_ingest_document RPC
+      // (SELECT … FOR UPDATE). Content-unchanged saves are exempt: identical
+      // content cannot lose data.
+      if (
+        !lastWriteWins &&
+        expectedContentHash &&
+        expectedContentHash !== existing.content_hash
+      ) {
+        throw new ConcurrencyConflictError(
+          documentId,
+          existing.content_hash,
+          `CEREFOX_CONFLICT: document ${documentId} changed since it was read ` +
+            `(expected hash ${expectedContentHash}, current hash ${existing.content_hash}). ` +
+            `Re-read the document, merge your changes, and retry with the new hash.`,
+        );
+      }
+
       const collision = await this.db.getDocumentByHash(newHash);
       if (collision && collision.id !== documentId) {
         throw new Error(
@@ -467,6 +495,8 @@ export class IngestionPipeline {
       sourceLabel: source,
       retentionHours: this.settings.versionRetentionHours,
       cleanupEnabled: this.settings.versionCleanupEnabled,
+      expectedContentHash: expectedContentHash ?? null,
+      lastWriteWins,
     });
 
     // Update project membership if explicitly provided.
@@ -524,5 +554,7 @@ export {
   type IngestTextOptions,
   type UpdateDocumentOptions,
   type PipelineSettings,
+  ConcurrencyConflictError,
+  ConcurrencyTokenRequiredError,
   DEFAULT_PIPELINE_SETTINGS,
 } from "./types.ts";

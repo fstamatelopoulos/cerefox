@@ -78,6 +78,7 @@ async function handler(
     project_ids: string[];
     project_names: string[];
     version_count: number;
+    content_hash: string | null;
     content: string | null;
   }>;
 
@@ -105,9 +106,10 @@ async function handler(
     const meta = Object.entries(row.doc_metadata ?? {})
       .map(([k, v]) => `${k}=${v}`)
       .join(", ");
+    const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
     const header =
       `## ${row.title} [id: ${row.document_id}]\n` +
-      `${meta}${projects} | ${row.total_chars} chars | ${row.review_status} | updated ${row.updated_at?.slice(0, 10) ?? "?"}`;
+      `${meta}${projects} | ${row.total_chars} chars | ${row.review_status} | updated ${row.updated_at?.slice(0, 10) ?? "?"}${hash}`;
 
     if (include_content && row.content) {
       return `${header}\n\n${row.content}`;

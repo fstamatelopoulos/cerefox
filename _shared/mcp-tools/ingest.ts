@@ -23,6 +23,43 @@ import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
+/**
+ * Agent-first instructions for an optimistic-concurrency conflict (iter-32).
+ * Raised either by the local fast-fail (before the embedding spend) or by the
+ * authoritative check inside the cerefox_ingest_document RPC.
+ */
+function conflictError(documentId: string, expectedHash: string, currentHash: string): Error {
+  return new Error(
+    `Conflict: document ${documentId} changed since you read it ` +
+      `(your base hash: ${expectedHash}, current hash: ${currentHash}). ` +
+      `To resolve: (1) cerefox_get_document("${documentId}") to fetch the latest content ` +
+      `and its content_hash, (2) merge your changes into it, (3) retry cerefox_ingest ` +
+      `with expected_content_hash set to the new hash. Do not overwrite blindly — ` +
+      `the current content may include another writer's work.`,
+  );
+}
+
+/** Map RPC-side CEREFOX_CONFLICT / CEREFOX_TOKEN_REQUIRED errors to agent-first text. */
+function mapIngestRpcError(message: string, documentId: string): Error {
+  if (message.includes("CEREFOX_CONFLICT")) {
+    const current = message.match(/current hash ([0-9a-f]{64})/)?.[1] ?? "unknown";
+    const expected = message.match(/expected hash ([0-9a-f]{64})/)?.[1] ?? "unknown";
+    return conflictError(documentId, expected, current);
+  }
+  if (message.includes("CEREFOX_TOKEN_REQUIRED")) {
+    const current = message.match(/Current hash: ([0-9a-f]{64})/)?.[1];
+    return new Error(
+      `Concurrency token required: content updates need expected_content_hash — ` +
+        `the content_hash of the version you based your edit on (returned by ` +
+        `cerefox_get_document, cerefox_search, and cerefox_metadata_search).` +
+        (current ? ` The document's current hash is ${current}; pass it ONLY if your edit was based on the current content.` : "") +
+        ` If you have not read the document, read it first. To deliberately overwrite ` +
+        `regardless of concurrent changes, pass last_write_wins=true.`,
+    );
+  }
+  return new Error(`Ingest RPC failed: ${message}`);
+}
+
 async function handler(
   supabase: MCPSupabaseClient,
   args: Record<string, unknown>,
@@ -38,6 +75,8 @@ async function handler(
   const update_if_exists = (args.update_if_exists as boolean | undefined) ?? false;
   const author = (args.author as string | undefined) ?? "mcp-agent";
   const author_type = "agent"; // MCP path is always agent
+  const expected_content_hash = (args.expected_content_hash as string | undefined)?.trim() || null;
+  const last_write_wins = (args.last_write_wins as boolean | undefined) ?? false;
 
   if (!title || !content?.trim()) {
     throw new McpInvalidParams("title and content are required");
@@ -83,7 +122,13 @@ async function handler(
       const note = update_if_exists
         ? ""
         : " Note: update_if_exists flag was overridden by document_id.";
-      return `Document already up-to-date: "${existingDoc.title}" (id: ${existingDoc.id}). Content hash unchanged.${note}`;
+      return `Document already up-to-date: "${existingDoc.title}" (id: ${existingDoc.id}). Content hash unchanged (${contentHash}).${note}`;
+    }
+
+    // Fast-fail on a stale token BEFORE paying the embedding cost. Advisory
+    // only — the authoritative, race-free check is inside the RPC (FOR UPDATE).
+    if (!last_write_wins && expected_content_hash && expected_content_hash !== existingDoc.content_hash) {
+      throw conflictError(existingDoc.id, expected_content_hash, existingDoc.content_hash);
     }
 
     const chunks = chunkMarkdown(content);
@@ -115,9 +160,11 @@ async function handler(
       p_author: author,
       p_author_type: author_type,
       p_source_label: source,
+      p_expected_content_hash: expected_content_hash,
+      p_last_write_wins: last_write_wins,
     });
 
-    if (ingestErr) throw new Error(`Ingest RPC failed: ${ingestErr.message}`);
+    if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);
 
     logUsage(supabase, {
       operation: "ingest",
@@ -136,7 +183,7 @@ async function handler(
     const note = update_if_exists
       ? ""
       : " Note: update_if_exists flag was overridden by document_id.";
-    return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars.${note}`;
+    return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${note}`;
   }
 
   // ── Update-existing path ─────────────────────────────────────────────────
@@ -152,7 +199,13 @@ async function handler(
       const existingDoc = existing[0];
 
       if (existingDoc.content_hash === contentHash) {
-        return `Document already up-to-date: "${existingDoc.title}" (id: ${existingDoc.id}). Content hash unchanged.`;
+        return `Document already up-to-date: "${existingDoc.title}" (id: ${existingDoc.id}). Content hash unchanged (${contentHash}).`;
+      }
+
+      // Fast-fail on a stale token BEFORE the embedding cost (advisory; the
+      // authoritative check is in the RPC).
+      if (!last_write_wins && expected_content_hash && expected_content_hash !== existingDoc.content_hash) {
+        throw conflictError(existingDoc.id, expected_content_hash, existingDoc.content_hash);
       }
 
       const chunks = chunkMarkdown(content);
@@ -184,9 +237,11 @@ async function handler(
         p_author: author,
         p_author_type: author_type,
         p_source_label: source,
+        p_expected_content_hash: expected_content_hash,
+        p_last_write_wins: last_write_wins,
       });
 
-      if (ingestErr) throw new Error(`Ingest RPC failed: ${ingestErr.message}`);
+      if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);
 
       logUsage(supabase, {
         operation: "ingest",
@@ -202,7 +257,7 @@ async function handler(
         await ensureDocumentInProject(supabase, existingDoc.id, project_name);
       }
 
-      return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars.`;
+      return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.`;
     }
     // Fall through to create path
   }
@@ -302,6 +357,16 @@ export const ingestTool: ToolDefinition = {
         type: "boolean",
         description:
           "When true, update an existing document with the same title instead of creating a new one (default: false). Ignored when document_id is provided.",
+      },
+      expected_content_hash: {
+        type: "string",
+        description:
+          "REQUIRED on content updates (optimistic concurrency): the content_hash of the document version you based your edit on, as returned by cerefox_get_document / cerefox_search / cerefox_metadata_search. If the document changed since you read it, the update fails with a conflict — re-read, merge, retry with the new hash. Not needed when creating a new document.",
+      },
+      last_write_wins: {
+        type: "boolean",
+        description:
+          "Explicitly skip the concurrency check and overwrite regardless of concurrent changes (default: false). Use ONLY when an external source of truth makes conflicts meaningless (e.g. re-syncing from files). Recorded in the audit log.",
       },
       metadata: { type: "object", description: "Arbitrary JSON metadata (optional)" },
       author: {

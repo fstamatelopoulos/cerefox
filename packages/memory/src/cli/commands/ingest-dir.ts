@@ -144,6 +144,9 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
         updateExisting: Boolean(options.updateIfExists),
         author,
         authorType: authorType as "user" | "agent",
+        // Filesystem-sync semantics: the directory IS the source of truth, so
+        // the optimistic-concurrency check is bypassed by design (iter-32).
+        lastWriteWins: true,
       });
       outcomes.push({
         file,

@@ -175,6 +175,9 @@ export function registerDocumentReadRoutes(app: Hono, ctx: WebContext): void {
       created_at: meta ? ((meta.created_at as string | null) ?? null) : null,
       updated_at: meta ? ((meta.updated_at as string | null) ?? null) : null,
       deleted_at: meta ? ((meta.deleted_at as string | null) ?? null) : null,
+      // Optimistic-concurrency token (iter-32): the edit page sends this back
+      // as expected_content_hash on save. Always the CURRENT hash.
+      content_hash: meta ? ((meta.content_hash as string | null) ?? null) : null,
       versions: versions.map((v) => ({
         version_id: v.version_id,
         version_number: v.version_number,

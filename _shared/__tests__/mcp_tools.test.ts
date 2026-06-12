@@ -236,6 +236,72 @@ describe("input validation throws McpInvalidParams", () => {
   });
 });
 
+describe("cerefox_ingest optimistic concurrency (iter-32)", () => {
+  // Mock client whose document lookup returns a doc with the given hash.
+  // The stale-token fast-fail throws BEFORE chunking/embedding, so no
+  // OpenAI or RPC mocking is needed beyond the lookup chain.
+  function docClient(currentHash: string): SupabaseClient {
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      order: () => chain,
+      limit: () => ({ data: [{ id: "doc-1", title: "T", content_hash: currentHash }], error: null }),
+    };
+    return {
+      from: () => chain,
+      rpc: () => ({ data: null, error: null }),
+    } as unknown as SupabaseClient;
+  }
+
+  test("stale expected_content_hash fast-fails with merge instructions", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_ingest"];
+    let err: unknown;
+    try {
+      await tool.handler(
+        docClient("c".repeat(64)),
+        {
+          title: "T",
+          content: "new body",
+          document_id: "doc-1",
+          expected_content_hash: "a".repeat(64),
+        },
+        { ...FAKE_CTX, openaiApiKey: "test-key" },
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Error);
+    const msg = (err as Error).message;
+    expect(msg).toContain("Conflict");
+    expect(msg).toContain("cerefox_get_document");
+    expect(msg).toContain("c".repeat(64)); // tells the agent the current hash
+  });
+
+  test("last_write_wins skips the fast-fail (reaches the embed stage)", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_ingest"];
+    let err: unknown;
+    try {
+      await tool.handler(
+        docClient("c".repeat(64)),
+        {
+          title: "T",
+          content: "new body",
+          document_id: "doc-1",
+          expected_content_hash: "a".repeat(64),
+          last_write_wins: true,
+        },
+        { ...FAKE_CTX, openaiApiKey: "test-key" },
+      );
+    } catch (e) {
+      err = e;
+    }
+    // It must NOT be the conflict error — with the check bypassed the handler
+    // proceeds to the embedding call, which fails against the fake key.
+    expect(String((err as Error)?.message ?? "")).not.toContain("Conflict:");
+  });
+});
+
 describe("cerefox_metadata_search listing (empty filter + scope)", () => {
   // A mock client that resolves any project name → "proj-1" and records the
   // params passed to the cerefox_metadata_search RPC.

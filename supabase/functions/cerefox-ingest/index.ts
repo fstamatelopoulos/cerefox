@@ -40,6 +40,42 @@ interface IngestRequest {
   update_if_exists?: boolean;
   author?: string;
   author_type?: string; // 'user' | 'agent'
+  // Optimistic concurrency (iter-32): REQUIRED on content updates — the
+  // content_hash of the version this edit was based on. Conflict → HTTP 409.
+  expected_content_hash?: string;
+  // Explicitly skip the concurrency check (external source of truth).
+  last_write_wins?: boolean;
+}
+
+// Map the RPC's CEREFOX_CONFLICT / CEREFOX_TOKEN_REQUIRED errors to HTTP
+// responses (409 conflict / 400 missing token). Returns null for other errors.
+function concurrencyErrorResponse(
+  message: string,
+  headers: Record<string, string>,
+): Response | null {
+  if (message.includes("CEREFOX_CONFLICT")) {
+    return new Response(
+      JSON.stringify({
+        error: "conflict",
+        message:
+          "Document changed since it was read. Re-read it (getDocument), merge your changes, and retry with the new expected_content_hash.",
+        detail: message,
+      }),
+      { status: 409, headers },
+    );
+  }
+  if (message.includes("CEREFOX_TOKEN_REQUIRED")) {
+    return new Response(
+      JSON.stringify({
+        error: "expected_content_hash required",
+        message:
+          "Content updates require expected_content_hash (the content_hash returned by getDocument / searchKnowledgeBase / metadataSearch) or last_write_wins=true.",
+        detail: message,
+      }),
+      { status: 400, headers },
+    );
+  }
+  return null;
 }
 
 interface Chunk {
@@ -428,7 +464,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const { title, content, document_id = null, project_name, source = "agent", metadata = {}, update_if_exists = false, author = "agent", author_type = "agent" } = body;
+  const { title, content, document_id = null, project_name, source = "agent", metadata = {}, update_if_exists = false, author = "agent", author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
 
   // Validate + normalize project_names if provided (full-set destructive form)
   let project_names: string[] | null = null;
@@ -525,6 +561,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Optimistic-concurrency fast-fail (iter-32): stale token fails BEFORE
+    // the embedding spend. Advisory only — the authoritative race-free check
+    // is inside the RPC (SELECT … FOR UPDATE).
+    if (!last_write_wins && expected_content_hash && expected_content_hash !== existingDoc.content_hash) {
+      return concurrencyErrorResponse(
+        `CEREFOX_CONFLICT: document ${existingDoc.id} changed since it was read (expected hash ${expected_content_hash}, current hash ${existingDoc.content_hash}).`,
+        headers,
+      )!;
+    }
+
     // Content changed -- re-chunk, re-embed, ingest via RPC
     const chunks = chunkMarkdown(content);
     if (chunks.length === 0) {
@@ -562,9 +608,13 @@ Deno.serve(async (req: Request) => {
       p_author: author,
       p_author_type: author_type,
       p_source_label: source,
+      p_expected_content_hash: expected_content_hash,
+      p_last_write_wins: last_write_wins,
     });
 
     if (ingestErr) {
+      const mapped = concurrencyErrorResponse(ingestErr.message ?? "", headers);
+      if (mapped) return mapped;
       return new Response(JSON.stringify({ error: `Ingest RPC failed: ${ingestErr.message}` }), { status: 500, headers });
     }
 
@@ -593,6 +643,7 @@ Deno.serve(async (req: Request) => {
         chunk_count: chunks.length,
         total_chars: totalChars,
         updated: true,
+        content_hash: contentHash,
         ...(note && { note }),
       }),
       { headers },
@@ -623,6 +674,14 @@ Deno.serve(async (req: Request) => {
           }),
           { headers },
         );
+      }
+
+      // Optimistic-concurrency fast-fail (iter-32) — see ID-based path.
+      if (!last_write_wins && expected_content_hash && expected_content_hash !== existingDoc.content_hash) {
+        return concurrencyErrorResponse(
+          `CEREFOX_CONFLICT: document ${existingDoc.id} changed since it was read (expected hash ${expected_content_hash}, current hash ${existingDoc.content_hash}).`,
+          headers,
+        )!;
       }
 
       // Content changed — re-chunk, re-embed, ingest via RPC
@@ -667,9 +726,13 @@ Deno.serve(async (req: Request) => {
         p_author: author,
         p_author_type: author_type,
         p_source_label: source,
+        p_expected_content_hash: expected_content_hash,
+        p_last_write_wins: last_write_wins,
       });
 
       if (ingestErr) {
+        const mapped = concurrencyErrorResponse(ingestErr.message ?? "", headers);
+        if (mapped) return mapped;
         return new Response(
           JSON.stringify({ error: `Ingest RPC failed: ${ingestErr.message}` }),
           { status: 500, headers },
@@ -701,6 +764,7 @@ Deno.serve(async (req: Request) => {
           chunk_count: chunks.length,
           total_chars: totalChars,
           updated: true,
+          content_hash: contentHash,
         }),
         { headers },
       );

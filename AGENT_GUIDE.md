@@ -68,6 +68,8 @@ Save a new document or update an existing one.
 | `content` | Yes | Markdown content. Use H1/H2/H3 headings -- the chunker uses them for segmentation. |
 | `document_id` | No | UUID of an existing document to update. When provided, updates that document directly regardless of `update_if_exists`. Returns an error if the document does not exist. Workflow: search → note the `[id: ...]` → pass here. |
 | `update_if_exists` | No | When `true`, updates the document with the same title (versions the old content). Default `false`. Ignored when `document_id` is provided. |
+| `expected_content_hash` | **Yes, on content updates** | Optimistic-concurrency token: the `content_hash` of the version you based your edit on (returned by `cerefox_get_document`, `cerefox_search`, and `cerefox_metadata_search`). Stale → **conflict error** (re-read, merge, retry). Absent → **token-required error**. Not needed when creating. See "Concurrent writers" below. |
+| `last_write_wins` | No | Explicitly skip the concurrency check (default `false`). Use ONLY when an external source of truth makes conflicts meaningless (file re-sync). Recorded in the audit log. **Never use it to silence a conflict.** |
 | `project_name` | No | **Single** project name (created if absent). On update: **non-destructive add** — ensures this membership exists, preserves others. See "Project membership semantics" below. |
 | `project_names` | No | **List** of project names (each created if absent). On update: **destructive replace** — sets the document's full project set to exactly this list. Use when you want to set multiple projects at once, or deliberately change the membership list. Wins over `project_name` when both are passed. |
 | `metadata` | No | Arbitrary JSON. Use at minimum: `type` and `status`. |
@@ -76,15 +78,24 @@ Save a new document or update an existing one.
 
 **The update workflow (preferred -- ID-based)**:
 1. Search for the document. Note the `[id: abc123]` in the result.
-2. Call `cerefox_ingest` with `document_id: "abc123"` and the new content.
-3. The old content is automatically versioned and recoverable.
+2. `cerefox_get_document("abc123")` — read the current content and note its `content_hash`.
+3. Call `cerefox_ingest` with `document_id: "abc123"`, the new content, and `expected_content_hash: "<the hash you read>"`.
+4. The old content is automatically versioned and recoverable.
 
 **The update workflow (fallback -- title-based)**:
-1. Search for the document first.
-2. Call `cerefox_ingest` with the **exact same title** and `update_if_exists: true`.
+1. Search for the document first (note its hash).
+2. Call `cerefox_ingest` with the **exact same title**, `update_if_exists: true`, and `expected_content_hash`.
 3. If you use a different title, a **new** document is created (the old one remains). This is almost never what you want when revising.
 
-**Deduplication**: Content is SHA-256 hashed. Identical content is skipped (no re-indexing). Metadata-only changes update metadata without creating a version.
+**Deduplication**: Content is SHA-256 hashed. Identical content is skipped (no re-indexing, no concurrency check needed — identical content cannot lose data). Metadata-only changes update metadata without creating a version.
+
+#### Concurrent writers (optimistic concurrency)
+
+Cerefox is **shared** memory — another agent (or the user) may update a document between your read and your write. Content updates therefore require proof of freshness: `expected_content_hash` must equal the document's current `content_hash` at write time, checked atomically inside the database.
+
+- **Conflict error** ("document changed since it was read"): the document moved underneath you. `cerefox_get_document` again → **merge your changes into the latest content** → retry with the new hash. Never resolve a conflict by overwriting blindly — the current content includes another writer's work.
+- **Token-required error**: you attempted a content update without `expected_content_hash`. Read the document first; if you already did, pass the hash you read.
+- `last_write_wins: true` bypasses the check — reserved for re-sync flows where an external source of truth (e.g., files on disk) makes conflicts meaningless. It is recorded in the audit log.
 
 **What to ingest**: Distilled summaries, decisions with rationale, curated insights. Not raw dumps, logs, or transcripts. Use Markdown headings for structure.
 
@@ -112,7 +123,7 @@ Retrieve the complete text of a document by its UUID.
 | `version_id` | No | UUID of an archived version (from `cerefox_list_versions`). |
 | `requestor` | No | Your agent name. |
 
-Use this when search returns partial results, or to read a previous version before restoring it.
+Use this when search returns partial results, or to read a previous version before restoring it. The response header includes the document's current `content_hash` — pass it back as `expected_content_hash` when updating via `cerefox_ingest`.
 
 ---
 
@@ -268,18 +279,22 @@ Metadata is matched as **strings**, so store the flag as the string `"true"` (no
 
 ```
 1. cerefox_search("topic")           -- find relevant docs, note [id: uuid]
-2. cerefox_get_document(id)          -- get full text if partial
+2. cerefox_get_document(id)          -- get full text + content_hash
 3. cerefox_ingest(title, content,    -- update by document ID (deterministic)
-     document_id="uuid")
+     document_id="uuid",
+     expected_content_hash="<hash from step 2>")
+4. On a conflict error: repeat from step 2, merging your changes into
+   the latest content before retrying with the fresh hash.
 ```
 
 ### Search then update (title-based -- fallback)
 
 ```
-1. cerefox_search("topic")           -- find relevant docs
-2. cerefox_get_document(id)          -- get full text if partial
+1. cerefox_search("topic")           -- find relevant docs (note the hash)
+2. cerefox_get_document(id)          -- get full text + content_hash
 3. cerefox_ingest(title, content,    -- update with same title
-     update_if_exists=true)
+     update_if_exists=true,
+     expected_content_hash="<hash from step 2>")
 ```
 
 ### Save new knowledge
@@ -287,7 +302,8 @@ Metadata is matched as **strings**, so store the flag as the string `"true"` (no
 ```
 1. cerefox_search("topic")           -- check if it already exists
 2. If not found: cerefox_ingest(title, content, project_name, metadata)
-3. If found: cerefox_ingest(same_title, new_content, document_id="uuid")
+3. If found: cerefox_ingest(same_title, new_content, document_id="uuid",
+     expected_content_hash="<its current hash>")
 ```
 
 ### Catch up on recent changes
@@ -309,6 +325,7 @@ Metadata is matched as **strings**, so store the flag as the string `"true"` (no
 5. **Add metadata**: at minimum `type` (e.g., "research", "decision-log") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings. The chunker uses heading structure.
 7. **Distill, don't dump.** Summaries > transcripts. Decisions > discussions. Insights > raw data.
+8. **Prove freshness on updates.** Pass `expected_content_hash` (the hash you read) on every content update. On conflict: re-read → merge → retry. Never `last_write_wins` your way out of a conflict.
 
 ---
 
@@ -418,7 +435,7 @@ The legacy Python `uv run cerefox` is a frozen husk as of v0.9 — only `uv run 
 | MCP tool | CLI command |
 |---|---|
 | `cerefox_search(query, match_count, project_name, metadata_filter, requestor)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (also `--mode`, `--alpha`, `--min-score`, `--only-metadata` — CLI-only) |
-| `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
+| `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest(...)` (paste) | `printf '%s' "<content>" \| cerefox document ingest --paste --title "<title>"` (same flags) |
 | `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <document-id> --requestor <name>` |

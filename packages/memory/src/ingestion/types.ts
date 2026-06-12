@@ -61,6 +61,14 @@ export interface IngestTextOptions {
   documentId?: string | null; // explicit update; bypasses dedup
   author?: string;             // default "unknown"
   authorType?: "user" | "agent"; // default "user"
+  /**
+   * Optimistic-concurrency token (iter-32): the content_hash of the document
+   * version this edit was based on. Required by the RPC on content updates
+   * unless `lastWriteWins` is set. Ignored on create.
+   */
+  expectedContentHash?: string | null;
+  /** Explicitly skip the concurrency check (filesystem-sync flows). */
+  lastWriteWins?: boolean;
 }
 
 /** Options for `updateDocument`. Mirrors Python's `update_document(...)`. */
@@ -74,6 +82,38 @@ export interface UpdateDocumentOptions {
   metadata?: Record<string, unknown> | null;
   author?: string;
   authorType?: "user" | "agent";
+  /** Optimistic-concurrency token — see IngestTextOptions.expectedContentHash. */
+  expectedContentHash?: string | null;
+  /** Explicitly skip the concurrency check (filesystem-sync flows). */
+  lastWriteWins?: boolean;
+}
+
+/**
+ * Thrown when a content update loses the optimistic-concurrency race
+ * (iter-32): the document's content_hash moved between read and write.
+ * Callers should re-read the document, merge, and retry with the new hash.
+ * The web routes map this to HTTP 409.
+ */
+export class ConcurrencyConflictError extends Error {
+  readonly documentId: string;
+  readonly currentHash: string | null;
+  constructor(documentId: string, currentHash: string | null, message: string) {
+    super(message);
+    this.name = "ConcurrencyConflictError";
+    this.documentId = documentId;
+    this.currentHash = currentHash;
+  }
+}
+
+/**
+ * Thrown when a content update supplies neither expectedContentHash nor
+ * lastWriteWins. The web routes map this to HTTP 400.
+ */
+export class ConcurrencyTokenRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConcurrencyTokenRequiredError";
+  }
 }
 
 /** Settings the pipeline needs. Subset of the broader app settings. */

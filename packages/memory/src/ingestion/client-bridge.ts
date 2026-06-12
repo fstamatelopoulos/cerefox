@@ -29,6 +29,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  ConcurrencyConflictError,
+  ConcurrencyTokenRequiredError,
+} from "./types.ts";
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export interface DocumentRow {
@@ -191,6 +196,8 @@ export class IngestionDbBridge {
     sourceLabel?: string;
     retentionHours?: number;
     cleanupEnabled?: boolean;
+    expectedContentHash?: string | null;
+    lastWriteWins?: boolean;
   }): Promise<IngestDocumentRpcResult> {
     const params: Record<string, unknown> = {
       p_document_id: args.documentId,
@@ -209,12 +216,28 @@ export class IngestionDbBridge {
       params.p_retention_hours = args.retentionHours;
     if (args.cleanupEnabled !== undefined)
       params.p_cleanup_enabled = args.cleanupEnabled;
+    // Optimistic concurrency (iter-32). Always sent on the update path so the
+    // RPC's token-required default applies; the RPC ignores both on create.
+    if (args.documentId !== null) {
+      params.p_expected_content_hash = args.expectedContentHash ?? null;
+      params.p_last_write_wins = args.lastWriteWins ?? false;
+    }
 
     const { data, error } = await this.supabase.rpc(
       "cerefox_ingest_document",
       params,
     );
-    if (error) throw new Error(error.message ?? JSON.stringify(error));
+    if (error) {
+      const msg = error.message ?? JSON.stringify(error);
+      if (msg.includes("CEREFOX_CONFLICT")) {
+        const current = msg.match(/current hash ([0-9a-f]{64})/)?.[1] ?? null;
+        throw new ConcurrencyConflictError(args.documentId ?? "", current, msg);
+      }
+      if (msg.includes("CEREFOX_TOKEN_REQUIRED")) {
+        throw new ConcurrencyTokenRequiredError(msg);
+      }
+      throw new Error(msg);
+    }
     // RPC returns either a single object or an array-with-one-object
     // depending on Supabase client version. Normalise.
     if (Array.isArray(data) && data.length > 0) {

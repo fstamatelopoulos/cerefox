@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { ApiError } from "../api/client";
 import { editDocument, fetchDocument } from "../api/documents";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
@@ -72,6 +73,9 @@ export function DocumentEditPage() {
         content,
         project_ids: projectIds,
         metadata,
+        // The hash the document was loaded with — lets the server detect a
+        // concurrent change (another writer saved while we were editing).
+        expected_content_hash: doc?.content_hash ?? null,
       });
     },
     onSuccess: (result) => {
@@ -85,6 +89,13 @@ export function DocumentEditPage() {
       }
     },
     onError: (err) => {
+      if (err instanceof ApiError && err.status === 409) {
+        showError(
+          "Edit conflict",
+          "This document changed while you were editing it (another writer saved a newer version). Open the document in a new tab, merge your changes, then save again.",
+        );
+        return;
+      }
       if (!showV07DeferredToast(err)) {
         showError("Save failed", err instanceof Error ? err.message : String(err));
       }

@@ -38,6 +38,13 @@ DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOO
 DROP FUNCTION IF EXISTS cerefox_fts_search(TEXT, INT, UUID);
 DROP FUNCTION IF EXISTS cerefox_semantic_search(VECTOR(768), INT, BOOLEAN, UUID, FLOAT);
 DROP FUNCTION IF EXISTS cerefox_reconstruct_doc(UUID);
+
+-- Iteration 32 (v0.11, optimistic concurrency): content_hash added to the return
+-- types of all document-shaped reads — the writer's concurrency token must be
+-- obtainable from every read surface. Drop the pre-change signatures first.
+DROP FUNCTION IF EXISTS cerefox_get_document(UUID, UUID);
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB);
+DROP FUNCTION IF EXISTS cerefox_metadata_search(JSONB, UUID, TIMESTAMPTZ, TIMESTAMPTZ, INT, BOOLEAN, INT);
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT);
 
 -- Iteration 13: Drop pre-metadata-filter signatures so we can add p_metadata_filter JSONB.
@@ -592,7 +599,10 @@ RETURNS TABLE (
     total_chars              INT,
     doc_updated_at           TIMESTAMPTZ,
     version_count            INT,
-    is_partial               BOOL
+    is_partial               BOOL,
+    -- Optimistic-concurrency token (iter-32): the document's current
+    -- content_hash, to pass back as expected_content_hash on update.
+    content_hash             TEXT
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -625,7 +635,8 @@ AS $$
             cr.doc_project_ids,
             cr.doc_project_names,
             cr.version_count,
-            d.updated_at       AS doc_updated_at
+            d.updated_at       AS doc_updated_at,
+            d.content_hash
         FROM chunk_results cr
         JOIN cerefox_documents d ON d.id = cr.document_id
         ORDER BY cr.document_id, cr.score DESC
@@ -707,7 +718,8 @@ AS $$
         ds.total_chars,    -- always full document size, even for partial results
         td.doc_updated_at,
         td.version_count,
-        ac.is_partial
+        ac.is_partial,
+        td.content_hash
     FROM top_docs td
     JOIN doc_sizes ds ON ds.document_id = td.document_id
     JOIN all_content ac ON ac.document_id = td.document_id
@@ -832,7 +844,11 @@ RETURNS TABLE (
     full_content    TEXT,
     chunk_count     INT,
     total_chars     INT,
-    created_at      TIMESTAMPTZ
+    created_at      TIMESTAMPTZ,
+    -- Current content_hash of the document — the optimistic-concurrency token
+    -- to pass back as expected_content_hash on update (iter-32). Note: always
+    -- the CURRENT hash, even when an archived version is being retrieved.
+    content_hash    TEXT
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -853,7 +869,8 @@ AS $$
         STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
         COUNT(*)::INT   AS chunk_count,
         SUM(c.char_count)::INT AS total_chars,
-        d.created_at
+        d.created_at,
+        d.content_hash
     FROM cerefox_documents d
     JOIN cerefox_chunks c ON c.document_id = d.id
     WHERE d.id = p_document_id
@@ -861,7 +878,7 @@ AS $$
           (p_version_id IS NULL     AND c.version_id IS NULL) OR
           (p_version_id IS NOT NULL AND c.version_id = p_version_id)
       )
-    GROUP BY d.id, d.title, d.source, d.metadata, d.created_at;
+    GROUP BY d.id, d.title, d.source, d.metadata, d.created_at, d.content_hash;
 $$;
 
 -- ── cerefox_list_document_versions ────────────────────────────────────────────
@@ -1037,11 +1054,21 @@ $$;
 --   p_source_label    : version source label for snapshot ('file','paste','agent','manual')
 --   p_retention_hours : for version cleanup (default 48)
 --   p_cleanup_enabled : whether version cleanup runs (default true)
+--   p_expected_content_hash : optimistic-concurrency token (iter-32). On the UPDATE
+--                       path this must equal the document's current content_hash —
+--                       the caller proves they based their edit on the live version.
+--                       Mismatch → CEREFOX_CONFLICT (SQLSTATE 40001). Absent (NULL)
+--                       without p_last_write_wins → CEREFOX_TOKEN_REQUIRED (22023).
+--                       Ignored on the CREATE path.
+--   p_last_write_wins : explicit opt-out of the concurrency check (filesystem-sync
+--                       flows where an external source of truth makes conflicts
+--                       meaningless). Recorded in the audit description when used.
 --
 -- Returns: document_id, chunk_count, total_chars, operation ('create' or 'update-content'),
 --          version_id (UUID of snapshot, null on create)
 
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN);
+DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN);
 CREATE FUNCTION cerefox_ingest_document(
     p_document_id       UUID        DEFAULT NULL,
     p_title             TEXT        DEFAULT 'Untitled',
@@ -1055,7 +1082,9 @@ CREATE FUNCTION cerefox_ingest_document(
     p_author_type       TEXT        DEFAULT 'user',
     p_source_label      TEXT        DEFAULT 'manual',
     p_retention_hours   INT         DEFAULT 48,
-    p_cleanup_enabled   BOOLEAN     DEFAULT TRUE
+    p_cleanup_enabled   BOOLEAN     DEFAULT TRUE,
+    p_expected_content_hash TEXT    DEFAULT NULL,
+    p_last_write_wins   BOOLEAN     DEFAULT FALSE
 )
 RETURNS TABLE (
     document_id     UUID,
@@ -1075,6 +1104,7 @@ DECLARE
     v_operation     TEXT;
     v_version_id    UUID    := NULL;
     v_old_chars     INT     := 0;
+    v_current_hash  TEXT;
     v_chunk         JSONB;
     v_snap          RECORD;
     v_status        TEXT;
@@ -1114,9 +1144,38 @@ BEGIN
         v_doc_id := p_document_id;
         v_operation := 'update-content';
 
-        -- Get old size for audit
-        SELECT COALESCE(d.total_chars, 0) INTO v_old_chars
-        FROM cerefox_documents d WHERE d.id = v_doc_id;
+        -- Lock the row and read its current state. FOR UPDATE makes the
+        -- concurrency check below atomic with the write: two simultaneous
+        -- updaters serialize here, and the second one sees the first one's
+        -- hash — the race window (chunk + embed latency) is closed at the
+        -- only place all transports share (iter-32).
+        SELECT COALESCE(d.total_chars, 0), d.content_hash
+        INTO v_old_chars, v_current_hash
+        FROM cerefox_documents d WHERE d.id = v_doc_id
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'cerefox_ingest_document: document not found: %', v_doc_id
+                USING ERRCODE = '22023';  -- invalid_parameter_value
+        END IF;
+
+        -- ── Optimistic concurrency check (iter-32) ───────────────────
+        -- Content updates must prove freshness (expected hash) or explicitly
+        -- choose last-write-wins. Message prefixes are machine-detectable:
+        -- transport handlers map them to agent-first retry instructions.
+        IF NOT p_last_write_wins THEN
+            IF p_expected_content_hash IS NULL THEN
+                RAISE EXCEPTION
+                    'CEREFOX_TOKEN_REQUIRED: content updates require expected_content_hash (the content_hash you read) or last_write_wins=true. Current hash: %',
+                    v_current_hash
+                    USING ERRCODE = '22023';  -- invalid_parameter_value
+            ELSIF p_expected_content_hash <> v_current_hash THEN
+                RAISE EXCEPTION
+                    'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, merge your changes, and retry with the new hash.',
+                    v_doc_id, p_expected_content_hash, v_current_hash
+                    USING ERRCODE = '40001';  -- serialization_failure
+            END IF;
+        END IF;
 
         -- Snapshot old version (archives current chunks, runs retention cleanup)
         SELECT sv.version_id INTO v_version_id
@@ -1183,6 +1242,8 @@ BEGIN
         p_size_before := CASE WHEN v_operation = 'create' THEN NULL ELSE v_old_chars END,
         p_size_after := v_total_chars,
         p_description := v_operation || ': ' || p_title || ' (' || v_chunk_count || ' chunks, ' || v_total_chars || ' chars)'
+            || CASE WHEN p_last_write_wins AND v_operation = 'update-content'
+                    THEN ' [last-write-wins]' ELSE '' END
     );
 
     RETURN QUERY SELECT v_doc_id, v_chunk_count, v_total_chars, v_operation, v_version_id;
@@ -1407,6 +1468,9 @@ RETURNS TABLE (
     project_ids     UUID[],
     project_names   TEXT[],
     version_count   INT,
+    -- Optimistic-concurrency token (iter-32): pass back as
+    -- expected_content_hash on update.
+    content_hash    TEXT,
     content         TEXT
 )
 LANGUAGE plpgsql
@@ -1436,6 +1500,7 @@ BEGIN
                   WHERE dp.document_id = d.id) AS project_names,
             (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
              WHERE dv.document_id = d.id) AS version_count,
+            d.content_hash,
             CASE WHEN p_include_content THEN
                 (SELECT STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index)
                  FROM cerefox_chunks c
@@ -1474,6 +1539,7 @@ BEGIN
         project_ids   := v_row.project_ids;
         project_names := v_row.project_names;
         version_count := v_row.version_count;
+        content_hash  := v_row.content_hash;
         content       := v_row.content;
         RETURN NEXT;
     END LOOP;
@@ -1694,7 +1760,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.4.0'::TEXT;
+    SELECT '0.5.0'::TEXT;
 $$;
 
 

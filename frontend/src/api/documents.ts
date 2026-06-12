@@ -28,6 +28,9 @@ export async function editDocument(
     content: string;
     project_ids: string[];
     metadata: Record<string, string>;
+    /** Optimistic-concurrency token: the content_hash the document was
+     * loaded with. A concurrent change → HTTP 409 (iter-32). */
+    expected_content_hash?: string | null;
   },
 ): Promise<EditResponse> {
   return apiFetch<EditResponse>(`/documents/${documentId}/edit`, {

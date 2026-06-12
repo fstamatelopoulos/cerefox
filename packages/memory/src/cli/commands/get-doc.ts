@@ -26,6 +26,7 @@ interface DocPayload {
   total_chars: number;
   is_archived: boolean;
   version_id: string | null;
+  content_hash: string | null;
 }
 
 async function action(
@@ -81,6 +82,11 @@ async function action(
         (doc.version_id ? ` · version: ${doc.version_id}` : ""),
     ),
   );
+  // The concurrency token: pass back via `document ingest
+  // --expected-content-hash` when updating this document (iter-32).
+  if (doc.content_hash) {
+    println(c.dim(`content_hash: ${doc.content_hash}`));
+  }
   println("");
   println(doc.full_content);
 }

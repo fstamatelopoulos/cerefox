@@ -80,6 +80,9 @@ export interface DocumentDetail {
   created_at: string | null;
   updated_at: string | null;
   deleted_at: string | null;
+  /** Optimistic-concurrency token (iter-32): send back as
+   * expected_content_hash when saving a content edit. */
+  content_hash: string | null;
   versions: DocumentVersion[];
 }
 

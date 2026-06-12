@@ -47,6 +47,8 @@ interface IngestOptions {
   metadata?: string;
   source?: string;
   updateIfExists?: boolean;
+  expectedContentHash?: string;
+  lastWriteWins?: boolean;
   documentId?: string;
   author?: string;
   authorType?: string;
@@ -155,6 +157,8 @@ async function action(
             documentId: options.documentId ?? null,
             author,
             authorType: authorType as "user" | "agent",
+            expectedContentHash: options.expectedContentHash ?? null,
+            lastWriteWins: Boolean(options.lastWriteWins),
           })
         : await pipeline.ingestText({
             text: content,
@@ -167,6 +171,8 @@ async function action(
             documentId: options.documentId ?? null,
             author,
             authorType: authorType as "user" | "agent",
+            expectedContentHash: options.expectedContentHash ?? null,
+            lastWriteWins: Boolean(options.lastWriteWins),
           });
 
     // Match the legacy `ingestTool.handler` output shape — users may
@@ -227,6 +233,14 @@ export function registerIngest(program: Command): void {
     .option(
       "-i, --document-id <uuid>",
       "Update a specific document by UUID (overrides --update-if-exists).",
+    )
+    .option(
+      "--expected-content-hash <sha256>",
+      "Optimistic-concurrency token: the content_hash of the version this edit is based on (shown by `document get` / `search`). Required on content updates unless --last-write-wins.",
+    )
+    .option(
+      "--last-write-wins",
+      "Skip the concurrency check and overwrite regardless of concurrent changes (recorded in the audit log).",
     )
     .option("-a, --author <name>", "Caller identity (audit log).")
     .option(

@@ -35,7 +35,11 @@
 import { Hono } from "hono";
 
 import { contentHash } from "../../../../../_shared/ingest/index.ts";
-import { IngestionPipeline } from "../../ingestion/pipeline.ts";
+import {
+  ConcurrencyConflictError,
+  ConcurrencyTokenRequiredError,
+  IngestionPipeline,
+} from "../../ingestion/pipeline.ts";
 import type { WebContext } from "../context.ts";
 
 // `normaliseForHash` + `contentHash` promoted to `_shared/ingest/pipeline-
@@ -162,9 +166,37 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
           author: "web-ui",
           authorType: "user",
+          // Optimistic concurrency (iter-32): the SPA sends the content_hash
+          // it loaded the document with; a concurrent change → 409 below.
+          expectedContentHash:
+            typeof body.expected_content_hash === "string"
+              ? body.expected_content_hash
+              : null,
         });
         return c.json({ success: true, reindexed: result.reindexed });
       } catch (err) {
+        if (err instanceof ConcurrencyConflictError) {
+          return c.json(
+            {
+              success: false,
+              error: "conflict",
+              message:
+                "This document changed while you were editing it (another writer saved a newer version). Open it again in a new tab, merge your changes, and save from there.",
+              current_hash: err.currentHash,
+            },
+            409,
+          );
+        }
+        if (err instanceof ConcurrencyTokenRequiredError) {
+          return c.json(
+            {
+              success: false,
+              error: "expected_content_hash required",
+              message: err.message,
+            },
+            400,
+          );
+        }
         return c.json(
           {
             success: false,

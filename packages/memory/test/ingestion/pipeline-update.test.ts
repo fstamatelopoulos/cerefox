@@ -36,13 +36,33 @@ const RUN_TAG = String(Date.now());
 describe("IngestionPipeline.updateDocument (live)", () => {
   let supabase: SupabaseClient | null = null;
   let pipeline: IngestionPipeline | null = null;
+  let schemaTooOld = false;
   const created: string[] = [];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     if (!LIVE_OK) return;
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false },
     });
+    // iter-32 gate: the update path now requires the v0.5.0 schema
+    // (p_expected_content_hash / p_last_write_wins on the ingest RPC).
+    // Against an older deployed server, leave the suite skipped instead of
+    // failing with "function not found".
+    try {
+      const { data: ver } = await client.rpc("cerefox_schema_version");
+      const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
+      if (maj === 0 && min < 5) {
+        schemaTooOld = true;
+        console.log(
+          `(skipped: deployed schema ${ver} < 0.5.0 — run \`cerefox server deploy --schema-only\` to enable these tests)`,
+        );
+        return;
+      }
+    } catch {
+      schemaTooOld = true;
+      return;
+    }
+    supabase = client;
     pipeline = new IngestionPipeline({
       supabase,
       openAiApiKey: OPENAI_API_KEY,
@@ -72,6 +92,10 @@ describe("IngestionPipeline.updateDocument (live)", () => {
   test("setup: live probe", () => {
     if (!LIVE_OK) {
       console.log("(skipped: Supabase + OpenAI not both available)");
+      return;
+    }
+    if (schemaTooOld) {
+      // Deployed schema predates iter-32; the beforeAll left the suite off.
       return;
     }
     expect(pipeline).not.toBeNull();
@@ -134,23 +158,67 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     });
     created.push(v1.documentId);
 
+    // Read the current hash — the optimistic-concurrency token (iter-32).
+    const { data: v1Row } = await supabase
+      .from("cerefox_documents")
+      .select("content_hash")
+      .eq("id", v1.documentId)
+      .maybeSingle();
+    const v1Hash = v1Row?.content_hash as string;
+    expect(v1Hash).toBeTruthy();
+
     const newText = "# Initial\n\nv2 content — totally new. Run " + RUN_TAG + ".\n";
     const updated = await pipeline.updateDocument({
       documentId: v1.documentId,
       text: newText,
       title,
       author: "pipeline-update-test",
+      expectedContentHash: v1Hash,
     });
     expect(updated.action).toBe("updated");
     expect(updated.reindexed).toBe(true);
 
-    // Verify a version was snapshotted.
+    // ── iter-32: concurrency contract ────────────────────────────────────
+    // (a) Updating again with the now-STALE v1 hash → conflict.
+    await expect(
+      pipeline.updateDocument({
+        documentId: v1.documentId,
+        text: "# Initial\n\nv3 from a stale base. Run " + RUN_TAG + ".\n",
+        title,
+        author: "pipeline-update-test",
+        expectedContentHash: v1Hash,
+      }),
+    ).rejects.toThrow(/CEREFOX_CONFLICT/);
+
+    // (b) Updating with NO token and no last-write-wins → token required.
+    await expect(
+      pipeline.updateDocument({
+        documentId: v1.documentId,
+        text: "# Initial\n\nv3 tokenless. Run " + RUN_TAG + ".\n",
+        title,
+        author: "pipeline-update-test",
+      }),
+    ).rejects.toThrow(/CEREFOX_TOKEN_REQUIRED/);
+
+    // (c) last_write_wins=true bypasses the check.
+    const forced = await pipeline.updateDocument({
+      documentId: v1.documentId,
+      text: "# Initial\n\nv3 forced. Run " + RUN_TAG + ".\n",
+      title,
+      author: "pipeline-update-test",
+      lastWriteWins: true,
+    });
+    expect(forced.reindexed).toBe(true);
+
+    // Verify versions were snapshotted: one for the token-checked update,
+    // one for the forced (last-write-wins) update. The two failed attempts
+    // (stale token, missing token) must NOT have created snapshots.
     const { data: versions } = await supabase
       .from("cerefox_document_versions")
       .select("id, version_number")
       .eq("document_id", v1.documentId);
-    expect(versions?.length).toBe(1);
-    expect(versions?.[0].version_number).toBe(1);
+    expect(versions?.length).toBe(2);
+    expect(versions?.map((v) => v.version_number).sort()).toEqual([1, 2]);
 
     // Verify the new content_hash on the doc row differs.
     const { data: row } = await supabase
