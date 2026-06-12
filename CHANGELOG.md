@@ -38,6 +38,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - Web edit page detects mid-edit concurrent changes and shows a merge-needed conflict
   error instead of silently overwriting.
 
+### Fixed
+
+- **Web edit page could corrupt metadata keys via the key autocomplete.** The key
+  suggestions embedded the usage count in the option label (`status (108)`), and
+  Mantine's Autocomplete inserts the *label* into the field on select — so picking a
+  suggestion (and saving) stored the literal string `status (108)` as the metadata key,
+  polluting the KB taxonomy (it then showed up in the key list as `status (108) (1)`).
+  The dropdown now shows the count via `renderOption` ("status · 108 docs" style),
+  while only the bare key ever enters the field. The search filter's key Select (which
+  was never affected — Select keeps value/label separate) now labels the count as
+  "(N docs)" for clarity.
+
 ---
 
 ## [v0.10.4] -- 2026-06-09

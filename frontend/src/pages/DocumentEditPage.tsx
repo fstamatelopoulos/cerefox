@@ -105,11 +105,13 @@ export function DocumentEditPage() {
   const projectOptions =
     projects?.map((p) => ({ value: p.id, label: p.name })) || [];
 
-  const keyOptions =
-    metadataKeys?.map((mk) => ({
-      value: mk.key,
-      label: `${mk.key} (${mk.doc_count})`,
-    })) || [];
+  // Mantine Autocomplete inserts the option LABEL into the input on select,
+  // so the label must be exactly the key — embedding the doc count in it
+  // (`status (108)`) used to leak the count into the saved metadata key,
+  // polluting the KB taxonomy. The count is shown via renderOption instead
+  // (dropdown-only; never enters the field).
+  const keyCounts = new Map((metadataKeys ?? []).map((mk) => [mk.key, mk.doc_count]));
+  const keyOptions = metadataKeys?.map((mk) => mk.key) || [];
 
   if (isLoading || !initialized) {
     return (
@@ -189,6 +191,14 @@ export function DocumentEditPage() {
                       updated[idx] = { ...pair, key: v };
                       setMetaPairs(updated);
                     }}
+                    renderOption={({ option }) => (
+                      <Group justify="space-between" w="100%" wrap="nowrap">
+                        <span>{option.value}</span>
+                        <Text size="xs" c="dimmed">
+                          {keyCounts.get(option.value)} docs
+                        </Text>
+                      </Group>
+                    )}
                     w={200}
                     size="sm"
                   />
