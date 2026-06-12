@@ -32,6 +32,7 @@ async function handler(
         full_content?: string;
         chunk_count?: number;
         total_chars?: number;
+        content_hash?: string;
       }
     | undefined;
 
@@ -46,13 +47,16 @@ async function handler(
   });
 
   const label = version_id !== null ? " (archived version)" : " (current)";
-  return `# ${row.doc_title ?? "Untitled"}${label}\n\n${row.full_content ?? ""}`;
+  // content_hash is the optimistic-concurrency token: pass it back as
+  // expected_content_hash when updating this document via cerefox_ingest.
+  const hashLine = row.content_hash ? `content_hash: ${row.content_hash}\n\n` : "";
+  return `# ${row.doc_title ?? "Untitled"}${label}\n${hashLine}${row.full_content ?? ""}`;
 }
 
 export const getDocumentTool: ToolDefinition = {
   name: "cerefox_get_document",
   description:
-    "Retrieve the full reconstructed content of a document. Pass version_id to retrieve an archived version; omit it (or pass null) for the current version. Version UUIDs are returned by cerefox_list_versions.",
+    "Retrieve the full reconstructed content of a document. Pass version_id to retrieve an archived version; omit it (or pass null) for the current version. Version UUIDs are returned by cerefox_list_versions. The response header includes the document's current content_hash — pass it back as expected_content_hash when updating via cerefox_ingest (optimistic concurrency).",
   inputSchema: {
     type: "object",
     required: ["document_id"],

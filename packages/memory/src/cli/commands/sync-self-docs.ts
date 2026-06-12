@@ -99,6 +99,9 @@ export async function runSyncSelfDocs(options: SyncSelfDocsOptions = {}): Promis
             topic: doc.topic,
           },
           update_if_exists: true,
+          // Bundled-docs sync: the npm package is the source of truth, so the
+          // optimistic-concurrency check is bypassed by design (iter-32).
+          last_write_wins: true,
           project_name: project,
           author,
           author_type: authorType,

@@ -9,7 +9,46 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed — BREAKING
+
+- **Optimistic concurrency control on content updates** (design:
+  [`docs/specs/concurrency-control-design.md`](docs/specs/concurrency-control-design.md)).
+  Updating a document's content (via `document_id` or `update_if_exists`) now requires
+  **`expected_content_hash`** — the `content_hash` of the version the edit was based on,
+  returned by every read surface (`cerefox_get_document`, `cerefox_search`,
+  `cerefox_metadata_search`, the REST EFs, `cerefox document get` / `cerefox search`,
+  and the web edit page). The check is atomic inside the `cerefox_ingest_document` RPC
+  (`SELECT … FOR UPDATE`), closing the read→embed→write race where two concurrent
+  writers silently last-write-wins'd each other. A stale hash fails with a **conflict**
+  (re-read → merge → retry; HTTP 409 on the REST path); a missing hash fails with
+  **token-required** (HTTP 400). `last_write_wins: true` (CLI `--last-write-wins`)
+  explicitly skips the check and is recorded in the audit log — `document ingest-dir`
+  and `guides ingest` pass it internally (the filesystem / npm package is their source
+  of truth), and the frozen Python fallback declares it to preserve its historical
+  behavior. **Breaking**: pre-v0.11 clients' content updates fail against an upgraded
+  server until updated (`cerefox self-update`); existing GPT Actions need the v2.0.0
+  OpenAPI block re-pasted. Creates are unaffected. Schema version 0.4.0 → **0.5.0**
+  (RPC-only change; ships via `cerefox server deploy --schema-only`).
+
+### Added
+
+- `content_hash` returned by all document-shaped reads (MCP tool headers, CLI output,
+  REST EF responses, web document API) — the token for the concurrency contract above.
+- CLI flags `--expected-content-hash` / `--last-write-wins` on `cerefox document ingest`.
+- Web edit page detects mid-edit concurrent changes and shows a merge-needed conflict
+  error instead of silently overwriting.
+
+### Fixed
+
+- **Web edit page could corrupt metadata keys via the key autocomplete.** The key
+  suggestions embedded the usage count in the option label (`status (108)`), and
+  Mantine's Autocomplete inserts the *label* into the field on select — so picking a
+  suggestion (and saving) stored the literal string `status (108)` as the metadata key,
+  polluting the KB taxonomy (it then showed up in the key list as `status (108) (1)`).
+  The dropdown now shows the count via `renderOption` ("status · 108 docs" style),
+  while only the bare key ever enters the field. The search filter's key Select (which
+  was never affected — Select keeps value/label separate) now labels the count as
+  "(N docs)" for clarity.
 
 ---
 

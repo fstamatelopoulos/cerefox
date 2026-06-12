@@ -46,6 +46,8 @@ cerefox document ingest --paste --title "<title>" [OPTIONS]   # stdin
 | `--metadata` | `-m` | JSON | `{}` | Extra metadata as a JSON object, e.g. `'{"tags":["work"]}'`. |
 | `--update-if-exists` | `-u` | flag | off | Title/source-path-based fallback update. Mutually exclusive with `--document-id`. |
 | `--document-id` | `-i` | UUID | _none_ | Deterministic ID-based update. Errors if the document doesn't exist. |
+| `--expected-content-hash` | — | sha256 | _none_ | **Required on content updates** (v0.11 optimistic concurrency): the `content_hash` of the version this edit is based on, shown by `cerefox document get` / `cerefox search`. Stale → conflict error (re-read, merge, retry). |
+| `--last-write-wins` | — | flag | off | Skip the concurrency check and overwrite regardless of concurrent changes. For re-sync flows where an external source of truth makes conflicts meaningless. Recorded in the audit log. |
 | `--source` | — | str | `paste` / `file` | Source label recorded on the document. |
 | `--author` | — | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Audit-log author identity. |
 | `--author-type` | — | `user`\|`agent` | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. Agent writes auto-routed to `pending_review`. |
@@ -63,11 +65,18 @@ cerefox document ingest notes.md \
   --author "claude-code" --author-type "agent" \
   --project-name "research" --metadata '{"type":"design-doc"}'
 
-# Deterministic update (preferred — agents should search → grab ID → ingest)
+# Deterministic update (preferred — agents should search → grab ID + hash → ingest)
 cerefox document ingest --paste --title "Same Title" \
   --document-id "abc12345-..." \
+  --expected-content-hash "<hash from `document get`>" \
   --author "claude-code" --author-type "agent"
 ```
+
+> **Concurrency (v0.11+)**: content updates require `--expected-content-hash`
+> (or an explicit `--last-write-wins`). On a conflict, re-run
+> `cerefox document get <id>`, merge your changes into the latest content, and
+> retry with the new hash. `document ingest-dir` and `guides ingest` bypass the
+> check internally (the filesystem / npm package is their source of truth).
 
 **Output**: human-readable summary line(s) — "Ingested" or "Updated" with the document ID, chunk count, character count.
 
@@ -183,7 +192,7 @@ cerefox document get abc12345-... --version-id <version-uuid>     # archived
 cerefox document get abc12345-... | bat -l md                  # pipe to viewer
 ```
 
-**Output**: title + metadata line, blank line, then raw markdown.
+**Output**: title + metadata line + `content_hash` line (the optimistic-concurrency token — pass back via `document ingest --expected-content-hash` when updating), blank line, then raw markdown.
 
 **MCP equivalent**: [`cerefox_get_document`](../../AGENT_GUIDE.md).
 
@@ -633,7 +642,7 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 | MCP tool | CLI command |
 |---|---|
 | `cerefox_search(query, match_count, project_name, metadata_filter, requestor)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --requestor <name>` |
-| `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type <t>` |
+| `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type <t>` |
 | `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>"` (same flags) |
 | `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <id> --requestor <name>` |
@@ -709,12 +718,18 @@ cerefox document ingest-dir ./papers --extensions .md \
 # Step 1: find it
 cerefox search "the OAuth design doc" --match-count 1
 
-# Step 2: copy the id from `Doc: ... (id: <uuid>)` line
-# Step 3: update in place
+# Step 2: read it — note the id AND the `content_hash:` line (the concurrency token)
+cerefox document get "<uuid>"
+
+# Step 3: update in place, proving freshness with the hash from step 2
 printf '%s' "$NEW_CONTENT" | cerefox document ingest --paste \
   --title "OAuth 2.1 Design Document" \
   --document-id "<uuid>" \
+  --expected-content-hash "<hash>" \
   --author "claude-code" --author-type "agent"
+
+# On a conflict error: repeat from step 2 (fresh content + fresh hash),
+# merge your changes into the latest content, then retry.
 ```
 
 ### Unattended sync job

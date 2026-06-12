@@ -81,6 +81,23 @@ async function hardPurgeE2eDocs(): Promise<void> {
 const probe = run(["project", "list", "--json"]);
 const LIVE_OK = probe.status === 0;
 
+// iter-32 gate: content updates require the v0.5.0 schema
+// (p_expected_content_hash / p_last_write_wins on cerefox_ingest_document).
+// Against an older deployed server the update-flow test skips instead of
+// failing with "function not found".
+const SCHEMA_OK = await (async () => {
+  if (!LIVE_OK) return false;
+  try {
+    const settings = loadSettings();
+    const client = createClient(settings);
+    const ver = await client.rpc<string>("cerefox_schema_version", {});
+    const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
+    return maj > 0 || min >= 5;
+  } catch {
+    return false;
+  }
+})();
+
 // Track docs we create so we can clean them up regardless of test
 // success / failure.
 const createdIds: string[] = [];
@@ -201,7 +218,16 @@ describe("cerefox write commands (live)", () => {
     expect(r2.status).toBe(0);
     expect(r2.stdout).toContain("up-to-date");
 
-    // Re-ingest with changed content → updated.
+    if (!SCHEMA_OK) {
+      console.log(
+        "(update-flow steps skipped: deployed schema < 0.5.0 — run `cerefox server deploy --schema-only`)",
+      );
+      return;
+    }
+
+    // Re-ingest with changed content but NO concurrency token → rejected
+    // (iter-32: content updates require --expected-content-hash or
+    // --last-write-wins).
     const r3 = run(
       [
         "document", "ingest",
@@ -218,8 +244,76 @@ describe("cerefox write commands (live)", () => {
       ],
       { stdin: "# Update flow\nV2 content.\n" },
     );
-    expect(r3.status).toBe(0);
-    expect(r3.stdout).toContain("updated");
+    expect(r3.status).not.toBe(0);
+    expect(r3.stderr + r3.stdout).toContain("CEREFOX_TOKEN_REQUIRED");
+
+    // Fetch the current hash (the token) via `document get --json`.
+    const rGet = run(["document", "get", id!, "--json"]);
+    expect(rGet.status).toBe(0);
+    const currentHash = (JSON.parse(rGet.stdout) as { content_hash?: string })
+      .content_hash;
+    expect(currentHash).toBeTruthy();
+
+    // Changed content WITH the token → updated.
+    const r4 = run(
+      [
+        "document", "ingest",
+        "--paste",
+        "--title",
+        title,
+        "--project-name",
+        "_e2e-v0.5",
+        "--update-if-exists",
+        "--expected-content-hash",
+        currentHash!,
+        "--author",
+        "v0.5-test",
+        "--author-type",
+        "agent",
+      ],
+      { stdin: "# Update flow\nV2 content.\n" },
+    );
+    expect(r4.status).toBe(0);
+    expect(r4.stdout).toContain("updated");
+
+    // Re-using the now-STALE token → conflict.
+    const r5 = run(
+      [
+        "document", "ingest",
+        "--paste",
+        "--title",
+        title,
+        "--update-if-exists",
+        "--expected-content-hash",
+        currentHash!,
+        "--author",
+        "v0.5-test",
+        "--author-type",
+        "agent",
+      ],
+      { stdin: "# Update flow\nV3 content.\n" },
+    );
+    expect(r5.status).not.toBe(0);
+    expect(r5.stderr + r5.stdout).toContain("CEREFOX_CONFLICT");
+
+    // --last-write-wins bypasses the check.
+    const r6 = run(
+      [
+        "document", "ingest",
+        "--paste",
+        "--title",
+        title,
+        "--update-if-exists",
+        "--last-write-wins",
+        "--author",
+        "v0.5-test",
+        "--author-type",
+        "agent",
+      ],
+      { stdin: "# Update flow\nV4 content.\n" },
+    );
+    expect(r6.status).toBe(0);
+    expect(r6.stdout).toContain("updated");
   });
 
   test("ingest-dir: walks tree and ingests matching files", () => {

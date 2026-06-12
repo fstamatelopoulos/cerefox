@@ -135,6 +135,7 @@ async function handler(
     is_partial?: boolean;
     chunk_count?: number;
     total_chars?: number;
+    content_hash?: string;
   }>;
 
   const parts: string[] = rows.map((row) => {
@@ -144,7 +145,9 @@ async function handler(
     const partial = row.is_partial
       ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
       : "";
-    return `## ${title}${docId}${score}${partial}\n\n${row.full_content ?? ""}`;
+    // content_hash = the concurrency token for cerefox_ingest updates (iter-32).
+    const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
+    return `## ${title}${docId}${score}${partial}${hash}\n\n${row.full_content ?? ""}`;
   });
 
   let output = parts.join("\n\n---\n\n");

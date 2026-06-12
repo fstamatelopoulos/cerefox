@@ -131,6 +131,27 @@ gated behind `CEREFOX_LIVE_E2E=1`).
 | `TestIdBasedIngestEdgeFunction` | `test_ingest_by_id_not_found_returns_404` | Primitive EF: non-existent UUID → HTTP 404 | Done |
 | `TestIdBasedIngestEdgeFunction` | `test_ingest_by_id_note_when_update_if_exists_false` | Primitive EF: `document_id` + `update_if_exists=false` → `note` field in response | Done |
 
+### 6C. Optimistic Concurrency on Content Updates (iter-32, v0.11)
+
+TS suites: `packages/memory/test/write-commands.test.ts` (CLI flow) and
+`packages/memory/test/ingestion/pipeline-update.test.ts` (pipeline). Both are
+probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
+(against an older server they skip with a "run `cerefox server deploy
+--schema-only`" note instead of failing).
+
+| Suite | Test | Use Case | Status |
+|-------|------|----------|--------|
+| write-commands (CLI) | update-flow | Changed content without `--expected-content-hash` → exit non-zero + `CEREFOX_TOKEN_REQUIRED` | Done |
+| write-commands (CLI) | update-flow | `document get --json` → grab `content_hash` → update with `--expected-content-hash` → updated | Done |
+| write-commands (CLI) | update-flow | Re-using the stale hash → exit non-zero + `CEREFOX_CONFLICT` | Done |
+| write-commands (CLI) | update-flow | `--last-write-wins` → update succeeds (check bypassed) | Done |
+| pipeline-update | content change | Update with correct `expectedContentHash` → reindexed + version snapshot | Done |
+| pipeline-update | content change | Stale token → throws `CEREFOX_CONFLICT`; no version snapshot created | Done |
+| pipeline-update | content change | Missing token → throws `CEREFOX_TOKEN_REQUIRED`; no snapshot | Done |
+| pipeline-update | content change | `lastWriteWins: true` → update succeeds, snapshot created | Done |
+| `_shared` unit (mocked) | ingest handler | Stale `expected_content_hash` fast-fails before embedding, with merge instructions + current hash | Done |
+| Web UI (manual / future Playwright) | edit conflict | Edit page sends loaded hash; concurrent change → 409 → "merge needed" toast | Manual |
+
 ### 7. Governance Features (future e2e)
 
 | # | Use Case | Status |

@@ -70,6 +70,7 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 | FR-1.8 | Batch ingest (directory of files) | P1 |
 | FR-1.9 | Ingestion is fire-and-forget (async, non-blocking) | P0 |
 | FR-1.10 | Report ingestion failures via UI event/log | P0 |
+| FR-1.11 | Optimistic concurrency on content updates (v0.11): updates require `expected_content_hash` (the `content_hash` the edit was based on, returned by all read surfaces), checked atomically in the ingest RPC; stale → conflict (re-read, merge, retry), absent → token-required; explicit `last_write_wins` opt-out for re-sync flows (audit-logged) | P0 |
 
 ### FR-2: Content Chunking
 

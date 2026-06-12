@@ -127,7 +127,9 @@ export function SearchControls({
   };
 
   const keyOptions =
-    metadataKeys?.map((mk) => ({ value: mk.key, label: `${mk.key} (${mk.doc_count})` })) ?? [];
+    // Select keeps value/label separate (the bare key is what's stored), so
+    // the count is safe to embed in the label here — but label it clearly.
+    metadataKeys?.map((mk) => ({ value: mk.key, label: `${mk.key} (${mk.doc_count} docs)` })) ?? [];
 
   return (
     <div className={`${ui.card} ${styles.searchBar} ${ui.rise}`}>

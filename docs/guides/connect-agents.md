@@ -568,6 +568,11 @@ You have access to a personal knowledge base via the searchKnowledgeBase action.
 When the user asks a question, always search the knowledge base first using a
 relevant query. Present results by document title, citing the source for every claim.
 Use ingestNote to save any new information the user asks you to remember.
+When UPDATING an existing document, first call getDocument and note its
+content_hash, then pass it as expected_content_hash on ingestNote. If you get a
+409 conflict, the document changed underneath you: call getDocument again, merge
+your changes into the latest content, and retry with the new hash — never
+overwrite blindly.
 ```
 
 ### Path B verification
@@ -604,7 +609,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 1.9.0
+  version: 2.0.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -731,6 +736,23 @@ paths:
                     instead of creating a new one. The previous content is archived
                     as a version. If content is unchanged, the document is skipped
                     (no re-indexing). Ignored when document_id is provided.
+                expected_content_hash:
+                  type: string
+                  description: >
+                    REQUIRED on content updates (optimistic concurrency, v2.0.0):
+                    the content_hash of the version this edit was based on, as
+                    returned by getDocument / searchKnowledgeBase / metadataSearch.
+                    If the document changed since it was read, the update fails
+                    with HTTP 409 — re-read the document, merge your changes,
+                    retry with the new hash. Not needed when creating.
+                last_write_wins:
+                  type: boolean
+                  default: false
+                  description: >
+                    Explicitly skip the concurrency check and overwrite regardless
+                    of concurrent changes. Use ONLY when an external source of
+                    truth makes conflicts meaningless. Recorded in the audit log.
+                    Never use it to silence a 409 conflict.
                 author:
                   type: string
                   description: >
@@ -753,8 +775,19 @@ paths:
               project_id?, project_name?,   # set when a project was assigned on create
               skipped?,                      # true when identical content was deduplicated
               updated?,                      # true when an existing doc was updated
+              content_hash?,                 # the NEW hash after an update (the next edit's token)
               message?,                      # human note on dedup/skip/update
               note? }                        # note when a flag (e.g. update_if_exists) was overridden
+        '400':
+          description: >
+            Missing expected_content_hash on a content update (and
+            last_write_wins not set). Read the document first, then retry
+            with its content_hash.
+        '409':
+          description: >
+            Conflict — the document changed since it was read. Call getDocument
+            for the latest content + content_hash, merge your changes, and
+            retry with the new hash. Do not overwrite blindly.
   /cerefox-metadata:
     post:
       operationId: listMetadataKeys
@@ -802,7 +835,9 @@ paths:
           description: >
             Document content and metadata:
             { document_id, doc_title, full_content, chunk_count, total_chars,
-              is_archived, version_id }
+              is_archived, version_id, content_hash }.
+            content_hash is the document's CURRENT hash — pass it back as
+            expected_content_hash when updating via ingestNote.
         '404':
           description: Document not found
   /cerefox-list-versions:
@@ -952,7 +987,9 @@ paths:
             Array of matching documents:
             [{ document_id, title, doc_metadata, review_status, source, created_at,
                updated_at, total_chars, chunk_count, project_ids, project_names,
-               version_count, content }]
+               version_count, content_hash, content }].
+            content_hash is the concurrency token — pass it back as
+            expected_content_hash when updating via ingestNote.
 ```
 
 **Step 3 — Configure authentication**

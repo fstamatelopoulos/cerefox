@@ -43,6 +43,7 @@ interface DocResult {
   doc_updated_at: string | null;
   version_count: number;
   doc_project_ids: string[] | null;
+  content_hash: string | null;
 }
 
 interface ChunkResult {
@@ -226,10 +227,14 @@ async function action(
         ? doc.best_chunk_heading_path.join(" › ")
         : null;
       const updated = doc.doc_updated_at ? doc.doc_updated_at.slice(0, 10) : null;
-      if (bestMatch || updated) {
+      // content_hash = the concurrency token for `document ingest
+      // --expected-content-hash` (iter-32).
+      const hash = doc.content_hash ? `hash: ${doc.content_hash}` : null;
+      if (bestMatch || updated || hash) {
         const bits = [
           bestMatch ? `best match: ${bestMatch}` : null,
           updated ? `updated ${updated}` : null,
+          hash,
         ].filter(Boolean);
         println(c.dim(`   ${bits.join(" · ")}`));
       }
