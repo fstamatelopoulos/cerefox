@@ -68,6 +68,7 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Markdown-first ingest** | `.md` / `.txt` / `.docx` (Markdown is the storage format; `.docx` is converted via `mammoth` on ingest, fidelity varies. PDF is not supported — convert upstream) |
 | **Batch ingest** | `cerefox document ingest-dir` recurses directories |
 | **Deduplication** | SHA-256 content hash; re-ingesting the same file is a no-op |
+| **Concurrency-safe updates** | Optimistic locking on content updates (v0.11+): writers pass the `content_hash` they read; a concurrent change fails with a conflict (re-read → merge → retry) instead of silently overwriting another agent's work. Explicit `last_write_wins` opt-out for file re-sync flows |
 | **Backup and restore** | JSON snapshots, optional git commit |
 | **Small-to-big retrieval** | `cerefox_context_expand` RPC returns chunk neighbours for richer context |
 | **Audit log** | Immutable, append-only log of all write operations (create, update, delete, status change). Author attribution with `author_type` ('user' or 'agent'). Browsable via web UI, queryable via MCP tool and Edge Function |

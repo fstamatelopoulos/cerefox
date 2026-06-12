@@ -493,12 +493,18 @@ printf '# Title\n\nBody markdown with H2s for chunking.\n' \
 # Step 1: search and note the [id: abc12345-...] in the result
 cerefox search "the exact doc" --match-count 1 --requestor "claude-code"
 
-# Step 2: update by ID
+# Step 2: read it — the header shows `content_hash:` (the concurrency token)
+cerefox document get "abc12345-..." --requestor "claude-code"
+
+# Step 3: update by ID, proving freshness with the hash from step 2
 printf '...new content...' \
   | cerefox document ingest --paste \
       --title "Exact Same Title" \
       --document-id "abc12345-..." \
+      --expected-content-hash "<hash from step 2>" \
       --author "claude-code" --author-type "agent"
+
+# Conflict error? Repeat from step 2, merge into the latest content, retry.
 ```
 
 **Title-based update (fallback when ID isn't available):**

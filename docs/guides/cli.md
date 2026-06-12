@@ -718,12 +718,18 @@ cerefox document ingest-dir ./papers --extensions .md \
 # Step 1: find it
 cerefox search "the OAuth design doc" --match-count 1
 
-# Step 2: copy the id from `Doc: ... (id: <uuid>)` line
-# Step 3: update in place
+# Step 2: read it — note the id AND the `content_hash:` line (the concurrency token)
+cerefox document get "<uuid>"
+
+# Step 3: update in place, proving freshness with the hash from step 2
 printf '%s' "$NEW_CONTENT" | cerefox document ingest --paste \
   --title "OAuth 2.1 Design Document" \
   --document-id "<uuid>" \
+  --expected-content-hash "<hash>" \
   --author "claude-code" --author-type "agent"
+
+# On a conflict error: repeat from step 2 (fresh content + fresh hash),
+# merge your changes into the latest content, then retry.
 ```
 
 ### Unattended sync job

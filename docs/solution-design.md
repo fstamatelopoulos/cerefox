@@ -682,6 +682,18 @@ flowchart TD
 where the document has zero current chunks. `chunk_count` / `total_chars` are
 updated atomically with the chunk insert.
 
+**Optimistic concurrency (v0.11 / schema 0.5.0)**: the update path locks the
+document row (`SELECT … FOR UPDATE`) and compares the caller-supplied
+`p_expected_content_hash` against the current `content_hash` before writing.
+Stale → `CEREFOX_CONFLICT` (SQLSTATE 40001); absent (without
+`p_last_write_wins`) → `CEREFOX_TOKEN_REQUIRED` (22023). This closes the
+read→chunk+embed→write race in which two concurrent writers would silently
+last-write-wins each other — the check is atomic at the one place all
+transports share. Every document-shaped read RPC (`cerefox_get_document`,
+`cerefox_search_docs`, `cerefox_metadata_search`) returns `content_hash` so
+writers always hold the token. Design of record:
+[`docs/specs/concurrency-control-design.md`](specs/concurrency-control-design.md).
+
 **Single-implementation pattern**: chunking + embedding happen in the TypeScript
 caller; *all* write logic (snapshot, archive, insert, audit, cleanup) lives in
 the `cerefox_ingest_document` RPC. New write-side behaviour is added to the RPC,

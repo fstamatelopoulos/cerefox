@@ -33,6 +33,19 @@ The coordination model is **asynchronous and knowledge-based**:
 
 This is not real-time orchestration. It is persistent, searchable shared memory.
 
+### Concurrent writers are conflict-guarded (v0.11+)
+
+Shared memory means two agents can hold the same document at once. Cerefox
+protects content updates with **optimistic concurrency control**: every read
+surface returns the document's `content_hash`, and a content update must pass
+it back as `expected_content_hash`. If the document changed in between, the
+write fails with a **conflict** instead of silently overwriting the other
+writer's work — the losing agent re-reads, merges, and retries with the fresh
+hash. (Versioning remains the recovery net; the conflict guard is the
+prevention layer.) An explicit `last_write_wins: true` exists for re-sync flows
+where an external source of truth makes conflicts meaningless — agents should
+never use it to silence a conflict. See `AGENT_GUIDE.md → Concurrent writers`.
+
 ---
 
 ## Coordination Patterns
@@ -53,7 +66,7 @@ A living document where agents record decisions, experiment outcomes, and lesson
 
 **Example**: A coding agent working on a project records "Chose PostgreSQL RPC approach over application-level logic because..." in a decision log document. Next week, a different agent working on a related feature searches Cerefox, finds the decision log, and understands the rationale without re-deriving it.
 
-**How it works**: Create a document with a structured format (date, context, decision, outcome). Use a consistent title or project tag so agents can find it. To add entries over time, re-ingest with `update_if_exists: true` (or `document_id`) — this replaces the document in place, so build the new full content by appending to the prior content you fetched.
+**How it works**: Create a document with a structured format (date, context, decision, outcome). Use a consistent title or project tag so agents can find it. To add entries over time, re-ingest with `update_if_exists: true` (or `document_id`) — this replaces the document in place, so build the new full content by appending to the prior content you fetched, and pass the `content_hash` you fetched as `expected_content_hash` (two agents appending entries concurrently is exactly the conflict the guard catches).
 
 **Best for**: Project-level institutional memory, avoiding repeated decisions, onboarding new agent sessions.
 

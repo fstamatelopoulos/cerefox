@@ -568,6 +568,11 @@ You have access to a personal knowledge base via the searchKnowledgeBase action.
 When the user asks a question, always search the knowledge base first using a
 relevant query. Present results by document title, citing the source for every claim.
 Use ingestNote to save any new information the user asks you to remember.
+When UPDATING an existing document, first call getDocument and note its
+content_hash, then pass it as expected_content_hash on ingestNote. If you get a
+409 conflict, the document changed underneath you: call getDocument again, merge
+your changes into the latest content, and retry with the new hash — never
+overwrite blindly.
 ```
 
 ### Path B verification
@@ -982,7 +987,9 @@ paths:
             Array of matching documents:
             [{ document_id, title, doc_metadata, review_status, source, created_at,
                updated_at, total_chars, chunk_count, project_ids, project_names,
-               version_count, content }]
+               version_count, content_hash, content }].
+            content_hash is the concurrency token — pass it back as
+            expected_content_hash when updating via ingestNote.
 ```
 
 **Step 3 — Configure authentication**
