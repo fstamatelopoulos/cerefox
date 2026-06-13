@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.11.0] -- 2026-06-12
+
 ### Changed — BREAKING
 
 - **Optimistic concurrency control on content updates** (design:
