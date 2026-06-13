@@ -38,7 +38,7 @@ interface MetadataSearchRow {
 }
 
 async function action(options: {
-  metadataFilter: string;
+  metadataFilter?: string;
   projectName?: string;
   updatedSince?: string;
   createdSince?: string;
@@ -48,11 +48,21 @@ async function action(options: {
   requestor?: string;
   json?: boolean;
 }): Promise<void> {
-  const metadataFilter = parseJsonObjectArg(options.metadataFilter, "--metadata-filter");
-  if (!metadataFilter || Object.keys(metadataFilter).length === 0) {
+  // Parity with the MCP tool / EF (v0.10.x relaxation, CLI caught up in
+  // v0.11.1): the filter is optional, but at least one narrowing criterion is
+  // required so this never becomes an unbounded whole-KB dump. An empty filter
+  // + --project-name lists that project's documents.
+  const metadataFilter =
+    parseJsonObjectArg(options.metadataFilter, "--metadata-filter") ?? {};
+  if (
+    Object.keys(metadataFilter).length === 0 &&
+    !options.projectName &&
+    !options.updatedSince &&
+    !options.createdSince
+  ) {
     throw userError(
-      "--metadata-filter is required and must be a non-empty JSON object.",
-      `Example: --metadata-filter '{"type":"decision-log"}'.`,
+      "Provide at least one of: --metadata-filter, --project-name, --updated-since, or --created-since.",
+      `Examples: --metadata-filter '{"type":"decision-log"}' · --project-name "research" (lists that project's docs).`,
     );
   }
 
@@ -136,10 +146,12 @@ async function action(options: {
 export function registerMetadataSearch(program: Command): void {
   program
     .command("metadata-search")
-    .description("Find documents by metadata criteria (no text query).")
-    .requiredOption(
+    .description(
+      "Find or list documents by metadata, project, or time criteria (no text query).",
+    )
+    .option(
       "-f, --metadata-filter <json>",
-      "JSON object; only docs whose metadata contains ALL pairs are returned.",
+      "JSON object; only docs whose metadata contains ALL pairs are returned. Optional — omit to list by --project-name / time range alone (at least one criterion is required).",
     )
     .option("-p, --project-name <name>", "Filter to a specific project.")
     .option("--updated-since <iso>", "Only docs updated on/after this ISO timestamp.")

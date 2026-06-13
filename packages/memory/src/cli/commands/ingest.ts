@@ -114,7 +114,10 @@ async function action(
       "No --author / CEREFOX_AUTHOR_NAME set — audit log will record this write as 'unknown'.",
     );
   }
-  const metadata = parseJsonObjectArg(options.metadata, "--metadata") ?? {};
+  // undefined = "not provided": on update the existing metadata is KEPT
+  // (v0.11.1 — the old `?? {}` default wiped a document's tags on every
+  // content update without --metadata). Pass --metadata '{}' to clear.
+  const metadata = parseJsonObjectArg(options.metadata, "--metadata");
 
   let projectNames: string[] | undefined;
   if (options.projectNames) {
@@ -152,7 +155,7 @@ async function action(
             source: options.source ?? "cli",
             projectName: options.projectName ?? null,
             projectNames: projectNames ?? null,
-            metadata: metadata as Record<string, unknown>,
+            metadata: metadata ?? null,
             updateExisting: Boolean(options.updateIfExists),
             documentId: options.documentId ?? null,
             author,
@@ -166,7 +169,7 @@ async function action(
             source: options.source ?? "cli",
             projectName: options.projectName ?? null,
             projectNames: projectNames ?? null,
-            metadata: metadata as Record<string, unknown>,
+            metadata: metadata ?? null,
             updateExisting: Boolean(options.updateIfExists),
             documentId: options.documentId ?? null,
             author,

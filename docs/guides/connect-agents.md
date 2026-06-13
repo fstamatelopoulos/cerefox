@@ -609,7 +609,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 2.0.0
+  version: 2.1.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -728,6 +728,10 @@ paths:
                   default: agent
                 metadata:
                   type: object
+                  description: >
+                    Arbitrary JSON metadata. On an UPDATE, omitting this keeps
+                    the document's existing metadata (v2.1.0); pass {} to
+                    deliberately clear all tags.
                 update_if_exists:
                   type: boolean
                   default: false

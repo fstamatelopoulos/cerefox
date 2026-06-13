@@ -72,7 +72,7 @@ Save a new document or update an existing one.
 | `last_write_wins` | No | Explicitly skip the concurrency check (default `false`). Use ONLY when an external source of truth makes conflicts meaningless (file re-sync). Recorded in the audit log. **Never use it to silence a conflict.** |
 | `project_name` | No | **Single** project name (created if absent). On update: **non-destructive add** — ensures this membership exists, preserves others. See "Project membership semantics" below. |
 | `project_names` | No | **List** of project names (each created if absent). On update: **destructive replace** — sets the document's full project set to exactly this list. Use when you want to set multiple projects at once, or deliberately change the membership list. Wins over `project_name` when both are passed. |
-| `metadata` | No | Arbitrary JSON. Use at minimum: `type` and `status`. |
+| `metadata` | No | Arbitrary JSON. Use at minimum: `type` and `status`. **On update, omitting this keeps the document's existing metadata** (v0.11.1); pass `{}` to deliberately clear all tags. |
 | `author` | No | Your agent name for audit attribution. Always set this. |
 | `source` | No | Origin label (default "agent"). |
 

@@ -92,7 +92,7 @@ const SCHEMA_OK = await (async () => {
     const client = createClient(settings);
     const ver = await client.rpc<string>("cerefox_schema_version", {});
     const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
-    return maj > 0 || min >= 5;
+    return maj > 0 || min >= 6;
   } catch {
     return false;
   }
@@ -185,6 +185,8 @@ describe("cerefox write commands (live)", () => {
         title,
         "--project-name",
         "_e2e-v0.5",
+        "--metadata",
+        '{"type":"e2e-flow","keep":"me"}',
         "--update-if-exists",
         "--author",
         "v0.5-test",
@@ -220,7 +222,7 @@ describe("cerefox write commands (live)", () => {
 
     if (!SCHEMA_OK) {
       console.log(
-        "(update-flow steps skipped: deployed schema < 0.5.0 — run `cerefox server deploy --schema-only`)",
+        "(update-flow steps skipped: deployed schema < 0.6.0 — run `cerefox server deploy --schema-only`)",
       );
       return;
     }
@@ -314,6 +316,28 @@ describe("cerefox write commands (live)", () => {
     );
     expect(r6.status).toBe(0);
     expect(r6.stdout).toContain("updated");
+
+    // v0.11.1: none of the four content updates above passed --metadata, so
+    // the metadata set at creation must have survived all of them (the old
+    // `?? {}` default wiped tags on every update).
+    const rList = run(["document", "list", "--project", "_e2e-v0.5", "--json"]);
+    expect(rList.status).toBe(0);
+    const row = (JSON.parse(rList.stdout) as Array<{ id: string; metadata: Record<string, unknown> }>)
+      .find((d) => d.id === id);
+    expect(row?.metadata).toEqual({ type: "e2e-flow", keep: "me" });
+  });
+
+  test("metadata search: --project-name alone lists docs (v0.11.1 parity)", () => {
+    const r = run(["metadata", "search", "--project-name", "_e2e-v0.5", "--json"]);
+    expect(r.status).toBe(0);
+    const rows = JSON.parse(r.stdout) as unknown[];
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  test("metadata search: no criteria at all → exit 1 with guidance", () => {
+    const r = run(["metadata", "search"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("at least one of");
   });
 
   test("ingest-dir: walks tree and ingests matching files", () => {

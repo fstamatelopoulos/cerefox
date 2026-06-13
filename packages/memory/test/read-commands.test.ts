@@ -139,10 +139,12 @@ describe("cerefox read commands (live)", () => {
     expect(stderr).toContain("not valid JSON");
   });
 
-  test("metadata-search: empty object → exit 1", () => {
+  test("metadata-search: empty object with no other criteria → exit 1", () => {
+    // v0.11.1: the filter alone may be empty, but at least one narrowing
+    // criterion (filter / project / time) is required.
     const { status, stderr } = run(["metadata", "search", "--metadata-filter", "{}"]);
     expect(status).toBe(1);
-    expect(stderr).toContain("non-empty");
+    expect(stderr).toContain("at least one of");
   });
 
   test("search: empty query → exit 1", () => {

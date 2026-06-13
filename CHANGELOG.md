@@ -9,7 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Content updates no longer wipe a document's metadata.** Every transport defaulted
+  an absent `metadata` argument to `{}` and the ingest RPC applied it verbatim — so any
+  content update that didn't re-pass the tags (CLI `document ingest` without
+  `--metadata`, MCP `cerefox_ingest`, the REST EF, the frozen Python fallback) silently
+  cleared the document's metadata. And since metadata is not versioned, the loss was
+  unrecoverable. The contract is now **NULL = "not provided" → keep existing** (create
+  uses `{}`), enforced once in the `cerefox_ingest_document` RPC; pass `{}` explicitly
+  to deliberately clear. Schema version 0.5.0 → **0.6.0** (RPC-only; run
+  `cerefox server deploy` — v0.11.1 clients sending NULL against a 0.5.0 server would
+  fail the NOT NULL constraint on update).
+- **CLI parity: `cerefox metadata search` no longer requires `--metadata-filter`.**
+  Like the MCP tool / EF (relaxed in v0.10.x — the CLI was missed), at least one of
+  filter / `--project-name` / `--updated-since` / `--created-since` is required;
+  `--project-name` alone lists that project's documents.
 
 ---
 

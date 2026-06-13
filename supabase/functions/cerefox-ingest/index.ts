@@ -17,7 +17,9 @@ import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/inde
  *   content      string   required  Markdown content
  *   project_name string   optional  Project to assign to (looked up by name, created if absent)
  *   source       string   optional  Origin label (default: "agent")
- *   metadata     object   optional  Arbitrary JSONB metadata
+ *   metadata     object   optional  Arbitrary JSONB metadata. Omitted on an
+ *                                   update → existing metadata is KEPT
+ *                                   (v0.11.1); pass {} explicitly to clear.
  *
  * Response: { document_id, title, chunk_count, project_id? }
  */
@@ -464,7 +466,10 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const { title, content, document_id = null, project_name, source = "agent", metadata = {}, update_if_exists = false, author = "agent", author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
+  // metadata: null = "not provided" — the RPC keeps existing metadata on
+  // update and uses {} on create (v0.11.1; a `= {}` default here used to wipe
+  // a document's tags on every content update that didn't re-pass them).
+  const { title, content, document_id = null, project_name, source = "agent", metadata = null, update_if_exists = false, author = "agent", author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
 
   // Validate + normalize project_names if provided (full-set destructive form)
   let project_names: string[] | null = null;

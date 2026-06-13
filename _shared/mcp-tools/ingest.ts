@@ -71,7 +71,10 @@ async function handler(
   const project_name = args.project_name as string | undefined;
   const project_names_raw = args.project_names;
   const source = (args.source as string | undefined) ?? "agent";
-  const metadata = (args.metadata as Record<string, unknown> | undefined) ?? {};
+  // null = "not provided": the RPC keeps existing metadata on update and uses
+  // {} on create (v0.11.1 — defaulting to {} here used to wipe a document's
+  // tags on every content update that didn't re-pass them).
+  const metadata = (args.metadata as Record<string, unknown> | undefined) ?? null;
   const update_if_exists = (args.update_if_exists as boolean | undefined) ?? false;
   const author = (args.author as string | undefined) ?? "mcp-agent";
   const author_type = "agent"; // MCP path is always agent
