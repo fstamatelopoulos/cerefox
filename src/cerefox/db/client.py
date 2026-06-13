@@ -755,7 +755,9 @@ class CerefoxClient:
             "p_source": source,
             "p_source_path": source_path,
             "p_content_hash": content_hash,
-            "p_metadata": metadata or {},
+            # v0.11.1: None = "not provided" — the RPC keeps existing metadata
+            # on update ({} on create). `metadata or {}` used to wipe tags.
+            "p_metadata": metadata,
             "p_review_status": review_status,
             "p_chunks": chunk_data,
             "p_author": author,

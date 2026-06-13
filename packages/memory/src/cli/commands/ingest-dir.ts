@@ -95,7 +95,9 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
       "No --author / CEREFOX_AUTHOR_NAME set — audit log will record these writes as 'unknown'.",
     );
   }
-  const metadata = parseJsonObjectArg(options.metadata, "--metadata") ?? {};
+  // undefined = "not provided": re-ingesting existing files keeps their
+  // current metadata (v0.11.1). Pass --metadata '{}' to clear on update.
+  const metadata = parseJsonObjectArg(options.metadata, "--metadata");
 
   const settings = loadSettings();
   if (!settings.supabaseUrl || !settings.supabaseKey) {
@@ -140,7 +142,7 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
         title: basename(file, extname(file)),
         source: options.source ?? "cli",
         projectName: options.projectName ?? null,
-        metadata: metadata as Record<string, unknown>,
+        metadata: metadata ?? null,
         updateExisting: Boolean(options.updateIfExists),
         author,
         authorType: authorType as "user" | "agent",

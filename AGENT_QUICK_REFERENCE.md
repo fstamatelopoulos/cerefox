@@ -7,7 +7,7 @@ Cerefox is a persistent, shared knowledge base. You have **10 MCP tools** (9 of 
 | Tool | Purpose | Key params |
 |------|---------|------------|
 | `cerefox_search` | Find documents (hybrid FTS + semantic) | `query` (required), `project_name`, `metadata_filter`, `requestor` |
-| `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `expected_content_hash` (**required on content updates** — see rule 9), `last_write_wins`, `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata`, `author` |
+| `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `expected_content_hash` (**required on content updates** — see rule 9), `last_write_wins`, `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata` (omit on update to keep existing tags; `{}` clears), `author` |
 | `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token) | `document_id` (required) |
 | `cerefox_list_versions` | Version history of a document | `document_id` (required) |
 | `cerefox_metadata_search` | Find or list docs by metadata, project, or time (no text query) | `metadata_filter`, `project_name` (list a project's docs), `updated_since`, `include_content` — **at least one** of metadata_filter/project_name/updated_since/created_since |

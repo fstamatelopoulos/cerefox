@@ -3477,13 +3477,18 @@ bundler (`--use-api`, issue #84). Design of record:
 [`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md).
 
 **Near-term tracks** (iteration numbers are planning IDs, not ship order):
-1. **Iteration 32 — Optimistic concurrency control**, target **v0.11.0**, on
-   `feat/optimistic-locking`. Motivated by a real two-agent last-write-wins incident.
-   Content updates now require `expected_content_hash` (compare-and-swap on the existing
+1. **Iteration 32 — Optimistic concurrency control**: ✅ **SHIPPED v0.11.0**
+   (2026-06-12; schema 0.5.0; deployed + live-validated on the maintainer cloud).
+   Content updates require `expected_content_hash` (compare-and-swap on the existing
    `content_hash`, atomic in the ingest RPC via `FOR UPDATE`) or an explicit
    `last_write_wins`. Design of record:
    [`docs/specs/concurrency-control-design.md`](specs/concurrency-control-design.md).
-   Implemented across RPC + MCP + EF + CLI + web + docs; schema 0.5.0.
+   **v0.11.1 follow-up** (on `fix/metadata-preserve-on-update`, schema 0.6.0):
+   content updates without metadata no longer wipe a document's tags
+   (`p_metadata` NULL = keep existing), plus CLI `metadata search` parity (filter
+   optional with another scope). The wipe incident also spawned the
+   **metadata-versioning** backlog proposal:
+   [`docs/research/metadata-versioning.md`](research/metadata-versioning.md).
 2. **Iteration 31 — Local ONNX embedder** (fully-offline World B), target **v0.12+**
    (slid from v0.11.0 to make room for iter-32), on `feat/local-embedder`.
    Design committed; P0 implementation pending review. See iter-31 in the log above.

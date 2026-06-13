@@ -44,17 +44,17 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false },
     });
-    // iter-32 gate: the update path now requires the v0.5.0 schema
-    // (p_expected_content_hash / p_last_write_wins on the ingest RPC).
-    // Against an older deployed server, leave the suite skipped instead of
-    // failing with "function not found".
+    // Schema gate: the update path requires the v0.5.0 schema (iter-32
+    // concurrency params) and the metadata-preserve assertions require
+    // v0.6.0 (p_metadata NULL = keep existing). Against an older deployed
+    // server, leave the suite skipped instead of failing.
     try {
       const { data: ver } = await client.rpc("cerefox_schema_version");
       const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
-      if (maj === 0 && min < 5) {
+      if (maj === 0 && min < 6) {
         schemaTooOld = true;
         console.log(
-          `(skipped: deployed schema ${ver} < 0.5.0 — run \`cerefox server deploy --schema-only\` to enable these tests)`,
+          `(skipped: deployed schema ${ver} < 0.6.0 — run \`cerefox server deploy --schema-only\` to enable these tests)`,
         );
         return;
       }
@@ -258,6 +258,86 @@ describe("IngestionPipeline.updateDocument (live)", () => {
         author: "pipeline-update-test",
       }),
     ).rejects.toThrow(/Identical content already exists/);
+  });
+
+  test("RPC: p_metadata NULL on update keeps existing metadata (v0.11.1)", async () => {
+    if (!pipeline || !supabase) return;
+
+    // Create a doc WITH metadata via the pipeline.
+    const title = `${TITLE_PREFIX} meta-preserve-${RUN_TAG}`;
+    const createdDoc = await pipeline.ingestText({
+      text: "# Meta preserve\n\nBody v1. Run " + RUN_TAG + ".\n",
+      title,
+      metadata: { type: "e2e-meta", keep: "me" },
+      author: "pipeline-update-test",
+    });
+    created.push(createdDoc.documentId);
+
+    // Direct RPC content update WITHOUT p_metadata (and with a synthetic
+    // embedding — no OpenAI needed): the v0.6.0 contract is NULL = keep.
+    const { error } = await supabase.rpc("cerefox_ingest_document", {
+      p_document_id: createdDoc.documentId,
+      p_title: title,
+      p_source: "agent",
+      p_content_hash: "e2e-meta-preserve-" + RUN_TAG,
+      p_review_status: "approved",
+      p_chunks: [
+        {
+          chunk_index: 0,
+          heading_path: ["Meta preserve"],
+          heading_level: 1,
+          title: "Meta preserve",
+          content: "Body v2. Run " + RUN_TAG + ".",
+          char_count: 24,
+          embedding: new Array(768).fill(0.001),
+          embedder: "e2e-test",
+        },
+      ],
+      p_author: "pipeline-update-test",
+      p_author_type: "agent",
+      p_last_write_wins: true,
+      // p_metadata deliberately omitted → NULL → keep existing
+    });
+    expect(error).toBeNull();
+
+    const { data: row } = await supabase
+      .from("cerefox_documents")
+      .select("metadata")
+      .eq("id", createdDoc.documentId)
+      .maybeSingle();
+    expect(row?.metadata).toEqual({ type: "e2e-meta", keep: "me" });
+
+    // And an explicit '{}' DOES clear (the deliberate-clear contract).
+    const { error: clearErr } = await supabase.rpc("cerefox_ingest_document", {
+      p_document_id: createdDoc.documentId,
+      p_title: title,
+      p_source: "agent",
+      p_content_hash: "e2e-meta-clear-" + RUN_TAG,
+      p_metadata: {},
+      p_review_status: "approved",
+      p_chunks: [
+        {
+          chunk_index: 0,
+          heading_path: ["Meta preserve"],
+          heading_level: 1,
+          title: "Meta preserve",
+          content: "Body v3. Run " + RUN_TAG + ".",
+          char_count: 24,
+          embedding: new Array(768).fill(0.001),
+          embedder: "e2e-test",
+        },
+      ],
+      p_author: "pipeline-update-test",
+      p_author_type: "agent",
+      p_last_write_wins: true,
+    });
+    expect(clearErr).toBeNull();
+    const { data: cleared } = await supabase
+      .from("cerefox_documents")
+      .select("metadata")
+      .eq("id", createdDoc.documentId)
+      .maybeSingle();
+    expect(cleared?.metadata).toEqual({});
   });
 
   test("update non-existent document → throws", async () => {

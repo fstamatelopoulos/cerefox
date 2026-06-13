@@ -1045,7 +1045,10 @@ $$;
 --
 -- Parameters:
 --   p_document_id     : NULL for create, UUID for update
---   p_title, p_source, p_source_path, p_content_hash, p_metadata : document fields
+--   p_title, p_source, p_source_path, p_content_hash : document fields
+--   p_metadata        : JSONB metadata. NULL = "not provided" → create uses '{}',
+--                       update keeps the existing metadata (v0.11.1). Pass '{}'
+--                       explicitly to clear all metadata.
 --   p_review_status   : 'approved' or 'pending_review' (based on author_type)
 --   p_chunks          : JSONB array of chunk objects, each with:
 --                        chunk_index, heading_path, heading_level, title,
@@ -1075,7 +1078,10 @@ CREATE FUNCTION cerefox_ingest_document(
     p_source            TEXT        DEFAULT 'agent',
     p_source_path       TEXT        DEFAULT NULL,
     p_content_hash      TEXT        DEFAULT '',
-    p_metadata          JSONB       DEFAULT '{}',
+    -- NULL = "not provided": create uses '{}', update KEEPS existing metadata
+    -- (v0.11.1 fix — content updates without metadata used to wipe tags).
+    -- Pass '{}' explicitly to deliberately clear all metadata.
+    p_metadata          JSONB       DEFAULT NULL,
     p_review_status     TEXT        DEFAULT 'approved',
     p_chunks            JSONB       DEFAULT '[]',
     p_author            TEXT        DEFAULT 'unknown',
@@ -1181,13 +1187,14 @@ BEGIN
         SELECT sv.version_id INTO v_version_id
         FROM cerefox_snapshot_version(v_doc_id, p_source_label, p_retention_hours, p_cleanup_enabled) sv;
 
-        -- Update document record
+        -- Update document record. metadata: NULL = keep existing (v0.11.1 —
+        -- a content update without metadata must not wipe the document's tags).
         UPDATE cerefox_documents SET
             title = p_title,
             source = p_source,
             source_path = COALESCE(p_source_path, source_path),
             content_hash = p_content_hash,
-            metadata = p_metadata,
+            metadata = COALESCE(p_metadata, metadata),
             chunk_count = v_chunk_count,
             total_chars = v_total_chars,
             review_status = v_status,
@@ -1202,7 +1209,7 @@ BEGIN
             title, source, source_path, content_hash, metadata,
             chunk_count, total_chars, review_status
         ) VALUES (
-            p_title, p_source, p_source_path, p_content_hash, p_metadata,
+            p_title, p_source, p_source_path, p_content_hash, COALESCE(p_metadata, '{}'::JSONB),
             v_chunk_count, v_total_chars, v_status
         )
         RETURNING id INTO v_doc_id;
@@ -1760,7 +1767,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.5.0'::TEXT;
+    SELECT '0.6.0'::TEXT;
 $$;
 
 

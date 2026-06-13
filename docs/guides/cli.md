@@ -43,7 +43,7 @@ cerefox document ingest --paste --title "<title>" [OPTIONS]   # stdin
 | `--title` | `-t` | str | filename stem | Document title. Required with `--paste`. |
 | `--project-name` | `--project`, `-p` | str | _none_ | Project name to assign the document to (created if missing). |
 | `--paste` | — | flag | off | Read markdown from stdin. Requires `--title`. |
-| `--metadata` | `-m` | JSON | `{}` | Extra metadata as a JSON object, e.g. `'{"tags":["work"]}'`. |
+| `--metadata` | `-m` | JSON | _not provided_ | Extra metadata as a JSON object, e.g. `'{"tags":["work"]}'`. **On update, omitting this keeps the document's existing metadata** (v0.11.1); pass `'{}'` to deliberately clear all metadata. |
 | `--update-if-exists` | `-u` | flag | off | Title/source-path-based fallback update. Mutually exclusive with `--document-id`. |
 | `--document-id` | `-i` | UUID | _none_ | Deterministic ID-based update. Errors if the document doesn't exist. |
 | `--expected-content-hash` | — | sha256 | _none_ | **Required on content updates** (v0.11 optimistic concurrency): the `content_hash` of the version this edit is based on, shown by `cerefox document get` / `cerefox search`. Stale → conflict error (re-read, merge, retry). |
@@ -410,8 +410,8 @@ cerefox metadata search --metadata-filter '<json>' [OPTIONS]
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--metadata-filter <json>` (`-f`) | JSON | **required** | Metadata filter, e.g. `'{"type":"decision-log"}'`. |
-| `--project-name <name>` (`-p`) | str | _none_ | Filter by project name. |
+| `--metadata-filter <json>` (`-f`) | JSON | _none_ | Metadata filter, e.g. `'{"type":"decision-log"}'`. Optional since v0.11.1 — at least one of filter / `--project-name` / `--updated-since` / `--created-since` is required (parity with the MCP tool). |
+| `--project-name <name>` (`-p`) | str | _none_ | Filter by project name. Sufficient on its own to list that project's documents. |
 | `--updated-since TEXT` | ISO-8601 | _none_ | Documents updated after this timestamp. |
 | `--created-since TEXT` | ISO-8601 | _none_ | Documents created after this timestamp. |
 | `--limit INTEGER` | int | `10` | Max results. |

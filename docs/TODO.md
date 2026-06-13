@@ -13,6 +13,12 @@
 
 ## Known Tasks (Not Yet Scheduled)
 
+### Data Safety
+- [ ] **Metadata versioning / recovery** — version snapshots capture content only;
+  a metadata wipe is unrecoverable (bit us in the v0.11.1 incident). Proposal with
+  options (audit-log before/after values, and/or metadata on version rows):
+  [`docs/research/metadata-versioning.md`](research/metadata-versioning.md).
+
 ### Search & Ranking
 - [ ] Reciprocal Rank Fusion (RRF) for hybrid search instead of linear alpha blending
 - [ ] True BM25 ranking via pg_textsearch or ParadeDB extension
