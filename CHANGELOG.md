@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v0.11.1] -- 2026-06-13
+
 ### Fixed
 
 - **Content updates no longer wipe a document's metadata.** Every transport defaulted

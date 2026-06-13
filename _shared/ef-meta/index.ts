@@ -18,7 +18,7 @@
  * doesn't touch `supabase/functions/` leaves it alone).
  */
 
-export const EF_VERSION = "0.11.0";
+export const EF_VERSION = "0.11.1";
 
 /**
  * The 8 peer EFs the cerefox-mcp aggregator probes (excludes cerefox-mcp
