@@ -325,7 +325,9 @@ describe("cerefox write commands (live)", () => {
     const row = (JSON.parse(rList.stdout) as Array<{ id: string; metadata: Record<string, unknown> }>)
       .find((d) => d.id === id);
     expect(row?.metadata).toEqual({ type: "e2e-flow", keep: "me" });
-  });
+    // Six CLI invocations (four with live embedding calls) — well beyond
+    // bun's 5s default test timeout.
+  }, 60_000);
 
   test("metadata search: --project-name alone lists docs (v0.11.1 parity)", () => {
     const r = run(["metadata", "search", "--project-name", "_e2e-v0.5", "--json"]);
