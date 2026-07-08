@@ -19,9 +19,20 @@ export const FUNCTION_PATH = "/functions/v1/cerefox-mcp";
 /** The protected-resource metadata route, matched as a suffix of the request path. */
 const PRS_SUFFIX = "/.well-known/oauth-protected-resource";
 
-/** Origin of the deployed project, e.g. `https://<ref>.supabase.co`, from the request. */
+/**
+ * Origin of the deployed project, e.g. `https://<ref>.supabase.co`.
+ *
+ * Behind Supabase's internal proxy `req.url` is `http://…`, but the public origin
+ * is always https (and Anthropic requires the `resource`/`authorization_servers`
+ * URLs to be https and to match the connector URL exactly). So we honor
+ * `x-forwarded-proto`/`x-forwarded-host` and default to https for any non-local host.
+ */
 function projectOrigin(req: Request): string {
-  return new URL(req.url).origin;
+  const url = new URL(req.url);
+  const host = req.headers.get("x-forwarded-host") ?? url.host;
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.");
+  const proto = req.headers.get("x-forwarded-proto") ?? (isLocal ? "http" : "https");
+  return `${proto}://${host}`;
 }
 
 /** Absolute URL of this MCP server (the `resource` identifier — must match exactly). */
