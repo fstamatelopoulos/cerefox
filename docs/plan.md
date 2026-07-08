@@ -3222,9 +3222,19 @@ deferral (`docs/research/oauth-mcp-auth.md`).
   Function secrets (`CEREFOX_MCP_STATIC_BEARER`, `CEREFOX_OAUTH_OWNER_ID`), register the
   Claude OAuth App (redirect `https://claude.ai/api/mcp/auth_callback`), then
   `cerefox server deploy --functions-only`.
-- **Next: Phase 4** — connect claude.ai with the pre-registered Client ID/Secret, watch
-  the discovery→consent→token→tool-call handshake in EF logs, confirm mobile, then the
-  Phase 5 regression matrix for the static-Bearer clients.
+- **Phase 2/3 deployed + live-verified (2026-07-08).** `cerefox-mcp` + secrets
+  (`CEREFOX_OAUTH_OWNER_ID`, `CEREFOX_MCP_STATIC_BEARER`) deployed. Live curls pass:
+  RFC 9728 metadata (https, exact `resource` match), 401+`WWW-Authenticate` on
+  unauthenticated POST, `tools/list` with the anon key → 10 tools. Two live fixes: the
+  `http→https` metadata scheme bug, and the injected `SUPABASE_ANON_KEY` not
+  authenticating (→ explicit `CEREFOX_MCP_STATIC_BEARER` required). **Consent page
+  moved to a Cloudflare Worker** (Supabase EFs rewrite html→text/plain on the default
+  domain) — deployed to `https://cerefox-consent.f-stamatelopoulos.workers.dev`,
+  verified serving real `text/html` with the project URL + anon key injected.
+- **Next: Phase 4** — set Supabase Site URL → the Worker; register the Claude OAuth App;
+  add the CerefoxMCP connector on claude.ai; watch discovery→consent→token→tool-call;
+  confirm mobile; then the Phase 5 regression matrix for static-Bearer clients. Highest
+  remaining risk: the beta supabase-js `auth.oauth.*` API in the consent page.
 - All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
   (design §14 has the verification table; re-check before each phase).
 - **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
