@@ -153,6 +153,12 @@ a **small static HTML+JS page from a dedicated Edge Function** deployed with
   scopes, then `approveAuthorization(authorization_id)` or
   `denyAuthorization(authorization_id)` — both return a `redirect_url` to send the user
   back to the OAuth client.
+- Two hard requirements from claude.ai field reports (`anthropics/claude-ai-mcp`):
+  redirects back to the client must be **302/303, never 307** (claude.ai silently
+  rejects 307 — issue #250), and an **already-consumed or unknown `authorization_id`
+  must render a graceful "start over from Claude" message** — Claude's Reconnect
+  button re-uses consumed authorization URLs and can double-submit approvals
+  (issue #562).
 - Holds **no secrets server-side**; everything runs client-side with the owner's session.
 Alternatives considered: the local web app (not publicly reachable — rejected); static
 hosting (GitHub Pages / Cloudflare Pages — works, but new infra and a second deploy
@@ -187,6 +193,11 @@ name `Claude`. If DCR proves flaky or noisy (one-off `client_id` rows per connec
 fall back to **pre-registering** a client with that exact redirect URI (exact match, no
 wildcards). CIMD is not yet supported by Supabase; Claude falls back to DCR when CIMD
 isn't advertised, so DCR is the working path today (watch item, §11).
+**Expect to need the pre-registration fallback**: `anthropics/claude-ai-mcp` issue #565
+(2026-07-07, open) reports claude.ai DCR against the Supabase OAuth server failing with
+"Couldn't register". The claude.ai connector dialog's "OAuth Client ID / Client Secret
+(optional)" fields are the UI for the pre-registered path (confirmed on the
+maintainer's account, Phase 0) — register via Authentication → OAuth Apps and paste.
 
 ### 4.3 What deliberately does NOT change
 
@@ -407,6 +418,26 @@ constantly; re-verify §14 before each phase that depends on a claim.)
 - **Signing-key migration**: moving HS256 → asymmetric is a prerequisite (§4.2-A);
   legacy-anon-key clients are unaffected (opaque string compare), but treat the
   migration as its own verified step in Phase 1, not a footnote.
+- **Known claude.ai platform failure modes** (from `anthropics/claude-ai-mcp`, the
+  official claude.ai-MCP tracker — check it before and during Phase 4, and file
+  server-developer reports there if we hit a wall):
+  - **#565** (open, 2026-07-07): DCR against Supabase OAuth server fails ("Couldn't
+    register") → go straight to the pre-registered client (§4.2-D).
+  - **#354 / #335 / #304 / #275** (recurring; #304 is Supabase-Auth-based): OAuth
+    completes, token endpoint returns 200, **claude.ai never sends an authenticated
+    MCP request**. Mostly closed "not planned". If we hit this and can't resolve it
+    (first suspects: PRS `resource` not byte-identical to the connector URL;
+    WWW-Authenticate still returned after valid auth), that is the §12 fallback
+    trigger.
+  - **#482** (closed): post-OAuth requests arrive **without** the Authorization header
+    → 401 loop. Distinguish from the above by EF logs (requests arrive, no token).
+  - **#476** (open): handshake + OAuth fine, tools never surface to the model on
+    claude.ai web (same server fine in Claude Code/ChatGPT).
+  - **#250**: 307 redirects silently rejected (consent page must 302/303 — §4.2-B).
+  - **#562**: Reconnect re-uses consumed authorization URLs (consent page must handle
+    idempotently — §4.2-B).
+  - **#561** (open): connectors occasionally removed without warning / can't re-add —
+    platform flakiness to keep in mind before blaming our own stack.
 
 ## 12. Fallback: Cloudflare Worker OAuth proxy (build only if §11 bites)
 
@@ -429,6 +460,9 @@ why it's the fallback. Trigger: the native path fails in a way we cannot resolve
 - Claude connector auth (OAuth required; callback URL; CIMD/DCR):
   `https://claude.com/docs/connectors/building/authentication`,
   `https://support.claude.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers`
+- claude.ai MCP tracker (bug reports + announcements — watch during Phase 4):
+  `https://github.com/anthropics/claude-ai-mcp` (issues #565, #562, #482, #476, #354,
+  #335, #304, #275, #250 catalogued in §11)
 - RFC 9728 (Protected Resource Metadata); RFC 8414 (AS metadata); RFC 8707 (resource
   indicators)
 - FastMCP `SupabaseProvider` (pattern reference only — Python, not a drop-in):
