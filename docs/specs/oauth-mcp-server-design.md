@@ -145,11 +145,29 @@ compliant clients never fall back to probing the domain root — where GoTrue's 
 - Create the **owner user** in Supabase Auth (email + password). Cerefox has never had
   GoTrue users; the OAuth flow authenticates *as* this user.
 
-**B. Consent page — a new public Edge Function (`cerefox-oauth-consent`).**
-Supabase delegates the consent screen to us; it needs a stable public URL. The Cerefox
-web app is localhost-only, so it can't host this. Rather than stand up new hosting, serve
-a **small static HTML+JS page from a dedicated Edge Function** deployed with
-`verify_jwt = false`:
+**B. Consent page — a static HTML+JS page on an HTML-capable host.**
+
+> **Live finding (2026-07-08): the consent page CANNOT be a Supabase Edge Function.**
+> Supabase rewrites `text/html` → `text/plain` (+ `nosniff`) for GET responses on the
+> default `*.supabase.co` domain (anti-phishing; discussions #35627 / #31238), so an
+> EF-served page renders as source. Real HTML from an EF needs a Supabase **custom
+> domain** (paid Pro add-on). The page is a single static file (all logic client-side),
+> so it moves to any host that serves real HTML. This does NOT affect the discovery host
+> (`cerefox-mcp` stays on `supabase.co`; the §5 custom-domain gotcha applies only there).
+> The `cerefox-oauth-consent` EF (built) is kept as the **template source** for the static
+> page; the deploy host is chosen from the options in the "Consent host" decision below.
+
+**Consent host decision (2026-07-08): Cloudflare Worker (free).** The maintainer picked
+zero-cost hosting over a Supabase custom domain. Markup lives once in
+`_shared/consent-page/renderConsentPage()`; the Cloudflare Worker
+(`cloudflare/cerefox-consent/`) serves it as real `text/html` from a free
+`*.workers.dev` subdomain (no owned domain needed). The `cerefox-oauth-consent` EF renders
+the same shared markup and is retained only for users who have a Supabase custom domain.
+Options weighed: Cloudflare Worker (free, chosen) · GitHub Pages (free, static) · Supabase
+custom domain (~$10/mo Pro add-on, keeps it in Supabase).
+
+Supabase delegates the consent screen to us; it needs a stable public URL that serves
+real HTML. The page:
 - Signs the owner in via supabase-js (CDN import, publishable key — public by design).
 - Receives the redirect with an `authorization_id` query parameter; fetches the pending
   authorization's details and renders "Allow *Claude* to access your Cerefox knowledge
@@ -459,6 +477,25 @@ constantly; re-verify §14 before each phase that depends on a claim.)
     idempotently — §4.2-B).
   - **#561** (open): connectors occasionally removed without warning / can't re-add —
     platform flakiness to keep in mind before blaming our own stack.
+- **OSS-framing open items (revisit before shipping to users, 2026-07-08):**
+  - **Cloud-agent support is an OPTIONAL, feature-scoped add-on** — most users connect via
+    local/desktop clients and never touch OAuth or the consent page. Frame it that way in
+    the guides so the "free tier is enough" story is unaffected. The consent page costs $0
+    on Cloudflare/GitHub Pages; the only friction is one static-hosting step (candidate
+    reductions: a `cerefox` command that emits the configured page, or a Cerefox-hosted
+    shared consent page).
+  - **Is the anon key really a "secret"? (maintainer note, 2026-07-08)**
+    `CEREFOX_MCP_STATIC_BEARER` is set via `supabase secrets set`, but the anon JWT is
+    **public by design** — the secrets mechanism is used purely as an env-var delivery
+    channel, not for secrecy. The same value is baked into the Cloudflare Worker `[vars]`
+    (also public). Before the OSS release, decide the cleanest framing: (a) document
+    explicitly that this "secret" is a public value delivered via the secrets CLI, and/or
+    (b) note it's only needed where the platform-injected `SUPABASE_ANON_KEY` fails to
+    authenticate in-function (it DID fail on the maintainer project — hence required here —
+    but a project where the injected var works could skip it entirely).
+  - **ChatGPT-via-MCP is a weak beneficiary**: it needs developer mode, which disables
+    ChatGPT Memory (Decision Log 2026-03-14). The honest audience for the OAuth work is
+    **claude.ai web + Claude mobile**; say so rather than overselling ChatGPT.
 
 ## 12. Fallback: Cloudflare Worker OAuth proxy (build only if §11 bites)
 

@@ -1,23 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { renderConsentPage } from "../../../_shared/consent-page/index.ts";
 
 /**
- * cerefox-oauth-consent — Supabase Edge Function
+ * cerefox-oauth-consent — Supabase Edge Function (OAuth consent page).
  *
- * The developer-hosted OAuth consent page (design §4.2-B). Supabase's OAuth 2.1
- * server authenticates the user, then redirects the browser here (Site URL +
- * Authorization Path) with an `authorization_id`. This page:
- *   1. signs the owner in (Supabase Auth email+password) if not already,
- *   2. shows what the client (Claude) is asking for, and
- *   3. approves/denies via supabase-js `auth.oauth.*`, then follows the returned
- *      `redirect_url` back to the client.
+ * ⚠️ On the default `*.supabase.co` domain Supabase rewrites `text/html` →
+ * `text/plain`, so this EF only RENDERS correctly behind a paid Supabase custom
+ * domain. For free setups the canonical host is the Cloudflare Worker in
+ * `cloudflare/cerefox-consent/`, which serves the SAME markup via the shared
+ * `renderConsentPage()`. This EF is retained for custom-domain deployments.
+ * See docs/specs/oauth-mcp-server-design.md §4.2-B.
  *
- * It holds NO secrets: everything runs client-side under the owner's session with
- * the public anon/publishable key. Redirects are client-side (`location.assign`),
- * so there is no server 307 for claude.ai to reject (anthropics/claude-ai-mcp #250),
- * and a consumed/unknown authorization_id renders a friendly "start over" message
- * rather than an error (#562).
- *
- * Deployed with --no-verify-jwt so the browser can load it without a Bearer.
+ * Markup + client-side logic live in `_shared/consent-page/`; this file is just
+ * the Deno HTTP wrapper. Deployed with --no-verify-jwt (loads in a browser).
  */
 
 const CORS_HEADERS = {
@@ -25,138 +20,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
-
-function page(supabaseUrl: string, anonKey: string): string {
-  // NOTE: values injected server-side are the project URL + public anon key
-  // (both non-secret). The supabase-js `auth.oauth` surface is beta — if method
-  // names drift, adjust here (design §11 watch item).
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Authorize access to Cerefox</title>
-<style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-         max-width: 28rem; margin: 6vh auto; padding: 0 1.25rem; line-height: 1.5; }
-  h1 { font-size: 1.35rem; } .muted { opacity: .7; font-size: .9rem; }
-  .card { border: 1px solid rgba(128,128,128,.3); border-radius: .75rem; padding: 1.25rem; }
-  label { display: block; margin: .75rem 0 .25rem; font-size: .9rem; }
-  input { width: 100%; padding: .6rem; border-radius: .5rem;
-          border: 1px solid rgba(128,128,128,.4); box-sizing: border-box; font-size: 1rem; }
-  .row { display: flex; gap: .75rem; margin-top: 1.25rem; }
-  button { flex: 1; padding: .7rem; border-radius: .5rem; border: 0; font-size: 1rem; cursor: pointer; }
-  .approve { background: #2f7d32; color: #fff; } .deny { background: transparent;
-             border: 1px solid rgba(128,128,128,.5); }
-  .hidden { display: none; } .err { color: #c0392b; margin-top: .75rem; font-size: .9rem; }
-  code { background: rgba(128,128,128,.15); padding: .1rem .3rem; border-radius: .3rem; }
-</style>
-</head>
-<body>
-<h1>Authorize access to Cerefox</h1>
-<div class="card">
-  <div id="fatal" class="hidden">
-    <p>This authorization link has expired or was already used.</p>
-    <p class="muted">Please start the connection again from your AI client.</p>
-  </div>
-
-  <div id="signin" class="hidden">
-    <p class="muted">Sign in to your Cerefox account to continue.</p>
-    <label for="email">Email</label>
-    <input id="email" type="email" autocomplete="username" />
-    <label for="password">Password</label>
-    <input id="password" type="password" autocomplete="current-password" />
-    <div class="row"><button class="approve" id="signin-btn">Sign in</button></div>
-    <div id="signin-err" class="err hidden"></div>
-  </div>
-
-  <div id="consent" class="hidden">
-    <p>Allow <strong id="client-name">this application</strong> to access your
-       Cerefox knowledge base (read and write)?</p>
-    <p class="muted" id="scopes"></p>
-    <div class="row">
-      <button class="deny" id="deny-btn">Deny</button>
-      <button class="approve" id="approve-btn">Allow</button>
-    </div>
-    <div id="consent-err" class="err hidden"></div>
-  </div>
-
-  <div id="loading"><p class="muted">Loading…</p></div>
-</div>
-
-<script type="module">
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const supabase = createClient(${JSON.stringify(supabaseUrl)}, ${JSON.stringify(anonKey)});
-const params = new URLSearchParams(location.search);
-const authorizationId = params.get("authorization_id");
-
-const $ = (id) => document.getElementById(id);
-const show = (id) => $(id).classList.remove("hidden");
-const hide = (id) => $(id).classList.add("hidden");
-function only(id) { for (const s of ["fatal","signin","consent","loading"]) hide(s); show(id); }
-
-function fatal() { only("fatal"); }
-
-async function loadDetails() {
-  try {
-    const { data, error } = await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
-    if (error || !data) return fatal();
-    $("client-name").textContent = data.client?.name || data.client_name || "This application";
-    const scopes = data.scopes || data.scope;
-    if (scopes && scopes.length) {
-      $("scopes").textContent = "Requested scopes: " +
-        (Array.isArray(scopes) ? scopes.join(", ") : scopes);
-    }
-    only("consent");
-  } catch (_e) { fatal(); }
-}
-
-async function boot() {
-  if (!authorizationId) return fatal();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) { only("signin"); return; }
-  only("loading");
-  await loadDetails();
-}
-
-$("signin-btn").addEventListener("click", async () => {
-  hide("signin-err");
-  const email = $("email").value.trim();
-  const password = $("password").value;
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) { $("signin-err").textContent = error.message; show("signin-err"); return; }
-  only("loading");
-  await loadDetails();
-});
-
-$("approve-btn").addEventListener("click", async () => {
-  hide("consent-err");
-  try {
-    const { data, error } = await supabase.auth.oauth.approveAuthorization(authorizationId);
-    if (error || !data?.redirect_url) throw error || new Error("no redirect_url");
-    location.assign(data.redirect_url);
-  } catch (e) {
-    $("consent-err").textContent = "Could not complete authorization. " +
-      "Please start again from your AI client.";
-    show("consent-err");
-  }
-});
-
-$("deny-btn").addEventListener("click", async () => {
-  try {
-    const { data } = await supabase.auth.oauth.denyAuthorization(authorizationId);
-    if (data?.redirect_url) location.assign(data.redirect_url);
-    else fatal();
-  } catch (_e) { fatal(); }
-});
-
-boot();
-</script>
-</body>
-</html>`;
-}
 
 Deno.serve((req: Request): Response => {
   if (req.method === "OPTIONS") {
@@ -167,7 +30,7 @@ Deno.serve((req: Request): Response => {
   }
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  return new Response(page(supabaseUrl, anonKey), {
+  return new Response(renderConsentPage(supabaseUrl, anonKey), {
     status: 200,
     headers: { ...CORS_HEADERS, "Content-Type": "text/html; charset=utf-8" },
   });

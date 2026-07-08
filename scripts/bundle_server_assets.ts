@@ -73,9 +73,10 @@ function main(): void {
   });
 
   // ── _shared/ (only the subtrees the EFs import) ──────────────────────────
-  // mcp-auth: cerefox-mcp imports ../../../_shared/mcp-auth for in-function
-  // OAuth/static token validation (iter-28A) — must ship or the deploy breaks.
-  for (const sub of ["mcp-tools", "embeddings", "ef-meta", "mcp-auth"]) {
+  // mcp-auth: cerefox-mcp imports it for in-function OAuth/static token
+  // validation. consent-page: cerefox-oauth-consent imports it for the consent
+  // markup. Both iter-28A — must ship or the respective EF deploy breaks.
+  for (const sub of ["mcp-tools", "embeddings", "ef-meta", "mcp-auth", "consent-page"]) {
     cpSync(join(SHARED_SRC, sub), join(OUT, "_shared", sub), {
       recursive: true,
       filter: notPythonCruft,
