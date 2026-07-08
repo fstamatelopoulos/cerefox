@@ -255,14 +255,18 @@ export function createMcpAuthenticator(config: McpAuthConfig): McpAuthenticator 
     const nowSec = Math.floor(now() / 1000);
 
     if (payload.iss !== config.issuer) {
-      return { ok: false, reason: "bad_claims", detail: "iss mismatch" };
+      return { ok: false, reason: "bad_claims", detail: `iss=${payload.iss} want=${config.issuer}` };
     }
     const auds = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (!auds.includes(config.expectedAudience)) {
-      return { ok: false, reason: "bad_claims", detail: "aud mismatch" };
+      return {
+        ok: false,
+        reason: "bad_claims",
+        detail: `aud=${JSON.stringify(payload.aud)} want=${config.expectedAudience}`,
+      };
     }
     if (typeof payload.exp !== "number" || payload.exp + clockSkewSec < nowSec) {
-      return { ok: false, reason: "bad_claims", detail: "expired" };
+      return { ok: false, reason: "bad_claims", detail: `expired (exp=${payload.exp})` };
     }
     if (typeof payload.nbf === "number" && payload.nbf - clockSkewSec > nowSec) {
       return { ok: false, reason: "bad_claims", detail: "not yet valid" };
@@ -271,7 +275,7 @@ export function createMcpAuthenticator(config: McpAuthConfig): McpAuthenticator 
       return { ok: false, reason: "bad_claims", detail: "missing sub" };
     }
     if (config.ownerUserId && payload.sub !== config.ownerUserId) {
-      return { ok: false, reason: "not_owner", detail: "sub is not the owner" };
+      return { ok: false, reason: "not_owner", detail: `sub=${payload.sub} owner=${config.ownerUserId}` };
     }
     return { ok: true, path: "oauth", sub: payload.sub };
   }
@@ -312,7 +316,15 @@ export function createMcpAuthenticator(config: McpAuthConfig): McpAuthenticator 
     if (!jwks) return { ok: false, reason: "no_verifier", detail: "JWKS unavailable" };
 
     const verified = await verifyJwtSignature(token, header, jwks);
-    if (!verified) return { ok: false, reason: "bad_signature", detail: "signature invalid" };
+    if (!verified) {
+      return {
+        ok: false,
+        reason: "bad_signature",
+        detail: `signature invalid (alg=${header.alg} kid=${header.kid} jwks_kids=${
+          jwks.keys.map((k) => k.kid).join(",")
+        })`,
+      };
+    }
 
     return validateClaims(payload);
   }

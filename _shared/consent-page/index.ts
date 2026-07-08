@@ -88,6 +88,10 @@ async function loadDetails() {
   try {
     const { data, error } = await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
     if (error || !data) return fatal();
+    // Consent already granted for this client: the server returns just a
+    // redirect_url (there is nothing to approve — approving again 400s with
+    // "authorization request is no longer pending"). Send the user straight back.
+    if (data.redirect_url) { location.assign(data.redirect_url); return; }
     $("client-name").textContent = data.client?.name || data.client_name || "This application";
     const scopes = data.scopes || data.scope;
     if (scopes && scopes.length) {
@@ -116,25 +120,45 @@ $("signin-btn").addEventListener("click", async () => {
   await loadDetails();
 });
 
+function describeError(e) {
+  if (!e) return "unknown error";
+  const parts = [];
+  if (e.message) parts.push(e.message);
+  if (e.status) parts.push("status " + e.status);
+  if (e.code) parts.push("code " + e.code);
+  if (e.name && e.name !== "Error") parts.push(e.name);
+  return parts.length ? parts.join(" · ") : JSON.stringify(e);
+}
+
 $("approve-btn").addEventListener("click", async () => {
   hide("consent-err");
+  $("approve-btn").disabled = true;
   try {
+    // The SDK auto-redirects the browser on success; we only need to handle
+    // the error path and a no-redirect fallback.
     const { data, error } = await supabase.auth.oauth.approveAuthorization(authorizationId);
-    if (error || !data?.redirect_url) throw error || new Error("no redirect_url");
-    location.assign(data.redirect_url);
+    if (error) throw error;
+    if (data?.redirect_url) { location.assign(data.redirect_url); return; }
+    throw new Error("approved but no redirect_url (response: " + JSON.stringify(data) + ")");
   } catch (e) {
-    $("consent-err").textContent = "Could not complete authorization. " +
-      "Please start again from your AI client.";
+    console.error("approveAuthorization failed:", e);
+    $("consent-err").textContent = "Could not complete authorization: " + describeError(e);
     show("consent-err");
+    $("approve-btn").disabled = false;
   }
 });
 
 $("deny-btn").addEventListener("click", async () => {
   try {
-    const { data } = await supabase.auth.oauth.denyAuthorization(authorizationId);
+    const { data, error } = await supabase.auth.oauth.denyAuthorization(authorizationId);
+    if (error) throw error;
     if (data?.redirect_url) location.assign(data.redirect_url);
     else fatal();
-  } catch (_e) { fatal(); }
+  } catch (e) {
+    console.error("denyAuthorization failed:", e);
+    $("consent-err").textContent = "Could not deny: " + describeError(e);
+    show("consent-err");
+  }
 });
 
 boot();

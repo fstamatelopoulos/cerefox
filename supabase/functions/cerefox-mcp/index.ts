@@ -266,9 +266,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     req.headers.get("Authorization"),
   );
   if (!authResult.ok) {
-    // Log the machine reason (never the token) so `supabase functions logs` is
-    // actionable. `no_token` is the normal OAuth-discovery challenge trigger —
-    // skip it to keep the logs meaningful (real auth failures only).
+    // Log the machine reason (never the token) so the dashboard logs are
+    // actionable on a real auth failure. `no_token` is the normal OAuth-discovery
+    // probe (every cloud client sends one first) — don't log it as noise. The
+    // enriched detail (aud/sub/alg values from _shared/mcp-auth) names which claim
+    // a rejected token tripped. To debug a "Claude never sends the token" case
+    // (claude-ai #482), temporarily also log `Array.from(req.headers.keys())`.
     if (authResult.reason !== "no_token") {
       console.warn(
         `[cerefox-mcp] auth rejected: ${authResult.reason}` +
