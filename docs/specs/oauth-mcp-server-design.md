@@ -136,7 +136,12 @@ compliant clients never fall back to probing the domain root — where GoTrue's 
   your Site URL … to create the full authorization endpoint URL" (component B's URL).
   Cerefox doesn't use Supabase Auth emails today, so repointing Site URL is acceptable;
   verify no side effects during Phase 1.
-- Enable **DCR** (`allow_dynamic_registration` — defaults to disabled).
+- **DCR: leave DISABLED** (decision 2026-07-08). The dashboard flags open dynamic
+  registration as a security risk (any client can self-register against the auth
+  server); claude.ai's DCR against Supabase is failing in the wild anyway (#565); and a
+  single-user system needs exactly one registered client. Use a **pre-registered OAuth
+  App** instead (Authentication → OAuth Apps → New OAuth App, in Phase 4) — more secure
+  and the working path today. `allow_dynamic_registration` stays `false`.
 - Create the **owner user** in Supabase Auth (email + password). Cerefox has never had
   GoTrue users; the OAuth flow authenticates *as* this user.
 
@@ -276,7 +281,9 @@ JWT validation against the project JWKS
   `cerefox_config` row (`oauth_owner_user_id`) set during Phase 1 setup. Until the row is
   set, any `authenticated`-role token is accepted (only the owner exists) — but pinning is
   part of the setup checklist, and `cerefox doctor` should warn when OAuth is live without
-  it.
+  it. **Maintainer owner UUID (Phase 1, 2026-07-08):
+  `0b850e27-27b6-48eb-b019-e208fb7f92e7`** — this is a server-side value only; it is
+  never entered into claude.ai.
 - JWKS fetched with in-isolate caching (EF isolates are short-lived; a simple in-memory
   cache with TTL is enough — key rotation is picked up on isolate recycle or TTL expiry).
 - Use a vetted JWT library (`jose` via npm/esm specifier in Deno) — no hand-rolled JWT

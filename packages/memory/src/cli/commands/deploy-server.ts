@@ -1,8 +1,11 @@
 /**
  * `cerefox server deploy` — the catch-all for standing up *and updating*
  * the Cerefox server side on your Supabase project: the Postgres schema +
- * RPCs (in-process) and the 9 Edge Functions (via `npx supabase functions
- * deploy`).
+ * RPCs (in-process) and the Edge Functions (via `npx supabase functions
+ * deploy`) — the 9 primitive/MCP functions plus the OAuth consent page
+ * (iter-28A). The EF list is auto-discovered from the bundled
+ * supabase/functions dir, so new functions are picked up automatically;
+ * NO_VERIFY_JWT_EFS below marks the two that gate auth in-function.
  *
  * Eliminates the repo-clone step: the server assets (SQL + EF sources) ship
  * bundled in `dist/server-assets/`, so a fresh `npm install -g
@@ -94,6 +97,18 @@ function parseProjectRef(supabaseUrl: string | undefined): string | null {
 }
 
 /** List the cerefox-* Edge Function directories under the resolved assets. */
+/**
+ * Edge Functions deployed WITHOUT the Supabase gateway's JWT verification
+ * (`--no-verify-jwt`). These are OAuth-protected-resource / public routes that
+ * must run their own in-function auth (design: docs/specs/oauth-mcp-server-design.md):
+ *   - cerefox-mcp          — serves discovery + 401 challenge; validates tokens itself.
+ *   - cerefox-oauth-consent — public consent page (loads in a browser, no Bearer).
+ * EVERY OTHER function keeps gateway verification. Forgetting the flag here never
+ * *opens* anything (it only breaks OAuth); passing it to the wrong function WOULD,
+ * so this map is the single source of truth, not operator memory.
+ */
+const NO_VERIFY_JWT_EFS = new Set(["cerefox-mcp", "cerefox-oauth-consent"]);
+
 function listEdgeFunctions(functionsDir: string): string[] {
   if (!existsSync(functionsDir)) return [];
   return readdirSync(functionsDir, { withFileTypes: true })
@@ -307,6 +322,11 @@ async function action(options: DeployServerOptions): Promise<void> {
       // bundler needed. Requires a reasonably current Supabase CLI (we resolve latest via npx).
       const args = ["--yes", "supabase", "functions", "deploy", ef, "--use-api"];
       if (projectRef) args.push("--project-ref", projectRef);
+      // OAuth protected-resource / public routes gate auth in-function (design §6).
+      if (NO_VERIFY_JWT_EFS.has(ef)) {
+        args.push("--no-verify-jwt");
+        info(`     (${ef}: --no-verify-jwt — in-function auth)`);
+      }
       const r = spawnSync("npx", args, {
         encoding: "utf8",
         stdio: "inherit",
@@ -322,6 +342,23 @@ async function action(options: DeployServerOptions): Promise<void> {
       process.exit(1);
     }
     println(c.green(`   ✓ Deployed ${efOk} Edge Function(s).`));
+
+    // cerefox-mcp runs with --no-verify-jwt, so in-function auth is the only gate.
+    // Its static-Bearer back-compat path needs an explicitly-set secret (the legacy
+    // anon JWT); without it, existing clients fail closed. Remind, don't assume.
+    if (efNames.includes("cerefox-mcp")) {
+      println(
+        c.yellow(
+          "\n   ⚠  cerefox-mcp now authenticates in-function (OAuth + legacy Bearer).\n" +
+            "      Ensure the back-compat secret is set so existing clients keep working:\n" +
+            "        supabase secrets set CEREFOX_MCP_STATIC_BEARER=<your anon JWT> --project-ref " +
+            (projectRef ?? "<ref>") +
+            "\n      Optional owner pin (single-user hardening):\n" +
+            "        supabase secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --project-ref " +
+            (projectRef ?? "<ref>"),
+        ),
+      );
+    }
   }
 
   println(c.green("\n✓ Server deploy complete."));
