@@ -37,7 +37,7 @@ Three top-level paths plus a few special cases:
 | Claude Desktop (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; Node.js; zero Edge Function invocations |
 | Claude Code (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
 | Cursor (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
-| Cloud Claude (claude.ai web + mobile) | Path A-Remote — `cerefox-mcp` over **OAuth** | Hybrid | No install; one-time Supabase OAuth setup ([setup-supabase Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)); iter-28A, verification pending |
+| Cloud Claude (claude.ai web + mobile) | Path A-Remote — `cerefox-mcp` over **OAuth** | Hybrid | No install; **optional** one-time OAuth setup + a free Cloudflare Worker consent page ([setup-supabase Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)) |
 | Gemini CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
 | Local coding agents (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) | Path C — Shell CLI (Bash tool) | Hybrid | `npm install -g @cerefox/memory`; agent runs `cerefox …` as a shell command. Useful when MCP setup is friction. |
 | curl / scripts | Path B — Edge Functions directly | Hybrid | Direct HTTP; no client needed |
@@ -1107,20 +1107,21 @@ See `docs/guides/configuration.md` → "Response size limit" for full details.
 
 ### Cloud Claude (claude.ai web + mobile — OAuth) <a id="cloud-claude-claudeai-web--mobile-oauth"></a>
 
-> **Status (iter-28A):** ⏳ **not yet verified end-to-end** — the server side is built and
-> deploys, but the claude.ai connection walk-through below is confirmed once we complete it
-> (Phase 4). The exact dialog labels may shift as the Supabase OAuth server and claude.ai
-> connectors are both in beta. Design: [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
+> **Optional feature.** This is the only path that needs the OAuth setup + a hosted
+> consent page. If you don't use claude.ai web / mobile, skip it — every other client
+> works without it. Design + rationale:
+> [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
 
 Claude.ai web **and the Claude mobile app** connect to your own `cerefox-mcp` Edge
 Function over **OAuth**, with the **full hybrid-search tool surface** — no local install.
-This replaces the old FTS-only `mcp.supabase.com` approach (which exposed raw keyword
-search over the tables, with no semantic search or Cerefox tool ergonomics).
+This replaces the old FTS-only `mcp.supabase.com` approach (raw keyword search over the
+tables, no semantic search, no Cerefox tool ergonomics).
 
 **Prerequisite:** complete the one-time Supabase OAuth setup in
 [`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)
-(enable the OAuth 2.1 Server, owner user, secrets, and — since DCR is off — a
-pre-registered OAuth App whose Client ID/Secret you'll paste below).
+— enable the OAuth 2.1 Server, deploy the Cloudflare Worker consent page, create the owner
+user + `CEREFOX_OAUTH_OWNER_ID` pin, and register the Claude OAuth App
+(**`client_secret_post`**) whose Client ID/Secret you paste below.
 
 1. In Claude.ai (web): **Settings → Connectors → Add custom connector**.
 2. **Name**: `CerefoxMCP` (distinct from the local `cerefox` server, so both can coexist).
@@ -1130,15 +1131,20 @@ pre-registered OAuth App whose Client ID/Secret you'll paste below).
    ```
 4. **Advanced settings → OAuth Client ID / OAuth Client Secret**: paste the Client ID and
    Client Secret from the pre-registered OAuth App (setup-supabase Step 7d).
-5. Save. Claude runs the OAuth flow: it redirects you to the **Cerefox consent page**
-   (sign in with the owner email/password from Step 7c, then **Allow**). On approval the
-   connector shows as connected with **10 tools**.
+5. Save. Claude runs the OAuth flow → redirects you to the **Cerefox consent page** (sign
+   in with the owner email/password from Step 7c, then **Allow**) → returns to Claude. The
+   connector shows as connected with **10 tools**. (If you've approved before, Supabase
+   auto-consents and the page just flashes through — that's expected.)
 6. **Mobile**: connectors are account-level, so `CerefoxMCP` appears in the Claude mobile
    app automatically — run one search from your phone to confirm.
 
-**Verify**: in a new chat with the connector enabled, ask *"Using CerefoxMCP, search for
-the Cerefox Decision Log and give the title of the latest part."* A correct answer proves
+**Verify**: in a new chat with the connector enabled, ask *"Using CerefoxMCP, search the
+Cerefox Decision Log and give the title of the latest part."* A correct answer proves
 search + document reconstruction over the OAuth path.
+
+> **If the connect fails right after consent** with an `ofid_…` reference: the OAuth App's
+> token endpoint auth method is wrong. It must be **`request body` (`client_secret_post`)**,
+> not HTTP Basic — see setup-supabase Step 7d. This is the most common mistake.
 
 > **Cost note**: each cloud tool call is ~1 Edge Function invocation. Fine for interactive
 > use; for heavy/automated work prefer the local stdio server (zero EF cost). Your local

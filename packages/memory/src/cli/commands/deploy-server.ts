@@ -344,18 +344,19 @@ async function action(options: DeployServerOptions): Promise<void> {
     println(c.green(`   ✓ Deployed ${efOk} Edge Function(s).`));
 
     // cerefox-mcp runs with --no-verify-jwt, so in-function auth is the only gate.
-    // The owner pin is the authorization boundary; the static-Bearer secret is
-    // optional (the function falls back to the injected SUPABASE_ANON_KEY).
+    // The OAuth owner pin is the authorization boundary and the ONE secret this
+    // feature needs. (The static-Bearer back-compat path for remote static-token
+    // clients is a separate concern — see docs/specs/oauth-mcp-server-design.md §5 —
+    // not part of the OAuth/cloud setup, so it's not prompted here.)
     if (efNames.includes("cerefox-mcp")) {
       const ref = projectRef ?? "<ref>";
       println(
         c.yellow(
-          "\n   ⚠  cerefox-mcp now authenticates in-function (OAuth + legacy Bearer).\n" +
-            "      RECOMMENDED — pin the owner (else any self-registered user is accepted):\n" +
+          "\n   ⚠  cerefox-mcp authenticates in-function (OAuth for cloud/mobile Claude).\n" +
+            "      Pin the owner — this is the authorization boundary (else any user who\n" +
+            "      self-registers on your project could get an accepted token):\n" +
             `        supabase secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --project-ref ${ref}\n` +
-            "      OPTIONAL — back-compat secret (only if old clients get 401; defaults to\n" +
-            "      the injected SUPABASE_ANON_KEY otherwise):\n" +
-            `        supabase secrets set CEREFOX_MCP_STATIC_BEARER=<your anon JWT> --project-ref ${ref}`,
+            "      Setup: docs/guides/setup-supabase.md Step 7 (incl. the client_secret_post gotcha).",
         ),
       );
     }

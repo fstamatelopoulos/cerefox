@@ -256,6 +256,8 @@ Cerefox has three distinct access layers, each with its own credential:
 2. **Python web app & CLI** — `CerefoxClient` authenticates via the Supabase REST API using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
 3. **Deployment scripts only** — `db_deploy.py` / `db_migrate.py` connect directly to Postgres via psycopg2 using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
 
+**OAuth path (iter-28A, `cerefox-mcp` only).** As an OPTIONAL feature for cloud/mobile Claude (claude.ai web + app), `cerefox-mcp` is also an OAuth 2.1 protected resource. It is deployed with `--no-verify-jwt` and does auth **in-function** (`_shared/mcp-auth/`): it accepts EITHER a valid OAuth 2.1 access token (validated against the project JWKS; `sub` pinned to `CEREFOX_OAUTH_OWNER_ID`) OR the legacy anon JWT (constant-time compare, back-compat for remote static-token clients). The consent page is a free Cloudflare Worker (`cloudflare/cerefox-consent/`) — a Supabase EF can't serve HTML on the default domain. Only `cerefox-mcp` (+ the optional `cerefox-oauth-consent` EF) skip the gateway; the 8 primitive EFs keep Layer-1 gateway validation. Design: `docs/specs/oauth-mcp-server-design.md`.
+
 See `docs/guides/access-paths.md` for a full breakdown with credential sources and a summary table.
 
 ### Single Implementation Principle
@@ -286,7 +288,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | GPT Actions, direct HTTP |
 | `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search | GPT Actions, direct HTTP |
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
-| `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/` | Claude Code, Cursor, Claude Desktop (via supergateway) |
+| `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/`. Also an OAuth 2.1 protected resource (iter-28A, `--no-verify-jwt` + in-function auth) for cloud clients | Claude Code, Cursor, Claude Desktop (via supergateway, static Bearer); **claude.ai web + mobile (via OAuth)** |
 
 The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md`.
 
@@ -348,7 +350,7 @@ authoritative release playbook; read it at the start of any release work.
 | Claude Desktop | `npx supergateway` or `npx mcp-remote` (see connect-agents.md) | `supergateway` tested and working; `mcp-remote` may work (untested for Desktop) |
 | ChatGPT | Custom GPT + GPT Actions (OpenAPI spec pointing at Edge Functions) | Streamable HTTP MCP not supported by ChatGPT |
 | ChatGPT Desktop | Developer Mode MCP (beta) or Custom GPT + GPT Actions | Dev Mode requires Plus/Pro; **untested for MCP path** |
-| Claude.ai web | Not supported | No native Streamable HTTP MCP |
+| Claude.ai web + mobile | Custom connector over **OAuth 2.1** to `cerefox-mcp` | **Working** (iter-28A). Optional feature; needs the Supabase OAuth setup + a free Cloudflare Worker consent page. Register the OAuth App with **`client_secret_post`**. See `docs/guides/setup-supabase.md` Step 7 + `connect-agents.md` → Cloud Claude. |
 
 ---
 

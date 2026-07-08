@@ -224,7 +224,7 @@ Search RPCs (MCP tools): `cerefox_hybrid_search`, `cerefox_fts_search`,
 
 The fastest path is `cerefox configure-agent --tool <client>` — it writes the
 right config for Claude Code, Claude Desktop, Cursor, Codex, or Gemini. There
-are four ways an agent can reach Cerefox:
+are several ways an agent can reach Cerefox:
 
 **1 — Remote MCP (recommended).** The `cerefox-mcp` Edge Function speaks MCP
 Streamable HTTP. Just a URL + a legacy anon JWT (Supabase → API Keys →
@@ -251,6 +251,14 @@ opencode, …) can read and write Cerefox by running the installed `cerefox`
 command directly — no MCP config at all. Point the agent at
 [`AGENT_GUIDE.md`](AGENT_GUIDE.md) and let it use `cerefox search` /
 `cerefox document ingest`.
+
+**5 — Cloud & mobile Claude (optional).** claude.ai web and the Claude mobile
+app connect to `cerefox-mcp` over **OAuth** — memory in your browser and on your
+phone, with full hybrid search. It's an opt-in extra: it needs a one-time
+Supabase OAuth setup plus a hosted consent page (the repo ships a one-command
+[Cloudflare Worker](cloudflare/cerefox-consent/) for that, free). Nothing else
+above requires it. See
+[setup-supabase.md → Step 7](docs/guides/setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional).
 
 Full setup for every client — plus a manual per-client config appendix for when
 `configure-agent` can't reach a tool — is in
