@@ -3156,23 +3156,69 @@ Accumulating on `fix/v0.9.1` (draft PR #68). Status as of 2026-05-30:
 
 ---
 
-## Iteration 28: v1.0.0 — "Stability Commitment" + Security Audit
+## Iteration 28: v1.0.0 — OAuth MCP (Claude.ai + mobile) + "Stability Commitment" + Security Audit
 
-**Goal**: Not a feature release. The contract release. Strict SemVer policy from §11 of the
-design doc becomes binding. Plus a one-time security audit (added per Fotis-24 / 2026-05-29).
+**Re-scoped 2026-07-08**: the OAuth-protected remote MCP server (Claude.ai / Claude
+mobile / other cloud agents) is folded INTO this iteration as 28A (maintainer decision).
+Rationale: the feature and the stability commitment travel together so the one-time
+security audit (28B) covers the new OAuth auth surface in the same pass — the audit's
+"every public endpoint requires auth" headline item must anyway be re-stated around the
+two deliberately-public routes 28A introduces. v1.0.0 is thus a feature + contract
+release. Work lands on `feat/oauth-mcp`.
 
-**Trigger**: ~2-3 months of v0.9 in the wild without breaking changes + at least one outside
-user installing without help.
+**Goal**: (28A) any OAuth-discovering MCP client — claude.ai web, the Claude mobile app,
+potentially ChatGPT connectors — can use the full 10-tool Cerefox surface; (28B) one-time
+security audit over the final surface; (28C) the contract: strict SemVer policy from §11
+of the polish design doc becomes binding.
 
-**Security audit headline items** (added 2026-05-29 per Fotis-24):
+**Trigger** (for 28B/28C; 28A can start immediately): ~2-3 months of v0.10/v0.11 in the
+wild without breaking changes + at least one outside user installing without help.
 
-- Every public-facing endpoint (Edge Functions including the new `/version` aggregator, GPT Actions OpenAPI block) requires Bearer JWT auth — verify none accidentally allow anon access. Cerefox treats every byte as personal/sensitive.
-- Threat-model review: write-access paths (`cerefox-ingest`, MCP `cerefox_ingest`/`cerefox_set_document_projects`), audit-log integrity (immutability guarantees), backup file handling, `~/.cerefox/.env` mode 0600 enforcement.
+### 28A: OAuth 2.1 on `cerefox-mcp` — cloud/mobile Claude connectivity
+
+**Design of record**: [`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md)
+— read it first. Derived from the maintainer's 2026-07-07 research handoff (KB doc
+`92996524-…`). The unblock: Supabase shipped a native **OAuth 2.1 Server** (beta
+2025-11-26), dissolving the GoTrue `/.well-known` conflict that forced the 2026-03-15
+deferral (`docs/research/oauth-mcp-auth.md`).
+
+- Supabase-native OAuth 2.1 (authorization code + PKCE + DCR); no new infrastructure.
+- `cerefox-mcp` becomes an RFC 9728 protected resource: serves its own
+  `.well-known/oauth-protected-resource`, returns 401 + `WWW-Authenticate`, validates
+  OAuth JWTs against the project JWKS in-function (new unit-tested `_shared/mcp-auth/`),
+  deployed `--no-verify-jwt`.
+- **Back-compat invariant**: legacy static-Bearer (anon JWT) keeps working for Claude
+  Code / Cursor / Codex / Gemini / Desktop bridges — validated in-function by
+  constant-time compare against an explicitly-set Function secret.
+- New public consent-page EF (`cerefox-oauth-consent`); owner user in GoTrue; per-EF
+  deploy-flag map in `deploy-server.ts` (only these two EFs skip gateway JWT).
+- No schema/RPC changes (no `schema_version` bump); GPT Actions block untouched.
+- Phases 0–6 in the design doc (preflight → Supabase config → consent page → resource
+  server → connect Claude → regression → docs). Fallback if the native path fails:
+  Cloudflare Worker OAuth proxy (design §12).
+- **Quick win to test in Phase 0** (verified 2026-07-08): claude.ai now has a beta,
+  slow-rollout "Request headers" option on custom connectors (static Bearer) — if the
+  maintainer's account has it, the existing anon-JWT auth works on claude.ai/mobile
+  with zero code while OAuth is built (design §4.4).
+- All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
+  (design §14 has the verification table; re-check before each phase).
+- **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
+  the feature in a v0.12.x pre-release and stamp v1.0.0 after it settles.
+
+### 28B: Security audit
+
+**Security audit headline items** (added 2026-05-29 per Fotis-24; extended 2026-07-08
+for 28A — audit runs on the **Fable 5** model per maintainer):
+
+- Every public-facing endpoint (Edge Functions including the new `/version` aggregator, GPT Actions OpenAPI block) requires Bearer JWT auth — verify none accidentally allow anon access. Cerefox treats every byte as personal/sensitive. **Re-stated for 28A**: the only deliberately-unauthenticated surfaces are `cerefox-mcp`'s RFC 9728 metadata route + 401 challenge and the `cerefox-oauth-consent` page; everything else on the two `--no-verify-jwt` functions is gated in-function (auth-first dispatch, fail-closed, constant-time compare, JWT alg allowlist — full invariant list in the design doc §6).
+- Threat-model review: write-access paths (`cerefox-ingest`, MCP `cerefox_ingest`/`cerefox_set_document_projects`), audit-log integrity (immutability guarantees), backup file handling, `~/.cerefox/.env` mode 0600 enforcement, **plus the OAuth token-validation paths and the consent flow (28A)**.
 - Dependency audit (`bun audit`, `npm audit`) — clean tree at v1.0 cut.
 - Secrets scanner (`gitleaks` or similar) on the repo history — verify no credentials ever committed.
 - Document the threat model + audit findings in `docs/specs/security-model.md` (new) — part of the v1.0 deliverable.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v1.0.0](specs/polish-and-distribution-design.md).
+### 28C: The contract
+
+Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-design.md` §13 v1.0.0](specs/polish-and-distribution-design.md).
 
 ---
 
@@ -3449,6 +3495,12 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-07-08, `main` at v0.11.1): Iteration 28 started (28A — OAuth MCP) on
+`feat/oauth-mcp`.** Supabase's native OAuth 2.1 Server (beta 2025-11-26) unblocked the
+claude.ai / Claude-mobile connectivity that was deferred 2026-03-15; design committed at
+[`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md), iteration 28
+re-scoped (see track 3 below). Implementation not yet started.
+
 **Update (2026-06-09, `main` at v0.10.3):** Iteration 30 (Local / Self-Hosted Cerefox,
 World B) shipped across v0.10.0–v0.10.2; v0.10.3 fixed the `cerefox server deploy` Edge
 Function bundler (`--use-api`, issue #84). Two active branches:
@@ -3492,8 +3544,13 @@ bundler (`--use-api`, issue #84). Design of record:
 2. **Iteration 31 — Local ONNX embedder** (fully-offline World B), target **v0.12+**
    (slid from v0.11.0 to make room for iter-32), on `feat/local-embedder`.
    Design committed; P0 implementation pending review. See iter-31 in the log above.
-3. **Iteration 28 — v1.0**, the stability commitment (strict SemVer becomes binding)
-   + security audit. Trigger: ~2–3 months of v0.10 in the wild + an outside user
+3. **Iteration 28 — v1.0**: ⏳ **ACTIVE (28A) as of 2026-07-08** on `feat/oauth-mcp`.
+   Re-scoped to fold in the **OAuth-protected remote MCP server** (28A: claude.ai +
+   Claude mobile via Supabase's native OAuth 2.1 Server — design of record:
+   [`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md)),
+   then the security audit (28B, on the Fable 5 model, covering the new OAuth
+   surface) and the stability contract (28C: strict SemVer becomes binding).
+   28B/28C trigger: ~2–3 months of v0.10/v0.11 in the wild + an outside user
    installing unaided.
 4. **Iteration 29 — Document Relations & Semantic Graph** (post-v1.0, target **v1.1+**),
    pending — design only. Design of record:
