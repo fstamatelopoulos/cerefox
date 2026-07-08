@@ -125,12 +125,13 @@ compliant clients never fall back to probing the domain root — where GoTrue's 
 - Enable **OAuth 2.1 Server** (Authentication → OAuth Server; config.toml equivalent:
   `[auth.oauth_server] enabled / authorization_url_path / allow_dynamic_registration`).
   Verified 2026-07-08: the feature is **beta, free during beta on all Supabase plans**.
-- **Migrate signing keys to asymmetric (RS256/ES256) — a prerequisite, not a
+- **Signing keys must be asymmetric (RS256/ES256) — a prerequisite, not a
   recommendation**: Supabase's default is HS256, and this design validates tokens against
   the public **JWKS** (§5 Path 2), which HS256 cannot serve; OIDC id tokens outright fail
-  on HS256. This project predates the asymmetric default — migrate during Phase 1 (a
-  Supabase-managed key-rotation flow) and verify existing clients are unaffected (they
-  compare the anon key as an opaque string, so they are).
+  on HS256. If a project is on HS256, migrate first (a Supabase-managed key-rotation
+  flow); legacy-anon-key clients are unaffected (they compare the key as an opaque
+  string). **Maintainer project: verified already on ES256 (ECC P-256), Phase 0
+  2026-07-08 — no migration needed.** Forks/other installs must still check.
 - Configure **Site URL + Authorization Path** — "the authorization path is combined with
   your Site URL … to create the full authorization endpoint URL" (component B's URL).
   Cerefox doesn't use Supabase Auth emails today, so repointing Site URL is acceptable;
@@ -360,6 +361,11 @@ explicit audit items for the v1.0 security audit (`docs/specs/security-model.md`
   baseline while OAuth is built). Confirm OAuth 2.1 Server availability in the project's
   dashboard; check current signing-key algorithm; re-verify the §14 claims that matter
   for the next phase.
+  **✅ DONE 2026-07-08**: Request-headers beta NOT on the account (§4.4 outcome note);
+  OAuth Server present on the plan (disabled, Authentication → OAuth Apps / Configuration
+  → OAuth Server); signing keys **already ES256 (P-256)** — no migration needed; Site URL
+  is the unused `http://localhost:3000` default (repointing is risk-free; Redirect URLs
+  allowlist empty).
 - **Phase 1 — Supabase config**: enable OAuth server + DCR; create owner user; set
   Site URL + Authorization Path; set `CEREFOX_MCP_STATIC_BEARER` secret; pin
   `oauth_owner_user_id` config row. No code.
@@ -487,6 +493,6 @@ docs on 2026-07-08. Re-check the relevant rows before each phase.
 | 4 | Custom domains break `.well-known` discovery | ✅ Still broken (maintainer ack 2026-02-17, no fix) — MCP URL stays on `<ref>.supabase.co` |
 | 5 | EF gateway is JWT-only; new `sb_…` keys rejected; `--no-verify-jwt` is the sanctioned escape | ✅ Confirmed (collaborator, 2026-01-10: "It is required to use --no-verify-jwt if you call them with anon (publishable) or service_role (secret) key") |
 | 6 | Consent page via Site URL + Authorization Path; supabase-js approve/deny | ✅ Confirmed; exact API: `supabase.auth.oauth.{getAuthorizationDetails,approveAuthorization,denyAuthorization}` → `redirect_url`; redirect carries `authorization_id` |
-| 7 | Asymmetric signing keys | ⚠️ **Sharpened**: HS256 is still the default; asymmetric is *required* for JWKS-based validation + OIDC id tokens → migration is a Phase 1 prerequisite. JWKS at `…/auth/v1/.well-known/jwks.json` |
+| 7 | Asymmetric signing keys | ⚠️ **Sharpened**: HS256 is still the platform default; asymmetric is *required* for JWKS-based validation + OIDC id tokens. **Maintainer project verified already on ES256 (P-256) in Phase 0** — prerequisite satisfied; forks must check. JWKS at `…/auth/v1/.well-known/jwks.json` |
 | 8 | Token claims | ✅ `sub`, `email`, `role`, `aud:"authenticated"`, `iss`, `client_id`; **no RFC 8707** resource binding |
 | 9 | claude.ai connectors require OAuth; callback `https://claude.ai/api/mcp/auth_callback`; CIMD→DCR fallback | ✅ Confirmed, **with one change**: beta slow-rollout **static "Request headers" auth** now exists (§4.4). PRS `resource` must exactly match the server URL; `authorization_servers[0]` is what Claude reads |

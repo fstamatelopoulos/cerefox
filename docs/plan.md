@@ -3202,6 +3202,13 @@ deferral (`docs/research/oauth-mcp-auth.md`).
   path. Silver lining: the dialog confirms pre-registered-client credentials are
   supported → the DCR fallback (design §4.2-D) is a verified UI affordance. Connector
   name will be **CerefoxMCP** (design §4.4 outcome note).
+- **Phase 0 ✅ COMPLETE (2026-07-08)**: OAuth Server available on the maintainer plan
+  (disabled, ready to enable); signing keys **already ES256/P-256** (the HS256→asymmetric
+  migration prerequisite is moot for this project); Site URL is the unused
+  `localhost:3000` default → repointing at the consent EF is risk-free. Next: Phase 1
+  (enable + configure OAuth server, owner user) and Phase 2 (consent EF) — Phase 2's URL
+  is needed for Phase 1's Site URL, so build order is consent EF first or configure with
+  the known-in-advance EF URL.
 - All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
   (design §14 has the verification table; re-check before each phase).
 - **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
