@@ -164,14 +164,105 @@ This points the client at the local stdio server (`cerefox mcp`). To edit
 configs by hand or use the remote (Edge Function) HTTP transport, see
 [`connect-agents.md`](connect-agents.md).
 
-**For cloud Claude.ai** — connect to the Supabase remote MCP (FTS keyword search only):
-1. In Supabase Dashboard → Project Settings → Integrations → MCP, get your project ref
-2. In Claude.ai Settings → Integrations, add `https://mcp.supabase.com/sse?project_ref=<ref>`
+**For cloud Claude.ai / Claude mobile** — connect over OAuth to your own
+`cerefox-mcp` Edge Function with the **full hybrid-search tool surface** (not the
+FTS-only `mcp.supabase.com` path). This needs a one-time OAuth setup — see
+[Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) below.
 
 **For cloud ChatGPT** — create a Custom GPT with GPT Actions pointing at the Edge Functions.
 
 See `docs/guides/connect-agents.md` for the complete guide including system prompts,
 architecture explanation, and ChatGPT GPT Actions setup.
+
+---
+
+## Step 7 — OAuth for cloud agents (Claude.ai / mobile) (optional) <a id="step-7--oauth-for-cloud-agents-claudeai--mobile-optional"></a>
+
+> **Status (iter-28A):** the server side ships in the npm package and deploys with
+> `cerefox server deploy`. This section documents the one-time Supabase configuration.
+> The client-side connection walk-through lives in
+> [`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth).
+> Full design: [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
+
+Cloud AI agents (claude.ai web, the Claude mobile app, and other
+OAuth-discovering MCP clients) can only connect to a custom MCP server over
+**OAuth** — they cannot send a static Bearer token. Supabase's native **OAuth 2.1
+Server** (beta; free during beta on all plans) makes `cerefox-mcp` a proper
+OAuth-protected resource, so those agents get the full tool surface. Your existing
+static-Bearer clients (Claude Code, Cursor, Codex, Gemini, Claude Desktop) keep
+working unchanged.
+
+**Prerequisite — asymmetric signing keys.** Token validation uses your project's
+public JWKS, so the JWT signing key must be **asymmetric (ES256 or RS256)**, not the
+HS256 default. Check under **Project Settings → JWT Keys**; if it says HS256, migrate
+to ES256 first (Supabase-managed key rotation). Legacy-anon-key clients are unaffected
+by the rotation (they treat the key as an opaque string).
+
+### 7a. Enable the OAuth 2.1 Server
+
+Supabase Dashboard → **Authentication → Configuration → OAuth Server**:
+
+- **Enable** the OAuth 2.1 Server.
+- **Authorization Path**: set to `/consent`. (This combines with the Site URL below
+  to form your consent-page URL.)
+- **Dynamic Client Registration (DCR): leave DISABLED.** The dashboard flags open DCR
+  as a security risk (any client could self-register), a single-user setup only ever
+  needs one client, and claude.ai's DCR against Supabase is currently unreliable. You
+  register the one client by hand in Step 7d instead.
+
+### 7b. Point the Site URL at the consent page
+
+Supabase Dashboard → **Authentication → URL Configuration → Site URL**:
+
+```
+https://<your-project-ref>.supabase.co/functions/v1/cerefox-oauth-consent
+```
+
+With Authorization Path `/consent`, the consent page is served at
+`…/cerefox-oauth-consent/consent`. (If your Site URL was the default
+`http://localhost:3000`, nothing depends on it — repointing is safe.)
+
+### 7c. Create the owner user + secrets
+
+1. **Owner user** — Dashboard → **Authentication → Users → Add user**: your email +
+   a strong password. This is the login you'll type on the consent page (unrelated to
+   your Supabase dashboard login). Copy the new user's **UUID** from the users list.
+2. **Function secrets** — the `cerefox-mcp` function runs with in-function auth
+   (`--no-verify-jwt`), so it needs:
+
+   ```bash
+   # Back-compat: lets existing static-Bearer clients keep working (your legacy anon JWT):
+   supabase secrets set CEREFOX_MCP_STATIC_BEARER='eyJ...your-legacy-anon-jwt...' --project-ref <ref>
+
+   # Single-user hardening: only tokens for THIS user id are accepted:
+   supabase secrets set CEREFOX_OAUTH_OWNER_ID='<owner-user-uuid>' --project-ref <ref>
+   ```
+
+   `CEREFOX_OAUTH_OWNER_ID` is the UUID from step 1. It is a **server-side** value only —
+   you never enter it into claude.ai. If unset, any validly-signed token from your
+   project's auth server is accepted (safe only because a single-user project has one
+   user; setting it is the recommended default).
+
+### 7d. Register the Claude client (pre-registration, since DCR is off)
+
+Dashboard → **Authentication → OAuth Apps → New OAuth App**:
+
+- **Client type**: Confidential (or Public — Claude supports both via the connector's
+  optional Client ID / Client Secret fields).
+- **Redirect URI** (exact match, no wildcards): `https://claude.ai/api/mcp/auth_callback`
+- Save, then copy the generated **Client ID** and **Client Secret** — you paste these
+  into the claude.ai connector dialog in `connect-agents.md`.
+
+### 7e. Deploy
+
+```bash
+cerefox server deploy --functions-only
+```
+
+This deploys `cerefox-mcp` and `cerefox-oauth-consent` with `--no-verify-jwt` (the
+deploy prints a reminder to set the secrets above). Then continue with the client
+connection in
+[`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth).
 
 ---
 

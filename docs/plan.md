@@ -3202,13 +3202,29 @@ deferral (`docs/research/oauth-mcp-auth.md`).
   path. Silver lining: the dialog confirms pre-registered-client credentials are
   supported → the DCR fallback (design §4.2-D) is a verified UI affordance. Connector
   name will be **CerefoxMCP** (design §4.4 outcome note).
-- **Phase 0 ✅ COMPLETE (2026-07-08)**: OAuth Server available on the maintainer plan
-  (disabled, ready to enable); signing keys **already ES256/P-256** (the HS256→asymmetric
-  migration prerequisite is moot for this project); Site URL is the unused
-  `localhost:3000` default → repointing at the consent EF is risk-free. Next: Phase 1
-  (enable + configure OAuth server, owner user) and Phase 2 (consent EF) — Phase 2's URL
-  is needed for Phase 1's Site URL, so build order is consent EF first or configure with
-  the known-in-advance EF URL.
+- **Phase 0 ✅ COMPLETE (2026-07-08)**: OAuth Server available on the maintainer plan;
+  signing keys **already ES256/P-256** (migration prerequisite moot); Site URL was the
+  unused `localhost:3000` default.
+- **Phases 2–3 code ✅ BUILT (2026-07-08), not yet deployed.** Commit on `feat/oauth-mcp`.
+  Shipped: `_shared/mcp-auth/` (dependency-free token validation — static constant-time
+  compare + OAuth JWT via SubtleCrypto against the project JWKS, ES256/RS256 allowlist,
+  iss/aud/exp/owner-sub, fail-closed, isolate JWKS cache; **20 unit tests green**, runs
+  under both Deno and Bun); `cerefox-mcp` auth-first dispatch + RFC 9728 metadata route +
+  401/`WWW-Authenticate` (405-for-GET and `/version` preserved); new public
+  `cerefox-oauth-consent` EF (client-side sign-in + approve/deny, `location.assign`
+  redirects so no 307 per #250, graceful consumed-`authorization_id` per #562);
+  `deploy-server` `NO_VERIFY_JWT_EFS` map (only the two EFs skip the gateway) + secret
+  reminder; `bundle_server_assets` ships `_shared/mcp-auth`. Docs updated:
+  setup-supabase Step 7 (OAuth config) + connect-agents Cloud Claude (OAuth).
+- **Phase 1 dashboard (maintainer, 2026-07-08)**: OAuth Server **enabled**, DCR left
+  **disabled** (pre-registered client instead), Site URL repointed to the consent EF,
+  owner user created (UUID `0b850e27-…`). **Remaining before Phase 4**: set the two
+  Function secrets (`CEREFOX_MCP_STATIC_BEARER`, `CEREFOX_OAUTH_OWNER_ID`), register the
+  Claude OAuth App (redirect `https://claude.ai/api/mcp/auth_callback`), then
+  `cerefox server deploy --functions-only`.
+- **Next: Phase 4** — connect claude.ai with the pre-registered Client ID/Secret, watch
+  the discovery→consent→token→tool-call handshake in EF logs, confirm mobile, then the
+  Phase 5 regression matrix for the static-Bearer clients.
 - All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
   (design §14 has the verification table; re-check before each phase).
 - **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
