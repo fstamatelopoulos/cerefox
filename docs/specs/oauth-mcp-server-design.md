@@ -220,6 +220,16 @@ product story ("any MCP client can connect") still needs the standard flow. But 
 deliver the maintainer's primary use case immediately and serves as a fallback if the
 Supabase beta misbehaves — a *second* escape hatch alongside §12.
 
+> **Phase 0 outcome (2026-07-08): not available.** The maintainer's claude.ai "Add
+> Custom Connector (beta)" dialog offers only Name, URL, and Advanced settings with
+> "OAuth Client ID (optional)" / "OAuth Client Secret (optional)" — no Request-headers
+> section. The rollout has not reached the account; the OAuth build proceeds as the
+> only path. Useful confirmation from the same dialog: claude.ai supports
+> **pre-registered client credentials**, so the §4.2-D DCR fallback (pre-register in
+> Supabase → paste ID/secret into those fields) is a verified UI affordance.
+> Connector name reserved by the maintainer: **CerefoxMCP** (distinct from the local
+> stdio server's `cerefox` so both can coexist in Claude clients).
+
 ## 5. Token validation (the auth model, precisely)
 
 Every request to the JSON-RPC surface must present `Authorization: Bearer <token>` that

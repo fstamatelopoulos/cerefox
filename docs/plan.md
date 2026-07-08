@@ -3196,10 +3196,12 @@ deferral (`docs/research/oauth-mcp-auth.md`).
 - Phases 0–6 in the design doc (preflight → Supabase config → consent page → resource
   server → connect Claude → regression → docs). Fallback if the native path fails:
   Cloudflare Worker OAuth proxy (design §12).
-- **Quick win to test in Phase 0** (verified 2026-07-08): claude.ai now has a beta,
-  slow-rollout "Request headers" option on custom connectors (static Bearer) — if the
-  maintainer's account has it, the existing anon-JWT auth works on claude.ai/mobile
-  with zero code while OAuth is built (design §4.4).
+- **Quick win tested in Phase 0 — NOT available** (2026-07-08): the claude.ai beta
+  "Request headers" static-auth rollout hasn't reached the maintainer's account (dialog
+  shows only OAuth Client ID/Secret advanced fields). OAuth build confirmed as the only
+  path. Silver lining: the dialog confirms pre-registered-client credentials are
+  supported → the DCR fallback (design §4.2-D) is a verified UI affordance. Connector
+  name will be **CerefoxMCP** (design §4.4 outcome note).
 - All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
   (design §14 has the verification table; re-check before each phase).
 - **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
