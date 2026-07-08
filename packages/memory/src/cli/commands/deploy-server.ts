@@ -344,18 +344,18 @@ async function action(options: DeployServerOptions): Promise<void> {
     println(c.green(`   ✓ Deployed ${efOk} Edge Function(s).`));
 
     // cerefox-mcp runs with --no-verify-jwt, so in-function auth is the only gate.
-    // Its static-Bearer back-compat path needs an explicitly-set secret (the legacy
-    // anon JWT); without it, existing clients fail closed. Remind, don't assume.
+    // The owner pin is the authorization boundary; the static-Bearer secret is
+    // optional (the function falls back to the injected SUPABASE_ANON_KEY).
     if (efNames.includes("cerefox-mcp")) {
+      const ref = projectRef ?? "<ref>";
       println(
         c.yellow(
           "\n   ⚠  cerefox-mcp now authenticates in-function (OAuth + legacy Bearer).\n" +
-            "      Ensure the back-compat secret is set so existing clients keep working:\n" +
-            "        supabase secrets set CEREFOX_MCP_STATIC_BEARER=<your anon JWT> --project-ref " +
-            (projectRef ?? "<ref>") +
-            "\n      Optional owner pin (single-user hardening):\n" +
-            "        supabase secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --project-ref " +
-            (projectRef ?? "<ref>"),
+            "      RECOMMENDED — pin the owner (else any self-registered user is accepted):\n" +
+            `        supabase secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --project-ref ${ref}\n` +
+            "      OPTIONAL — back-compat secret (only if old clients get 401; defaults to\n" +
+            "      the injected SUPABASE_ANON_KEY otherwise):\n" +
+            `        supabase secrets set CEREFOX_MCP_STATIC_BEARER=<your anon JWT> --project-ref ${ref}`,
         ),
       );
     }

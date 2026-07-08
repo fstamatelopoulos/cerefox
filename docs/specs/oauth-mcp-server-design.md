@@ -212,9 +212,11 @@ maintainer's account, Phase 0) — register via Authentication → OAuth Apps an
   Actions (Developer-Mode MCP disables ChatGPT Memory — recorded lesson); an OAuth MCP
   connector for ChatGPT becomes *possible* later but is out of scope.
 - **Local MCP server (`cerefox mcp`) and CLI**: untouched.
-- **Schema / RPCs**: no `src/cerefox/db/` change → **no `schema_version` bump**. Any new
-  server-side setting (e.g. the pinned owner id, §5) is a `cerefox_config` *row*, not a
-  schema change.
+- **Schema / RPCs**: no `src/cerefox/db/` change → **no `schema_version` bump**. New
+  server-side settings (the owner pin, the optional static-Bearer value) are **Edge
+  Function secrets** (`supabase secrets set`), read via `Deno.env` — no DB round-trip on
+  the auth hot path, and no schema change. (An earlier draft considered a `cerefox_config`
+  row; secrets are cheaper per-request and equally single-user-safe.)
 - **Existing client configs**: Claude Code / Cursor / Codex / Gemini / Desktop bridges
   keep sending the legacy anon JWT in `Authorization: Bearer` — unchanged.
 
@@ -253,16 +255,20 @@ Every request to the JSON-RPC surface must present `Authorization: Bearer <token
 passes ONE of:
 
 **Path 1 — legacy static Bearer (back-compat).**
-Constant-time equality against the expected anon JWT. Because EF env vars are not
-reliably available (Decision Log 2026-03-14), the expected value is an **explicitly-set
-Function secret** (e.g. `CEREFOX_MCP_STATIC_BEARER`, set to the legacy anon JWT via
-`supabase secrets set`), with `SUPABASE_ANON_KEY` as an opportunistic fallback when
-present. Note this *tightens* auth versus today: the gateway accepted any valid project
-JWT (anon, service_role, user tokens); the in-function check accepts exactly the anon key
-on this path. `cerefox server deploy` gains a preflight that verifies the secret is set
-before deploying with `--no-verify-jwt` (never deploy an open function whose only gate is
-an unset secret — fail closed: if neither source is available at request time, Path 1
-rejects everything rather than accepting everything).
+Constant-time equality against the expected anon JWT.
+`staticBearer = CEREFOX_MCP_STATIC_BEARER ?? SUPABASE_ANON_KEY ?? null`.
+**Decision (2026-07-08, maintainer):** default to the platform-injected
+`SUPABASE_ANON_KEY` — which is exactly what existing clients send — and treat the
+explicit `CEREFOX_MCP_STATIC_BEARER` secret as an **escape hatch**, set only if the
+injected var proves unreliable (the 2026-03-14 Decision Log flagged `SUPABASE_ANON_KEY`
+as "sometimes undefined", but that was the original always-on gateway-redundant check;
+here it is a fallback, and the maintainer primarily uses the local MCP that never touches
+this path, so the blast radius of a miss is small). Whichever source is used, the check
+*tightens* auth versus the old gateway (which accepted any valid project JWT). **Fail
+closed**: if neither source is available at request time, Path 1 rejects everything
+rather than accepting everything. No blocking deploy preflight — `cerefox server deploy`
+prints a reminder; a missing static value cannot *open* the function (it only breaks old
+clients, who then show `bad_signature`/`malformed_token` in the logs).
 
 **Path 2 — OAuth access token.**
 JWT validation against the project JWKS
@@ -277,13 +283,15 @@ JWT validation against the project JWKS
   `role` (`authenticated`), `aud`, `iss`, and the OAuth-specific `client_id`.
 - Grant types issued: `authorization_code` (+PKCE) and `refresh_token` only
   (`client_credentials`/`password` explicitly unsupported — fine for this flow).
-- **Owner check** (single-user): `sub` must equal the pinned owner user id, stored as a
-  `cerefox_config` row (`oauth_owner_user_id`) set during Phase 1 setup. Until the row is
-  set, any `authenticated`-role token is accepted (only the owner exists) — but pinning is
-  part of the setup checklist, and `cerefox doctor` should warn when OAuth is live without
-  it. **Maintainer owner UUID (Phase 1, 2026-07-08):
-  `0b850e27-27b6-48eb-b019-e208fb7f92e7`** — this is a server-side value only; it is
-  never entered into claude.ai.
+- **Owner check** (single-user) — **this is the authorization boundary, not optional
+  hardening.** `sub` must equal the pinned owner user id, from the `CEREFOX_OAUTH_OWNER_ID`
+  Function secret (a server-side value only; never entered into claude.ai). If unset, the
+  function accepts *any* validly-signed `authenticated` token from the project's auth
+  server — and **because Supabase enables email sign-ups by default, an attacker could
+  self-register via `/auth/v1/signup` and obtain an accepted token**. Pinning the owner
+  (or disabling public sign-ups) closes that hole; for a "every byte is sensitive" system,
+  pin it. Maintainer owner UUID (Phase 1, 2026-07-08):
+  `0b850e27-27b6-48eb-b019-e208fb7f92e7`.
 - JWKS fetched with in-isolate caching (EF isolates are short-lived; a simple in-memory
   cache with TTL is enough — key rotation is picked up on isolate recycle or TTL expiry).
 - Use a vetted JWT library (`jose` via npm/esm specifier in Deno) — no hand-rolled JWT

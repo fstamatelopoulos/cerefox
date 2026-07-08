@@ -228,20 +228,32 @@ With Authorization Path `/consent`, the consent page is served at
    a strong password. This is the login you'll type on the consent page (unrelated to
    your Supabase dashboard login). Copy the new user's **UUID** from the users list.
 2. **Function secrets** — the `cerefox-mcp` function runs with in-function auth
-   (`--no-verify-jwt`), so it needs:
+   (`--no-verify-jwt`). Set the **owner pin**; the back-compat secret is **optional**:
 
    ```bash
-   # Back-compat: lets existing static-Bearer clients keep working (your legacy anon JWT):
-   supabase secrets set CEREFOX_MCP_STATIC_BEARER='eyJ...your-legacy-anon-jwt...' --project-ref <ref>
-
-   # Single-user hardening: only tokens for THIS user id are accepted:
+   # RECOMMENDED — owner pin: only tokens for THIS user id are accepted.
    supabase secrets set CEREFOX_OAUTH_OWNER_ID='<owner-user-uuid>' --project-ref <ref>
+
+   # OPTIONAL — back-compat for existing static-Bearer clients. Skip this unless
+   # you see old clients getting 401 (see note): by default the function uses the
+   # platform-injected SUPABASE_ANON_KEY, which is what those clients already send.
+   # supabase secrets set CEREFOX_MCP_STATIC_BEARER='eyJ...your-legacy-anon-jwt...' --project-ref <ref>
    ```
 
-   `CEREFOX_OAUTH_OWNER_ID` is the UUID from step 1. It is a **server-side** value only —
-   you never enter it into claude.ai. If unset, any validly-signed token from your
-   project's auth server is accepted (safe only because a single-user project has one
-   user; setting it is the recommended default).
+   **`CEREFOX_OAUTH_OWNER_ID`** is the UUID from step 1 — a **server-side** value only
+   (never entered into claude.ai). Set it: it is the authorization boundary. If unset,
+   the function accepts *any* validly-signed `authenticated` token from your project's
+   auth server — which means **if email sign-ups are enabled (the Supabase default),
+   anyone who self-registers could get an accepted token**. Pinning the owner (or
+   disabling public sign-ups under Authentication → Sign In / Providers) closes that.
+
+   **`CEREFOX_MCP_STATIC_BEARER`** is optional back-compat. The function falls back to
+   the auto-injected `SUPABASE_ANON_KEY` (what Claude Code / Cursor / etc. already send),
+   so existing clients keep working without it. Set it explicitly only if the injected
+   var proves unreliable — the symptom is old clients getting 401 with a
+   `auth rejected: bad_signature`/`malformed_token` line in
+   `supabase functions logs cerefox-mcp`. Either way the static path fails **closed**
+   (never accepts an unexpected token).
 
 ### 7d. Register the Claude client (pre-registration, since DCR is off)
 

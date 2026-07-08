@@ -266,6 +266,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     req.headers.get("Authorization"),
   );
   if (!authResult.ok) {
+    // Log the machine reason (never the token) so `supabase functions logs` is
+    // actionable. `no_token` is the normal OAuth-discovery challenge trigger —
+    // skip it to keep the logs meaningful (real auth failures only).
+    if (authResult.reason !== "no_token") {
+      console.warn(
+        `[cerefox-mcp] auth rejected: ${authResult.reason}` +
+          (authResult.detail ? ` (${authResult.detail})` : ""),
+      );
+    }
     return unauthorizedChallenge(req, authResult);
   }
 
