@@ -3231,10 +3231,20 @@ deferral (`docs/research/oauth-mcp-auth.md`).
   moved to a Cloudflare Worker** (Supabase EFs rewrite html→text/plain on the default
   domain) — deployed to `https://cerefox-consent.f-stamatelopoulos.workers.dev`,
   verified serving real `text/html` with the project URL + anon key injected.
-- **Next: Phase 4** — set Supabase Site URL → the Worker; register the Claude OAuth App;
-  add the CerefoxMCP connector on claude.ai; watch discovery→consent→token→tool-call;
-  confirm mobile; then the Phase 5 regression matrix for static-Bearer clients. Highest
-  remaining risk: the beta supabase-js `auth.oauth.*` API in the consent page.
+- **Phase 4 ✅ DONE (2026-07-08) — claude.ai web + mobile connected over OAuth, all 10
+  tools, verified live (tools/list + a hybrid search from claude.ai).** Two live-only
+  gotchas resolved: (R1) the consent page must redirect immediately when consent was
+  already granted (`getAuthorizationDetails` returns only a `redirect_url`; approving an
+  already-resolved request 400s "no longer pending"); (R2) the Supabase OAuth app must use
+  **`client_secret_post`** (request body), not `client_secret_basic` — Claude sends the
+  secret in the body, and the basic default failed the token exchange with an opaque
+  `ofid_` error. Debugging lesson: the token-exchange failure is invisible in the Edge
+  Function logs (only `no_token` discovery probes reach the function) — it lives in the
+  Supabase **Auth** logs. Full write-up: Decision Log Q3 Part 1 (KB) "Resolution".
+- **Next: Phase 5** — regression matrix for the static-Bearer clients (Claude Code /
+  Cursor / Codex / Gemini / local MCP) confirming the OAuth work didn't disturb them
+  (`tools/list` with the anon key already re-verified → 10 tools). Then **28B** (security
+  audit over the OAuth surface, Fable 5) and **28C** (v1.0 stability commitment).
 - All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
   (design §14 has the verification table; re-check before each phase).
 - **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
@@ -3530,11 +3540,18 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
-**Update (2026-07-08, `main` at v0.11.1): Iteration 28 started (28A — OAuth MCP) on
-`feat/oauth-mcp`.** Supabase's native OAuth 2.1 Server (beta 2025-11-26) unblocked the
-claude.ai / Claude-mobile connectivity that was deferred 2026-03-15; design committed at
-[`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md), iteration 28
-re-scoped (see track 3 below). Implementation not yet started.
+**Update (2026-07-08, `main` at v0.11.1): Iteration 28A (OAuth MCP) is BUILT and WORKING
+end-to-end on `feat/oauth-mcp`.** claude.ai web + Claude mobile now connect to
+`cerefox-mcp` over OAuth with the full 10-tool surface (verified live). Supabase's native
+OAuth 2.1 Server (beta 2025-11-26) unblocked what was deferred 2026-03-15. Shipped: the
+`_shared/mcp-auth/` in-function validator (OAuth JWT + legacy static Bearer, Web-Crypto,
+20 tests), `cerefox-mcp` as an RFC 9728 protected resource (`--no-verify-jwt`), the
+`_shared/consent-page/` markup rendered by a free **Cloudflare Worker** (Supabase EFs
+can't serve HTML on the default domain), and the per-EF deploy-flag map. Design of record:
+[`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md). Full decision
+history + the R1/R2 live gotchas: Decision Log Q3 Part 1 (KB). Remaining in iter-28:
+Phase 5 regression matrix, then 28B (security audit, Fable 5) + 28C (v1.0 contract).
+**Not yet merged to `main` or released** — still on `feat/oauth-mcp`.
 
 **Update (2026-06-09, `main` at v0.10.3):** Iteration 30 (Local / Self-Hosted Cerefox,
 World B) shipped across v0.10.0–v0.10.2; v0.10.3 fixed the `cerefox server deploy` Edge
