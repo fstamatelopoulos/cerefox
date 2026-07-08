@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+- **Cloud & mobile Claude over OAuth (optional).** `cerefox-mcp` is now an OAuth 2.1
+  protected resource, so **claude.ai web and the Claude mobile app** can connect with the
+  full 10-tool hybrid-search surface (previously unsupported / FTS-only). Opt-in: it needs
+  the Supabase OAuth 2.1 Server enabled, an owner-user pin (`CEREFOX_OAUTH_OWNER_ID`), a
+  pre-registered OAuth App (**`client_secret_post`**), and a hosted consent page shipped as
+  a one-command free **Cloudflare Worker** (`cloudflare/cerefox-consent/`). Existing
+  clients (Claude Code, Cursor, Codex, Gemini, Claude Desktop, local MCP) are unchanged and
+  need none of it. In-function auth lives in the new dependency-free `_shared/mcp-auth/`
+  (OAuth JWT via Web Crypto + legacy static-Bearer back-compat). Setup:
+  `docs/guides/setup-supabase.md` Step 7. Design: `docs/specs/oauth-mcp-server-design.md`.
+
 Open roadmap.
 
 ---
