@@ -3217,11 +3217,24 @@ SemVer they must land BEFORE the 1.0 freeze, or they'd force a 2.0.0. **Discord:
 to testers on the beta; hold the broad public announce until after the full audit (③) — it's a
 security-sensitive release, don't publicize new public surfaces before auditing them.
 
+**Known deploy gotcha (2026-07-10, needs a follow-up fix).** `cerefox server deploy` FAILS when
+the built bin is run *from inside the repo checkout* (`node packages/memory/dist/bin/cerefox.js
+server deploy`): `supabase functions deploy --use-api` computes the entrypoint relative to the
+detected project root and, with no `config.toml`, walks up to the **git root**, producing a
+bogus `packages/memory/supabase/functions/<ef>/index.ts` path → `400 Entrypoint path does not
+exist`. Adding a `config.toml` to the bundle did NOT fix it. **End users are unaffected** (they
+run from an installed package outside any git tree). **Workaround used for the 28E cutover:**
+`cp -R packages/memory/dist/server-assets /tmp/cfx-deploy && cd /tmp/cfx-deploy && for ef in …;
+do npx supabase functions deploy $ef --use-api --no-verify-jwt --project-ref <ref>; done`.
+**Proper fix (follow-up, separate branch):** have `cerefox server deploy` stage the resolved
+`supabase/` + `_shared/` to an `os.tmpdir()` dir outside the git tree and deploy from there
+(matches the installed-package layout; robust from any cwd). Also fixes local-e2e.
+
 **Local e2e without a published release (decided 2026-07-10).** No registry publish is needed
 to validate 28E end-to-end: `cd packages/memory && bun run build && npm link` (or `npm install
 -g .`) makes the global `cerefox` the working-tree build (doctor/token/web/mcp), and `cerefox
 server deploy` bundles the EFs from local `dist/server-assets/` (deploys the new token-gated
-EFs, no publish). MCP clients point at the linked local `cerefox mcp` bin (not the `npx
+EFs, no publish — modulo the in-repo deploy gotcha above; deploy from the staged temp copy). MCP clients point at the linked local `cerefox mcp` bin (not the `npx
 @cerefox/memory` form, which fetches the published version). So we **hold the first published
 beta** until the batch (28E + audit + 28D) is soak-tested locally, rather than cutting a beta
 just to test. **Deploy + e2e is a supervised step** (cutover order is lock-out-sensitive; touches
