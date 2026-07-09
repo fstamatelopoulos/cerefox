@@ -3415,6 +3415,18 @@ section:
 - Confirm `configuration.md` documents `CEREFOX_ACCESS_TOKENS` and drops any retired var.
   (Maintainer also cleans their own local `.env` per this section.)
 
+**EF-count reconciliation.** Authoritative count after 28E = **9 Edge Functions = 8 primitive
++ `cerefox-mcp`** (the consent EF is deleted). Note the "9 Edge Functions" *deploy* references
+(README, `cli.md`, `upgrading.md`, `setup-supabase.md`, `ops-scripts.md`, `connect-agents.md`,
+`solution-design.md`, `requirements-and-specs.md`, `bundle_server_assets.ts`) are **correct
+again** — they predated the consent EF; leave the number, just make sure none *enumerates*
+`cerefox-oauth-consent` within the nine. Real fixes: `access-paths.md:28` ("The nine Edge
+Functions" list — must be the 8 primitive + `cerefox-mcp`, no consent) and **`CLAUDE.md:259`**,
+whose auth text is now stale on two counts — it says the primitive EFs "keep Layer-1 gateway
+validation" (now `--no-verify-jwt` + in-function token) and that `cerefox-mcp` accepts the
+legacy anon JWT (retired; it's OAuth or the Cerefox token). Also refresh the CLAUDE.md
+Client-Compatibility table + EF inventory + the "OAuth path" paragraph accordingly.
+
 **Consent-EF removal (done in code on `feat/ef-auth-token`; docs pending in the sweep).**
 `cerefox-oauth-consent` was deleted in iter-28E (the Cloudflare Worker is the one consent
 path; `_shared/consent-page` is retained — the Worker still imports it). Purge/adjust the
