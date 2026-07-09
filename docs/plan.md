@@ -3174,33 +3174,43 @@ of the polish design doc becomes binding.
 **Trigger** (for 28B/28C; 28A can start immediately): ~2-3 months of v0.10/v0.11 in the
 wild without breaking changes + at least one outside user installing without help.
 
-### v1.0.0 release scope + remaining steps (updated 2026-07-09)
+### v1.0.0 release scope + remaining steps (updated 2026-07-10)
 
 v1.0.0 grew into a large, multi-workstream release. **Branch strategy:** keep the
-workstreams on separate branches, merge each into `main`, then cut `v1.0.0-beta` from
+workstreams on separate branches, merge each into `main`, then cut `0.12.0-beta` from
 `main` (each is independently reviewable/testable; squash-merge collapses history).
 
-| Workstream | Branch | Status | Remaining before merge |
+**Only two substantive workstreams remain for 1.0.0: (a) the full-codebase security
+audit (28B ③) and (c) the chunking fix (28D Phase 0/1).** Everything else is done or a
+cut-time step (28C contract; the Supabase "disable legacy API keys" toggle; recovering
+the 4 chunker-corrupted docs, which rides on 28D).
+
+| Workstream | Branch | Status | Remaining |
 |---|---|---|---|
-| **28A — OAuth MCP** (claude.ai + mobile) | `feat/oauth-mcp` | ✅ built + live-working | Phase 5 regression matrix (static-Bearer clients) |
-| **28B — Security** | `feat/oauth-mcp` | ✅ audit + fixes deployed (OAuth surface) | ① anon-key rotation ② secret cleanup ③ **full-codebase audit** (8 primitive EFs, GPT Actions, web app, backup/restore) — may add mitigations |
-| **28D — Chunk reconstruction fix** | `fix/chunk-reconstruction` (new) | interim keep-whole shipped on `feat/oauth-mcp`; Phase 0/1 not started | Phase 0 embed cap + Phase 1 blind-stitch + doctor check + data recovery of 4 corrupted docs |
+| **28A — OAuth MCP** (claude.ai + mobile) | merged to `main` (PR #91) | ✅ built + live-working | Phase 5 regression matrix (minor) |
+| **28B — Security** (OAuth surface + RPC lockdown) | merged to `main` (PR #91) | ✅ deployed | ③ **full-codebase audit** (8 primitive EFs, GPT Actions, web app, backup/restore) — **(a), the main open item** |
+| **28E — EF auth → Cerefox token** | `feat/ef-auth-token` (PR #92) | ✅ done + **validated in prod** (all 9 EFs redeployed, doctor green, live 45/45, OAuth confirmed) | in review — closes 28B ① (anon-key) + ② (secret cleanup) |
+| **28F — Documentation sweep** | `feat/ef-auth-token` (PR #92) | ✅ done (exhaustive) | in review |
+| **28D — Chunk reconstruction fix** | `fix/chunk-reconstruction` (new) | interim keep-whole shipped; Phase 0/1 not started | **Phase 0 embed cap + Phase 1 blind-stitch + doctor check — (c), the other open item** |
 | **28C — Stability contract** | (at cut) | pending | strict SemVer becomes binding; `security-model.md` + threat model finalized |
 
 **Held priority TODOs (do NOT lose these):**
-1. **Neutralize the exposed anon key** — **superseded by 28E**: the fix is no longer "rotate the
-   anon key" (it's unrotatable on ES256) but "stop accepting it, then revoke it." 28E retires
-   the anon JWT from all EF paths; the final step is to **revoke the legacy anon key** in
-   Supabase after the token cutover (migration-0.12.md step 5). `CEREFOX_MCP_STATIC_BEARER`
-   already removed.
-2. **Supabase/CF secret cleanup** — keep `CEREFOX_OAUTH_OWNER_ID`, `CEREFOX_SUPABASE_PUBLISHABLE_KEY`;
-   set `CEREFOX_ACCESS_TOKENS` (via `cerefox token generate`); `CEREFOX_MCP_STATIC_BEARER` gone;
-   verify the old CF `SUPABASE_ANON_KEY` Worker var is gone; `cerefox-oauth-consent` EF **deleted
-   in 28E** (run `supabase functions delete cerefox-oauth-consent` on the deployed project).
-3. **Full-codebase security audit** before merge (28B extends with any new mitigations).
+1. **Neutralize the exposed anon key** — ✅ **effectively done via 28E** (all EFs reject it now).
+   One residual step, deferred to just before the public release: flip **"Disable legacy API
+   keys"** in the Supabase dashboard to close the Data-API surface (the maintainer chose to
+   leave it enabled-but-unused for now; migration-0.12.md step 5). `CEREFOX_MCP_STATIC_BEARER`
+   removed.
+2. **Supabase/CF secret cleanup** — ✅ **done in 28E**: `CEREFOX_ACCESS_TOKENS` set via
+   `cerefox token generate`; `CEREFOX_MCP_STATIC_BEARER` gone; `CEREFOX_SUPABASE_ANON_KEY`
+   removed from the maintainer's `.env`; `cerefox-oauth-consent` EF **deleted** from the
+   project (`supabase functions delete`). Keep `CEREFOX_OAUTH_OWNER_ID`, `CEREFOX_SUPABASE_PUBLISHABLE_KEY`.
+3. **(a) Full-codebase security audit** — the main open item for 1.0 (8 primitive EFs, GPT
+   Actions, web app, backup/restore); 28B extends with any new mitigations.
 4. **Data recovery** of the 4 chunker-corrupted docs (Job Hunting, Oshmabel, Saltwater,
-   Kallisti) — restore each from its last clean version after the chunker fix is installed.
+   Kallisti) — restore each from its last clean version after the chunker fix (28D) is installed.
 5. Retire the Python MCP fallback? — candidate for v1.0 (drops the chunker parity requirement).
+6. **Fix `cerefox server deploy` from a repo checkout** — supabase `--use-api` git-root
+   confusion (see the deploy-gotcha note below); end users unaffected. Low priority.
 
 **Release sequencing (decided 2026-07-09) — stay in `0.x` until all breaking changes land, then freeze 1.0:**
 1. **`0.12.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
@@ -3749,6 +3759,23 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 ---
 
 ## Current Focus
+
+**Update (2026-07-10, later): 28E + 28F DONE, VALIDATED IN PROD, PR open (#92).** The full
+EF-auth migration is committed on `feat/ef-auth-token`, deployed to the maintainer's Supabase
+(all 9 EFs `--no-verify-jwt` + token gate), and validated end-to-end: `cerefox doctor` all
+green, live e2e **45/45**, cloud-Claude OAuth confirmed, consent EF deleted, `.env` cleaned. An
+**exhaustive** doc scan then caught (and fixed) files the scoped agents missed — including
+functional scripts (`sync_docs.ts`, `check_ef_parity.ts`, web-integration `_helpers.ts`) that
+still sent the anon key. PR #92 (`feat/ef-auth-token` → `main`, squash, **no release cut**) is
+open for the maintainer to merge.
+
+**Remaining for 1.0.0 — only two substantive workstreams** (see the scope table under Iteration
+28): **(a) the full-codebase security audit** (28B ③) and **(c) the chunking fix** (28D Phase
+0/1, on `fix/chunk-reconstruction`). Then cut-time steps: 28C stability contract, the Supabase
+"disable legacy API keys" toggle, and recovering the 4 chunker-corrupted docs (rides on 28D).
+Next session: start whichever the maintainer picks (audit or 28D).
+
+---
 
 **Update (2026-07-10): 28E + 28F CODE-COMPLETE on `feat/ef-auth-token`** (off `main`; not
 merged, not deployed). All slices landed and are committed:
