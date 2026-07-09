@@ -67,12 +67,6 @@ function cpLen(s: string): number {
   return n;
 }
 
-/** Python-equivalent slice (code-point indexed). Inclusive `start`, exclusive `end`. */
-function cpSlice(s: string, start: number, end?: number): string {
-  const arr = [...s];
-  return arr.slice(start, end).join("");
-}
-
 /** Strip trailing `#` characters (matches Python `str.rstrip("#")`). */
 function rstripHash(s: string): string {
   let i = s.length;
@@ -168,13 +162,18 @@ function splitParagraphs(text: string, maxChars: number): string[] {
       currentParts = [para];
       currentLen = paraLen;
     } else {
-      // Single paragraph exceeds max — hard-split by code-point count.
-      // Python: `range(0, len(para), step)` with `step = max_chars // 2`
-      // and slices `para[start : start + max_chars]`.
-      const step = Math.floor(maxChars / 2);
-      for (let start = 0; start < paraLen; start += step) {
-        result.push(cpSlice(para, start, start + maxChars));
-      }
+      // Single paragraph exceeds max_chars. Keep it WHOLE as one piece — never
+      // split INSIDE a paragraph. `cerefox_reconstruct_doc` reassembles a document
+      // by joining chunks with "\n\n", so any intra-paragraph split is lossy: it
+      // inserts a spurious blank line at each seam (e.g. "Source" -> "Sour\n\nce",
+      // and a markdown table gets a blank line mid-row, splitting the table). The
+      // earlier `step = maxChars/2` char-slice ALSO overlapped, duplicating content
+      // on reconstruction. Only splitting at paragraph ("\n\n") boundaries keeps the
+      // join lossless — a whole oversized paragraph (typically a big markdown table)
+      // is a valid single chunk, well within the embedder's token limit for realistic
+      // inputs. (A pathologically huge single paragraph exceeding the embedder limit
+      // is a separate, rare concern; we still keep it whole rather than corrupt it.)
+      result.push(para);
       currentParts = [];
       currentLen = 0;
     }
