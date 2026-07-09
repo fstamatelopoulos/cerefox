@@ -19,6 +19,9 @@ Current contents:
   on Bun/Node, not the FastAPI named in the doc.
 - `concurrency-control-design.md` — Iteration 32 design: optimistic concurrency on
   content updates (`expected_content_hash` / `last_write_wins`). Shipped in v0.11.0.
+- `chunk-reconstruction-design.md` — Iteration 28D design (2026-07-09): fix the
+  document-reconstruction data-corruption bug via an exact-partition chunker +
+  versioned blind-stitch reconstruction (backward-compatible, lazy migration).
 - `security-model.md` — **living doc** (not a point-in-time snapshot): Cerefox's access
   layers, credential scopes, the schema-0.7.0 RPC lockdown, and the OAuth surface
   invariants. Iteration 28B deliverable.

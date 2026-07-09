@@ -3174,6 +3174,30 @@ of the polish design doc becomes binding.
 **Trigger** (for 28B/28C; 28A can start immediately): ~2-3 months of v0.10/v0.11 in the
 wild without breaking changes + at least one outside user installing without help.
 
+### v1.0.0 release scope + remaining steps (updated 2026-07-09)
+
+v1.0.0 grew into a large, multi-workstream release. **Branch strategy:** keep the
+workstreams on separate branches, merge each into `main`, then cut `v1.0.0-beta` from
+`main` (each is independently reviewable/testable; squash-merge collapses history).
+
+| Workstream | Branch | Status | Remaining before merge |
+|---|---|---|---|
+| **28A — OAuth MCP** (claude.ai + mobile) | `feat/oauth-mcp` | ✅ built + live-working | Phase 5 regression matrix (static-Bearer clients) |
+| **28B — Security** | `feat/oauth-mcp` | ✅ audit + fixes deployed (OAuth surface) | ① anon-key rotation ② secret cleanup ③ **full-codebase audit** (8 primitive EFs, GPT Actions, web app, backup/restore) — may add mitigations |
+| **28D — Chunk reconstruction fix** | `fix/chunk-reconstruction` (new) | interim keep-whole shipped on `feat/oauth-mcp`; Phase 0/1 not started | Phase 0 embed cap + Phase 1 blind-stitch + doctor check + data recovery of 4 corrupted docs |
+| **28C — Stability contract** | (at cut) | pending | strict SemVer becomes binding; `security-model.md` + threat model finalized |
+
+**Held priority TODOs (do NOT lose these):**
+1. **Rotate the exposed anon key** (was briefly in the public consent Worker) — rotate the
+   legacy JWT secret; re-issue the anon key to client configs; update `CEREFOX_MCP_STATIC_BEARER`.
+2. **Supabase/CF secret cleanup** — keep `CEREFOX_OAUTH_OWNER_ID`, `CEREFOX_SUPABASE_PUBLISHABLE_KEY`;
+   drop `CEREFOX_MCP_STATIC_BEARER` if no remote static-Bearer clients; verify the old CF
+   `SUPABASE_ANON_KEY` Worker var is gone; consider deleting the redundant `cerefox-oauth-consent` EF.
+3. **Full-codebase security audit** before merge (28B extends with any new mitigations).
+4. **Data recovery** of the 4 chunker-corrupted docs (Job Hunting, Oshmabel, Saltwater,
+   Kallisti) — restore each from its last clean version after the chunker fix is installed.
+5. Retire the Python MCP fallback? — candidate for v1.0 (drops the chunker parity requirement).
+
 ### 28A: OAuth 2.1 on `cerefox-mcp` — cloud/mobile Claude connectivity
 
 **Design of record**: [`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md)
@@ -3260,6 +3284,35 @@ for 28A — audit runs on the **Fable 5** model per maintainer):
 - Dependency audit (`bun audit`, `npm audit`) — clean tree at v1.0 cut.
 - Secrets scanner (`gitleaks` or similar) on the repo history — verify no credentials ever committed.
 - Document the threat model + audit findings in `docs/specs/security-model.md` (new) — part of the v1.0 deliverable.
+
+### 28B (extended 2026-07-09): deployed OAuth-surface fixes
+
+The OAuth-surface audit ran 2026-07-09 and **shipped fixes** (schema 0.7.0 + EF/Worker
+redeploys, live-verified): closed a Data-API RPC execute-privilege gap (SECURITY DEFINER
+RPCs now `service_role`-only); the OAuth consent page uses the public-safe publishable key
+(not the anon JWT); issuer/JWKS derive from `SUPABASE_URL`; the OAuth path fails closed
+when the owner isn't pinned. Full technical record: Decision Log Q3 Part 1 (KB, private —
+exploit specifics kept out of public docs). Public reference: `docs/specs/security-model.md`.
+**Still owed (see the held-TODOs table above): anon-key rotation, secret cleanup, and the
+FULL-codebase audit** of the 8 primitive EFs, GPT Actions, web app, and backup/restore.
+
+### 28D: Chunk-reconstruction fix (data-corruption bug)
+
+**Design**: [`docs/specs/chunk-reconstruction-design.md`](specs/chunk-reconstruction-design.md).
+Branch `fix/chunk-reconstruction`. A serious data-corruption bug: `cerefox_reconstruct_doc`
+re-synthesizes a `\n\n` separator it never stored, so any chunk split not on a paragraph
+boundary corrupts on read (duplication via a 50%-overlap hard-split, or a blank line
+mid-word/mid-row). 4 KB docs were corrupted.
+
+- **Interim fix (SHIPPED on `feat/oauth-mcp`)**: keep oversized single paragraphs whole →
+  lossless for realistic docs; regression test asserts `reconstruct(chunk(doc)) === doc`.
+- **Phase 0**: cap the embedding input to the model token limit (+ warn) so a huge whole
+  chunk never fails ingest.
+- **Phase 1**: exact-partition chunker + heading context moved to the embedding input +
+  a `content_format` marker on `cerefox_documents` (schema 0.7.0 → 0.8.0) + versioned
+  reconstruction (blind-stitch for new docs, `\n\n`-join for legacy) + **lazy migration**
+  (docs convert on next edit; no forced re-embed) + a `cerefox doctor` legacy-format count.
+- **Data recovery**: restore the 4 corrupted docs from their last clean version.
 
 ### 28C: The contract
 
@@ -3539,6 +3592,16 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 ---
 
 ## Current Focus
+
+**Update (2026-07-09): v1.0.0 is a large multi-workstream release — see the "v1.0.0
+release scope + remaining steps" table under Iteration 28.** On `feat/oauth-mcp`:
+28A OAuth MCP (working) + 28B security fixes (deployed, OAuth surface) + the interim
+chunker keep-whole fix. Newly scoped as design-of-record: **28D chunk-reconstruction**
+([`docs/specs/chunk-reconstruction-design.md`](specs/chunk-reconstruction-design.md),
+branch `fix/chunk-reconstruction`). **Held priority TODOs** (in the scope table): anon-key
+rotation, secret cleanup, full-codebase security audit, recovery of the 4 chunker-corrupted
+docs, and (maybe) retiring the Python MCP fallback at v1.0. Branch strategy: separate
+branches → `main` → cut `v1.0.0-beta`.
 
 **Update (2026-07-08, `main` at v0.11.1): Iteration 28A (OAuth MCP) is BUILT and WORKING
 end-to-end on `feat/oauth-mcp`.** claude.ai web + Claude mobile now connect to
