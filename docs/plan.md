@@ -3402,6 +3402,19 @@ Client-Compatibility table + EF inventory), `docs/solution-design.md` (auth laye
 token), `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and the `CHANGELOG.md` beta
 entry. Sync the GPT Actions OpenAPI block (`info.version` bump) per the CLAUDE.md rule.
 
+**Migration guide + `.env`/secrets cleanup (upgrade path for existing deployers).** Add/refresh
+the versioned migration guide (`docs/guides/migration-*.md`) with a **".env / secrets changes"**
+section:
+- **Remove** (now obsolete): `CEREFOX_MCP_STATIC_BEARER`; any anon-key var used *only* for the
+  remote-MCP/EF static path.
+- **Add** (server-side Function secret, set by `cerefox token generate`): `CEREFOX_ACCESS_TOKENS`.
+- **Unchanged**: the local MCP's `CEREFOX_SUPABASE_URL` + secret key (Data API path) — 28E does
+  not touch it.
+- **Client cutover steps**: re-point GPT Actions + remote HTTP MCP to the token, then **revoke
+  the legacy anon key** in Supabase (the per-deployer order from 28E §6/§11).
+- Confirm `configuration.md` documents `CEREFOX_ACCESS_TOKENS` and drops any retired var.
+  (Maintainer also cleans their own local `.env` per this section.)
+
 **Grep gates (must return nothing stale after the sweep):** any lingering `CEREFOX_MCP_STATIC_BEARER`;
 any "anon JWT"/"legacy anon"/`Bearer eyJ` shown as the *current* way to connect an EF/GPT-Action
 client (historical/iteration-log mentions are fine); any doc still pointing local agents at the
@@ -3685,6 +3698,16 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 ---
 
 ## Current Focus
+
+**Update (2026-07-10): iter-28A/B/D + 28E/28F design MERGED to `main`** via PR #91
+(squash, commit `77de5e9`) — `feat/oauth-mcp` deleted. **No release cut** (CHANGELOG stays
+under `[Unreleased]` until the `0.12.0-beta` tag). Now on **`feat/ef-auth-token`** implementing,
+in order: **28E** (retire the unrotatable legacy anon JWT across all EF paths → rotatable
+Cerefox-managed token; design: [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md))
+then **28F** (full documentation sanity sweep, incl. the migration guide + `.env`/secrets
+cleanup) — both in this one branch. Start slice: `_shared/ef-auth/` token check + unit tests
+(no-deploy). Then: cut `0.12.0-beta` from `main`, test on the maintainer laptop, soft Discord.
+See the release-sequencing block + 28E/28F under Iteration 28.
 
 **Update (2026-07-09): v1.0.0 is a large multi-workstream release — see the "v1.0.0
 release scope + remaining steps" table under Iteration 28.** On `feat/oauth-mcp`:
