@@ -3200,8 +3200,9 @@ workstreams on separate branches, merge each into `main`, then cut `v1.0.0-beta`
 
 **Release sequencing (decided 2026-07-09) — stay in `0.x` until all breaking changes land, then freeze 1.0:**
 1. **`0.12.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
-   docs cleanup + secret cleanup (②) → merge `feat/oauth-mcp` → `main` → cut the beta →
-   **test extensively on the maintainer laptop** → *soft* Discord (beta testers only).
+   **28F** (full documentation sanity sweep) + secret cleanup (②) → merge `feat/oauth-mcp` →
+   `main` → cut the beta → **test extensively on the maintainer laptop** → *soft* Discord
+   (beta testers only).
 2. **`0.12.x` betas** — the **full-codebase security audit** (③, + any mitigations) then
    **28D Phase 1** (proper chunker: `content_format` schema + blind-stitch).
 3. **`1.0.0-rc` → `1.0.0`** once every breaking/schema change is in, audited, and soaked —
@@ -3377,6 +3378,34 @@ NOT a Supabase key:
 - **Priority: implement next** (maintainer 2026-07-09) — it's the enabler for fully retiring
   the legacy JWT + closing the maintainer's own residual anon-key risk. Overlaps 28B.
   Interim already done: `CEREFOX_MCP_STATIC_BEARER` removed on the maintainer project.
+
+### 28F: Documentation sanity sweep (v0.12.0-beta release deliverable)
+
+The access-path narrative shifted materially across 28A (OAuth), 28B (security), and 28E
+(token + legacy-JWT retirement). Before the beta cut, do **one full documentation pass** to
+make every guide tell the *same* new story. This is broader than 28E §8's targeted edits — it's
+a whole-repo consistency check. Target: v0.12.0-beta (part of step 1 in the sequencing block).
+
+**The single narrative every doc must reflect:**
+- **Local agents** (Claude Code, Cursor, Codex, Gemini, Desktop) → **local MCP** via
+  `cerefox configure-agent` (stdio, Data API, no EF token). *Preferred.*
+- **Cloud Claude** (web/mobile) → **OAuth** connector to `cerefox-mcp`.
+- **Custom GPT** → **GPT Actions** + the **Cerefox token**.
+- **Remote HTTP MCP** → token (Advanced/fallback only; not the headline).
+- **Legacy anon JWT is retired** for all EF paths (hard cutover, 28E). `CEREFOX_MCP_STATIC_BEARER`
+  is gone. New `cerefox token generate/rotate/list` + `CEREFOX_ACCESS_TOKENS` Function secret.
+
+**Docs to review (checklist):** `docs/guides/{connect-agents,access-paths,setup-supabase,
+quickstart,configuration,setup-local,setup-cloud-run}.md`, `CLAUDE.md` (Layer-1 auth note +
+Client-Compatibility table + EF inventory), `docs/solution-design.md` (auth layers),
+`docs/specs/security-model.md` (new invariant: all data EFs in-function-auth'd on a rotatable
+token), `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and the `CHANGELOG.md` beta
+entry. Sync the GPT Actions OpenAPI block (`info.version` bump) per the CLAUDE.md rule.
+
+**Grep gates (must return nothing stale after the sweep):** any lingering `CEREFOX_MCP_STATIC_BEARER`;
+any "anon JWT"/"legacy anon"/`Bearer eyJ` shown as the *current* way to connect an EF/GPT-Action
+client (historical/iteration-log mentions are fine); any doc still pointing local agents at the
+remote MCP as the default. Do the grep, fix or annotate each hit.
 
 ### 28C: The contract
 
