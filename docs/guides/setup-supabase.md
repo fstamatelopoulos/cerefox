@@ -131,6 +131,22 @@ Your project ref is in the Supabase dashboard URL:
 After it finishes, verify in the Supabase Dashboard → **Edge Functions** — all 9
 functions should appear with a green "Active" status.
 
+**Now generate the Edge Function access token (required).** Every Edge Function
+authenticates callers with a Cerefox access token and rejects anyone without it, so
+mint one:
+
+```bash
+cerefox token generate
+```
+
+This sets the `CEREFOX_ACCESS_TOKENS` secret on Supabase and writes
+`CEREFOX_ACCESS_TOKEN` into your `.env` (so `cerefox doctor`, your tools, and any
+remote client can use it). It prints the token **once** — store it. You paste it by
+hand only if you connect a **Custom GPT** (Action → Authentication → API Key) or a
+**remote HTTP MCP** client; the local MCP and cloud Claude (OAuth) don't use it.
+Lose it → `cerefox token rotate`. Re-run `cerefox doctor` — the "edge functions"
+check should now be green.
+
 > **`WARNING: Docker is not running` is expected and harmless.** The Supabase CLI checks for
 > Docker (its older local bundler ran in a container) but falls back to bundling the functions
 > server-side — it uploads the source assets (you'll see `Uploading asset (…)` lines) and

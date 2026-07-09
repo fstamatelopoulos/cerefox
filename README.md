@@ -126,10 +126,16 @@ curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/
 # 2. Configure + stand up the server side (against your own Supabase project):
 cerefox init             # interactive setup: Supabase URL/keys, embedding key
 cerefox server deploy    # schema + RPCs + all 9 Edge Functions, from the npm bundle
+cerefox token generate   # mint the Edge Function access token; sets it on Supabase
+                         # and writes CEREFOX_ACCESS_TOKEN to your .env (required —
+                         # the EFs reject callers without it). Prints it once.
 cerefox doctor           # verify everything is wired up
 
 # 3. Wire up your AI agent(s) — run the ones that apply:
-cerefox configure-agent --tool claude-code      # also: claude-desktop | cursor | codex | gemini
+cerefox configure-agent --tool claude-code      # local MCP (preferred) — also: claude-desktop | cursor | codex | gemini
+#   Cloud Claude (claude.ai/app): connect over OAuth (setup-supabase Step 7).
+#   Custom GPT (ChatGPT): paste the token from step 2 into the Action's
+#   Authentication → API Key (Bearer). See docs/guides/connect-agents.md.
 
 # 4. Use it:
 cerefox document ingest my-notes.md --title "My notes"

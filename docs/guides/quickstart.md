@@ -80,6 +80,23 @@ On an existing database this applies pending migrations and re-applies RPCs
 in place, so re-run it after upgrading. Detailed walkthrough:
 [`setup-supabase.md`](setup-supabase.md).
 
+## 3b. Generate the Edge Function access token
+
+The Edge Functions authenticate callers with a **Cerefox access token** and reject
+anyone without it, so mint one now:
+
+```bash
+cerefox token generate
+```
+
+This creates a `cfx_pat_…` token, sets it as the `CEREFOX_ACCESS_TOKENS` secret on
+Supabase, and writes `CEREFOX_ACCESS_TOKEN` into your `.env` (so `cerefox doctor`,
+your tools, and any remote client can use it). It prints the token **once** — store
+it. You only need to paste it somewhere by hand if you connect a **Custom GPT**
+(into the Action's Authentication → API Key) or a **remote HTTP MCP** client; the
+local MCP and cloud Claude (OAuth) don't use it. Lose it → `cerefox token rotate`.
+Run `cerefox doctor` again — the "edge functions" check should now be green.
+
 ## 4. Wire up an AI agent
 
 ```bash
