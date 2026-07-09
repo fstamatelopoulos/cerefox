@@ -3,27 +3,31 @@
 Cerefox is built in three distinct layers. Understanding them tells you which credentials to
 configure, what can reach the database, and which path is right for your integration.
 
-> **A note on Supabase keys (2026):** Cerefox needs two API keys for two different transport
-> layers. Layer 1 (Edge Functions) uses the **legacy anon JWT** as a Bearer token — the new
-> `sb_publishable_…` key is rejected by the Edge Function gateway. Layer 2 (web + CLI REST)
-> uses the new **secret key** (`sb_secret_…`) or the legacy `service_role` JWT — either
-> works. See [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026)
-> for the full picture and why this asymmetry exists.
+> **A note on credentials (2026):** Cerefox uses two different credentials for two transport
+> layers. Layer 1 (Edge Functions) uses the **Cerefox access token** (`cfx_pat_…`) as a Bearer
+> token — a random, Cerefox-managed secret validated in-function (the legacy Supabase anon JWT
+> is retired for all Edge Function paths as of iter-28E). Layer 2 (web + CLI REST) uses the new
+> **secret key** (`sb_secret_…`) or the legacy `service_role` JWT — either works. See
+> [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026)
+> for the full picture.
 
 ---
 
 ## Layer 1 — AI Agents via Edge Functions (HTTPS)
 
 This is the primary integration layer for AI clients. Nine Supabase Edge Functions are
-deployed on the Supabase platform and are reachable over HTTPS with nothing more than the
-**legacy anon JWT** (a public-facing JWT, `eyJ…`). The Supabase gateway validates the key
-before any request reaches a function; individual functions then use the service-role key
-internally to call Postgres RPCs. Your anon key is never elevated to database-level access.
+deployed on the Supabase platform and are reachable over HTTPS with the **Cerefox access
+token** (`cfx_pat_…`) as a Bearer token. Each function is deployed `--no-verify-jwt` and
+**authenticates the token in-function** (constant-time compare against the accepted set); it
+then uses the service-role key internally to call Postgres RPCs. The token grants Edge
+Function access only — it is never elevated to database-level access, and the service-role key
+never leaves the server.
 
-> ⚠️ Use the **legacy anon JWT** here, not the new `sb_publishable_…` key. The Edge
-> Function gateway rejects non-JWT keys with `UNAUTHORIZED_INVALID_JWT_FORMAT`. See
-> [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026)
-> for why.
+> ⚠️ The credential here is the **Cerefox access token**, not a Supabase key. Generate it with
+> `cerefox token generate` (it sets the `CEREFOX_ACCESS_TOKENS` Function secret and writes
+> `CEREFOX_ACCESS_TOKEN` to your local `.env`). The legacy Supabase anon JWT is retired for
+> Edge Function auth as of iter-28E. See
+> [`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional).
 
 ### The nine Edge Functions
 
@@ -46,10 +50,10 @@ the MCP Streamable HTTP protocol and calls the Postgres RPCs directly (no intern
 to the primitive Edge Functions). The client only ever talks to one URL.
 
 ```
-MCP client (anon key)
+MCP client (Cerefox token)
     │
     ▼
-cerefox-mcp
+cerefox-mcp   (in-function token check)
     │
     ▼ (service-role key, internal)
 Postgres RPCs
@@ -60,37 +64,37 @@ using an OpenAPI schema. `cerefox-mcp` is not involved (ChatGPT does not support
 Streamable HTTP MCP protocol).
 
 **curl / scripts / custom HTTP clients** can also call the primitives directly using the
-same anon key as a Bearer token.
+same Cerefox token as a Bearer token.
 
 ### Credentials needed
 
 - `CEREFOX_SUPABASE_URL` — your Supabase project URL
-- **Legacy anon JWT** — found in your Supabase dashboard under **Project Settings → API Keys → Legacy → anon**. (Do not use the new `sb_publishable_…` key — gateway constraint.)
+- **Cerefox access token** (`cfx_pat_…`) — generate it with `cerefox token generate`. It is a
+  random, Cerefox-managed secret (not a Supabase key), validated in-function on every Edge
+  Function call.
 
 See `docs/guides/connect-agents.md` for step-by-step setup per client.
 
 ### The OAuth variant of `cerefox-mcp` — cloud & mobile Claude (optional)
 
-claude.ai web and the Claude mobile app **cannot** send a static anon JWT — a custom
+claude.ai web and the Claude mobile app **cannot** send a static Bearer token — a custom
 connector there requires **OAuth**. As an optional feature (iter-28A), `cerefox-mcp` is
 therefore *also* an OAuth 2.1 protected resource, so those clients get the same full
 tool surface. Nothing else in Layer 1 changes, and you can ignore this entirely if you
 don't use cloud/mobile Claude.
 
-How it differs from the static-anon-JWT path:
+How it differs from the static-token path:
 
-- **In-function auth.** `cerefox-mcp` is deployed with `--no-verify-jwt`, so the Supabase
-  gateway no longer validates it. The function authenticates each request itself
+- **Two accepted credentials.** `cerefox-mcp` authenticates each request itself
   (`_shared/mcp-auth/`), accepting **either** a valid OAuth 2.1 access token (verified
   against the project **JWKS**, with the token's `sub` pinned to `CEREFOX_OAUTH_OWNER_ID`)
-  **or** the legacy anon JWT (constant-time compare, so existing static-token clients keep
-  working). This is the ONLY function whose auth moves in-function; the eight primitive
-  Edge Functions keep the gateway anon-JWT validation described above.
+  **or** the static **Cerefox access token** (constant-time compare, the same token the
+  static-Bearer clients use). All nine data Edge Functions are deployed `--no-verify-jwt` and
+  do their token check in-function; `cerefox-mcp` additionally supports the OAuth arm.
 - **Supabase is the authorization server.** The OAuth flow uses Supabase's native OAuth 2.1
   Server. The one piece that must serve HTML — the **consent page** — is a free **Cloudflare
   Worker** (`cloudflare/cerefox-consent/`), because a Supabase Edge Function can't serve
-  `text/html` on the default `*.supabase.co` domain. (A `cerefox-oauth-consent` EF also
-  ships for users who have a paid Supabase custom domain.)
+  `text/html` on the default `*.supabase.co` domain.
 - **The owner pin is the authorization boundary.** `CEREFOX_OAUTH_OWNER_ID` (the owner
   user's UUID) is a server-side value — never entered into any client — and only tokens
   whose `sub` matches it are accepted.
@@ -208,11 +212,11 @@ single container with an internally-held token.
 
 | Caller | Transport | Auth credential | Typical use |
 |---|---|---|---|
-| Claude Code / Cursor | HTTPS → `cerefox-mcp` | Legacy anon JWT | Daily AI assistant access |
-| Claude Desktop | HTTPS → `cerefox-mcp` (via `supergateway`) | Legacy anon JWT | Daily AI assistant access |
+| Claude Code / Cursor | HTTPS → `cerefox-mcp` | Cerefox access token (`cfx_pat_…`) | Advanced/fallback; prefer local MCP for daily use |
+| Claude Desktop | HTTPS → `cerefox-mcp` (via `supergateway`) | Cerefox access token (`cfx_pat_…`) | Advanced/fallback; prefer local MCP for daily use |
 | **Cloud Claude (claude.ai web + mobile)** | HTTPS → `cerefox-mcp` over **OAuth 2.1** | Owner-pinned OAuth access token (JWKS-verified) | Optional; memory in the browser + on the phone |
-| ChatGPT Custom GPT | HTTPS → primitive Edge Functions | Legacy anon JWT | AI assistant via GPT Actions |
-| curl / HTTP scripts | HTTPS → primitive Edge Functions | Legacy anon JWT | Ad-hoc queries, automation |
+| ChatGPT Custom GPT | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | AI assistant via GPT Actions |
+| curl / HTTP scripts | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | Ad-hoc queries, automation |
 | Web UI (`cerefox web`) | Supabase REST API | Secret key (or legacy service_role) | Web UI backend (TS Hono) |
 | `cerefox` CLI (human) | Supabase REST API | Secret key (or legacy service_role) | Ingestion, search, reindex, backup |
 | Local coding agent via `cerefox` CLI | Supabase REST API | Secret key (or legacy service_role) | User-authorised agent (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) acting on user's behalf via Bash tool |
@@ -220,11 +224,13 @@ single container with an internally-held token.
 
 ### Key security principle
 
-The (legacy) anon JWT is the **Edge Function credential**. It authenticates to the Edge
-Functions (which run business logic with the service-role key internally); the Supabase
-gateway validates and rate-limits it. **It is not RLS-scoped** — any holder can call the
-full EF tool surface (read *and* write). So treat it as a shared secret for *trusted*
-agents/clients — keep it in local configs, but do **not** publish it on a public web page.
+The **Cerefox access token** (`cfx_pat_…`) is the **Edge Function credential**. It authenticates
+to the Edge Functions (which run business logic with the service-role key internally); each
+function validates it in-function and Supabase rate-limits the request. **It is not RLS-scoped**
+— any holder can call the full EF tool surface (read *and* write). So treat it as a shared
+secret for *trusted* agents/clients — keep it in local configs, but do **not** publish it on a
+public web page. Unlike the retired legacy anon JWT (which was revoke-only on ES256-migrated
+projects), the Cerefox token is **rotatable** with zero downtime via `cerefox token rotate`.
 
 > **Schema 0.7.0 hardening:** the `cerefox_*` RPCs are `SECURITY DEFINER` and previously
 > had broader-than-intended `EXECUTE` grants. They now grant `EXECUTE` only to
@@ -278,7 +284,7 @@ So the access model is:
    is therefore always possible until the human explicitly chooses purge.
 
 A `cerefox purge-doc` CLI command, a `cerefox_purge_document` MCP tool, or a
-`/documents/{id}/purge` HTTP endpoint accessible via the anon JWT would each break this
+`/documents/{id}/purge` HTTP endpoint accessible via the Cerefox token would each break this
 property. **Do not add them without a governance design that replaces the human-in-the-
 loop step with an equivalent guard** (e.g. a "purge approval queue" the web UI must
 clear before the operation actually runs).

@@ -50,9 +50,9 @@ OB1's `MCP_ACCESS_KEY`.
 ## 3. Architecture
 
 - **All data EFs run `--no-verify-jwt`** (the gateway stops gating; in-function auth is the
-  only gate — extends the `NO_VERIFY_JWT_EFS` set from `{cerefox-mcp, cerefox-oauth-consent}`
-  to include the 8 primitive EFs). `cerefox-oauth-consent` stays public (no auth — it's the
-  consent page). `cerefox-mcp` already `--no-verify-jwt`.
+  only gate — the `NO_VERIFY_JWT_EFS` set becomes `{cerefox-mcp}` + the 8 primitive EFs = all
+  9 Cerefox EFs). `cerefox-mcp` was already `--no-verify-jwt`. (The `cerefox-oauth-consent` EF
+  was removed in this iteration — the consent page is the Cloudflare Worker; see §9.)
 - **In-function token check** on every data EF: read the incoming credential from
   `Authorization: Bearer <token>`, constant-time-compare against a set of accepted tokens.
 - `cerefox-mcp` accepts **OAuth JWT (owner-pinned) OR a Cerefox token** (its static path,

@@ -48,7 +48,7 @@ You need three values from Supabase: a URL, an API key, and a direct Postgres co
 See the **[Supabase API keys (2026)](#supabase-api-keys-2026)** section near the end of this guide for the full picture. The short version:
 
 - For `CEREFOX_SUPABASE_KEY` (this guide, the web UI, and the CLI): use the new **secret key** (`sb_secret_…`) from **Project Settings → API Keys → Secret key**. The legacy `service_role` JWT also still works during the transition.
-- For `CEREFOX_SUPABASE_ANON_KEY` (only if you'll use Edge Functions / MCP / GPT Actions; not needed for this guide's deployment step): you must use the **legacy anon JWT** (`eyJ…`). The new `sb_publishable_…` key fails at the Edge Function gateway. See the reference section for why.
+- To call Edge Functions / remote MCP / GPT Actions you need the **Cerefox access token** (`cfx_pat_…`), not a Supabase key. Generate it later with `cerefox token generate` (Step 7 covers the server-side setup). The legacy Supabase anon JWT is retired for Edge Function auth (iter-28E), and `CEREFOX_SUPABASE_ANON_KEY` is no longer used.
 
 Either way: keep this key secret — it bypasses Row Level Security and grants full database access.
 
@@ -78,9 +78,9 @@ cerefox init
 
 When prompted, supply the three values from Step 3 (URL, secret key, database
 URL) plus your `OPENAI_API_KEY`. If you plan to connect AI agents via the
-remote MCP / GPT Actions path, also set `CEREFOX_SUPABASE_ANON_KEY` to the
-**legacy anon JWT** (`eyJ…`, not `sb_publishable_…` — see "Supabase API keys
-(2026)" below).
+remote MCP / GPT Actions path, you'll add a **Cerefox access token** later by
+running `cerefox token generate` (it upserts `CEREFOX_ACCESS_TOKEN` into this
+same `.env` and sets the accepted set on Supabase — see Step 7).
 
 A minimal `~/.cerefox/.env` looks like:
 
@@ -89,8 +89,8 @@ CEREFOX_SUPABASE_URL=https://your-project-ref.supabase.co
 CEREFOX_SUPABASE_KEY=sb_secret_...your-secret-key...
 CEREFOX_DATABASE_URL=postgresql://postgres.yourref:yourpassword@aws-N-region.pooler.supabase.com:5432/postgres?sslmode=require
 OPENAI_API_KEY=sk-...
-# Only needed for Edge Functions / MCP / GPT Actions — must be the legacy anon JWT:
-# CEREFOX_SUPABASE_ANON_KEY=eyJ...your-legacy-anon-jwt...
+# Only needed for Edge Functions / MCP / GPT Actions — written by `cerefox token generate`:
+# CEREFOX_ACCESS_TOKEN=cfx_pat_...your-cerefox-token...
 ```
 
 > **Contributors** (repo clone): copy `cp .env.example .env` in the project root
@@ -245,11 +245,6 @@ Then Dashboard → **Authentication → URL Configuration → Site URL** = that 
 With Authorization Path `/consent`, the consent page lands at `…workers.dev/consent`. (If
 your Site URL was the default `http://localhost:3000`, repointing is safe.)
 
-> **Custom-domain alternative:** a `cerefox-oauth-consent` Edge Function also ships (renders
-> the same page from the `CEREFOX_SUPABASE_PUBLISHABLE_KEY` Function secret). It only works
-> behind a paid Supabase custom domain (EFs serve `text/plain` on `*.supabase.co`), so the
-> free Cloudflare Worker is the default.
-
 ### 7c. Create the owner user + pin it
 
 1. **Owner user** — Dashboard → **Authentication → Users → Add user**: your email + a
@@ -292,14 +287,15 @@ Deploys `cerefox-mcp` with `--no-verify-jwt` (in-function auth). Then wire the c
 connector per
 [`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth).
 
-> **Note — remote static-token clients.** Deploying with `--no-verify-jwt` means the
-> Supabase gateway no longer validates the anon-JWT Bearer that *remote* static-token
-> clients would send directly to `cerefox-mcp`. **Most setups have none** — local coding
-> agents use the local MCP (Step 6), which is also cheaper (zero Edge Function calls). If
-> you do run such a client and it starts returning 401 after enabling OAuth, that is a
-> separate back-compat concern covered in the
-> [design doc §5](../specs/oauth-mcp-server-design.md); it is **not** part of the
-> OAuth/cloud setup and needs no secret here.
+> **Note — the Cerefox access token (iter-28E).** All nine data Edge Functions (the 8
+> primitives + `cerefox-mcp`) now deploy `--no-verify-jwt` and authenticate the **Cerefox
+> access token** in-function; the legacy anon JWT is retired for Edge Function auth. Before
+> your first token-gated deploy, run `cerefox token generate` — it sets the accepted set
+> (`CEREFOX_ACCESS_TOKENS`, a Supabase Function secret) and writes `CEREFOX_ACCESS_TOKEN` to
+> your local `.env`. Deploying token-gated functions with no token set locks every caller
+> out, so generate the token first. `cerefox-mcp` also accepts an owner-pinned OAuth token
+> (the arm this Step 7 configures); the OAuth path fails closed until `CEREFOX_OAUTH_OWNER_ID`
+> is set (7c).
 
 ---
 
@@ -331,18 +327,19 @@ In 2026 Supabase rolled out a new API key system. The dashboard now shows two ke
 | Family | What you'll see in the dashboard | Use it for |
 |---|---|---|
 | **New (recommended)** | "Publishable key" (`sb_publishable_…`) and "Secret key" (`sb_secret_…`) | `CEREFOX_SUPABASE_KEY` — works end-to-end through the Data API. |
-| **Legacy** | "anon" and "service_role" JWTs (`eyJ…`), filed under a "Legacy" section | `CEREFOX_SUPABASE_ANON_KEY` — **still required** for any Edge Function call (MCP, GPT Actions, e2e tests, direct curl). |
+| **Legacy** | "anon" and "service_role" JWTs (`eyJ…`), filed under a "Legacy" section | `service_role` still works for `CEREFOX_SUPABASE_KEY` (Data API). The **anon** JWT is **no longer used** for Edge Function auth (retired in iter-28E — see below). |
 
 ### What goes where in `.env`
 
 | Variable | Recommended value | Why |
 |---|---|---|
 | `CEREFOX_SUPABASE_KEY` | New **secret key** (`sb_secret_…`). Legacy `service_role` JWT also works. | Used by `db/client.py` to reach the Data API (PostgREST). Both formats are accepted by the gateway. |
-| `CEREFOX_SUPABASE_ANON_KEY` | **Legacy anon JWT** (`eyJ…`). | Used as the `Authorization: Bearer …` header for Edge Function calls. The Supabase Edge Function gateway still validates this token as a JWT — it parses `header.payload.signature` and rejects non-JWT keys with `UNAUTHORIZED_INVALID_JWT_FORMAT`. The new `sb_publishable_…` key is not a JWT and fails. |
+| `CEREFOX_ACCESS_TOKEN` | **Cerefox access token** (`cfx_pat_…`) from `cerefox token generate`. | The `Authorization: Bearer …` credential for Edge Function calls (remote MCP, GPT Actions, e2e tests, direct curl). Validated in-function; rotatable via `cerefox token rotate`. |
+| `CEREFOX_SUPABASE_ANON_KEY` | *(deprecated / unused)* | Formerly the Edge Function Bearer credential. Retired in iter-28E; retained only so an old `.env` still parses. |
 
-### Why we cannot just use the new keys everywhere
+### Why Edge Functions use a Cerefox token, not a Supabase key
 
-The Data API gateway was migrated in 2026 to accept both the new and legacy key formats. The Edge Function gateway was not. A Supabase team member [confirmed this](https://github.com/orgs/supabase/discussions/41834): the only way to call Edge Functions with the new keys today is to deploy each function with `verify_jwt = false` and validate the key inside the function. Cerefox is not yet doing that (a future migration; see Decision Log 2026 Q2 for context and triggers).
+The Data API gateway was migrated in 2026 to accept both the new and legacy key formats. The Edge Function gateway was not — it rejects the new `sb_publishable_…`/`sb_secret_…` keys as non-JWTs. Rather than pin Edge Function auth to the unrotatable legacy anon JWT (revoke-only on ES256-migrated projects), iter-28E deploys every data Edge Function with `verify_jwt = false` and validates a **Cerefox-managed access token** in-function — a secret, rotatable credential independent of Supabase's key lifecycle. See `docs/specs/ef-auth-migration-design.md`.
 
 ### Is the legacy key going away?
 

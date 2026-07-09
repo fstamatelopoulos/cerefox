@@ -30,15 +30,15 @@ Three top-level paths plus a few special cases:
 | Client | Path | Search | Requirements / caveats |
 |--------|------|--------|-----------------------|
 | Claude Desktop (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | Node.js for `npx supergateway` or `npx mcp-remote`; no Python needed |
-| Claude Code (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
-| Cursor (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
-| OpenAI Codex CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key env var; TOML config |
+| Claude Code (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token only; no local install. Advanced/fallback — prefer Path A-Local |
+| Cursor (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token only; no local install. Advanced/fallback — prefer Path A-Local |
+| OpenAI Codex CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token env var; TOML config. Advanced/fallback — prefer Path A-Local |
 | ChatGPT (chatgpt.com or desktop) | Path B — Custom GPT → Edge Functions | Hybrid | ChatGPT Plus required |
 | Claude Desktop (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; Node.js; zero Edge Function invocations |
 | Claude Code (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
 | Cursor (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
 | Cloud Claude (claude.ai web + mobile) | Path A-Remote — `cerefox-mcp` over **OAuth** | Hybrid | No install; **optional** one-time OAuth setup + a free Cloudflare Worker consent page ([setup-supabase Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)) |
-| Gemini CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + anon key only; no local install |
+| Gemini CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token only; no local install. Advanced/fallback — prefer Path A-Local |
 | Local coding agents (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) | Path C — Shell CLI (Bash tool) | Hybrid | `npm install -g @cerefox/memory`; agent runs `cerefox …` as a shell command. Useful when MCP setup is friction. |
 | curl / scripts | Path B — Edge Functions directly | Hybrid | Direct HTTP; no client needed |
 | Custom Python agents | Python SDK directly (legacy) | Hybrid | Local Python + repo clone; the Python path is legacy/frozen |
@@ -95,17 +95,23 @@ in the container.
 - A frozen Python MCP server still exists as a standalone fallback (`uv run cerefox mcp` from a
   repo clone), but the npm package is the maintained path.
 
-> **Important — which anon key to use (2026):** Path A-Remote and Path B both require an
-> "anon key" as a Bearer token. As of 2026, you **must** use the **legacy anon JWT**
-> (`eyJ…`) — the new `sb_publishable_…` key is rejected by the Supabase Edge Function
-> gateway with `UNAUTHORIZED_INVALID_JWT_FORMAT`. Find the legacy key in **Project
-> Settings → API Keys → Legacy → anon**. This is a Supabase platform constraint;
-> see [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026)
-> for the full story.
+> **Important — the Cerefox access token (iter-28E):** Path A-Remote and Path B both require a
+> **Bearer token** on every request. That credential is now the **Cerefox access token**
+> (`cfx_pat_…`), a random, Cerefox-managed secret validated in-function — **not** the legacy
+> Supabase anon JWT (which is retired for all Edge Function paths). Generate it with
+> `cerefox token generate`: it sets the accepted token set on Supabase (the
+> `CEREFOX_ACCESS_TOKENS` Function secret) and writes the value to your local `.env` as
+> `CEREFOX_ACCESS_TOKEN`, printing it once so you can paste it into client configs. Lose it →
+> `cerefox token rotate`. See [`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)
+> for the server-side setup.
 
-**For Path A-Remote (remote MCP Edge Function) — recommended:**
+**For Path A-Remote (remote MCP Edge Function) — advanced / fallback:**
+> For **local agents** (Claude Code, Cursor, Codex, Gemini, Claude Desktop) the **local MCP**
+> (Path A-Local, via `cerefox configure-agent`) is the preferred path — zero Edge Function
+> cost and no token to distribute. Use Path A-Remote when you specifically want a hosted URL
+> (multiple machines, cloud dev environments) or as a fallback.
 - `cerefox-mcp` Edge Function deployed (`npx supabase functions deploy cerefox-mcp`)
-- Your **legacy anon JWT** (see callout above): Supabase Dashboard → Project Settings → API Keys → Legacy → anon
+- Your **Cerefox access token** (see callout above): run `cerefox token generate`
 - For Claude Desktop: [Node.js](https://nodejs.org) installed (for `npx supergateway` or `npx mcp-remote`)
 - For Claude Code: [Node.js](https://nodejs.org) for `npx mcp-remote` (recommended), or no extra deps for native HTTP
 
@@ -115,7 +121,7 @@ in the container.
   `cerefox-get-audit-log`, `cerefox-metadata-search`, `cerefox-list-projects`, `cerefox-mcp`.
   End-user path: `cerefox server deploy`. Contributor/manual path: `npx supabase functions
   deploy` (see `setup-supabase.md`).
-- Your **legacy anon JWT** (see callout above): Supabase Dashboard → Project Settings → API Keys → Legacy → anon
+- Your **Cerefox access token** (see callout above): run `cerefox token generate`
 - Your **project ref**: visible in the Supabase Dashboard URL
   (`app.supabase.com/project/<project-ref>`)
 
@@ -321,8 +327,8 @@ https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
 
 | Scenario | Prefer |
 |----------|--------|
-| Default / new setup | Path A-Remote -- no Python, no local clone, one URL works everywhere |
-| Multiple machines / cloud dev environments | Path A-Remote |
+| Default local agent (Claude Code, Cursor, Codex, Gemini, Claude Desktop) | Path A-Local -- preferred; `cerefox configure-agent`, zero Edge Function cost, no token to distribute |
+| Multiple machines / cloud dev environments | Path A-Remote -- one hosted URL works everywhere (needs a Cerefox token) |
 | Minimise Supabase Edge Function usage (free tier limits) | Path A-Local -- zero Edge Function invocations |
 | Offline use or development on the cerefox codebase | Path A-Local -- no network dependency |
 | Lowest latency (same machine, no HTTPS round-trip) | Path A-Local -- slightly faster |
@@ -359,7 +365,7 @@ Add to your project's `.mcp.json` (or copy
         "mcp-remote",
         "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
         "--header",
-        "Authorization: Bearer <your-anon-key>"
+        "Authorization: Bearer <your-cerefox-token>"
       ]
     }
   }
@@ -374,7 +380,7 @@ overhead (fixed in v0.1.12). However, `mcp-remote` is still preferred for the OA
 ```bash
 claude mcp add --transport http cerefox \
   https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp \
-  --header "Authorization: Bearer <your-anon-key>"
+  --header "Authorization: Bearer <your-cerefox-token>"
 ```
 
 Verify:
@@ -386,7 +392,7 @@ For a user-scoped server (available in all projects), add `--scope user`:
 ```bash
 claude mcp add --transport http --scope user cerefox \
   https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp \
-  --header "Authorization: Bearer <your-anon-key>"
+  --header "Authorization: Bearer <your-cerefox-token>"
 ```
 
 ---
@@ -404,7 +410,7 @@ Cursor supports remote MCP servers natively via `url` + `headers` in `mcp.json`.
     "cerefox": {
       "url": "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
       "headers": {
-        "Authorization": "Bearer <your-anon-key>"
+        "Authorization": "Bearer <your-cerefox-token>"
       }
     }
   }
@@ -445,19 +451,19 @@ Add (or merge into) the file:
       "args": [
         "-y", "supergateway",
         "--streamableHttp", "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
-        "--oauth2Bearer", "<your-anon-key>"
+        "--oauth2Bearer", "<your-cerefox-token>"
       ]
     }
   }
 }
 ```
 
-Replace `<your-project-ref>` and `<your-anon-key>` with your actual values.
+Replace `<your-project-ref>` and `<your-cerefox-token>` with your actual values.
 
 **Important:**
 - Restart Claude Desktop fully (Cmd+Q on macOS) after saving the config.
 - `-y` tells npx to auto-install `supergateway` without prompting.
-- No Python, no local repo clone, no `.env` file needed — just the URL and anon key.
+- No Python, no local repo clone, no `.env` file needed — just the URL and Cerefox token.
 
 ---
 
@@ -466,13 +472,13 @@ Replace `<your-project-ref>` and `<your-anon-key>` with your actual values.
 [Codex](https://github.com/openai/codex) supports remote MCP servers natively via Streamable
 HTTP. Configuration uses TOML (not JSON like most other MCP clients).
 
-**Step 1 — Set the anon key as an environment variable:**
+**Step 1 — Set the Cerefox token as an environment variable:**
 
 Codex references Bearer tokens by environment variable name, not by value. Add to your
 `~/.zshrc` (or `~/.bashrc`):
 
 ```bash
-export CEREFOX_ANON_KEY="<your-anon-key>"
+export CEREFOX_ACCESS_TOKEN="<your-cerefox-token>"
 ```
 
 Then reload: `source ~/.zshrc`
@@ -482,7 +488,7 @@ Then reload: `source ~/.zshrc`
 ```toml
 [mcp_servers.cerefox]
 url = "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp"
-bearer_token_env_var = "CEREFOX_ANON_KEY"
+bearer_token_env_var = "CEREFOX_ACCESS_TOKEN"
 ```
 
 Replace `<your-project-ref>` with your Supabase project ref.
@@ -493,9 +499,9 @@ Launch Codex and use the `/mcp` slash command to confirm the `cerefox` server is
 and all 10 tools are listed.
 
 **Notes:**
-- `bearer_token_env_var` is the **name** of the env var (e.g. `"CEREFOX_ANON_KEY"`), not the
+- `bearer_token_env_var` is the **name** of the env var (e.g. `"CEREFOX_ACCESS_TOKEN"`), not the
   token itself. Codex reads the value at runtime.
-- No Python, no local repo clone needed — just the URL and anon key.
+- No Python, no local repo clone needed — just the URL and Cerefox token.
 - No idle SSE polling cost — the 405 GET fix in `cerefox-mcp` prevents it.
 
 ---
@@ -518,14 +524,14 @@ Add (or merge into) the file:
     "cerefox": {
       "httpUrl": "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
       "headers": {
-        "Authorization": "Bearer <your-anon-key>"
+        "Authorization": "Bearer <your-cerefox-token>"
       }
     }
   }
 }
 ```
 
-Replace `<your-project-ref>` and `<your-anon-key>` with your actual values.
+Replace `<your-project-ref>` and `<your-cerefox-token>` with your actual values.
 
 **Verify:**
 
@@ -558,11 +564,11 @@ stored in Supabase.
 All Edge Function calls require:
 
 ```
-Authorization: Bearer <your-anon-key>
+Authorization: Bearer <your-cerefox-token>
 Content-Type: application/json
 ```
 
-Find your anon key: **Supabase Dashboard → Project Settings → API Keys → Legacy → anon** (use the legacy JWT, not the new `sb_publishable_…` — see the API keys callout in the Prerequisites section).
+Generate your token: run `cerefox token generate` (it prints the `cfx_pat_…` Cerefox access token once and sets it on Supabase). The legacy Supabase anon JWT is no longer accepted for Edge Function calls — see the token callout in the Prerequisites section.
 
 ### Path B system prompt
 
@@ -584,7 +590,7 @@ overwrite blindly.
 ```bash
 curl -s -X POST \
   "https://<your-project-ref>.supabase.co/functions/v1/cerefox-search" \
-  -H "Authorization: Bearer <your-anon-key>" \
+  -H "Authorization: Bearer <your-cerefox-token>" \
   -H "Content-Type: application/json" \
   -d '{"query": "second brain", "match_count": 3}'
 ```
@@ -1033,7 +1039,7 @@ Direct HTTP access — useful for shell scripts, CI pipelines, or one-off querie
 ```bash
 curl -s -X POST \
   "https://<your-project-ref>.supabase.co/functions/v1/cerefox-search" \
-  -H "Authorization: Bearer <your-anon-key>" \
+  -H "Authorization: Bearer <your-cerefox-token>" \
   -H "Content-Type: application/json" \
   -d '{"query": "knowledge management", "match_count": 5}'
 ```
@@ -1042,7 +1048,7 @@ curl -s -X POST \
 ```bash
 curl -s -X POST \
   "https://<your-project-ref>.supabase.co/functions/v1/cerefox-ingest" \
-  -H "Authorization: Bearer <your-anon-key>" \
+  -H "Authorization: Bearer <your-cerefox-token>" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Meeting Notes 2026-03-11",
