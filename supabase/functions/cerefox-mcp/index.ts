@@ -33,7 +33,8 @@ import {
   protectedResourceMetadata,
   unauthorizedChallenge,
 } from "./oauth.ts";
-import type { McpAuthenticator } from "../../../_shared/mcp-auth/index.ts";
+import type { AuthResult, McpAuthenticator } from "../../../_shared/mcp-auth/index.ts";
+import { checkAccessToken, parseAccessTokens } from "../../../_shared/ef-auth/index.ts";
 import {
   ALL_TOOLS,
   McpInvalidParams,
@@ -261,10 +262,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // ── Auth-first dispatch (design §6) ────────────────────────────────────────
   // The function is deployed with --no-verify-jwt, so this in-function check is
-  // the ONLY gate. Accept either the legacy static Bearer or a valid OAuth JWT.
-  const authResult = await getAuthenticator().authenticate(
-    req.headers.get("Authorization"),
-  );
+  // the ONLY gate. Accept EITHER a Cerefox access token (the static path — same
+  // credential the primitive EFs take, iter-28E) OR a valid OAuth JWT.
+  const authHeader = req.headers.get("Authorization");
+  let authResult: AuthResult;
+  // Static token first (cheap constant-time compare). A real OAuth JWT won't match
+  // any token, so it falls through to the JWKS path below — no false rejection.
+  const tokenResult = checkAccessToken(authHeader, {
+    tokens: parseAccessTokens(Deno.env.get("CEREFOX_ACCESS_TOKENS")),
+  });
+  if (tokenResult.ok) {
+    authResult = { ok: true, path: "static" };
+  } else {
+    authResult = await getAuthenticator().authenticate(authHeader);
+  }
   if (!authResult.ok) {
     // Log the machine reason (never the token) so the dashboard logs are
     // actionable on a real auth failure. `no_token` is the normal OAuth-discovery
