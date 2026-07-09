@@ -3198,6 +3198,29 @@ workstreams on separate branches, merge each into `main`, then cut `v1.0.0-beta`
    Kallisti) — restore each from its last clean version after the chunker fix is installed.
 5. Retire the Python MCP fallback? — candidate for v1.0 (drops the chunker parity requirement).
 
+**Release sequencing (decided 2026-07-09) — stay in `0.x` until all breaking changes land, then freeze 1.0:**
+1. **`0.12.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
+   docs cleanup + secret cleanup (②) → merge `feat/oauth-mcp` → `main` → cut the beta →
+   **test extensively on the maintainer laptop** → *soft* Discord (beta testers only).
+2. **`0.12.x` betas** — the **full-codebase security audit** (③, + any mitigations) then
+   **28D Phase 1** (proper chunker: `content_format` schema + blind-stitch).
+3. **`1.0.0-rc` → `1.0.0`** once every breaking/schema change is in, audited, and soaked —
+   the stability commitment (28C).
+*Why not `1.0.0-RC` now:* RC implies "no more breaking changes," but 28E (client creds),
+28D Phase 1 (schema), and audit mitigations are still breaking/schema-affecting. Under strict
+SemVer they must land BEFORE the 1.0 freeze, or they'd force a 2.0.0. **Discord:** soft-launch
+to testers on the beta; hold the broad public announce until after the full audit (③) — it's a
+security-sensitive release, don't publicize new public surfaces before auditing them.
+
+**28E credential decision (2026-07-09): a Cerefox-managed token, NOT `sb_publishable_`.**
+The publishable key is *public by design* (it's embedded in the consent Worker HTML, shipped
+to clients), so gating the EFs on it = **no access control** (anyone who reads it gets full KB
+access, since the EFs use `service_role` internally with no RLS). It only looks lower-friction
+— it isn't (you'd still paste it into every client config), and it removes all security. The
+Cerefox-managed token is the same paste-a-credential friction as today's anon key, but secret +
+rotatable; friction is minimized by automating it (`cerefox` generates + stores the Function
+secret and writes it via `configure-agent`).
+
 ### 28A: OAuth 2.1 on `cerefox-mcp` — cloud/mobile Claude connectivity
 
 **Design of record**: [`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md)
