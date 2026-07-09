@@ -3415,6 +3415,16 @@ section:
 - Confirm `configuration.md` documents `CEREFOX_ACCESS_TOKENS` and drops any retired var.
   (Maintainer also cleans their own local `.env` per this section.)
 
+**Consent-EF removal (done in code on `feat/ef-auth-token`; docs pending in the sweep).**
+`cerefox-oauth-consent` was deleted in iter-28E (the Cloudflare Worker is the one consent
+path; `_shared/consent-page` is retained — the Worker still imports it). Purge/adjust the
+doc references: `docs/specs/oauth-mcp-server-design.md` (L157/164/341/359/361/405 — mark the
+EF as removed, not "retained template/alternative"), `docs/specs/security-model.md` (L74/78),
+`docs/guides/access-paths.md` (L92), `docs/guides/setup-supabase.md` (L248 custom-domain
+alternative), `cloudflare/cerefox-consent/README.md` (L66), `CLAUDE.md` (L259), and the
+`docs/plan.md` iter-28A notes (L3244/3265/3309). Operator step (server-side, maintainer runs
+it): `npx supabase functions delete cerefox-oauth-consent`.
+
 **Grep gates (must return nothing stale after the sweep):** any lingering `CEREFOX_MCP_STATIC_BEARER`;
 any "anon JWT"/"legacy anon"/`Bearer eyJ` shown as the *current* way to connect an EF/GPT-Action
 client (historical/iteration-log mentions are fine); any doc still pointing local agents at the

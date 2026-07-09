@@ -2,10 +2,10 @@
  * `cerefox server deploy` — the catch-all for standing up *and updating*
  * the Cerefox server side on your Supabase project: the Postgres schema +
  * RPCs (in-process) and the Edge Functions (via `npx supabase functions
- * deploy`) — the 9 primitive/MCP functions plus the OAuth consent page
- * (iter-28A). The EF list is auto-discovered from the bundled
- * supabase/functions dir, so new functions are picked up automatically;
- * NO_VERIFY_JWT_EFS below marks the two that gate auth in-function.
+ * deploy`) — the 8 primitive functions plus cerefox-mcp. The EF list is
+ * auto-discovered from the bundled supabase/functions dir, so new functions
+ * are picked up automatically; every Cerefox EF now authenticates in-function
+ * (all listed in NO_VERIFY_JWT_EFS below — the gateway gates none of them).
  *
  * Eliminates the repo-clone step: the server assets (SQL + EF sources) ship
  * bundled in `dist/server-assets/`, so a fresh `npm install -g
@@ -102,7 +102,6 @@ function parseProjectRef(supabaseUrl: string | undefined): string | null {
  * (`--no-verify-jwt`). They run their own in-function auth instead (designs:
  * docs/specs/oauth-mcp-server-design.md, docs/specs/ef-auth-migration-design.md):
  *   - cerefox-mcp           — serves discovery + 401 challenge; OAuth JWT or token.
- *   - cerefox-oauth-consent — public consent page (loads in a browser, no Bearer).
  *   - the 8 primitive EFs   — (iter-28E) validate the Cerefox access token
  *                             (CEREFOX_ACCESS_TOKENS) in-function; the gateway is
  *                             JWT-only and rejects that token, so it can't gate them.
@@ -110,6 +109,8 @@ function parseProjectRef(supabaseUrl: string | undefined): string | null {
  * gate everywhere. Forgetting the flag here never *opens* anything (a gated caller
  * just gets 401 at the gateway); the in-function check is the real boundary. This
  * map is the single source of truth, not operator memory.
+ * (The consent page is the Cloudflare Worker `cloudflare/cerefox-consent/`; the
+ * former `cerefox-oauth-consent` EF was removed in iter-28E.)
  */
 const PRIMITIVE_EFS = [
   "cerefox-search",
@@ -121,11 +122,7 @@ const PRIMITIVE_EFS = [
   "cerefox-metadata-search",
   "cerefox-list-projects",
 ];
-const NO_VERIFY_JWT_EFS = new Set([
-  "cerefox-mcp",
-  "cerefox-oauth-consent",
-  ...PRIMITIVE_EFS,
-]);
+const NO_VERIFY_JWT_EFS = new Set(["cerefox-mcp", ...PRIMITIVE_EFS]);
 
 function listEdgeFunctions(functionsDir: string): string[] {
   if (!existsSync(functionsDir)) return [];
