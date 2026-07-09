@@ -116,10 +116,30 @@ token EFs = the Cerefox token).
 
 ## 7. CLI automation (minimize friction)
 
-- **`cerefox token generate` / `rotate` / `list`** (new command group): generates a random
-  token, sets/updates `CEREFOX_ACCESS_TOKENS` (via `supabase secrets set`, needs the Supabase
-  CLI + project), prints the token, and records it where clients need it. `rotate` adds a new
-  token and (after confirmation) drops the oldest.
+**`cerefox token generate` / `rotate` / `list`** (new command group). The command automates
+the **server** side and **guides** the client side — it deliberately does *not* claim to
+auto-install into ChatGPT (not technically possible; see below). `generate` flow:
+1. **Generate** a random `cfx_pat_…` token.
+2. **Install it on Supabase** — set/update the `CEREFOX_ACCESS_TOKENS` Function secret via
+   `supabase secrets set` (needs the Supabase CLI + linked project). This is the only place
+   the token is *installed* automatically.
+3. **Print the token once** + where to paste it: the Custom GPT's **Configure → Actions →
+   Authentication → API Key**, Auth Type **Bearer**. (Reprints are impossible — it's a secret;
+   `list` shows only masked fingerprints, not the value. Lose it → `rotate`.)
+4. **Point to the local doc** for the Action *body* — print the path/anchor to the GPT Actions
+   OpenAPI block in `docs/guides/connect-agents.md` to copy-paste **if the schema changed**
+   this release (the auth-scheme change bumps `info.version`; changing the schema in ChatGPT
+   also clears the stored auth key, so the user re-pastes the schema *and* re-enters the token
+   together). `cerefox guides open connect-agents` can surface it locally.
+
+`rotate` adds a new token to the set and (after confirmation) drops the oldest — zero-downtime
+because `CEREFOX_ACCESS_TOKENS` accepts multiple. `list` shows masked fingerprints + count.
+
+**Why the ChatGPT side is guide-only:** Custom GPTs are editable **only** through the ChatGPT
+web GPT-builder UI; OpenAI exposes no API/CLI to set a Custom GPT's Action authentication or
+schema programmatically. So the token lands in ChatGPT by a human paste — the CLI's job is to
+make that paste trivial (right value, right field, right doc), not to eliminate it.
+
 - **`cerefox server deploy`** generates a token on first deploy if none exists; warns loudly
   if the token-gated EFs would deploy with no token (fail-closed footgun).
 - **`cerefox configure-agent` is NOT in scope** — it writes a *local stdio* MCP entry
