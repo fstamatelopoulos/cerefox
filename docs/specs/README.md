@@ -29,3 +29,8 @@ Current contents:
   `cerefox-mcp` via Supabase's native OAuth 2.1 Server, so claude.ai / Claude
   mobile / other cloud agents get the full MCP tool surface. Supersedes the
   2026-03 deferral in `docs/research/oauth-mcp-auth.md`.
+- `ef-auth-migration-design.md` — Iteration 28E design (2026-07-09): replace the
+  unrotatable legacy anon JWT across all Edge Function paths (8 primitive EFs +
+  `cerefox-mcp` static path) with a rotatable, Cerefox-managed access token
+  validated in-function; back-compat window then legacy-anon revoke. Target
+  v0.12.0-beta.

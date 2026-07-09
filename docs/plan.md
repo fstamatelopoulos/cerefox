@@ -3339,6 +3339,9 @@ mid-word/mid-row). 4 KB docs were corrupted.
 
 ### 28E: Migrate Edge Function auth off the unrotatable legacy anon JWT
 
+**Design-of-record**: [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md)
+(the full, self-contained design + defensive rollout order — start there).
+
 **Problem (surfaced by the 2026-07-09 rotation attempt).** Supabase's Edge Function gateway
 is JWT-only — it rejects the new `sb_publishable_`/`sb_secret_` keys (Decision Log Q2 Part 1,
 2026-05-18). So the 8 primitive EFs (ChatGPT GPT Actions + direct HTTP) and `cerefox-mcp`'s
