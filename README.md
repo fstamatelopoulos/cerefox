@@ -127,8 +127,9 @@ curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/
 cerefox init             # interactive setup: Supabase URL/keys, embedding key
 cerefox server deploy    # schema + RPCs + all 9 Edge Functions, from the npm bundle
 cerefox token generate   # mint the Edge Function access token; sets it on Supabase
-                         # and writes CEREFOX_ACCESS_TOKEN to your .env (required —
-                         # the EFs reject callers without it). Prints it once.
+                         # and writes CEREFOX_ACCESS_TOKEN to your .env. Needed for
+                         # GPT Actions / remote MCP + a fully-green doctor; the local
+                         # MCP, cloud Claude (OAuth) and CLI/web don't use it.
 cerefox doctor           # verify everything is wired up
 
 # 3. Wire up your AI agent(s) — run the ones that apply:

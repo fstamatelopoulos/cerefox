@@ -82,8 +82,11 @@ in place, so re-run it after upgrading. Detailed walkthrough:
 
 ## 3b. Generate the Edge Function access token
 
-The Edge Functions authenticate callers with a **Cerefox access token** and reject
-anyone without it, so mint one now:
+The Edge Functions authenticate callers with a **Cerefox access token**. You need it
+if you'll connect a **Custom GPT** (GPT Actions) or a **remote HTTP MCP** client, and
+for a fully-green `cerefox doctor`. The **local MCP** (local agents), **cloud Claude**
+(OAuth), and the CLI/web reach Supabase over the Data API and don't use it — so this
+step is optional if that's your whole setup, but it's quick and harmless to run:
 
 ```bash
 cerefox token generate
