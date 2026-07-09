@@ -224,7 +224,7 @@ Every Cerefox operation is implemented **once** in a Postgres RPC (SECURITY DEFI
 ```
 Agent / MCP client
       │
-      ▼  (anon key, JWT validated by Supabase gateway)
+      ▼  (Cerefox access token OR OAuth JWT, validated in-function)
 cerefox-mcp  ──supabase.rpc──▶  cerefox_hybrid_search / cerefox_search_docs
              ──supabase.rpc──▶  cerefox_ingest_document
              ──supabase.rpc──▶  cerefox_list_metadata_keys
@@ -252,11 +252,11 @@ Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functio
 
 Cerefox has three distinct access layers, each with its own credential:
 
-1. **AI agents / Edge Functions** — callers (MCP clients, GPT Actions, curl) use the **legacy anon JWT** (`eyJ…`). The Supabase gateway validates it as a JWT; Edge Functions then use `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. **Important (2026):** the new `sb_publishable_…` API key cannot be used here — the Edge Function gateway rejects non-JWT keys. The Data API (Layer 2) accepts the new key system; the Edge Function gateway does not. See `docs/guides/setup-supabase.md` → "Supabase API keys (2026)" for context.
+1. **AI agents / Edge Functions** — callers (GPT Actions, remote MCP, curl) present the **Cerefox access token** (`cfx_pat_…`, iter-28E) as `Authorization: Bearer`. Every data Edge Function runs `--no-verify-jwt` and validates that token **in-function** (constant-time, against the `CEREFOX_ACCESS_TOKENS` Function secret) before using `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. Generate/rotate the token with `cerefox token generate` / `cerefox token rotate`. The **legacy anon JWT is retired** for this layer (it was unrotatable on ES256-signed projects). Context: `docs/specs/ef-auth-migration-design.md`.
 2. **Python web app & CLI** — `CerefoxClient` authenticates via the Supabase REST API using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
 3. **Deployment scripts only** — `db_deploy.py` / `db_migrate.py` connect directly to Postgres via psycopg2 using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
 
-**OAuth path (iter-28A, `cerefox-mcp` only).** As an OPTIONAL feature for cloud/mobile Claude (claude.ai web + app), `cerefox-mcp` is also an OAuth 2.1 protected resource. It is deployed with `--no-verify-jwt` and does auth **in-function** (`_shared/mcp-auth/`): it accepts EITHER a valid OAuth 2.1 access token (validated against the project JWKS; `sub` pinned to `CEREFOX_OAUTH_OWNER_ID`) OR the legacy anon JWT (constant-time compare, back-compat for remote static-token clients). The consent page is a free Cloudflare Worker (`cloudflare/cerefox-consent/`) — a Supabase EF can't serve HTML on the default domain. Only `cerefox-mcp` (+ the optional `cerefox-oauth-consent` EF) skip the gateway; the 8 primitive EFs keep Layer-1 gateway validation. Design: `docs/specs/oauth-mcp-server-design.md`.
+**OAuth path (iter-28A, `cerefox-mcp`).** As an OPTIONAL feature for cloud/mobile Claude (claude.ai web + app), `cerefox-mcp` is also an OAuth 2.1 protected resource. It does auth **in-function** (`_shared/mcp-auth/`): it accepts EITHER a valid OAuth 2.1 access token (validated against the project JWKS; `sub` pinned to `CEREFOX_OAUTH_OWNER_ID`) OR the **Cerefox access token** (its static path — the same credential the primitive EFs take; the legacy anon static-Bearer was retired in iter-28E). The consent page is a free Cloudflare Worker (`cloudflare/cerefox-consent/`) — a Supabase EF can't serve HTML on the default domain. **All 9 Cerefox Edge Functions now run `--no-verify-jwt` and authenticate in-function** (iter-28E) — the gateway gates none of them; the only unauthenticated surface is `cerefox-mcp`'s RFC 9728 OAuth discovery route + its 401 challenge. Designs: `docs/specs/oauth-mcp-server-design.md`, `docs/specs/ef-auth-migration-design.md`.
 
 See `docs/guides/access-paths.md` for a full breakdown with credential sources and a summary table.
 
@@ -288,7 +288,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | GPT Actions, direct HTTP |
 | `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search | GPT Actions, direct HTTP |
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
-| `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/`. Also an OAuth 2.1 protected resource (iter-28A, `--no-verify-jwt` + in-function auth) for cloud clients | Claude Code, Cursor, Claude Desktop (via supergateway, static Bearer); **claude.ai web + mobile (via OAuth)** |
+| `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/`. Also an OAuth 2.1 protected resource (iter-28A, `--no-verify-jwt` + in-function auth) for cloud clients; the static path takes the **Cerefox access token** (iter-28E) | Claude Code, Cursor, Claude Desktop (remote, via the Cerefox token); **claude.ai web + mobile (via OAuth)**. Local agents prefer the local MCP. |
 
 The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md`.
 
@@ -341,9 +341,11 @@ authoritative release playbook; read it at the start of any release work.
 
 ### Client Compatibility
 
+For **local** agents (Claude Code, Cursor, Codex, Gemini, Desktop) the **preferred** path is the **local MCP** via `cerefox configure-agent` (stdio; reaches Supabase through the Data API with the local server's own secret key; no Edge Function token needed). The remote-HTTP forms below are an Advanced/fallback alternative and now use the **Cerefox access token** (`cerefox token generate`), not the retired anon JWT.
+
 | Client | How to connect | Notes |
 |---|---|---|
-| Claude Code | `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <legacy-anon-jwt>"` (legacy `eyJ…` only — see Layer 1 note above) | Direct Streamable HTTP |
+| Claude Code | Preferred: `cerefox configure-agent --tool claude-code` (local MCP). Advanced (remote): `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <cerefox-access-token>"` | Direct Streamable HTTP |
 | Cursor | `url` + `headers.Authorization` in mcp.json | Same as Claude Code |
 | OpenAI Codex CLI | `url` + `bearer_token_env_var` in `~/.codex/config.toml` | Direct Streamable HTTP; TOML config; **tested, working** |
 | Gemini CLI | `httpUrl` + `headers` in `~/.gemini/settings.json` | Direct Streamable HTTP; **untested, expected to work** |
