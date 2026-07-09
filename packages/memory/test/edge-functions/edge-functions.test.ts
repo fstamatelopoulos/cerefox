@@ -202,6 +202,8 @@ describe("Edge Functions (live HTTP)", () => {
         title,
         content: "# A\n\nv2 changed.",
         update_if_exists: true,
+        // sole-writer test: bypass the v0.11 concurrency token (no concurrent writer)
+        last_write_wins: true,
         author: "e2e-ef-test",
         author_type: "agent",
       });
@@ -374,6 +376,7 @@ describe("Edge Functions (live HTTP)", () => {
         title,
         content: "# ID Update\n\nOriginal.\n\n## Added\n\nVia id path.",
         document_id: r1.document_id,
+        last_write_wins: true, // sole-writer test (see above)
         author: "e2e-ef-test",
         author_type: "agent",
       });
@@ -408,6 +411,7 @@ describe("Edge Functions (live HTTP)", () => {
         content: uniqueContent(),
         document_id: r1.document_id,
         update_if_exists: false,
+        last_write_wins: true, // sole-writer test (see above)
         author: "e2e-ef-test",
         author_type: "agent",
       });

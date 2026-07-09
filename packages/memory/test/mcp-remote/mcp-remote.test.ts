@@ -342,6 +342,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
         title,
         content: "# ID Update\n\nv1.\n\n## More\n\nvia id.",
         document_id: docId,
+        last_write_wins: true, // sole-writer test: bypass the v0.11 concurrency token
         author: "e2e-mcp-test",
       });
       expect(t2.toLowerCase()).toContain("updated");
@@ -369,6 +370,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
         content: "# ID Note\n\nmodified.",
         document_id: docId,
         update_if_exists: false,
+        last_write_wins: true, // sole-writer test: bypass the v0.11 concurrency token
         author: "e2e-mcp-test",
       });
       expect(t2.toLowerCase()).toContain("updated");
