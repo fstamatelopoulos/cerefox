@@ -40,11 +40,14 @@ grant all on all tables in schema public to service_role;
 grant all on all sequences in schema public to service_role;
 grant execute on all functions in schema public to service_role;
 
--- anon / authenticated: may execute the SECURITY DEFINER RPCs (matches cloud agent
--- access); direct table access stays RLS-denied (no policies).
-grant execute on all functions in schema public to anon, authenticated;
+-- anon / authenticated: NO execute on the SECURITY DEFINER RPCs. Those functions
+-- bypass RLS, so granting anon/authenticated execute would let any anon/publishable
+-- key call them via the Data API and read/write the whole KB (bypassing RLS). All
+-- Cerefox clients (CLI / MCP / web) use the service_role key, so anon/authenticated
+-- need no function access. (rpcs.sql also REVOKEs these grants defensively on every
+-- deploy — schema 0.7.0.) Direct table access stays RLS-denied (no policies).
 
 -- Objects created by later deploys (new tables/funcs) inherit the same grants.
 alter default privileges in schema public grant all on tables to service_role;
 alter default privileges in schema public grant all on sequences to service_role;
-alter default privileges in schema public grant execute on functions to service_role, anon, authenticated;
+alter default privileges in schema public grant execute on functions to service_role;

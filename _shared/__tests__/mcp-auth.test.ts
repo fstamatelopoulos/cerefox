@@ -165,9 +165,17 @@ describe("OAuth JWT — valid", () => {
     expect(r).toEqual({ ok: true, path: "oauth", sub: OWNER });
   });
 
-  test("accepts any authenticated token when owner is not pinned", async () => {
+  test("fails closed when owner is not pinned and allowAnyUser is off", async () => {
     const token = await signEs256(validPayload({ sub: "some-other-user" }));
     const r = await makeAuth({ ownerUserId: null }).authenticate(`Bearer ${token}`);
+    expect(r).toMatchObject({ ok: false, reason: "not_owner" });
+  });
+
+  test("accepts any authenticated token only with explicit allowAnyUser opt-out", async () => {
+    const token = await signEs256(validPayload({ sub: "some-other-user" }));
+    const r = await makeAuth({ ownerUserId: null, allowAnyUser: true }).authenticate(
+      `Bearer ${token}`,
+    );
     expect(r.ok).toBe(true);
   });
 });

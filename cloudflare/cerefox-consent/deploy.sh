@@ -2,11 +2,13 @@
 #
 # Deploy the Cerefox OAuth consent page to a free Cloudflare Worker.
 #
-# Reads your Supabase project URL + anon key from ~/.cerefox/.env (both are PUBLIC
-# values) and injects them at deploy time, so the committed wrangler.toml stays
-# generic (no project-specific values in the repo). First run opens a browser for
-# `wrangler login`; the free Workers plan gives you a `*.workers.dev` URL — no owned
-# domain or credit card needed.
+# Reads your Supabase project URL + PUBLISHABLE key from ~/.cerefox/.env and injects
+# them at deploy time, so the committed wrangler.toml stays generic (no project values
+# in the repo). First run opens a browser for `wrangler login`; the free Workers plan
+# gives you a `*.workers.dev` URL — no owned domain or credit card needed.
+#
+# SECURITY: this deploys the sb_publishable_… key (public-safe), NOT the legacy anon
+# JWT. The anon JWT is a full-KB credential and must never be world-readable.
 #
 # Usage:
 #   cd cloudflare/cerefox-consent && ./deploy.sh
@@ -19,22 +21,23 @@ ENV_FILE="${CEREFOX_ENV:-$HOME/.cerefox/.env}"
 if [ ! -f "$ENV_FILE" ]; then
   echo "✗ No env file at $ENV_FILE" >&2
   echo "  Set CEREFOX_ENV, or deploy manually:" >&2
-  echo "    npx wrangler deploy --var SUPABASE_URL:https://<ref>.supabase.co --var SUPABASE_ANON_KEY:<anon-jwt>" >&2
+  echo "    npx wrangler deploy --var SUPABASE_URL:https://<ref>.supabase.co --var SUPABASE_PUBLISHABLE_KEY:sb_publishable_..." >&2
   exit 1
 fi
 
 url=$(grep -m1 '^CEREFOX_SUPABASE_URL=' "$ENV_FILE" | cut -d= -f2-)
-anon=$(grep -m1 '^CEREFOX_SUPABASE_ANON_KEY=' "$ENV_FILE" | cut -d= -f2-)
+pub=$(grep -m1 '^CEREFOX_SUPABASE_PUBLISHABLE_KEY=' "$ENV_FILE" | cut -d= -f2-)
 
-if [ -z "$url" ] || [ -z "$anon" ]; then
-  echo "✗ Could not read CEREFOX_SUPABASE_URL and/or CEREFOX_SUPABASE_ANON_KEY from $ENV_FILE" >&2
-  echo "  The anon key is the legacy anon JWT (starts with eyJ). Both are public values." >&2
+if [ -z "$url" ] || [ -z "$pub" ]; then
+  echo "✗ Could not read CEREFOX_SUPABASE_URL and/or CEREFOX_SUPABASE_PUBLISHABLE_KEY from $ENV_FILE" >&2
+  echo "  Add CEREFOX_SUPABASE_PUBLISHABLE_KEY (your sb_publishable_… key from Supabase →" >&2
+  echo "  Project Settings → API Keys → Publishable) to $ENV_FILE. Do NOT use the anon JWT here." >&2
   exit 1
 fi
 
 cd "$(dirname "$0")"
-echo "▶ Deploying the Cerefox consent Worker for $url"
-npx wrangler deploy --var "SUPABASE_URL:$url" --var "SUPABASE_ANON_KEY:$anon"
+echo "▶ Deploying the Cerefox consent Worker for $url (publishable key)"
+npx wrangler deploy --var "SUPABASE_URL:$url" --var "SUPABASE_PUBLISHABLE_KEY:$pub"
 
 cat <<'EOF'
 

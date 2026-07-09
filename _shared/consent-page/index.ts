@@ -9,12 +9,18 @@
  *
  * The page is entirely client-side: it loads supabase-js from a CDN, signs the
  * owner in, shows the approve/deny screen, and completes the flow via
- * `supabase.auth.oauth.*`. The only values injected are the project URL and the
- * public anon key — both non-secret. No `node:`/`jsr:`/`npm:` imports, so it is
- * bundler-agnostic (Deno, Wrangler/esbuild, Bun).
+ * `supabase.auth.oauth.*`. It only ever talks to Supabase Auth (`/auth/v1`).
+ *
+ * SECURITY: the embedded key is world-readable, so it MUST be the **publishable**
+ * key (`sb_publishable_…`), NOT the legacy anon JWT. The anon JWT authenticates to
+ * the Edge Function gateway AND (before the schema-0.7.0 RPC lockdown) the Data API
+ * RPCs — i.e. it is a full-KB credential and must never be published. The publishable
+ * key works with GoTrue (all this page needs) but is rejected by the EF gateway, so
+ * exposing it grants no KB access. No `node:`/`jsr:`/`npm:` imports — bundler-agnostic
+ * (Deno, Wrangler/esbuild, Bun).
  */
 
-export function renderConsentPage(supabaseUrl: string, anonKey: string): string {
+export function renderConsentPage(supabaseUrl: string, publishableKey: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -73,7 +79,7 @@ export function renderConsentPage(supabaseUrl: string, anonKey: string): string 
 <script type="module">
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const supabase = createClient(${JSON.stringify(supabaseUrl)}, ${JSON.stringify(anonKey)});
+const supabase = createClient(${JSON.stringify(supabaseUrl)}, ${JSON.stringify(publishableKey)});
 const params = new URLSearchParams(location.search);
 const authorizationId = params.get("authorization_id");
 

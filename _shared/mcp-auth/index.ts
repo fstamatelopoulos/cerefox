@@ -72,12 +72,18 @@ export interface McpAuthConfig {
   /** Expected `aud` claim. Supabase issues `"authenticated"`. */
   expectedAudience: string;
   /**
-   * Pinned owner user id. When set, an OAuth token's `sub` MUST equal it.
-   * When null/undefined, any validly-signed `authenticated` token is accepted
-   * (safe only because a single-user project has exactly one user — pinning is
-   * still the setup default; see design §5).
+   * Pinned owner user id. When set, an OAuth token's `sub` MUST equal it. When
+   * null/undefined the OAuth path FAILS CLOSED (rejects) unless `allowAnyUser` is
+   * true — because with Supabase's default email sign-ups on, an unpinned server
+   * would accept any self-registered user's token (design §6 / Finding 3).
    */
   ownerUserId?: string | null;
+  /**
+   * Explicit opt-out of the owner pin: accept any validly-signed `authenticated`
+   * token when `ownerUserId` is unset. For deliberate multi-user / sign-ups-disabled
+   * setups only. Default false (fail closed when unpinned).
+   */
+  allowAnyUser?: boolean;
   /**
    * Expected value for the legacy static-Bearer path (the anon JWT). When
    * null/undefined the static path is disabled and rejects everything
@@ -274,8 +280,18 @@ export function createMcpAuthenticator(config: McpAuthConfig): McpAuthenticator 
     if (!payload.sub) {
       return { ok: false, reason: "bad_claims", detail: "missing sub" };
     }
-    if (config.ownerUserId && payload.sub !== config.ownerUserId) {
-      return { ok: false, reason: "not_owner", detail: `sub=${payload.sub} owner=${config.ownerUserId}` };
+    if (config.ownerUserId) {
+      if (payload.sub !== config.ownerUserId) {
+        return { ok: false, reason: "not_owner", detail: `sub=${payload.sub} owner=${config.ownerUserId}` };
+      }
+    } else if (!config.allowAnyUser) {
+      // Fail closed: no owner pinned and no explicit opt-out. Accepting here would
+      // let any self-registered user in (Supabase email sign-ups default on).
+      return {
+        ok: false,
+        reason: "not_owner",
+        detail: "owner not pinned; set CEREFOX_OAUTH_OWNER_ID (or CEREFOX_OAUTH_ALLOW_ANY_USER=true to opt out)",
+      };
     }
     return { ok: true, path: "oauth", sub: payload.sub };
   }

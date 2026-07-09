@@ -7,8 +7,10 @@ main = "src/index.ts"
 compatibility_date = "2024-11-01"
 workers_dev = true
 
-# Both values are PUBLIC (project URL + anon JWT). Fill in your project's, or
-# override per-deploy with:  npx wrangler deploy --var SUPABASE_URL:... --var SUPABASE_ANON_KEY:...
+# Both values are PUBLIC. Use the sb_publishable_… key, NOT the legacy anon JWT
+# (the anon JWT is a full-KB credential and must never be world-readable). Fill in
+# your project's, or override per-deploy with:
+#   npx wrangler deploy --var SUPABASE_URL:... --var SUPABASE_PUBLISHABLE_KEY:...
 [vars]
 SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
-SUPABASE_ANON_KEY = "REPLACE_WITH_YOUR_LEGACY_ANON_JWT"
+SUPABASE_PUBLISHABLE_KEY = "REPLACE_WITH_YOUR_sb_publishable_KEY"

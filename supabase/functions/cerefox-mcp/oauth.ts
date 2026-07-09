@@ -20,29 +20,30 @@ export const FUNCTION_PATH = "/functions/v1/cerefox-mcp";
 const PRS_SUFFIX = "/.well-known/oauth-protected-resource";
 
 /**
- * Origin of the deployed project, e.g. `https://<ref>.supabase.co`.
+ * Origin of the deployed project, e.g. `https://<ref>.supabase.co`, from the
+ * platform-injected `SUPABASE_URL` — NOT from request headers.
  *
- * Behind Supabase's internal proxy `req.url` is `http://…`, but the public origin
- * is always https (and Anthropic requires the `resource`/`authorization_servers`
- * URLs to be https and to match the connector URL exactly). So we honor
- * `x-forwarded-proto`/`x-forwarded-host` and default to https for any non-local host.
+ * SECURITY (design §6): the token issuer and JWKS URL are derived from this origin.
+ * Deriving it from client-influenced headers (`x-forwarded-host`/`-proto`) would let
+ * a caller point token validation at an attacker-controlled JWKS and forge a token
+ * that passes (JWKS-poisoning auth bypass). `SUPABASE_URL` is set by the platform for
+ * every Edge Function and is not client-controllable (every other Cerefox EF already
+ * depends on it). It is also the exact public https origin Anthropic requires for the
+ * RFC 9728 `resource` identifier — so this both hardens auth and removes the earlier
+ * `http://` (internal-proxy) scheme workaround.
  */
-function projectOrigin(req: Request): string {
-  const url = new URL(req.url);
-  const host = req.headers.get("x-forwarded-host") ?? url.host;
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.");
-  const proto = req.headers.get("x-forwarded-proto") ?? (isLocal ? "http" : "https");
-  return `${proto}://${host}`;
+function projectOrigin(): string {
+  return (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/+$/, "");
 }
 
 /** Absolute URL of this MCP server (the `resource` identifier — must match exactly). */
-export function resourceUrl(req: Request): string {
-  return `${projectOrigin(req)}${FUNCTION_PATH}`;
+export function resourceUrl(): string {
+  return `${projectOrigin()}${FUNCTION_PATH}`;
 }
 
 /** The Supabase auth server issuer for this project. */
-export function issuerUrl(req: Request): string {
-  return `${projectOrigin(req)}/auth/v1`;
+export function issuerUrl(): string {
+  return `${projectOrigin()}/auth/v1`;
 }
 
 /** True when the request targets the (public) protected-resource metadata route. */
@@ -54,11 +55,11 @@ export function isProtectedResourceMetadata(req: Request): boolean {
 }
 
 /** RFC 9728 Protected Resource Metadata document. */
-export function protectedResourceMetadata(req: Request): Response {
+export function protectedResourceMetadata(): Response {
   const body = {
-    resource: resourceUrl(req),
+    resource: resourceUrl(),
     // Anthropic reads authorization_servers[0]; Supabase serves valid AS metadata here.
-    authorization_servers: [issuerUrl(req)],
+    authorization_servers: [issuerUrl()],
     bearer_methods_supported: ["header"],
     scopes_supported: ["openid", "email"],
     resource_name: "Cerefox",
@@ -73,8 +74,8 @@ export function protectedResourceMetadata(req: Request): Response {
  * 401 with an explicit `resource_metadata` pointer (RFC 9728 §5.1), so clients
  * discover our metadata route rather than probing the domain root.
  */
-export function unauthorizedChallenge(req: Request, result: AuthResult): Response {
-  const metadataUrl = `${resourceUrl(req)}${PRS_SUFFIX}`;
+export function unauthorizedChallenge(result: AuthResult): Response {
+  const metadataUrl = `${resourceUrl()}${PRS_SUFFIX}`;
   const invalid = result.ok === false && result.reason !== "no_token";
   const params = [`resource_metadata="${metadataUrl}"`];
   if (invalid) params.push(`error="invalid_token"`);
@@ -89,25 +90,32 @@ export function unauthorizedChallenge(req: Request, result: AuthResult): Respons
 }
 
 /**
- * Build the authenticator from Function secrets. Deriving issuer/JWKS from the
- * request keeps the function project-portable (no hardcoded ref).
+ * Build the authenticator from Function secrets + the injected SUPABASE_URL.
  *
- * Secrets (set via `supabase secrets set`, reliable unlike auto-injected vars):
- *   CEREFOX_MCP_STATIC_BEARER — legacy anon JWT for back-compat (falls back to the
- *                               auto-injected SUPABASE_ANON_KEY when present).
- *   CEREFOX_OAUTH_OWNER_ID    — pinned owner user id (optional; unset = accept any
- *                               validly-signed authenticated token).
+ * Secrets (set via `supabase secrets set`):
+ *   CEREFOX_OAUTH_OWNER_ID       — pinned owner user id. The OAuth path fails CLOSED
+ *                                  when this is unset (design §6 / Finding 3), unless
+ *                                  CEREFOX_OAUTH_ALLOW_ANY_USER="true" is set.
+ *   CEREFOX_OAUTH_ALLOW_ANY_USER — explicit opt-out of the owner pin (multi-user /
+ *                                  sign-ups-disabled setups). Default off.
+ *   CEREFOX_MCP_STATIC_BEARER    — optional legacy anon JWT for remote static-token
+ *                                  clients' back-compat. Unset = static path disabled
+ *                                  (fail-closed). We do NOT fall back to the injected
+ *                                  SUPABASE_ANON_KEY: it is unreliable (Decision Log
+ *                                  2026-03-14) and treating it as an accepted bearer
+ *                                  would broaden the credential surface implicitly.
  */
-export function buildAuthenticator(req: Request): McpAuthenticator {
-  const issuer = issuerUrl(req);
-  const staticBearer =
-    Deno.env.get("CEREFOX_MCP_STATIC_BEARER") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? null;
+export function buildAuthenticator(): McpAuthenticator {
+  const issuer = issuerUrl();
   const ownerUserId = Deno.env.get("CEREFOX_OAUTH_OWNER_ID") ?? null;
+  const allowAnyUser = Deno.env.get("CEREFOX_OAUTH_ALLOW_ANY_USER") === "true";
+  const staticBearer = Deno.env.get("CEREFOX_MCP_STATIC_BEARER") ?? null;
   return createMcpAuthenticator({
     issuer,
     jwksUri: `${issuer}/.well-known/jwks.json`,
     expectedAudience: "authenticated",
     ownerUserId,
+    allowAnyUser,
     staticBearer,
     allowedAlgs: ["ES256", "RS256"],
   });

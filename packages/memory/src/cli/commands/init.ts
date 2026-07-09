@@ -274,6 +274,16 @@ function buildEnvFile(answers: ConfigAnswers): string {
   if (answers.CEREFOX_AUTHOR_TYPE) {
     lines.push(`CEREFOX_AUTHOR_TYPE=${answers.CEREFOX_AUTHOR_TYPE}`);
   }
+  lines.push(
+    "",
+    "# ── Optional: connect cloud/mobile Claude over OAuth (setup-supabase.md Step 7) ──",
+    "# These are only needed for the optional claude.ai / Claude-mobile OAuth feature.",
+    "# The legacy anon JWT is a full-KB credential — used by remote static-token clients:",
+    "# CEREFOX_SUPABASE_ANON_KEY=eyJ...your-legacy-anon-jwt...",
+    "# The PUBLISHABLE key is public-safe (no KB access) — used by the consent-page",
+    "# Cloudflare Worker deploy (cloudflare/cerefox-consent/deploy.sh reads this):",
+    "# CEREFOX_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...",
+  );
   return lines.join("\n") + "\n";
 }
 

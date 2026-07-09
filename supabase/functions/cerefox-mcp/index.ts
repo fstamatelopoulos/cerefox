@@ -240,11 +240,11 @@ async function handleVersion(req: Request): Promise<Response> {
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
-// Isolate-lifetime authenticator (holds the JWKS cache). The issuer/JWKS are
-// derived from the first request's origin, which is stable per deployment.
+// Isolate-lifetime authenticator (holds the JWKS cache). Issuer/JWKS come from the
+// injected SUPABASE_URL (not request headers — see oauth.ts projectOrigin).
 let authenticator: McpAuthenticator | null = null;
-function getAuthenticator(req: Request): McpAuthenticator {
-  if (!authenticator) authenticator = buildAuthenticator(req);
+function getAuthenticator(): McpAuthenticator {
+  if (!authenticator) authenticator = buildAuthenticator();
   return authenticator;
 }
 
@@ -256,13 +256,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // Public discovery route (RFC 9728): the ONLY unauthenticated non-OPTIONS
   // response. Served before auth so OAuth clients can bootstrap.
   if (req.method === "GET" && isProtectedResourceMetadata(req)) {
-    return protectedResourceMetadata(req);
+    return protectedResourceMetadata();
   }
 
   // ── Auth-first dispatch (design §6) ────────────────────────────────────────
   // The function is deployed with --no-verify-jwt, so this in-function check is
   // the ONLY gate. Accept either the legacy static Bearer or a valid OAuth JWT.
-  const authResult = await getAuthenticator(req).authenticate(
+  const authResult = await getAuthenticator().authenticate(
     req.headers.get("Authorization"),
   );
   if (!authResult.ok) {
@@ -278,7 +278,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           (authResult.detail ? ` (${authResult.detail})` : ""),
       );
     }
-    return unauthorizedChallenge(req, authResult);
+    return unauthorizedChallenge(authResult);
   }
 
   // GET — the only supported GET is the /version surface (iter-26). Per MCP

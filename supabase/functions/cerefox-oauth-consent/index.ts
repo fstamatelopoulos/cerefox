@@ -29,8 +29,13 @@ Deno.serve((req: Request): Response => {
     return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
   }
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  return new Response(renderConsentPage(supabaseUrl, anonKey), {
+  // SECURITY: embed the PUBLISHABLE key only — never the injected SUPABASE_ANON_KEY
+  // (the anon JWT is a full-KB credential; this page is served unauthenticated). If
+  // the secret is unset the page renders keyless (non-functional) rather than leaking
+  // the anon key. Set it with:
+  //   supabase secrets set CEREFOX_SUPABASE_PUBLISHABLE_KEY=sb_publishable_... --project-ref <ref>
+  const publishableKey = Deno.env.get("CEREFOX_SUPABASE_PUBLISHABLE_KEY") ?? "";
+  return new Response(renderConsentPage(supabaseUrl, publishableKey), {
     status: 200,
     headers: { ...CORS_HEADERS, "Content-Type": "text/html; charset=utf-8" },
   });
