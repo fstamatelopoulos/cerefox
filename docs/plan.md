@@ -3314,6 +3314,32 @@ mid-word/mid-row). 4 KB docs were corrupted.
   (docs convert on next edit; no forced re-embed) + a `cerefox doctor` legacy-format count.
 - **Data recovery**: restore the 4 corrupted docs from their last clean version.
 
+### 28E: Migrate Edge Function auth off the unrotatable legacy anon JWT
+
+**Problem (surfaced by the 2026-07-09 rotation attempt).** Supabase's Edge Function gateway
+is JWT-only — it rejects the new `sb_publishable_`/`sb_secret_` keys (Decision Log Q2 Part 1,
+2026-05-18). So the 8 primitive EFs (ChatGPT GPT Actions + direct HTTP) and `cerefox-mcp`'s
+static-Bearer path require the **legacy anon JWT**. On a project migrated to asymmetric
+(ES256) signing keys — Supabase's default direction — the legacy anon key **can only be
+revoked, not rotated** (revoking kills the whole EF path). So **any Cerefox user whose anon
+key leaks is stuck**: they can't cycle it without disabling GPT Actions / remote MCP. A real
+security gap for every user on the anon-key/EF path (not just the maintainer).
+
+**Fix — the deferred "Option B" from the Decision Log; trigger conditions (security +
+touching the client-config layer) are now met.** Deploy the 8 primitive EFs with
+`--no-verify-jwt` and validate the caller's key **in-function**, accepting a **rotatable**
+key (`sb_publishable_`/`sb_secret_`, or a Cerefox-managed token) instead of the unrotatable
+legacy anon JWT.
+- Reuse the in-function auth pattern from `_shared/mcp-auth/` (iter-28A) — a shared
+  constant-time key/token check for the primitive EFs.
+- Update the GPT Actions OpenAPI block (auth scheme + `info.version` bump) and the
+  remote-MCP client docs to the new key — a documented, client-config-breaking migration
+  with a back-compat window (still accept the legacy anon JWT during deprecation).
+- Candidate for v1.0 (security) or a fast-follow; overlaps 28B's mitigations. Interim: on
+  the maintainer's own project, remove `CEREFOX_MCP_STATIC_BEARER` (done 2026-07-09) and
+  accept residual risk on the primitive EFs (GPT Actions kept; low exposure, RPC bypass
+  already closed) until this migration ships.
+
 ### 28C: The contract
 
 Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-design.md` §13 v1.0.0](specs/polish-and-distribution-design.md).
