@@ -3327,18 +3327,25 @@ security gap for every user on the anon-key/EF path (not just the maintainer).
 
 **Fix — the deferred "Option B" from the Decision Log; trigger conditions (security +
 touching the client-config layer) are now met.** Deploy the 8 primitive EFs with
-`--no-verify-jwt` and validate the caller's key **in-function**, accepting a **rotatable**
-key (`sb_publishable_`/`sb_secret_`, or a Cerefox-managed token) instead of the unrotatable
-legacy anon JWT.
-- Reuse the in-function auth pattern from `_shared/mcp-auth/` (iter-28A) — a shared
-  constant-time key/token check for the primitive EFs.
-- Update the GPT Actions OpenAPI block (auth scheme + `info.version` bump) and the
-  remote-MCP client docs to the new key — a documented, client-config-breaking migration
-  with a back-compat window (still accept the legacy anon JWT during deprecation).
-- Candidate for v1.0 (security) or a fast-follow; overlaps 28B's mitigations. Interim: on
-  the maintainer's own project, remove `CEREFOX_MCP_STATIC_BEARER` (done 2026-07-09) and
-  accept residual risk on the primitive EFs (GPT Actions kept; low exposure, RPC bypass
-  already closed) until this migration ships.
+`--no-verify-jwt` and validate the caller's credential **in-function**, using a **rotatable,
+appropriately-scoped Cerefox-managed access token** — NOT a Supabase key:
+- **Why not the Supabase keys:** `sb_secret_` is full-DB (service_role) — handing it to a
+  ChatGPT GPT Action / remote client config means a client compromise = full DB access via
+  the Data API (worse than the anon key). `sb_publishable_` is public by design — accepting
+  it in-function is no auth at all. So the credential is a **random Cerefox-owned token**
+  stored as a Function secret (the expected value), given to clients, constant-time-compared
+  in-function; the EF still uses its own `service_role` internally (never leaves the server).
+  Rotatable = regenerate the secret + re-issue to clients.
+- Reuse/extend the in-function auth pattern from `_shared/mcp-auth/` (iter-28A) — a shared
+  constant-time token check for the primitive EFs AND `cerefox-mcp`'s (removed) static path.
+- **Deprecate the legacy anon JWT for all EF paths.** Back-compat window: accept the legacy
+  anon JWT during deprecation, warn, then drop. Migration docs for the two affected client
+  classes: **old remote static-Bearer MCP** and **ChatGPT GPT Actions**.
+- Update the GPT Actions OpenAPI block (auth scheme → the token in a header; `info.version`
+  bump) + the remote-MCP client + connect-agents docs.
+- **Priority: implement next** (maintainer 2026-07-09) — it's the enabler for fully retiring
+  the legacy JWT + closing the maintainer's own residual anon-key risk. Overlaps 28B.
+  Interim already done: `CEREFOX_MCP_STATIC_BEARER` removed on the maintainer project.
 
 ### 28C: The contract
 
