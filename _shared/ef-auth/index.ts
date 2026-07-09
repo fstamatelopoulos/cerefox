@@ -97,3 +97,38 @@ export function checkAccessToken(
 
   return matched ? { ok: true } : { ok: false, reason: "bad_token" };
 }
+
+// ── Edge Function gate (drop-in for each primitive EF) ───────────────────────
+
+/**
+ * One-call auth gate for a primitive Edge Function. Returns a 401 `Response` to
+ * short-circuit the handler when the token is missing/wrong/unconfigured, or
+ * `null` to continue. Placed **before** the `/version` branch so version is gated
+ * too (design §3, decision 2026-07-10).
+ *
+ * Deno-free by design: the caller passes the raw `CEREFOX_ACCESS_TOKENS` env
+ * value (read via `Deno.env.get` in the EF) rather than this module touching the
+ * `Deno` global — so the identical source still imports cleanly under Bun for
+ * unit tests. `Response`/`console` are Web globals available in both runtimes.
+ */
+export function efAuthGate(
+  authorization: string | null,
+  tokensRaw: string | null | undefined,
+  headers: Record<string, string>,
+): Response | null {
+  const result = checkAccessToken(authorization, { tokens: parseAccessTokens(tokensRaw) });
+  if (result.ok) return null;
+
+  // Log the machine reason (never the token). `no_token` is the normal
+  // unauthenticated probe (noise); `bad_token` / `no_tokens_configured` are
+  // worth surfacing in the dashboard logs.
+  if (result.reason !== "no_token") {
+    console.warn(
+      `[ef-auth] rejected: ${result.reason}${result.detail ? ` (${result.detail})` : ""}`,
+    );
+  }
+  return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    status: 401,
+    headers: { ...headers, "WWW-Authenticate": "Bearer" },
+  });
+}

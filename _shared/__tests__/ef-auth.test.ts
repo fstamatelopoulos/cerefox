@@ -13,6 +13,7 @@ import { describe, expect, test } from "bun:test";
 import {
   type AccessTokenConfig,
   checkAccessToken,
+  efAuthGate,
   parseAccessTokens,
 } from "../ef-auth/index.ts";
 
@@ -106,5 +107,45 @@ describe("parseAccessTokens", () => {
     const tokens = parseAccessTokens(`${TOKEN}, ${OTHER}`);
     expect(checkAccessToken(bearer(OTHER), cfg(tokens))).toEqual({ ok: true });
     expect(checkAccessToken(bearer("nope"), cfg(tokens)).ok).toBe(false);
+  });
+});
+
+describe("efAuthGate", () => {
+  const HEADERS = { "Content-Type": "application/json" };
+  const gate = (auth: string | null, tokensRaw: string | null) =>
+    efAuthGate(auth, tokensRaw, HEADERS);
+
+  test("returns null (continue) on a valid token", () => {
+    expect(gate(bearer(TOKEN), TOKEN)).toBeNull();
+  });
+
+  test("returns a 401 Response on a wrong token", () => {
+    const r = gate(bearer("wrong"), TOKEN);
+    expect(r).toBeInstanceOf(Response);
+    expect(r!.status).toBe(401);
+    expect(r!.headers.get("WWW-Authenticate")).toBe("Bearer");
+    expect(r!.headers.get("Content-Type")).toBe("application/json");
+  });
+
+  test("returns 401 on a missing header", () => {
+    expect(gate(null, TOKEN)!.status).toBe(401);
+  });
+
+  test("returns 401 (fail closed) when no tokens are configured", () => {
+    expect(gate(bearer(TOKEN), null)!.status).toBe(401);
+    expect(gate(bearer(TOKEN), "")!.status).toBe(401);
+  });
+
+  test("parses a comma-separated env value and accepts any member", async () => {
+    expect(gate(bearer(TOKEN), `${OTHER},${TOKEN}`)).toBeNull();
+    expect(gate(bearer(OTHER), `${OTHER},${TOKEN}`)).toBeNull();
+  });
+
+  test("the 401 body carries no token material", async () => {
+    const r = gate(bearer("wrong"), TOKEN)!;
+    const body = await r.text();
+    expect(body).not.toContain("wrong");
+    expect(body).not.toContain(TOKEN);
+    expect(JSON.parse(body)).toEqual({ error: "Unauthorized" });
   });
 });

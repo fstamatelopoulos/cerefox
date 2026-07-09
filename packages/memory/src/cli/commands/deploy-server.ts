@@ -99,15 +99,33 @@ function parseProjectRef(supabaseUrl: string | undefined): string | null {
 /** List the cerefox-* Edge Function directories under the resolved assets. */
 /**
  * Edge Functions deployed WITHOUT the Supabase gateway's JWT verification
- * (`--no-verify-jwt`). These are OAuth-protected-resource / public routes that
- * must run their own in-function auth (design: docs/specs/oauth-mcp-server-design.md):
- *   - cerefox-mcp          — serves discovery + 401 challenge; validates tokens itself.
+ * (`--no-verify-jwt`). They run their own in-function auth instead (designs:
+ * docs/specs/oauth-mcp-server-design.md, docs/specs/ef-auth-migration-design.md):
+ *   - cerefox-mcp           — serves discovery + 401 challenge; OAuth JWT or token.
  *   - cerefox-oauth-consent — public consent page (loads in a browser, no Bearer).
- * EVERY OTHER function keeps gateway verification. Forgetting the flag here never
- * *opens* anything (it only breaks OAuth); passing it to the wrong function WOULD,
- * so this map is the single source of truth, not operator memory.
+ *   - the 8 primitive EFs   — (iter-28E) validate the Cerefox access token
+ *                             (CEREFOX_ACCESS_TOKENS) in-function; the gateway is
+ *                             JWT-only and rejects that token, so it can't gate them.
+ * The gateway no longer gates any Cerefox function; in-function auth is the only
+ * gate everywhere. Forgetting the flag here never *opens* anything (a gated caller
+ * just gets 401 at the gateway); the in-function check is the real boundary. This
+ * map is the single source of truth, not operator memory.
  */
-const NO_VERIFY_JWT_EFS = new Set(["cerefox-mcp", "cerefox-oauth-consent"]);
+const PRIMITIVE_EFS = [
+  "cerefox-search",
+  "cerefox-ingest",
+  "cerefox-metadata",
+  "cerefox-get-document",
+  "cerefox-list-versions",
+  "cerefox-get-audit-log",
+  "cerefox-metadata-search",
+  "cerefox-list-projects",
+];
+const NO_VERIFY_JWT_EFS = new Set([
+  "cerefox-mcp",
+  "cerefox-oauth-consent",
+  ...PRIMITIVE_EFS,
+]);
 
 function listEdgeFunctions(functionsDir: string): string[] {
   if (!existsSync(functionsDir)) return [];
@@ -357,6 +375,25 @@ async function action(options: DeployServerOptions): Promise<void> {
             "      self-registers on your project could get an accepted token):\n" +
             `        supabase secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --project-ref ${ref}\n` +
             "      Setup: docs/guides/setup-supabase.md Step 7 (incl. the client_secret_post gotcha).",
+        ),
+      );
+    }
+
+    // The 8 primitive EFs now authenticate the Cerefox access token in-function
+    // (iter-28E). If CEREFOX_ACCESS_TOKENS is unset, they FAIL CLOSED — every GPT
+    // Action / remote-HTTP caller AND `cerefox doctor`'s version aggregator get
+    // 401. This is the cutover footgun: generate the token BEFORE clients rely on
+    // it (design §6/§11). `cerefox token generate` sets the secret + writes .env.
+    if (efNames.some((ef) => PRIMITIVE_EFS.includes(ef))) {
+      const ref = projectRef ?? "<ref>";
+      println(
+        c.yellow(
+          "\n   ⚠  The primitive Edge Functions now require the Cerefox access token.\n" +
+            "      If CEREFOX_ACCESS_TOKENS is unset they reject ALL callers (fail closed) —\n" +
+            "      GPT Actions, remote HTTP, and `cerefox doctor`. Generate it now:\n" +
+            "        cerefox token generate\n" +
+            `      (or manually: supabase secrets set CEREFOX_ACCESS_TOKENS=<token> --project-ref ${ref})\n` +
+            "      Migration + client cutover: docs/specs/ef-auth-migration-design.md §6.",
         ),
       );
     }

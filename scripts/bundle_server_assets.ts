@@ -76,7 +76,9 @@ function main(): void {
   // mcp-auth: cerefox-mcp imports it for in-function OAuth/static token
   // validation. consent-page: cerefox-oauth-consent imports it for the consent
   // markup. Both iter-28A — must ship or the respective EF deploy breaks.
-  for (const sub of ["mcp-tools", "embeddings", "ef-meta", "mcp-auth", "consent-page"]) {
+  // ef-auth (iter-28E): the 8 primitive EFs import it for the in-function access-
+  // token gate; it in turn imports `../mcp-auth` (constantTimeEqual) — both must ship.
+  for (const sub of ["mcp-tools", "embeddings", "ef-meta", "mcp-auth", "ef-auth", "consent-page"]) {
     cpSync(join(SHARED_SRC, sub), join(OUT, "_shared", sub), {
       recursive: true,
       filter: notPythonCruft,

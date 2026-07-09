@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
+import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 
 /**
  * cerefox-ingest — Supabase Edge Function
@@ -441,6 +442,13 @@ Deno.serve(async (req: Request) => {
       },
     });
   }
+
+  const authFail = efAuthGate(
+    req.headers.get("Authorization"),
+    Deno.env.get("CEREFOX_ACCESS_TOKENS"),
+    { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+  );
+  if (authFail) return authFail;
 
   if (isVersionRequest(req)) {
     return versionResponse("cerefox-ingest", {
