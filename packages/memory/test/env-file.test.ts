@@ -71,7 +71,35 @@ describe("upsertEnvVar", () => {
   test("appends a trailing newline when the file lacks one", () => {
     writeFileSync(envPath, "A=1"); // no trailing \n
     upsertEnvVar(envPath, "K", "v", { noBackup: true });
-    expect(readFileSync(envPath, "utf8")).toBe("A=1\nK=v\n");
+    expect(readFileSync(envPath, "utf8")).toBe("A=1\n\nK=v\n");
+  });
+
+  test("a comment becomes a blank-line-separated section header on append", () => {
+    writeFileSync(envPath, "# Logging\nCEREFOX_LOG_LEVEL=info\n");
+    upsertEnvVar(envPath, "CEREFOX_ACCESS_TOKEN", "cfx_pat_x", {
+      noBackup: true,
+      comment: "── Cerefox access token ──",
+    });
+    expect(readFileSync(envPath, "utf8")).toBe(
+      "# Logging\nCEREFOX_LOG_LEVEL=info\n\n# ── Cerefox access token ──\nCEREFOX_ACCESS_TOKEN=cfx_pat_x\n",
+    );
+  });
+
+  test("a comment prefixes a freshly created file", () => {
+    upsertEnvVar(envPath, "CEREFOX_ACCESS_TOKEN", "cfx_pat_x", { comment: "hdr" });
+    expect(readFileSync(envPath, "utf8")).toBe("# hdr\nCEREFOX_ACCESS_TOKEN=cfx_pat_x\n");
+  });
+
+  test("update-in-place ignores the comment (rotate doesn't re-add a header)", () => {
+    writeFileSync(envPath, "# ── Cerefox access token ──\nCEREFOX_ACCESS_TOKEN=cfx_pat_old\n");
+    upsertEnvVar(envPath, "CEREFOX_ACCESS_TOKEN", "cfx_pat_new", {
+      noBackup: true,
+      comment: "── Cerefox access token ──",
+    });
+    // value replaced in place; no duplicate header, no extra blank line
+    expect(readFileSync(envPath, "utf8")).toBe(
+      "# ── Cerefox access token ──\nCEREFOX_ACCESS_TOKEN=cfx_pat_new\n",
+    );
   });
 });
 

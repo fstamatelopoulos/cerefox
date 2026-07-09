@@ -25,17 +25,24 @@ export interface UpsertResult {
  * Upsert `KEY=value`. If the file exists with an uncommented `KEY=` line, replace
  * it in place; otherwise append. All other lines are preserved. Creates the file
  * (mode 0600) if absent. Backs up an existing file first unless `noBackup`.
+ *
+ * `comment` (optional) is a section header emitted **only when the key is newly
+ * created or appended** — a blank line + `# <comment>` above the new line, so an
+ * appended key reads as its own section instead of crowding the previous one. On
+ * an in-place update (e.g. `token rotate`) the value line is replaced and the
+ * existing comment is left untouched.
  */
 export function upsertEnvVar(
   path: string,
   key: string,
   value: string,
-  opts: { noBackup?: boolean } = {},
+  opts: { noBackup?: boolean; comment?: string } = {},
 ): UpsertResult {
   const line = `${key}=${value}`;
+  const header = opts.comment ? `# ${opts.comment}\n` : "";
 
   if (!existsSync(path)) {
-    writeFileSync(path, `${line}\n`, { mode: 0o600 });
+    writeFileSync(path, `${header}${line}\n`, { mode: 0o600 });
     return { path, action: "created" };
   }
 
@@ -53,7 +60,9 @@ export function upsertEnvVar(
     next = original.replace(re, `$1${line}`);
     action = "updated";
   } else {
-    next = original.endsWith("\n") ? `${original}${line}\n` : `${original}\n${line}\n`;
+    // Append as its own section: blank-line separator + optional comment header.
+    const base = original.endsWith("\n") ? original : `${original}\n`;
+    next = `${base}\n${header}${line}\n`;
     action = "added";
   }
   writeFileSync(path, next);

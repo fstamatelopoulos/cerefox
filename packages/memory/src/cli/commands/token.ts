@@ -85,7 +85,10 @@ function writeLocalEnv(token: string, opts: TokenOptions): void {
     return;
   }
   const envPath = resolveEnvFile();
-  const r = upsertEnvVar(envPath, LOCAL_NAME, token, { noBackup: !opts.backup });
+  const r = upsertEnvVar(envPath, LOCAL_NAME, token, {
+    noBackup: !opts.backup,
+    comment: "── Cerefox access token — Edge Function credential (managed by `cerefox token`) ──",
+  });
   println(c.green(`   ✓ ${r.action === "created" ? "Wrote" : "Updated"} ${LOCAL_NAME} in ${r.path}`));
   if (r.backupPath) println(c.dim(`     backup: ${r.backupPath}`));
   const warn = envGitignoreWarning(envPath);
