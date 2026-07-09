@@ -164,14 +164,142 @@ This points the client at the local stdio server (`cerefox mcp`). To edit
 configs by hand or use the remote (Edge Function) HTTP transport, see
 [`connect-agents.md`](connect-agents.md).
 
-**For cloud Claude.ai** — connect to the Supabase remote MCP (FTS keyword search only):
-1. In Supabase Dashboard → Project Settings → Integrations → MCP, get your project ref
-2. In Claude.ai Settings → Integrations, add `https://mcp.supabase.com/sse?project_ref=<ref>`
+**For cloud Claude.ai / Claude mobile** — connect over OAuth to your own
+`cerefox-mcp` Edge Function with the **full hybrid-search tool surface** (not the
+FTS-only `mcp.supabase.com` path). This needs a one-time OAuth setup — see
+[Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) below.
 
 **For cloud ChatGPT** — create a Custom GPT with GPT Actions pointing at the Edge Functions.
 
 See `docs/guides/connect-agents.md` for the complete guide including system prompts,
 architecture explanation, and ChatGPT GPT Actions setup.
+
+---
+
+## Step 7 — Connect cloud & mobile Claude over OAuth (optional) <a id="step-7--oauth-for-cloud-agents-claudeai--mobile-optional"></a>
+
+> **This whole section is optional.** You only need it to connect **claude.ai web and
+> the Claude mobile app** (and any other OAuth-only cloud MCP client). Everything in
+> Step 6 — the local MCP, Claude Desktop, Cursor, Claude Code, Codex, Gemini — works
+> **without** any of this. Skipping Step 7 costs you nothing except cloud/mobile Claude.
+>
+> The one extra moving part OAuth adds is a **hosted consent page** — the screen where
+> you approve the connection. A Supabase Edge Function can't serve it (Supabase rewrites
+> HTML to `text/plain` on the default `*.supabase.co` domain), so this repo ships the
+> page as a **free Cloudflare Worker** with a one-command deploy. Full design + the
+> gotchas we hit: [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
+
+Cloud AI agents can only connect to a custom MCP server over **OAuth** — they cannot send
+a static token. Supabase's native **OAuth 2.1 Server** (beta; free on all plans) makes
+`cerefox-mcp` an OAuth-protected resource, so claude.ai and the mobile app get the full
+hybrid-search tool surface (not the FTS-only `mcp.supabase.com` path).
+
+**Prerequisite — asymmetric signing keys.** Token validation uses your project's public
+JWKS, so the JWT signing key must be **asymmetric (ES256 or RS256)**, not the HS256
+default. Check **Project Settings → JWT Keys**; if it says HS256, migrate to ES256 first
+(a Supabase-managed key rotation). Existing clients are unaffected (they treat the key as
+an opaque string). New projects often already default to ES256.
+
+### 7a. Enable the OAuth 2.1 Server
+
+Supabase Dashboard → **Authentication → OAuth Server** (under Configuration):
+
+- **Enable** the OAuth 2.1 Server.
+- **Authorization Path**: set to `/consent` (combines with the Site URL in 7b to form the
+  consent-page URL).
+- **Dynamic Client Registration (DCR): leave DISABLED.** The dashboard flags open DCR as a
+  security risk (any client could self-register), a single-user setup only needs one
+  client, and claude.ai's DCR against Supabase is currently unreliable. Register the one
+  client by hand in 7d instead.
+
+### 7b. Deploy the consent page (free Cloudflare Worker) and point Site URL at it
+
+The consent page is a single static file that talks only to Supabase Auth. It embeds a
+**publishable** key (`sb_publishable_…`) — **never the legacy anon JWT**. (The anon JWT is a
+full-KB credential; the publishable key is public-safe — it's rejected by the Edge Function
+gateway and, since schema 0.7.0, cannot call the Data API RPCs either. See the
+[security model](../specs/security-model.md).)
+
+Add your publishable key to `~/.cerefox/.env` as the single source
+(`deploy.sh` reads it). Grab it from the dashboard (**Project Settings → API Keys →
+Publishable**) or the CLI:
+
+```bash
+npx supabase projects api-keys --project-ref <ref>   # find the "publishable" entry
+echo 'CEREFOX_SUPABASE_PUBLISHABLE_KEY=sb_publishable_…' >> ~/.cerefox/.env
+```
+
+Then deploy to a free Cloudflare Worker (needs a free Cloudflare account — no domain, no
+card):
+
+```bash
+cd cloudflare/cerefox-consent
+./deploy.sh        # reads CEREFOX_SUPABASE_URL + CEREFOX_SUPABASE_PUBLISHABLE_KEY from ~/.cerefox/.env
+```
+
+See [`cloudflare/cerefox-consent/README.md`](../../cloudflare/cerefox-consent/README.md)
+for the manual `wrangler` commands. It prints your Worker URL, e.g.
+`https://cerefox-consent.<your-subdomain>.workers.dev`.
+
+Then Dashboard → **Authentication → URL Configuration → Site URL** = that Worker origin.
+With Authorization Path `/consent`, the consent page lands at `…workers.dev/consent`. (If
+your Site URL was the default `http://localhost:3000`, repointing is safe.)
+
+> **Custom-domain alternative:** a `cerefox-oauth-consent` Edge Function also ships (renders
+> the same page from the `CEREFOX_SUPABASE_PUBLISHABLE_KEY` Function secret). It only works
+> behind a paid Supabase custom domain (EFs serve `text/plain` on `*.supabase.co`), so the
+> free Cloudflare Worker is the default.
+
+### 7c. Create the owner user + pin it
+
+1. **Owner user** — Dashboard → **Authentication → Users → Add user**: your email + a
+   strong password. This is the login you type on the consent page (unrelated to your
+   Supabase dashboard login). Copy the new user's **UUID**.
+2. **Owner pin** — the only Function secret this feature needs:
+
+   ```bash
+   supabase secrets set CEREFOX_OAUTH_OWNER_ID='<owner-user-uuid>' --project-ref <ref>
+   ```
+
+   This is the **authorization boundary**, and a server-side value only (never entered
+   into claude.ai). The OAuth path **fails closed when this is unset** — the function
+   rejects every OAuth token — because otherwise, with Supabase's default email sign-ups
+   on, anyone who self-registers could get an accepted token. For a deliberate multi-user
+   setup (with sign-ups disabled), opt out explicitly:
+   `supabase secrets set CEREFOX_OAUTH_ALLOW_ANY_USER=true`.
+
+### 7d. Register the Claude client — **use `client_secret_post`**
+
+Dashboard → **Authentication → OAuth Apps → New OAuth App**:
+
+- **Client type**: Confidential.
+- **Redirect URI** (exact match, no wildcards): `https://claude.ai/api/mcp/auth_callback`
+- **Token endpoint auth method: `request body` (`client_secret_post`)** — **not** HTTP
+  Basic. Claude sends its client secret in the request body; the Basic default silently
+  fails the token exchange with an opaque `ofid_…` error and no usable token. **This is
+  the single most common setup mistake — get it right here.**
+- Save, then copy the **Client ID** and **Client Secret** (the secret is shown once). You
+  paste both into the claude.ai connector — see
+  [`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth).
+
+### 7e. Deploy the function
+
+```bash
+cerefox server deploy --functions-only
+```
+
+Deploys `cerefox-mcp` with `--no-verify-jwt` (in-function auth). Then wire the claude.ai
+connector per
+[`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth).
+
+> **Note — remote static-token clients.** Deploying with `--no-verify-jwt` means the
+> Supabase gateway no longer validates the anon-JWT Bearer that *remote* static-token
+> clients would send directly to `cerefox-mcp`. **Most setups have none** — local coding
+> agents use the local MCP (Step 6), which is also cheaper (zero Edge Function calls). If
+> you do run such a client and it starts returning 401 after enabling OAuth, that is a
+> separate back-compat concern covered in the
+> [design doc §5](../specs/oauth-mcp-server-design.md); it is **not** part of the
+> OAuth/cloud setup and needs no secret here.
 
 ---
 

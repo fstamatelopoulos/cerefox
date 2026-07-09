@@ -268,8 +268,9 @@ def _split_paragraphs(text: str, max_chars: int) -> list[str]:
     prefix (prepended by the caller for the first piece) provides sufficient
     context for each chunk when read in isolation.
 
-    If a single paragraph is longer than *max_chars*, it is hard-split by
-    character count.
+    If a single paragraph is longer than *max_chars*, it is kept WHOLE as one
+    piece — splitting inside a paragraph would corrupt document reconstruction,
+    which joins chunks with "\n\n" (see the inline note below).
     """
     paragraphs = [p for p in _PARAGRAPH_SEP.split(text) if p.strip()]
     if not paragraphs:
@@ -292,10 +293,15 @@ def _split_paragraphs(text: str, max_chars: int) -> list[str]:
                 current_parts = [para]
                 current_len = len(para)
             else:
-                # A single paragraph exceeds max_chars — hard-split it.
-                step = max_chars // 2
-                for start in range(0, len(para), step):
-                    result.append(para[start: start + max_chars])
+                # A single paragraph exceeds max_chars. Keep it WHOLE — never split
+                # INSIDE a paragraph. cerefox_reconstruct_doc reassembles a document
+                # by joining chunks with "\n\n", so any intra-paragraph split is lossy:
+                # it inserts a spurious blank line at each seam (e.g. "Source" ->
+                # "Sour\n\nce", and a markdown table gets a blank line mid-row). The
+                # earlier step = max_chars // 2 char-slice ALSO overlapped, duplicating
+                # content on reconstruction. Only paragraph ("\n\n") boundaries keep the
+                # join lossless; a whole oversized paragraph is a valid single chunk.
+                result.append(para)
                 current_parts = []
                 current_len = 0
 

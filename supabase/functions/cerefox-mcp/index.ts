@@ -28,6 +28,13 @@ import {
   notificationResponse,
 } from "./shared.ts";
 import {
+  buildAuthenticator,
+  isProtectedResourceMetadata,
+  protectedResourceMetadata,
+  unauthorizedChallenge,
+} from "./oauth.ts";
+import type { McpAuthenticator } from "../../../_shared/mcp-auth/index.ts";
+import {
   ALL_TOOLS,
   McpInvalidParams,
   TOOLS_BY_NAME,
@@ -233,9 +240,45 @@ async function handleVersion(req: Request): Promise<Response> {
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
+// Isolate-lifetime authenticator (holds the JWKS cache). Issuer/JWKS come from the
+// injected SUPABASE_URL (not request headers — see oauth.ts projectOrigin).
+let authenticator: McpAuthenticator | null = null;
+function getAuthenticator(): McpAuthenticator {
+  if (!authenticator) authenticator = buildAuthenticator();
+  return authenticator;
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
+  }
+
+  // Public discovery route (RFC 9728): the ONLY unauthenticated non-OPTIONS
+  // response. Served before auth so OAuth clients can bootstrap.
+  if (req.method === "GET" && isProtectedResourceMetadata(req)) {
+    return protectedResourceMetadata();
+  }
+
+  // ── Auth-first dispatch (design §6) ────────────────────────────────────────
+  // The function is deployed with --no-verify-jwt, so this in-function check is
+  // the ONLY gate. Accept either the legacy static Bearer or a valid OAuth JWT.
+  const authResult = await getAuthenticator().authenticate(
+    req.headers.get("Authorization"),
+  );
+  if (!authResult.ok) {
+    // Log the machine reason (never the token) so the dashboard logs are
+    // actionable on a real auth failure. `no_token` is the normal OAuth-discovery
+    // probe (every cloud client sends one first) — don't log it as noise. The
+    // enriched detail (aud/sub/alg values from _shared/mcp-auth) names which claim
+    // a rejected token tripped. To debug a "Claude never sends the token" case
+    // (claude-ai #482), temporarily also log `Array.from(req.headers.keys())`.
+    if (authResult.reason !== "no_token") {
+      console.warn(
+        `[cerefox-mcp] auth rejected: ${authResult.reason}` +
+          (authResult.detail ? ` (${authResult.detail})` : ""),
+      );
+    }
+    return unauthorizedChallenge(authResult);
   }
 
   // GET — the only supported GET is the /version surface (iter-26). Per MCP

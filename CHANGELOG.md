@@ -9,6 +9,44 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Security
+- **Tightened RPC execute privileges (schema 0.7.0 — redeploy recommended).** The
+  `cerefox_*` `SECURITY DEFINER` functions now grant `EXECUTE` only to `service_role`
+  (revoked from `PUBLIC`/`anon`/`authenticated`), matching the intended
+  Edge-Function-only access model. A security hardening — **existing cloud deployments
+  should run `cerefox server deploy` to apply it.**
+- **OAuth consent page uses the public-safe publishable key** (`sb_publishable_…`) instead
+  of a broader key (Worker + custom-domain EF + shared template).
+- **Hardened the `cerefox-mcp` OAuth surface**: issuer/JWKS derived from the injected
+  `SUPABASE_URL` rather than request headers; the OAuth path fails closed when
+  `CEREFOX_OAUTH_OWNER_ID` is unset (opt out with `CEREFOX_OAUTH_ALLOW_ANY_USER=true`);
+  removed the implicit `SUPABASE_ANON_KEY` fallback on the static-Bearer path.
+- New threat-model reference: [`docs/specs/security-model.md`](docs/specs/security-model.md).
+
+### Added
+- **Cloud & mobile Claude over OAuth (optional).** `cerefox-mcp` is now an OAuth 2.1
+  protected resource, so **claude.ai web and the Claude mobile app** can connect with the
+  full 10-tool hybrid-search surface (previously unsupported / FTS-only). Opt-in: it needs
+  the Supabase OAuth 2.1 Server enabled, an owner-user pin (`CEREFOX_OAUTH_OWNER_ID`), a
+  pre-registered OAuth App (**`client_secret_post`**), and a hosted consent page shipped as
+  a one-command free **Cloudflare Worker** (`cloudflare/cerefox-consent/`). Existing
+  clients (Claude Code, Cursor, Codex, Gemini, Claude Desktop, local MCP) are unchanged and
+  need none of it. In-function auth lives in the new dependency-free `_shared/mcp-auth/`
+  (OAuth JWT via Web Crypto + legacy static-Bearer back-compat). Setup:
+  `docs/guides/setup-supabase.md` Step 7. Design: `docs/specs/oauth-mcp-server-design.md`.
+
+### Fixed
+- **Chunker no longer corrupts documents whose single paragraph/table exceeds
+  `max_chunk_chars`.** `cerefox_reconstruct_doc` reassembles a document by joining chunks
+  with `\n\n`, so the chunker must only split at paragraph boundaries. The oversized-section
+  path violated this by hard-splitting *inside* a paragraph — which both duplicated content
+  (an old 50%-overlap slice) and inserted spurious blank lines mid-word / mid-table-row on
+  reconstruction. An oversized single paragraph (commonly a large markdown table, which has
+  no blank lines) is now kept **whole** as one chunk, so reconstruction is lossless. Fixed
+  identically in the TS and Python chunkers. Affected documents re-chunk cleanly on their
+  next write; no schema change. (See `docs/specs/…` / the chunker regression tests, which
+  now assert `reconstruct(chunks) === original`.)
+
 Open roadmap.
 
 ---

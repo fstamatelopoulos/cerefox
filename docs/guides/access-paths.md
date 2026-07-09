@@ -37,7 +37,7 @@ internally to call Postgres RPCs. Your anon key is never elevated to database-le
 | `cerefox-get-audit-log` | Query audit log entries with filters |
 | `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search |
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions |
-| `cerefox-mcp` | Streamable HTTP MCP adapter — calls Postgres RPCs directly |
+| `cerefox-mcp` | Streamable HTTP MCP adapter — calls Postgres RPCs directly. **Also** an OAuth 2.1 protected resource for cloud/mobile Claude (optional — see "the OAuth variant" below) |
 
 ### How clients connect
 
@@ -68,6 +68,37 @@ same anon key as a Bearer token.
 - **Legacy anon JWT** — found in your Supabase dashboard under **Project Settings → API Keys → Legacy → anon**. (Do not use the new `sb_publishable_…` key — gateway constraint.)
 
 See `docs/guides/connect-agents.md` for step-by-step setup per client.
+
+### The OAuth variant of `cerefox-mcp` — cloud & mobile Claude (optional)
+
+claude.ai web and the Claude mobile app **cannot** send a static anon JWT — a custom
+connector there requires **OAuth**. As an optional feature (iter-28A), `cerefox-mcp` is
+therefore *also* an OAuth 2.1 protected resource, so those clients get the same full
+tool surface. Nothing else in Layer 1 changes, and you can ignore this entirely if you
+don't use cloud/mobile Claude.
+
+How it differs from the static-anon-JWT path:
+
+- **In-function auth.** `cerefox-mcp` is deployed with `--no-verify-jwt`, so the Supabase
+  gateway no longer validates it. The function authenticates each request itself
+  (`_shared/mcp-auth/`), accepting **either** a valid OAuth 2.1 access token (verified
+  against the project **JWKS**, with the token's `sub` pinned to `CEREFOX_OAUTH_OWNER_ID`)
+  **or** the legacy anon JWT (constant-time compare, so existing static-token clients keep
+  working). This is the ONLY function whose auth moves in-function; the eight primitive
+  Edge Functions keep the gateway anon-JWT validation described above.
+- **Supabase is the authorization server.** The OAuth flow uses Supabase's native OAuth 2.1
+  Server. The one piece that must serve HTML — the **consent page** — is a free **Cloudflare
+  Worker** (`cloudflare/cerefox-consent/`), because a Supabase Edge Function can't serve
+  `text/html` on the default `*.supabase.co` domain. (A `cerefox-oauth-consent` EF also
+  ships for users who have a paid Supabase custom domain.)
+- **The owner pin is the authorization boundary.** `CEREFOX_OAUTH_OWNER_ID` (the owner
+  user's UUID) is a server-side value — never entered into any client — and only tokens
+  whose `sub` matches it are accepted.
+
+Config: `CEREFOX_OAUTH_OWNER_ID` (owner pin), a pre-registered OAuth App using
+**`client_secret_post`**, and the Cloudflare Worker (public project URL + anon key baked
+in). Setup: [`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional).
+Design: [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
 
 ---
 
@@ -179,6 +210,7 @@ single container with an internally-held token.
 |---|---|---|---|
 | Claude Code / Cursor | HTTPS → `cerefox-mcp` | Legacy anon JWT | Daily AI assistant access |
 | Claude Desktop | HTTPS → `cerefox-mcp` (via `supergateway`) | Legacy anon JWT | Daily AI assistant access |
+| **Cloud Claude (claude.ai web + mobile)** | HTTPS → `cerefox-mcp` over **OAuth 2.1** | Owner-pinned OAuth access token (JWKS-verified) | Optional; memory in the browser + on the phone |
 | ChatGPT Custom GPT | HTTPS → primitive Edge Functions | Legacy anon JWT | AI assistant via GPT Actions |
 | curl / HTTP scripts | HTTPS → primitive Edge Functions | Legacy anon JWT | Ad-hoc queries, automation |
 | Web UI (`cerefox web`) | Supabase REST API | Secret key (or legacy service_role) | Web UI backend (TS Hono) |
@@ -188,11 +220,24 @@ single container with an internally-held token.
 
 ### Key security principle
 
-The (legacy) anon JWT is safe to share with AI agents and client applications — it can
-only call the operations exposed by the Edge Functions, and the Supabase gateway
-rate-limits and validates it. The secret key / `service_role` JWT and the database
-password must never be embedded in client-facing configuration or committed to the
-repository.
+The (legacy) anon JWT is the **Edge Function credential**. It authenticates to the Edge
+Functions (which run business logic with the service-role key internally); the Supabase
+gateway validates and rate-limits it. **It is not RLS-scoped** — any holder can call the
+full EF tool surface (read *and* write). So treat it as a shared secret for *trusted*
+agents/clients — keep it in local configs, but do **not** publish it on a public web page.
+
+> **Schema 0.7.0 hardening:** the `cerefox_*` RPCs are `SECURITY DEFINER` and previously
+> had broader-than-intended `EXECUTE` grants. They now grant `EXECUTE` only to
+> `service_role` (which every legitimate caller uses) — revoked from `anon`/`authenticated`/
+> `PUBLIC`. A security hardening; run `cerefox server deploy` to apply. See
+> [`docs/specs/security-model.md`](../specs/security-model.md).
+
+The **publishable** key (`sb_publishable_…`) is genuinely public-safe: the EF gateway
+rejects it and (post-0.7.0) it cannot call the RPCs either, so it grants no KB access — it
+only reaches Supabase Auth. That's why the OAuth consent page embeds it, not the anon JWT.
+
+The secret key / `service_role` JWT and the database password must never be embedded in
+client-facing configuration or committed to the repository.
 
 ---
 

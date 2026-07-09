@@ -1767,7 +1767,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.6.0'::TEXT;
+    SELECT '0.7.0'::TEXT;
 $$;
 
 
@@ -1847,3 +1847,41 @@ AS $$
     WHERE a.document_id = ANY(p_doc_ids)
     ORDER BY a.document_id, a.created_at DESC;
 $$;
+
+-- ── Function privilege lockdown (schema 0.7.0) ────────────────────────────────
+-- SECURITY (critical): every cerefox_* RPC is SECURITY DEFINER, so it bypasses the
+-- Row Level Security enabled on the tables. PostgreSQL grants EXECUTE to PUBLIC by
+-- default, and Supabase's PostgREST exposes public-schema functions at
+-- /rest/v1/rpc/<name>. WITHOUT this block, the anon key (and the new sb_publishable_
+-- key, which maps to the same anon role) could call every RPC directly via the Data
+-- API — reading and writing the entire KB, bypassing BOTH the Edge Functions and
+-- RLS. Every legitimate caller uses the service_role key instead (Edge Functions via
+-- SUPABASE_SERVICE_ROLE_KEY; the CLI/web via the secret key; local World B via a
+-- container-minted service_role JWT), so we REVOKE EXECUTE from PUBLIC/anon/
+-- authenticated and GRANT only to service_role.
+--
+-- Applied over ALL cerefox_* functions (so new functions are covered on the next
+-- deploy) and idempotent — re-applied each time rpcs.sql is deployed. Guarded on
+-- role existence so it is safe on non-Supabase Postgres (e.g. World B bootstrap).
+DO $$
+DECLARE
+  fn regprocedure;
+  r  text;
+BEGIN
+  FOR fn IN
+    SELECT p.oid::regprocedure
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname LIKE 'cerefox\_%'
+  LOOP
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC', fn);
+    FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+        EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM %I', fn, r);
+      END IF;
+    END LOOP;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', fn);
+    END IF;
+  END LOOP;
+END $$;
