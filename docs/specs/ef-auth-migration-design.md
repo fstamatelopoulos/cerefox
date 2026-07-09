@@ -79,32 +79,40 @@ Add a small **`_shared/ef-auth/`** module (Web-Platform-only, runs under Deno + 
 ```
 checkAccessToken(authorizationHeader, {
   tokens: string[],          // from CEREFOX_ACCESS_TOKENS
-  legacyBearer?: string|null // legacy anon JWT accepted during the deprecation window
-}): { ok: true, path: "token"|"legacy" } | { ok: false, reason }
+}): { ok: true } | { ok: false, reason }
 ```
 
 - Constant-time compare (reuse `constantTimeEqual` from `_shared/mcp-auth/`).
-- **Fail closed**: if `tokens` is empty and no `legacyBearer`, reject everything (never
-  accept-all). `cerefox server deploy` must warn if it deploys token-gated EFs with no token set.
-- Log the reason on rejection (never the token); `console.log` a warn when the **legacy** path
-  is used (so the maintainer sees remaining legacy usage before dropping it).
-- `cerefox-mcp` composes: OAuth JWT (existing `_shared/mcp-auth`) OR `checkAccessToken`.
+- **Fail closed**: if `tokens` is empty, reject everything (never accept-all). `cerefox server
+  deploy` must warn if it deploys token-gated EFs with no token set.
+- Log the reason on rejection (never the token).
+- `cerefox-mcp` composes: OAuth JWT (existing `_shared/mcp-auth`) OR `checkAccessToken` (the
+  static-token arm — kept mainly for the live remote-MCP e2e harness + as a non-OAuth
+  fallback; positioned as *Advanced* in the guides, not the primary story).
 - The 8 primitive EFs: `checkAccessToken` only. Refactor their shared request handling
   (they each build a Supabase client + parse the request) to call the check first — put the
   gate in one shared place they already import if possible (`supabase/functions/*/shared.ts`
   or a new `_shared/ef-auth` used by each `index.ts`).
 
-## 6. Back-compat / deprecation window (CRITICAL for defensive rollout)
+## 6. Cutover — hard, no back-compat window
 
-During migration the EFs accept **BOTH**: the new Cerefox token(s) **and** the legacy anon
-JWT (via `legacyBearer` = the known anon JWT value, set as a Function secret
-`CEREFOX_LEGACY_ANON_BEARER` during the window — same static-compare mechanism as the removed
-`CEREFOX_MCP_STATIC_BEARER`). Warn on legacy use. After all clients migrate, **unset**
-`CEREFOX_LEGACY_ANON_BEARER` → only tokens accepted → the legacy anon JWT is fully deprecated.
+No runtime dual-accept, no warn-then-drop, no `legacyBearer` machinery. The EFs accept **only**
+the Cerefox token (fail closed). Dropping the legacy anon JWT is a **clean breaking change at
+the `0.12.0-beta` boundary** (breaking changes are allowed pre-1.0), documented in CHANGELOG +
+the migration note. This is safe because Cerefox is single-user: each deployer controls all
+their own clients and cuts over on their own schedule.
 
-**This unlocks completing the 28B anon-key rotation:** once *no* EF accepts the legacy anon
-JWT, the maintainer can **revoke the legacy HS256 secret** in Supabase → the exposed anon key
-is fully neutralized (closes the 28B residual risk).
+**Per-deployer order (so nobody locks *themselves* out mid-upgrade):**
+1. `cerefox token generate` → get the token.
+2. Update your client configs (GPT Actions, remote MCP) to the token.
+3. `cerefox server deploy` → token-only EFs (`--no-verify-jwt` + `checkAccessToken`), with
+   `CEREFOX_ACCESS_TOKENS` set.
+4. **Revoke the legacy anon key** in Supabase.
+
+**This completes the 28B anon-key rotation:** after step 3 *no* EF accepts the legacy anon JWT,
+so step 4 fully neutralizes the exposed anon key (closes the 28B residual risk). Nothing at
+runtime uses the legacy HS256 secret afterward (OAuth = ES256 JWKS; local MCP = no network;
+token EFs = the Cerefox token).
 
 ## 7. CLI automation (minimize friction)
 
@@ -137,8 +145,8 @@ is fully neutralized (closes the 28B residual risk).
 ## 9. Deploy changes
 
 - `packages/memory/src/cli/commands/deploy-server.ts`: extend `NO_VERIFY_JWT_EFS` to the 8
-  primitive EFs; keep the post-deploy reminder (now: "set `CEREFOX_ACCESS_TOKENS`; optional
-  `CEREFOX_LEGACY_ANON_BEARER` during the deprecation window").
+  primitive EFs; post-deploy reminder now: "set `CEREFOX_ACCESS_TOKENS`, update your client
+  configs to the token, then revoke the legacy anon key."
 - Bundle `_shared/ef-auth` into `dist/server-assets/_shared/` (`scripts/bundle_server_assets.ts`
   — add `"ef-auth"` to the subtree list, like `mcp-auth`).
 - No schema change (this is EF/auth only) → **no `schema_version` bump**.
@@ -146,34 +154,32 @@ is fully neutralized (closes the 28B residual risk).
 ## 10. Testing (extensive — this is security)
 
 - **Unit (`bun test`, `_shared/__tests__/`):** `checkAccessToken` — accepts a valid token,
-  rejects garbage, rejects empty header, constant-time, accepts the legacy bearer only when
-  `legacyBearer` set, **fails closed** when no tokens + no legacy, multiple-token set.
+  rejects garbage, rejects empty header, constant-time, **fails closed** when no tokens set,
+  multiple-token set (rotation).
 - **Live EF e2e (opt-in `CEREFOX_LIVE_E2E=1`, narrowest file):** each primitive EF with the
-  token → 200; with the legacy anon JWT during the window → 200 + warn; with garbage → 401;
-  with the token unset server-side → 401 (fail closed). Keep EF-quota discipline (`requestor:
-  "e2e-test"`).
+  token → 200; with garbage → 401; with the token unset server-side → 401 (fail closed); with
+  the (now-revoked) legacy anon JWT → 401. Keep EF-quota discipline (`requestor: "e2e-test"`).
 - **`cerefox-mcp`:** OAuth path still works; token static path works; garbage → 401.
 - **Regression:** existing EF e2e suites migrated to the token; `cerefox doctor` still works
   (its `/version` aggregator now needs the token, not the anon key).
 
-## 11. Defensive rollout order (avoid locking yourself out)
+## 11. Rollout order (per-deployer; avoid locking yourself out)
 
+Because the cutover is hard (§6), the client update must precede the token-only deploy:
 1. Implement + unit-test the shared check.
-2. Deploy the EFs with **BOTH** accepted (set `CEREFOX_ACCESS_TOKENS` AND
-   `CEREFOX_LEGACY_ANON_BEARER`=current anon JWT). Nothing breaks — existing clients keep
-   working via legacy; new token also works. **Verify live before proceeding.**
-3. Migrate clients to the token (GPT Actions re-enter; remote MCP re-configure; `doctor`/CLI
-   to the token).
-4. Watch the "legacy path used" logs go quiet.
-5. **Unset `CEREFOX_LEGACY_ANON_BEARER`** → token-only. Verify.
-6. **Then revoke the legacy HS256 secret** in Supabase → the exposed anon key is dead (closes
+2. `cerefox token generate` → set `CEREFOX_ACCESS_TOKENS`; **update every client config**
+   (GPT Actions, remote MCP, `doctor`/CLI) to the token.
+3. `cerefox server deploy` → token-only EFs (`--no-verify-jwt` + `checkAccessToken`).
+   **Verify live** each path (primitive EFs, `cerefox-mcp` token + OAuth).
+4. **Revoke the legacy HS256 secret** in Supabase → the exposed anon key is dead (closes
    28B ①). Verify OAuth (cloud Claude) + local MCP + token EFs all still work (none use the
    legacy secret).
 
 ## 12. Risks
 
-- **Lockout** if steps are reordered — mitigated by back-compat-first (§11). Never tighten
-  before migrating clients + verifying.
+- **Self-lockout** if the token-only deploy (step 3) runs before clients are updated (step 2) —
+  brief, self-inflicted, per-deployer. The documented order avoids it; verify live before
+  revoking.
 - **Token leakage** in client configs (esp. ChatGPT) — it's a secret, but rotatable (the whole
   point). Document safe handling; never commit; gitleaks pattern.
 - **"Every public endpoint requires auth"** (28B invariant) — this *strengthens* it: after
@@ -187,7 +193,4 @@ is fully neutralized (closes the 28B residual risk).
   logging patterns). `supabase/functions/cerefox-mcp/{index,oauth}.ts` (the pattern to mirror).
 - `docs/specs/security-model.md` (§1 credentials, §4 OAuth invariants — update for 28E).
 - `docs/specs/oauth-mcp-server-design.md` (the sibling iter-28A design).
-- Decision Log Q3 Part 1 (KB, private) — the 2026-07-09 security entry (RPC bypass, anon-key
-  rotation blocked by the ES256/gateway constraint — the direct motivation for 28E).
-- Decision Log Q2 Part 1 (KB) — the original "Option B" sketch (2026-05-18) this executes.
 - GPT Actions OpenAPI block: `docs/guides/connect-agents.md` (keep in sync per CLAUDE.md rule).

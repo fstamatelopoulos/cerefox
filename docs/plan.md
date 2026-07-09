@@ -3343,18 +3343,19 @@ mid-word/mid-row). 4 KB docs were corrupted.
 (the full, self-contained design + defensive rollout order — start there).
 
 **Problem (surfaced by the 2026-07-09 rotation attempt).** Supabase's Edge Function gateway
-is JWT-only — it rejects the new `sb_publishable_`/`sb_secret_` keys (Decision Log Q2 Part 1,
-2026-05-18). So the 8 primitive EFs (ChatGPT GPT Actions + direct HTTP) and `cerefox-mcp`'s
-static-Bearer path require the **legacy anon JWT**. On a project migrated to asymmetric
+is JWT-only — it rejects the new `sb_publishable_`/`sb_secret_` keys (verified 2026-05-18:
+the gateway returns `UNAUTHORIZED_INVALID_JWT_FORMAT` for non-JWT keys). So the 8 primitive
+EFs (ChatGPT GPT Actions + direct HTTP) and `cerefox-mcp`'s static-Bearer path require the
+**legacy anon JWT**. On a project migrated to asymmetric
 (ES256) signing keys — Supabase's default direction — the legacy anon key **can only be
 revoked, not rotated** (revoking kills the whole EF path). So **any Cerefox user whose anon
 key leaks is stuck**: they can't cycle it without disabling GPT Actions / remote MCP. A real
 security gap for every user on the anon-key/EF path (not just the maintainer).
 
-**Fix — the deferred "Option B" from the Decision Log; trigger conditions (security +
-touching the client-config layer) are now met.** Deploy the 8 primitive EFs with
-`--no-verify-jwt` and validate the caller's credential **in-function**, using a **rotatable,
-appropriately-scoped Cerefox-managed access token** — NOT a Supabase key:
+**Fix — full design in [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md).**
+Deploy the 8 primitive EFs with `--no-verify-jwt` and validate the caller's credential
+**in-function**, using a **rotatable, appropriately-scoped Cerefox-managed access token** —
+NOT a Supabase key:
 - **Why not the Supabase keys:** `sb_secret_` is full-DB (service_role) — handing it to a
   ChatGPT GPT Action / remote client config means a client compromise = full DB access via
   the Data API (worse than the anon key). `sb_publishable_` is public by design — accepting
@@ -3364,9 +3365,10 @@ appropriately-scoped Cerefox-managed access token** — NOT a Supabase key:
   Rotatable = regenerate the secret + re-issue to clients.
 - Reuse/extend the in-function auth pattern from `_shared/mcp-auth/` (iter-28A) — a shared
   constant-time token check for the primitive EFs AND `cerefox-mcp`'s (removed) static path.
-- **Deprecate the legacy anon JWT for all EF paths.** Back-compat window: accept the legacy
-  anon JWT during deprecation, warn, then drop. Migration docs for the two affected client
-  classes: **old remote static-Bearer MCP** and **ChatGPT GPT Actions**.
+- **Retire the legacy anon JWT for all EF paths — hard cutover, no back-compat window.**
+  Single-user project, so each deployer updates their own clients then flips to token-only (a
+  clean breaking change at the `0.12.0-beta` boundary). Migration docs for the two affected
+  client classes: **old remote static-Bearer MCP** and **ChatGPT GPT Actions**.
 - Update the GPT Actions OpenAPI block (auth scheme → the token in a header; `info.version`
   bump) + the remote-MCP client + connect-agents docs.
 - **Priority: implement next** (maintainer 2026-07-09) — it's the enabler for fully retiring
