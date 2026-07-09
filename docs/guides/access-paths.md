@@ -100,8 +100,8 @@ How it differs from the static-token path:
   whose `sub` matches it are accepted.
 
 Config: `CEREFOX_OAUTH_OWNER_ID` (owner pin), a pre-registered OAuth App using
-**`client_secret_post`**, and the Cloudflare Worker (public project URL + anon key baked
-in). Setup: [`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional).
+**`client_secret_post`**, and the Cloudflare Worker (public project URL + publishable key
+baked in). Setup: [`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional).
 Design: [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
 
 ---

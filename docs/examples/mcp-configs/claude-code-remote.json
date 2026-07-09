@@ -6,7 +6,7 @@
         "mcp-remote",
         "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
         "--header",
-        "Authorization: Bearer <your-anon-key>"
+        "Authorization: Bearer <your-cerefox-token>"
       ]
     }
   }

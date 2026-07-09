@@ -34,8 +34,9 @@ notes.
 Cerefox is a single-user, self-hosted memory layer. The threat model assumes:
 
 - You control the Supabase instance and its credentials.
-- The legacy anon JWT used for MCP / Edge Function access is treated as a
-  capability token: anyone with it can read and write your knowledge base.
+- The Cerefox access token (`cfx_pat_…`) used for Edge Function / GPT Actions /
+  remote-MCP access is treated as a capability token: anyone with it can read and
+  write your knowledge base. Keep it secret; rotate it with `cerefox token rotate`.
 - The Postgres database may contain personal information (notes, chats,
   research) — confidentiality of the data at rest is your responsibility
   (Supabase encryption, network controls, etc.).

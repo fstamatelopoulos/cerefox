@@ -91,7 +91,7 @@ export interface ServerCompat {
   };
   /** True if any surface is below-min — callers that must block should refuse. */
   blocking: boolean;
-  /** True if EF probing couldn't run (no anon key / aggregator unreachable). */
+  /** True if EF probing couldn't run (no access token / aggregator unreachable). */
   efProbeSkipped: boolean;
   /** Human note when the EF probe was skipped. */
   efSkipReason?: string;
@@ -100,7 +100,7 @@ export interface ServerCompat {
 export interface CheckOptions {
   /** Full aggregator URL: `<supabaseUrl>/functions/v1/cerefox-mcp/version?peers=true`. */
   aggregatorUrl: string;
-  /** Gateway-valid bearer (legacy anon JWT `eyJ…`). EFs reject the new sb_* keys. */
+  /** The Cerefox access token (`cfx_pat_…`), validated in-function by the EFs (iter-28E). */
   bearer?: string;
   /** Client's bundled schema version (from db-status), for the old-but-ok tier. */
   bundledSchema?: string | null;
@@ -125,7 +125,7 @@ export function aggregatorUrlFor(supabaseUrl: string): string {
  *
  * EF probing is skipped (not failed) when no bearer is available or the
  * aggregator is unreachable — those are common transitional states (e.g.
- * v0.8 EFs not yet deployed → aggregator 404, or no anon key configured).
+ * EFs not yet deployed → aggregator 404, or no access token configured).
  * Skipped EF checks never set `blocking`.
  */
 export async function checkServerCompatibility(

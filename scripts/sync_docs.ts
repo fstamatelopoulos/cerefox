@@ -14,7 +14,7 @@
  *
  * Requires:
  *   CEREFOX_SUPABASE_URL       — base URL of the Supabase project
- *   CEREFOX_SUPABASE_ANON_KEY  — legacy anon JWT used to invoke Edge Functions
+ *   CEREFOX_ACCESS_TOKEN       — Cerefox access token used to invoke Edge Functions (iter-28E)
  *
  * Why not import the chunking + embedding code locally? Because the Python
  * ingestion pipeline isn't ported to TS until v0.7. For v0.3.0 we delegate
@@ -120,7 +120,7 @@ interface IngestResult {
 
 async function ingestOne(
   supabaseUrl: string,
-  anonKey: string,
+  accessToken: string,
   title: string,
   content: string,
   sourcePath: string,
@@ -132,7 +132,7 @@ async function ingestOne(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${anonKey}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         title,
@@ -165,15 +165,12 @@ async function main(): Promise<void> {
     console.error("❌  CEREFOX_SUPABASE_URL is not set in your .env.");
     exit(2);
   }
-  const anonKey =
-    env.CEREFOX_SUPABASE_ANON_KEY ??
-    env.SUPABASE_ANON_KEY ??
-    "";
-  if (!anonKey) {
+  const accessToken = settings.accessToken || env.CEREFOX_ACCESS_TOKEN || "";
+  if (!accessToken) {
     console.error(
-      "❌  CEREFOX_SUPABASE_ANON_KEY is not set.\n" +
-        "    The Edge Function gateway requires the legacy anon JWT (eyJ…).\n" +
-        "    See docs/guides/setup-supabase.md → Supabase API keys (2026).",
+      "❌  CEREFOX_ACCESS_TOKEN is not set.\n" +
+        "    Edge Function calls require the Cerefox access token — run `cerefox token generate`.\n" +
+        "    See docs/guides/migration-0.12.md.",
     );
     exit(2);
   }
@@ -206,7 +203,7 @@ async function main(): Promise<void> {
 
     const result = await ingestOne(
       settings.supabaseUrl,
-      anonKey,
+      accessToken,
       title,
       content,
       f.sourcePath,

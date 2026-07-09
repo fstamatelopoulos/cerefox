@@ -12,7 +12,7 @@ placeholders with your Supabase project values.
 
 | Template | Client | Transport | Notes |
 |----------|--------|-----------|-------|
-| `claude-code-remote.json` | Claude Code | stdio via `mcp-remote` | Works. Claude Code also supports **native HTTP** — `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <anon-key>"` (what `configure-agent --tool claude-code` uses). |
+| `claude-code-remote.json` | Claude Code | stdio via `mcp-remote` | Works. Claude Code also supports **native HTTP** — `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <your-cerefox-token>"`. Note: for local agents the **local MCP** (`local-stdio.json` / `configure-agent --tool claude-code`) is preferred; this remote form is an advanced/fallback path. |
 | `claude-desktop-remote.json` | Claude Desktop | stdio via `mcp-remote` | Requires Node.js. `supergateway` is the tested bridge (see connect-agents.md). |
 | `cursor-remote.json` | Cursor | native HTTP | Cursor supports remote MCP natively. |
 | `local-stdio.json` | Any stdio client | stdio via the `@cerefox/memory` npm package | Runs the MCP server locally (`npx --package=@cerefox/memory cerefox mcp`). Zero Edge Function cost, lower latency. Requires Node ≥ 20 or Bun — **no repo clone, no Python**. |
@@ -26,7 +26,7 @@ placeholders with your Supabase project values.
 
 2. Replace the placeholders:
    - `<your-project-ref>` -- your Supabase project reference (from Project Settings > General)
-   - `<your-anon-key>` -- your Supabase **legacy anon JWT** (Project Settings > API Keys > Legacy > anon). Do **not** use the new `sb_publishable_…` key — Edge Function gateway rejects it. See [`docs/guides/setup-supabase.md` → Supabase API keys (2026)](../../guides/setup-supabase.md#supabase-api-keys-2026).
+   - `<your-cerefox-token>` -- your **Cerefox access token** (`cfx_pat_…`). Generate it with `cerefox token generate` (it prints the token once and sets it on Supabase). The legacy Supabase anon JWT is no longer accepted by the Edge Functions (iter-28E). See [`docs/guides/migration-0.12.md`](../../guides/migration-0.12.md).
    (The `local-stdio.json` template needs no placeholders — `npx` fetches
    `@cerefox/memory` on demand. It reads your `~/.cerefox/.env` for Supabase
    credentials, so run `cerefox init` first.)
