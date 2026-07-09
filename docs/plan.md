@@ -3191,7 +3191,8 @@ the 4 chunker-corrupted docs, which rides on 28D).
 | **28B — Security** (OAuth surface + RPC lockdown) | merged to `main` (PR #91) | ✅ deployed | ③ **full-codebase audit** (8 primitive EFs, GPT Actions, web app, backup/restore) — **(a), the main open item** |
 | **28E — EF auth → Cerefox token** | `feat/ef-auth-token` (PR #92) | ✅ done + **validated in prod** (all 9 EFs redeployed, doctor green, live 45/45, OAuth confirmed) | in review — closes 28B ① (anon-key) + ② (secret cleanup) |
 | **28F — Documentation sweep** | `feat/ef-auth-token` (PR #92) | ✅ done (exhaustive) | in review |
-| **28D — Chunk reconstruction fix** | `fix/chunk-reconstruction` (new) | interim keep-whole shipped; Phase 0/1 not started | **Phase 0 embed cap + Phase 1 blind-stitch + doctor check — (c), the other open item** |
+| **28D — Chunk reconstruction fix** | `fix/chunk-reconstruction` | 🔨 in progress | **Phase 0 embed cap + Phase 1 blind-stitch + doctor check — (c), the other open item** |
+| **28G — Python retirement** | (new branch) | decided 2026-07-10, not started | deprecation notices (README / CLAUDE.md / migration guide / CHANGELOG) + Discord announce (maintainer) + husk/remove the Python code |
 | **28C — Stability contract** | (at cut) | pending | strict SemVer becomes binding; `security-model.md` + threat model finalized |
 
 **Held priority TODOs (do NOT lose these):**
@@ -3204,13 +3205,18 @@ the 4 chunker-corrupted docs, which rides on 28D).
    `cerefox token generate`; `CEREFOX_MCP_STATIC_BEARER` gone; `CEREFOX_SUPABASE_ANON_KEY`
    removed from the maintainer's `.env`; `cerefox-oauth-consent` EF **deleted** from the
    project (`supabase functions delete`). Keep `CEREFOX_OAUTH_OWNER_ID`, `CEREFOX_SUPABASE_PUBLISHABLE_KEY`.
-3. **(a) Full-codebase security audit** — the main open item for 1.0 (8 primitive EFs, GPT
+3. **(a) Full-codebase security audit** — a main open item for 1.0 (8 primitive EFs, GPT
    Actions, web app, backup/restore); 28B extends with any new mitigations.
-4. **Data recovery** of the 4 chunker-corrupted docs (Job Hunting, Oshmabel, Saltwater,
-   Kallisti) — restore each from its last clean version after the chunker fix (28D) is installed.
-5. Retire the Python MCP fallback? — candidate for v1.0 (drops the chunker parity requirement).
-6. **Fix `cerefox server deploy` from a repo checkout** — supabase `--use-api` git-root
+4. **Retire Python completely at v1.0 — DECIDED (2026-07-10), workstream 28G.** The last live
+   Python path (`uv run cerefox mcp`) is retired; users who still rely on it stay on their
+   current version until they migrate to the npm package. Deliverables: prominent deprecation
+   notices (README, CLAUDE.md, migration guide, CHANGELOG) + Discord announcement (maintainer;
+   agent drafts) + husk/remove the Python code. Unblocks 28D (no chunker parity).
+5. **Fix `cerefox server deploy` from a repo checkout** — supabase `--use-api` git-root
    confusion (see the deploy-gotcha note below); end users unaffected. Low priority.
+
+> **Note:** recovery of any chunker-corrupted documents is a private maintainer data task,
+> intentionally **not tracked in this OSS repo** (it involves personal KB content).
 
 **Release sequencing (decided 2026-07-09) — stay in `0.x` until all breaking changes land, then freeze 1.0:**
 1. **`0.12.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
@@ -3364,6 +3370,12 @@ FULL-codebase audit** of the 8 primitive EFs, GPT Actions, web app, and backup/r
 
 ### 28D: Chunk-reconstruction fix (data-corruption bug)
 
+> 🔨 **IN PROGRESS (2026-07-10) on `fix/chunk-reconstruction`.** Interim keep-whole fix already
+> on `main`; now building the proper fix: Phase 0 (embedding-input cap) + Phase 1 (exact-partition
+> chunker + `content_format` column + branch all **5** reconstruction sites + schema 0.7.0→0.8.0
+> + doctor migration check). **Python chunker parity dropped** (Python retired at v1.0, 28G).
+> One open item **(c)** for 1.0.
+
 **Design**: [`docs/specs/chunk-reconstruction-design.md`](specs/chunk-reconstruction-design.md).
 Branch `fix/chunk-reconstruction`. A serious data-corruption bug: `cerefox_reconstruct_doc`
 re-synthesizes a `\n\n` separator it never stored, so any chunk split not on a paragraph
@@ -3381,6 +3393,11 @@ mid-word/mid-row). 4 KB docs were corrupted.
 - **Data recovery**: restore the 4 corrupted docs from their last clean version.
 
 ### 28E: Migrate Edge Function auth off the unrotatable legacy anon JWT
+
+> ✅ **DONE + validated in prod, merged to `main` via PR #92 (2026-07-10).** All 9 EFs
+> `--no-verify-jwt` + token gate; `cerefox token` command; doctor/tests on the token; consent
+> EF removed. `cerefox doctor` green, live e2e 45/45, OAuth confirmed. Details below are the
+> as-built record.
 
 **Design-of-record**: [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md)
 (the full, self-contained design + defensive rollout order — start there).
@@ -3418,7 +3435,14 @@ NOT a Supabase key:
   the legacy JWT + closing the maintainer's own residual anon-key risk. Overlaps 28B.
   Interim already done: `CEREFOX_MCP_STATIC_BEARER` removed on the maintainer project.
 
-### 28F: Documentation sanity sweep (v0.12.0-beta release deliverable)
+### 28F: Documentation sanity sweep
+
+> ✅ **DONE (2026-07-10), merged to `main` via PR #92.** Exhaustive whole-repo sweep — every
+> guide, spec, README, CLAUDE.md, `.env.example`, `SECURITY.md`, `docs/examples/mcp-configs/`,
+> and code comments aligned to the token narrative; consent-EF refs removed; EF count reconciled
+> (9); `cerefox token generate` added to the install flows; **functional** stale refs fixed
+> (`scripts/sync_docs.ts`, `check_ef_parity.ts`, web-integration `_helpers.ts` would have 401'd).
+> The checklist below is the as-built record.
 
 The access-path narrative shifted materially across 28A (OAuth), 28B (security), and 28E
 (token + legacy-JWT retirement). Before the beta cut, do **one full documentation pass** to
@@ -3480,6 +3504,24 @@ it): `npx supabase functions delete cerefox-oauth-consent`.
 any "anon JWT"/"legacy anon"/`Bearer eyJ` shown as the *current* way to connect an EF/GPT-Action
 client (historical/iteration-log mentions are fine); any doc still pointing local agents at the
 remote MCP as the default. Do the grep, fix or annotate each hit.
+
+### 28G: Python retirement (v1.0.0)
+
+> Decided 2026-07-10. Not started; own branch (after/alongside 28D).
+
+Cerefox's Python side is already husked to a single live path — the frozen MCP fallback
+`uv run cerefox mcp` (CLI + web app retired to husks in v0.9.0). **v1.0.0 retires Python
+entirely.** Users who still rely on the Python MCP stay on their current version until they
+migrate to the `@cerefox/memory` npm package; they do not need to upgrade to 1.0.0.
+
+Deliverables:
+- **Prominent deprecation notices**: README, `CLAUDE.md`, the migration guide, and CHANGELOG —
+  "Python is retired at v1.0; if you use `uv run cerefox mcp`, migrate to the npm package or
+  stay on ≤0.11.x." Draft the **Discord announcement** (maintainer posts it).
+- **Husk / remove the Python code**: `src/cerefox/` (mcp_server.py + the frozen chunking /
+  ingestion / embeddings / db modules), `pyproject.toml`, the `uv` tooling. Decide husk-with-
+  pointer vs. hard-delete (husk is friendlier for a major-version cut).
+- Removes the chunker parity requirement (unblocks 28D §4.2) and the `python-parity` fixtures.
 
 ### 28C: The contract
 
