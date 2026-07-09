@@ -214,21 +214,41 @@ Supabase Dashboard → **Authentication → OAuth Server** (under Configuration)
 
 ### 7b. Deploy the consent page (free Cloudflare Worker) and point Site URL at it
 
-The consent page is a single static file. Deploy it to a free Cloudflare Worker (needs a
-free Cloudflare account — no domain, no card):
+The consent page is a single static file that talks only to Supabase Auth. It embeds a
+**publishable** key (`sb_publishable_…`) — **never the legacy anon JWT**. (The anon JWT is a
+full-KB credential; the publishable key is public-safe — it's rejected by the Edge Function
+gateway and, since schema 0.7.0, cannot call the Data API RPCs either. See the
+[security model](../specs/security-model.md).)
+
+Add your publishable key to `~/.cerefox/.env` as the single source
+(`deploy.sh` reads it). Grab it from the dashboard (**Project Settings → API Keys →
+Publishable**) or the CLI:
+
+```bash
+npx supabase projects api-keys --project-ref <ref>   # find the "publishable" entry
+echo 'CEREFOX_SUPABASE_PUBLISHABLE_KEY=sb_publishable_…' >> ~/.cerefox/.env
+```
+
+Then deploy to a free Cloudflare Worker (needs a free Cloudflare account — no domain, no
+card):
 
 ```bash
 cd cloudflare/cerefox-consent
-./deploy.sh        # reads your Supabase URL + anon key from ~/.cerefox/.env; runs wrangler
+./deploy.sh        # reads CEREFOX_SUPABASE_URL + CEREFOX_SUPABASE_PUBLISHABLE_KEY from ~/.cerefox/.env
 ```
 
 See [`cloudflare/cerefox-consent/README.md`](../../cloudflare/cerefox-consent/README.md)
-for the manual `wrangler` commands and how it works. It prints your Worker URL, e.g.
+for the manual `wrangler` commands. It prints your Worker URL, e.g.
 `https://cerefox-consent.<your-subdomain>.workers.dev`.
 
 Then Dashboard → **Authentication → URL Configuration → Site URL** = that Worker origin.
 With Authorization Path `/consent`, the consent page lands at `…workers.dev/consent`. (If
 your Site URL was the default `http://localhost:3000`, repointing is safe.)
+
+> **Custom-domain alternative:** a `cerefox-oauth-consent` Edge Function also ships (renders
+> the same page from the `CEREFOX_SUPABASE_PUBLISHABLE_KEY` Function secret). It only works
+> behind a paid Supabase custom domain (EFs serve `text/plain` on `*.supabase.co`), so the
+> free Cloudflare Worker is the default.
 
 ### 7c. Create the owner user + pin it
 
@@ -242,10 +262,11 @@ your Site URL was the default `http://localhost:3000`, repointing is safe.)
    ```
 
    This is the **authorization boundary**, and a server-side value only (never entered
-   into claude.ai). If unset, the function accepts *any* validly-signed `authenticated`
-   token from your project's auth server — and **with Supabase's default email sign-ups
-   enabled, anyone who self-registers could get an accepted token**. Pin the owner (or
-   disable public sign-ups under Authentication → Sign In / Providers).
+   into claude.ai). The OAuth path **fails closed when this is unset** — the function
+   rejects every OAuth token — because otherwise, with Supabase's default email sign-ups
+   on, anyone who self-registers could get an accepted token. For a deliberate multi-user
+   setup (with sign-ups disabled), opt out explicitly:
+   `supabase secrets set CEREFOX_OAUTH_ALLOW_ANY_USER=true`.
 
 ### 7d. Register the Claude client — **use `client_secret_post`**
 

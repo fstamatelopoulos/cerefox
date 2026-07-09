@@ -220,11 +220,26 @@ single container with an internally-held token.
 
 ### Key security principle
 
-The (legacy) anon JWT is safe to share with AI agents and client applications — it can
-only call the operations exposed by the Edge Functions, and the Supabase gateway
-rate-limits and validates it. The secret key / `service_role` JWT and the database
-password must never be embedded in client-facing configuration or committed to the
-repository.
+The (legacy) anon JWT is the **Edge Function credential**. It authenticates to the Edge
+Functions (which run business logic with the service-role key internally); the Supabase
+gateway validates and rate-limits it. **It is not RLS-scoped** — any holder can call the
+full EF tool surface (read *and* write). So treat it as a shared secret for *trusted*
+agents/clients — keep it in local configs, but do **not** publish it on a public web page.
+
+> **Schema 0.7.0 hardening:** the `cerefox_*` RPCs are `SECURITY DEFINER` (they bypass RLS),
+> so before 0.7.0 the anon/publishable key could call them **directly** via the Data API
+> (`/rest/v1/rpc/…`), sidestepping the Edge Functions entirely. Those functions now
+> `REVOKE EXECUTE` from `anon`/`authenticated`/`PUBLIC` and grant only `service_role`, so
+> the Data API RPC path is closed for anon/publishable keys — every legitimate caller uses
+> the service-role key. Run `cerefox server deploy` to apply it. See
+> [`docs/specs/security-model.md`](../specs/security-model.md).
+
+The **publishable** key (`sb_publishable_…`) is genuinely public-safe: the EF gateway
+rejects it and (post-0.7.0) it cannot call the RPCs either, so it grants no KB access — it
+only reaches Supabase Auth. That's why the OAuth consent page embeds it, not the anon JWT.
+
+The secret key / `service_role` JWT and the database password must never be embedded in
+client-facing configuration or committed to the repository.
 
 ---
 

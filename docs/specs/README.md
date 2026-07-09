@@ -19,6 +19,9 @@ Current contents:
   on Bun/Node, not the FastAPI named in the doc.
 - `concurrency-control-design.md` — Iteration 32 design: optimistic concurrency on
   content updates (`expected_content_hash` / `last_write_wins`). Shipped in v0.11.0.
+- `security-model.md` — **living doc** (not a point-in-time snapshot): Cerefox's access
+  layers, credential scopes, the schema-0.7.0 RPC lockdown, and the OAuth surface
+  invariants. Iteration 28B deliverable.
 - `oauth-mcp-server-design.md` — Iteration 28A design (2026-07-08): OAuth 2.1 on
   `cerefox-mcp` via Supabase's native OAuth 2.1 Server, so claude.ai / Claude
   mobile / other cloud agents get the full MCP tool surface. Supersedes the

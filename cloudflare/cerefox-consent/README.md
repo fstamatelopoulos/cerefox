@@ -13,14 +13,17 @@ infrastructure** — you only need it if you want claude.ai web / Claude mobile;
 local MCP, Claude Desktop, Cursor, Claude Code, etc. don't use it.
 
 It holds **no secrets**: the only values baked in are your Supabase project URL and the
-**public** anon key. Sign-in happens against your own Supabase Auth, in the browser.
+**publishable** key (`sb_publishable_…`) — a public-safe key that grants no KB access (the
+Edge Function gateway rejects it, and since schema 0.7.0 it cannot call the Data API RPCs
+either). It must **not** be the legacy anon JWT, which is a full-KB credential. Sign-in
+happens against your own Supabase Auth, in the browser.
 
 ## Deploy
 
 Prerequisite: a free [Cloudflare account](https://dash.cloudflare.com/sign-up) (no
 domain, no card). The Workers free tier includes a `*.workers.dev` subdomain.
 
-**One command** (reads your Supabase URL + anon key from `~/.cerefox/.env`):
+**One command** (reads `CEREFOX_SUPABASE_URL` + `CEREFOX_SUPABASE_PUBLISHABLE_KEY` from `~/.cerefox/.env`):
 
 ```bash
 cd cloudflare/cerefox-consent
@@ -36,7 +39,7 @@ URL, e.g. `https://cerefox-consent.<your-subdomain>.workers.dev`.
 npx wrangler login
 npx wrangler deploy \
   --var SUPABASE_URL:https://<your-project-ref>.supabase.co \
-  --var SUPABASE_ANON_KEY:<your-legacy-anon-jwt>
+  --var SUPABASE_PUBLISHABLE_KEY:sb_publishable_...
 ```
 
 Both values are public. They're injected at deploy time so the committed
