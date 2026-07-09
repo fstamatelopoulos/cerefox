@@ -3,7 +3,7 @@
     "cerefox": {
       "url": "https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp",
       "headers": {
-        "Authorization": "Bearer <your-anon-key>"
+        "Authorization": "Bearer <your-cerefox-token>"
       }
     }
   }

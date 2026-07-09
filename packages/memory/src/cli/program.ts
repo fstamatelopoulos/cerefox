@@ -55,6 +55,7 @@ import { registerRestore } from "./commands/restore.ts";
 import { registerSearch } from "./commands/search.ts";
 import { registerSelfUpdate } from "./commands/self-update.ts";
 import { registerStatus } from "./commands/status.ts";
+import { registerToken } from "./commands/token.ts";
 import { registerSyncSelfDocs } from "./commands/sync-self-docs.ts";
 import { registerWeb } from "./commands/web.ts";
 
@@ -170,6 +171,7 @@ export function buildProgram(): Command {
   registerMcp(program);
   registerWeb(program);
   registerCompletion(program);
+  registerToken(program); // `token generate|rotate|list` — self-contained group (iter-28E)
 
   // ── Resource groups (v0.9.0 rename-only redesign) ────────────────────────
   const document = program

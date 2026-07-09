@@ -102,8 +102,8 @@ export async function spawnWebServer(): Promise<SpawnedServer> {
  * Function. Used by tests that need a real document_id to exercise
  * mutations against (since v0.6's web `/api/v1/ingest` returns 503).
  *
- * Reads CEREFOX_SUPABASE_URL + (CEREFOX_SUPABASE_ANON_KEY ||
- * CEREFOX_SUPABASE_KEY when it starts with `eyJ`) from the loaded env.
+ * Reads CEREFOX_SUPABASE_URL + CEREFOX_ACCESS_TOKEN from the env (the EFs
+ * validate the Cerefox access token in-function, iter-28E).
  * Returns the new document's id.
  */
 export async function ingestViaEdgeFunction(opts: {
@@ -112,13 +112,9 @@ export async function ingestViaEdgeFunction(opts: {
   author?: string;
 }): Promise<string> {
   const url = process.env.CEREFOX_SUPABASE_URL;
-  const key =
-    process.env.CEREFOX_SUPABASE_ANON_KEY ||
-    (process.env.CEREFOX_SUPABASE_KEY?.startsWith("eyJ")
-      ? process.env.CEREFOX_SUPABASE_KEY
-      : undefined);
+  const key = process.env.CEREFOX_ACCESS_TOKEN;
   if (!url || !key) {
-    throw new Error("CEREFOX_SUPABASE_URL + a JWT key required for ingestViaEdgeFunction");
+    throw new Error("CEREFOX_SUPABASE_URL + CEREFOX_ACCESS_TOKEN required for ingestViaEdgeFunction");
   }
   const resp = await fetch(`${url}/functions/v1/cerefox-ingest`, {
     method: "POST",

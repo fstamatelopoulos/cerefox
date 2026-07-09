@@ -98,25 +98,24 @@ export function unauthorizedChallenge(result: AuthResult): Response {
  *                                  CEREFOX_OAUTH_ALLOW_ANY_USER="true" is set.
  *   CEREFOX_OAUTH_ALLOW_ANY_USER — explicit opt-out of the owner pin (multi-user /
  *                                  sign-ups-disabled setups). Default off.
- *   CEREFOX_MCP_STATIC_BEARER    — optional legacy anon JWT for remote static-token
- *                                  clients' back-compat. Unset = static path disabled
- *                                  (fail-closed). We do NOT fall back to the injected
- *                                  SUPABASE_ANON_KEY: it is unreliable (Decision Log
- *                                  2026-03-14) and treating it as an accepted bearer
- *                                  would broaden the credential surface implicitly.
+ *
+ * The non-OAuth static path is the **Cerefox access token** (`CEREFOX_ACCESS_TOKENS`,
+ * iter-28E) — the same credential the primitive EFs accept — checked in the handler
+ * via `_shared/ef-auth` (see index.ts), NOT here. The legacy `CEREFOX_MCP_STATIC_BEARER`
+ * (anon JWT) is retired: `staticBearer` is left unset so this authenticator handles
+ * OAuth only.
  */
 export function buildAuthenticator(): McpAuthenticator {
   const issuer = issuerUrl();
   const ownerUserId = Deno.env.get("CEREFOX_OAUTH_OWNER_ID") ?? null;
   const allowAnyUser = Deno.env.get("CEREFOX_OAUTH_ALLOW_ANY_USER") === "true";
-  const staticBearer = Deno.env.get("CEREFOX_MCP_STATIC_BEARER") ?? null;
   return createMcpAuthenticator({
     issuer,
     jwksUri: `${issuer}/.well-known/jwks.json`,
     expectedAudience: "authenticated",
     ownerUserId,
     allowAnyUser,
-    staticBearer,
+    staticBearer: null,
     allowedAlgs: ["ES256", "RS256"],
   });
 }

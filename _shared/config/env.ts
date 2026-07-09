@@ -66,12 +66,20 @@ export interface Settings {
   supabaseUrl: string;
   supabaseKey: string;
   /**
-   * Legacy anon JWT (`eyJ…`). Gateway-valid for Edge Function calls — the
-   * new `sb_publishable_…` keys are rejected by the EF gateway. Optional;
-   * only needed for client-side EF probes (e.g. the version aggregator
-   * used by the compatibility check). May be empty.
+   * Legacy anon JWT (`eyJ…`). **Deprecated as of iter-28E** — the Edge Functions
+   * no longer accept it (they validate the Cerefox access token in-function; see
+   * `accessToken`). Retained only so an old `.env` still parses; no code path
+   * uses it for auth anymore. May be empty.
    */
   supabaseAnonKey: string;
+  /**
+   * Cerefox access token (`cfx_pat_…`, iter-28E) — the credential this machine
+   * presents to the token-gated Edge Functions (primitive EFs + cerefox-mcp's
+   * static path). Used by the version-aggregator compatibility probe (`doctor`)
+   * and the live EF/remote-MCP tests. Set by `cerefox token generate`. May be
+   * empty (then the EF version check is skipped).
+   */
+  accessToken: string;
   databaseUrl: string;
   openaiApiKey: string;
   fireworksApiKey: string;
@@ -84,6 +92,7 @@ export function loadSettings(opts: ResolverOptions = {}): Settings {
     supabaseUrl: env.CEREFOX_SUPABASE_URL ?? "",
     supabaseKey: env.CEREFOX_SUPABASE_KEY ?? "",
     supabaseAnonKey: env.CEREFOX_SUPABASE_ANON_KEY ?? "",
+    accessToken: env.CEREFOX_ACCESS_TOKEN ?? "",
     databaseUrl: env.CEREFOX_DATABASE_URL ?? "",
     openaiApiKey: env.CEREFOX_OPENAI_API_KEY ?? env.OPENAI_API_KEY ?? "",
     fireworksApiKey: env.CEREFOX_FIREWORKS_API_KEY ?? "",

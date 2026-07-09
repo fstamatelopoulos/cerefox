@@ -50,26 +50,45 @@ OB1's `MCP_ACCESS_KEY`.
 ## 3. Architecture
 
 - **All data EFs run `--no-verify-jwt`** (the gateway stops gating; in-function auth is the
-  only gate — extends the `NO_VERIFY_JWT_EFS` set from `{cerefox-mcp, cerefox-oauth-consent}`
-  to include the 8 primitive EFs). `cerefox-oauth-consent` stays public (no auth — it's the
-  consent page). `cerefox-mcp` already `--no-verify-jwt`.
+  only gate — the `NO_VERIFY_JWT_EFS` set becomes `{cerefox-mcp}` + the 8 primitive EFs = all
+  9 Cerefox EFs). `cerefox-mcp` was already `--no-verify-jwt`. (The `cerefox-oauth-consent` EF
+  was removed in this iteration — the consent page is the Cloudflare Worker; see §9.)
 - **In-function token check** on every data EF: read the incoming credential from
   `Authorization: Bearer <token>`, constant-time-compare against a set of accepted tokens.
 - `cerefox-mcp` accepts **OAuth JWT (owner-pinned) OR a Cerefox token** (its static path,
   re-added — replacing the removed anon-JWT one). The 8 primitive EFs accept **a Cerefox
   token** (no OAuth — GPT Actions/HTTP clients don't do OAuth).
 - Internally, EFs keep using `SUPABASE_SERVICE_ROLE_KEY` to call the RPCs (unchanged).
+- **`/version` is GATED, not public** (decision 2026-07-10). The primitive EFs run the token
+  check **before** the `isVersionRequest` branch; `cerefox-mcp` keeps its auth-first dispatch
+  (version already behind auth). Rationale: the token is in `.env` anyway (so `doctor`/tests
+  have it), so we keep the tight invariant "**nothing public except the RFC 9728 OAuth
+  discovery route**" rather than expose version/schema strings. `doctor`'s aggregator already
+  forwards the caller's `Authorization` to each peer (`cerefox-mcp/index.ts` ~L201/218), so it
+  flows through once `doctor` sends the token. See [[feedback_gate_over_expose]].
 
 ## 4. The token
 
 - **Format:** a random 256-bit secret, base64url, prefixed for identifiability, e.g.
   `cfx_pat_<43chars>`. (Prefix helps gitleaks/humans recognize it.)
-- **Storage (server):** a Supabase **Function secret** holding the accepted set:
-  `CEREFOX_ACCESS_TOKENS` = comma-separated list (support **multiple** for zero-downtime
-  rotation — accept old + new during a cutover). Set via `supabase secrets set`.
-- **Distribution (clients):** the token goes into client configs (GPT Actions header, remote
-  MCP client header). Automated by the CLI (§7).
-- **Rotation:** add a new token to the set → migrate clients → remove the old. No downtime.
+- **Two env names — a deliberate singular/plural split:**
+  - **`CEREFOX_ACCESS_TOKENS`** (plural) — the **server-side accepted set**, a Supabase
+    **Function secret**, comma-separated. The validator (`checkAccessToken`) accepts a request
+    whose Bearer equals *any* token in this set → **zero-downtime rotation** (accept old + new
+    during a cutover). Set via `supabase secrets set`.
+  - **`CEREFOX_ACCESS_TOKEN`** (singular) — the **one token this machine presents**, written to
+    local **`.env`**. Read by `doctor`, the live e2e data tests, and the optional non-OAuth
+    remote-MCP client. Always one of the values in the server's plural set.
+- **`.env` write is safe + done by the CLI.** `.env` already holds the far more powerful
+  `service_role`/secret key, so adding a scoped access token doesn't change the posture. The
+  CLI **upserts** `CEREFOX_ACCESS_TOKEN` (never clobbers other vars), **backs up** the file,
+  **warns loudly if `.env` is not gitignored**, and honours `--no-env` to skip. (The *local
+  MCP* path does NOT use the token — it reaches Supabase via the Data API with its own secret
+  key — so `configure-agent` is untouched; §7.)
+- **Distribution (clients):** GPT Actions header + remote-MCP client header = manual paste of
+  the token (§7/§8). The CLI prints it and points at the doc.
+- **Rotation:** add a new token to the plural set → migrate clients + rewrite the singular
+  `.env` value → remove the old from the set. No downtime.
 
 ## 5. In-function auth (shared helper)
 
@@ -120,13 +139,15 @@ token EFs = the Cerefox token).
 the **server** side and **guides** the client side — it deliberately does *not* claim to
 auto-install into ChatGPT (not technically possible; see below). `generate` flow:
 1. **Generate** a random `cfx_pat_…` token.
-2. **Install it on Supabase** — set/update the `CEREFOX_ACCESS_TOKENS` Function secret via
-   `supabase secrets set` (needs the Supabase CLI + linked project). This is the only place
-   the token is *installed* automatically.
-3. **Print the token once** + where to paste it: the Custom GPT's **Configure → Actions →
+2. **Install it on Supabase** — set/update the `CEREFOX_ACCESS_TOKENS` Function secret (plural
+   set) via `supabase secrets set` (needs the Supabase CLI + linked project).
+3. **Write it to local `.env`** — upsert `CEREFOX_ACCESS_TOKEN` (singular) so `doctor`, the
+   live e2e data tests, and the optional remote-MCP client have it. Upsert (preserve other
+   vars), back up the file, **warn if `.env` isn't gitignored**, `--no-env` to skip.
+4. **Print the token once** + where to paste it: the Custom GPT's **Configure → Actions →
    Authentication → API Key**, Auth Type **Bearer**. (Reprints are impossible — it's a secret;
    `list` shows only masked fingerprints, not the value. Lose it → `rotate`.)
-4. **Point to the local doc** for the Action *body* — print the path/anchor to the GPT Actions
+5. **Point to the local doc** for the Action *body* — print the path/anchor to the GPT Actions
    OpenAPI block in `docs/guides/connect-agents.md` to copy-paste **if the schema changed**
    this release (the auth-scheme change bumps `info.version`; changing the schema in ChatGPT
    also clears the stored auth key, so the user re-pastes the schema *and* re-enters the token
@@ -140,8 +161,15 @@ web GPT-builder UI; OpenAI exposes no API/CLI to set a Custom GPT's Action authe
 schema programmatically. So the token lands in ChatGPT by a human paste — the CLI's job is to
 make that paste trivial (right value, right field, right doc), not to eliminate it.
 
-- **`cerefox server deploy`** generates a token on first deploy if none exists; warns loudly
-  if the token-gated EFs would deploy with no token (fail-closed footgun).
+- **`cerefox server deploy`** — the cutover footgun lives here: deploying token-gated EFs when
+  `CEREFOX_ACCESS_TOKENS` is unset locks every caller out. So deploy **refuses (or warns very
+  loudly)** if it's about to deploy the token-gated EFs with no token secret set, pointing at
+  `cerefox token generate`. Run `token generate` first (§6 order).
+- **`doctor` + the live test suites switch their EF credential from the legacy anon key to
+  `CEREFOX_ACCESS_TOKEN`.** `doctor` reads it from `.env` and sends it as the Bearer to the
+  version aggregator (which forwards it to peers). When it's absent (fresh install, pre-
+  `token generate`), the peer-version section degrades gracefully with a helpful "run
+  `cerefox token generate`" hint, not a bare 401.
 - **`cerefox configure-agent` is NOT in scope** — it writes a *local stdio* MCP entry
   (`npx … cerefox mcp`, or `cerefox-local mcp` with `--local`), which authenticates to Supabase
   via the local server's own `.env` credential and the **Data API**, bypassing the Edge

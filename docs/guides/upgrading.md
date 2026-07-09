@@ -84,7 +84,8 @@ if you need it.
 
 **ChatGPT Custom GPT (GPT Actions):** after an upgrade, check the OpenAPI schema
 version in [`connect-agents.md`](connect-agents.md); if it changed, paste the new
-schema into the Custom GPT editor and **re-enter your Supabase legacy anon JWT**
-as the Bearer token. (The editor clears the key on every schema save, and the
-new `sb_publishable_…` key doesn't work for GPT Actions — see
+schema into the Custom GPT editor and **re-enter your Cerefox access token**
+(`cfx_pat_…`, from `cerefox token generate`) as the Bearer token. (The editor
+clears the key on every schema save. The legacy Supabase anon JWT is retired for
+Edge Function auth as of iter-28E — see
 [`setup-supabase.md`](setup-supabase.md#supabase-api-keys-2026).)

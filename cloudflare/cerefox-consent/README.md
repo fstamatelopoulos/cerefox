@@ -62,9 +62,10 @@ Both values are public. They're injected at deploy time so the committed
   `deploy.sh` / `--var`).
 - `deploy.sh` — reads `~/.cerefox/.env` and deploys.
 
-The markup + client-side OAuth logic live once in `_shared/consent-page/` and are shared
-with the (retained, custom-domain-only) `cerefox-oauth-consent` Edge Function, so the two
-can't drift.
+The markup + client-side OAuth logic live once in `_shared/consent-page/`, imported by this
+Worker. (The `cerefox-oauth-consent` Edge Function that previously shared this module was
+**removed in iter-28E**; this Worker is now the sole consent page. The `_shared/consent-page/`
+module is retained.)
 
 ## Updating
 

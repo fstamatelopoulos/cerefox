@@ -996,12 +996,14 @@ remains only as a legacy fallback. Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
 as the local server, so both expose the identical 10 tools. Path 3's primitive
-Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers use
-the legacy anon JWT; Edge Functions use the service-role key internally.
+Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers
+authenticate with a **Cerefox access token** (`cerefox token generate`),
+validated in-function; Edge Functions use the service-role key internally. The
+legacy anon JWT was retired as an Edge Function credential in iter-28E.
 
 **Key constraint for Path 1**: `cerefox mcp` is a stdio process — it only runs on the local machine. Desktop clients launch it as a subprocess. Cloud clients cannot reach it.
 
-**Path 2 vs Path 1 trade-offs**: Path 2 (remote) requires no local install and works from any machine with just a URL + anon key. Path 1 (local) is slightly faster (no HTTPS round-trip to Supabase) and avoids Edge Function billing; it runs the TS `@cerefox/memory` server via npx (Node/Bun). The frozen Python `uv run cerefox mcp` remains only as a legacy fallback.
+**Path 2 vs Path 1 trade-offs**: Path 2 (remote) requires no local install and works from any machine with just a URL + a Cerefox access token. Path 1 (local) is slightly faster (no HTTPS round-trip to Supabase) and avoids Edge Function billing; it runs the TS `@cerefox/memory` server via npx (Node/Bun). The frozen Python `uv run cerefox mcp` remains only as a legacy fallback.
 
 ### 10.2 MCP Tools
 
@@ -1045,8 +1047,8 @@ base (in md format). If search returns partial results for a large document
 
 ### 10.3 Supabase Edge Functions (HTTP, for GPT Actions / scripts)
 
-The dedicated Edge Functions are deployed to Supabase and callable via HTTP POST with an anon
-key. They are the backend for ChatGPT GPT Actions, curl / scripted access, and any HTTP client:
+The dedicated Edge Functions are deployed to Supabase and callable via HTTP POST with a Cerefox
+access token. They are the backend for ChatGPT GPT Actions, curl / scripted access, and any HTTP client:
 
 **Primitive Edge Functions (HTTP, for GPT Actions and direct callers):**
 
@@ -1070,11 +1072,12 @@ DEFINER, service-role access). The Edge Function:
 2. Calls the Supabase client with the **service-role key** to execute the RPC
 3. Formats and returns the response as JSON
 
-Callers authenticate with the **legacy anon JWT** (validated as a JWT by the Supabase API
-gateway). As of 2026, the new `sb_publishable_…` key is not accepted here — the Edge
-Function gateway has not been migrated. See `docs/guides/setup-supabase.md` →
-"Supabase API keys (2026)" for context. The service-role-equivalent key (new `sb_secret_…`
-or legacy `service_role` JWT) is never exposed to callers -- it is read from
+Callers authenticate with a **Cerefox access token** (`cerefox token generate`), validated
+**in-function** by a constant-time compare against the server-side accepted set
+(`CEREFOX_ACCESS_TOKENS`). All data Edge Functions are deployed `--no-verify-jwt` and do their
+own token check (the legacy anon JWT was retired as an Edge Function credential in iter-28E;
+the Supabase gateway no longer gates these functions). The service-role-equivalent key (new
+`sb_secret_…` or legacy `service_role` JWT) is never exposed to callers -- it is read from
 `SUPABASE_SERVICE_ROLE_KEY` at runtime inside the Edge Function.
 
 **Single implementation principle**: each operation is implemented once in a Postgres RPC.
@@ -1141,7 +1144,7 @@ All search RPCs remain available for direct SQL execution via the Supabase MCP
   - `cerefox_get_document`       → `cerefox_get_document` RPC
   - `cerefox_list_versions`      → `cerefox_list_document_versions` RPC
 - Stateless — no session tracking; each request is independent
-- Auth: Supabase API gateway validates the JWT (anon key); the Edge Function uses the service-role key internally to call the RPCs
+- Auth: in-function (deployed `--no-verify-jwt`) — accepts an OAuth 2.1 access token (owner-pinned) or a Cerefox access token (constant-time compare); the Edge Function uses the service-role key internally to call the RPCs
 
 ## 11. Deployment Topologies
 

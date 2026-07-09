@@ -10,13 +10,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 ### Security
+- **Edge Function auth moved off the unrotatable legacy anon JWT to a rotatable
+  Cerefox-managed access token (breaking; iter-28E).** On Supabase projects using
+  asymmetric (ES256) signing keys, the legacy anon key can only be revoked, not rotated,
+  so a leak could not be cycled without disabling the Edge Function path. All 9 Edge
+  Functions now deploy `--no-verify-jwt` and validate a **Cerefox access token**
+  (`cfx_pat_…`) in-function (constant-time, fail-closed) against the `CEREFOX_ACCESS_TOKENS`
+  Function secret; the token is rotatable and scoped to Edge Function access only. Generate
+  it with the new `cerefox token generate`. The gateway no longer gates any Cerefox
+  function; the only unauthenticated surface is `cerefox-mcp`'s RFC 9728 OAuth discovery
+  route + 401 challenge. **Action required on upgrade** (see the migration guide): run
+  `cerefox token generate`, update your GPT Actions / remote-MCP clients to the token, then
+  revoke the legacy anon key. Design: [`docs/specs/ef-auth-migration-design.md`](docs/specs/ef-auth-migration-design.md).
 - **Tightened RPC execute privileges (schema 0.7.0 — redeploy recommended).** The
   `cerefox_*` `SECURITY DEFINER` functions now grant `EXECUTE` only to `service_role`
   (revoked from `PUBLIC`/`anon`/`authenticated`), matching the intended
   Edge-Function-only access model. A security hardening — **existing cloud deployments
   should run `cerefox server deploy` to apply it.**
 - **OAuth consent page uses the public-safe publishable key** (`sb_publishable_…`) instead
-  of a broader key (Worker + custom-domain EF + shared template).
+  of a broader key (the Cloudflare Worker + shared template).
 - **Hardened the `cerefox-mcp` OAuth surface**: issuer/JWKS derived from the injected
   `SUPABASE_URL` rather than request headers; the OAuth path fails closed when
   `CEREFOX_OAUTH_OWNER_ID` is unset (opt out with `CEREFOX_OAUTH_ALLOW_ANY_USER=true`);
@@ -24,6 +36,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - New threat-model reference: [`docs/specs/security-model.md`](docs/specs/security-model.md).
 
 ### Added
+- **`cerefox token generate | rotate | list`** — manage the Cerefox access token (iter-28E).
+  `generate` mints a `cfx_pat_…` token, sets it as the `CEREFOX_ACCESS_TOKENS` Supabase
+  Function secret, and writes `CEREFOX_ACCESS_TOKEN` into your `.env` (so `doctor`, the live
+  tests, and the optional remote-MCP client have it), then prints it once with paste
+  guidance for a Custom GPT / remote MCP client. `rotate` widens the accepted set to the new
+  and previous token for a zero-downtime cutover (`--finalize` drops the old); `list` shows
+  the local token masked.
 - **Cloud & mobile Claude over OAuth (optional).** `cerefox-mcp` is now an OAuth 2.1
   protected resource, so **claude.ai web and the Claude mobile app** can connect with the
   full 10-tool hybrid-search surface (previously unsupported / FTS-only). Opt-in: it needs
@@ -31,9 +50,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   pre-registered OAuth App (**`client_secret_post`**), and a hosted consent page shipped as
   a one-command free **Cloudflare Worker** (`cloudflare/cerefox-consent/`). Existing
   clients (Claude Code, Cursor, Codex, Gemini, Claude Desktop, local MCP) are unchanged and
-  need none of it. In-function auth lives in the new dependency-free `_shared/mcp-auth/`
-  (OAuth JWT via Web Crypto + legacy static-Bearer back-compat). Setup:
-  `docs/guides/setup-supabase.md` Step 7. Design: `docs/specs/oauth-mcp-server-design.md`.
+  need none of it. In-function OAuth-JWT validation lives in the new dependency-free
+  `_shared/mcp-auth/` (Web Crypto); the non-OAuth static path takes the Cerefox access
+  token (iter-28E). Setup: `docs/guides/setup-supabase.md` Step 7. Design:
+  `docs/specs/oauth-mcp-server-design.md`.
+
+### Removed
+- **The `cerefox-oauth-consent` Edge Function** (iter-28E). The OAuth consent page is now
+  served solely by the free Cloudflare Worker (`cloudflare/cerefox-consent/`); the EF was a
+  custom-domain alternative no longer worth its surface. If you deployed it, remove it with
+  `npx supabase functions delete cerefox-oauth-consent`. (The shared `_shared/consent-page`
+  template is retained — the Worker uses it.)
 
 ### Fixed
 - **Chunker no longer corrupts documents whose single paragraph/table exceeds

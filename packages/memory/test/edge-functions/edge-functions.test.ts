@@ -3,12 +3,13 @@
  * (iter-26 Part 26G — TS port of tests/e2e/test_edge_functions_e2e.py).
  *
  * Tests each EF independently (bypassing cerefox-mcp). Probe-and-skip when
- * Supabase / the anon JWT isn't available. All created documents are
+ * Supabase / the access token isn't available. All created documents are
  * prefixed `[E2E-EF]` and hard-deleted in afterAll via the service client.
  *
- * Requires CEREFOX_SUPABASE_URL + a gateway-valid anon JWT
- * (CEREFOX_SUPABASE_ANON_KEY, or CEREFOX_SUPABASE_KEY if it's an `eyJ…` JWT)
- * + OPENAI_API_KEY set as a Supabase secret (for search/ingest).
+ * Requires CEREFOX_SUPABASE_URL + the Cerefox access token
+ * (CEREFOX_ACCESS_TOKEN, set by `cerefox token generate`) + OPENAI_API_KEY
+ * set as a Supabase secret (for search/ingest). The EFs validate the token
+ * in-function (iter-28E); the legacy anon JWT is no longer accepted.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -46,11 +47,9 @@ function uniqueContent(): string {
   return `${SAMPLE_CONTENT}\n<!-- e2e-marker ${crypto.randomUUID()} -->\n`;
 }
 
-// ── Resolve anon JWT + base URL (probe-and-skip) ─────────────────────────────
+// ── Resolve access token + base URL (probe-and-skip) ─────────────────────────────
 const settings = loadSettings();
-const anonKey =
-  settings.supabaseAnonKey ||
-  (settings.supabaseKey.startsWith("eyJ") ? settings.supabaseKey : "");
+const accessToken = settings.accessToken;
 const efBase = settings.supabaseUrl
   ? `${settings.supabaseUrl.replace(/\/$/, "")}/functions/v1`
   : "";
@@ -64,8 +63,8 @@ async function invoke(fn: string, body: Record<string, unknown> = {}): Promise<I
   const resp = await fetch(`${efBase}/${fn}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${anonKey}`,
-      apikey: anonKey,
+      Authorization: `Bearer ${accessToken}`,
+      apikey: accessToken,
       "Content-Type": "application/json",
     },
     // Tag every call with a `requestor` so usage-log rows from the test suite
@@ -101,9 +100,9 @@ async function invokeOk(fn: string, body: Record<string, unknown> = {}): Promise
 const E2E_ENABLED = process.env.CEREFOX_LIVE_E2E === "1";
 
 // Probe reachability once (only when enabled). The deployed EFs answer POST; a
-// network/credential failure or missing anon key skips the whole suite.
+// network/credential failure or missing access token skips the whole suite.
 let LIVE_OK = false;
-if (E2E_ENABLED && anonKey && efBase) {
+if (E2E_ENABLED && accessToken && efBase) {
   try {
     const probe = await invoke("cerefox-metadata", {});
     LIVE_OK = probe.status >= 200 && probe.status < 500;
@@ -123,7 +122,7 @@ describe("Edge Functions (live HTTP)", () => {
     return;
   }
   if (!LIVE_OK) {
-    test.skip("Supabase / anon JWT not available — skipping EF e2e", () => {});
+    test.skip("Supabase / access token not available — skipping EF e2e", () => {});
     return;
   }
 
@@ -203,6 +202,8 @@ describe("Edge Functions (live HTTP)", () => {
         title,
         content: "# A\n\nv2 changed.",
         update_if_exists: true,
+        // sole-writer test: bypass the v0.11 concurrency token (no concurrent writer)
+        last_write_wins: true,
         author: "e2e-ef-test",
         author_type: "agent",
       });
@@ -375,6 +376,7 @@ describe("Edge Functions (live HTTP)", () => {
         title,
         content: "# ID Update\n\nOriginal.\n\n## Added\n\nVia id path.",
         document_id: r1.document_id,
+        last_write_wins: true, // sole-writer test (see above)
         author: "e2e-ef-test",
         author_type: "agent",
       });
@@ -409,6 +411,7 @@ describe("Edge Functions (live HTTP)", () => {
         content: uniqueContent(),
         document_id: r1.document_id,
         update_if_exists: false,
+        last_write_wins: true, // sole-writer test (see above)
         author: "e2e-ef-test",
         author_type: "agent",
       });

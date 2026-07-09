@@ -9,8 +9,10 @@
  * `docs/specs/oauth-mcp-server-design.md` §5–6.
  *
  * Two accepted credentials (design §5):
- *   Path 1 — legacy static Bearer (the anon JWT existing clients already send),
- *            constant-time compared against an explicitly-set value.
+ *   Path 1 — an optional static Bearer, constant-time compared against an
+ *            explicitly-set value. Left unset by cerefox-mcp since iter-28E (its
+ *            static path is the Cerefox access token, checked in the EF via
+ *            _shared/ef-auth); kept here as a generic, fail-closed capability.
  *   Path 2 — an OAuth 2.1 access token: a project-signed JWT validated against the
  *            project JWKS (asymmetric alg allowlist, iss/aud/exp/nbf, owner `sub`).
  *
@@ -85,9 +87,10 @@ export interface McpAuthConfig {
    */
   allowAnyUser?: boolean;
   /**
-   * Expected value for the legacy static-Bearer path (the anon JWT). When
-   * null/undefined the static path is disabled and rejects everything
-   * (fail-closed — never accept-all).
+   * Expected value for the optional static-Bearer path. When null/undefined the
+   * static path is disabled and rejects everything (fail-closed — never
+   * accept-all). cerefox-mcp leaves this null since iter-28E (its static path is
+   * the Cerefox access token, validated in the EF via `_shared/ef-auth`).
    */
   staticBearer?: string | null;
   /** Accepted JWS algorithms. Default `["ES256", "RS256"]`. Never HS256/none. */

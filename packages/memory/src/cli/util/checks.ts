@@ -458,9 +458,10 @@ export async function checkPostgres(): Promise<CheckResult> {
  * cerefox-mcp `/version?peers=true` aggregator and classifies the deployed
  * EF + schema versions against the client's compatibility matrix.
  *
- * Needs a gateway-valid anon JWT (`CEREFOX_SUPABASE_ANON_KEY`). Without it,
- * or before v0.8 EFs are deployed (aggregator 404), the check reports
- * `skipped` rather than failing — those are expected transitional states.
+ * Needs the Cerefox access token (`CEREFOX_ACCESS_TOKEN`, iter-28E) — the
+ * aggregator + peer `/version` endpoints are token-gated. Without it (pre
+ * `cerefox token generate`), or before the EFs are deployed (aggregator 404),
+ * the check reports `skipped` rather than failing — expected transitional states.
  */
 export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
   const settings = loadSettings();
@@ -471,12 +472,12 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
       detail: "Supabase URL not set; EF version check skipped.",
     };
   }
-  if (!settings.supabaseAnonKey) {
+  if (!settings.accessToken) {
     return {
       name: "edge functions",
       status: "skipped",
-      detail: "No CEREFOX_SUPABASE_ANON_KEY set; EF version check skipped.",
-      hint: "Set the legacy anon JWT (eyJ…) to enable client↔server version checks.",
+      detail: "No CEREFOX_ACCESS_TOKEN set; EF version check skipped.",
+      hint: "Run `cerefox token generate` to enable client↔server version checks.",
     };
   }
 
@@ -484,7 +485,7 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
   try {
     compat = await checkServerCompatibility({
       aggregatorUrl: aggregatorUrlFor(settings.supabaseUrl),
-      bearer: settings.supabaseAnonKey,
+      bearer: settings.accessToken,
       // Baseline against the EF version this package *bundles* (EF_VERSION),
       // not the npm package version (PKG_VERSION). A client-only release bumps
       // PKG_VERSION without changing the EFs, so using PKG_VERSION here made

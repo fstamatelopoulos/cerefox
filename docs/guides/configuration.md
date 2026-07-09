@@ -39,11 +39,14 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 |----------|---------|----------|-------------|
 | `CEREFOX_SUPABASE_URL` | `""` | For app | Supabase project URL. Found in: Project Settings → API → Project URL |
 | `CEREFOX_SUPABASE_KEY` | `""` | For app | New **secret key** (`sb_secret_…`) from Project Settings → API Keys → Secret key. Legacy `service_role` JWT also works. **Keep secret.** See [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026). |
-| `CEREFOX_SUPABASE_ANON_KEY` | `""` | For Edge Functions / e2e | **Legacy anon JWT** (`eyJ…`), under "Legacy" in Project Settings → API Keys. Used as Bearer token for Edge Function / MCP / GPT Action calls. The new `sb_publishable_…` key fails at the Edge Function gateway and cannot replace this. See [`setup-supabase.md`](setup-supabase.md#supabase-api-keys-2026). |
+| `CEREFOX_ACCESS_TOKEN` | `""` | For Edge Functions / e2e | **Cerefox access token** (`cfx_pat_…`), the single token this machine presents. Written to local `.env` by `cerefox token generate`. Used as the `Authorization: Bearer …` credential for remote MCP / GPT Actions / direct Edge Function calls, and read by `cerefox doctor` + the live e2e tests. Rotatable via `cerefox token rotate`. |
+| `CEREFOX_ACCESS_TOKENS` | `""` | Server-side (Function secret) | The **server-side accepted set** — a comma-separated list of Cerefox tokens, set as a Supabase **Function secret** (not local `.env`). A request is accepted if its Bearer matches any token in the set, enabling zero-downtime rotation. Managed by `cerefox token generate` / `rotate`. |
+| `CEREFOX_SUPABASE_ANON_KEY` | `""` | *(deprecated / unused)* | Formerly the legacy anon JWT Bearer for Edge Function calls. **Retired in iter-28E** — Edge Functions now authenticate the Cerefox access token in-function. Retained only so an old `.env` still parses; no longer read. |
 | `CEREFOX_DATABASE_URL` | `""` | For scripts | Direct Postgres URL for deployment scripts. **Use the Session Pooler** (port `5432`) — Transaction Pooler (`6543`) does not support DDL. Username must include the project-ref suffix (`postgres.<project-ref>`). Append `?sslmode=require`. See [`setup-supabase.md` → Connection pooling (2026)](setup-supabase.md#connection-pooling-2026). |
 
 **When each is needed:**
 - `CEREFOX_SUPABASE_URL` + `CEREFOX_SUPABASE_KEY` — used by the CLI, web UI, and local MCP server (ingestion, search) via the Supabase Data API
+- `CEREFOX_ACCESS_TOKEN` — used to call the Edge Functions (remote MCP, GPT Actions, direct HTTP) and by `cerefox doctor` / the live e2e tests; `CEREFOX_ACCESS_TOKENS` is its server-side counterpart (the accepted set). Generate both with `cerefox token generate`.
 - `CEREFOX_DATABASE_URL` — used only for schema deploys (`cerefox server deploy`, or the contributor scripts `bun scripts/db_*.ts`) via a direct Postgres connection
 
 ---

@@ -539,6 +539,34 @@ Detects fresh vs. existing databases: a fresh DB gets schema + RPCs + migration 
 
 ---
 
+### `cerefox token generate` / `cerefox token rotate` / `cerefox token list`
+
+**Purpose**: manage the **Cerefox access token** (`cfx_pat_…`) — the Bearer credential that
+callers present to the Edge Functions (remote MCP, GPT Actions, direct HTTP). It replaces the
+retired legacy anon JWT (iter-28E). The token is validated in-function; the accepted set lives
+in the `CEREFOX_ACCESS_TOKENS` Supabase Function secret, and the value this machine presents is
+`CEREFOX_ACCESS_TOKEN` in local `.env`.
+
+**Synopsis**:
+```
+cerefox token generate           # mint a token, set it on Supabase, write it to local .env
+cerefox token rotate             # add a new token (accepted set becomes [new, old]) — zero downtime
+cerefox token rotate --finalize  # drop the old token once every client is on the new one
+cerefox token list               # show masked fingerprints of the accepted set (never the value)
+```
+
+- `generate` prints the token **once** (it's a secret — reprints are impossible; lose it → `rotate`),
+  sets the `CEREFOX_ACCESS_TOKENS` Function secret, and upserts `CEREFOX_ACCESS_TOKEN` into your
+  local `.env` (backs the file up; warns if `.env` isn't gitignored; `--no-env` skips the write).
+- `rotate` widens the accepted set to `[new, old]` so clients cut over with no downtime;
+  `rotate --finalize` removes the old token afterward.
+- Paste the token into each client per [`connect-agents.md`](connect-agents.md): the Custom GPT's
+  Actions → Authentication (Bearer), or the remote-MCP client header.
+- Run `token generate` **before** a token-gated `cerefox server deploy` — deploying token-gated
+  Edge Functions with no token set locks every caller out.
+
+---
+
 ### `cerefox config list` / `cerefox config get` / `cerefox config set`
 
 **Purpose**: read/write runtime config in `cerefox_config` (e.g. `usage_tracking_enabled`, `require_requestor_identity`).
@@ -607,6 +635,7 @@ These flat commands handle install, configuration, and health. Run any with `--h
 | `cerefox doctor` | Diagnose the install (credentials, DB reachability, schema version). |
 | `cerefox status` | Show connection + schema status. |
 | `cerefox configure-agent --tool <client>` | Write MCP client config (`claude-code`, `claude-desktop`, `cursor`, `codex`, `gemini`). |
+| `cerefox token generate` / `rotate` / `list` | Manage the Cerefox access token (`cfx_pat_…`) — the Edge Function Bearer credential (remote MCP, GPT Actions, curl). See the [`cerefox token`](#cerefox-token-generate--cerefox-token-rotate--cerefox-token-list) section above. |
 | `cerefox self-update` | Update the installed `@cerefox/memory` package. |
 | `cerefox completion` | Emit a shell completion script. |
 | `cerefox backup create` / `cerefox backup restore` | File-system backup / restore of the knowledge base (see [`ops-scripts.md`](ops-scripts.md)). |

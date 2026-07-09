@@ -12,7 +12,7 @@
  * Usage:
  *   bun scripts/check_ef_parity.ts
  *
- * Requires CEREFOX_SUPABASE_URL and CEREFOX_SUPABASE_ANON_KEY in the
+ * Requires CEREFOX_SUPABASE_URL and CEREFOX_ACCESS_TOKEN in the
  * resolved .env.
  */
 
@@ -24,9 +24,9 @@ if (!settings.supabaseUrl) {
   console.error("❌  CEREFOX_SUPABASE_URL not set");
   process.exit(2);
 }
-const anonKey = process.env.CEREFOX_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
-if (!anonKey) {
-  console.error("❌  CEREFOX_SUPABASE_ANON_KEY not set");
+const accessToken = settings.accessToken || process.env.CEREFOX_ACCESS_TOKEN || "";
+if (!accessToken) {
+  console.error("❌  CEREFOX_ACCESS_TOKEN not set — run `cerefox token generate`");
   process.exit(2);
 }
 
@@ -37,7 +37,7 @@ async function callMcp(method: string, params: unknown, id: number): Promise<unk
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${anonKey}`,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
   });

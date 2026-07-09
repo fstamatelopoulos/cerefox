@@ -234,7 +234,7 @@ bun scripts/sync_docs.ts [OPTIONS]
 | `--project NAME`, `-p NAME` | Project to assign documents to (default: `cerefox`) |
 | `--dry-run`, `-n` | List files that would be synced without ingesting anything |
 
-**Requires**: `CEREFOX_SUPABASE_URL` and `CEREFOX_SUPABASE_ANON_KEY` (the legacy anon JWT — `eyJ…` — used to invoke Edge Functions). Embedding happens server-side inside the `cerefox-ingest` Edge Function, so you don't need an OpenAI / Fireworks key in your local env for the TS script.
+**Requires**: `CEREFOX_SUPABASE_URL` and `CEREFOX_ACCESS_TOKEN` (the Cerefox access token — `cfx_pat_…`, from `cerefox token generate` — the Bearer used to invoke Edge Functions). Embedding happens server-side inside the `cerefox-ingest` Edge Function, so you don't need an OpenAI / Fireworks key in your local env for the TS script.
 
 The target project must already exist (create it with `cerefox project create cerefox` if needed).
 

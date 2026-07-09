@@ -171,7 +171,7 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
 /**
  * Refuse to bind when the deployed server is below the client's minimum
  * (iter-26 Part 26C). Only blocks on a *confirmed* below-min server — a
- * missing anon key or unreachable aggregator boots normally (tolerant-boot
+ * missing access token or unreachable aggregator boots normally (tolerant-boot
  * principle; the per-route 503s handle a missing backend). Throws a
  * CompatibilityError the `cerefox web` command renders + exits on.
  */
@@ -179,12 +179,12 @@ export class CompatibilityError extends Error {}
 
 async function assertServerCompatible(): Promise<void> {
   const settings = loadSettings();
-  if (!settings.supabaseUrl || !settings.supabaseAnonKey) return; // tolerant boot
+  if (!settings.supabaseUrl || !settings.accessToken) return; // tolerant boot
   let compat;
   try {
     compat = await checkServerCompatibility({
       aggregatorUrl: aggregatorUrlFor(settings.supabaseUrl),
-      bearer: settings.supabaseAnonKey,
+      bearer: settings.accessToken,
       // EF version this package bundles, not the npm package version — see the
       // note in checks.ts. (Web boot only refuses on `below-min`, which uses
       // `min`, so this is for correctness/consistency rather than behavior.)

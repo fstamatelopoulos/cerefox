@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
+import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 
 /**
  * cerefox-list-versions — Supabase Edge Function
@@ -33,6 +34,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
   }
+
+  const authFail = efAuthGate(
+    req.headers.get("Authorization"),
+    Deno.env.get("CEREFOX_ACCESS_TOKENS"),
+    { ...CORS_HEADERS, "Content-Type": "application/json" },
+  );
+  if (authFail) return authFail;
 
   if (isVersionRequest(req)) {
     return versionResponse("cerefox-list-versions", { ...CORS_HEADERS, "Content-Type": "application/json" });
