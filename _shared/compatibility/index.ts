@@ -147,7 +147,7 @@ export async function checkServerCompatibility(
   if (!opts.bearer) {
     result.efProbeSkipped = true;
     result.efSkipReason =
-      "No anon JWT (CEREFOX_SUPABASE_ANON_KEY) configured; Edge Function version check skipped.";
+      "No CEREFOX_ACCESS_TOKEN configured; Edge Function version check skipped.";
     return result;
   }
 
