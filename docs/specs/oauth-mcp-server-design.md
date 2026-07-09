@@ -156,6 +156,10 @@ compliant clients never fall back to probing the domain root — where GoTrue's 
 > (`cerefox-mcp` stays on `supabase.co`; the §5 custom-domain gotcha applies only there).
 > The `cerefox-oauth-consent` EF (built) is kept as the **template source** for the static
 > page; the deploy host is chosen from the options in the "Consent host" decision below.
+>
+> **[iter-28E update]** The `cerefox-oauth-consent` EF was **removed** in iter-28E. The
+> consent page is now served **only** by the Cloudflare Worker (`cloudflare/cerefox-consent/`);
+> the shared markup module `_shared/consent-page/` is retained (the Worker imports it).
 
 **Consent host decision (2026-07-08): Cloudflare Worker (free).** The maintainer picked
 zero-cost hosting over a Supabase custom domain. Markup lives once in
@@ -163,6 +167,8 @@ zero-cost hosting over a Supabase custom domain. Markup lives once in
 (`cloudflare/cerefox-consent/`) serves it as real `text/html` from a free
 `*.workers.dev` subdomain (no owned domain needed). The `cerefox-oauth-consent` EF renders
 the same shared markup and is retained only for users who have a Supabase custom domain.
+**[iter-28E update]** That EF was removed in iter-28E; the Cloudflare Worker is now the sole
+consent page (the `_shared/consent-page/` markup module stays, imported by the Worker).
 Options weighed: Cloudflare Worker (free, chosen) · GitHub Pages (free, static) · Supabase
 custom domain (~$10/mo Pro add-on, keeps it in Supabase).
 
@@ -275,6 +281,10 @@ passes ONE of:
 **Path 1 — legacy static Bearer (back-compat).**
 Constant-time equality against the expected anon JWT.
 `staticBearer = CEREFOX_MCP_STATIC_BEARER ?? SUPABASE_ANON_KEY ?? null`.
+**[iter-28E update]** This anon-JWT static path was replaced in iter-28E: the static arm now
+constant-time-compares against the rotatable **Cerefox access token** (`CEREFOX_ACCESS_TOKENS`);
+`CEREFOX_MCP_STATIC_BEARER` and the anon-JWT fallback are gone. See
+`docs/specs/ef-auth-migration-design.md`.
 **Decision (2026-07-08, maintainer):** default to the platform-injected
 `SUPABASE_ANON_KEY` — which is exactly what existing clients send — and treat the
 explicit `CEREFOX_MCP_STATIC_BEARER` secret as an **escape hatch**, set only if the
@@ -343,6 +353,10 @@ explicit audit items for the v1.0 security audit (`docs/specs/security-model.md`
    memory, and the flag must be passed on **every** deploy of those functions (the CLI
    default re-enables verification otherwise — a silent regression that would break
    OAuth clients; conversely, forgetting it never *opens* anything, it only breaks).
+   **[iter-28E update]** Superseded: since iter-28E `--no-verify-jwt` applies to **all
+   data EFs** (`cerefox-mcp` + the 8 primitive EFs), which now gate in-function on the
+   Cerefox access token; the `cerefox-oauth-consent` EF was removed. See
+   `docs/specs/security-model.md` §4 and `docs/specs/ef-auth-migration-design.md`.
 7. **Consent page holds no secrets**; approve/deny happens under the owner's GoTrue
    session; the page validates the `authorization_id` against the API rather than
    trusting query-string content for display.

@@ -2,6 +2,9 @@
 
 > **Status**: Living document. First written 2026-07-09 as the Iteration 28B security-audit
 > deliverable, covering the OAuth MCP surface (iter-28A) and the credential/RPC trust model.
+> Updated for **iter-28E**: the legacy anon JWT is retired as an Edge Function credential;
+> all data EFs gate in-function on a rotatable Cerefox access token; the `cerefox-oauth-consent`
+> EF was removed (the consent page is the Cloudflare Worker).
 > **Scope note:** this pass audited the **OAuth surface + the credential trust model it
 > touches**. A full-codebase audit of *all* publicly-reachable components (the 8 primitive
 > Edge Functions, the GPT Actions surface, the web app, backup/restore) is a **tracked
@@ -18,11 +21,19 @@ short:
 
 | Credential | Role | Reaches | Sensitivity |
 |---|---|---|---|
-| Legacy **anon JWT** (`eyJ…`) | Edge Function gateway credential | The EF tool surface (full read/write; EFs use service-role internally). **Not** the Data API RPCs (§3). | **Shared secret** — trusted agents/local configs only; never publish |
-| **Publishable** key (`sb_publishable_…`) | Public client key | Supabase **Auth only**. EF gateway rejects it; RPCs revoked (§3). No KB access. | Public-safe (embed in the consent page) |
+| **Cerefox access token** (`cfx_pat_…`) | Edge Function caller credential, validated **in-function** (constant-time compare against `CEREFOX_ACCESS_TOKENS`) | The EF tool surface (full read/write; EFs use service-role internally). **Not** the Data API RPCs (§3). | **Secret**, rotatable (`cerefox token generate`/`rotate`) — trusted agents/local configs only; never publish |
+| **Publishable** key (`sb_publishable_…`) | Public client key | Supabase **Auth only**. The EF in-function token check rejects it; RPCs revoked (§3). No KB access. | Public-safe (embed in the consent page) |
 | **Secret** key (`sb_secret_…`) / legacy `service_role` JWT | Full DB access, bypasses RLS | Data API + RPCs (as `service_role`). Used by the CLI, web app, Edge Functions (internally), local World B. | **Never** client-facing / committed |
 | **Database password** (`CEREFOX_DATABASE_URL`) | Direct Postgres | DDL / deploy / restore only | **Never** client-facing / committed |
 | **OAuth 2.1 access token** | Owner identity (cloud/mobile Claude) | `cerefox-mcp` only, validated in-function against JWKS + owner-`sub` pin (§4) | Per-session; issued by Supabase, `sub`-pinned |
+
+> **Legacy anon JWT retired (iter-28E).** The legacy anon JWT (`eyJ…`) was the Edge
+> Function gateway credential until iter-28E. On ES256-migrated projects it is
+> **unrotatable** (revoke-only), so a leak could not be cycled without killing the EF
+> path. It has been **retired as an Edge Function credential**: all data Edge Functions
+> now run `--no-verify-jwt` and gate in-function on the rotatable Cerefox access token
+> above. `CEREFOX_SUPABASE_ANON_KEY` and the removed `CEREFOX_MCP_STATIC_BEARER` are no
+> longer used for Edge Function auth.
 
 ## 2. RLS posture
 
@@ -54,9 +65,10 @@ deployments should redeploy to pick this up.**
 1. **Auth-first dispatch** — token validation runs before any method dispatch, tool lookup,
    or DB touch. The only unauthenticated responses are the RFC 9728 metadata document, the
    401 challenge, 405s, and CORS preflight.
-2. **Two credentials, both fail-closed** — a valid OAuth JWT *or* the legacy static Bearer.
-   Static path rejects when its secret is unset (no implicit fallback to the injected
-   `SUPABASE_ANON_KEY`). OAuth path rejects when JWKS is unreachable.
+2. **Two credentials, both fail-closed** — a valid OAuth JWT *or* the Cerefox access token
+   (constant-time compare against `CEREFOX_ACCESS_TOKENS`; the legacy static-Bearer anon-JWT
+   path was replaced in iter-28E). The token path rejects when no tokens are set (never
+   accept-all). OAuth path rejects when JWKS is unreachable.
 3. **Algorithm allowlist** — ES256/RS256 only, checked *before* any crypto (defends against
    HS256 alg-confusion with the legacy anon JWT). Never `none`.
 4. **Issuer/JWKS from `SUPABASE_URL`, not request headers** — deriving them from
@@ -70,14 +82,21 @@ deployments should redeploy to pick this up.**
    is a bare `{"error":"unauthorized"}` + `WWW-Authenticate`).
 7. **405-for-GET preserved** for everything except `/version` and the metadata route
    (SSE-polling quota-burn guard).
-8. **Deploy-flag map in code** (`NO_VERIFY_JWT_EFS`) — only `cerefox-mcp` and
-   `cerefox-oauth-consent` skip the gateway; the 8 primitive EFs keep gateway validation.
+8. **Deploy-flag map in code** (`NO_VERIFY_JWT_EFS`) — since iter-28E **all data Edge
+   Functions** (`cerefox-mcp` + the 8 primitive EFs) deploy `--no-verify-jwt` and gate
+   in-function on the Cerefox access token; the Supabase gateway no longer validates any of
+   them. (The `cerefox-oauth-consent` EF was removed in iter-28E — the consent page is now
+   the Cloudflare Worker, §5.) The only unauthenticated surface is `cerefox-mcp`'s RFC 9728
+   OAuth discovery route plus its 401 challenge.
 
 ## 5. Consent page
 
-The consent page (Cloudflare Worker, or the custom-domain `cerefox-oauth-consent` EF) is
-served **unauthenticated** (a browser loads it) and is therefore world-readable. It embeds
-**only** the publishable key (§1) — never the anon JWT — and holds no server-side secret.
+The consent page is a **Cloudflare Worker** (`cloudflare/cerefox-consent/`, importing the
+retained `_shared/consent-page` module). It is **not** a Cerefox Edge Function surface: the
+`cerefox-oauth-consent` EF was removed in iter-28E, so the Worker is the sole consent page.
+It is served **unauthenticated** (a browser loads it) and is therefore world-readable. It
+embeds **only** the publishable key (§1) — never the anon JWT — and holds no server-side
+secret.
 Approve/deny happens under the owner's Supabase Auth session; the page redirects with
 `location.assign` (client-side, so no 307), and handles an already-consumed
 `authorization_id` gracefully.
@@ -94,8 +113,9 @@ Approve/deny happens under the owner's Supabase Auth session; the page redirects
 - **Full-codebase security audit** of all publicly-reachable components — the 8 primitive
   Edge Functions, the GPT Actions OpenAPI surface, the web app, and backup/restore file
   handling. This document covers the OAuth surface + credential model only.
-- **Anon-key rotation** after any exposure (rotate the legacy JWT secret; update client
-  configs + `CEREFOX_MCP_STATIC_BEARER`).
+- **Access-token rotation** after any exposure: `cerefox token rotate` (add a new token to
+  `CEREFOX_ACCESS_TOKENS`, migrate client configs, drop the old) — zero-downtime and fully
+  rotatable, unlike the retired anon JWT (iter-28E closed the underlying unrotatability).
 - **CI gates**: gitleaks (secret scanning) + `bun audit` (dependencies).
 - **JWKS stale-cache** (low): on a JWKS fetch failure the validator serves the last-cached
   keys for up to the TTL (600s) — a rotated-out key stays accepted briefly. Acceptable;

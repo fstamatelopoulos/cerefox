@@ -62,7 +62,7 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Project discovery** | `cerefox_list_projects` MCP tool for agents to discover available projects; all search results include human-readable `project_names` alongside UUIDs |
 | **Heading-aware chunking** | Greedy section accumulation — H1/H2/H3 sections accumulate until MAX_CHUNK_CHARS; heading breadcrumb preserved per chunk |
 | **Cloud embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API (the only embedder wired in the TS runtime today) |
-| **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and anon key; no Python install needed |
+| **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and a Cerefox access token (`cerefox token generate`); no Python install needed |
 | **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. (A frozen Python MCP server also ships for repo-clone users: `uv run cerefox mcp`.) |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
 | **Markdown-first ingest** | `.md` / `.txt` / `.docx` (Markdown is the storage format; `.docx` is converted via `mammoth` on ingest, fidelity varies. PDF is not supported — convert upstream) |
@@ -226,25 +226,27 @@ The fastest path is `cerefox configure-agent --tool <client>` — it writes the
 right config for Claude Code, Claude Desktop, Cursor, Codex, or Gemini. There
 are several ways an agent can reach Cerefox:
 
-**1 — Remote MCP (recommended).** The `cerefox-mcp` Edge Function speaks MCP
-Streamable HTTP. Just a URL + a legacy anon JWT (Supabase → API Keys →
-**Legacy → anon**, *not* the new `sb_publishable_…` key — see
-[setup-supabase.md](docs/guides/setup-supabase.md#supabase-api-keys-2026)). No
-local install:
+**1 — Local stdio MCP (recommended for local agents).** `cerefox mcp` runs the
+same 10 tools in-process — lower latency, no per-call Edge Function billing, and
+no Edge Function token needed (it reaches Supabase over the Data API with its own
+`.env` credential). `configure-agent` wires it up, or point your client at
+`command: "cerefox", args: ["mcp"]`.
+
+**2 — Remote HTTP MCP (advanced/fallback).** The `cerefox-mcp` Edge Function
+speaks MCP Streamable HTTP. Just a URL + a Cerefox access token
+(`cerefox token generate` — see
+[setup-supabase.md](docs/guides/setup-supabase.md)). No local install:
 
 ```bash
 claude mcp add --transport http cerefox \
   https://<project-ref>.supabase.co/functions/v1/cerefox-mcp \
-  --header "Authorization: Bearer <anon-key>"
+  --header "Authorization: Bearer <cerefox-access-token>"
 ```
-
-**2 — Local stdio MCP.** `cerefox mcp` runs the same 10 tools in-process — lower
-latency, no per-call Edge Function billing. `configure-agent` wires it up, or
-point your client at `command: "cerefox", args: ["mcp"]`.
 
 **3 — ChatGPT.** Custom GPT + GPT Actions pointing at the Edge Functions
 (requires ChatGPT Plus). Paste the OpenAPI block from
-[`connect-agents.md`](docs/guides/connect-agents.md).
+[`connect-agents.md`](docs/guides/connect-agents.md) and set the Action's Bearer
+auth to your Cerefox access token (`cerefox token generate`).
 
 **4 — Shell CLI.** Local coding agents with a Bash tool (Claude Code, Codex,
 opencode, …) can read and write Cerefox by running the installed `cerefox`
