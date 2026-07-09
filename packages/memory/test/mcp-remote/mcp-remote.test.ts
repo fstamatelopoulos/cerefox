@@ -4,7 +4,7 @@
  *
  * Talks to the deployed cerefox-mcp over HTTP with no MCP SDK, so protocol
  * failures are unambiguously the EF's. Probe-and-skip when Supabase / the
- * anon JWT is unavailable. Created docs are [E2E-MCP]-prefixed and
+ * access token is unavailable. Created docs are [E2E-MCP]-prefixed and
  * hard-deleted in afterAll via the service client.
  */
 
@@ -28,9 +28,9 @@ function uniqueContent(): string {
 }
 
 const settings = loadSettings();
-const anonKey =
-  settings.supabaseAnonKey ||
-  (settings.supabaseKey.startsWith("eyJ") ? settings.supabaseKey : "");
+// cerefox-mcp's static path accepts the Cerefox access token (iter-28E); the
+// legacy anon JWT is retired. (OAuth is exercised manually with cloud Claude.)
+const accessToken = settings.accessToken;
 const mcpUrl = settings.supabaseUrl
   ? `${settings.supabaseUrl.replace(/\/$/, "")}/functions/v1/cerefox-mcp`
   : "";
@@ -49,7 +49,7 @@ async function rpc(method: string, params?: Record<string, unknown>): Promise<Js
   if (params !== undefined) body.params = params;
   const resp = await fetch(mcpUrl, {
     method: "POST",
-    headers: { Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   return (await resp.json()) as JsonRpcResponse;
@@ -79,7 +79,7 @@ const E2E_ENABLED = process.env.CEREFOX_LIVE_E2E === "1";
 
 // Probe: a tools/list handshake confirms the EF is reachable.
 let LIVE_OK = false;
-if (E2E_ENABLED && anonKey && mcpUrl) {
+if (E2E_ENABLED && accessToken && mcpUrl) {
   try {
     const resp = await rpc("tools/list");
     LIVE_OK = !resp.error && Array.isArray(resp.result?.tools);
@@ -99,7 +99,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
     return;
   }
   if (!LIVE_OK) {
-    test.skip("Supabase / anon JWT not available — skipping MCP-remote e2e", () => {});
+    test.skip("Supabase / access token not available — skipping MCP-remote e2e", () => {});
     return;
   }
 
@@ -119,7 +119,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
     test("bare GET returns 405 (no SSE)", async () => {
       const resp = await fetch(mcpUrl, {
         method: "GET",
-        headers: { Authorization: `Bearer ${anonKey}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       expect(resp.status).toBe(405);
     });
