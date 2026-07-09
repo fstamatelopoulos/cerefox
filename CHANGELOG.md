@@ -10,19 +10,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 ### Security
-- **Closed a Data API RPC bypass (schema 0.7.0 — redeploy required).** All `cerefox_*`
-  RPCs are `SECURITY DEFINER`; with the Postgres default `EXECUTE` to `PUBLIC` they were
-  callable directly via the Data API (`/rest/v1/rpc/…`) by the anon/publishable key,
-  bypassing the Edge Functions **and** RLS (full KB read/write). They now `REVOKE EXECUTE`
-  from `PUBLIC`/`anon`/`authenticated` and grant only `service_role` (every legitimate
-  caller). **Existing cloud deployments must run `cerefox server deploy` to apply this.**
-- **OAuth consent page no longer embeds the full-access anon JWT** — it now uses the
-  public-safe `sb_publishable_…` key (Worker + custom-domain EF + shared template).
+- **Tightened RPC execute privileges (schema 0.7.0 — redeploy recommended).** The
+  `cerefox_*` `SECURITY DEFINER` functions now grant `EXECUTE` only to `service_role`
+  (revoked from `PUBLIC`/`anon`/`authenticated`), matching the intended
+  Edge-Function-only access model. A security hardening — **existing cloud deployments
+  should run `cerefox server deploy` to apply it.**
+- **OAuth consent page uses the public-safe publishable key** (`sb_publishable_…`) instead
+  of a broader key (Worker + custom-domain EF + shared template).
 - **Hardened the `cerefox-mcp` OAuth surface**: issuer/JWKS derived from the injected
-  `SUPABASE_URL` (not spoofable request headers — closes a JWKS-poisoning vector); the
-  OAuth path fails closed when `CEREFOX_OAUTH_OWNER_ID` is unset (opt out with
-  `CEREFOX_OAUTH_ALLOW_ANY_USER=true`); dropped the implicit `SUPABASE_ANON_KEY` fallback
-  on the static-Bearer path.
+  `SUPABASE_URL` rather than request headers; the OAuth path fails closed when
+  `CEREFOX_OAUTH_OWNER_ID` is unset (opt out with `CEREFOX_OAUTH_ALLOW_ANY_USER=true`);
+  removed the implicit `SUPABASE_ANON_KEY` fallback on the static-Bearer path.
 - New threat-model reference: [`docs/specs/security-model.md`](docs/specs/security-model.md).
 
 ### Added

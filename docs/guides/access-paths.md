@@ -226,12 +226,10 @@ gateway validates and rate-limits it. **It is not RLS-scoped** — any holder ca
 full EF tool surface (read *and* write). So treat it as a shared secret for *trusted*
 agents/clients — keep it in local configs, but do **not** publish it on a public web page.
 
-> **Schema 0.7.0 hardening:** the `cerefox_*` RPCs are `SECURITY DEFINER` (they bypass RLS),
-> so before 0.7.0 the anon/publishable key could call them **directly** via the Data API
-> (`/rest/v1/rpc/…`), sidestepping the Edge Functions entirely. Those functions now
-> `REVOKE EXECUTE` from `anon`/`authenticated`/`PUBLIC` and grant only `service_role`, so
-> the Data API RPC path is closed for anon/publishable keys — every legitimate caller uses
-> the service-role key. Run `cerefox server deploy` to apply it. See
+> **Schema 0.7.0 hardening:** the `cerefox_*` RPCs are `SECURITY DEFINER` and previously
+> had broader-than-intended `EXECUTE` grants. They now grant `EXECUTE` only to
+> `service_role` (which every legitimate caller uses) — revoked from `anon`/`authenticated`/
+> `PUBLIC`. A security hardening; run `cerefox server deploy` to apply. See
 > [`docs/specs/security-model.md`](../specs/security-model.md).
 
 The **publishable** key (`sb_publishable_…`) is genuinely public-safe: the EF gateway

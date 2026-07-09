@@ -30,22 +30,20 @@ RLS is **enabled on every `cerefox_*` table with no policies** → deny-all for
 `anon`/`authenticated` via the Data API. Direct table access (`/rest/v1/cerefox_documents`)
 is closed for anon/publishable keys.
 
-## 3. RPC lockdown (schema 0.7.0) — the SECURITY DEFINER side door
+## 3. RPC execute-privilege lockdown (schema 0.7.0)
 
-**Finding (audit, 2026-07-09):** all `cerefox_*` RPCs are `SECURITY DEFINER` (they bypass
-RLS). PostgreSQL grants `EXECUTE` to `PUBLIC` by default, and PostgREST exposes public-schema
-functions at `/rest/v1/rpc/<name>`. So before this fix, **the anon key (and the publishable
-key — same `anon` role) could call every RPC directly via the Data API**, bypassing both the
-Edge Functions and RLS — full KB read/write. Verified live (`cerefox_list_projects` returned
-data with just the anon key).
+The `cerefox_*` RPCs are `SECURITY DEFINER` (they run with the definer's privileges, so they
+bypass RLS by design — that's how the Edge Functions and CLI do their work). The intended
+access model is that only `service_role` executes them. Schema 0.7.0 makes the grants match
+that intent.
 
-**Mitigation (deployed):** `rpcs.sql` now `REVOKE`s `EXECUTE` from `PUBLIC`/`anon`/
-`authenticated` and `GRANT`s only to `service_role`, applied over all `cerefox_*` functions
-and idempotent (re-applied each deploy). Every legitimate caller uses `service_role` (EFs via
-the service-role key; CLI/web via the secret key; local World B via a container-minted
+**Change (deployed):** `rpcs.sql` `REVOKE`s `EXECUTE` from `PUBLIC`/`anon`/`authenticated`
+and `GRANT`s only to `service_role`, applied over all `cerefox_*` functions and idempotent
+(re-applied each deploy). Every legitimate caller uses `service_role` (Edge Functions via the
+service-role key; CLI/web via the secret key; local World B via a container-minted
 service-role JWT), so nothing legitimate breaks. `docker/local/roles.sql` was tightened to
-match (no anon/authenticated function grants). Applied by `cerefox server deploy` (schema
-0.6.0 → 0.7.0). **Existing cloud deployments must redeploy to get this fix.**
+match. Applied by `cerefox server deploy` (schema 0.6.0 → 0.7.0). **Existing cloud
+deployments should redeploy to pick this up.**
 
 ## 4. OAuth MCP surface invariants (`cerefox-mcp`)
 
