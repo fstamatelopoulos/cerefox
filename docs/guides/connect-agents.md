@@ -613,7 +613,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 2.1.0
+  version: 3.0.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -1005,11 +1005,15 @@ paths:
 In the action's **Authentication** settings:
 - Type: **API Key**
 - Auth type: **Bearer**
-- API key: your Supabase **anon key**
+- API key: your **Cerefox access token** (`cfx_pat_…`). Generate it with
+  `cerefox token generate` (it prints the token once and sets it on Supabase).
+  The legacy Supabase anon key is no longer accepted (iter-28E).
 
-> **Important:** ChatGPT may reset the API key when you update the action schema.
-> If you get a 403 error after changing the schema, re-enter the anon key in the
-> authentication settings — the functions themselves are fine.
+> **Important:** ChatGPT resets the stored API key when you update the action
+> schema. This release bumps the schema `info.version`, so on your next schema
+> paste ChatGPT will clear the key — re-enter your **Cerefox access token** in the
+> authentication settings. (That reset is expected here: it's what swaps you off
+> the old anon key.)
 
 **Step 4 — Save and test**
 
