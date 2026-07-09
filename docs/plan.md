@@ -3188,11 +3188,15 @@ workstreams on separate branches, merge each into `main`, then cut `v1.0.0-beta`
 | **28C — Stability contract** | (at cut) | pending | strict SemVer becomes binding; `security-model.md` + threat model finalized |
 
 **Held priority TODOs (do NOT lose these):**
-1. **Rotate the exposed anon key** (was briefly in the public consent Worker) — rotate the
-   legacy JWT secret; re-issue the anon key to client configs; update `CEREFOX_MCP_STATIC_BEARER`.
+1. **Neutralize the exposed anon key** — **superseded by 28E**: the fix is no longer "rotate the
+   anon key" (it's unrotatable on ES256) but "stop accepting it, then revoke it." 28E retires
+   the anon JWT from all EF paths; the final step is to **revoke the legacy anon key** in
+   Supabase after the token cutover (migration-0.12.md step 5). `CEREFOX_MCP_STATIC_BEARER`
+   already removed.
 2. **Supabase/CF secret cleanup** — keep `CEREFOX_OAUTH_OWNER_ID`, `CEREFOX_SUPABASE_PUBLISHABLE_KEY`;
-   drop `CEREFOX_MCP_STATIC_BEARER` if no remote static-Bearer clients; verify the old CF
-   `SUPABASE_ANON_KEY` Worker var is gone; consider deleting the redundant `cerefox-oauth-consent` EF.
+   set `CEREFOX_ACCESS_TOKENS` (via `cerefox token generate`); `CEREFOX_MCP_STATIC_BEARER` gone;
+   verify the old CF `SUPABASE_ANON_KEY` Worker var is gone; `cerefox-oauth-consent` EF **deleted
+   in 28E** (run `supabase functions delete cerefox-oauth-consent` on the deployed project).
 3. **Full-codebase security audit** before merge (28B extends with any new mitigations).
 4. **Data recovery** of the 4 chunker-corrupted docs (Job Hunting, Oshmabel, Saltwater,
    Kallisti) — restore each from its last clean version after the chunker fix is installed.
@@ -3212,6 +3216,18 @@ workstreams on separate branches, merge each into `main`, then cut `v1.0.0-beta`
 SemVer they must land BEFORE the 1.0 freeze, or they'd force a 2.0.0. **Discord:** soft-launch
 to testers on the beta; hold the broad public announce until after the full audit (③) — it's a
 security-sensitive release, don't publicize new public surfaces before auditing them.
+
+**Local e2e without a published release (decided 2026-07-10).** No registry publish is needed
+to validate 28E end-to-end: `cd packages/memory && bun run build && npm link` (or `npm install
+-g .`) makes the global `cerefox` the working-tree build (doctor/token/web/mcp), and `cerefox
+server deploy` bundles the EFs from local `dist/server-assets/` (deploys the new token-gated
+EFs, no publish). MCP clients point at the linked local `cerefox mcp` bin (not the `npx
+@cerefox/memory` form, which fetches the published version). So we **hold the first published
+beta** until the batch (28E + audit + 28D) is soak-tested locally, rather than cutting a beta
+just to test. **Deploy + e2e is a supervised step** (cutover order is lock-out-sensitive; touches
+prod + EF quota) — not run unattended. **Back up prod first** (no staging env): `cerefox backup
+create` (restorable JSON) + `bun scripts/cerefox_export.ts <folder>` (readable markdown); both
+read via the Data API (secret key), unaffected by 28E.
 
 **28E credential decision (2026-07-09): a Cerefox-managed token, NOT `sb_publishable_`.**
 The publishable key is *public by design* (it's embedded in the consent Worker HTML, shipped
@@ -3721,15 +3737,30 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
-**Update (2026-07-10): iter-28A/B/D + 28E/28F design MERGED to `main`** via PR #91
-(squash, commit `77de5e9`) — `feat/oauth-mcp` deleted. **No release cut** (CHANGELOG stays
-under `[Unreleased]` until the `0.12.0-beta` tag). Now on **`feat/ef-auth-token`** implementing,
-in order: **28E** (retire the unrotatable legacy anon JWT across all EF paths → rotatable
-Cerefox-managed token; design: [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md))
-then **28F** (full documentation sanity sweep, incl. the migration guide + `.env`/secrets
-cleanup) — both in this one branch. Start slice: `_shared/ef-auth/` token check + unit tests
-(no-deploy). Then: cut `0.12.0-beta` from `main`, test on the maintainer laptop, soft Discord.
-See the release-sequencing block + 28E/28F under Iteration 28.
+**Update (2026-07-10): 28E + 28F CODE-COMPLETE on `feat/ef-auth-token`** (off `main`; not
+merged, not deployed). All slices landed and are committed:
+- **28E** — `_shared/ef-auth` in-function token check (`checkAccessToken`/`efAuthGate`, tests);
+  all 8 primitive EFs gated (before `/version`, so version is gated too); `cerefox-mcp` accepts
+  the Cerefox token (static path) OR OAuth; `cerefox-oauth-consent` EF deleted; bundler +
+  `deploy-server` (`--no-verify-jwt` for all 9, cutover warning); **`cerefox token
+  generate/rotate/list`** + `.env` upsert util; `doctor` + web-boot + live e2e suites switched
+  from the anon key to `CEREFOX_ACCESS_TOKEN`; GPT Actions OpenAPI `info.version` 3.0.0.
+- **28F** — full doc sweep (CLAUDE.md auth model, CHANGELOG, `migration-0.12.md`, connect-agents,
+  access-paths, setup-supabase, configuration, cli, security-model, solution-design, README,
+  oauth-mcp-server-design [historical, annotated], cloudflare README). Legacy anon JWT retired
+  everywhere; consent-EF refs → removed; EF count reconciled (9 = 8 primitive + `cerefox-mcp`).
+
+Verification done: `_shared` 255 pass, `env-file` 8 pass, package builds, live suites skip by
+default (0 EF calls). **NOT yet done (guardrails held): no deploy, no live-EF run.**
+
+**NEXT — supervised deploy + e2e (do together, not unattended):** (0) `cerefox backup create`
++ `cerefox_export.ts` snapshot of prod (no staging env); (1) `npm link` the local build; (2)
+`cerefox token generate`; (3) `cerefox server deploy` (token-gated EFs from local assets); (4)
+e2e — `cerefox doctor`, `CEREFOX_LIVE_E2E=1` EF + mcp-remote suites, MCP handshake, GPT Actions
+re-paste, cloud-Claude OAuth; (5) revoke the legacy anon key; (6) `supabase functions delete
+cerefox-oauth-consent`. Then merge to `main`. **Hold the published beta** until the batch (28E
++ audit ③ + 28D) is soak-tested locally (see the "Local e2e without a published release" +
+release-sequencing notes under Iteration 28).
 
 **Update (2026-07-09): v1.0.0 is a large multi-workstream release — see the "v1.0.0
 release scope + remaining steps" table under Iteration 28.** On `feat/oauth-mcp`:
