@@ -3218,8 +3218,11 @@ to clients), so gating the EFs on it = **no access control** (anyone who reads i
 access, since the EFs use `service_role` internally with no RLS). It only looks lower-friction
 — it isn't (you'd still paste it into every client config), and it removes all security. The
 Cerefox-managed token is the same paste-a-credential friction as today's anon key, but secret +
-rotatable; friction is minimized by automating it (`cerefox` generates + stores the Function
-secret and writes it via `configure-agent`).
+rotatable; friction is minimized by automating it (`cerefox token generate` creates + stores
+the Function secret and prints the token to paste into the two remote paths). Note the token
+touches only **GPT Actions** and the **remote HTTP MCP** — `configure-agent` writes a *local*
+stdio MCP entry (Data API via the local server's own `.env`), so it needs no token and is
+unaffected by 28E.
 
 ### 28A: OAuth 2.1 on `cerefox-mcp` — cloud/mobile Claude connectivity
 

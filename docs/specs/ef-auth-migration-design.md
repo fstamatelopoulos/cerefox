@@ -122,8 +122,12 @@ token EFs = the Cerefox token).
   token and (after confirmation) drops the oldest.
 - **`cerefox server deploy`** generates a token on first deploy if none exists; warns loudly
   if the token-gated EFs would deploy with no token (fail-closed footgun).
-- **`cerefox configure-agent`** writes the token into remote-MCP client configs (it already
-  writes MCP configs; swap the anon key for the token for the *remote* transport).
+- **`cerefox configure-agent` is NOT in scope** — it writes a *local stdio* MCP entry
+  (`npx … cerefox mcp`, or `cerefox-local mcp` with `--local`), which authenticates to Supabase
+  via the local server's own `.env` credential and the **Data API**, bypassing the Edge
+  Functions. It needs no EF token and is unaffected by 28E. The two token-bearing paths
+  (**GPT Actions**, **remote HTTP MCP**) are configured *manually* per `connect-agents.md`;
+  `cerefox token generate` just prints the token to paste there.
 - The token is a **secret** — never commit it; `.env` / Function secret / client config only.
   Add it to the gitleaks allowlist patterns (recognize `cfx_pat_`), and ensure it's not
   printed to logs.
