@@ -1,10 +1,11 @@
 # Design: chunk storage & lossless document reconstruction
 
-> **Status**: In progress (2026-07-10) on `fix/chunk-reconstruction`. The interim
-> correctness fix (keep oversized single paragraphs whole) already shipped on `main`;
-> this doc specifies the *proper* fix. **Decision (2026-07-10): Python is fully retired
-> at v1.0 (workstream 28G), so Python chunker parity is dropped** — only the TS chunker
-> gets format-2 (§4.2). Target: v1.0.0 (part of the release; see `docs/plan.md`).
+> **Status**: Phase 0 + Phase 1 **CODE-COMPLETE** (2026-07-11) on `fix/chunk-reconstruction`,
+> pending the supervised schema-0.8.0 deploy + live round-trip validation. Built: the
+> exact-partition chunker (single consolidated TS impl), `content_format` on `cerefox_chunks`
+> (§4.3), all 5 reconstruction branches, ingest `p_content_format`, callers passing format-2 +
+> heading-breadcrumb embeddings, the doctor stats check, and `docs/guides/content-format.md`.
+> Python parity dropped (retired at v1.0, workstream 28G). NOT deployed. Target v1.0.0.
 
 ## 1. The problem
 

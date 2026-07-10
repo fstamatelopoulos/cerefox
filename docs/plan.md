@@ -3802,6 +3802,29 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-07-11, end of session — 28D Phase 0 + Phase 1 CODE-COMPLETE on
+`fix/chunk-reconstruction`, pushed, NOT deployed).** Everything is built + unit-tested; the only
+thing left is the **supervised deploy of schema 0.8.0 + live round-trip validation** (per the
+agreed plan). What landed:
+- **Chunker**: exact-partition `chunkMarkdown` (invariant `blindStitch(chunk(doc))===doc.trim()`,
+  structural + 27 cases / 1178 assertions incl. adversarial); the 3 duplicate TS chunkers
+  consolidated into `_shared/ingest/chunker.ts` (verified content_hash is doc-level → dedup safe;
+  callers field-compatible).
+- **DB (schema 0.7.0→0.8.0)**: `content_format` on **`cerefox_chunks`** (migration 0012;
+  chunks-level so archived versions keep their format); ingest RPC `p_content_format`; all 5
+  reconstruction sites branch on `MAX(content_format)>=2`; `cerefox_content_format_stats()`.
+- **Callers**: mcp-tools/ingest, pipeline (via client-bridge `contentFormat`), and the
+  cerefox-ingest EF all pass `content_format=2` + build embedding input with the heading
+  breadcrumb (`embeddingInputFor`).
+- **Doctor**: ℹ "N of M docs use the legacy format" → points to `cerefox guides show content-format`.
+- **Docs**: bundled `docs/guides/content-format.md`; CHANGELOG proper-fix entry.
+
+**NEXT (supervised, together):** `npm link` local build → `cerefox server deploy` (schema 0.8.0 +
+EFs, from the staged temp copy per the deploy-gotcha) → `cerefox doctor` (content-format ℹ) →
+ingest a dummy table doc via local + remote MCP and verify byte-exact reconstruction (format-2)
+AND that an existing doc still reads correctly (format-1) → then Fotis validates via web UI +
+manually fixes the corrupted file. Then PR → main.
+
 **Update (2026-07-11, later — 28D Phase 1 wiring in progress on `fix/chunk-reconstruction`).**
 Done + pushed since the overnight note below:
 - **Chunker swap + consolidation (Stages A/B/C): DONE + verified.** `chunkMarkdown` is now the

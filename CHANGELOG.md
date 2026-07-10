@@ -63,8 +63,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   template is retained — the Worker uses it.)
 
 ### Fixed
+- **Document reconstruction is now lossless by construction (proper fix; schema 0.7.0 →
+  0.8.0 — redeploy required).** The root cause of the corruption was that reconstruction
+  synthesized a `\n\n` separator between chunks that was never stored, so any chunk boundary
+  off a paragraph edge injected a blank line mid-content. The new **exact-partition chunker**
+  stores chunk contents as a gapless slice-by-slice partition of the document, reconstructed by
+  plain concatenation — `reconstruct(chunks) === document` byte-for-byte, so a boundary may fall
+  anywhere (including inside a huge table) with zero corruption, and chunk size is bounded again.
+  Versioned + lazy: a new `content_format` column on `cerefox_chunks` (`1` = legacy `\n\n`-join,
+  `2` = blind-stitch) means existing documents reconstruct exactly as before and convert only on
+  next edit (or `cerefox server reindex`); archived versions keep their own format. `cerefox
+  doctor` reports how many docs still use the legacy format. Also caps embedding inputs
+  (`CEREFOX_EMBED_MAX_INPUT_CHARS`, default 20000) so an oversized chunk can never fail an ingest.
+  The three TS chunkers were consolidated into one. What it means: `cerefox guides show
+  content-format`. Design: `docs/specs/chunk-reconstruction-design.md`.
 - **Chunker no longer corrupts documents whose single paragraph/table exceeds
-  `max_chunk_chars`.** `cerefox_reconstruct_doc` reassembles a document by joining chunks
+  `max_chunk_chars`.** (Interim fix, superseded by the exact-partition fix above.)
+  `cerefox_reconstruct_doc` reassembles a document by joining chunks
   with `\n\n`, so the chunker must only split at paragraph boundaries. The oversized-section
   path violated this by hard-splitting *inside* a paragraph — which both duplicated content
   (an old 50%-overlap slice) and inserted spurious blank lines mid-word / mid-table-row on
