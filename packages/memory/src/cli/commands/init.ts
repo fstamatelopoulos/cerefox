@@ -217,8 +217,8 @@ async function promptForAnswers(): Promise<ConfigAnswers> {
   println(c.cyan("▶ Step 4/5 — Direct Postgres connection (optional for npm-installed users)"));
   println(
     c.dim(
-      "  Only needed for `uv run python scripts/db_deploy.py` (schema deploy + migrations).\n" +
-        "  npm-installed users without Python can skip — press Enter.\n" +
+      "  Only needed for `cerefox server deploy` (schema deploy + migrations).\n" +
+        "  You can skip this and set CEREFOX_DATABASE_URL later — press Enter.\n" +
         "  Format: postgresql://postgres.<project-ref>:<pw>@…:5432/postgres?sslmode=require",
     ),
   );
@@ -331,16 +331,15 @@ function printMigrationMenu(cwdEnv: string, homeEnv: string): void {
   println("");
   println(c.yellow(`⚠ Found existing config at ${cwdEnv}.`));
   println("");
-  println("This may be from a previous Python install. The TS CLI can use the");
+  println("This may be from an earlier install. The CLI can use the");
   println("same .env — env-var names are identical, no rewrite needed.");
   println("");
   println("  " + c.bold("[c]") + " Copy to " + homeEnv + "  " + c.green("(recommended)"));
-  println(c.dim("      • TS reads the new home from now on"));
-  println(c.dim("      • Python keeps reading " + cwdEnv + " (backward compat)"));
+  println(c.dim("      • The CLI reads the new home from now on"));
   println(c.dim("      • Edit ~/.cerefox/.env going forward; the repo .env is legacy"));
   println("");
   println("  " + c.bold("[u]") + " Use " + cwdEnv + " as-is, skip writing anything");
-  println(c.dim("      • Both TS and Python keep reading the existing file"));
+  println(c.dim("      • The CLI keeps reading the existing file"));
   println(c.dim("      • Defer the migration"));
   println("");
   println("  " + c.bold("[f]") + " Fresh start — interactive prompts, write to " + homeEnv);
@@ -583,7 +582,7 @@ async function action(options: InitOptions): Promise<void> {
         }
       }
       println(c.green(`✓ Copied ${cwdEnv} → ${homeEnv}`));
-      println(c.dim(`  Repo file unchanged — Python still reads it during migration.`));
+      println(c.dim(`  Repo file left unchanged — safe to delete once the new location works.`));
       println("");
 
       // Validate the copied config against live services.

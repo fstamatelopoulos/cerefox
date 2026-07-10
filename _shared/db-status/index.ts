@@ -132,7 +132,7 @@ export async function runDbStatusChecks(
         exists === true ? "ok" : exists === false ? "missing" : "unknown";
       const detail =
         status === "unknown"
-          ? "introspection helper not deployed; run `python scripts/db_deploy.py`"
+          ? "introspection helper not deployed; run `cerefox server deploy`"
           : undefined;
       functions.push({ name: f, status, detail });
     } catch (err) {
@@ -225,7 +225,7 @@ export function formatReport(report: DbStatusReport): string {
     lines.push(
       "     legacy deployment that hasn't been redeployed since v0.3.0).");
     lines.push(
-      "     Run `uv run python scripts/db_deploy.py` to install it, then");
+      "     Run `cerefox server deploy` to install it, then");
     lines.push(
       "     re-run this script for a full report.");
     lines.push("");
