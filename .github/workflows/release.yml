@@ -33,7 +33,7 @@ jobs:
     name: Build + test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag }}
 
@@ -43,7 +43,7 @@ jobs:
           bun-version: latest
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # Node 24's BUNDLED npm is >= 11.5.1 (required by trusted publishing).
           # We deliberately do NOT self-upgrade with `npm i -g npm@latest`: that
@@ -89,7 +89,7 @@ jobs:
     if: inputs.publish_to_npm
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag }}
 
@@ -99,7 +99,7 @@ jobs:
           bun-version: latest
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # Node 24 bundles npm >= 11.5.1 (trusted-publishing minimum). Do NOT
           # self-upgrade npm here: `npm i -g npm@latest` corrupts the global tree

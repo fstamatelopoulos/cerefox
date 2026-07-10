@@ -47,7 +47,7 @@ jobs:
     name: TS — _shared/ unit tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -68,7 +68,7 @@ jobs:
     name: TS — @cerefox/memory build + smoke
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -76,7 +76,7 @@ jobs:
           bun-version: latest
 
       - name: Set up Node (for `node dist/bin/cerefox.js` smoke runs)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
 
