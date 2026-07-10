@@ -3802,6 +3802,20 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Beta sequencing decision (2026-07-12): ship `1.0.0-beta.1` as-is; the security audit is
+`beta.2`, not folded into this cut.** Rationale: the two workstreams don't gate each other.
+beta.1 exists to validate the highest-risk, least-tested path — install → migrate →
+schema-0.8.0 deploy → byte-exact reconstruction — which is ready now. The full-codebase security
+audit (28B ③) is a code review whose fixes need *their own* validation, not beta.1's; folding it
+in only delays the migration dogfooding and couples two independent risks. Betas allow breaking
+changes, so audit findings land cleanly in beta.2. No security downside to going first: beta.1 is
+opt-in (`beta` dist-tag; `latest` stays on 0.11.x, only the maintainer installs it), and the main
+security-hardening change (28E EF-auth off the anon JWT) already shipped + was validated in prod —
+beta.1 is the reconstruction fix riding on top of that. **Hard rule: the audit is a 1.0.0-stable
+gate — it must complete before promoting off the beta/rc line.** Sequence:
+`beta.1` (chunk fix + migration-UX validation) → `beta.2` (security audit + fixes) →
+`beta.N`/`rc.1` (28G Python retirement, freeze) → `1.0.0` (promote to `latest`).
+
 **Update (2026-07-11, end of session — 28D Phase 0 + Phase 1 CODE-COMPLETE on
 `fix/chunk-reconstruction`, pushed, NOT deployed).** Everything is built + unit-tested; the only
 thing left is the **supervised deploy of schema 0.8.0 + live round-trip validation** (per the
