@@ -15,7 +15,7 @@ It is not a message bus -- it is curated, versioned, searchable memory backed by
 
 You'll be using **one** of these — whichever your user (or the harness) has configured:
 
-1. **MCP tools (default)** — ten named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, run as `cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 10 Tools** below. This is the recommended path for purpose-built agent clients. (A frozen Python MCP server still exists as a standalone fallback, invoked explicitly with `uv run cerefox mcp` from a repo clone.)
+1. **MCP tools (default)** — ten named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, run as `cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 10 Tools** below. This is the recommended path for purpose-built agent clients.
 2. **Shell CLI (Bash tool)** — the same operations exposed as a local `cerefox …` command (the TypeScript CLI from `@cerefox/memory`, resource-verb shape — e.g. `cerefox document get`, `cerefox project list`), invoked via your Bash tool. Used when your user prefers not to install/configure an MCP server. The semantics are identical; only the surface differs. See **Using Cerefox via the CLI** near the bottom of this guide for the MCP-tool → CLI-command mapping and the small list of behavioural differences.
 
 If you're not sure which mode you're in: check whether `cerefox_search` shows up in your tool list. If yes, use MCP. If no, ask your user where the Cerefox checkout lives — they'll have told you, typically in `CLAUDE.md`, `AGENTS.md`, or an equivalent project memory file.
@@ -426,7 +426,7 @@ Read this section only if you do **not** have MCP tools available (no `cerefox_s
 
 The Cerefox CLI is the TypeScript binary from `@cerefox/memory` (`npm install -g @cerefox/memory`), invoked as plain `cerefox <subcommand>` on your `PATH` — no repo checkout or `uv` required. It uses a resource-verb shape (`cerefox document get`, `cerefox project list`, `cerefox metadata search`, …). Credentials come from a `.env` file resolved from the working directory, or from environment variables.
 
-The legacy Python `uv run cerefox` is a frozen husk as of v0.9 — only `uv run cerefox mcp` (the standalone Python MCP fallback) still works; every other verb has moved to the TypeScript `cerefox` binary.
+The Python implementation was fully removed at v1.0.0; every command is the TypeScript `cerefox` binary (`npm install -g @cerefox/memory`).
 
 > Full per-flag reference lives in [`docs/guides/cli.md`](docs/guides/cli.md). The mapping table below is the agent-facing summary. **CLI flag names match MCP parameter names exactly** (kebab-case), each with a single-letter short form (`-p`, `-f`, `-c`, `-m`, `-u`, `-a`, `-r`). Use the canonical long name or its short form — there are no long-form aliases like `--project` or `--count`.
 

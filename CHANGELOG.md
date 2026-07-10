@@ -9,7 +9,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Removed
+- **Python is fully retired (BREAKING, iter-28G).** The frozen, unmaintained
+  Python implementation is deleted — the MCP-server fallback (`uv run cerefox
+  mcp`), the husked CLI / web / ingestion packages, the legacy `scripts/*.py`,
+  and `pyproject.toml` / `uv.lock` (31 files). The maintained paths are the
+  `@cerefox/memory` npm package (local MCP + CLI), the remote `cerefox-mcp` Edge
+  Function, and the Hono web app. **If you still run `uv run cerefox mcp`,
+  switch to `npx --package=@cerefox/memory cerefox mcp`, or stay on 0.11.x.**
+  The SQL schema assets (`src/cerefox/db/*.sql`) are unaffected — they are not
+  Python and remain the source of truth for the schema + RPCs.
+
+### Fixed
+- `cerefox-ingest` now returns **409 `duplicate_content`** (was a generic 500)
+  when an ingest or edit would collide with another document's content hash.
+- The live pipeline suite no longer leaks `[E2E-pipeline-project…]` test
+  projects — cleanup moved to `afterAll`, after the documents are purged so the
+  membership rows cascade away first.
+
+### Changed
+- The two post-`server deploy` reminders (pin `CEREFOX_OAUTH_OWNER_ID` /
+  generate `CEREFOX_ACCESS_TOKENS`) now render as informational `ℹ` (cyan)
+  instead of a yellow `⚠` — they print on every deploy and are reminders, not a
+  detected problem.
 
 ---
 

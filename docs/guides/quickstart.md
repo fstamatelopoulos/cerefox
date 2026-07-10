@@ -133,8 +133,8 @@ You should see results from the bundled self-docs.
 
 The path above is for **end users** (no clone). If you want to hack on Cerefox,
 clone the repo, run `bun install`, and use the contributor scripts
-(`bun scripts/db_deploy.ts`, `bun scripts/db_migrate.ts`). `uv` is only needed
-for the legacy Python MCP fallback. See [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+(`bun scripts/db_deploy.ts`, `bun scripts/db_migrate.ts`). See
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 (Want a no-cloud install instead? That's the self-hosted Docker backend —
 [`setup-local.md`](setup-local.md).)
 
