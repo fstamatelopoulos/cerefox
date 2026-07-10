@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
+import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
 
 /**
  * cerefox-ingest — Supabase Edge Function
@@ -256,6 +257,7 @@ const EMBEDDING_INITIAL_BACKOFF_MS = 500; // 500ms, 1s, 2s exponential backoff
 
 async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> {
   let lastError: Error | null = null;
+  const inputs = texts.map(capEmbeddingInput); // iter-28D Phase 0: cap oversized inputs
 
   for (let attempt = 0; attempt < EMBEDDING_MAX_RETRIES; attempt++) {
     try {
@@ -267,7 +269,7 @@ async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> 
         },
         body: JSON.stringify({
           model: OPENAI_MODEL,
-          input: texts,
+          input: inputs,
           dimensions: EMBEDDING_DIMENSIONS,
         }),
       });
