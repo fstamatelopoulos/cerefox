@@ -83,7 +83,7 @@ const wantedGuides = (() => {
     "response-limits.md",
     "upgrading.md",
     "content-format.md",
-    "migration-0.12.md",
+    "migration-1.0.md",
   ]);
 })();
 

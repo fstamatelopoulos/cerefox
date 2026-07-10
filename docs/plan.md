@@ -3177,7 +3177,7 @@ wild without breaking changes + at least one outside user installing without hel
 ### v1.0.0 release scope + remaining steps (updated 2026-07-10)
 
 v1.0.0 grew into a large, multi-workstream release. **Branch strategy:** keep the
-workstreams on separate branches, merge each into `main`, then cut `0.12.0-beta` from
+workstreams on separate branches, merge each into `main`, then cut `1.0.0-beta` from
 `main` (each is independently reviewable/testable; squash-merge collapses history).
 
 **Only two substantive workstreams remain for 1.0.0: (a) the full-codebase security
@@ -3199,7 +3199,7 @@ the 4 chunker-corrupted docs, which rides on 28D).
 1. **Neutralize the exposed anon key** — ✅ **effectively done via 28E** (all EFs reject it now).
    One residual step, deferred to just before the public release: flip **"Disable legacy API
    keys"** in the Supabase dashboard to close the Data-API surface (the maintainer chose to
-   leave it enabled-but-unused for now; migration-0.12.md step 5). `CEREFOX_MCP_STATIC_BEARER`
+   leave it enabled-but-unused for now; migration-1.0.md step 5). `CEREFOX_MCP_STATIC_BEARER`
    removed.
 2. **Supabase/CF secret cleanup** — ✅ **done in 28E**: `CEREFOX_ACCESS_TOKENS` set via
    `cerefox token generate`; `CEREFOX_MCP_STATIC_BEARER` gone; `CEREFOX_SUPABASE_ANON_KEY`
@@ -3219,11 +3219,11 @@ the 4 chunker-corrupted docs, which rides on 28D).
 > intentionally **not tracked in this OSS repo** (it involves personal KB content).
 
 **Release sequencing (decided 2026-07-09) — stay in `0.x` until all breaking changes land, then freeze 1.0:**
-1. **`0.12.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
+1. **`1.0.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
    **28F** (full documentation sanity sweep) + secret cleanup (②) → merge `feat/oauth-mcp` →
    `main` → cut the beta → **test extensively on the maintainer laptop** → *soft* Discord
    (beta testers only).
-2. **`0.12.x` betas** — the **full-codebase security audit** (③, + any mitigations) then
+2. **`1.0.0-beta.N` betas** — the **full-codebase security audit** (③, + any mitigations) then
    **28D Phase 1** (proper chunker: `content_format` schema + blind-stitch).
 3. **`1.0.0-rc` → `1.0.0`** once every breaking/schema change is in, audited, and soaked —
    the stability commitment (28C).
@@ -3344,7 +3344,7 @@ deferral (`docs/research/oauth-mcp-auth.md`).
 - All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
   (design §14 has the verification table; re-check before each phase).
 - **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
-  the feature in a v0.12.x pre-release and stamp v1.0.0 after it settles.
+  the feature in a 1.0.0-beta pre-release and stamp v1.0.0 after it settles.
 
 ### 28B: Security audit
 
@@ -3427,7 +3427,7 @@ NOT a Supabase key:
   constant-time token check for the primitive EFs AND `cerefox-mcp`'s (removed) static path.
 - **Retire the legacy anon JWT for all EF paths — hard cutover, no back-compat window.**
   Single-user project, so each deployer updates their own clients then flips to token-only (a
-  clean breaking change at the `0.12.0-beta` boundary). Migration docs for the two affected
+  clean breaking change at the `1.0.0-beta` boundary). Migration docs for the two affected
   client classes: **old remote static-Bearer MCP** and **ChatGPT GPT Actions**.
 - Update the GPT Actions OpenAPI block (auth scheme → the token in a header; `info.version`
   bump) + the remote-MCP client + connect-agents docs.
@@ -3447,7 +3447,7 @@ NOT a Supabase key:
 The access-path narrative shifted materially across 28A (OAuth), 28B (security), and 28E
 (token + legacy-JWT retirement). Before the beta cut, do **one full documentation pass** to
 make every guide tell the *same* new story. This is broader than 28E §8's targeted edits — it's
-a whole-repo consistency check. Target: v0.12.0-beta (part of step 1 in the sequencing block).
+a whole-repo consistency check. Target: v1.0.0-beta (part of step 1 in the sequencing block).
 
 **The single narrative every doc must reflect:**
 - **Local agents** (Claude Code, Cursor, Codex, Gemini, Desktop) → **local MCP** via
@@ -3903,7 +3903,7 @@ merged, not deployed). All slices landed and are committed:
   `deploy-server` (`--no-verify-jwt` for all 9, cutover warning); **`cerefox token
   generate/rotate/list`** + `.env` upsert util; `doctor` + web-boot + live e2e suites switched
   from the anon key to `CEREFOX_ACCESS_TOKEN`; GPT Actions OpenAPI `info.version` 3.0.0.
-- **28F** — full doc sweep (CLAUDE.md auth model, CHANGELOG, `migration-0.12.md`, connect-agents,
+- **28F** — full doc sweep (CLAUDE.md auth model, CHANGELOG, `migration-1.0.md`, connect-agents,
   access-paths, setup-supabase, configuration, cli, security-model, solution-design, README,
   oauth-mcp-server-design [historical, annotated], cloudflare README). Legacy anon JWT retired
   everywhere; consent-EF refs → removed; EF count reconciled (9 = 8 primitive + `cerefox-mcp`).
@@ -3983,7 +3983,7 @@ bundler (`--use-api`, issue #84). Design of record:
    optional with another scope). The wipe incident also spawned the
    **metadata-versioning** backlog proposal:
    [`docs/research/metadata-versioning.md`](research/metadata-versioning.md).
-2. **Iteration 31 — Local ONNX embedder** (fully-offline World B), target **v0.12+**
+2. **Iteration 31 — Local ONNX embedder** (fully-offline World B), target **v1.1+ (post-1.0)**
    (slid from v0.11.0 to make room for iter-32), on `feat/local-embedder`.
    Design committed; P0 implementation pending review. See iter-31 in the log above.
 3. **Iteration 28 — v1.0**: ⏳ **ACTIVE (28A) as of 2026-07-08** on `feat/oauth-mcp`.

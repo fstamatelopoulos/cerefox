@@ -33,4 +33,4 @@ Current contents:
   unrotatable legacy anon JWT across all Edge Function paths (8 primitive EFs +
   `cerefox-mcp` static path) with a rotatable, Cerefox-managed access token
   validated in-function; back-compat window then legacy-anon revoke. Target
-  v0.12.0-beta.
+  v1.0.0-beta.
