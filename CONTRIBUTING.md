@@ -45,18 +45,17 @@ See `docs/solution-design.md` and `docs/research/vision.md` for the full archite
 ## Development Setup
 
 Cerefox is a **TypeScript** project (Bun/Node). The entire runtime — CLI, MCP server, web
-server, and ingestion pipeline — is TypeScript in [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)
-as of v0.9. Python survives **only** as a frozen, unmaintained MCP fallback (`uv run cerefox
-mcp`); `uv` is optional and only needed if you want to touch that husk.
+server, and ingestion pipeline — is TypeScript in [`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory).
+The Python implementation was **fully removed at v1.0.0**; the only non-Python thing left
+under `src/cerefox/` is the SQL schema (`db/*.sql`), which the TS deploy bundles.
 
 | Tool | Why | Install |
 |---|---|---|
 | **[Bun](https://bun.sh) 1.x** | The whole TS runtime + `scripts/*.ts` + tests (`bun test`) | `curl -fsSL https://bun.sh/install \| bash` |
 | **Node 20+** with `npm` | Frontend (React + Vite) build + npm publish; an alternative TS runtime | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
-| **Python 3.11+** with [`uv`](https://docs.astral.sh/uv/) | **Optional** — only for the legacy `uv run cerefox mcp` fallback | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 
 End users install via `npm`/`bun install -g @cerefox/memory` (or the one-liner installer) and
-need neither `uv` nor a clone. The **local / self-hosted (Docker) backend** is separate again
+need no clone. The **local / self-hosted (Docker) backend** is separate again
 — see [`docs/guides/setup-local.md`](docs/guides/setup-local.md).
 
 ```bash
@@ -64,16 +63,15 @@ need neither `uv` nor a clone. The **local / self-hosted (Docker) backend** is s
 git clone https://github.com/fstamatelopoulos/cerefox.git
 cd cerefox
 bun install
-# uv sync   # OPTIONAL — only for the legacy `uv run cerefox mcp` fallback
 
-# Run tests (`bun test` is the only runner; pytest is retired)
+# Run tests (`bun test` is the only runner)
 cd _shared && bun test                                  # TS unit tests (mocked)
 cd packages/memory && bun run build && bun test         # CLI/MCP smokes + live read/write
 cd frontend && bun run test:e2e                         # UI e2e (Playwright)
 CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote  # live EF e2e (opt-in)
 
-# Lint and format
-uv run ruff check . && uv run ruff format .
+# Type-check
+bun run typecheck            # tsc --noEmit across _shared
 
 # Build frontend
 cd frontend && bun install && bun run build
@@ -141,20 +139,14 @@ Two versions track the server side: the **schema version** (`@version:` marker i
 
 ---
 
-## Script-Language Policy (effective from v0.2.0)
+## Script-Language Policy
 
-Cerefox is in a Python → TypeScript strangler-fig migration that runs through the v0.2.0 → v1.0.0 polish-and-distribution arc. The policy:
+**Everything is TypeScript.** The Python → TypeScript strangler-fig migration (v0.2.0 →
+v1.0.0) is complete — the last Python was removed at v1.0.0. All scripts, CLI tools, and
+installer pieces are TypeScript (Bun-runnable, Node 20+ compatible); new scripts go in
+`scripts/*.ts`.
 
-1. **All new scripts, CLI tools, and installer pieces are written in TypeScript.** Bun-runnable, Node 20+ compatible. New scripts go in `scripts/*.ts`.
-2. **Existing Python scripts get migrated when they're extended.** Trivial extension (add a flag, fix a small bug): port to TS first, then make the change. Complex extension (real new functionality): defer the port to its scheduled iteration; do the extension in Python.
-3. **Untouched Python scripts stay Python** until their scheduled port. Don't migrate for migration's sake.
-4. **Bun is a contributor prerequisite from v0.2.0**, but end users are unaffected (Python install path stays the same until v0.4.0).
-
-When in doubt, open an issue before starting work on a new script. We'll point you at the TS skeleton.
-
-The first concrete artifact under this policy is [`scripts/cut_release.ts`](scripts/cut_release.ts) — the release-cutting script, shipped with v0.2.0. v0.3.0 ports `scripts/sync_docs.ts` and `scripts/db_status.ts` (both extended in that release).
-
-Full reasoning in [`docs/specs/polish-and-distribution-design.md` §12f](docs/specs/polish-and-distribution-design.md).
+Historical reasoning for the migration: [`docs/specs/polish-and-distribution-design.md` §12f](docs/specs/polish-and-distribution-design.md).
 
 ### `_shared/` — cross-context TypeScript modules
 
@@ -162,7 +154,7 @@ Starting in v0.3.0, TS code that's consumed by more than one entry point (script
 
 ```
 _shared/
-  config/      env resolver, dotenv loader (TS mirror of src/cerefox/paths.py)
+  config/      env resolver, dotenv loader
   db-client/   thin @supabase/supabase-js wrapper with zod-typed responses
   db-status/   reusable schema-introspection (used by db_status.ts; v0.5's
                `cerefox doctor` will import the same module)
@@ -233,7 +225,7 @@ If something needs fixing after a tag is published, **cut a new patch version**.
 
 PRs must pass these jobs before merge. Cold-cache wall clock is ~60-90 seconds. Live e2e tests (`CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote`, `scripts/check_ef_parity.ts`) need Supabase credentials and are run manually by the maintainer before each cut — see `docs/research/v0.7-manual-test-plan.md` (the rolling test plan that spans v0.5 → v0.7).
 
-**Lint enforcement** (`ruff check` + `ruff format --check`) is intentionally NOT in CI yet — `main` carries ~28 pre-existing warnings + ~28 files that would be reformatted, accumulated before lint was wired up. Adding it now would block every PR until that debt is cleaned. That cleanup deserves its own focused PR; once it lands, the ruff steps will be added to `ci.yml`.
+**Type-checking**: `bun run typecheck` (`tsc --noEmit` across `_shared`) is the TS quality gate. A dedicated formatter/linter (biome) is not yet wired.
 
 ---
 
@@ -252,7 +244,6 @@ PRs must pass these jobs before merge. Cold-cache wall clock is ~60-90 seconds. 
 
 ## Code Style
 
-- **Formatter/linter**: ruff (line length 100)
-- **Type hints**: required on all public functions
+- **Type-checking**: `tsc --noEmit` (`bun run typecheck`); annotate public function signatures
 - **Tests**: new code is TypeScript; add tests alongside it in `packages/memory/test/` or `_shared/__tests__/` (`bun test`)
 - **Imports**: lazy-import heavy dependencies inside functions

@@ -63,7 +63,7 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Heading-aware chunking** | Greedy section accumulation — H1/H2/H3 sections accumulate until MAX_CHUNK_CHARS; heading breadcrumb preserved per chunk |
 | **Cloud embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API (the only embedder wired in the TS runtime today) |
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and a Cerefox access token (`cerefox token generate`); no Python install needed |
-| **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. (A frozen Python MCP server also ships for repo-clone users: `uv run cerefox mcp`.) |
+| **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
 | **Markdown-first ingest** | `.md` / `.txt` / `.docx` (Markdown is the storage format; `.docx` is converted via `mammoth` on ingest, fidelity varies. PDF is not supported — convert upstream) |
 | **Batch ingest** | `cerefox document ingest-dir` recurses directories |
@@ -180,13 +180,11 @@ cerefox-local search "what did I decide about auth?"
 
 ### Run from source (contributors)
 
-Clone the repo and run from source. `bun` drives everything; `uv` is only for
-the legacy Python MCP fallback.
+Clone the repo and run from source. `bun` drives everything.
 
 ```bash
 git clone https://github.com/fstamatelopoulos/cerefox.git && cd cerefox
 bun install                  # workspace deps: root + packages/memory + frontend
-uv sync                      # OPTIONAL — only for the legacy `uv run cerefox mcp` fallback
 cp .env.example .env         # fill in Supabase URL/keys + embedding key
 
 bun scripts/db_deploy.ts     # schema + RPCs  (--dry-run to preview · --reset to wipe first)
@@ -200,11 +198,10 @@ Full contributor setup, conventions, and the test matrix are in
 [`CONTRIBUTING.md`](CONTRIBUTING.md) and the contributor section of
 [`docs/guides/quickstart.md`](docs/guides/quickstart.md).
 
-> **Python is legacy.** As of v0.9 the entire runtime (CLI, MCP, web,
-> ingestion) is TypeScript in `@cerefox/memory`. The only surviving Python is
-> `uv run cerefox mcp` — a frozen, offline / no-npm MCP fallback for repo-clone
-> users. It is unmaintained and slated for removal; everything else Python is a
-> husk that redirects to the TS CLI. See
+> **Python is gone.** As of **v1.0.0** the entire runtime (CLI, MCP, web,
+> ingestion) is TypeScript in `@cerefox/memory`; the Python implementation —
+> including the `uv run cerefox mcp` fallback — was removed. Only the SQL schema
+> assets under `src/cerefox/db/` remain (they are not Python). See
 > [`docs/guides/upgrading.md`](docs/guides/upgrading.md).
 
 ---

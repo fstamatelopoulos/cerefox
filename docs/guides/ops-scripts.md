@@ -30,10 +30,8 @@ The canonical scripts are **TypeScript**, run with [Bun](https://bun.sh) (instal
 | `backup_restore.ts` | `bun scripts/backup_restore.ts` |
 | `reindex_all.ts` | `bun scripts/reindex_all.ts` |
 
-The `.py` equivalents are **legacy** — they still exist as a migration aid but are no longer
-maintained; use the `.ts` scripts. The legacy `db_status.py` and `sync_docs.py` are
-deprecation shims that exit non-zero with a pointer to the TS replacement, so update any cron
-jobs / CI / make targets that invoke them.
+Use the `.ts` scripts. The former `.py` equivalents were **removed at v1.0.0** — update any
+cron jobs / CI / make targets that still invoke a `python scripts/*.py` path.
 
 ### TS scripts and `.env` resolution
 
@@ -75,7 +73,7 @@ CEREFOX_DATABASE_URL=postgresql://cerefox:cerefox@localhost:5432/cerefox \
 
 ## db_status.ts — Schema verification
 
-**TypeScript (v0.3.0+).** Checks that the schema is correctly deployed and reports table statistics. Replaces the legacy `db_status.py`, which now prints a deprecation notice and exits non-zero.
+**TypeScript (v0.3.0+).** Checks that the schema is correctly deployed and reports table statistics. Replaces the former `db_status.py` (removed at v1.0.0).
 
 ```bash
 bun scripts/db_status.ts          # human-readable report
@@ -223,7 +221,7 @@ The backup directory (`./backup-data/` by default) is gitignored. Back up the ba
 
 Ingests `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and every Markdown file under `docs/` into your Cerefox knowledge base, updating existing documents in-place. Run this any time after editing documentation so AI agents always have access to the current state of the project.
 
-Replaces the legacy `sync_docs.py`, which now prints a deprecation notice and exits non-zero.
+Replaces the former `sync_docs.py` (removed at v1.0.0).
 
 ```bash
 bun scripts/sync_docs.ts [OPTIONS]

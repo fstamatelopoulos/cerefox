@@ -12,7 +12,7 @@ This guide walks you from a blank Supabase project to a fully deployed Cerefox s
 - **Node.js 20+** or **Bun 1.0+** (the CLI runtime; also used for `npx supabase`).
 - A Supabase account (free tier is enough): [supabase.com](https://supabase.com)
 
-> The `python scripts/db_*.py` paths shown in the contributor footnotes below are **legacy**. The Python implementation is legacy and slated for removal in a future release; only the Python MCP server remains as a fallback. Contributors with a repo clone should use `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts`.
+> Contributors with a repo clone use `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts` for the low-level schema path. (The former `python scripts/db_*.py` equivalents were removed at v1.0.0.)
 
 ---
 
@@ -161,7 +161,7 @@ Re-run `cerefox doctor` — the "edge functions" check goes green.
 
 > **Contributors** (repo clone): the low-level path is `bun scripts/db_deploy.ts`
 > / `bun scripts/db_migrate.ts` for schema, and `npx supabase functions deploy
-> <name>` per Edge Function. The `python scripts/db_deploy.py` path is legacy.
+> <name>` per Edge Function.
 
 ---
 
@@ -349,7 +349,7 @@ In 2026 Supabase rolled out a new API key system. The dashboard now shows two ke
 
 | Variable | Recommended value | Why |
 |---|---|---|
-| `CEREFOX_SUPABASE_KEY` | New **secret key** (`sb_secret_…`). Legacy `service_role` JWT also works. | Used by `db/client.py` to reach the Data API (PostgREST). Both formats are accepted by the gateway. |
+| `CEREFOX_SUPABASE_KEY` | New **secret key** (`sb_secret_…`). Legacy `service_role` JWT also works. | Used by the CLI / web app to reach the Data API (PostgREST). Both formats are accepted by the gateway. |
 | `CEREFOX_ACCESS_TOKEN` | **Cerefox access token** (`cfx_pat_…`) from `cerefox token generate`. | The `Authorization: Bearer …` credential for Edge Function calls (remote MCP, GPT Actions, e2e tests, direct curl). Validated in-function; rotatable via `cerefox token rotate`. |
 | `CEREFOX_SUPABASE_ANON_KEY` | *(deprecated / unused)* | Formerly the Edge Function Bearer credential. Retired in iter-28E; retained only so an old `.env` still parses. |
 

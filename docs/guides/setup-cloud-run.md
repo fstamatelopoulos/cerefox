@@ -9,12 +9,9 @@
 
 Deploy the Cerefox web UI to Google Cloud Run for a lightweight, serverless hosting option. This guide uses Supabase (free tier) for the database.
 
-> **Note (v0.9):** The Cerefox web UI is now the TypeScript server (`cerefox web` — Hono
-> backend + React/Mantine SPA), not the retired Python/FastAPI app. The container build and
-> env-var wiring below still apply, but the `Dockerfile` must build/serve the TS `cerefox web`
-> server (port 8000), and any reference to the old Python image should be treated as **needing
-> revalidation** against the current `Dockerfile`. The "Securing access" middleware example is
-> flagged inline.
+> **Note:** The Cerefox web UI is the TypeScript server (`cerefox web` — Hono backend +
+> React/Mantine SPA); the Python/FastAPI app was removed at v1.0.0. The container `Dockerfile`
+> builds and serves the TS `cerefox web` server (port 8000).
 
 ---
 
@@ -128,7 +125,6 @@ Use Identity-Aware Proxy (IAP) in front of Cloud Run for Google SSO.
 ### Option 3 — Add HTTP basic auth
 
 Add a Hono middleware to the TS `cerefox web` server that checks `Authorization: Basic ...`
-headers, using `CEREFOX_BASIC_AUTH_USER` / `CEREFOX_BASIC_AUTH_PASSWORD` env vars. (The
-old Python `src/cerefox/api/app.py` middleware path is retired — this needs revalidation
-against the current TS web server's middleware hook.)
+headers, using `CEREFOX_BASIC_AUTH_USER` / `CEREFOX_BASIC_AUTH_PASSWORD` env vars
+(implement it against the current TS `cerefox web` server's middleware hook).
 

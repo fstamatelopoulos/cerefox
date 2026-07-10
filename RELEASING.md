@@ -106,6 +106,14 @@ Breaking changes are allowed **between betas**; freeze them at `-rc`. Promote to
 `1.0.0` (which publishes under `latest`) once the RC has soaked. Do NOT skip the
 `[Unreleased]` → versioned CHANGELOG promotion for a beta — each beta gets its own section.
 
+**Consolidate the CHANGELOG when cutting the stable `X.0.0`.** Because each beta/rc holds only
+*its* delta, the final stable section would otherwise contain just the delta since the last rc
+— not the whole story since the previous stable. Before running `cut_release.ts X.0.0`, hand-
+edit `[Unreleased]` so the `[X.0.0]` section aggregates **every** change across all the
+`X.0.0-beta.N` / `-rc.N` sections since the last stable, deduped and organized by
+Added / Changed / Fixed / Removed / Security. That consolidated section is the source for the
+release announcement. Leave the individual pre-release sections beneath it as granular history.
+
 ## Post-release verification
 
 1. The release workflow run is green (build + test, then publish).
