@@ -56,12 +56,27 @@ interface IngestRequest {
   last_write_wins?: boolean;
 }
 
-// Map the RPC's CEREFOX_CONFLICT / CEREFOX_TOKEN_REQUIRED errors to HTTP
-// responses (409 conflict / 400 missing token). Returns null for other errors.
+// Map the RPC's expected/validation errors to proper HTTP responses:
+//   CEREFOX_CONFLICT                → 409 (stale optimistic-concurrency token)
+//   CEREFOX_TOKEN_REQUIRED          → 400 (missing expected_content_hash)
+//   cerefox_documents_hash_unique   → 409 (content de-dup: another doc already
+//                                          holds identical content)
+// Returns null for genuinely unexpected errors (→ 500 at the call site).
 function concurrencyErrorResponse(
   message: string,
   headers: Record<string, string>,
 ): Response | null {
+  if (message.includes("cerefox_documents_hash_unique")) {
+    return new Response(
+      JSON.stringify({
+        error: "duplicate_content",
+        message:
+          "Another document already has identical content. Cerefox de-duplicates by content hash — update that document instead of creating or editing a second copy to match it.",
+        detail: message,
+      }),
+      { status: 409, headers },
+    );
+  }
   if (message.includes("CEREFOX_CONFLICT")) {
     return new Response(
       JSON.stringify({
