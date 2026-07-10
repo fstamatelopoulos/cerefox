@@ -136,3 +136,65 @@ describe("chunkMarkdown — heading_path metadata", () => {
     expect(first.heading_level).toBe(0);
   });
 });
+
+describe("chunkMarkdown — adversarial edge cases (sole-chunker hardening)", () => {
+  test("heading immediately followed by body (no blank line between)", () => {
+    const doc = "## Head\nbody line right under it\n\n" + "tail ".repeat(50).trim();
+    roundTrips(doc, 40);
+  });
+
+  test("doc exactly at the size limit → single chunk, unchanged", () => {
+    const body = "z".repeat(100);
+    const chunks = chunkMarkdown(body, 100);
+    expect(chunks.length).toBe(1);
+    expect(chunks[0].content).toBe(body);
+  });
+
+  test("doc of only headings round-trips", () => {
+    const doc = Array.from({ length: 20 }, (_, i) => `${"#".repeat((i % 3) + 1)} Heading ${i}`).join("\n\n");
+    roundTrips(doc, 30);
+  });
+
+  test("trailing spaces + tabs on lines are preserved exactly", () => {
+    const doc = "# H   \n\nline with trailing spaces   \nand a\ttab\tinside\n\n" + "x".repeat(200);
+    roundTrips(doc, 50);
+  });
+
+  test("heading with closing hashes (## Foo ##) parses title without them", () => {
+    const doc = "## Foo ##\n\n" + "body ".repeat(60).trim();
+    const chunks = chunkMarkdown(doc, 80);
+    const underFoo = chunks.find((c) => c.heading_path.length > 0);
+    expect(underFoo!.heading_path).toEqual(["Foo"]);
+    expect(blindStitch(chunks)).toBe(doc.trim()); // content still exact incl. the "##"
+  });
+
+  test("a fenced code block containing '### not-a-heading' still round-trips exactly", () => {
+    const doc =
+      "# Real\n\n```\n### this is code, not a heading\nsome code line\n```\n\n" + "after ".repeat(60).trim();
+    // Round-trip must be byte-exact regardless of how headings are detected.
+    roundTrips(doc, 50);
+  });
+
+  test("one huge line (no blank lines, has single \\n soft-wraps) hard-splits losslessly", () => {
+    const doc = Array.from({ length: 400 }, (_, i) => `soft-wrapped line number ${i}`).join("\n"); // single \n, no \n\n
+    const chunks = roundTrips(doc, 120);
+    expect(chunks.length).toBeGreaterThan(1);
+  });
+
+  test("all-astral content larger than the limit hard-splits without breaking pairs", () => {
+    const doc = "𝟙".repeat(1000); // 1000 astral code points, one block, no separators
+    roundTrips(doc, 100);
+  });
+
+  test("CRLF throughout a large multi-section doc", () => {
+    const doc = Array.from({ length: 20 }, (_, i) => `## Section ${i}\r\n\r\nBody ${i} ${"y".repeat(20)}`).join(
+      "\r\n\r\n",
+    );
+    roundTrips(doc, 45);
+  });
+
+  test("windows-style paragraph gaps (\\r\\n\\r\\n) count as separators", () => {
+    const doc = "para one here\r\n\r\npara two here\r\n\r\npara three which is a bit longer to force splitting";
+    roundTrips(doc, 25);
+  });
+});
