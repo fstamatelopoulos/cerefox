@@ -3819,6 +3819,11 @@ agreed plan). What landed:
 - **Doctor**: ℹ "N of M docs use the legacy format" → points to `cerefox guides show content-format`.
 - **Docs**: bundled `docs/guides/content-format.md`; CHANGELOG proper-fix entry.
 
+**Expected until deploy:** the default `packages/memory` `bun test` now shows **16 LIVE failures**
+— all "Could not find the function … p_content_format" — because the code passes `p_content_format`
+but prod is still on schema 0.7.0. These are NOT bugs; they confirm the wiring and clear the moment
+schema 0.8.0 is deployed. `_shared` (274) + all non-live package tests pass.
+
 **NEXT (supervised, together):** `npm link` local build → `cerefox server deploy` (schema 0.8.0 +
 EFs, from the staged temp copy per the deploy-gotcha) → `cerefox doctor` (content-format ℹ) →
 ingest a dummy table doc via local + remote MCP and verify byte-exact reconstruction (format-2)
