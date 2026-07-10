@@ -186,7 +186,25 @@ export function blindStitch(chunks: Pick<ChunkData, "content">[]): string {
 }
 
 /**
- * The document-content format this chunker produces. Stored on the document and
- * used by the reconstruction RPCs to pick the join strategy (2 = blind concat).
+ * The content format this chunker produces. Stamped on each chunk (via the ingest
+ * RPC's p_content_format) and used by the reconstruction RPCs to pick the join
+ * strategy (2 = blind concat). See docs/guides/content-format.md.
  */
 export const CONTENT_FORMAT_BLIND_STITCH = 2;
+
+/**
+ * Build the title-boosted embedding input for a chunk. Format-2 chunk `content` is
+ * an exact slice that no longer carries the heading line for mid-section chunks, so
+ * the heading context is re-added here as a breadcrumb from `heading_path` (search
+ * quality parity). Stored `content` is unchanged; this string is embedded only.
+ *   `# {docTitle}`                       (chunk at the doc's top / preamble)
+ *   `# {docTitle}\n{A > B > C}`          (chunk under headings A > B > C)
+ */
+export function embeddingInputFor(
+  docTitle: string,
+  chunk: Pick<ChunkData, "heading_path" | "content">,
+): string {
+  const breadcrumb = chunk.heading_path.join(" > ");
+  const head = breadcrumb ? `# ${docTitle}\n${breadcrumb}` : `# ${docTitle}`;
+  return `${head}\n${chunk.content}`;
+}

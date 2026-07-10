@@ -19,6 +19,7 @@
 export {
   chunkMarkdown,
   blindStitch,
+  embeddingInputFor,
   CONTENT_FORMAT_BLIND_STITCH,
   type ChunkData,
 } from "./chunker.js";

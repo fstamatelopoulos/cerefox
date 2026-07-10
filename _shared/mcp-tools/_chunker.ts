@@ -6,7 +6,13 @@
  * here was removed) and keeps the content-hash helpers used for dedup.
  */
 
-export { chunkMarkdown, type ChunkData, type ChunkData as Chunk } from "../ingest/chunker.ts";
+export {
+  chunkMarkdown,
+  embeddingInputFor,
+  CONTENT_FORMAT_BLIND_STITCH,
+  type ChunkData,
+  type ChunkData as Chunk,
+} from "../ingest/chunker.ts";
 
 export const MAX_CHUNK_CHARS = 4000;
 

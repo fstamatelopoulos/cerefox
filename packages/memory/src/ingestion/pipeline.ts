@@ -25,8 +25,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   chunkMarkdown,
+  CONTENT_FORMAT_BLIND_STITCH,
   contentHash,
   deriveSourcePath,
+  embeddingInputFor,
   resolveProjectIds,
 } from "../../../../_shared/ingest/index.ts";
 import { embedBatch } from "../../../../_shared/embeddings/index.ts";
@@ -235,7 +237,7 @@ export class IngestionPipeline {
     // ── (7) Embed chunks (title-boosted) ─────────────────────────────────
     let chunkRows: ChunkInsertRow[] = [];
     if (chunks.length > 0) {
-      const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+      const texts = chunks.map((c) => embeddingInputFor(title, c));
       const embeddings = await embedBatch(texts, this.apiKey);
       chunkRows = chunks.map((c, i) => ({
         chunk_index: c.chunk_index,
@@ -261,6 +263,7 @@ export class IngestionPipeline {
       metadata: validatedMeta,
       reviewStatus,
       chunks: chunkRows,
+      contentFormat: CONTENT_FORMAT_BLIND_STITCH,
       author,
       authorType,
     });
@@ -385,7 +388,7 @@ export class IngestionPipeline {
 
       // Title-change re-embed (contextual enrichment).
       if (titleChanged) {
-        const texts = actualChunks.map((c) => `# ${title}\n${c.content}`);
+        const texts = actualChunks.map((c) => embeddingInputFor(title, c));
         try {
           const embeddings = await embedBatch(texts, this.apiKey);
           for (let i = 0; i < actualChunks.length; i++) {
@@ -458,7 +461,7 @@ export class IngestionPipeline {
 
     let chunkRows: ChunkInsertRow[] = [];
     if (chunks.length > 0) {
-      const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+      const texts = chunks.map((c) => embeddingInputFor(title, c));
       const embeddings = await embedBatch(texts, this.apiKey);
       chunkRows = chunks.map((c, i) => ({
         chunk_index: c.chunk_index,
@@ -490,6 +493,7 @@ export class IngestionPipeline {
       metadata: metaToWrite,
       reviewStatus,
       chunks: chunkRows,
+      contentFormat: CONTENT_FORMAT_BLIND_STITCH,
       author,
       authorType,
       sourceLabel: source,

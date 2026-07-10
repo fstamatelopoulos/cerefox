@@ -11,7 +11,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { blindStitch, chunkMarkdown, type ChunkData } from "../ingest/chunker.ts";
+import {
+  blindStitch,
+  chunkMarkdown,
+  embeddingInputFor,
+  type ChunkData,
+} from "../ingest/chunker.ts";
 
 function cpLen(s: string): number {
   let n = 0;
@@ -196,5 +201,26 @@ describe("chunkMarkdown — adversarial edge cases (sole-chunker hardening)", ()
   test("windows-style paragraph gaps (\\r\\n\\r\\n) count as separators", () => {
     const doc = "para one here\r\n\r\npara two here\r\n\r\npara three which is a bit longer to force splitting";
     roundTrips(doc, 25);
+  });
+});
+
+describe("embeddingInputFor — heading breadcrumb", () => {
+  test("no heading path → just the title line + content", () => {
+    expect(embeddingInputFor("Doc Title", { heading_path: [], content: "body text" })).toBe(
+      "# Doc Title\nbody text",
+    );
+  });
+
+  test("heading path → title + breadcrumb + content", () => {
+    expect(
+      embeddingInputFor("Doc Title", { heading_path: ["A", "B", "C"], content: "body" }),
+    ).toBe("# Doc Title\nA > B > C\nbody");
+  });
+
+  test("stored content is never mutated (only the embedding input adds context)", () => {
+    const chunk = { heading_path: ["Sec"], content: "para without its heading line" };
+    const input = embeddingInputFor("T", chunk);
+    expect(input).toContain(chunk.content);
+    expect(chunk.content).toBe("para without its heading line"); // unchanged
   });
 });

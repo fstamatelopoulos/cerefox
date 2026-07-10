@@ -17,7 +17,13 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { chunkMarkdown, normalizeContent, sha256hex } from "./_chunker.ts";
+import {
+  chunkMarkdown,
+  embeddingInputFor,
+  CONTENT_FORMAT_BLIND_STITCH,
+  normalizeContent,
+  sha256hex,
+} from "./_chunker.ts";
 import { embedBatch, OPENAI_MODEL } from "../embeddings/index.ts";
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
 import { logUsage } from "./_utils.ts";
@@ -137,7 +143,7 @@ async function handler(
     const chunks = chunkMarkdown(content);
     if (chunks.length === 0) throw new Error("Content produced no chunks");
 
-    const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+    const texts = chunks.map((c) => embeddingInputFor(title, c));
     const embeddings = await embedBatch(texts, ctx.openaiApiKey);
     const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 
@@ -165,6 +171,7 @@ async function handler(
       p_source_label: source,
       p_expected_content_hash: expected_content_hash,
       p_last_write_wins: last_write_wins,
+      p_content_format: CONTENT_FORMAT_BLIND_STITCH,
     });
 
     if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);
@@ -214,7 +221,7 @@ async function handler(
       const chunks = chunkMarkdown(content);
       if (chunks.length === 0) throw new Error("Content produced no chunks");
 
-      const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+      const texts = chunks.map((c) => embeddingInputFor(title, c));
       const embeddings = await embedBatch(texts, ctx.openaiApiKey);
       const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 
@@ -242,6 +249,7 @@ async function handler(
         p_source_label: source,
         p_expected_content_hash: expected_content_hash,
         p_last_write_wins: last_write_wins,
+      p_content_format: CONTENT_FORMAT_BLIND_STITCH,
       });
 
       if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);
@@ -279,7 +287,7 @@ async function handler(
   const chunks = chunkMarkdown(content);
   if (chunks.length === 0) throw new Error("Content produced no chunks");
 
-  const texts = chunks.map((c) => `# ${title}\n${c.content}`);
+  const texts = chunks.map((c) => embeddingInputFor(title, c));
   const embeddings = await embedBatch(texts, ctx.openaiApiKey);
   const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 
@@ -304,6 +312,7 @@ async function handler(
     p_chunks: chunkData,
     p_author: author,
     p_author_type: author_type,
+    p_content_format: CONTENT_FORMAT_BLIND_STITCH,
   });
 
   if (ingestErr || !ingestResult?.length) {

@@ -3,7 +3,11 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
-import { chunkMarkdown } from "../../../_shared/ingest/chunker.ts";
+import {
+  chunkMarkdown,
+  embeddingInputFor,
+  CONTENT_FORMAT_BLIND_STITCH,
+} from "../../../_shared/ingest/chunker.ts";
 
 /**
  * cerefox-ingest — Supabase Edge Function
@@ -426,7 +430,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Content produced no chunks" }), { status: 422, headers });
     }
 
-    const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
+    const texts = chunks.map((c) => embeddingInputFor(title.trim(), c));
     let embeddings: number[][];
     try {
       embeddings = await embedBatch(texts, openaiKey);
@@ -459,6 +463,7 @@ Deno.serve(async (req: Request) => {
       p_source_label: source,
       p_expected_content_hash: expected_content_hash,
       p_last_write_wins: last_write_wins,
+      p_content_format: CONTENT_FORMAT_BLIND_STITCH,
     });
 
     if (ingestErr) {
@@ -542,7 +547,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // Prepend document title for contextual enrichment (stored content unchanged)
-      const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
+      const texts = chunks.map((c) => embeddingInputFor(title.trim(), c));
       let embeddings: number[][];
       try {
         embeddings = await embedBatch(texts, openaiKey);
@@ -577,6 +582,7 @@ Deno.serve(async (req: Request) => {
         p_source_label: source,
         p_expected_content_hash: expected_content_hash,
         p_last_write_wins: last_write_wins,
+      p_content_format: CONTENT_FORMAT_BLIND_STITCH,
       });
 
       if (ingestErr) {
@@ -650,7 +656,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Embed all chunks with title prefix for contextual enrichment (stored content unchanged)
-  const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
+  const texts = chunks.map((c) => embeddingInputFor(title.trim(), c));
   let embeddings: number[][];
   try {
     embeddings = await embedBatch(texts, openaiKey);
@@ -685,6 +691,7 @@ Deno.serve(async (req: Request) => {
     p_chunks: chunkData,
     p_author: author,
     p_author_type: author_type,
+    p_content_format: CONTENT_FORMAT_BLIND_STITCH,
   });
 
   if (ingestErr || !ingestResult?.length) {
