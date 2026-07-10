@@ -3802,6 +3802,44 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-07-10): `1.0.0-beta.1` SHIPPED, migrated to prod, and FULLY VALIDATED. 28D is
+done.** (Supersedes the sequencing/NEXT blocks below.) What happened:
+- **Cut + published** `1.0.0-beta.1` under the **`beta`** npm dist-tag (`latest` stays on 0.11.1).
+  The first publish failed — `npm publish --provenance` threw `Cannot find module 'sigstore'`
+  because `npm i -g npm@latest` corrupts npm's global tree. Fixed `release.yml` to use **Node 24's
+  bundled npm** (≥ 11.5.1) and drop the self-upgrade; re-dispatched → published clean.
+- **Migrated prod** via the installed beta (not a repo checkout): `cerefox server deploy` applied
+  migration 0012 + refreshed RPCs (schema **0.7.0 → 0.8.0**) and redeployed all 9 EFs. `doctor`
+  green (edge-functions ✓, content-format ℹ 236/236 legacy). Token infra from 28E already in place,
+  so `token generate` was correctly skipped.
+- **Validated the reconstruction fix across EVERY write path on prod** (byte-exact `recon ==
+  content_hash`, `content_format=2`, no injected `\n\n`): remote MCP over OAuth, token-gated
+  `cerefox-ingest`, web-UI edit, web docx upload, and local MCP (after a client restart — a running
+  agent keeps its stale `cerefox mcp` process until restarted; the installer already documents this,
+  see `upgrading.md`). Legacy **format-1** docs verified to still `\n\n`-join (94-chunk doc); the
+  **mixed** case (edited legacy → format-2 current + format-1 archived) and per-version
+  reconstruction both confirmed. The maintainer completed their own data recovery of the file that
+  surfaced the bug; it reconstructs byte-exactly.
+
+**Go-forward to 1.0.0 (ordering of the two big items is the maintainer's call):**
+- **`fix/beta2-followups`** branch (off main, unmerged) — small fixes found while dogfooding:
+  committed = leaked-test-project cleanup (`pipeline-ingest-text.test.ts`) + `cerefox-ingest`
+  500→**409** on the content-dedup unique violation; TODO on the branch = deploy post-run advisories
+  `⚠→ℹ` (they're unconditional, not state-detected), and a `packages/memory/README.md` 1.0 pass.
+- **28G — Python retirement** (delete the frozen Python MCP fallback + sweep all docs): mechanical,
+  low-risk, needs no model switch. Good candidate to bundle into the next beta with the fix branch.
+- **Security audit** (28B ③): full-codebase, needs Fable 5 + a way to not trip safeguards on an
+  authorized audit of our own code. Its own beta so fixes get soak time.
+- **rc.1 gate (not a beta blocker):** World B (local/self-hosted) chunk-fix smoke — same
+  `schema.sql`/`rpcs.sql` (0012 + `content_format` CASE) + shared chunker as cloud, so low risk but
+  unexercised there; build the local image `publish_latest=false` (or `docker compose up`
+  `docker/local` from source) + `smoke.sh` + one round-trip. Publish the public `:latest` local
+  image (via `cut_release --docker-publish` / `local-image.yml`, manual-dispatch only) at rc.1/1.0.0,
+  not for betas.
+- Then **`1.0.0-rc.1`** (freeze) → **`1.0.0`** (promote to `latest`).
+
+---
+
 **Beta sequencing decision (2026-07-12): ship `1.0.0-beta.1` as-is; the security audit is
 `beta.2`, not folded into this cut.** Rationale: the two workstreams don't gate each other.
 beta.1 exists to validate the highest-risk, least-tested path — install → migrate →
