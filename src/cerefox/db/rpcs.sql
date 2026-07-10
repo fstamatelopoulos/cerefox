@@ -403,7 +403,7 @@ AS $$
         ARRAY(SELECT p.name FROM cerefox_projects p
               JOIN cerefox_document_projects dp ON p.id = dp.project_id
               WHERE dp.document_id = d.id) AS doc_project_names,
-        STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
+        CASE WHEN MAX(c.content_format) >= 2 THEN STRING_AGG(c.content, '' ORDER BY c.chunk_index) ELSE STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) END AS full_content,
         COUNT(*)::INT   AS chunk_count,
         SUM(c.char_count)::INT AS total_chars,
         (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
@@ -680,17 +680,18 @@ AS $$
     large_doc_content AS (
         SELECT
             e.document_id,
-            STRING_AGG(e.content, E'\n\n' ORDER BY e.chunk_index) AS full_content,
+            CASE WHEN MAX(ch.content_format) >= 2 THEN STRING_AGG(e.content, '' ORDER BY e.chunk_index) ELSE STRING_AGG(e.content, E'\n\n' ORDER BY e.chunk_index) END AS full_content,
             COUNT(*)::INT AS chunk_count,
             TRUE          AS is_partial
         FROM expanded e
+        JOIN cerefox_chunks ch ON ch.id = e.chunk_id
         GROUP BY e.document_id
     ),
     -- Full content for small documents (is_partial = FALSE).
     small_doc_content AS (
         SELECT
             c.document_id,
-            STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
+            CASE WHEN MAX(c.content_format) >= 2 THEN STRING_AGG(c.content, '' ORDER BY c.chunk_index) ELSE STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) END AS full_content,
             COUNT(*)::INT AS chunk_count,
             FALSE         AS is_partial
         FROM cerefox_chunks c
@@ -866,7 +867,7 @@ AS $$
               JOIN cerefox_document_projects dp ON p.id = dp.project_id
               WHERE dp.document_id = d.id) AS doc_project_names,
         p_version_id    AS version_id,
-        STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) AS full_content,
+        CASE WHEN MAX(c.content_format) >= 2 THEN STRING_AGG(c.content, '' ORDER BY c.chunk_index) ELSE STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) END AS full_content,
         COUNT(*)::INT   AS chunk_count,
         SUM(c.char_count)::INT AS total_chars,
         d.created_at,
@@ -1072,6 +1073,7 @@ $$;
 
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN);
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN);
+DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN, SMALLINT);
 CREATE FUNCTION cerefox_ingest_document(
     p_document_id       UUID        DEFAULT NULL,
     p_title             TEXT        DEFAULT 'Untitled',
@@ -1090,7 +1092,11 @@ CREATE FUNCTION cerefox_ingest_document(
     p_retention_hours   INT         DEFAULT 48,
     p_cleanup_enabled   BOOLEAN     DEFAULT TRUE,
     p_expected_content_hash TEXT    DEFAULT NULL,
-    p_last_write_wins   BOOLEAN     DEFAULT FALSE
+    p_last_write_wins   BOOLEAN     DEFAULT FALSE,
+    -- content_format for the chunks being written (iter-28D). 2 = exact-partition
+    -- (blind-stitch reconstruction); default 1 = legacy (E'\n\n'-join). Stamped on
+    -- every chunk this call inserts.
+    p_content_format    SMALLINT    DEFAULT 1
 )
 RETURNS TABLE (
     document_id     UUID,
@@ -1222,7 +1228,7 @@ BEGIN
     -- Formula: doc_title (A) || chunk_heading (A) || body_content (B)
     INSERT INTO cerefox_chunks (
         document_id, chunk_index, heading_path, heading_level,
-        title, content, char_count, embedding_primary, embedder_primary, fts
+        title, content, char_count, content_format, embedding_primary, embedder_primary, fts
     )
     SELECT
         v_doc_id,
@@ -1232,6 +1238,7 @@ BEGIN
         c->>'title',
         c->>'content',
         (c->>'char_count')::INT,
+        p_content_format,
         (SELECT array_agg(e::FLOAT)::VECTOR(768) FROM jsonb_array_elements_text(c->'embedding') AS e),
         c->>'embedder',
         setweight(to_tsvector('english', COALESCE(p_title, '')), 'A') ||
@@ -1509,7 +1516,7 @@ BEGIN
              WHERE dv.document_id = d.id) AS version_count,
             d.content_hash,
             CASE WHEN p_include_content THEN
-                (SELECT STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index)
+                (SELECT CASE WHEN MAX(c.content_format) >= 2 THEN STRING_AGG(c.content, '' ORDER BY c.chunk_index) ELSE STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) END
                  FROM cerefox_chunks c
                  WHERE c.document_id = d.id AND c.version_id IS NULL)
             ELSE NULL END AS content
@@ -1767,7 +1774,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.7.0'::TEXT;
+    SELECT '0.8.0'::TEXT;
 $$;
 
 

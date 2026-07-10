@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.7.0
+-- @version: 0.8.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -157,6 +157,12 @@ CREATE TABLE IF NOT EXISTS cerefox_chunks (
     title           TEXT,
     content         TEXT        NOT NULL,
     char_count      INT         NOT NULL,
+    -- content_format: how this chunk's content reconstructs into full document text
+    -- (iter-28D). 1 = legacy (chunk contents re-joined with E'\n\n' on read); 2 =
+    -- blind-stitch (chunk contents are an exact, gapless partition, reconstructed by
+    -- plain concat). It lives on the chunk (not the document) so an archived version
+    -- reconstructs with its OWN format. See docs/guides/content-format.md.
+    content_format  SMALLINT    NOT NULL DEFAULT 1,
 
     -- Primary embedding: always computed, cloud API (default: OpenAI text-embedding-3-small)
     embedding_primary  VECTOR(768) NOT NULL,
