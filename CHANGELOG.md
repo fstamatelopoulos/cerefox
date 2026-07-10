@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-beta.1] -- 2026-07-10
+
 ### Security
 - **Edge Function auth moved off the unrotatable legacy anon JWT to a rotatable
   Cerefox-managed access token (breaking; iter-28E).** On Supabase projects using
