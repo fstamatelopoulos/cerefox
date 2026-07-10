@@ -114,9 +114,8 @@ to Supabase over its REST API (PostgREST), authenticating with a **service-role-
 key** rather than the anon key — either the new **secret key** (`sb_secret_…`) or the legacy
 `service_role` JWT. Both are accepted by the Data API gateway.
 
-> The legacy Python FastAPI web app and Python CLI are husks slated for removal; only
-> `uv run cerefox mcp` survives as a frozen, unmaintained fallback. The TS `cerefox` CLI
-> and `cerefox web` are the current implementations.
+> The Python implementation (FastAPI web app, CLI, and the MCP-server fallback) was fully
+> removed at v1.0.0. The TS `cerefox` CLI and `cerefox web` are the implementations.
 
 The service-role key bypasses Supabase Row Level Security (RLS) policies and grants
 unrestricted read and write access. This is intentional — the CLI and web app are trusted,
@@ -156,8 +155,7 @@ For end users, `cerefox server deploy` (which bundles schema + RPCs + the nine E
 Functions from the npm package) handles schema deployment directly. For contributors, the
 canonical deployment and migration scripts (`bun scripts/db_deploy.ts`,
 `bun scripts/db_migrate.ts`, `bun scripts/backup_restore.ts`) connect directly to Postgres
-over TCP using the database connection string. (The legacy `.py` equivalents still exist
-but are deprecated.) This is the only path that can run DDL statements (`CREATE TABLE`,
+over TCP using the database connection string. This is the only path that can run DDL statements (`CREATE TABLE`,
 `CREATE FUNCTION`) — the REST API does not support them.
 
 ```

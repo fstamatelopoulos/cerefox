@@ -41,7 +41,6 @@ Three top-level paths plus a few special cases:
 | Gemini CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token only; no local install. Advanced/fallback — prefer Path A-Local |
 | Local coding agents (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) | Path C — Shell CLI (Bash tool) | Hybrid | `npm install -g @cerefox/memory`; agent runs `cerefox …` as a shell command. Useful when MCP setup is friction. |
 | curl / scripts | Path B — Edge Functions directly | Hybrid | Direct HTTP; no client needed |
-| Custom Python agents | Python SDK directly (legacy) | Hybrid | Local Python + repo clone; the Python path is legacy/frozen |
 
 > **"Hybrid"** = FTS + semantic, document-level (complete reconstructed notes, not isolated chunks).
 > **"FTS only"** = keyword search only; no semantic/vector search.
@@ -92,8 +91,6 @@ in the container.
   in the per-client configs below if your client can't see the file)
 - `.env` must define `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, and your
   embedding API key (`OPENAI_API_KEY`)
-- A frozen Python MCP server still exists as a standalone fallback (`uv run cerefox mcp` from a
-  repo clone), but the npm package is the maintained path.
 
 > **Important — the Cerefox access token (iter-28E):** Path A-Remote and Path B both require a
 > **Bearer token** on every request. That credential is now the **Cerefox access token**
@@ -139,12 +136,6 @@ Edge Function, communicating with clients over stdio.
 
 The local server ships as an npm package — **[`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)** — built with the official `@modelcontextprotocol/sdk`.
 The bin entry is `cerefox` (run as `cerefox mcp`). The recommended client config is `npx -y --package=@cerefox/memory cerefox mcp`, or if you've installed the package globally, just `cerefox mcp`.
-
-A separate, **frozen** Python MCP server still exists as a standalone fallback — invoke it
-explicitly with `uv run cerefox mcp` from a Cerefox repo clone. It is independent and
-unmaintained; the npm package is the maintained path. (A "soft wrapper" that auto-delegated
-the Python `cerefox mcp` to the npm package was removed in v0.5.2 — the two are now fully
-separate. Pick one explicitly in your MCP client config.)
 
 - Embeddings are computed locally using your `.env` key (no extra credentials)
 - Works offline except for the OpenAI embedding API call per query
@@ -1281,39 +1272,6 @@ There is nothing Cerefox-specific to configure for the agent itself — just the
 
 ---
 
-## Custom agents (Python SDK — legacy)
-
-> **Legacy/frozen path.** The Python codebase is no longer the maintained runtime — the CLI,
-> local MCP server, and deploy tooling have all moved to TypeScript (`@cerefox/memory`). The
-> Python client below still works from a repo clone but is unmaintained. Prefer Path A (MCP),
-> Path B (Edge Functions HTTP), or Path C (the `cerefox` CLI) for new integrations.
-
-Use the Cerefox Python client directly for scripted or embedded agents (from a repo clone):
-
-```python
-from cerefox.config import Settings
-from cerefox.db.client import CerefoxClient
-from cerefox.embeddings.cloud import CloudEmbedder
-from cerefox.retrieval.search import SearchClient
-
-settings = Settings()            # reads from .env
-client = CerefoxClient(settings)
-embedder = CloudEmbedder(
-    api_key=settings.get_embedder_api_key(),
-    base_url=settings.get_embedder_base_url(),
-    model=settings.get_embedder_model(),
-    dimensions=settings.get_embedder_dimensions(),
-)
-sc = SearchClient(client, embedder, settings)
-
-resp = sc.search_docs("what did I write about Rust?", match_count=5)
-for hit in resp.results:
-    print(f"[{hit.best_score:.2f}] {hit.doc_title}")
-    print(hit.full_content[:400])
-```
-
----
-
 ## Keeping both paths in sync
 
 Both paths use the same Postgres RPCs and the same stored embeddings, but embed queries
@@ -1583,7 +1541,3 @@ claude mcp add --scope user cerefox \
 If `.env` isn't resolvable from your shell's CWD, edit the resulting JSON config to add an
 `env` block (see the Claude Desktop block above). The **Code** tab inside Claude Desktop uses
 this same config — run the `claude mcp add` above and it picks it up automatically.
-
-> The legacy Python MCP server can be wired manually as a standalone fallback by pointing the
-> `command` at `uv` with args `["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]`.
-> It is frozen and unmaintained — prefer the npm entry above.

@@ -10,24 +10,23 @@ Single-user, open-source (Apache 2.0), designed to be cheap/free to operate. See
 
 ## Tech Stack
 
-- **Language**: TypeScript via Bun (CLI, web server, local MCP server, build/release scripts, Edge Functions). Python 3.11+ remains **only** as the frozen, unmaintained MCP-server fallback (`uv run cerefox mcp`) — its CLI + web app were retired to husks in v0.9.0.
+- **Language**: TypeScript via Bun (CLI, web server, local MCP server, build/release scripts, Edge Functions). The Python implementation was **fully removed at v1.0.0** (iter-28G) — only the SQL schema assets under `src/cerefox/db/` remain (they are not Python).
 - **Database**: PostgreSQL 16+ with pgvector (Supabase free tier or local Docker)
 - **Embeddings**: OpenAI `text-embedding-3-small` (768-dim, cloud API); Fireworks AI as alternative; Edge Functions handle embedding server-side for agents
-- **Web framework**: Hono on Bun/Node (TypeScript), in `packages/memory` — served by `cerefox web`. (The former Python FastAPI web app is a husk as of v0.9.0.)
+- **Web framework**: Hono on Bun/Node (TypeScript), in `packages/memory` — served by `cerefox web`.
 - **Web UI**: React + TypeScript SPA (Mantine UI, TanStack Query, Vite); served at `/app/`
-- **CLI**: commander (TypeScript) in `@cerefox/memory`; resource-verb shape (v0.9.0). The Python Click CLI is husked (redirects to the TS CLI).
+- **CLI**: commander (TypeScript) in `@cerefox/memory`; resource-verb shape (v0.9.0).
 - **Local MCP server**: `@cerefox/memory` npm package (Node ≥20 / Bun ≥1.0); single artifact growing to host CLI + web server + ingestion in future iterations
 - **Shared TS modules**: `_shared/{config,db-client,db-status,embeddings,mcp-tools}/` — imported by both Edge Functions (Deno) and local server (Node/Bun) via structural typing
-- **Package management**: uv (pyproject.toml) for Python; bun workspaces for TS
+- **Package management**: bun workspaces for TS
 - **Testing**: `bun test` (TypeScript) — the only test runner as of v0.9.0 (pytest retired; `tests/**/*.py` deleted)
-- **Linting**: ruff (the surviving Python MCP code); biome/tsc for TS
+- **Type-checking**: `tsc --noEmit` for TS (`bun run typecheck`)
 
 ## Project Structure
 
 ```
 cerefox/
 ├── CLAUDE.md                  # This file
-├── pyproject.toml
 ├── docs/
 │   ├── requirements-and-specs.md  # Source of truth for requirements
 │   ├── solution-design.md         # Architecture and design decisions
@@ -35,25 +34,10 @@ cerefox/
 │   └── TODO.md                    # Backlog and future ideas
 ├── src/
 │   └── cerefox/
-│       ├── __init__.py
-│       ├── config.py              # Settings via pydantic-settings
-│       ├── db/
-│       │   ├── schema.sql         # Database schema
-│       │   ├── rpcs.sql           # Search RPC functions
-│       │   └── client.py          # Supabase/Postgres client wrapper
-│       ├── chunking/
-│       │   └── markdown.py        # Heading-aware MD splitter (PDF/DOCX converters dropped in v0.7)
-│       ├── embeddings/
-│       │   ├── base.py            # Embedder protocol/interface
-│       │   └── cloud.py           # OpenAI/Fireworks REST API embedder
-│       ├── ingestion/
-│       │   └── pipeline.py        # Ingest documents → chunks → DB
-│       ├── retrieval/
-│       │   └── search.py          # Search + small-to-big assembly
-│       ├── api/
-│       │   └── app.py             # Husk (v0.9): Python web removed; use the TS `cerefox web`
-│       ├── mcp_server.py          # Python MCP server — the one live Python path (`uv run cerefox mcp`); frozen/unmaintained fallback
-│       └── cli.py                 # Python CLI — husked in v0.9 (all subcommands redirect to the TS CLI except `mcp`)
+│       └── db/                    # SQL assets ONLY (not Python) — bundled by the TS deploy
+│           ├── schema.sql         # Database schema (+ `-- @version:` marker)
+│           ├── rpcs.sql           # RPC functions (+ `cerefox_schema_version()`)
+│           └── migrations/        # Numbered incremental migrations (00NN_*.sql)
 ├── _shared/                       # TS modules imported by both EFs (Deno) and local server (Node/Bun)
 │   ├── config/                    # paths, env loading
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
@@ -86,8 +70,7 @@ cerefox/
 │   ├── bundle_help.ts         # Bundle AGENT_QUICK_REFERENCE.md into _shared/mcp-tools/get-help-content.ts
 │   ├── db_deploy.ts           # Low-level fresh schema+RPC deploy (contributor; has --reset)
 │   ├── db_migrate.ts          # Low-level apply-pending-migrations (contributor; --status/--dry-run)
-│   ├── backup_create.ts / backup_restore.ts / reindex_all.ts / sync_docs.ts / cerefox_export.ts
-│   └── *.py                   # LEGACY Python scripts — superseded by the .ts ports above
+│   └── backup_create.ts / backup_restore.ts / reindex_all.ts / sync_docs.ts / cerefox_export.ts
 ├── packages/memory/test/      # TS test suite (`bun test`) — the only test runner (v0.9)
 ├── _shared/__tests__/         # TS unit tests for the shared modules
 ├── frontend/tests/e2e/        # Playwright UI e2e (@playwright/test)
@@ -98,7 +81,7 @@ cerefox/
 ## Development Conventions
 
 ### Code Style
-- Use ruff for linting and formatting (line length 100)
+- Type-check TypeScript with `bun run typecheck` (`tsc --noEmit`)
 - Type hints on all public functions
 - Docstrings only where the purpose isn't obvious from the name/signature
 - Prefer simple, flat code over abstractions — don't create a helper for something used once
@@ -106,7 +89,6 @@ cerefox/
 ### Naming
 - Database tables: `cerefox_` prefix (e.g., `cerefox_documents`, `cerefox_chunks`)
 - Database RPCs: `cerefox_` prefix (e.g., `cerefox_hybrid_search`)
-- Python modules: snake_case, short names
 - Config: environment variables with `CEREFOX_` prefix
 
 ### CLI verb conventions (v0.9.0+)
@@ -130,7 +112,7 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
   a minor (e.g., v0.9.1) — see plan.md Iteration 27's v0.9.1 block.
 
 ### Architecture Principles
-- **Pluggable embedders**: all embedders implement the `Embedder` protocol (see `embeddings/base.py`)
+- **Pluggable embedders**: embedding helpers live in `_shared/embeddings/` (OpenAI today)
 - **Markdown-first**: all content is converted to markdown before chunking/storage
 - **Fire-and-forget ingestion**: ingestion can be async; failures log errors but don't block
 - **Parameterized limits**: response size limits, chunk sizes, etc. are configurable via settings
@@ -139,7 +121,7 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
 - **Requestor enforcement**: optional `require_requestor_identity` config (default false) makes `requestor`/`author` mandatory on MCP tool calls. Optional `requestor_identity_format` config validates against a regex pattern. Both controlled via `cerefox_config`.
 
 ### Configuration
-- Use pydantic-settings with `.env` file support
+- Config is loaded from `.env` / environment via `_shared/config/`
 - All config has sensible defaults for local development
 - Key settings: `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, `OPENAI_API_KEY`, `CEREFOX_EMBEDDER`, `CEREFOX_MAX_RESPONSE_BYTES`
 
@@ -170,7 +152,6 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
 > calls the `/version?peers=true` aggregator (several EF calls), so don't loop it.
 
 - The live read/write command suites (`packages/memory/test/{read,write}-commands.test.ts`) hit the Data API (not Edge Functions), probe-and-skip when Supabase is unreachable, and self-clean `[E2E …]`-prefixed data.
-- The Python side is **not tested** — it's a frozen, unmaintained fallback (see the Python-legacy note above).
 - See `docs/e2e-use-cases.md` for the full use-case matrix and TODO list.
 
 ### Git (Lightweight GitHub Flow)
@@ -243,7 +224,7 @@ GPT Actions (Custom GPT) ──────▶  cerefox-search           (primit
                          ──────▶  cerefox-metadata-search
                          ──────▶  cerefox-list-projects
 
-Python CLI / Web UI ───────────▶  cerefox.db.client     ──psycopg2 / REST──▶  same RPCs
+cerefox CLI / Web app ─────────▶  Supabase Data API (PostgREST / supabase-js) ─▶  same RPCs
 ```
 
 Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functions). This halves billable invocations for every MCP tool call. Primitive Edge Functions remain unchanged for GPT Actions and direct HTTP clients.
@@ -253,8 +234,8 @@ Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functio
 Cerefox has three distinct access layers, each with its own credential:
 
 1. **AI agents / Edge Functions** — callers (GPT Actions, remote MCP, curl) present the **Cerefox access token** (`cfx_pat_…`, iter-28E) as `Authorization: Bearer`. Every data Edge Function runs `--no-verify-jwt` and validates that token **in-function** (constant-time, against the `CEREFOX_ACCESS_TOKENS` Function secret) before using `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. Generate/rotate the token with `cerefox token generate` / `cerefox token rotate`. The **legacy anon JWT is retired** for this layer (it was unrotatable on ES256-signed projects). Context: `docs/specs/ef-auth-migration-design.md`.
-2. **Python web app & CLI** — `CerefoxClient` authenticates via the Supabase REST API using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
-3. **Deployment scripts only** — `db_deploy.py` / `db_migrate.py` connect directly to Postgres via psycopg2 using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
+2. **Web app & CLI** — the TS client authenticates via the Supabase REST API (Data API) using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
+3. **Deployment scripts only** — `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts` connect directly to Postgres over TCP using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
 
 **OAuth path (iter-28A, `cerefox-mcp`).** As an OPTIONAL feature for cloud/mobile Claude (claude.ai web + app), `cerefox-mcp` is also an OAuth 2.1 protected resource. It does auth **in-function** (`_shared/mcp-auth/`): it accepts EITHER a valid OAuth 2.1 access token (validated against the project JWKS; `sub` pinned to `CEREFOX_OAUTH_OWNER_ID`) OR the **Cerefox access token** (its static path — the same credential the primitive EFs take; the legacy anon static-Bearer was retired in iter-28E). The consent page is a free Cloudflare Worker (`cloudflare/cerefox-consent/`) — a Supabase EF can't serve HTML on the default domain. **All 9 Cerefox Edge Functions now run `--no-verify-jwt` and authenticate in-function** (iter-28E) — the gateway gates none of them; the only unauthenticated surface is `cerefox-mcp`'s RFC 9728 OAuth discovery route + its 401 challenge. Designs: `docs/specs/oauth-mcp-server-design.md`, `docs/specs/ef-auth-migration-design.md`.
 
@@ -264,15 +245,15 @@ See `docs/guides/access-paths.md` for a full breakdown with credential sources a
 
 Business logic lives **only in Postgres RPCs** wherever feasible. If you need to add logic to a tool:
 1. Add or modify the RPC in `src/cerefox/db/rpcs.sql`
-2. The Python client (`db/client.py`) calls the RPC via `supabase.rpc()`
+2. The TS client (CLI / web app) calls the RPC via `supabase.rpc()`
 3. The dedicated primitive Edge Function calls the same RPC via `supabase.rpc()`
 4. The MCP tool handler in `_shared/mcp-tools/*.ts` calls the same RPC directly. Both the remote `cerefox-mcp` Edge Function and the local `@cerefox/memory` TS server import the same handlers from `_shared/mcp-tools/`, so a tool's behaviour is identical regardless of which transport an agent uses.
 
-**Do NOT** add business logic directly in Edge Function TypeScript, Python routes, or in the MCP server bin. The only logic in transport-layer code is input validation, RPC call, and JSON response formatting.
+**Do NOT** add business logic directly in Edge Function TypeScript or in the MCP server bin. The only logic in transport-layer code is input validation, RPC call, and JSON response formatting.
 
-**Ingestion**: The ingestion pipeline has two steps: (1) chunking + embedding (requires external HTTP calls, runs in Python or TypeScript), and (2) database writes (insert document, insert chunks, snapshot version, set review_status, create audit entry). Step 2 is handled entirely by the `cerefox_ingest_document` RPC -- a single atomic transaction. Both the Python `IngestionPipeline` and the `cerefox-ingest` Edge Function call this RPC after completing step 1. This ensures all write logic, review_status transitions, and audit entry creation happen in one place.
+**Ingestion**: The ingestion pipeline has two steps: (1) chunking + embedding (requires external HTTP calls, runs in TypeScript), and (2) database writes (insert document, insert chunks, snapshot version, set review_status, create audit entry). Step 2 is handled entirely by the `cerefox_ingest_document` RPC -- a single atomic transaction. Both the TS `IngestionPipeline` and the `cerefox-ingest` Edge Function call this RPC after completing step 1. This ensures all write logic, review_status transitions, and audit entry creation happen in one place.
 
-**Important**: when adding new write logic (e.g., a new field on documents, a new side effect of ingestion), add it to the `cerefox_ingest_document` RPC, not to the Python pipeline or Edge Function. The callers should only handle chunking, embedding, and parameter preparation.
+**Important**: when adding new write logic (e.g., a new field on documents, a new side effect of ingestion), add it to the `cerefox_ingest_document` RPC, not to the pipeline or Edge Function. The callers should only handle chunking, embedding, and parameter preparation.
 
 **Simple CRUD** operations (read/list queries on documents, chunks, projects; project create/update/delete) use the Supabase REST API directly (`client.table(...)`). This is acceptable as these are pure data access with no business logic.
 
@@ -280,8 +261,8 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 
 | Edge Function | Purpose | Called By |
 |---|---|---|
-| `cerefox-search` | Hybrid FTS + semantic search; handles server-side embedding | GPT Actions, Python client, direct HTTP |
-| `cerefox-ingest` | Ingest document; chunks, embeds, versions, stores | GPT Actions, Python client, direct HTTP |
+| `cerefox-search` | Hybrid FTS + semantic search; handles server-side embedding | GPT Actions, direct HTTP |
+| `cerefox-ingest` | Ingest document; chunks, embeds, versions, stores | GPT Actions, direct HTTP |
 | `cerefox-metadata` | List metadata keys with doc counts + example values | GPT Actions, direct HTTP |
 | `cerefox-get-document` | Retrieve full doc content; supports archived versions | GPT Actions, direct HTTP |
 | `cerefox-list-versions` | List archived version history for a document | GPT Actions, direct HTTP |
@@ -366,7 +347,7 @@ For **local** agents (Claude Code, Cursor, Codex, Gemini, Desktop) the **preferr
 6. **Edge Function per operation** — each operation has a dedicated Edge Function that is a thin HTTP adapter over a Postgres RPC; `cerefox-mcp` calls those same RPCs directly (no delegation/fan-out to other Edge Functions); single implementation principle (see above)
 7. **Chunks-anchored versioning** — `version_id IS NULL` = current version; `version_id = <uuid>` = archived; partial indexes automatically exclude archived chunks from search; no separate content table
 8. **Title boosting** — `cerefox_chunks.fts` is a regular `TSVECTOR` (not `GENERATED`) because `GENERATED` columns cannot cross-reference another table. The `cerefox_ingest_document` RPC computes `fts` inline using its `p_title` parameter: document title at weight A, chunk heading at weight A, body at weight B. Embeddings are similarly enriched: `# {doc_title}\n{chunk.content}` is the embedding input (stored content is unchanged). Title changes trigger `cerefox_update_chunk_fts` + re-embed of current chunks.
-9. **Optimistic concurrency on content updates** (v0.11 / schema 0.5.0) — updates via `cerefox_ingest_document` require `p_expected_content_hash` (compare-and-swap against the document's existing `content_hash`, atomic via `SELECT … FOR UPDATE` in the RPC) or an explicit `p_last_write_wins` (audit-logged). Stale → `CEREFOX_CONFLICT` (40001 / HTTP 409); absent → `CEREFOX_TOKEN_REQUIRED` (22023 / HTTP 400). All document-shaped read RPCs return `content_hash` so writers hold the token. Filesystem-sync flows (`ingest-dir`, `guides ingest`) and the frozen Python fallback pass `last_write_wins` internally. Design: `docs/specs/concurrency-control-design.md`.
+9. **Optimistic concurrency on content updates** (v0.11 / schema 0.5.0) — updates via `cerefox_ingest_document` require `p_expected_content_hash` (compare-and-swap against the document's existing `content_hash`, atomic via `SELECT … FOR UPDATE` in the RPC) or an explicit `p_last_write_wins` (audit-logged). Stale → `CEREFOX_CONFLICT` (40001 / HTTP 409); absent → `CEREFOX_TOKEN_REQUIRED` (22023 / HTTP 400). All document-shaped read RPCs return `content_hash` so writers hold the token. Filesystem-sync flows (`ingest-dir`, `guides ingest`) pass `last_write_wins` internally. Design: `docs/specs/concurrency-control-design.md`.
 
 ## Documentation as Source of Truth
 
@@ -424,5 +405,5 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 - **Docs**: `docs/plan.md` for current status, `docs/TODO.md` for backlog
 - **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 8 tools, key rules, workflows)
 - **Schema**: `src/cerefox/db/schema.sql`
-- **Config**: `.env` file or environment variables (see `src/cerefox/config.py`)
+- **Config**: `.env` file or environment variables (see `_shared/config/`)
 - **Max response size**: defaults to 200000 bytes, configurable via `CEREFOX_MAX_RESPONSE_BYTES`. Enforced on the MCP / Edge Function paths **and the CLI** (the CLI also accepts a per-call `--max-bytes`). The **web UI is unlimited** (no byte budget).

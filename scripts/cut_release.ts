@@ -16,15 +16,12 @@
  *   1. Verify clean working tree, on `main`, up to date with origin.
  *   2. Verify CHANGELOG [Unreleased] section has content.
  *   3. Update VERSION to the new version.
- *   4. Sync pyproject.toml's [project] table (build-time dynamic version
- *      already reads VERSION; we update only if there is an explicit pin,
- *      which there should NOT be from v0.2.0 onward).
- *   5. Promote [Unreleased] to [vX.Y.Z] -- <today> in CHANGELOG.md and add
+ *   4. Promote [Unreleased] to [vX.Y.Z] -- <today> in CHANGELOG.md and add
  *      a fresh empty [Unreleased] heading.
- *   6. Commit: "chore: cut vX.Y.Z".
- *   7. Annotated tag vX.Y.Z whose message is the extracted CHANGELOG section.
- *   8. Push commit + tag to origin (asks for confirmation unless --yes).
- *   9. Create GitHub Release via `gh release create` using the extracted
+ *   5. Commit: "chore: cut vX.Y.Z".
+ *   6. Annotated tag vX.Y.Z whose message is the extracted CHANGELOG section.
+ *   7. Push commit + tag to origin (asks for confirmation unless --yes).
+ *   8. Create GitHub Release via `gh release create` using the extracted
  *      CHANGELOG section as the notes file.
  *
  * Per the "force-move tags only on objective failure" rule (Cerefox Decision
@@ -44,7 +41,6 @@ import { exit } from "node:process";
 const REPO_ROOT = join(import.meta.dir, "..");
 const VERSION_FILE = join(REPO_ROOT, "VERSION");
 const CHANGELOG_FILE = join(REPO_ROOT, "CHANGELOG.md");
-const PYPROJECT_FILE = join(REPO_ROOT, "pyproject.toml");
 
 // Npm packages whose `package.json` version field must stay in lockstep
 // with the repo-root VERSION file. Each is bumped + git-added on cut.
@@ -423,22 +419,6 @@ function writeVersionLiteral(lit: VersionLiteralFile, newVersion: string): void 
   writeFileSync(lit.path, updated, "utf8");
 }
 
-// ── pyproject.toml sync ──────────────────────────────────────────────────
-
-function checkPyprojectVersionStanza(): void {
-  const text = readFileSync(PYPROJECT_FILE, "utf8");
-  // From v0.2.0 onward pyproject.toml uses `dynamic = ["version"]`; if a
-  // contributor pinned `version = "..."` directly the dynamic source breaks
-  // silently. Refuse to proceed.
-  const pinnedVersion = /^\s*version\s*=\s*"[^"]+"/m;
-  if (pinnedVersion.test(text)) {
-    die(
-      "pyproject.toml has a static `version = \"...\"` pin. " +
-        "Expected `dynamic = [\"version\"]` so the VERSION file drives all surfaces.",
-    );
-  }
-}
-
 // ── main ─────────────────────────────────────────────────────────────────
 
 interface Args {
@@ -564,7 +544,6 @@ async function main(): Promise<void> {
     checkBranch();
     checkUpToDateWithOrigin();
     checkTagDoesNotExist(newVersion);
-    checkPyprojectVersionStanza();
   } else {
     info("  (dry-run: skipping git state checks)");
   }

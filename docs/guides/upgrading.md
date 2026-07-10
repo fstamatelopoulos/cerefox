@@ -52,9 +52,8 @@ migrations) + `bun scripts/db_deploy.ts` (re-apply RPCs) + `npx supabase
 functions deploy <fn>`. These need `CEREFOX_DATABASE_URL` (direct Postgres) and
 a linked Supabase project.
 
-> Python is legacy: the Python CLI and FastAPI web app are husks; only
-> `uv run cerefox mcp` survives as a frozen, unmaintained fallback. Tests run
-> via `bun test` (pytest is retired).
+> Python was **fully removed at v1.0.0** (CLI, FastAPI web app, and the
+> `uv run cerefox mcp` fallback). Tests run via `bun test`.
 
 ## Notable cross-version transitions
 
@@ -66,8 +65,7 @@ knowing about:
   `deploy-server`, `docs`, …) still run but print the new form and exit
   non-zero — so any scripts or aliases tell you exactly what to change. Re-run
   `cerefox completion install` to refresh tab-completion. The Python CLI + web
-  app became husks at v0.9; `uv run cerefox mcp` is the only surviving Python
-  path.
+  app became husks at v0.9 and were fully removed at v1.0.0.
 - **v0.4–v0.5 — the runtime moved Python → TypeScript** and became the
   `@cerefox/memory` npm package (CLI, MCP server, web server, ingestion). If
   you're coming from a pre-installer 0.1.x clone, see the "old pre-installer

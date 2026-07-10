@@ -35,6 +35,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
   let supabase: SupabaseClient | null = null;
   let pipeline: IngestionPipeline | null = null;
   const created: string[] = []; // document IDs to purge in afterAll
+  const createdProjects: string[] = []; // project IDs to delete in afterAll
 
   beforeAll(() => {
     if (!LIVE_OK) return;
@@ -62,6 +63,18 @@ describe("IngestionPipeline.ingestText (live)", () => {
           p_author: "pipeline-ingest-test",
           p_author_type: "user",
         });
+      } catch {
+        /* swallow */
+      }
+    }
+    // Projects are deleted AFTER the docs are purged. Purging a document
+    // cascade-removes its cerefox_document_projects membership rows, which
+    // unblocks the project delete. Deleting a project inline mid-test (while
+    // the doc still exists) fails and supabase-js swallows the error — that
+    // is exactly how these projects leaked across runs.
+    for (const pid of createdProjects) {
+      try {
+        await supabase.from("cerefox_projects").delete().eq("id", pid);
       } catch {
         /* swallow */
       }
@@ -134,6 +147,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
       projectName,
     });
     created.push(result.documentId);
+    createdProjects.push(...result.projectIds); // track before asserting → afterAll always cleans up
     expect(result.action).toBe("created");
     expect(result.projectIds.length).toBe(1);
 
@@ -144,9 +158,6 @@ describe("IngestionPipeline.ingestText (live)", () => {
       .eq("id", result.projectIds[0])
       .maybeSingle();
     expect(data?.name).toBe(projectName);
-
-    // Cleanup the test project too (afterAll only handles docs).
-    await supabase.from("cerefox_projects").delete().eq("id", result.projectIds[0]);
   });
 
   test("ingestText with projectNames list creates + assigns all", async () => {
@@ -162,6 +173,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
       projectNames,
     });
     created.push(result.documentId);
+    createdProjects.push(...result.projectIds); // track before asserting → afterAll always cleans up
     expect(result.action).toBe("created");
     expect(result.projectIds.length).toBe(2);
 
@@ -172,11 +184,6 @@ describe("IngestionPipeline.ingestText (live)", () => {
       .in("id", result.projectIds);
     const names = (data ?? []).map((r) => r.name).sort();
     expect(names).toEqual(projectNames.slice().sort());
-
-    // Cleanup the test projects.
-    for (const pid of result.projectIds) {
-      await supabase.from("cerefox_projects").delete().eq("id", pid);
-    }
   });
 
   test("ingestText with authorType='agent' sets review_status='pending_review'", async () => {

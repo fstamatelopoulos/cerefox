@@ -69,12 +69,21 @@ The migration is **lazy and safe**:
 
 Details: `cerefox guides show content-format` (or [`content-format.md`](content-format.md)).
 
-## 3. Python is retired at 1.0.0
+## 3. Python is fully removed at 1.0.0 (breaking)
 
-The frozen Python MCP fallback (`uv run cerefox mcp`) is retired in 1.0.0. If you still rely
-on it, migrate to the `@cerefox/memory` npm package (`npx --package=@cerefox/memory cerefox
-mcp`), or stay on 0.11.x until you have. The TypeScript CLI, local MCP, remote MCP, and web
-app are the maintained paths.
+**The Python implementation is deleted in 1.0.0** — including the frozen MCP-server fallback
+(`uv run cerefox mcp`), the husked Python CLI / web / ingestion packages, and
+`pyproject.toml`. There is no Python code left to run.
+
+If you still invoke `uv run cerefox mcp`, switch to the maintained local server:
+
+```bash
+npx --package=@cerefox/memory cerefox mcp
+```
+
+(or stay on 0.11.x until you have migrated). The TypeScript CLI, local MCP, remote MCP, and
+web app are the only maintained paths. The SQL schema assets under `src/cerefox/db/` are
+unaffected — they are not Python and remain the source of truth for the schema + RPCs.
 
 ## Upgrade order summary
 

@@ -55,10 +55,9 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 
 Cerefox uses cloud-based embedding APIs. Local models (mpnet, Ollama) are not supported — they require large downloads, fail on some hardware, and add installation complexity.
 
-> **TS runtime: OpenAI only (today).** The current TypeScript runtime implements the
-> OpenAI embedder. `CEREFOX_EMBEDDER` and the `CEREFOX_FIREWORKS_*` variables are
-> documented (they worked in the retired Python runtime) but are **not yet wired in TS** —
-> they're currently no-ops, tracked for a future release.
+> **OpenAI only (today).** The TypeScript runtime implements the OpenAI embedder.
+> `CEREFOX_EMBEDDER` and the `CEREFOX_FIREWORKS_*` variables are documented but **not yet
+> wired in TS** — they're currently no-ops, tracked for a future release.
 
 ### OpenAI (default, recommended)
 
@@ -254,8 +253,8 @@ OPENAI_API_KEY=sk-...
 ```
 
 > **Fireworks is not wired in the TS runtime yet** — `CEREFOX_EMBEDDER=fireworks` /
-> `CEREFOX_FIREWORKS_*` are documented for the retired Python runtime but are currently
-> no-ops (OpenAI is the only embedder implemented today). Tracked for a future release.
+> `CEREFOX_FIREWORKS_*` are documented but currently no-ops (OpenAI is the only embedder
+> implemented today). Tracked for a future release.
 
 ---
 
@@ -332,7 +331,7 @@ key currently in use is `usage_tracking_enabled`. Every usage logging call goes 
 - If `usage_tracking_enabled` is anything else (including missing) -- the RPC returns immediately without inserting
 
 The check happens **inside Postgres on every call**. All callers (Edge Functions, MCP tools,
-Python routes, CLI) call `cerefox_log_usage` unconditionally -- the RPC decides whether to
+CLI) call `cerefox_log_usage` unconditionally -- the RPC decides whether to
 actually log. Callers never wait for the logging result or handle errors from it
 (fire-and-forget).
 
