@@ -453,8 +453,8 @@ export function checkLegacyShadowEnv(): CheckResult | null {
     status: "skipped",
     detail: `${cwdEnv} (shadowed by ~/.cerefox/.env)`,
     hint:
-      "Python `uv run cerefox …` still reads this file during the v0.5–v0.7 migration window. " +
-      "Safe to delete once Python support is removed (v0.9+).",
+      "Shadowed by ~/.cerefox/.env and no longer read by anything (Python was removed at " +
+      "v1.0.0). Safe to delete.",
   };
 }
 

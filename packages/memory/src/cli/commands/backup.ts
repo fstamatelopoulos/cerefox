@@ -114,8 +114,8 @@ async function action(options: BackupOptions): Promise<void> {
   println(c.dim(`  documents: ${docs.length} · chunks: ${chunkTotal}`));
 
   if (options.git) {
-    println(c.yellow("⚠ ") + "--git commit option not yet ported to the TS CLI.");
-    println(c.dim("  For git-aware backups, run `uv run cerefox backup --git` from a clone."));
+    println(c.yellow("⚠ ") + "--git commit is not implemented; the snapshot was written without a git checkpoint.");
+    println(c.dim("  Commit the backup directory yourself if you want it version-controlled."));
   }
 }
 
