@@ -123,14 +123,9 @@ function efsChangedSinceLastTag(): boolean {
  * `schema_version` is the single "redeploy required" signal for both. Unlike
  * EF_VERSION (auto-bumped to the release version), the schema version is an
  * independent semver chosen by hand — so this GATES the cut rather than
- * auto-bumping: if anything under `src/cerefox/db/` changed since the last
+ * auto-bumping: if any `.sql` under `src/cerefox/db/` changed since the last
  * tag, the version must have been bumped, and the two literals must agree.
  */
-const SCHEMA_SOURCE_PATHS = [
-  "src/cerefox/db/schema.sql",
-  "src/cerefox/db/rpcs.sql",
-  "src/cerefox/db/migrations",
-];
 const SCHEMA_SQL_PATH = join(REPO_ROOT, "src", "cerefox", "db", "schema.sql");
 const RPCS_SQL_PATH = join(REPO_ROOT, "src", "cerefox", "db", "rpcs.sql");
 
@@ -164,9 +159,14 @@ function assertSchemaVersionGuard(): void {
   }
   const lastTag = run("git", ["describe", "--tags", "--abbrev=0"]).stdout.trim();
   if (!lastTag) return;
-  const dbChanged =
-    run("git", ["diff", "--name-only", `${lastTag}..HEAD`, "--", ...SCHEMA_SOURCE_PATHS])
-      .stdout.trim().length > 0;
+  // Only `.sql` changes justify a schema_version bump — schema.sql, rpcs.sql, or
+  // a migration. Non-SQL files that merely live under db/ (e.g. the Python
+  // client.py deleted at v1.0.0) must NOT trip the gate, or we'd falsely tell
+  // every user to redeploy.
+  const dbChanged = run("git", ["diff", "--name-only", `${lastTag}..HEAD`, "--", "src/cerefox/db"])
+    .stdout.trim()
+    .split("\n")
+    .some((f) => f.endsWith(".sql"));
   if (!dbChanged) return;
   const prevMarker = parseSchemaMarker(
     run("git", ["show", `${lastTag}:src/cerefox/db/schema.sql`]).stdout,
