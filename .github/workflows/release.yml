@@ -125,4 +125,17 @@ jobs:
         # are belt-and-suspenders — the Trusted Publisher entry
         # enforces both, but explicit flags survive future npm-CLI
         # default changes.
-        run: npm publish --access public --provenance
+        #
+        # Dist-tag: a PRE-RELEASE version (e.g. 1.0.0-beta.1, 1.0.0-rc.1)
+        # publishes under its channel tag (`beta` / `rc`), so `latest` — and a
+        # plain `npm i -g @cerefox/memory` / `cerefox self-update` — stays on the
+        # newest STABLE release. A stable version publishes under `latest`.
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "$VERSION" == *-* ]]; then
+            CHANNEL="${VERSION#*-}"; CHANNEL="${CHANNEL%%.*}"
+          else
+            CHANNEL=latest
+          fi
+          echo "Publishing $VERSION under npm dist-tag: $CHANNEL"
+          npm publish --access public --provenance --tag "$CHANNEL"
