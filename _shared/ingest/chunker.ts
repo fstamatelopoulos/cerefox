@@ -316,3 +316,151 @@ export function chunkMarkdown(
   }
   return chunks;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// iter-28D Phase 1 — exact-partition chunker (format-2, "blind-stitch")
+//
+// NOT YET WIRED to any ingest path. The production chunker above is unchanged.
+// This is the new algorithm + its reconstruction, written and unit-tested in
+// isolation ahead of the (coupled, deploy-dependent) wiring — see the design
+// doc `docs/specs/chunk-reconstruction-design.md` and the "Phase 1 wiring"
+// handoff in `docs/plan.md`.
+//
+// Invariant: `blindStitch(chunkMarkdownExact(doc)) === doc.trim()`. Chunk
+// `content` values are consecutive, gapless, non-overlapping slices of the
+// trimmed document, so reconstruction is a plain concatenation (no `\n\n`
+// separator synthesized on read) — which is what lets a chunk boundary fall
+// anywhere (incl. mid-paragraph at a size limit) with zero corruption.
+// Heading context is NOT stored in mid-section chunk content; it lives in
+// `heading_path` metadata (the embedding input adds it back as a breadcrumb).
+// ════════════════════════════════════════════════════════════════════════════
+
+interface HeadingMark {
+  /** UTF-16 offset of the `#` in the trimmed doc. */
+  offset: number;
+  level: number;
+  text: string;
+}
+
+/** All H1/H2/H3 heading lines in `doc`, in order. Heading text on one line only. */
+function findHeadings(doc: string): HeadingMark[] {
+  const out: HeadingMark[] = [];
+  const re = /^(#{1,3})[ \t]+(.+)$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(doc)) !== null) {
+    out.push({ offset: m.index, level: m[1].length, text: rstripHash(m[2]).trim() });
+  }
+  return out;
+}
+
+/** The active H1/H2/H3 nesting stack at `offset` (headings at or before it). */
+function activeHeadings(headings: HeadingMark[], offset: number): HeadingMark[] {
+  const stack: HeadingMark[] = [];
+  for (const h of headings) {
+    if (h.offset > offset) break;
+    while (stack.length && stack[stack.length - 1].level >= h.level) stack.pop();
+    stack.push(h);
+  }
+  return stack;
+}
+
+/**
+ * Split `s` into consecutive pieces of at most `maxCp` code points each, such
+ * that `pieces.join("") === s`. Never splits a code point (surrogate pair).
+ */
+function hardSplitCp(s: string, maxCp: number): string[] {
+  const out: string[] = [];
+  let buf = "";
+  let n = 0;
+  for (const ch of s) {
+    if (n >= maxCp) {
+      out.push(buf);
+      buf = "";
+      n = 0;
+    }
+    buf += ch;
+    n++;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
+/**
+ * Exact-partition ("blind-stitch") markdown chunker. See the banner above.
+ * `minChunkChars` is accepted for signature parity but unused — tiny trailing
+ * atoms merge into the current chunk naturally via greedy accumulation.
+ */
+export function chunkMarkdownExact(
+  text: string,
+  maxChunkChars = 4000,
+  _minChunkChars = 100,
+): ChunkData[] {
+  const doc = text.trim();
+  if (!doc) return [];
+
+  if (cpLen(doc) <= maxChunkChars) {
+    return [
+      { chunk_index: 0, heading_path: [], heading_level: 0, title: "", content: doc, char_count: cpLen(doc) },
+    ];
+  }
+
+  const headings = findHeadings(doc);
+
+  // Atomize preserving every character: split on blank-line runs, attach each
+  // separator to its PRECEDING block (so a separator never starts a chunk), then
+  // hard-split any atom that alone exceeds the size limit. atoms.join("") === doc.
+  const parts = doc.split(/(\n{2,})/); // [block, sep, block, sep, …, block]
+  const atoms: string[] = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const unit = (parts[i] ?? "") + (parts[i + 1] ?? ""); // block + trailing separator
+    if (unit === "") continue;
+    if (cpLen(unit) > maxChunkChars) atoms.push(...hardSplitCp(unit, maxChunkChars));
+    else atoms.push(unit);
+  }
+
+  const chunks: ChunkData[] = [];
+  let buf = "";
+  let bufCp = 0;
+  let bufStart = 0;
+  let offset = 0;
+
+  const flush = (): void => {
+    if (buf === "") return;
+    const stack = activeHeadings(headings, bufStart);
+    chunks.push({
+      chunk_index: chunks.length,
+      heading_path: stack.map((h) => h.text),
+      heading_level: stack.length ? stack[stack.length - 1].level : 0,
+      title: stack.length ? stack[stack.length - 1].text : "",
+      content: buf,
+      char_count: bufCp,
+    });
+    buf = "";
+    bufCp = 0;
+  };
+
+  for (const atom of atoms) {
+    const cp = cpLen(atom);
+    if (buf === "") {
+      bufStart = offset;
+      buf = atom;
+      bufCp = cp;
+    } else if (bufCp + cp <= maxChunkChars) {
+      buf += atom;
+      bufCp += cp;
+    } else {
+      flush();
+      bufStart = offset;
+      buf = atom;
+      bufCp = cp;
+    }
+    offset += atom.length; // UTF-16 length — same units as heading offsets
+  }
+  flush();
+  return chunks;
+}
+
+/** Format-2 reconstruction: blind concatenation (no separator synthesized). */
+export function blindStitch(chunks: Pick<ChunkData, "content">[]): string {
+  return chunks.map((c) => c.content).join("");
+}

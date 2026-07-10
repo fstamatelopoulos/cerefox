@@ -16,7 +16,7 @@
  * (see `packages/memory/test/fixtures/python-parity/chunking/`).
  */
 
-export { chunkMarkdown, type ChunkData } from "./chunker.js";
+export { chunkMarkdown, chunkMarkdownExact, blindStitch, type ChunkData } from "./chunker.js";
 export {
   normalizeForHash,
   contentHash,

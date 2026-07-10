@@ -77,6 +77,22 @@ corruption, which is what lets us bound chunk size again.
   (`_shared/ingest/chunker.ts`) produces **format-2** blind-stitch. The versioned
   reconstruction (§4.3) handles both, so nothing breaks during the deprecation window.
 
+### 4.2b Chunker consolidation — REQUIRED FIRST (discovered 2026-07-10)
+
+The design above assumed one TS chunker. There are **three**, plus Python:
+1. `_shared/ingest/chunker.ts` — used by the CLI/web/pipeline (`packages/memory/src/ingestion/pipeline.ts`).
+2. `_shared/mcp-tools/_chunker.ts` — used by `_shared/mcp-tools/ingest.ts` (local MCP + `cerefox-mcp` EF).
+3. `supabase/functions/cerefox-ingest/index.ts` inline `chunkMarkdown` — the GPT-Actions ingest path.
+
+A partial/inconsistent Phase-1 change across these would itself corrupt data, so **consolidate to
+one before rewriting**. `_shared/ingest/index.ts` claims Deno EFs "can't import from `_shared/`",
+but iter-28E disproved that (the EFs now import `ef-auth`/`ef-meta`/`embeddings` via the bundler).
+Plan: point (2) and (3) at `_shared/ingest/chunker.ts`; add `"ingest"` to the
+`bundle_server_assets.ts` subtree list; delete the two duplicate copies. Then the exact-partition
+rewrite is a single change. **Status: the exact-partition algorithm + `blindStitch` + invariant
+tests are written and green as `chunkMarkdownExact` (unwired); consolidation + swap-in is the next
+step.**
+
 ### 4.3 Reconstruction (backward-compatible, versioned)
 - New column `cerefox_documents.content_format SMALLINT NOT NULL DEFAULT 1`
   (`1` = legacy `\n\n`-join; `2` = blind-stitch).

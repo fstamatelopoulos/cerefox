@@ -3802,6 +3802,35 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-07-11, overnight — 28D in progress on `fix/chunk-reconstruction`).** Done this
+session (all pushed):
+- **Phase 0 — embedding-input cap: COMPLETE.** `capEmbeddingInput` in `_shared/embeddings`
+  (default 20000 chars, `CEREFOX_EMBED_MAX_INPUT_CHARS`) applied at every embed choke point
+  (shared client + the `cerefox-ingest`/`cerefox-search` EF inline embedders). +8 tests.
+- **Phase 1 — exact-partition algorithm: WRITTEN + FULLY TESTED, UNWIRED.** `chunkMarkdownExact`
+  + `blindStitch` in `_shared/ingest/chunker.ts`; invariant `blindStitch(chunk(doc)) === doc.trim()`
+  green across 14 cases / 823 assertions (prose, multi-heading, oversized table, blank-line-free
+  paragraph, unicode/astral, CRLF, size stress). The production `chunkMarkdown` (format-1) is
+  UNCHANGED, so there is **zero behavior/prod impact** yet.
+
+**Guardrails held (unattended):** no schema deploy, no live-EF runs.
+
+**Phase 1 REMAINING (coupled — must land together; do carefully, ideally reviewed):**
+1. **Consolidate the 3 TS chunkers → 1** (design §4.2b): point `_shared/mcp-tools/_chunker.ts`
+   and the `cerefox-ingest` EF inline chunker at `_shared/ingest/chunker.ts`; add `"ingest"` to
+   `bundle_server_assets.ts`; delete the copies.
+2. **Swap** `chunkMarkdown` → `chunkMarkdownExact` (the consolidated chunker).
+3. **DB (schema 0.7.0 → 0.8.0, both literals):** add `cerefox_documents.content_format SMALLINT
+   NOT NULL DEFAULT 1`; add `p_content_format SMALLINT DEFAULT 1` to `cerefox_ingest_document`
+   (stamp it); branch **all 5** `STRING_AGG(content, E'\n\n')` reconstruction sites
+   (rpcs.sql ~406/683/693/869/1512) on `content_format` (`>=2` → `STRING_AGG(content,'')`).
+4. **Callers pass `content_format=2`** + build the embedding input as
+   `# {doc_title}\n{heading_path breadcrumb}\n{content}` (pipeline.ts, mcp-tools/ingest.ts, the EF).
+5. **`cerefox doctor`** migration-progress check (needs the column).
+6. **Tests:** the live round-trip through the ingest RPC + a read; remove the `python-parity`
+   fixtures (Python retired, 28G).
+7. **Supervised deploy** of schema 0.8.0 + live round-trip validation (NOT unattended).
+
 **Update (2026-07-10, later): 28E + 28F DONE, VALIDATED IN PROD, PR open (#92).** The full
 EF-auth migration is committed on `feat/ef-auth-token`, deployed to the maintainer's Supabase
 (all 9 EFs `--no-verify-jwt` + token gate), and validated end-to-end: `cerefox doctor` all
