@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-beta.2] -- 2026-07-10
+
 ### Removed
 - **Python is fully retired (BREAKING, iter-28G).** The frozen, unmaintained
   Python implementation is deleted — the MCP-server fallback (`uv run cerefox
