@@ -75,9 +75,9 @@ describe("runDbStatusChecks", () => {
     const report = await runDbStatusChecks(client, { bundledSchemaVersion: "0.3.0" });
     expect(report.functions.every((f) => f.status === "unknown")).toBe(true);
     expect(report.allOk).toBe(false);
-    // Each "unknown" row has a detail nudging the user toward db_deploy.py.
+    // Each "unknown" row has a detail nudging the user toward `cerefox server deploy`.
     for (const f of report.functions) {
-      expect(f.detail).toMatch(/db_deploy/);
+      expect(f.detail).toMatch(/server deploy/);
     }
   });
 
