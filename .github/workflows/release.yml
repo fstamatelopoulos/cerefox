@@ -45,13 +45,13 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Node 24's BUNDLED npm is >= 11.5.1 (required by trusted publishing).
+          # We deliberately do NOT self-upgrade with `npm i -g npm@latest`: that
+          # corrupts npm's global tree so `publish --provenance` throws
+          # "Cannot find module 'sigstore'" (npm self-install bug). Rely on the
+          # complete bundled tree and guard the version below.
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Install npm@latest
-        # Bun's setup-node still bundles npm 10.x; trusted publishing needs
-        # npm >= 11.5.1. Pinning latest covers any future bumps.
-        run: npm install -g npm@latest
 
       - name: Verify npm version
         run: |
@@ -101,11 +101,23 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Node 24 bundles npm >= 11.5.1 (trusted-publishing minimum). Do NOT
+          # self-upgrade npm here: `npm i -g npm@latest` corrupts the global tree
+          # and makes `publish --provenance` fail with "Cannot find module
+          # 'sigstore'". Rely on the bundled npm; the verify step guards it.
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install npm@latest
-        run: npm install -g npm@latest
+      - name: Verify npm version
+        run: |
+          v=$(npm --version)
+          major=$(echo "$v" | cut -d. -f1)
+          minor=$(echo "$v" | cut -d. -f2)
+          if [ "$major" -lt 11 ] || { [ "$major" -eq 11 ] && [ "$minor" -lt 5 ]; }; then
+            echo "❌  npm $v is below the 11.5.1 minimum required by trusted publishing"
+            exit 1
+          fi
+          echo "✓  npm $v"
 
       - name: Install workspace deps
         run: bun install --frozen-lockfile || bun install
