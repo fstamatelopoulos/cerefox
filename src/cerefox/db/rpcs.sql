@@ -1777,6 +1777,29 @@ AS $$
     SELECT '0.8.0'::TEXT;
 $$;
 
+-- ── cerefox_content_format_stats ─────────────────────────────────────────────
+-- Counts how many (non-deleted) documents still use the legacy chunk
+-- reconstruction format (content_format = 1) vs the total. Powers the
+-- informational `cerefox doctor` line. See docs/guides/content-format.md.
+CREATE OR REPLACE FUNCTION cerefox_content_format_stats()
+RETURNS TABLE (legacy_docs INT, total_docs INT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+    SELECT
+        COUNT(*) FILTER (WHERE cf.min_format < 2)::INT AS legacy_docs,
+        COUNT(*)::INT                                  AS total_docs
+    FROM cerefox_documents d
+    LEFT JOIN LATERAL (
+        SELECT MIN(c.content_format) AS min_format
+        FROM cerefox_chunks c
+        WHERE c.document_id = d.id AND c.version_id IS NULL
+    ) cf ON TRUE
+    WHERE d.deleted_at IS NULL;
+$$;
+
 
 
 -- ─────────────────────────────────────────────────────────────────────────
