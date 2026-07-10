@@ -82,6 +82,8 @@ const wantedGuides = (() => {
     "operational-cost.md",
     "response-limits.md",
     "upgrading.md",
+    "content-format.md",
+    "migration-0.12.md",
   ]);
 })();
 
