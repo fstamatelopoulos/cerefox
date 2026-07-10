@@ -2,6 +2,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
+import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
+import {
+  chunkMarkdown,
+  embeddingInputFor,
+  CONTENT_FORMAT_BLIND_STITCH,
+} from "../../../_shared/ingest/chunker.ts";
 
 /**
  * cerefox-ingest — Supabase Edge Function
@@ -81,173 +87,6 @@ function concurrencyErrorResponse(
   return null;
 }
 
-interface Chunk {
-  heading_path: string[];
-  heading_level: number;
-  title: string;
-  content: string;
-  char_count: number;
-}
-
-// ── Heading-aware chunker (mirrors Python logic) ───────────────────────────
-//
-// Design notes:
-//   • Short-circuit for small documents: if the entire document fits within
-//     MAX_CHUNK_CHARS, it is returned as a single chunk with no splitting.
-//   • Greedy accumulation: sections are collected into a buffer until adding
-//     the next would exceed MAX_CHUNK_CHARS. This keeps chunks close to the
-//     target size and avoids many tiny fragments at every heading boundary.
-//     All heading levels (H1/H2/H3) are treated equally — size alone controls
-//     when a chunk is flushed; there are no hard heading-level boundaries.
-//   • Oversized sections (> MAX_CHUNK_CHARS) are paragraph-split with no overlap.
-//   • The first section's heading metadata anchors each chunk's breadcrumb.
-//   • No overlaps between chunks — the heading breadcrumb in the content
-//     provides sufficient context. Overlaps caused duplication on reconstruction.
-
-interface Section {
-  level: number;
-  headings: string[]; // full heading stack at this section
-  heading: string;    // just the current heading text
-  content: string;    // heading line + body
-  body: string;       // body only (no heading line)
-}
-
-function parseSections(text: string): Section[] {
-  const lines = text.split("\n");
-  const sections: Section[] = [];
-  let currentHeadings: string[] = [];
-  let currentLevel = 0;
-  let bodyLines: string[] = [];
-
-  function collectSection() {
-    const body = bodyLines.join("\n").trim();
-    bodyLines = [];
-    let content: string;
-    if (currentLevel > 0) {
-      const headerLine = "#".repeat(currentLevel) + " " + (currentHeadings[currentHeadings.length - 1] ?? "");
-      content = body ? headerLine + "\n\n" + body : headerLine;
-    } else {
-      content = body;
-    }
-    if (!content.trim()) return;
-    sections.push({
-      level: currentLevel,
-      headings: [...currentHeadings],
-      heading: currentHeadings[currentHeadings.length - 1] ?? "",
-      content,
-      body,
-    });
-  }
-
-  for (const line of lines) {
-    const h1 = line.match(/^# (.+)/);
-    const h2 = line.match(/^## (.+)/);
-    const h3 = line.match(/^### (.+)/);
-
-    if (h1) {
-      collectSection();
-      currentHeadings = [h1[1].trim()];
-      currentLevel = 1;
-    } else if (h2) {
-      collectSection();
-      currentHeadings = [currentHeadings[0] ?? "", h2[1].trim()].filter(Boolean);
-      currentLevel = 2;
-    } else if (h3) {
-      collectSection();
-      currentHeadings = [
-        currentHeadings[0] ?? "",
-        currentHeadings[1] ?? "",
-        h3[1].trim(),
-      ].filter(Boolean);
-      currentLevel = 3;
-    } else {
-      bodyLines.push(line);
-    }
-  }
-  collectSection();
-  return sections;
-}
-
-function chunkMarkdown(text: string): Chunk[] {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-
-  // Short-circuit: entire document fits in one chunk — skip heading splitting.
-  if (trimmed.length <= MAX_CHUNK_CHARS) {
-    return [makeChunk([], 0, trimmed)];
-  }
-
-  const sections = parseSections(trimmed);
-  const chunks: Chunk[] = [];
-
-  // Greedy accumulation buffer
-  let bufParts: string[] = [];
-  let bufHeadings: string[] = [];
-  let bufLevel = 0;
-  let bufChars = 0;
-
-  function flushBuf() {
-    if (bufParts.length === 0) return;
-    chunks.push(makeChunk(bufHeadings, bufLevel, bufParts.join("\n\n")));
-    bufParts = [];
-    bufHeadings = [];
-    bufLevel = 0;
-    bufChars = 0;
-  }
-
-  for (const section of sections) {
-    const { level, headings, heading, content, body } = section;
-
-    // Oversized section: flush buffer, then paragraph-split.
-    if (content.length > MAX_CHUNK_CHARS) {
-      flushBuf();
-      const headerPrefix = level > 0 ? "#".repeat(level) + " " + heading + "\n\n" : "";
-      const bodyToSplit = body || content;
-      const paragraphs = bodyToSplit.split(/\n\n+/);
-      let sub = "";
-      let isFirst = true;
-      for (const para of paragraphs) {
-        const prefix = isFirst ? headerPrefix : "";
-        if (sub.length + prefix.length + para.length + 2 > MAX_CHUNK_CHARS && sub.length > 0) {
-          chunks.push(makeChunk(headings, level, sub.trim()));
-          sub = para;
-          isFirst = false;
-        } else {
-          sub = sub ? sub + "\n\n" + para : prefix + para;
-          isFirst = false;
-        }
-      }
-      if (sub.trim()) chunks.push(makeChunk(headings, level, sub.trim()));
-      continue;
-    }
-
-    // Section fits. Try to accumulate into the buffer.
-    const addition = content.length + (bufParts.length > 0 ? 2 : 0);
-
-    if (bufChars + addition <= MAX_CHUNK_CHARS) {
-      if (bufParts.length === 0) {
-        bufHeadings = headings;
-        bufLevel = level;
-      }
-      bufParts.push(content);
-      bufChars += addition;
-    } else {
-      flushBuf();
-      bufParts = [content];
-      bufHeadings = headings;
-      bufLevel = level;
-      bufChars = content.length;
-    }
-  }
-
-  flushBuf();
-  return chunks;
-}
-
-function makeChunk(headings: string[], level: number, content: string): Chunk {
-  const title = headings[headings.length - 1] ?? "";
-  return { heading_path: [...headings], heading_level: level, title, content, char_count: content.length };
-}
 
 // ── Embedding ──────────────────────────────────────────────────────────────
 
@@ -256,6 +95,7 @@ const EMBEDDING_INITIAL_BACKOFF_MS = 500; // 500ms, 1s, 2s exponential backoff
 
 async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> {
   let lastError: Error | null = null;
+  const inputs = texts.map(capEmbeddingInput); // iter-28D Phase 0: cap oversized inputs
 
   for (let attempt = 0; attempt < EMBEDDING_MAX_RETRIES; attempt++) {
     try {
@@ -267,7 +107,7 @@ async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> 
         },
         body: JSON.stringify({
           model: OPENAI_MODEL,
-          input: texts,
+          input: inputs,
           dimensions: EMBEDDING_DIMENSIONS,
         }),
       });
@@ -590,7 +430,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Content produced no chunks" }), { status: 422, headers });
     }
 
-    const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
+    const texts = chunks.map((c) => embeddingInputFor(title.trim(), c));
     let embeddings: number[][];
     try {
       embeddings = await embedBatch(texts, openaiKey);
@@ -623,6 +463,7 @@ Deno.serve(async (req: Request) => {
       p_source_label: source,
       p_expected_content_hash: expected_content_hash,
       p_last_write_wins: last_write_wins,
+      p_content_format: CONTENT_FORMAT_BLIND_STITCH,
     });
 
     if (ingestErr) {
@@ -706,7 +547,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // Prepend document title for contextual enrichment (stored content unchanged)
-      const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
+      const texts = chunks.map((c) => embeddingInputFor(title.trim(), c));
       let embeddings: number[][];
       try {
         embeddings = await embedBatch(texts, openaiKey);
@@ -741,6 +582,7 @@ Deno.serve(async (req: Request) => {
         p_source_label: source,
         p_expected_content_hash: expected_content_hash,
         p_last_write_wins: last_write_wins,
+      p_content_format: CONTENT_FORMAT_BLIND_STITCH,
       });
 
       if (ingestErr) {
@@ -814,7 +656,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Embed all chunks with title prefix for contextual enrichment (stored content unchanged)
-  const texts = chunks.map((c) => `# ${title.trim()}\n${c.content}`);
+  const texts = chunks.map((c) => embeddingInputFor(title.trim(), c));
   let embeddings: number[][];
   try {
     embeddings = await embedBatch(texts, openaiKey);
@@ -849,6 +691,7 @@ Deno.serve(async (req: Request) => {
     p_chunks: chunkData,
     p_author: author,
     p_author_type: author_type,
+    p_content_format: CONTENT_FORMAT_BLIND_STITCH,
   });
 
   if (ingestErr || !ingestResult?.length) {

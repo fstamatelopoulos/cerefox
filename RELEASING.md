@@ -83,6 +83,29 @@ bun scripts/cut_release.ts <version> --npm-publish
 - commits, creates an annotated tag, pushes, and (with `--npm-publish`)
   triggers the release workflow that publishes to npm via trusted publishing.
 
+### Pre-releases (betas / RCs)
+
+A version with a pre-release suffix (`1.0.0-beta.1`, `1.0.0-rc.1`) is cut exactly the
+same way — `cut_release.ts` accepts it. What differs is **automatic and safe**:
+
+- **npm dist-tag**: the release workflow publishes a pre-release under its **channel tag**
+  (`beta` / `rc`), not `latest`. So `latest` — and a plain `npm i -g @cerefox/memory` /
+  `cerefox self-update` / `install.sh` with no `VERSION` — **stays on the newest stable
+  release**. Only opt-in installs get the pre-release.
+- **Docker `:latest`** is likewise skipped for pre-releases.
+
+Install a pre-release to test the full user experience:
+
+```bash
+VERSION=beta sh install.sh            # newest beta (the `beta` dist-tag)
+VERSION=1.0.0-beta.1 sh install.sh    # a specific pre-release
+# or: npm i -g @cerefox/memory@beta
+```
+
+Breaking changes are allowed **between betas**; freeze them at `-rc`. Promote to the stable
+`1.0.0` (which publishes under `latest`) once the RC has soaked. Do NOT skip the
+`[Unreleased]` → versioned CHANGELOG promotion for a beta — each beta gets its own section.
+
 ## Post-release verification
 
 1. The release workflow run is green (build + test, then publish).

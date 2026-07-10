@@ -198,6 +198,8 @@ export class IngestionDbBridge {
     cleanupEnabled?: boolean;
     expectedContentHash?: string | null;
     lastWriteWins?: boolean;
+    /** iter-28D: chunk reconstruction format (2 = exact-partition/blind-stitch). */
+    contentFormat?: number;
   }): Promise<IngestDocumentRpcResult> {
     const params: Record<string, unknown> = {
       p_document_id: args.documentId,
@@ -216,6 +218,7 @@ export class IngestionDbBridge {
       params.p_retention_hours = args.retentionHours;
     if (args.cleanupEnabled !== undefined)
       params.p_cleanup_enabled = args.cleanupEnabled;
+    if (args.contentFormat !== undefined) params.p_content_format = args.contentFormat;
     // Optimistic concurrency (iter-32). Always sent on the update path so the
     // RPC's token-required default applies; the RPC ignores both on create.
     if (args.documentId !== null) {

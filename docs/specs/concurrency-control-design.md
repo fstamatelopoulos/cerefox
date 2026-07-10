@@ -102,7 +102,7 @@ matching — cleverness there buys little and complicates the RPC contract).
 - **GPT Actions**: ingest action body gains the two fields; existing custom GPTs'
   updates fail until the schema block is re-pasted → OpenAPI `info.version` → **2.0.0**.
 - **Release**: behavior-changing default ⇒ a **minor** (proposed v0.11.0; the local
-  embedder slides to v0.12.0 — maintainer decides at cut time).
+  embedder slides to a post-1.0 minor — maintainer decides at cut time).
 
 ## 5. Out of scope (explicit)
 

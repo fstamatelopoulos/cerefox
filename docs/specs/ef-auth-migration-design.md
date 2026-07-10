@@ -2,7 +2,7 @@
 
 > **Status**: Design-of-record (2026-07-09). Not started. Work lands on a new branch
 > `feat/ef-auth-token` (off `feat/oauth-mcp` — so the OAuth/security context is present).
-> Target: **v0.12.0-beta** (executed carefully/defensively, extensively tested), before the
+> Target: **v1.0.0-beta** (executed carefully/defensively, extensively tested), before the
 > 1.0.0 freeze. Plan entry: `docs/plan.md` Iteration 28E + the "Release sequencing" note.
 >
 > **Read-this-first context for a fresh session** (post-compaction): Cerefox is a single-user
@@ -117,7 +117,7 @@ checkAccessToken(authorizationHeader, {
 
 No runtime dual-accept, no warn-then-drop, no `legacyBearer` machinery. The EFs accept **only**
 the Cerefox token (fail closed). Dropping the legacy anon JWT is a **clean breaking change at
-the `0.12.0-beta` boundary** (breaking changes are allowed pre-1.0), documented in CHANGELOG +
+the `1.0.0-beta` boundary** (breaking changes are allowed pre-1.0), documented in CHANGELOG +
 the migration note. This is safe because Cerefox is single-user: each deployer controls all
 their own clients and cuts over on their own schedule.
 

@@ -3177,7 +3177,7 @@ wild without breaking changes + at least one outside user installing without hel
 ### v1.0.0 release scope + remaining steps (updated 2026-07-10)
 
 v1.0.0 grew into a large, multi-workstream release. **Branch strategy:** keep the
-workstreams on separate branches, merge each into `main`, then cut `0.12.0-beta` from
+workstreams on separate branches, merge each into `main`, then cut `1.0.0-beta` from
 `main` (each is independently reviewable/testable; squash-merge collapses history).
 
 **Only two substantive workstreams remain for 1.0.0: (a) the full-codebase security
@@ -3191,33 +3191,39 @@ the 4 chunker-corrupted docs, which rides on 28D).
 | **28B — Security** (OAuth surface + RPC lockdown) | merged to `main` (PR #91) | ✅ deployed | ③ **full-codebase audit** (8 primitive EFs, GPT Actions, web app, backup/restore) — **(a), the main open item** |
 | **28E — EF auth → Cerefox token** | `feat/ef-auth-token` (PR #92) | ✅ done + **validated in prod** (all 9 EFs redeployed, doctor green, live 45/45, OAuth confirmed) | in review — closes 28B ① (anon-key) + ② (secret cleanup) |
 | **28F — Documentation sweep** | `feat/ef-auth-token` (PR #92) | ✅ done (exhaustive) | in review |
-| **28D — Chunk reconstruction fix** | `fix/chunk-reconstruction` (new) | interim keep-whole shipped; Phase 0/1 not started | **Phase 0 embed cap + Phase 1 blind-stitch + doctor check — (c), the other open item** |
+| **28D — Chunk reconstruction fix** | `fix/chunk-reconstruction` | 🔨 in progress | **Phase 0 embed cap + Phase 1 blind-stitch + doctor check — (c), the other open item** |
+| **28G — Python retirement** | (new branch) | decided 2026-07-10, not started | deprecation notices (README / CLAUDE.md / migration guide / CHANGELOG) + Discord announce (maintainer) + husk/remove the Python code |
 | **28C — Stability contract** | (at cut) | pending | strict SemVer becomes binding; `security-model.md` + threat model finalized |
 
 **Held priority TODOs (do NOT lose these):**
 1. **Neutralize the exposed anon key** — ✅ **effectively done via 28E** (all EFs reject it now).
    One residual step, deferred to just before the public release: flip **"Disable legacy API
    keys"** in the Supabase dashboard to close the Data-API surface (the maintainer chose to
-   leave it enabled-but-unused for now; migration-0.12.md step 5). `CEREFOX_MCP_STATIC_BEARER`
+   leave it enabled-but-unused for now; migration-1.0.md step 5). `CEREFOX_MCP_STATIC_BEARER`
    removed.
 2. **Supabase/CF secret cleanup** — ✅ **done in 28E**: `CEREFOX_ACCESS_TOKENS` set via
    `cerefox token generate`; `CEREFOX_MCP_STATIC_BEARER` gone; `CEREFOX_SUPABASE_ANON_KEY`
    removed from the maintainer's `.env`; `cerefox-oauth-consent` EF **deleted** from the
    project (`supabase functions delete`). Keep `CEREFOX_OAUTH_OWNER_ID`, `CEREFOX_SUPABASE_PUBLISHABLE_KEY`.
-3. **(a) Full-codebase security audit** — the main open item for 1.0 (8 primitive EFs, GPT
+3. **(a) Full-codebase security audit** — a main open item for 1.0 (8 primitive EFs, GPT
    Actions, web app, backup/restore); 28B extends with any new mitigations.
-4. **Data recovery** of the 4 chunker-corrupted docs (Job Hunting, Oshmabel, Saltwater,
-   Kallisti) — restore each from its last clean version after the chunker fix (28D) is installed.
-5. Retire the Python MCP fallback? — candidate for v1.0 (drops the chunker parity requirement).
-6. **Fix `cerefox server deploy` from a repo checkout** — supabase `--use-api` git-root
+4. **Retire Python completely at v1.0 — DECIDED (2026-07-10), workstream 28G.** The last live
+   Python path (`uv run cerefox mcp`) is retired; users who still rely on it stay on their
+   current version until they migrate to the npm package. Deliverables: prominent deprecation
+   notices (README, CLAUDE.md, migration guide, CHANGELOG) + Discord announcement (maintainer;
+   agent drafts) + husk/remove the Python code. Unblocks 28D (no chunker parity).
+5. **Fix `cerefox server deploy` from a repo checkout** — supabase `--use-api` git-root
    confusion (see the deploy-gotcha note below); end users unaffected. Low priority.
 
+> **Note:** recovery of any chunker-corrupted documents is a private maintainer data task,
+> intentionally **not tracked in this OSS repo** (it involves personal KB content).
+
 **Release sequencing (decided 2026-07-09) — stay in `0.x` until all breaking changes land, then freeze 1.0:**
-1. **`0.12.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
+1. **`1.0.0-beta`** — finish **28E** (EF-auth migration, done *very carefully/defensively*) +
    **28F** (full documentation sanity sweep) + secret cleanup (②) → merge `feat/oauth-mcp` →
    `main` → cut the beta → **test extensively on the maintainer laptop** → *soft* Discord
    (beta testers only).
-2. **`0.12.x` betas** — the **full-codebase security audit** (③, + any mitigations) then
+2. **`1.0.0-beta.N` betas** — the **full-codebase security audit** (③, + any mitigations) then
    **28D Phase 1** (proper chunker: `content_format` schema + blind-stitch).
 3. **`1.0.0-rc` → `1.0.0`** once every breaking/schema change is in, audited, and soaked —
    the stability commitment (28C).
@@ -3338,7 +3344,7 @@ deferral (`docs/research/oauth-mcp-auth.md`).
 - All platform claims re-verified against live Supabase/Anthropic docs 2026-07-08
   (design §14 has the verification table; re-check before each phase).
 - **Beta caveat**: Supabase's OAuth server is beta. If Phase 4 shows instability, soak
-  the feature in a v0.12.x pre-release and stamp v1.0.0 after it settles.
+  the feature in a 1.0.0-beta pre-release and stamp v1.0.0 after it settles.
 
 ### 28B: Security audit
 
@@ -3364,6 +3370,12 @@ FULL-codebase audit** of the 8 primitive EFs, GPT Actions, web app, and backup/r
 
 ### 28D: Chunk-reconstruction fix (data-corruption bug)
 
+> 🔨 **IN PROGRESS (2026-07-10) on `fix/chunk-reconstruction`.** Interim keep-whole fix already
+> on `main`; now building the proper fix: Phase 0 (embedding-input cap) + Phase 1 (exact-partition
+> chunker + `content_format` column + branch all **5** reconstruction sites + schema 0.7.0→0.8.0
+> + doctor migration check). **Python chunker parity dropped** (Python retired at v1.0, 28G).
+> One open item **(c)** for 1.0.
+
 **Design**: [`docs/specs/chunk-reconstruction-design.md`](specs/chunk-reconstruction-design.md).
 Branch `fix/chunk-reconstruction`. A serious data-corruption bug: `cerefox_reconstruct_doc`
 re-synthesizes a `\n\n` separator it never stored, so any chunk split not on a paragraph
@@ -3381,6 +3393,11 @@ mid-word/mid-row). 4 KB docs were corrupted.
 - **Data recovery**: restore the 4 corrupted docs from their last clean version.
 
 ### 28E: Migrate Edge Function auth off the unrotatable legacy anon JWT
+
+> ✅ **DONE + validated in prod, merged to `main` via PR #92 (2026-07-10).** All 9 EFs
+> `--no-verify-jwt` + token gate; `cerefox token` command; doctor/tests on the token; consent
+> EF removed. `cerefox doctor` green, live e2e 45/45, OAuth confirmed. Details below are the
+> as-built record.
 
 **Design-of-record**: [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md)
 (the full, self-contained design + defensive rollout order — start there).
@@ -3410,7 +3427,7 @@ NOT a Supabase key:
   constant-time token check for the primitive EFs AND `cerefox-mcp`'s (removed) static path.
 - **Retire the legacy anon JWT for all EF paths — hard cutover, no back-compat window.**
   Single-user project, so each deployer updates their own clients then flips to token-only (a
-  clean breaking change at the `0.12.0-beta` boundary). Migration docs for the two affected
+  clean breaking change at the `1.0.0-beta` boundary). Migration docs for the two affected
   client classes: **old remote static-Bearer MCP** and **ChatGPT GPT Actions**.
 - Update the GPT Actions OpenAPI block (auth scheme → the token in a header; `info.version`
   bump) + the remote-MCP client + connect-agents docs.
@@ -3418,12 +3435,19 @@ NOT a Supabase key:
   the legacy JWT + closing the maintainer's own residual anon-key risk. Overlaps 28B.
   Interim already done: `CEREFOX_MCP_STATIC_BEARER` removed on the maintainer project.
 
-### 28F: Documentation sanity sweep (v0.12.0-beta release deliverable)
+### 28F: Documentation sanity sweep
+
+> ✅ **DONE (2026-07-10), merged to `main` via PR #92.** Exhaustive whole-repo sweep — every
+> guide, spec, README, CLAUDE.md, `.env.example`, `SECURITY.md`, `docs/examples/mcp-configs/`,
+> and code comments aligned to the token narrative; consent-EF refs removed; EF count reconciled
+> (9); `cerefox token generate` added to the install flows; **functional** stale refs fixed
+> (`scripts/sync_docs.ts`, `check_ef_parity.ts`, web-integration `_helpers.ts` would have 401'd).
+> The checklist below is the as-built record.
 
 The access-path narrative shifted materially across 28A (OAuth), 28B (security), and 28E
 (token + legacy-JWT retirement). Before the beta cut, do **one full documentation pass** to
 make every guide tell the *same* new story. This is broader than 28E §8's targeted edits — it's
-a whole-repo consistency check. Target: v0.12.0-beta (part of step 1 in the sequencing block).
+a whole-repo consistency check. Target: v1.0.0-beta (part of step 1 in the sequencing block).
 
 **The single narrative every doc must reflect:**
 - **Local agents** (Claude Code, Cursor, Codex, Gemini, Desktop) → **local MCP** via
@@ -3480,6 +3504,24 @@ it): `npx supabase functions delete cerefox-oauth-consent`.
 any "anon JWT"/"legacy anon"/`Bearer eyJ` shown as the *current* way to connect an EF/GPT-Action
 client (historical/iteration-log mentions are fine); any doc still pointing local agents at the
 remote MCP as the default. Do the grep, fix or annotate each hit.
+
+### 28G: Python retirement (v1.0.0)
+
+> Decided 2026-07-10. Not started; own branch (after/alongside 28D).
+
+Cerefox's Python side is already husked to a single live path — the frozen MCP fallback
+`uv run cerefox mcp` (CLI + web app retired to husks in v0.9.0). **v1.0.0 retires Python
+entirely.** Users who still rely on the Python MCP stay on their current version until they
+migrate to the `@cerefox/memory` npm package; they do not need to upgrade to 1.0.0.
+
+Deliverables:
+- **Prominent deprecation notices**: README, `CLAUDE.md`, the migration guide, and CHANGELOG —
+  "Python is retired at v1.0; if you use `uv run cerefox mcp`, migrate to the npm package or
+  stay on ≤0.11.x." Draft the **Discord announcement** (maintainer posts it).
+- **Husk / remove the Python code**: `src/cerefox/` (mcp_server.py + the frozen chunking /
+  ingestion / embeddings / db modules), `pyproject.toml`, the `uv` tooling. Decide husk-with-
+  pointer vs. hard-delete (husk is friendlier for a major-version cut).
+- Removes the chunker parity requirement (unblocks 28D §4.2) and the `python-parity` fixtures.
 
 ### 28C: The contract
 
@@ -3760,6 +3802,110 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Beta sequencing decision (2026-07-12): ship `1.0.0-beta.1` as-is; the security audit is
+`beta.2`, not folded into this cut.** Rationale: the two workstreams don't gate each other.
+beta.1 exists to validate the highest-risk, least-tested path — install → migrate →
+schema-0.8.0 deploy → byte-exact reconstruction — which is ready now. The full-codebase security
+audit (28B ③) is a code review whose fixes need *their own* validation, not beta.1's; folding it
+in only delays the migration dogfooding and couples two independent risks. Betas allow breaking
+changes, so audit findings land cleanly in beta.2. No security downside to going first: beta.1 is
+opt-in (`beta` dist-tag; `latest` stays on 0.11.x, only the maintainer installs it), and the main
+security-hardening change (28E EF-auth off the anon JWT) already shipped + was validated in prod —
+beta.1 is the reconstruction fix riding on top of that. **Hard rule: the audit is a 1.0.0-stable
+gate — it must complete before promoting off the beta/rc line.** Sequence:
+`beta.1` (chunk fix + migration-UX validation) → `beta.2` (security audit + fixes) →
+`beta.N`/`rc.1` (28G Python retirement, freeze) → `1.0.0` (promote to `latest`).
+
+**Update (2026-07-11, end of session — 28D Phase 0 + Phase 1 CODE-COMPLETE on
+`fix/chunk-reconstruction`, pushed, NOT deployed).** Everything is built + unit-tested; the only
+thing left is the **supervised deploy of schema 0.8.0 + live round-trip validation** (per the
+agreed plan). What landed:
+- **Chunker**: exact-partition `chunkMarkdown` (invariant `blindStitch(chunk(doc))===doc.trim()`,
+  structural + 27 cases / 1178 assertions incl. adversarial); the 3 duplicate TS chunkers
+  consolidated into `_shared/ingest/chunker.ts` (verified content_hash is doc-level → dedup safe;
+  callers field-compatible).
+- **DB (schema 0.7.0→0.8.0)**: `content_format` on **`cerefox_chunks`** (migration 0012;
+  chunks-level so archived versions keep their format); ingest RPC `p_content_format`; all 5
+  reconstruction sites branch on `MAX(content_format)>=2`; `cerefox_content_format_stats()`.
+- **Callers**: mcp-tools/ingest, pipeline (via client-bridge `contentFormat`), and the
+  cerefox-ingest EF all pass `content_format=2` + build embedding input with the heading
+  breadcrumb (`embeddingInputFor`).
+- **Doctor**: ℹ "N of M docs use the legacy format" → points to `cerefox guides show content-format`.
+- **Docs**: bundled `docs/guides/content-format.md`; CHANGELOG proper-fix entry.
+
+**Expected until deploy:** the default `packages/memory` `bun test` now shows **16 LIVE failures**
+— all "Could not find the function … p_content_format" — because the code passes `p_content_format`
+but prod is still on schema 0.7.0. These are NOT bugs; they confirm the wiring and clear the moment
+schema 0.8.0 is deployed. `_shared` (274) + all non-live package tests pass.
+
+**NEXT — via a published `1.0.0-beta.1` (decided 2026-07-11), to dogfood the whole install →
+migrate → test UX instead of an `npm link` shortcut:**
+1. **Merge the 28D PR → `main`** (`fix/chunk-reconstruction`). RELEASING.md pre-release checklist
+   first — with one nuance for a *schema-changing* beta: the 16 live failures stay red until the
+   0.8.0 schema is deployed (which happens in step 4, via the beta), so "tests green" here means
+   the `_shared` (274) + non-live package suites; the live suites go green during the migrate.
+2. **Cut `1.0.0-beta.1`:** `bun scripts/cut_release.ts 1.0.0-beta.1 --npm-publish`. The release
+   workflow publishes it under the **`beta`** npm dist-tag (release.yml computes the channel from
+   the pre-release suffix), so `latest` — and any plain `self-update`/`install.sh` — stays on
+   0.11.x. Each beta gets its own CHANGELOG section; breaking changes are allowed between betas.
+3. **Install the beta:** `VERSION=beta sh install.sh` (or `npm i -g @cerefox/memory@beta`).
+4. **Migrate** (supervised together, per `docs/guides/migration-1.0.md`): `cerefox token generate`
+   → `cerefox server deploy` (schema 0.8.0 + token-gated EFs — an *installed* package deploys with
+   no repo-checkout gotcha) → `cerefox doctor` (edge-functions ✓, content-format ℹ) → revoke the
+   legacy anon key → `supabase functions delete cerefox-oauth-consent` (if still present).
+5. **Validate:** agent ingests a dummy table doc via local + remote MCP and verifies byte-exact
+   format-2 reconstruction AND that a pre-existing doc still reads correctly (format-1); then Fotis
+   validates via the web UI + manually fixes the file that surfaced the bug.
+6. More betas as the audit (③) + 28G (Python retirement) land → `1.0.0-rc.1` (freeze) → `1.0.0`.
+
+**Update (2026-07-11, later — 28D Phase 1 wiring in progress on `fix/chunk-reconstruction`).**
+Done + pushed since the overnight note below:
+- **Chunker swap + consolidation (Stages A/B/C): DONE + verified.** `chunkMarkdown` is now the
+  exact-partition algorithm; the two duplicate copies (`_shared/mcp-tools/_chunker.ts`, the
+  `cerefox-ingest` EF inline) now import the single shared chunker. Verified rigorously: the
+  invariant is structural (not just tested) + **24 cases / 1174 assertions** incl. adversarial
+  (code-fence false headings, all-astral, CRLF, closing hashes, huge soft-wrapped lines);
+  **`content_hash` is doc-level so dedup is chunker-independent**; all 3 callers are
+  field-compatible with `ChunkData`.
+- **DB (Stage D): PAUSED on a design decision — needs a quick confirm.** Discovered that
+  documents are **versioned** (chunks-anchored, `cerefox_chunks.version_id`), so an archived
+  version can have a different `content_format` than the current doc. The design's original
+  `content_format`-on-`cerefox_documents` would **corrupt archived versions** at reconstruction
+  site #869 (`p_version_id`). **Revised recommendation (design §4.3): put `content_format` on
+  `cerefox_chunks`** and branch all 5 sites on `MAX(c.content_format) >= 2` (uniform for current
+  + archived). No schema files touched yet — clean state. Once confirmed: implement Stage D with
+  this placement, then Stage E (callers pass `content_format=2` + embedding heading breadcrumb),
+  Stage F (doctor), then the supervised deploy.
+
+**Update (2026-07-11, overnight — 28D in progress on `fix/chunk-reconstruction`).** Done this
+session (all pushed):
+- **Phase 0 — embedding-input cap: COMPLETE.** `capEmbeddingInput` in `_shared/embeddings`
+  (default 20000 chars, `CEREFOX_EMBED_MAX_INPUT_CHARS`) applied at every embed choke point
+  (shared client + the `cerefox-ingest`/`cerefox-search` EF inline embedders). +8 tests.
+- **Phase 1 — exact-partition algorithm: WRITTEN + FULLY TESTED, UNWIRED.** `chunkMarkdownExact`
+  + `blindStitch` in `_shared/ingest/chunker.ts`; invariant `blindStitch(chunk(doc)) === doc.trim()`
+  green across 14 cases / 823 assertions (prose, multi-heading, oversized table, blank-line-free
+  paragraph, unicode/astral, CRLF, size stress). The production `chunkMarkdown` (format-1) is
+  UNCHANGED, so there is **zero behavior/prod impact** yet.
+
+**Guardrails held (unattended):** no schema deploy, no live-EF runs.
+
+**Phase 1 REMAINING (coupled — must land together; do carefully, ideally reviewed):**
+1. **Consolidate the 3 TS chunkers → 1** (design §4.2b): point `_shared/mcp-tools/_chunker.ts`
+   and the `cerefox-ingest` EF inline chunker at `_shared/ingest/chunker.ts`; add `"ingest"` to
+   `bundle_server_assets.ts`; delete the copies.
+2. **Swap** `chunkMarkdown` → `chunkMarkdownExact` (the consolidated chunker).
+3. **DB (schema 0.7.0 → 0.8.0, both literals):** add `cerefox_documents.content_format SMALLINT
+   NOT NULL DEFAULT 1`; add `p_content_format SMALLINT DEFAULT 1` to `cerefox_ingest_document`
+   (stamp it); branch **all 5** `STRING_AGG(content, E'\n\n')` reconstruction sites
+   (rpcs.sql ~406/683/693/869/1512) on `content_format` (`>=2` → `STRING_AGG(content,'')`).
+4. **Callers pass `content_format=2`** + build the embedding input as
+   `# {doc_title}\n{heading_path breadcrumb}\n{content}` (pipeline.ts, mcp-tools/ingest.ts, the EF).
+5. **`cerefox doctor`** migration-progress check (needs the column).
+6. **Tests:** the live round-trip through the ingest RPC + a read; remove the `python-parity`
+   fixtures (Python retired, 28G).
+7. **Supervised deploy** of schema 0.8.0 + live round-trip validation (NOT unattended).
+
 **Update (2026-07-10, later): 28E + 28F DONE, VALIDATED IN PROD, PR open (#92).** The full
 EF-auth migration is committed on `feat/ef-auth-token`, deployed to the maintainer's Supabase
 (all 9 EFs `--no-verify-jwt` + token gate), and validated end-to-end: `cerefox doctor` all
@@ -3785,7 +3931,7 @@ merged, not deployed). All slices landed and are committed:
   `deploy-server` (`--no-verify-jwt` for all 9, cutover warning); **`cerefox token
   generate/rotate/list`** + `.env` upsert util; `doctor` + web-boot + live e2e suites switched
   from the anon key to `CEREFOX_ACCESS_TOKEN`; GPT Actions OpenAPI `info.version` 3.0.0.
-- **28F** — full doc sweep (CLAUDE.md auth model, CHANGELOG, `migration-0.12.md`, connect-agents,
+- **28F** — full doc sweep (CLAUDE.md auth model, CHANGELOG, `migration-1.0.md`, connect-agents,
   access-paths, setup-supabase, configuration, cli, security-model, solution-design, README,
   oauth-mcp-server-design [historical, annotated], cloudflare README). Legacy anon JWT retired
   everywhere; consent-EF refs → removed; EF count reconciled (9 = 8 primitive + `cerefox-mcp`).
@@ -3865,7 +4011,7 @@ bundler (`--use-api`, issue #84). Design of record:
    optional with another scope). The wipe incident also spawned the
    **metadata-versioning** backlog proposal:
    [`docs/research/metadata-versioning.md`](research/metadata-versioning.md).
-2. **Iteration 31 — Local ONNX embedder** (fully-offline World B), target **v0.12+**
+2. **Iteration 31 — Local ONNX embedder** (fully-offline World B), target **v1.1+ (post-1.0)**
    (slid from v0.11.0 to make room for iter-32), on `feat/local-embedder`.
    Design committed; P0 implementation pending review. See iter-31 in the log above.
 3. **Iteration 28 — v1.0**: ⏳ **ACTIVE (28A) as of 2026-07-08** on `feat/oauth-mcp`.

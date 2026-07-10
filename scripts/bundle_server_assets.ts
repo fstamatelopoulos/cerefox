@@ -79,7 +79,9 @@ function main(): void {
   // (constantTimeEqual) — both must ship or the EF deploy breaks. (consent-page
   // is no longer bundled: its only EF consumer, cerefox-oauth-consent, was
   // removed in iter-28E; the Cloudflare Worker builds it independently.)
-  for (const sub of ["mcp-tools", "embeddings", "ef-meta", "mcp-auth", "ef-auth"]) {
+  // ingest (iter-28D): cerefox-ingest imports the consolidated exact-partition
+  // chunker from `_shared/ingest/chunker.ts`.
+  for (const sub of ["mcp-tools", "embeddings", "ef-meta", "mcp-auth", "ef-auth", "ingest"]) {
     cpSync(join(SHARED_SRC, sub), join(OUT, "_shared", sub), {
       recursive: true,
       filter: notPythonCruft,

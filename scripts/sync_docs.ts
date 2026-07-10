@@ -170,7 +170,7 @@ async function main(): Promise<void> {
     console.error(
       "❌  CEREFOX_ACCESS_TOKEN is not set.\n" +
         "    Edge Function calls require the Cerefox access token — run `cerefox token generate`.\n" +
-        "    See docs/guides/migration-0.12.md.",
+        "    See docs/guides/migration-1.0.md.",
     );
     exit(2);
   }

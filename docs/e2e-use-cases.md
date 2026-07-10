@@ -25,7 +25,7 @@ after each run, even on failure.
 ## Configuration
 
 - **Supabase REST API tests**: Use credentials from `.env` (`CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`)
-- **Edge Function tests**: Set `CEREFOX_ACCESS_TOKEN` in `.env` — the Cerefox access token (`cfx_pat_…`) validated in-function by the EFs (iter-28E). Generate it with `cerefox token generate` (see [`docs/guides/migration-0.12.md`](guides/migration-0.12.md)). Tests are skipped if `CEREFOX_ACCESS_TOKEN` is not set.
+- **Edge Function tests**: Set `CEREFOX_ACCESS_TOKEN` in `.env` — the Cerefox access token (`cfx_pat_…`) validated in-function by the EFs (iter-28E). Generate it with `cerefox token generate` (see [`docs/guides/migration-1.0.md`](guides/migration-1.0.md)). Tests are skipped if `CEREFOX_ACCESS_TOKEN` is not set.
 - **UI tests**: Require the web app running (`cerefox web`) and the frontend built (`cd frontend && bun run build`). Tests target the React SPA at `http://127.0.0.1:8000/app/`.
 
 ---

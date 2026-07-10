@@ -26,7 +26,7 @@ placeholders with your Supabase project values.
 
 2. Replace the placeholders:
    - `<your-project-ref>` -- your Supabase project reference (from Project Settings > General)
-   - `<your-cerefox-token>` -- your **Cerefox access token** (`cfx_pat_…`). Generate it with `cerefox token generate` (it prints the token once and sets it on Supabase). The legacy Supabase anon JWT is no longer accepted by the Edge Functions (iter-28E). See [`docs/guides/migration-0.12.md`](../../guides/migration-0.12.md).
+   - `<your-cerefox-token>` -- your **Cerefox access token** (`cfx_pat_…`). Generate it with `cerefox token generate` (it prints the token once and sets it on Supabase). The legacy Supabase anon JWT is no longer accepted by the Edge Functions (iter-28E). See [`docs/guides/migration-1.0.md`](../../guides/migration-1.0.md).
    (The `local-stdio.json` template needs no placeholders — `npx` fetches
    `@cerefox/memory` on demand. It reads your `~/.cerefox/.env` for Supabase
    credentials, so run `cerefox init` first.)

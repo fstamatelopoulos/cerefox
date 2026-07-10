@@ -439,7 +439,7 @@ routes this design introduces). Iterations 29+ keep their numbers.
 Sequencing inside the iteration: OAuth work first (28A), then the audit (28B) over the
 final surface, then the v1.0 contract/stamp (28C). One caveat the maintainer should hold:
 Supabase's OAuth server is **beta** — if Phase 4 shows instability, prefer soaking the
-OAuth feature in a `v0.12.x` pre-release and stamping `v1.0.0` after it settles, rather
+OAuth feature in a `1.0.0-beta` pre-release and stamping `v1.0.0` after it settles, rather
 than delaying or shipping a shaky 1.0. The plan structure supports either cut.
 
 ## 11. Risks and watch items

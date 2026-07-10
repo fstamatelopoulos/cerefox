@@ -318,6 +318,62 @@ export async function checkSchemaVersion(): Promise<CheckResult> {
   }
 }
 
+const CONTENT_FORMAT_CHECK_NAME = "content format";
+
+/**
+ * Informational (iter-28D): how many documents still use the legacy chunk
+ * reconstruction format (format 1). Never a failure — a `skipped` (ℹ) line when
+ * some remain, `ok` (✓) when all are converted. Points at the bundled explanation.
+ */
+export async function checkContentFormat(): Promise<CheckResult> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    return { name: CONTENT_FORMAT_CHECK_NAME, status: "skipped", detail: "Supabase config missing; skipped." };
+  }
+  try {
+    const url = `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/cerefox_content_format_stats`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: settings.supabaseKey,
+        Authorization: `Bearer ${settings.supabaseKey}`,
+      },
+      body: "{}",
+    });
+    if (!resp.ok) {
+      // RPC absent → server not yet on schema 0.8.0. Informational skip, not an error.
+      return {
+        name: CONTENT_FORMAT_CHECK_NAME,
+        status: "skipped",
+        detail: `format stats unavailable (${resp.status}); deploy schema 0.8.0 to enable.`,
+      };
+    }
+    const rows = (await resp.json()) as Array<{ legacy_docs: number; total_docs: number }>;
+    const legacy = rows[0]?.legacy_docs ?? 0;
+    const total = rows[0]?.total_docs ?? 0;
+    if (legacy === 0) {
+      return {
+        name: CONTENT_FORMAT_CHECK_NAME,
+        status: "ok",
+        detail: total === 0 ? "no documents yet" : `all ${total} document(s) use the current format`,
+      };
+    }
+    return {
+      name: CONTENT_FORMAT_CHECK_NAME,
+      status: "skipped", // informational (ℹ), never a gate
+      detail: `${legacy} of ${total} document(s) use the legacy reconstruction format (format 1).`,
+      hint: "They auto-convert on next edit; run `cerefox server reindex` to convert all now. What this means: `cerefox guides show content-format`.",
+    };
+  } catch (err) {
+    return {
+      name: CONTENT_FORMAT_CHECK_NAME,
+      status: "skipped",
+      detail: `content-format check skipped: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 /**
  * Read `mcpServers.cerefox` from a JSON file, if present. Returns null
  * when the file is missing, malformed, or doesn't have a cerefox entry.
@@ -588,6 +644,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
+    { name: "content format", phase: "Checking chunk reconstruction format", run: () => checkContentFormat() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
     { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },

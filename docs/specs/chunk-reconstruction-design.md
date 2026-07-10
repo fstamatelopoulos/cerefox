@@ -1,9 +1,11 @@
 # Design: chunk storage & lossless document reconstruction
 
-> **Status**: Design-of-record (2026-07-09). Not started (Phase 1). The interim
-> correctness fix (keep oversized single paragraphs whole) already shipped on
-> `feat/oauth-mcp`; this doc specifies the *proper* fix. Work lands on a new branch
-> `fix/chunk-reconstruction`. Target: v1.0.0 (part of the release; see `docs/plan.md`).
+> **Status**: Phase 0 + Phase 1 **CODE-COMPLETE** (2026-07-11) on `fix/chunk-reconstruction`,
+> pending the supervised schema-0.8.0 deploy + live round-trip validation. Built: the
+> exact-partition chunker (single consolidated TS impl), `content_format` on `cerefox_chunks`
+> (§4.3), all 5 reconstruction branches, ingest `p_content_format`, callers passing format-2 +
+> heading-breadcrumb embeddings, the doctor stats check, and `docs/guides/content-format.md`.
+> Python parity dropped (retired at v1.0, workstream 28G). NOT deployed. Target v1.0.0.
 
 ## 1. The problem
 
@@ -69,24 +71,58 @@ corruption, which is what lets us bound chunk size again.
   already-stored `heading_path` metadata. Stored content stays a clean partition;
   search still gets full heading context. (`heading_path`, `heading_level`, `title`
   metadata are computed as today.)
-- Keep it byte-for-byte identical between the TS chunker (`_shared/ingest/chunker.ts`)
-  and the legacy Python chunker (`src/cerefox/chunking/markdown.py`) — OR, if the Python
-  MCP fallback is retired at v1.0 (see plan), drop the Python parity requirement then.
+- **Python parity dropped (decided 2026-07-10).** Python is fully retired at v1.0
+  (workstream 28G), so `src/cerefox/chunking/markdown.py` is NOT updated to format-2.
+  The frozen Python MCP keeps its interim keep-whole fix and produces **format-1**
+  chunks (lossless via the `\n\n` branch); only the TS chunker
+  (`_shared/ingest/chunker.ts`) produces **format-2** blind-stitch. The versioned
+  reconstruction (§4.3) handles both, so nothing breaks during the deprecation window.
+
+### 4.2b Chunker consolidation — REQUIRED FIRST (discovered 2026-07-10)
+
+The design above assumed one TS chunker. There are **three**, plus Python:
+1. `_shared/ingest/chunker.ts` — used by the CLI/web/pipeline (`packages/memory/src/ingestion/pipeline.ts`).
+2. `_shared/mcp-tools/_chunker.ts` — used by `_shared/mcp-tools/ingest.ts` (local MCP + `cerefox-mcp` EF).
+3. `supabase/functions/cerefox-ingest/index.ts` inline `chunkMarkdown` — the GPT-Actions ingest path.
+
+A partial/inconsistent Phase-1 change across these would itself corrupt data, so **consolidate to
+one before rewriting**. `_shared/ingest/index.ts` claims Deno EFs "can't import from `_shared/`",
+but iter-28E disproved that (the EFs now import `ef-auth`/`ef-meta`/`embeddings` via the bundler).
+Plan: point (2) and (3) at `_shared/ingest/chunker.ts`; add `"ingest"` to the
+`bundle_server_assets.ts` subtree list; delete the two duplicate copies. Then the exact-partition
+rewrite is a single change. **Status: the exact-partition algorithm + `blindStitch` + invariant
+tests are written and green as `chunkMarkdownExact` (unwired); consolidation + swap-in is the next
+step.**
 
 ### 4.3 Reconstruction (backward-compatible, versioned)
-- New column `cerefox_documents.content_format SMALLINT NOT NULL DEFAULT 1`
-  (`1` = legacy `\n\n`-join; `2` = blind-stitch).
-- The 4 reconstruction RPC sites branch on it:
-  `CASE WHEN d.content_format >= 2 THEN STRING_AGG(c.content, '' ORDER BY chunk_index)
-        ELSE STRING_AGG(c.content, E'\n\n' ORDER BY chunk_index) END`.
-- The ingest RPC sets `content_format = 2` on any write that stores blind-stitch chunks
-  (i.e. all writes from the new chunker).
+
+**REVISED (2026-07-11) — put `content_format` on `cerefox_chunks`, NOT `cerefox_documents`.**
+Cerefox uses **chunks-anchored versioning** (design decision 7): a document's history lives in
+`cerefox_chunks.version_id` (NULL = current, UUID = archived), with no separate content table.
+An archived version can therefore have a *different* format than the current one (e.g. a doc
+first ingested format-1, later re-saved format-2 — the archived format-1 chunks must still
+reconstruct with `\n\n`). If the flag lived on `cerefox_documents`, reconstruction site **#5
+below (`p_version_id`, the archived-version read) would use the current doc's format and corrupt
+the archived copy.** The format belongs *with the chunks*, exactly like `version_id`.
+
+- New column `cerefox_chunks.content_format SMALLINT NOT NULL DEFAULT 1` (`1` = legacy `\n\n`-join;
+  `2` = blind-stitch). Adding a column with a constant default is metadata-only in PG 11+ (no
+  rewrite of the large chunks table).
+- The ingest RPC gains `p_content_format SMALLINT DEFAULT 1` and stamps it **on each chunk row**
+  it inserts. TS callers (new chunker) pass `2`; anything else defaults to `1`.
+- The **5** reconstruction sites (`rpcs.sql`, schema 0.7.0: lines ~406, ~683, ~693, ~869, ~1512 —
+  four reconstruct current `version_id IS NULL`, #869 reconstructs an archived version) branch
+  uniformly on the aggregated chunks' format:
+  `CASE WHEN MAX(c.content_format) >= 2 THEN STRING_AGG(c.content, '' ORDER BY c.chunk_index)
+        ELSE STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) END`
+  (all chunks in one group share a format, so `MAX` = "the group's format"; this handles current
+  AND archived with one pattern — no per-site current/archived special-casing).
 - Schema bump: `schema_version` 0.7.0 → 0.8.0 (both literals in lockstep).
 
 ### 4.4 Migration — lazy, zero forced re-embed
 - **Existing documents stay `content_format = 1`** and reconstruct exactly as today.
 - A document **flips to `2` the next time it is written** (re-chunked by the new
-  chunker). No mass re-embed; Debasis's 1,000+ docs are untouched until edited.
+  chunker). No mass re-embed; existing large KBs are untouched until edited.
 - **Eager option:** `cerefox server reindex` re-chunks + re-embeds and stamps
   `content_format = 2` (offer, don't force).
 
@@ -106,8 +142,8 @@ run `cerefox server reindex` to convert now)."* Informational, not a gate. Needs
 - **No chunk exceeds the size limit** (bounded chunks again).
 - **Reconstruction-RPC branch**: legacy-format doc reconstructs with `\n\n`; new-format
   doc reconstructs by blind concat; a live round-trip through the ingest RPC + a read.
-- Regenerate the `python-parity` chunking fixtures for the new output (they encoded the
-  old normalize-and-rejoin format).
+- **Remove the `python-parity` chunking fixtures** (Python retired at v1.0, 28G) and
+  replace their coverage with the format-2 invariant tests above.
 
 ## 6. Risks & rollout
 - Changing how *new* writes are stored right before the v1.0 stability freeze is the
@@ -118,9 +154,7 @@ run `cerefox server reindex` to convert now)."* Informational, not a gate. Needs
 - The interim keep-whole fix stays until Phase 1 lands (no regression window).
 
 ## 7. References
-- Root-cause forensics + the 4 affected docs: Cerefox Decision Log 2026 Q3 Part 1
-  (KB), 2026-07-09 entries.
-- Interim fix: `fix(chunker): keep oversized single paragraphs whole` on
-  `feat/oauth-mcp`; regression test in `_shared/__tests__/ingest-chunker.test.ts`.
+- Interim fix: `fix(chunker): keep oversized single paragraphs whole` (shipped on `main`);
+  regression test in `_shared/__tests__/ingest-chunker.test.ts`.
 - Reconstruction sites: `src/cerefox/db/rpcs.sql` (`STRING_AGG(c.content, E'\n\n' …)`,
-  4 occurrences).
+  5 occurrences — see §4.3).

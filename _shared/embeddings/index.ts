@@ -43,6 +43,44 @@ export function openaiEmbeddingConfig(): { url: string; model: string; dimension
   };
 }
 
+/**
+ * Safety cap (iter-28D Phase 0) on the characters sent to the embedding model per
+ * input — a conservative proxy for the model's token limit (`text-embedding-3-small`
+ * is 8191 tokens). Normal chunks are far below this (`max_chunk_chars` ≈ 2000); the
+ * cap only bites on an oversized *keep-whole* chunk (a huge table or blank-line-free
+ * paragraph the interim chunker fix keeps intact). Default 20000 chars sits well under
+ * 8191 tokens for markdown/English; override with `CEREFOX_EMBED_MAX_INPUT_CHARS`.
+ */
+export const DEFAULT_EMBED_MAX_INPUT_CHARS = 20000;
+
+export function embeddingMaxInputChars(): number {
+  const env =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+  const raw = Number.parseInt(env.CEREFOX_EMBED_MAX_INPUT_CHARS ?? "", 10);
+  return Number.isNaN(raw) || raw <= 0 ? DEFAULT_EMBED_MAX_INPUT_CHARS : raw;
+}
+
+/**
+ * Truncate one embedding input to the char cap. The full chunk `content` is stored and
+ * reconstructed untouched; only its *embedding* is computed on this prefix — so at worst
+ * search quality for one oversized chunk is degraded, and an ingest **never fails** on an
+ * over-limit embedding input (the failure mode this prevents). Surrogate-safe (never leaves
+ * a dangling high surrogate). Warns when it truncates.
+ */
+export function capEmbeddingInput(text: string): string {
+  const max = embeddingMaxInputChars();
+  if (text.length <= max) return text;
+  let cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1); // don't split a surrogate pair
+  console.warn(
+    `[embeddings] truncated an embedding input: ${text.length} → ${cut.length} chars ` +
+      `(cap CEREFOX_EMBED_MAX_INPUT_CHARS=${max}). The full content is stored and reconstructed ` +
+      `untouched; only this chunk's embedding uses the prefix (degraded search for this chunk).`,
+  );
+  return cut;
+}
+
 const EMBEDDING_MAX_RETRIES = 3;
 const EMBEDDING_INITIAL_BACKOFF_MS = 500; // 500ms → 1s → 2s
 
@@ -50,6 +88,7 @@ const EMBEDDING_INITIAL_BACKOFF_MS = 500; // 500ms → 1s → 2s
 export async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
   let lastError: Error | null = null;
   const cfg = openaiEmbeddingConfig();
+  const input = capEmbeddingInput(text); // cap once, before the retry loop
 
   for (let attempt = 0; attempt < EMBEDDING_MAX_RETRIES; attempt++) {
     try {
@@ -61,7 +100,7 @@ export async function getEmbedding(text: string, apiKey: string): Promise<number
         },
         body: JSON.stringify({
           model: cfg.model,
-          input: text,
+          input,
           dimensions: cfg.dimensions,
         }),
       });
@@ -121,6 +160,7 @@ async function embedBatchSingleCall(
 ): Promise<number[][]> {
   let lastError: Error | null = null;
   const cfg = openaiEmbeddingConfig();
+  const inputs = texts.map(capEmbeddingInput); // cap once, before the retry loop
 
   for (let attempt = 0; attempt < EMBEDDING_MAX_RETRIES; attempt++) {
     try {
@@ -132,7 +172,7 @@ async function embedBatchSingleCall(
         },
         body: JSON.stringify({
           model: cfg.model,
-          input: texts,
+          input: inputs,
           dimensions: cfg.dimensions,
         }),
       });
