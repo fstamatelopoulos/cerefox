@@ -3824,11 +3824,25 @@ agreed plan). What landed:
 but prod is still on schema 0.7.0. These are NOT bugs; they confirm the wiring and clear the moment
 schema 0.8.0 is deployed. `_shared` (274) + all non-live package tests pass.
 
-**NEXT (supervised, together):** `npm link` local build → `cerefox server deploy` (schema 0.8.0 +
-EFs, from the staged temp copy per the deploy-gotcha) → `cerefox doctor` (content-format ℹ) →
-ingest a dummy table doc via local + remote MCP and verify byte-exact reconstruction (format-2)
-AND that an existing doc still reads correctly (format-1) → then Fotis validates via web UI +
-manually fixes the corrupted file. Then PR → main.
+**NEXT — via a published `1.0.0-beta.1` (decided 2026-07-11), to dogfood the whole install →
+migrate → test UX instead of an `npm link` shortcut:**
+1. **Merge the 28D PR → `main`** (`fix/chunk-reconstruction`). RELEASING.md pre-release checklist
+   first — with one nuance for a *schema-changing* beta: the 16 live failures stay red until the
+   0.8.0 schema is deployed (which happens in step 4, via the beta), so "tests green" here means
+   the `_shared` (274) + non-live package suites; the live suites go green during the migrate.
+2. **Cut `1.0.0-beta.1`:** `bun scripts/cut_release.ts 1.0.0-beta.1 --npm-publish`. The release
+   workflow publishes it under the **`beta`** npm dist-tag (release.yml computes the channel from
+   the pre-release suffix), so `latest` — and any plain `self-update`/`install.sh` — stays on
+   0.11.x. Each beta gets its own CHANGELOG section; breaking changes are allowed between betas.
+3. **Install the beta:** `VERSION=beta sh install.sh` (or `npm i -g @cerefox/memory@beta`).
+4. **Migrate** (supervised together, per `docs/guides/migration-1.0.md`): `cerefox token generate`
+   → `cerefox server deploy` (schema 0.8.0 + token-gated EFs — an *installed* package deploys with
+   no repo-checkout gotcha) → `cerefox doctor` (edge-functions ✓, content-format ℹ) → revoke the
+   legacy anon key → `supabase functions delete cerefox-oauth-consent` (if still present).
+5. **Validate:** agent ingests a dummy table doc via local + remote MCP and verifies byte-exact
+   format-2 reconstruction AND that a pre-existing doc still reads correctly (format-1); then Fotis
+   validates via the web UI + manually fixes the file that surfaced the bug.
+6. More betas as the audit (③) + 28G (Python retirement) land → `1.0.0-rc.1` (freeze) → `1.0.0`.
 
 **Update (2026-07-11, later — 28D Phase 1 wiring in progress on `fix/chunk-reconstruction`).**
 Done + pushed since the overnight note below:
