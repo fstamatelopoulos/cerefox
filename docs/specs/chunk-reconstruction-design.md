@@ -94,15 +94,28 @@ tests are written and green as `chunkMarkdownExact` (unwired); consolidation + s
 step.**
 
 ### 4.3 Reconstruction (backward-compatible, versioned)
-- New column `cerefox_documents.content_format SMALLINT NOT NULL DEFAULT 1`
-  (`1` = legacy `\n\n`-join; `2` = blind-stitch).
-- The 4 reconstruction RPC sites branch on it:
-  `CASE WHEN d.content_format >= 2 THEN STRING_AGG(c.content, '' ORDER BY chunk_index)
-        ELSE STRING_AGG(c.content, E'\n\n' ORDER BY chunk_index) END`.
-- The ingest RPC gains a `p_content_format SMALLINT DEFAULT 1` param and stamps it on the
-  document. TS callers (new chunker) pass `2`; Python / other callers omit it → default `1`.
-- **Note (2026-07-10): 5 reconstruction sites, not 4** — `rpcs.sql` has `STRING_AGG(content,
-  E'\n\n')` at (as of schema 0.7.0) lines ~406, ~683, ~693, ~869, ~1512. Branch all five.
+
+**REVISED (2026-07-11) — put `content_format` on `cerefox_chunks`, NOT `cerefox_documents`.**
+Cerefox uses **chunks-anchored versioning** (design decision 7): a document's history lives in
+`cerefox_chunks.version_id` (NULL = current, UUID = archived), with no separate content table.
+An archived version can therefore have a *different* format than the current one (e.g. a doc
+first ingested format-1, later re-saved format-2 — the archived format-1 chunks must still
+reconstruct with `\n\n`). If the flag lived on `cerefox_documents`, reconstruction site **#5
+below (`p_version_id`, the archived-version read) would use the current doc's format and corrupt
+the archived copy.** The format belongs *with the chunks*, exactly like `version_id`.
+
+- New column `cerefox_chunks.content_format SMALLINT NOT NULL DEFAULT 1` (`1` = legacy `\n\n`-join;
+  `2` = blind-stitch). Adding a column with a constant default is metadata-only in PG 11+ (no
+  rewrite of the large chunks table).
+- The ingest RPC gains `p_content_format SMALLINT DEFAULT 1` and stamps it **on each chunk row**
+  it inserts. TS callers (new chunker) pass `2`; anything else defaults to `1`.
+- The **5** reconstruction sites (`rpcs.sql`, schema 0.7.0: lines ~406, ~683, ~693, ~869, ~1512 —
+  four reconstruct current `version_id IS NULL`, #869 reconstructs an archived version) branch
+  uniformly on the aggregated chunks' format:
+  `CASE WHEN MAX(c.content_format) >= 2 THEN STRING_AGG(c.content, '' ORDER BY c.chunk_index)
+        ELSE STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) END`
+  (all chunks in one group share a format, so `MAX` = "the group's format"; this handles current
+  AND archived with one pattern — no per-site current/archived special-casing).
 - Schema bump: `schema_version` 0.7.0 → 0.8.0 (both literals in lockstep).
 
 ### 4.4 Migration — lazy, zero forced re-embed

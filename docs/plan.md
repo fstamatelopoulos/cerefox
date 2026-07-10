@@ -3802,6 +3802,25 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-07-11, later — 28D Phase 1 wiring in progress on `fix/chunk-reconstruction`).**
+Done + pushed since the overnight note below:
+- **Chunker swap + consolidation (Stages A/B/C): DONE + verified.** `chunkMarkdown` is now the
+  exact-partition algorithm; the two duplicate copies (`_shared/mcp-tools/_chunker.ts`, the
+  `cerefox-ingest` EF inline) now import the single shared chunker. Verified rigorously: the
+  invariant is structural (not just tested) + **24 cases / 1174 assertions** incl. adversarial
+  (code-fence false headings, all-astral, CRLF, closing hashes, huge soft-wrapped lines);
+  **`content_hash` is doc-level so dedup is chunker-independent**; all 3 callers are
+  field-compatible with `ChunkData`.
+- **DB (Stage D): PAUSED on a design decision — needs a quick confirm.** Discovered that
+  documents are **versioned** (chunks-anchored, `cerefox_chunks.version_id`), so an archived
+  version can have a different `content_format` than the current doc. The design's original
+  `content_format`-on-`cerefox_documents` would **corrupt archived versions** at reconstruction
+  site #869 (`p_version_id`). **Revised recommendation (design §4.3): put `content_format` on
+  `cerefox_chunks`** and branch all 5 sites on `MAX(c.content_format) >= 2` (uniform for current
+  + archived). No schema files touched yet — clean state. Once confirmed: implement Stage D with
+  this placement, then Stage E (callers pass `content_format=2` + embedding heading breadcrumb),
+  Stage F (doctor), then the supervised deploy.
+
 **Update (2026-07-11, overnight — 28D in progress on `fix/chunk-reconstruction`).** Done this
 session (all pushed):
 - **Phase 0 — embedding-input cap: COMPLETE.** `capEmbeddingInput` in `_shared/embeddings`
