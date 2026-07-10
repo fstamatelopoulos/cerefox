@@ -2,7 +2,7 @@
  * iter-28D Phase 1 — invariant tests for the exact-partition ("blind-stitch")
  * chunker. THE test that would have caught the original corruption bug:
  *
- *     blindStitch(chunkMarkdownExact(doc)) === doc.trim()
+ *     blindStitch(chunkMarkdown(doc)) === doc.trim()
  *
  * for every input, byte-for-byte, plus "no chunk exceeds the size limit".
  * These are pure-TS and validate the core algorithm ahead of the (coupled,
@@ -11,7 +11,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { blindStitch, chunkMarkdownExact, type ChunkData } from "../ingest/chunker.ts";
+import { blindStitch, chunkMarkdown, type ChunkData } from "../ingest/chunker.ts";
 
 function cpLen(s: string): number {
   let n = 0;
@@ -20,7 +20,7 @@ function cpLen(s: string): number {
 }
 
 const roundTrips = (doc: string, max = 100): ChunkData[] => {
-  const chunks = chunkMarkdownExact(doc, max);
+  const chunks = chunkMarkdown(doc, max);
   expect(blindStitch(chunks)).toBe(doc.trim()); // THE invariant
   for (const c of chunks) expect(cpLen(c.content)).toBeLessThanOrEqual(max); // bounded
   // chunk_index is contiguous from 0
@@ -28,10 +28,10 @@ const roundTrips = (doc: string, max = 100): ChunkData[] => {
   return chunks;
 };
 
-describe("chunkMarkdownExact — the reconstruction invariant", () => {
+describe("chunkMarkdown — the reconstruction invariant", () => {
   test("empty / whitespace-only → no chunks", () => {
-    expect(chunkMarkdownExact("")).toEqual([]);
-    expect(chunkMarkdownExact("   \n\n  \t ")).toEqual([]);
+    expect(chunkMarkdown("")).toEqual([]);
+    expect(chunkMarkdown("   \n\n  \t ")).toEqual([]);
   });
 
   test("small doc → single chunk == trimmed doc", () => {
@@ -109,10 +109,10 @@ describe("chunkMarkdownExact — the reconstruction invariant", () => {
   });
 });
 
-describe("chunkMarkdownExact — heading_path metadata", () => {
+describe("chunkMarkdown — heading_path metadata", () => {
   test("a mid-section chunk inherits its enclosing heading path (not stored in content)", () => {
     const doc = "# A\n\n## B\n\n" + "para ".repeat(60).trim() + "\n\n" + "more ".repeat(60).trim();
-    const chunks = chunkMarkdownExact(doc, 120);
+    const chunks = chunkMarkdown(doc, 120);
     // find a chunk whose content does NOT contain a heading line but is under A > B
     const midSection = chunks.find((c) => !/^#{1,3} /m.test(c.content) && c.heading_path.length > 0);
     expect(midSection).toBeDefined();
@@ -123,7 +123,7 @@ describe("chunkMarkdownExact — heading_path metadata", () => {
 
   test("proper nesting stack: a new H1 resets the path", () => {
     const doc = "# One\n\n## Sub\n\nbody one\n\n# Two\n\nbody two here to make it distinct and longer.";
-    const chunks = chunkMarkdownExact(doc, 40);
+    const chunks = chunkMarkdown(doc, 40);
     const underTwo = chunks.find((c) => c.heading_path[0] === "Two");
     expect(underTwo).toBeDefined();
     expect(underTwo!.heading_path).toEqual(["Two"]);
@@ -131,7 +131,7 @@ describe("chunkMarkdownExact — heading_path metadata", () => {
 
   test("preamble before any heading has empty path / level 0", () => {
     const doc = "preamble text ".repeat(30).trim() + "\n\n# Later\n\nbody";
-    const first = chunkMarkdownExact(doc, 80)[0];
+    const first = chunkMarkdown(doc, 80)[0];
     expect(first.heading_path).toEqual([]);
     expect(first.heading_level).toBe(0);
   });

@@ -10,13 +10,18 @@
  *   - `packages/memory/src/web/routes/documents-write.ts` (v0.6's /edit
  *     content-hash short-circuit, now using the shared helper)
  *
- * NOT consumed by `supabase/functions/cerefox-ingest/` — Deno Edge Runtime
- * can't import from the monorepo's `_shared/`. The EF keeps its own
- * chunker copy; cross-runtime parity is enforced by shared fixture tests
- * (see `packages/memory/test/fixtures/python-parity/chunking/`).
+ * Also consumed by `supabase/functions/cerefox-ingest/` and
+ * `_shared/mcp-tools/_chunker.ts` (iter-28D Phase 1 consolidation) — the
+ * chunker lives here only; the EF bundles `_shared/ingest/` via
+ * `bundle_server_assets.ts`, the same way it bundles `ef-auth`/`embeddings`.
  */
 
-export { chunkMarkdown, chunkMarkdownExact, blindStitch, type ChunkData } from "./chunker.js";
+export {
+  chunkMarkdown,
+  blindStitch,
+  CONTENT_FORMAT_BLIND_STITCH,
+  type ChunkData,
+} from "./chunker.js";
 export {
   normalizeForHash,
   contentHash,
