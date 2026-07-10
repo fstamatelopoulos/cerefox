@@ -366,8 +366,8 @@ async function action(options: DeployServerOptions): Promise<void> {
     if (efNames.includes("cerefox-mcp")) {
       const ref = projectRef ?? "<ref>";
       println(
-        c.yellow(
-          "\n   ⚠  cerefox-mcp authenticates in-function (OAuth for cloud/mobile Claude).\n" +
+        c.cyan(
+          "\n   ℹ  cerefox-mcp authenticates in-function (OAuth for cloud/mobile Claude).\n" +
             "      Pin the owner — this is the authorization boundary (else any user who\n" +
             "      self-registers on your project could get an accepted token):\n" +
             `        supabase secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --project-ref ${ref}\n` +
@@ -384,8 +384,8 @@ async function action(options: DeployServerOptions): Promise<void> {
     if (efNames.some((ef) => PRIMITIVE_EFS.includes(ef))) {
       const ref = projectRef ?? "<ref>";
       println(
-        c.yellow(
-          "\n   ⚠  The primitive Edge Functions now require the Cerefox access token.\n" +
+        c.cyan(
+          "\n   ℹ  The primitive Edge Functions now require the Cerefox access token.\n" +
             "      If CEREFOX_ACCESS_TOKENS is unset they reject ALL callers (fail closed) —\n" +
             "      GPT Actions, remote HTTP, and `cerefox doctor`. Generate it now:\n" +
             "        cerefox token generate\n" +
