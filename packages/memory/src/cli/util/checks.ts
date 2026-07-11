@@ -190,6 +190,16 @@ export async function checkSupabase(): Promise<CheckResult> {
 export async function checkOpenAI(): Promise<CheckResult> {
   const settings = loadSettings();
   if (!settings.openaiApiKey) {
+    // Keyless is HEALTHY when the local ONNX embedder is active (iter-31) —
+    // don't alarm a fully-offline Cerefox Local install with a ⚠.
+    const { resolveEmbedderKind } = await import("../../../../../_shared/embeddings/index.ts");
+    if (resolveEmbedderKind() === "local") {
+      return {
+        name: "openai",
+        status: "skipped",
+        detail: "no key set — not needed (local embedder active; see the embedder check).",
+      };
+    }
     return {
       name: "openai",
       status: "warn",
