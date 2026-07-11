@@ -105,11 +105,21 @@ fi
 # Preserve any config overrides the user added to a prior local .env (we only manage
 # OPENAI + port), and forward them into the container. Same whitelist cerefox-local uses;
 # never the container-managed SUPABASE/DB/JWT vars.
-PASSTHROUGH_VARS="CEREFOX_MIN_SEARCH_SCORE CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_VERSION_RETENTION_HOURS CEREFOX_VERSION_CLEANUP_ENABLED CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
+PASSTHROUGH_VARS="CEREFOX_EMBEDDER CEREFOX_MIN_SEARCH_SCORE CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_VERSION_RETENTION_HOURS CEREFOX_VERSION_CLEANUP_ENABLED CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
+# --local-embedder (curl … | sh -s -- --local-embedder) selects the in-container
+# nomic ONNX embedder (fully offline; ~130 MB model downloads on first use).
+# Equivalent env form: CEREFOX_EMBEDDER=local. Default stays OpenAI.
+for arg in "$@"; do
+  case "$arg" in
+    --local-embedder) CEREFOX_EMBEDDER=local ;;
+  esac
+done
+
 PRESERVED_OVERRIDES=""
 ENV_ARGS=""
 if [ -f "$CONFIG_DIR/.env" ]; then
   for v in $PASSTHROUGH_VARS; do
+    eval "cur=\${$v:-}"; [ -n "$cur" ] && continue  # live env wins over a preserved line
     line=$(grep -E "^${v}=" "$CONFIG_DIR/.env" | head -1)
     if [ -n "$line" ]; then
       PRESERVED_OVERRIDES="${PRESERVED_OVERRIDES}${line}
@@ -132,6 +142,7 @@ docker run -d --name "$CONTAINER" -p "$BIND_ADDR:$PORT:8000" \
   --restart unless-stopped \
   -v "$VOLUME:/var/lib/postgresql/data" \
   ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
+  ${CEREFOX_EMBEDDER:+-e CEREFOX_EMBEDDER=$CEREFOX_EMBEDDER} \
   $ENV_ARGS \
   "$IMAGE" >/dev/null
 
@@ -145,6 +156,7 @@ umask 077
   echo "CEREFOX_LOCAL_PORT=$PORT"
   echo "CEREFOX_LOCAL_BIND=$BIND_ADDR"
   [ -n "${OPENAI_API_KEY:-}" ] && echo "OPENAI_API_KEY=$OPENAI_API_KEY"
+  [ -n "${CEREFOX_EMBEDDER:-}" ] && echo "CEREFOX_EMBEDDER=$CEREFOX_EMBEDDER"
   [ -n "$PRESERVED_OVERRIDES" ] && printf '%s' "$PRESERVED_OVERRIDES"
 } > "$CONFIG_DIR/.env"
 
