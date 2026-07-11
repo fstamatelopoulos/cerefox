@@ -84,8 +84,42 @@ export function capEmbeddingInput(text: string): string {
 const EMBEDDING_MAX_RETRIES = 3;
 const EMBEDDING_INITIAL_BACKOFF_MS = 500; // 500ms → 1s → 2s
 
-/** Embed a single string. Used for the query vector in `cerefox_search`. */
+// ── Embedder selection (iter-31: local ONNX embedder, World B only) ─────────
+//
+// `CEREFOX_EMBEDDER` selects the backend: "openai" (default) or "local" (the
+// in-container nomic ONNX model — Cerefox Local only; cloud embedding runs in
+// the Edge Functions, which a local model can't serve). The ONNX module is
+// reached ONLY via dynamic import so the cloud `cerefox-mcp` Edge Function
+// (which loads this file via _shared/mcp-tools) never touches the Node-only
+// onnxruntime dependency — a top-level import here would break that EF.
+//
+// The public signatures are unchanged (`apiKey` is ignored by the local path).
+// The query/document role is implicit in the entry point — an invariant every
+// call site was audited for (design doc §"role is reliably implicit"):
+//   getEmbedding = QUERY-only · embedBatch = DOCUMENT-only.
+// If a future caller needs the other role from either function, add an explicit
+// role argument instead of misusing the entry point — the nomic model embeds
+// the two roles into different spaces (`search_query:` vs `search_document:`).
+
+export type EmbedderKind = "openai" | "local";
+
+export function resolveEmbedderKind(): EmbedderKind {
+  const env =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+  return env.CEREFOX_EMBEDDER === "local" ? "local" : "openai";
+}
+
+async function onnxModule(): Promise<typeof import("./onnx-embedder.ts")> {
+  return await import("./onnx-embedder.ts");
+}
+
+/** Embed a single string. QUERY role — used for the query vector in search. */
 export async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
+  if (resolveEmbedderKind() === "local") {
+    const onnx = await onnxModule();
+    const [vec] = await onnx.onnxEmbed([capEmbeddingInput(text)], "query");
+    return vec;
+  }
   let lastError: Error | null = null;
   const cfg = openaiEmbeddingConfig();
   const input = capEmbeddingInput(text); // cap once, before the retry loop
@@ -229,6 +263,12 @@ export async function embedBatch(
   batchSize: number = EMBEDDING_BATCH_SIZE,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
+  if (resolveEmbedderKind() === "local") {
+    // DOCUMENT role (see the invariant note above). The ONNX runtime batches
+    // internally; the OpenAI per-request batch limit doesn't apply.
+    const onnx = await onnxModule();
+    return onnx.onnxEmbed(texts.map(capEmbeddingInput), "document");
+  }
   if (texts.length <= batchSize) {
     return embedBatchSingleCall(texts, apiKey);
   }
