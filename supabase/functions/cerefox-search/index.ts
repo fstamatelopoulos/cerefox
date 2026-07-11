@@ -52,6 +52,11 @@ const EMBEDDING_DIMENSIONS = 768;
 // ceiling is rarely reached under normal usage at the default match_count=5.
 const MAX_BYTES = 200_000;
 
+// Upper bound on match_count. The response is byte-capped separately (MAX_BYTES);
+// this caps the query work (vector sort / FTS ranking) so an authenticated caller
+// cannot request an unbounded LIMIT. Defensive review, pre-1.0.
+const MAX_MATCH_COUNT = 200;
+
 
 interface SearchRequest {
   query: string;
@@ -216,7 +221,7 @@ Deno.serve(async (req: Request) => {
   const {
     query,
     project_name,
-    match_count = 5,
+    match_count: raw_match_count = 5,
     mode = "docs",
     alpha = 0.7,
     min_score = 0.5,
@@ -226,6 +231,8 @@ Deno.serve(async (req: Request) => {
 
   // Enforce ceiling: agents may request less but never more than MAX_BYTES.
   const max_bytes = Math.min(requested_max_bytes ?? MAX_BYTES, MAX_BYTES);
+  // Clamp match_count to [1, MAX_MATCH_COUNT] (bounds query work; see MAX_MATCH_COUNT).
+  const match_count = Math.min(Math.max(1, Math.floor(Number(raw_match_count)) || 5), MAX_MATCH_COUNT);
 
   // Validate metadata_filter: must be a plain object (or null/absent).
   // Reject arrays, strings, and other non-object types to prevent RPC errors.

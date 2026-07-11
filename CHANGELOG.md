@@ -9,7 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Security
+- **Pre-1.0.0 defensive security review (iter-28B ③).** A full read of the
+  auth, database, Edge Function, web, and CLI surfaces. The material risks were
+  already closed by the earlier auth work; this pass added one hardening fix and
+  documented the review in `docs/specs/security-audit-1.0.md`.
+- **Hardening:** `cerefox-search` and `cerefox-metadata-search` now clamp the
+  requested result count to a sane maximum, so a large `match_count` / `limit`
+  can't drive an oversized query. No API shape change.
 
 ---
 

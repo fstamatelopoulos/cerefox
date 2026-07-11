@@ -93,7 +93,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
-    const limit = body.limit ?? 10;
+    // Clamp limit to [1, 500]: response is byte-capped, but bound the row work too
+    // so an authenticated caller can't request an unbounded scan. Defensive review, pre-1.0.
+    const limit = Math.min(Math.max(1, Math.floor(Number(body.limit)) || 10), 500);
     const include_content = body.include_content ?? false;
     const requested_max_bytes = body.max_bytes;
 
