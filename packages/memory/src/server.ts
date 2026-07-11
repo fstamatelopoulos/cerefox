@@ -21,8 +21,11 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { existsSync, readFileSync } from "node:fs";
 
+import { compareSemver } from "../../../_shared/compatibility/index.ts";
 import { loadSettings } from "../../../_shared/config/index.ts";
+import { resolveServerAssets } from "../../../_shared/server-assets/index.ts";
 import {
   ALL_TOOLS,
   McpInvalidParams,
@@ -115,19 +118,41 @@ export function buildServer(): ServerHandle {
   };
 }
 
+/** Matches the `-- @version: X.Y.Z` marker at the top of the bundled schema.sql. */
+const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
+
 async function warnIfSchemaVersionMismatch(
   supabase: SharedSupabaseClient,
 ): Promise<void> {
   try {
     const { data } = await supabase.rpc("cerefox_schema_version");
     const deployed = typeof data === "string" ? data : null;
-    if (deployed && deployed !== PKG_VERSION) {
-      // Match the Python schema-mismatch banner's wording so operators get a
-      // consistent signal regardless of which surface noticed first.
+    if (!deployed) return;
+    // Compare SCHEMA against SCHEMA. The npm package version (PKG_VERSION) is an
+    // independent numbering scale that is never equal to the schema version, so
+    // comparing against it made this banner a permanent false positive on every
+    // healthy startup (issue #90). The bundled schema version is the same source
+    // `cerefox doctor` uses: the `-- @version:` marker in the bundled schema.sql.
+    let bundled: string | null = null;
+    try {
+      const assets = resolveServerAssets();
+      if (existsSync(assets.schemaFile)) {
+        const m = readFileSync(assets.schemaFile, "utf8").match(SCHEMA_VERSION_RE);
+        bundled = m ? m[1] : null;
+      }
+    } catch {
+      /* assets unresolvable (unusual install layout) → skip the check */
+    }
+    if (!bundled) return;
+    // Warn only for the redeploy footgun: client bundles a NEWER schema than is
+    // deployed (user upgraded npm, forgot `cerefox server deploy`). A deployed
+    // schema newer than the bundle is fine (another machine deployed it) and
+    // equal versions are the healthy steady state — both stay silent.
+    if (compareSemver(deployed, bundled) < 0) {
       process.stderr.write(
-        `[cerefox-mcp] ⚠  schema version mismatch: bundled ${PKG_VERSION}, ` +
-          `deployed ${deployed}. Run \`uv run python scripts/db_deploy.py\` ` +
-          `to update the database. Tools may behave unexpectedly until then.\n`,
+        `[cerefox-mcp] ⚠  schema version mismatch: this client bundles v${bundled} ` +
+          `but the deployed schema is v${deployed}. Run \`cerefox server deploy\` ` +
+          `to update it. Tools may behave unexpectedly until then.\n`,
       );
     }
   } catch {

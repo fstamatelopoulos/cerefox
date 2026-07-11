@@ -159,6 +159,23 @@ describe("input validation throws McpInvalidParams", () => {
     expect(err).toBeInstanceOf(McpInvalidParams);
   });
 
+  test("cerefox_ingest rejects scalar metadata (issue #89)", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_ingest"];
+    for (const bad of ["i am a scalar", 42, true, ["an", "array"]]) {
+      let err: unknown;
+      try {
+        await tool.handler(
+          noopClient(),
+          { title: "x", content: "y", metadata: bad },
+          { ...FAKE_CTX, openaiApiKey: "test" },
+        );
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(McpInvalidParams);
+    }
+  });
+
   test("cerefox_get_document rejects missing document_id", async () => {
     const tool = TOOLS_BY_NAME["cerefox_get_document"];
     let err: unknown;

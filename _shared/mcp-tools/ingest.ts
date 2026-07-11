@@ -81,6 +81,14 @@ async function handler(
   // {} on create (v0.11.1 — defaulting to {} here used to wipe a document's
   // tags on every content update that didn't re-pass them).
   const metadata = (args.metadata as Record<string, unknown> | undefined) ?? null;
+  // Must be a plain JSON object (or absent). A scalar/array stored in the JSONB
+  // column poisons cerefox_list_metadata_keys for the whole dataset (issue #89),
+  // so reject it at the boundary too, not just in the RPC.
+  if (metadata !== null && (typeof metadata !== "object" || Array.isArray(metadata))) {
+    throw new McpInvalidParams(
+      'metadata must be a JSON object of key/value pairs, e.g. {"type":"note"} — not a string, number, or array',
+    );
+  }
   const update_if_exists = (args.update_if_exists as boolean | undefined) ?? false;
   const author = (args.author as string | undefined) ?? "mcp-agent";
   const author_type = "agent"; // MCP path is always agent

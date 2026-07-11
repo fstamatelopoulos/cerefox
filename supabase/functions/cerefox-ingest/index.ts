@@ -334,6 +334,16 @@ Deno.serve(async (req: Request) => {
   // a document's tags on every content update that didn't re-pass them).
   const { title, content, document_id = null, project_name, source = "agent", metadata = null, update_if_exists = false, author = "agent", author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
 
+  // metadata must be a plain JSON object (or absent). A scalar/array stored in
+  // the JSONB column poisons cerefox_list_metadata_keys for the whole dataset
+  // (issue #89) — reject at the boundary too, not just in the RPC.
+  if (metadata !== null && (typeof metadata !== "object" || Array.isArray(metadata))) {
+    return new Response(
+      JSON.stringify({ error: 'metadata must be a JSON object of key/value pairs, e.g. {"type":"note"} — not a string, number, or array' }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   // Validate + normalize project_names if provided (full-set destructive form)
   let project_names: string[] | null = null;
   if (body.project_names !== undefined && body.project_names !== null) {
