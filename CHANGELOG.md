@@ -10,6 +10,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 ### Fixed
+- **`cerefox server reindex` now targets the ACTIVE embedder.** It hardcoded the
+  OpenAI model as its target, so after switching Cerefox Local to the local
+  embedder it reported "(nothing to reindex)" (existing OpenAI-embedded chunks
+  looked already-correct), and `--all` would have stamped the wrong
+  `embedder_primary` on locally-embedded vectors. The staleness filter, the
+  recorded embedder, and the API-key gate all follow `CEREFOX_EMBEDDER` now.
+
+
+### Fixed
 - **`cerefox-local` now persists the pinned image ref.** Installing/upgrading with
   `CEREFOX_LOCAL_IMAGE=<ref>` stores the ref in the host config, and every verb
   that recreates the container (`init`, `start` on a busy port, `upgrade`) uses

@@ -27,7 +27,7 @@ import {
   userError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
-import { embedBatch } from "../../../../../_shared/embeddings/index.ts";
+import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 
 interface ReindexOptions {
@@ -45,14 +45,19 @@ interface ChunkRow {
   cerefox_documents: { title: string | null } | null;
 }
 
-const DEFAULT_MODEL = "text-embedding-3-small";
+// The reindex TARGET is whatever embedder is active (iter-31): reindex exists
+// precisely to migrate chunks TO the configured embedder, so both the staleness
+// filter and the recorded embedder_primary must follow it — a hardcoded OpenAI
+// name made `server reindex` a no-op after switching to the local embedder
+// (chunks looked "already correct") and mis-stamped provenance under --all.
 
 async function action(options: ReindexOptions): Promise<void> {
   const settings = loadSettings();
   if (!settings.supabaseUrl || !settings.supabaseKey) {
     throw userError("Supabase credentials not configured — run `cerefox init` first.");
   }
-  if (!settings.openaiApiKey) {
+  if (!settings.openaiApiKey && resolveEmbedderKind() !== "local") {
+    // The local ONNX embedder (CEREFOX_EMBEDDER=local, iter-31) needs no API key.
     throw userError("OPENAI_API_KEY not set — required for embeddings.");
   }
   const supabase = createClient(settings.supabaseUrl, settings.supabaseKey, {
@@ -74,8 +79,9 @@ async function action(options: ReindexOptions): Promise<void> {
   if (options.documentId) {
     query = query.eq("document_id", options.documentId);
   }
+  const targetModel = activeEmbedderName();
   if (!reindexAll) {
-    query = query.neq("embedder_primary", DEFAULT_MODEL);
+    query = query.neq("embedder_primary", targetModel);
   }
 
   const { data, error } = await query;
@@ -114,7 +120,7 @@ async function action(options: ReindexOptions): Promise<void> {
     });
     let embeddings: number[][];
     try {
-      embeddings = await embedBatch(texts, settings.openaiApiKey);
+      embeddings = await embedBatch(texts, settings.openaiApiKey ?? "");
     } catch (err) {
       errors += slice.length;
       const msg = err instanceof Error ? err.message : String(err);
@@ -126,7 +132,7 @@ async function action(options: ReindexOptions): Promise<void> {
         .from("cerefox_chunks")
         .update({
           embedding_primary: embeddings[i],
-          embedder_primary: DEFAULT_MODEL,
+          embedder_primary: targetModel,
         })
         .eq("id", slice[i].id);
       if (updErr) {
