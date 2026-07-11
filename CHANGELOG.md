@@ -9,6 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **`cerefox-local` now persists the pinned image ref.** Installing/upgrading with
+  `CEREFOX_LOCAL_IMAGE=<ref>` stores the ref in the host config, and every verb
+  that recreates the container (`init`, `start` on a busy port, `upgrade`) uses
+  it. Previously the pin was one-shot: a later `cerefox-local init` silently
+  recreated from `:latest` — observed downgrading a pinned rc.1 install to a
+  stale local `:latest` image mid-init (which also re-applied that old image's
+  RPCs over a newer schema until the next correct boot).
+
+
 Open roadmap.
 
 ---
