@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-beta.3] -- 2026-07-11
+
 ### Security
 - **Pre-1.0.0 defensive security review (iter-28B ③).** A full read of the
   auth, database, Edge Function, web, and CLI surfaces. The material risks were
