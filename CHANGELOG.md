@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-rc.1] -- 2026-07-11
+
 Feature freeze for 1.0.0 (release-candidate line): fixes only from here to stable.
 
 ### Fixed
