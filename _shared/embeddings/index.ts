@@ -109,6 +109,16 @@ export function resolveEmbedderKind(): EmbedderKind {
   return env.CEREFOX_EMBEDDER === "local" ? "local" : "openai";
 }
 
+/**
+ * The embedder identifier recorded on chunks (`cerefox_chunks.embedder_primary`)
+ * and compared by the mismatch guard. Literal (not imported from onnx-embedder)
+ * so this file keeps ZERO top-level onnx references (EF safety test enforces).
+ * Keep in sync with ONNX_MODEL_NAME in onnx-embedder.ts.
+ */
+export function activeEmbedderName(): string {
+  return resolveEmbedderKind() === "local" ? "nomic-embed-text-v1.5" : openaiEmbeddingConfig().model;
+}
+
 async function onnxModule(): Promise<typeof import("./onnx-embedder.ts")> {
   return await import("./onnx-embedder.ts");
 }

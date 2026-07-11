@@ -49,6 +49,7 @@ import { registerListMetadataKeys } from "./commands/list-metadata-keys.ts";
 import { registerListProjects } from "./commands/list-projects.ts";
 import { registerListVersions } from "./commands/list-versions.ts";
 import { registerMcp } from "./commands/mcp.ts";
+import { registerEmbedderWarmup } from "./commands/embedder-warmup.ts";
 import { registerMetadataSearch } from "./commands/metadata-search.ts";
 import { registerReindex } from "./commands/reindex.ts";
 import { registerRestore } from "./commands/restore.ts";
@@ -169,6 +170,7 @@ export function buildProgram(): Command {
   registerConfigureAgent(program);
   registerSelfUpdate(program);
   registerMcp(program);
+  registerEmbedderWarmup(program);
   registerWeb(program);
   registerCompletion(program);
   registerToken(program); // `token generate|rotate|list` — self-contained group (iter-28E)

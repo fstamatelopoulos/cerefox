@@ -138,6 +138,11 @@ docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 # crash (a known GHC-startup segfault) — Docker re-runs the container and the 2nd boot is
 # clean. It does NOT override a manual `cerefox-local stop`.
 # shellcheck disable=SC2086
+if [ -z "${OPENAI_API_KEY:-}" ] && [ "${CEREFOX_EMBEDDER:-}" != "local" ]; then
+  echo "ℹ No OPENAI_API_KEY and no local embedder selected — semantic search/ingest will be"
+  echo "  disabled until you run 'cerefox-local init'. Fully offline instead? re-run with:"
+  echo "    … | sh -s -- --local-embedder"
+fi
 docker run -d --name "$CONTAINER" -p "$BIND_ADDR:$PORT:8000" \
   --restart unless-stopped \
   -v "$VOLUME:/var/lib/postgresql/data" \
@@ -159,6 +164,14 @@ umask 077
   [ -n "${CEREFOX_EMBEDDER:-}" ] && echo "CEREFOX_EMBEDDER=$CEREFOX_EMBEDDER"
   [ -n "$PRESERVED_OVERRIDES" ] && printf '%s' "$PRESERVED_OVERRIDES"
 } > "$CONFIG_DIR/.env"
+
+# Local embedder selected → download the model NOW (one-time, with progress) so the
+# first search isn't slow. Failure is non-fatal: it downloads on first use instead.
+if [ "${CEREFOX_EMBEDDER:-}" = "local" ]; then
+  echo "Downloading the local embedding model (~130 MB, one-time)…"
+  docker exec -i "$CONTAINER" cerefox embedder-warmup || \
+    echo "⚠ warmup failed (the model will download on first search instead)"
+fi
 
 # 3. Extract the host `cerefox-local` script from the image (single source of truth) and
 #    put it on PATH via a symlink in $BIN_DIR.

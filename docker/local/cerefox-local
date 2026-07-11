@@ -140,16 +140,20 @@ case "$cmd" in
     # TTY is available; otherwise pass --openai-key / --port. Embeddings (ingest + semantic
     # search) need the key; without it the server still runs (FTS only).
     need_docker
-    key=""; port=""
+    key=""; port=""; embedder=""; force=false
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --openai-key) key="${2:-}"; shift 2 ;;
         --openai-key=*) key="${1#*=}"; shift ;;
         --port) port="${2:-}"; shift 2 ;;
         --port=*) port="${1#*=}"; shift ;;
-        *) die "unknown init option: $1 (use --openai-key / --port)" ;;
+        --embedder) embedder="${2:-}"; shift 2 ;;
+        --embedder=*) embedder="${1#*=}"; shift ;;
+        --force) force=true; shift ;;
+        *) die "unknown init option: $1 (use --openai-key / --port / --embedder openai|local / --force)" ;;
       esac
     done
+    case "$embedder" in ""|openai|local) ;; *) die "--embedder must be 'openai' or 'local'" ;; esac
     mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
     cur_key=""; cur_port="8000"; cur_bind="127.0.0.1"
     if [ -f "$ENV_FILE" ]; then
@@ -170,10 +174,37 @@ case "$cmd" in
     fi
     [ -z "$key" ] && key="$cur_key"     # keep current when left blank
     [ -z "$port" ] && port="$cur_port"
+    # Embedder choice (iter-31). Interactive when a TTY and not passed via flag.
+    cur_embedder="openai"
+    if [ -f "$ENV_FILE" ]; then
+      # shellcheck disable=SC1090
+      _e="$(. "$ENV_FILE"; echo "${CEREFOX_EMBEDDER:-}")"; [ "$_e" = "local" ] && cur_embedder="local"
+    fi
+    if [ -z "$embedder" ] && [ -t 0 ]; then
+      echo "Embedder:"
+      echo "  [1] OpenAI  — cloud API, needs OPENAI_API_KEY (best search quality)"
+      echo "  [2] Local   — fully offline, ~130 MB one-time download (nomic-embed-text-v1.5), no key"
+      printf 'Choice [Enter to keep current: %s]: ' "$cur_embedder"
+      read -r _c || true
+      case "$_c" in 1) embedder=openai ;; 2) embedder=local ;; esac
+    fi
+    [ -z "$embedder" ] && embedder="$cur_embedder"
+    if [ "$embedder" != "$cur_embedder" ]; then
+      echo "⚠  Changing the embedder puts existing documents in a DIFFERENT vector space."
+      echo "   Semantic search will be broken for them until you run: cerefox-local server reindex"
+      if [ -t 0 ]; then
+        printf 'Proceed? [y/N] '
+        read -r _y || true
+        case "$_y" in y|Y) ;; *) die "aborted (embedder unchanged)" ;; esac
+      elif [ "$force" != true ]; then
+        die "changing the embedder non-interactively requires --force (then run: cerefox-local server reindex)"
+      fi
+    fi
     # Preserve any CEREFOX_* tuning overrides already in the file (we only manage key+port).
     preserved=""
     if [ -f "$ENV_FILE" ]; then
       for v in $PASSTHROUGH_VARS; do
+        [ "$v" = "CEREFOX_EMBEDDER" ] && continue  # managed explicitly by init
         line=$(grep -E "^${v}=" "$ENV_FILE" | head -1)
         [ -n "$line" ] && preserved="${preserved}${line}
 "
@@ -186,11 +217,17 @@ case "$cmd" in
       echo "CEREFOX_LOCAL_PORT=$port"
       echo "CEREFOX_LOCAL_BIND=$cur_bind"
       [ -n "$key" ] && echo "OPENAI_API_KEY=$key"
+      [ "$embedder" = "local" ] && echo "CEREFOX_EMBEDDER=local"
       [ -n "$preserved" ] && printf '%s' "$preserved"
     } > "$ENV_FILE"
     echo "✓ saved config to $ENV_FILE"
     [ -n "$key" ] || echo "  (no OpenAI key set — ingest + semantic search stay disabled; re-run 'cerefox-local init' to add one)"
     recreate
+    if [ "$embedder" = "local" ] && [ "$cur_embedder" != "local" ]; then
+      echo "Downloading the local embedding model (one-time)…"
+      docker exec -i "$CONTAINER" cerefox embedder-warmup || \
+        echo "⚠ warmup failed (model downloads on first search instead)"
+    fi
     ;;
 
   start|up)

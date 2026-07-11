@@ -27,9 +27,34 @@ both, your cloud `~/.cerefox/.env` is never touched by the local installer.
 ## Prerequisites
 
 - **Docker** (Docker Desktop, or [Colima](https://github.com/abiosoft/colima): `colima start`).
-- An **OpenAI API key** — [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+- An **OpenAI API key** — [platform.openai.com/api-keys](https://platform.openai.com/api-keys) —
+  **unless** you choose the local embedder (next section), which needs no key at all.
 
 That's it. No Node, Bun, Postgres, or repo clone needed.
+
+## Choose your embedder (OpenAI vs fully local)
+
+Cerefox Local turns text into search vectors with one of two embedders. Pick at
+install; switching later requires a re-index (see below).
+
+| | **OpenAI** (default) | **Local** (fully offline) |
+|---|---|---|
+| Model | `text-embedding-3-small` (cloud API) | `nomic-embed-text-v1.5` (ONNX, runs in the container) |
+| Needs | `OPENAI_API_KEY` | nothing — no key, no network after the one-time model download |
+| Privacy | document/query text is sent to OpenAI for embedding | **text never leaves your machine** |
+| Cost | pennies/month typical ([operational-cost.md](operational-cost.md)) | zero |
+| Quality / speed | best retrieval quality; fast API | very good quality; CPU inference (fine at personal scale) |
+| Setup | provide the key (Step 1 or `cerefox-local init`) | `--local-embedder` at install, or `[2] Local` in `cerefox-local init` |
+
+The local model (~130 MB) downloads once — at install/init when selected — into the
+data volume, so it survives `cerefox-local upgrade`.
+
+> **Switching embedders on existing data is breaking**: the two models produce
+> incompatible vector spaces, so documents embedded with one are invisible to
+> semantic search under the other. `cerefox-local init` warns and requires
+> confirmation (`--force` non-interactively); after switching, run
+> `cerefox-local server reindex` to re-embed everything. `cerefox-local doctor`
+> flags any mismatch.
 
 ---
 
@@ -40,7 +65,14 @@ curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/
 ```
 
 This pulls the published multi-arch image (`amd64` + `arm64`), starts the container, and
-installs a `cerefox-local` command (symlinked into `~/.local/bin`). To set your OpenAI key
+installs a `cerefox-local` command (symlinked into `~/.local/bin`).
+
+**Fully-offline variant** — select the local embedder (no OpenAI key needed; downloads the
+~130 MB model during install):
+
+```bash
+curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh -s -- --local-embedder
+``` To set your OpenAI key
 inline at install instead of via `cerefox-local init` (Step 2), use the command-substitution
 form: `OPENAI_API_KEY=sk-... sh -c "$(curl -fsSL …/install-local.sh)"`. Pick a specific port
 with `PORT=8017 …`.

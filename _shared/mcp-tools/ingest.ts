@@ -24,7 +24,7 @@ import {
   normalizeContent,
   sha256hex,
 } from "./_chunker.ts";
-import { embedBatch, OPENAI_MODEL } from "../embeddings/index.ts";
+import { activeEmbedderName, embedBatch } from "../embeddings/index.ts";
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
@@ -163,7 +163,7 @@ async function handler(
       content: chunk.content,
       char_count: chunk.char_count,
       embedding: embeddings[i],
-      embedder: OPENAI_MODEL,
+      embedder: activeEmbedderName(),
     }));
 
     const { error: ingestErr } = await supabase.rpc("cerefox_ingest_document", {
@@ -241,7 +241,7 @@ async function handler(
         content: chunk.content,
         char_count: chunk.char_count,
         embedding: embeddings[i],
-        embedder: OPENAI_MODEL,
+        embedder: activeEmbedderName(),
       }));
 
       const { error: ingestErr } = await supabase.rpc("cerefox_ingest_document", {
@@ -307,7 +307,7 @@ async function handler(
     content: chunk.content,
     char_count: chunk.char_count,
     embedding: embeddings[i],
-    embedder: OPENAI_MODEL,
+    embedder: activeEmbedderName(),
   }));
 
   const { data: ingestResult, error: ingestErr } = await supabase.rpc("cerefox_ingest_document", {
