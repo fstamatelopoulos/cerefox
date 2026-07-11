@@ -12,12 +12,13 @@
 
 import { systemError, userError } from "../../../../../_shared/cli-core/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
-import { getEmbedding } from "../../../../../_shared/embeddings/index.ts";
+import { resolveEmbedderKind, getEmbedding } from "../../../../../_shared/embeddings/index.ts";
 
 export async function embedQuery(query: string): Promise<number[]> {
   const settings = loadSettings();
   const apiKey = settings.openaiApiKey;
-  if (!apiKey) {
+  // The local ONNX embedder (CEREFOX_EMBEDDER=local, iter-31) needs no API key.
+  if (!apiKey && resolveEmbedderKind() !== "local") {
     throw userError(
       "OPENAI_API_KEY (or CEREFOX_OPENAI_API_KEY) is required for search.",
       "Set the key in your .env, or run `cerefox init` to bootstrap.",

@@ -24,7 +24,7 @@ import {
   normalizeContent,
   sha256hex,
 } from "./_chunker.ts";
-import { activeEmbedderName, embedBatch } from "../embeddings/index.ts";
+import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
@@ -111,7 +111,7 @@ async function handler(
     ? project_names_raw.filter((s): s is string => typeof s === "string" && s.length > 0)
     : null;
 
-  if (!ctx.openaiApiKey) {
+  if (!ctx.openaiApiKey && resolveEmbedderKind() !== "local") {
     throw new Error(
       "OpenAI API key not configured. Set OPENAI_API_KEY (Edge Function) or CEREFOX_OPENAI_API_KEY (.env, local).",
     );
@@ -152,7 +152,7 @@ async function handler(
     if (chunks.length === 0) throw new Error("Content produced no chunks");
 
     const texts = chunks.map((c) => embeddingInputFor(title, c));
-    const embeddings = await embedBatch(texts, ctx.openaiApiKey);
+    const embeddings = await embedBatch(texts, ctx.openaiApiKey ?? "");
     const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 
     const chunkData = chunks.map((chunk, i) => ({
@@ -230,7 +230,7 @@ async function handler(
       if (chunks.length === 0) throw new Error("Content produced no chunks");
 
       const texts = chunks.map((c) => embeddingInputFor(title, c));
-      const embeddings = await embedBatch(texts, ctx.openaiApiKey);
+      const embeddings = await embedBatch(texts, ctx.openaiApiKey ?? "");
       const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 
       const chunkData = chunks.map((chunk, i) => ({
@@ -296,7 +296,7 @@ async function handler(
   if (chunks.length === 0) throw new Error("Content produced no chunks");
 
   const texts = chunks.map((c) => embeddingInputFor(title, c));
-  const embeddings = await embedBatch(texts, ctx.openaiApiKey);
+  const embeddings = await embedBatch(texts, ctx.openaiApiKey ?? "");
   const totalChars = chunks.reduce((s, c) => s + c.char_count, 0);
 
   const chunkData = chunks.map((chunk, i) => ({
