@@ -24,8 +24,8 @@ describe("compareSemver", () => {
     expect(compareSemver("1.0.0", "0.9.9")).toBe(1);
   });
 
-  test("ignores prerelease suffixes", () => {
-    expect(compareSemver("0.8.0-rc.1", "0.8.0")).toBe(0);
+  test("pre-release sorts below its stable (SemVer §11 — was 'ignored' pre-1.0)", () => {
+    expect(compareSemver("0.8.0-rc.1", "0.8.0")).toBe(-1);
     expect(compareSemver("0.8.0-rc.1", "0.7.9")).toBe(1);
   });
 
@@ -185,5 +185,17 @@ describe("checkServerCompatibility", () => {
   test("matrix constants are semver strings", () => {
     expect(COMPATIBILITY.minSchema).toMatch(/^\d+\.\d+\.\d+/);
     expect(COMPATIBILITY.minEdgeFunctions).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});
+
+describe("compareSemver — pre-release precedence (SemVer §11)", () => {
+  test("pre-releases order within a line; all below the stable", () => {
+    expect(compareSemver("1.0.0-beta.3", "1.0.0-beta.4")).toBe(-1);
+    expect(compareSemver("1.0.0-beta.4", "1.0.0-rc.1")).toBe(-1);
+    expect(compareSemver("1.0.0-rc.1", "1.0.0")).toBe(-1);
+    expect(compareSemver("1.0.0", "1.0.0-beta.9")).toBe(1);
+    expect(compareSemver("1.0.0-beta", "1.0.0-beta.1")).toBe(-1);
+    expect(compareSemver("0.11.1", "1.0.0-beta.1")).toBe(-1);
+    expect(compareSemver("1.0.0-beta.4", "1.0.0-beta.4")).toBe(0);
   });
 });
