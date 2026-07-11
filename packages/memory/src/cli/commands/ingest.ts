@@ -21,6 +21,7 @@
  *   - (`--paste` without `--title`)       — exit 1; title is required
  */
 
+import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import type { Command } from "commander";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
@@ -134,7 +135,8 @@ async function action(
       "Supabase credentials not configured — run `cerefox init` first.",
     );
   }
-  if (!settings.openaiApiKey) {
+  if (!settings.openaiApiKey && resolveEmbedderKind() !== "local") {
+    // The local ONNX embedder (CEREFOX_EMBEDDER=local, iter-31) needs no API key.
     throw userError(
       "OPENAI_API_KEY not set — required for embeddings during ingest.",
     );

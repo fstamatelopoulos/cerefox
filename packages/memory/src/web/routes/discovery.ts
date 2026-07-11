@@ -11,6 +11,7 @@
  * handlers are thin: validate, call RPC / table, project, respond.
  */
 
+import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { Hono } from "hono";
 
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
@@ -322,7 +323,7 @@ async function runSearch(
   }
 
   // Modes below need an embedding.
-  if (!ctx.openAiApiKey) {
+  if (!ctx.openAiApiKey && resolveEmbedderKind() !== "local") {
     throw new HttpError(503, "Embedder not available");
   }
   const embedding = await getEmbedding(query, ctx.openAiApiKey);

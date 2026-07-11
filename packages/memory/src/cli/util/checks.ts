@@ -190,6 +190,16 @@ export async function checkSupabase(): Promise<CheckResult> {
 export async function checkOpenAI(): Promise<CheckResult> {
   const settings = loadSettings();
   if (!settings.openaiApiKey) {
+    // Keyless is HEALTHY when the local ONNX embedder is active (iter-31) —
+    // don't alarm a fully-offline Cerefox Local install with a ⚠.
+    const { resolveEmbedderKind } = await import("../../../../../_shared/embeddings/index.ts");
+    if (resolveEmbedderKind() === "local") {
+      return {
+        name: "openai",
+        status: "skipped",
+        detail: "no key set — not needed (local embedder active; see the embedder check).",
+      };
+    }
     return {
       name: "openai",
       status: "warn",
@@ -314,6 +324,56 @@ export async function checkSchemaVersion(): Promise<CheckResult> {
       name: SCHEMA_CHECK_NAME,
       status: "error",
       detail: `Schema version probe failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+const EMBEDDER_CHECK_NAME = "embedder";
+
+/**
+ * Embedder-mismatch guard (iter-31). The configured embedder must match what the
+ * existing chunks were embedded with — different embedders put vectors in
+ * different spaces, so a mismatch silently breaks semantic search. Warns (never
+ * blocks) and points at `server reindex`.
+ */
+export async function checkEmbedderMismatch(): Promise<CheckResult> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    return { name: EMBEDDER_CHECK_NAME, status: "skipped", detail: "Supabase config missing; skipped." };
+  }
+  const { activeEmbedderName } = await import("../../../../../_shared/embeddings/index.ts");
+  const active = activeEmbedderName();
+  try {
+    const url =
+      `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/cerefox_chunks` +
+      `?version_id=is.null&embedder_primary=not.is.null&select=embedder_primary&limit=1000`;
+    const resp = await fetch(url, {
+      headers: { apikey: settings.supabaseKey, Authorization: `Bearer ${settings.supabaseKey}` },
+    });
+    if (!resp.ok) {
+      return { name: EMBEDDER_CHECK_NAME, status: "skipped", detail: `chunk probe returned ${resp.status}; skipped.` };
+    }
+    const rows = (await resp.json()) as Array<{ embedder_primary: string }>;
+    const recorded = [...new Set(rows.map((r) => r.embedder_primary))];
+    const stale = recorded.filter((r) => r !== active);
+    if (stale.length === 0) {
+      return {
+        name: EMBEDDER_CHECK_NAME,
+        status: "ok",
+        detail: `configured "${active}"${recorded.length ? " — matches all existing chunks" : " (no embedded chunks yet)"}`,
+      };
+    }
+    return {
+      name: EMBEDDER_CHECK_NAME,
+      status: "warn",
+      detail: `configured "${active}" but existing chunks were embedded with ${stale.map((r) => `"${r}"`).join(", ")} — semantic search across them is broken.`,
+      hint: "Run `cerefox server reindex` to re-embed everything with the configured embedder.",
+    };
+  } catch (err) {
+    return {
+      name: EMBEDDER_CHECK_NAME,
+      status: "skipped",
+      detail: `probe failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }
@@ -644,6 +704,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
+    { name: "embedder", phase: "Checking embedder consistency", run: () => checkEmbedderMismatch() },
     { name: "content format", phase: "Checking chunk reconstruction format", run: () => checkContentFormat() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },

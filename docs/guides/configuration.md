@@ -55,9 +55,14 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 
 Cerefox uses cloud-based embedding APIs. Local models (mpnet, Ollama) are not supported — they require large downloads, fail on some hardware, and add installation complexity.
 
-> **OpenAI only (today).** The TypeScript runtime implements the OpenAI embedder.
-> `CEREFOX_EMBEDDER` and the `CEREFOX_FIREWORKS_*` variables are documented but **not yet
-> wired in TS** — they're currently no-ops, tracked for a future release.
+> **Two embedders.** `CEREFOX_EMBEDDER` selects the backend: `openai` (default —
+> `text-embedding-3-small` via API) or `local` (the in-container `nomic-embed-text-v1.5`
+> ONNX model — **Cerefox Local only**; the cloud/Supabase deployment embeds inside the
+> Edge Functions, which a local model can't serve, so `local` has no effect there).
+> Set it via the Cerefox Local installer (`--local-embedder`) or `cerefox-local init` —
+> not by hand on existing data (switching requires `server reindex`; see
+> [setup-local.md](setup-local.md#choose-your-embedder-openai-vs-fully-local)).
+> The `CEREFOX_FIREWORKS_*` variables remain documented but **not wired** (no-ops).
 
 ### OpenAI (default, recommended)
 

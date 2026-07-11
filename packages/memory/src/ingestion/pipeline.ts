@@ -31,7 +31,7 @@ import {
   embeddingInputFor,
   resolveProjectIds,
 } from "../../../../_shared/ingest/index.ts";
-import { embedBatch } from "../../../../_shared/embeddings/index.ts";
+import { activeEmbedderName, embedBatch } from "../../../../_shared/embeddings/index.ts";
 import {
   IngestionDbBridge,
   type ChunkInsertRow,
@@ -66,7 +66,7 @@ export class IngestionPipeline {
   constructor(deps: IngestionPipelineDeps) {
     this.db = new IngestionDbBridge(deps.supabase);
     this.apiKey = deps.openAiApiKey;
-    this.embedderModel = deps.embedderModel ?? "text-embedding-3-small";
+    this.embedderModel = deps.embedderModel ?? activeEmbedderName();
     this.settings = { ...loadPipelineSettings(), ...(deps.settings ?? {}) };
   }
 

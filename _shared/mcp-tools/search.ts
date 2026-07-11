@@ -17,7 +17,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { getEmbedding } from "../embeddings/index.ts";
+import { getEmbedding, resolveEmbedderKind } from "../embeddings/index.ts";
 import { applyByteBudget, getMaxResponseBytes, getMinSearchScore, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
@@ -50,7 +50,7 @@ async function handler(
 
   if (!query?.trim()) throw new McpInvalidParams("query is required");
 
-  if (mode !== "fts" && !ctx.openaiApiKey) {
+  if (mode !== "fts" && !ctx.openaiApiKey && resolveEmbedderKind() !== "local") {
     throw new Error(
       "OpenAI API key not configured. Set OPENAI_API_KEY (Edge Function) or CEREFOX_OPENAI_API_KEY (.env, local).",
     );
@@ -66,7 +66,7 @@ async function handler(
   // FTS mode doesn't need an embedding
   let embedding: number[] | null = null;
   if (mode !== "fts") {
-    embedding = await getEmbedding(query, ctx.openaiApiKey!);
+    embedding = await getEmbedding(query, ctx.openaiApiKey ?? "");
   }
 
   const metaFilterParam =

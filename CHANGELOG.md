@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+- **Fully-offline local embedder for Cerefox Local (iter-31).** Opt-in
+  `CEREFOX_EMBEDDER=local` runs `nomic-embed-text-v1.5` (ONNX, q8, 768-dim — no
+  schema change) inside the container: no OpenAI key, and document/query text
+  never leaves your machine. Select it at install
+  (`install-local.sh --local-embedder`) or interactively in `cerefox-local init`;
+  the ~130 MB model downloads once into the data volume (survives upgrades).
+  Cloud/Supabase deployments are unaffected (default stays OpenAI). Switching
+  embedders on existing data requires `cerefox-local server reindex`;
+  `doctor` gains an embedder-consistency check. Design:
+  `docs/research/local-embedder-design.md`.
+
 ### Fixed
 - **`cerefox metadata keys` no longer crashes when any document's `metadata` is a
   JSON scalar/array** (#89; schema 0.8.0 → 0.8.1 — redeploy via `cerefox server

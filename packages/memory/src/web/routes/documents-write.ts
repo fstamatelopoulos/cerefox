@@ -32,6 +32,7 @@
  * the pipeline.
  */
 
+import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { Hono } from "hono";
 
 import { contentHash } from "../../../../../_shared/ingest/index.ts";
@@ -141,7 +142,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     // pattern in place for any future 503 fallback we might want, and
     // avoids frontend churn.
     if (contentChanged) {
-      if (!ctx.openAiApiKey) {
+      if (!ctx.openAiApiKey && resolveEmbedderKind() !== "local") {
         return c.json(
           {
             success: false,

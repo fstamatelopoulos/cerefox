@@ -20,6 +20,7 @@
  * `Embedder not available` 503 shape.
  */
 
+import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { Hono } from "hono";
 
 import { fileToMarkdown } from "../../ingestion/file-to-markdown.ts";
@@ -44,7 +45,7 @@ function notReady(error: string): IngestResponse {
 export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
   // ── POST /api/v1/ingest (paste) ───────────────────────────────────────────
   app.post("/api/v1/ingest", async (c) => {
-    if (!ctx.openAiApiKey) {
+    if (!ctx.openAiApiKey && resolveEmbedderKind() !== "local") {
       return c.json(notReady("Embedder not available"), 503);
     }
 
@@ -99,7 +100,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
 
   // ── POST /api/v1/ingest/file (multipart) ──────────────────────────────────
   app.post("/api/v1/ingest/file", async (c) => {
-    if (!ctx.openAiApiKey) {
+    if (!ctx.openAiApiKey && resolveEmbedderKind() !== "local") {
       return c.json(notReady("Embedder not available"), 503);
     }
 
@@ -176,7 +177,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
 
   // ── POST /api/v1/documents/{id}/upload (replace existing) ────────────────
   app.post("/api/v1/documents/:document_id/upload", async (c) => {
-    if (!ctx.openAiApiKey) {
+    if (!ctx.openAiApiKey && resolveEmbedderKind() !== "local") {
       return c.json(notReady("Embedder not available"), 503);
     }
     const documentId = c.req.param("document_id");

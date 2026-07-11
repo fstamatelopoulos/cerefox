@@ -60,6 +60,16 @@ RUN chmod +x /opt/cerefox/cerefox-local \
  && printf '#!/bin/sh\nexec bun /opt/cerefox/dist/bin/cerefox.js "$@"\n' > /usr/local/bin/cerefox \
  && chmod +x /usr/local/bin/cerefox
 
+# Local ONNX embedder deps (iter-31). The CLI bundle marks these --external, so
+# the runtime resolves them from node_modules above dist/bin → /opt/cerefox.
+# World-B image only — the cloud npm install never pulls them in. Model WEIGHTS
+# are NOT baked in (downloaded on first use into CEREFOX_MODELS_DIR, which the
+# env below points into the data volume so they survive recreate/upgrade).
+RUN cd /opt/cerefox \
+ && printf '{"name":"cerefox-local-runtime","private":true,"dependencies":{"@huggingface/transformers":"^3.5.0","onnxruntime-node":"^1.21.0"}}\n' > package.json \
+ && bun install --production \
+ && rm -rf /root/.bun/install/cache
+
 # s6 service tree: db-init (oneshot) → postgres / postgrest / cerefox-server (longruns).
 COPY docker/local/s6/s6-rc.d /etc/s6-overlay/s6-rc.d
 COPY docker/local/s6/scripts /etc/s6-overlay/scripts
@@ -73,6 +83,7 @@ ENV POSTGRES_USER=cerefox \
     CEREFOX_DATABASE_URL=postgresql://cerefox:cerefox@127.0.0.1:5432/cerefox \
     CEREFOX_SUPABASE_URL=http://127.0.0.1:8000 \
     CEREFOX_POSTGREST_UPSTREAM=http://127.0.0.1:3000 \
+    CEREFOX_MODELS_DIR=/var/lib/postgresql/data/.cerefox-models \
     PGRST_DB_URI=postgresql://authenticator:authenticator@127.0.0.1:5432/cerefox \
     PGRST_DB_SCHEMAS=public \
     PGRST_DB_ANON_ROLE=anon \
