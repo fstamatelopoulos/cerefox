@@ -10,6 +10,10 @@ curated knowledge layer that multiple AI tools can read and write.
 > npm package does **not** give you a working KB on its own; you also need a
 > Supabase project + an embedding API key, and a one-time server-side deploy
 > (`cerefox server deploy` — no repo clone needed). **See "Before you install" below.**
+>
+> Prefer no cloud at all? There is also **Cerefox Local**: the same stack in a
+> single Docker container on your machine (this npm package is not needed for
+> it). See [setup-local.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-local.md).
 
 **Why cloud-backed?** Cerefox is designed as a *cloud-backed* memory layer so
 the same knowledge is reachable from every agent you run — Claude Code on
@@ -52,7 +56,7 @@ You deploy the server side with this package's CLI — `cerefox server deploy` s
 | Prerequisite | Why | How |
 |---|---|---|
 | A **Supabase project** | Hosts Postgres + pgvector + Edge Functions. Free tier is enough for most personal use. | [supabase.com](https://supabase.com) → New project |
-| An **embedding API key** | OpenAI `text-embedding-3-small` (default) or Fireworks AI. Pennies/month for typical personal use (see [operational-cost.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/operational-cost.md)). | Get an [OpenAI API key](https://platform.openai.com/api-keys). |
+| An **embedding API key** | OpenAI `text-embedding-3-small` (the only embedder wired today). Pennies/month for typical personal use (see [operational-cost.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/operational-cost.md)). | Get an [OpenAI API key](https://platform.openai.com/api-keys). |
 | **Node ≥ 20** or **Bun ≥ 1.0** | Runtime for the `cerefox` bin (and the bundled `cerefox mcp` server). | [nodejs.org](https://nodejs.org) · [bun.sh](https://bun.sh). The one-line installer below bootstraps Bun if neither is present. |
 
 ### One-time server-side setup (~10 min — no clone needed)
@@ -112,12 +116,10 @@ already provisioned (see "Before you install").
 > `cerefox doctor` will flag it and point you back to
 > `cerefox server deploy`.
 
-> **Upgrading from the Python `cerefox` CLI?** If you have a working
-> `.env` in your repo clone, init detects it and offers to **copy** it to
-> `~/.cerefox/.env` so the TS CLI uses the new home while Python keeps
-> reading the repo file unchanged (`cerefox init` walks you through the choice).
-> Existing users with no `~/.cerefox/.env` see zero behavior change until they
-> opt in.
+> **Have a `.env` from an earlier install (e.g. a repo clone)?** `cerefox init`
+> detects it and offers to copy it to `~/.cerefox/.env` — the env-var names are
+> identical, no rewrite needed. (The Python implementation was fully removed at
+> v1.0.0; see the [migration guide](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/migration-1.0.md).)
 
 ---
 
@@ -132,8 +134,7 @@ cerefox configure-agent --tool codex                # ~/.codex/config.toml
 cerefox configure-agent --tool gemini               # ~/.gemini/settings.json
 ```
 
-All five writers landed in v0.6. For manual configuration, the canonical MCP
-entry is:
+For manual configuration (any other MCP client), the canonical entry is:
 
 ```json
 {

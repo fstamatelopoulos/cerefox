@@ -1,8 +1,15 @@
-# Local Cerefox — P0 spike runbook
+# Cerefox Local — contributor runbook
 
-Proves the **D1** architecture (see `docs/research/local-cerefox-design.md` and
-`docs/plan.md` Iteration 30): the existing **CLI / MCP / web run UNCHANGED** against a
-local **PostgREST** Data API + **Postgres+pgvector** — only the `.env` URL+key differ.
+> **End user?** This directory is the *contributor* runbook for the local
+> (self-hosted Docker) backend. To install and run Cerefox Local, see
+> [`docs/guides/setup-local.md`](../../docs/guides/setup-local.md) — one command:
+> `curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh`.
+
+Below is the original **P0 spike** validation (kept as reference) plus the P1/P2
+as-built notes. It proves the **D1** architecture (see
+`docs/research/local-cerefox-design.md` and `docs/plan.md` Iteration 30): the existing
+**CLI / MCP / web run UNCHANGED** against a local **PostgREST** Data API +
+**Postgres+pgvector** — only the `.env` URL+key differ.
 
 **✅ Validated 2026-06-02** end-to-end: project create/list, document ingest (768-dim
 OpenAI embeddings), hybrid search (pgvector), FTS search, and the web UI — all with
