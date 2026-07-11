@@ -17,7 +17,15 @@ set -eu
 
 CONTAINER="${CEREFOX_LOCAL_CONTAINER:-cerefox-local}"
 CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
-IMAGE="${CEREFOX_LOCAL_IMAGE:-ghcr.io/fstamatelopoulos/cerefox-local:latest}"
+# Image resolution (fixed after the rc.1 dogfood): explicit env wins, then the
+# ref PERSISTED at the last install/upgrade, then :latest. Without persistence,
+# any verb that recreates (init, start-on-busy-port) silently reverted a pinned
+# install back to :latest — observed as an rc.1 container downgrading to the
+# stale local :latest image mid-`init`.
+_DEFAULT_IMAGE="ghcr.io/fstamatelopoulos/cerefox-local:latest"
+_persisted_image=""
+[ -f "${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}/.env" ] &&   _persisted_image="$(. "${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}/.env" 2>/dev/null; echo "${CEREFOX_LOCAL_IMAGE:-}")"
+IMAGE="${CEREFOX_LOCAL_IMAGE:-${_persisted_image:-$_DEFAULT_IMAGE}}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
 ENV_FILE="$CONFIG_DIR/.env"
 
@@ -220,6 +228,8 @@ case "$cmd" in
       echo "CEREFOX_LOCAL_BIND=$cur_bind"
       [ -n "$key" ] && echo "OPENAI_API_KEY=$key"
       [ "$embedder" = "local" ] && echo "CEREFOX_EMBEDDER=local"
+      # Keep the pinned image ref (host-only; deliberately not in PASSTHROUGH_VARS).
+      [ -n "$_persisted_image" ] && echo "CEREFOX_LOCAL_IMAGE=$_persisted_image"
       [ -n "$preserved" ] && printf '%s' "$preserved"
     } > "$ENV_FILE"
     echo "✓ saved config to $ENV_FILE"
@@ -257,6 +267,13 @@ case "$cmd" in
   upgrade)
     need_docker
     echo "Pulling $IMAGE …"; docker pull "$IMAGE"
+    # Persist the image ref so every later verb (init, start, …) recreates from
+    # THIS image, not :latest.
+    if [ -f "$ENV_FILE" ]; then
+      grep -vE "^CEREFOX_LOCAL_IMAGE=" "$ENV_FILE" > "$ENV_FILE.tmp" || true
+      echo "CEREFOX_LOCAL_IMAGE=$IMAGE" >> "$ENV_FILE.tmp"
+      mv "$ENV_FILE.tmp" "$ENV_FILE"
+    fi
     recreate
     # Refresh this host script from the new image (atomic rename → safe mid-run).
     dst="$CONFIG_DIR/cerefox-local"; tmp="$CONFIG_DIR/.cerefox-local.new"
