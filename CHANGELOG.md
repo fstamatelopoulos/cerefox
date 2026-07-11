@@ -9,7 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+- **`cerefox metadata keys` no longer crashes when any document's `metadata` is a
+  JSON scalar/array** (#89; schema 0.8.0 → 0.8.1 — redeploy via `cerefox server
+  deploy`). One malformed row poisoned the whole listing ("cannot call
+  jsonb_object_keys on a scalar"); the RPC now considers only object-typed
+  metadata. Ingest (Edge Function + MCP tools) additionally rejects non-object
+  `metadata` up front with a clear error, so such rows can't be stored again.
+  Thanks @tdebasis for the precise report and proposed fix.
+- **`cerefox mcp` no longer prints a false-positive "schema version mismatch"
+  banner on every healthy startup** (#90). It compared the npm package version
+  against the deployed schema version — two independent numbering scales that
+  are never equal. It now compares schema-to-schema (the same source `cerefox
+  doctor` uses) and warns only for the real redeploy footgun (the client bundles
+  a newer schema than is deployed), with the correct remediation
+  (`cerefox server deploy`, not the removed Python command). Thanks @tdebasis.
 
 ---
 

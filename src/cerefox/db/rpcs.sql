@@ -1420,8 +1420,10 @@ AS $$
           (WHERE d.metadata ->> k.key IS NOT NULL))[1:5]   AS example_values
     FROM cerefox_documents d,
          LATERAL jsonb_object_keys(d.metadata) AS k(key)
-    WHERE d.metadata IS NOT NULL
-      AND d.metadata != '{}'::jsonb
+    -- jsonb_object_keys() throws on non-object jsonb (scalar/array), and one such
+    -- row would poison the whole listing (issue #89). jsonb_typeof covers NULL
+    -- (returns NULL → filtered), scalars, and arrays; '{}' yields no keys anyway.
+    WHERE jsonb_typeof(d.metadata) = 'object'
     GROUP BY k.key
     ORDER BY doc_count DESC, k.key;
 $$;
@@ -1774,7 +1776,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.8.0'::TEXT;
+    SELECT '0.8.1'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────
