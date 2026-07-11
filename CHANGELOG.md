@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-beta.4] -- 2026-07-11
+
 ### Added
 - **Fully-offline local embedder for Cerefox Local (iter-31).** Opt-in
   `CEREFOX_EMBEDDER=local` runs `nomic-embed-text-v1.5` (ONNX, q8, 768-dim — no
