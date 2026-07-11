@@ -164,16 +164,6 @@ case "$cmd" in
       # shellcheck disable=SC1090
       cur_bind="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_BIND:-127.0.0.1}")"
     fi
-    if [ -z "$key" ] && [ -t 0 ]; then
-      if [ -n "$cur_key" ]; then
-        printf 'OpenAI API key [Enter to keep current …%s]: ' "$(printf '%s' "$cur_key" | tail -c 4)"
-      else
-        printf 'OpenAI API key (sk-…, Enter to skip): '
-      fi
-      read -r key || true
-    fi
-    [ -z "$key" ] && key="$cur_key"     # keep current when left blank
-    [ -z "$port" ] && port="$cur_port"
     # Embedder choice (iter-31). Interactive when a TTY and not passed via flag.
     cur_embedder="openai"
     if [ -f "$ENV_FILE" ]; then
@@ -189,6 +179,18 @@ case "$cmd" in
       case "$_c" in 1) embedder=openai ;; 2) embedder=local ;; esac
     fi
     [ -z "$embedder" ] && embedder="$cur_embedder"
+    # OpenAI key — only prompt on the OpenAI path (the local embedder needs no
+    # key; any existing key is kept silently so switching back later is easy).
+    if [ -z "$key" ] && [ -t 0 ] && [ "$embedder" != "local" ]; then
+      if [ -n "$cur_key" ]; then
+        printf 'OpenAI API key [Enter to keep current …%s]: ' "$(printf '%s' "$cur_key" | tail -c 4)"
+      else
+        printf 'OpenAI API key (sk-…, Enter to skip): '
+      fi
+      read -r key || true
+    fi
+    [ -z "$key" ] && key="$cur_key"     # keep current when left blank
+    [ -z "$port" ] && port="$cur_port"
     if [ "$embedder" != "$cur_embedder" ]; then
       echo "⚠  Changing the embedder puts existing documents in a DIFFERENT vector space."
       echo "   Semantic search will be broken for them until you run: cerefox-local server reindex"

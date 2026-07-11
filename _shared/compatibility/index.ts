@@ -40,18 +40,50 @@ export type CompatLevel =
  * `0.8.0`). Returns -1 if a<b, 0 if equal, 1 if a>b.
  */
 export function compareSemver(a: string, b: string): number {
-  const norm = (v: string) =>
-    v
-      .split(/[.-]/)
-      .slice(0, 3)
-      .map((p) => Number.parseInt(p, 10))
-      .map((n) => (Number.isFinite(n) ? n : 0));
-  const pa = norm(a);
-  const pb = norm(b);
+  // Core X.Y.Z compare, then SemVer §11 pre-release precedence. The previous
+  // implementation truncated to the numeric triple, so EVERY 1.0.0-* pre-release
+  // (and 1.0.0 itself) compared equal — which silenced doctor's "EF older than
+  // bundled" warning across the 1.0.0-beta line (found in the beta.4 dogfood).
+  const split = (v: string): { core: number[]; pre: string[] } => {
+    const [core, ...preParts] = v.split("-");
+    return {
+      core: core.split(".").slice(0, 3).map((p) => {
+        const n = Number.parseInt(p, 10);
+        return Number.isFinite(n) ? n : 0;
+      }),
+      pre: preParts.length ? preParts.join("-").split(".") : [],
+    };
+  };
+  const pa = split(a);
+  const pb = split(b);
   for (let i = 0; i < 3; i++) {
-    const x = pa[i] ?? 0;
-    const y = pb[i] ?? 0;
+    const x = pa.core[i] ?? 0;
+    const y = pb.core[i] ?? 0;
     if (x !== y) return x < y ? -1 : 1;
+  }
+  // Equal cores: no pre-release outranks any pre-release (1.0.0 > 1.0.0-rc.1).
+  if (pa.pre.length === 0 && pb.pre.length === 0) return 0;
+  if (pa.pre.length === 0) return 1;
+  if (pb.pre.length === 0) return -1;
+  // Identifier-by-identifier: numeric < alphanumeric; numerics numerically,
+  // alphanumerics lexically; a shorter prefix sorts lower (beta < beta.1).
+  const len = Math.max(pa.pre.length, pb.pre.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa.pre[i];
+    const y = pb.pre[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    const xn = /^\d+$/.test(x) ? Number.parseInt(x, 10) : null;
+    const yn = /^\d+$/.test(y) ? Number.parseInt(y, 10) : null;
+    if (xn !== null && yn !== null) {
+      if (xn !== yn) return xn < yn ? -1 : 1;
+    } else if (xn !== null) {
+      return -1; // numeric identifiers sort below alphanumeric
+    } else if (yn !== null) {
+      return 1;
+    } else if (x !== y) {
+      return x < y ? -1 : 1;
+    }
   }
   return 0;
 }

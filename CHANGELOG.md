@@ -9,6 +9,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Feature freeze for 1.0.0 (release-candidate line): fixes only from here to stable.
+
+### Fixed
+- **Version comparisons now honor SemVer pre-release precedence.** `compareSemver`
+  truncated versions to the numeric `X.Y.Z`, so every `1.0.0-*` pre-release (and
+  `1.0.0` itself) compared equal — silencing `doctor`'s "Edge Functions older
+  than bundled" warning across the entire beta line (a user following doctor
+  ended up two EF releases stale with no hint). Also fixes the same comparison
+  in the MCP startup banner and the client↔server compatibility matrix.
+- **`cerefox-local init` asks for the embedder first** — choosing `[2] Local`
+  now skips the OpenAI-key prompt entirely (the local embedder needs no key;
+  an existing key is kept silently).
+
 Open roadmap.
 
 ---
