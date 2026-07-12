@@ -49,6 +49,10 @@ install; switching later requires a re-index (see below).
 The local model (~130 MB) downloads once — at install/init when selected — into the
 data volume, so it survives `cerefox-local upgrade`.
 
+> **Memory**: give the Docker VM **≥ 4 GB** for comfortable local-embedder use
+> (Colima defaults to 2 GB: `colima start --memory 4`). Inference is
+> sub-batched to keep peak memory flat, so smaller VMs work — just slower.
+
 > **Switching embedders on existing data is breaking**: the two models produce
 > incompatible vector spaces, so documents embedded with one are invisible to
 > semantic search under the other. `cerefox-local init` warns and requires
