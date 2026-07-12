@@ -118,7 +118,10 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Maximum bytes in a single search response (local MCP path). See explanation below. |
-| `CEREFOX_MIN_SEARCH_SCORE` | `0.50` | Minimum cosine similarity for hybrid and semantic search results (0.0–1.0). In **hybrid search**, chunks that matched the FTS keyword operator (`@@`) always pass through regardless of their vector score — the threshold only filters vector-only results. In **semantic search**, all results are filtered. The pure **FTS search** mode is unaffected. Increase for stricter precision; decrease for wider recall. |
+| `CEREFOX_MIN_SEARCH_SCORE` | `0.50` (`0.60` with the local embedder) | Minimum cosine similarity for hybrid and semantic search results (0.0–1.0). The default is embedder-aware: nomic scores unrelated text higher than OpenAI, so `CEREFOX_EMBEDDER=local` raises the floor to 0.60. In **hybrid search**, chunks that matched the FTS keyword operator (`@@`) always pass through regardless of their vector score — the threshold only filters vector-only results. In **semantic search**, all results are filtered. The pure **FTS search** mode is unaffected. Increase for stricter precision; decrease for wider recall. |
+| `CEREFOX_EMBED_MAX_INPUT_CHARS` | `20000` | Safety cap on the characters sent to the embedding model per input. The full chunk content is always stored and reconstructed untouched; only the embedding uses the (rare) truncated prefix, so an oversized chunk can never fail an ingest. |
+| `CEREFOX_MODELS_DIR` | `~/.cerefox/models` (in-container: inside the data volume) | Where the local embedder caches downloaded model weights (Cerefox Local; `CEREFOX_EMBEDDER=local`). |
+| `CEREFOX_ONNX_BATCH` | `4` | Texts per local-embedder inference call. Peak memory scales with this; the small default keeps ingest/reindex safe on small Docker VMs. |
 
 ### Metadata filter
 
@@ -257,9 +260,9 @@ OPENAI_API_KEY=sk-...
 # All other settings use defaults
 ```
 
-> **Fireworks is not wired in the TS runtime yet** — `CEREFOX_EMBEDDER=fireworks` /
-> `CEREFOX_FIREWORKS_*` are documented but currently no-ops (OpenAI is the only embedder
-> implemented today). Tracked for a future release.
+> **Fireworks is not wired yet** — `CEREFOX_EMBEDDER=fireworks` / `CEREFOX_FIREWORKS_*`
+> are documented but currently no-ops. The wired embedders are `openai` (default) and
+> `local` (Cerefox Local only). Fireworks is tracked for a future release.
 
 ---
 

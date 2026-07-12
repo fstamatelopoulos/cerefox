@@ -9,7 +9,116 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+<!-- Consolidated 1.0.0 section (RELEASING.md: "Consolidate the CHANGELOG when cutting
+     the stable X.0.0"). Cutting v1.0.0 promotes this whole block to [1.0.0]. It
+     aggregates EVERYTHING since v0.11.1 across the beta.1–rc.1 pre-releases, whose
+     individual sections remain below as granular history. -->
+
+**Cerefox 1.0.0 — the first stable release.** Everything below shipped across the
+`1.0.0-beta.1` … `1.0.0-rc.1` pre-releases and is consolidated here. Upgrading an
+existing deployment requires a server redeploy and a one-time auth migration — follow
+[`docs/guides/migration-1.0.md`](docs/guides/migration-1.0.md) (short version:
+`cerefox self-update` → `cerefox token generate` → `cerefox server deploy` →
+update GPT Actions / remote-MCP clients to the token → revoke the legacy anon key).
+
+### Security
+- **Edge Function auth moved off the unrotatable legacy anon JWT to a rotatable,
+  Cerefox-managed access token (BREAKING).** All 9 Edge Functions deploy
+  `--no-verify-jwt` and validate a `cfx_pat_…` token in-function (constant-time,
+  fail-closed) against the `CEREFOX_ACCESS_TOKENS` Function secret. New
+  **`cerefox token generate | rotate | list`** manages it (zero-downtime rotation).
+  The legacy anon JWT is retired for this layer. **Action required on upgrade** —
+  see the migration guide. Design: `docs/specs/ef-auth-migration-design.md`.
+- **Tightened RPC privileges**: the `cerefox_*` `SECURITY DEFINER` functions grant
+  `EXECUTE` only to `service_role` (revoked from `PUBLIC`/`anon`/`authenticated`).
+- **Hardened the `cerefox-mcp` OAuth surface**: issuer/JWKS derived from the
+  injected `SUPABASE_URL` (not request headers); the OAuth path fails closed when
+  `CEREFOX_OAUTH_OWNER_ID` is unset; the consent page uses the public-safe
+  publishable key.
+- **Pre-1.0 defensive security review** of the auth, database, Edge Function, web,
+  and CLI surfaces (`docs/specs/security-audit-1.0.md`); hardening applied:
+  `cerefox-search` / `cerefox-metadata-search` clamp the requested result count.
+- New threat-model reference: `docs/specs/security-model.md`.
+
+### Added
+- **Cloud & mobile Claude over OAuth 2.1 (optional).** `cerefox-mcp` is an OAuth
+  2.1 protected resource — claude.ai web and the Claude mobile app connect as a
+  custom connector with the full 10-tool surface. Setup: `setup-supabase.md` Step 7.
+- **Fully-offline local embedder for Cerefox Local.** Opt-in
+  `CEREFOX_EMBEDDER=local` runs `nomic-embed-text-v1.5` (ONNX, 768-dim — no schema
+  change) inside the container: no OpenAI key, and text never leaves your machine.
+  Select at install (`install-local.sh --local-embedder`) or in `cerefox-local
+  init`; the ~130 MB model downloads once into the data volume. Switching embedders
+  on existing data requires `cerefox-local server reindex`.
+- **`cerefox doctor` grew real server awareness**: schema-version + Edge-Function
+  compatibility classification, a content-format progress line, and an
+  embedder-consistency check (warns with a `server reindex` hint on mismatch).
+
+### Fixed
+- **Document reconstruction is lossless by construction (the 1.0 data-integrity
+  fix).** Chunking is now an exact partition of the source (structural invariant:
+  concatenating the chunks reproduces the document byte-for-byte), and
+  reconstruction is versioned per chunk (`content_format`), so documents with
+  large tables or blank-line-free paragraphs can no longer gain spurious blank
+  lines. Existing documents keep the legacy format and reconstruct exactly as
+  before; each converts on its next edit, or run `cerefox server reindex` to
+  convert all. Also: an embedding-input cap so an oversized chunk can never fail
+  an ingest. Design: `docs/specs/chunk-reconstruction-design.md`.
+- **`cerefox metadata keys` no longer crashes when any document's `metadata` is a
+  JSON scalar/array** (#89, thanks @tdebasis) — one malformed row poisoned the
+  whole listing; ingest now also rejects non-object metadata at the boundary.
+- **`cerefox mcp` no longer prints a false-positive "schema version mismatch"
+  banner on every startup** (#90, thanks @tdebasis) — it compared the npm package
+  version against the schema version; it now compares schema-to-schema with the
+  correct remediation.
+- **Version comparisons honor SemVer pre-release precedence** — previously every
+  `1.0.0-*` pre-release compared equal, silencing doctor's "Edge Functions older
+  than bundled" warning.
+- **`cerefox-local` persists the pinned image ref** — previously a later `init`
+  could silently recreate the container from `:latest` instead of the installed
+  version.
+- **`cerefox server reindex` targets the active embedder** — it hardcoded the
+  OpenAI model, so it skipped everything after switching to the local embedder
+  and would have mis-stamped embedding provenance.
+- **Local-embedder inference is sub-batched** (default 4 texts per call,
+  `CEREFOX_ONNX_BATCH`) so `server reindex` and large-document ingest survive
+  small Docker VMs — a 12-text single inference was OOM-killed on a 2 GB VM.
+- **Search thresholds auto-calibrate per embedder**: the default semantic floor
+  is 0.6 with the local (nomic) embedder and 0.5 with OpenAI, because nomic
+  scores unrelated text higher. `CEREFOX_MIN_SEARCH_SCORE` / `--min-score` win.
+- **`cerefox-local doctor` is World-B aware**: no more bogus errors inside the
+  container (env-based config is recognized, the Edge-Function check is skipped
+  on a local backend, and the MCP-clients check points at the host).
+- `cerefox-ingest` returns **409** (not 500) when content de-duplication rejects a
+  write that would duplicate another document's content.
+- Live-test project leak cleaned up; stale Python-era command strings in CLI
+  messages corrected; `cerefox-local init` asks for the embedder before the
+  OpenAI key.
+
+### Changed
+- **Documentation overhauled around the new auth narrative**: local agents use the
+  local MCP, cloud Claude uses OAuth, ChatGPT uses GPT Actions + the Cerefox
+  token, remote HTTP MCP is the advanced path. GPT Actions OpenAPI `info.version`
+  is 3.0.0 (re-paste the schema in your Custom GPT and switch its auth to the
+  token).
+- Post-deploy reminders render as informational `ℹ` instead of alarming `⚠`.
+- Pre-releases publish under their npm channel dist-tag (`beta` / `rc`) and never
+  move `latest`; same policy for the ghcr `cerefox-local` image.
+
+### Removed
+- **Python is fully removed (BREAKING).** The frozen MCP fallback
+  (`uv run cerefox mcp`), the husked Python CLI/web/ingestion packages, the legacy
+  `scripts/*.py`, and `pyproject.toml` are deleted. The TypeScript runtime
+  (`@cerefox/memory`) is the only implementation; the SQL schema assets under
+  `src/cerefox/db/` are unaffected.
+- **The `cerefox-oauth-consent` Edge Function** — the OAuth consent page is served
+  solely by the Cloudflare Worker.
+- `CEREFOX_MCP_STATIC_BEARER` and the anon-key auth path
+  (`CEREFOX_SUPABASE_ANON_KEY` is no longer used by anything).
+
+### Server versions at 1.0.0
+- Schema **0.8.1** · Edge Functions **1.0.0** line · one `cerefox server deploy`
+  brings an existing deployment current.
 
 ---
 

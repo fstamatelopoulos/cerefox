@@ -61,7 +61,7 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Metadata search** | Standalone metadata-only search (no text query needed); find documents by key-value criteria, project, and date range; optional content inclusion with byte budget; dedicated MCP tool, CLI command, and web UI page |
 | **Project discovery** | `cerefox_list_projects` MCP tool for agents to discover available projects; all search results include human-readable `project_names` alongside UUIDs |
 | **Heading-aware chunking** | Greedy section accumulation — H1/H2/H3 sections accumulate until MAX_CHUNK_CHARS; heading breadcrumb preserved per chunk |
-| **Cloud embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API (the only embedder wired in the TS runtime today) |
+| **Embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API — or, on Cerefox Local, an optional **fully-offline local model** (`nomic-embed-text-v1.5`, in-container ONNX): no API key, text never leaves your machine |
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and a Cerefox access token (`cerefox token generate`); no Python install needed |
 | **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
@@ -99,10 +99,10 @@ reason; after v1.0.0 it's binding. Full release history is in
 
 ## Getting Started
 
-> **Upgrading to v0.9?** The CLI verbs were renamed to a resource-verb shape
-> (`cerefox get-doc X` → `cerefox document get X`; old names still run but
-> redirect) and the Python CLI/web were retired to husks. See
-> [`docs/guides/upgrading.md`](docs/guides/upgrading.md).
+> **Upgrading to v1.0.0?** Two changes need action (a rotatable access token
+> replaces the legacy anon JWT for Edge Functions, and a schema redeploy) and
+> Python is fully removed. One guide covers it:
+> [`docs/guides/migration-1.0.md`](docs/guides/migration-1.0.md).
 
 Cerefox runs **two ways — pick your backend.** Both expose the same features,
 web UI, and MCP tools; they differ only in where your data lives and how you
@@ -160,8 +160,11 @@ Docker. You get a `cerefox-local` command (same KB verbs as `cerefox`).
 # 1. Install (one-liner; pulls the all-in-one image, adds a `cerefox-local` command):
 curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh
 
-# 2. Set your OpenAI key (for embeddings) + wire up an AI agent:
-cerefox-local init                 # set/rotate the OpenAI key (re-creates the container)
+#    Fully offline instead? add `-s -- --local-embedder` — embeddings run
+#    in-container (no OpenAI key; text never leaves your machine).
+
+# 2. Set your OpenAI key (or pick the local embedder) + wire up an AI agent:
+cerefox-local init                 # OpenAI key or [2] Local embedder (re-creates the container)
 cerefox-local configure-agent      # wire an MCP client (e.g. Claude Code)
 
 # 3. Use it:
