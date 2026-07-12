@@ -74,6 +74,12 @@ update GPT Actions / remote-MCP clients to the token → revoke the legacy anon 
 - **Version comparisons honor SemVer pre-release precedence** — previously every
   `1.0.0-*` pre-release compared equal, silencing doctor's "Edge Functions older
   than bundled" warning.
+- **`cerefox-local` persists the pinned image ref** — previously a later `init`
+  could silently recreate the container from `:latest` instead of the installed
+  version.
+- **`cerefox server reindex` targets the active embedder** — it hardcoded the
+  OpenAI model, so it skipped everything after switching to the local embedder
+  and would have mis-stamped embedding provenance.
 - `cerefox-ingest` returns **409** (not 500) when content de-duplication rejects a
   write that would duplicate another document's content.
 - Live-test project leak cleaned up; stale Python-era command strings in CLI
