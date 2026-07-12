@@ -3529,6 +3529,59 @@ Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-
 
 ---
 
+### 28H — v1.0.1 (post-release fixes; first patch of the stable line)
+
+**Status: scoped 2026-07-12, not started.** Fixes-only patch release; no schema-breaking
+work. Candidates in priority order:
+
+1. **Explicit Data API GRANTs (#26) — the headline, time-sensitive.** Supabase is
+   removing the implicit `anon`/`authenticated`/`service_role` grants on `public`
+   tables: already the **default for projects created after 2026-05-30** (a fresh
+   Cerefox install on a new Supabase project may hit `42501` today) and **enforced on
+   existing projects 2026-10-30**. Fix: explicit `GRANT`s to `service_role` on all
+   `cerefox_*` tables/sequences in `schema.sql` + `ALTER DEFAULT PRIVILEGES` for
+   future tables + migration `0013` for existing deployments (schema 0.8.1 → 0.8.2).
+   `anon`/`authenticated` stay ungranted (the Data API is only used with
+   service-role-equivalent keys; RPC EXECUTE is already `service_role`-only from 28B).
+   **Validate on a freshly created Supabase project** — pairs with the planned
+   clean-install test of `setup-supabase.md`.
+2. **`self-update` post-upgrade docs sync runs in the old process (#106).** Spawn the
+   freshly installed binary (`spawnSync(process.execPath, [process.argv[1],
+   "sync-self-docs"])`, the `init.ts` pattern) so the version stamp + sync code are
+   the new release's. Cosmetic today (content was fresh; only `metadata.version`
+   stamped stale).
+3. **`cerefox-local upgrade --latest` (and/or `upgrade <tag>`)** — one-command
+   re-point of the persisted image pin (today: re-run with `CEREFOX_LOCAL_IMAGE=…`).
+4. **VM-memory warning at local-embedder selection** — when `docker info` shows the
+   VM below ~3 GB, `install-local.sh --local-embedder` / `cerefox-local init` print
+   the `colima start --memory 4` hint at the decision moment (the rc.3 OOM found a
+   1.9 GB default VM).
+5. **Doctor EF-version check polish (DECIDED 2026-07-12).** Three changes: (a) the
+   above-minimum "older than bundled" case downgrades **⚠ → ℹ** (⚠ stays reserved
+   for actual compatibility violations); (b) agreed text: *"Deployed Edge Functions
+   (vX) are older than the ones bundled with this client (vY). Compatible — nothing
+   is broken — but redeploying picks up the latest server-side fixes: `cerefox
+   server deploy --functions-only`"* (deliberately NOT "cosmetic": an older EF can
+   miss real fixes); (c) `cut_release.ts` bumps `EF_VERSION` **unconditionally at
+   stable cuts** (pre-releases keep change-detection) so stable-era deployments
+   never display a pre-release EF label (1.0.0 ships EFs labeled `1.0.0-rc.4`
+   because no EF source changed after rc.4 — correct but confusing).
+
+6. **`document ingest --document-id` must not silently retitle** — the CLI derives
+   the title from the filename (`options.title ?? titleFromPath`) even on an
+   update-by-id, renaming the existing document (observed live: a Decision Log part
+   briefly renamed to "dlog"). Fix: when `--document-id` is set and `--title` is
+   absent, keep the existing title. (MCP is unaffected: `title` is an explicit
+   required parameter there.)
+7. **Missing-author warning parity on all CLI write paths** — `document ingest` /
+   `ingest-dir` warn "audit log will record this write as 'unknown'" when no
+   `--author` / `CEREFOX_AUTHOR_NAME` is set, but `document edit` (and the other
+   write verbs) silently record "unknown". Add the same warning everywhere a write
+   creates an audit entry. (Agent-facing docs already cover author/requestor; this
+   is CLI-UX parity with the iter-27 identity work from #18/#28.)
+
+Deferred past 1.0.1: Fireworks embedder wiring (v1.1+), Iteration 29.
+
 ## Iteration 29: Document Relations & Semantic Graph (post-v1.0, target v1.1+)
 
 **Goal**: Add explicit document-to-document relations (`related_to`, `references`,
@@ -3578,9 +3631,15 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
 
 ---
 
-## Iteration 30: Local / Self-Hosted Cerefox Backend (D1) — target v0.10.0
+## Iteration 30: Local / Self-Hosted Cerefox Backend (D1) — ✅ SHIPPED v0.10.0–v0.10.2
 
-**Status: Designed, not started.** Design of record:
+**Status: ✅ DONE — shipped across v0.10.0–v0.10.2 (2026-06)**: the all-in-one s6 image,
+the `/rest/v1` proxy, ghcr multi-arch publish, `install-local.sh` + the `cerefox-local`
+host command, per-install JWT. The follow-up **Iteration 31 (local ONNX embedder,
+fully-offline World B) shipped at v1.0.0** — design of record:
+[`docs/research/local-embedder-design.md`](research/local-embedder-design.md); it never
+got its own plan section (tracked through the Iteration 28 / 1.0.0 release line instead).
+The section below is kept as the design/history record. Design of record:
 [`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md) — **read
 it first**: topology, the data-access audit, the D1 decision, the supabase-js↔PostgREST
 version-coupling caveat, and the phase breakdown. Work lands on `feat/local-cerefox`.
@@ -3801,6 +3860,19 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 ---
 
 ## Current Focus
+
+**Update (2026-07-12): 🎉 v1.0.0 SHIPPED.** Cut, published (npm `latest` +
+ghcr `:latest`), installed + validated on both backends, announced on Discord
+(`#announcements`, via the bot). The release-line retrospective (what the 8-pre-release
+dogfood caught and why) is in the **Cerefox Decision Log, 2026 Q3 Part 1** (KB — not in
+the repo). Post-release housekeeping done: self-docs metadata stamps corrected, #106
+filed, Debasis thanked on both closed issues + the announcement.
+
+**NEXT: v1.0.1 — see the new 28H block (under Iteration 28)** for the scoped list.
+Headline: **#26 explicit Data API GRANTs** (time-sensitive — already the default on new
+Supabase projects; enforced on existing ones 2026-10-30), plus #106, the local-image
+`upgrade --latest` convenience, the VM-memory hint, and the doctor EF-label polish.
+Then Iteration 29 / Fireworks / the deferred menu for v1.1+.
 
 **Update (2026-07-12): v1.0.0 IS READY TO CUT.** The pre-release line ran
 beta.1–beta.4 + rc.1–rc.4; every workstream in the 1.0.0 scope shipped and was
