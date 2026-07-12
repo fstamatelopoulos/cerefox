@@ -80,6 +80,15 @@ update GPT Actions / remote-MCP clients to the token → revoke the legacy anon 
 - **`cerefox server reindex` targets the active embedder** — it hardcoded the
   OpenAI model, so it skipped everything after switching to the local embedder
   and would have mis-stamped embedding provenance.
+- **Local-embedder inference is sub-batched** (default 4 texts per call,
+  `CEREFOX_ONNX_BATCH`) so `server reindex` and large-document ingest survive
+  small Docker VMs — a 12-text single inference was OOM-killed on a 2 GB VM.
+- **Search thresholds auto-calibrate per embedder**: the default semantic floor
+  is 0.6 with the local (nomic) embedder and 0.5 with OpenAI, because nomic
+  scores unrelated text higher. `CEREFOX_MIN_SEARCH_SCORE` / `--min-score` win.
+- **`cerefox-local doctor` is World-B aware**: no more bogus errors inside the
+  container (env-based config is recognized, the Edge-Function check is skipped
+  on a local backend, and the MCP-clients check points at the host).
 - `cerefox-ingest` returns **409** (not 500) when content de-duplication rejects a
   write that would duplicate another document's content.
 - Live-test project leak cleaned up; stale Python-era command strings in CLI
