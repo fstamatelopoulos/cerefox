@@ -9,6 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **Local-embedder inference is sub-batched (default 4 texts per call,
+  `CEREFOX_ONNX_BATCH`).** A 12-text single inference was OOM-killed (exit 137)
+  on Colima's default 2 GB Docker VM — the container shares that VM with
+  Postgres, PostgREST, and the web server. Sub-batching keeps peak memory flat,
+  fixing `server reindex` and large-document ingest on small VMs.
+  `setup-local.md` now documents the ≥ 4 GB VM recommendation.
+
 Open roadmap.
 
 ---
