@@ -150,19 +150,28 @@ async function action(options: SelfUpdateOptions): Promise<void> {
   println(c.green(`✓ Upgraded to ${target}.`));
 
   // Refresh the bundled-docs ingest so the KB stays in lockstep.
-  // Best-effort: if the user has no config yet (e.g. self-update before
-  // init), the sync is skipped with a clear message.
+  //
+  // MUST run in a child process of the FRESHLY INSTALLED binary (#106): this
+  // process is still the OLD bundle, so an in-process `await import(...)` would
+  // run the old sync code and stamp the old PKG_VERSION on the synced docs (the
+  // .md files on disk are already new — the package manager replaced them —
+  // which made the bug subtle: fresh content, stale version stamp). The package
+  // manager replaces the global bin file in place, so re-executing our own
+  // argv[1] loads the new code — the same pattern `init` uses to run
+  // `server deploy`.
+  //
+  // Best-effort: if the user has no config yet (e.g. self-update before init),
+  // the child prints its own clear skip message.
   println("");
-  println(c.dim("Refreshing bundled-docs ingest…"));
-  try {
-    const { runSyncSelfDocs } = await import("./sync-self-docs.ts");
-    await runSyncSelfDocs({});
-  } catch (err) {
+  println(c.dim("Refreshing bundled-docs ingest (using the new version)…"));
+  const sync = spawnSync(process.execPath, [process.argv[1], "guides", "ingest"], {
+    stdio: "inherit",
+  });
+  if (sync.status !== 0) {
     println(
-      cErr.yellow("⚠ ") +
-        `Could not refresh self-docs: ${err instanceof Error ? err.message : String(err)}`,
+      cErr.yellow("⚠ ") + "Could not refresh self-docs (see output above).",
     );
-    println(c.dim("  Run `cerefox sync-self-docs` manually after a successful `cerefox init`."));
+    println(c.dim("  Run `cerefox guides ingest` manually after a successful `cerefox init`."));
   }
 }
 

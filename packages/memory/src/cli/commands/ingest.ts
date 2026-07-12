@@ -99,8 +99,12 @@ async function action(
     Boolean(options.paste),
   );
 
-  const title = options.title ?? titleFromPath;
-  if (!title || title.trim() === "") {
+  // On an update-by-id WITHOUT an explicit --title, keep the document's
+  // existing title (28H item 6): deriving it from the filename silently RENAMED
+  // the target document (observed live). null = "fetch current" below.
+  const updatingById = Boolean(options.documentId);
+  let title = options.title ?? (updatingById ? null : titleFromPath);
+  if (title !== null && (!title || title.trim() === "")) {
     throw userError(
       options.paste
         ? "--title is required with --paste."
@@ -144,6 +148,24 @@ async function action(
   const supabase = createClient(settings.supabaseUrl, settings.supabaseKey, {
     auth: { persistSession: false },
   });
+  // Update-by-id without --title: fetch and KEEP the existing title (28H item 6)
+  // instead of renaming the document to the local filename.
+  if (title === null) {
+    const { data, error } = await supabase
+      .from("cerefox_documents")
+      .select("title")
+      .eq("id", options.documentId)
+      .maybeSingle();
+    if (error || !data?.title) {
+      throw userError(
+        `Could not resolve document ${options.documentId} to keep its title` +
+          `${error ? ` (${error.message})` : ""}.`,
+        "Pass --title explicitly, or check the --document-id.",
+      );
+    }
+    title = data.title as string;
+    println(c.dim(`  (keeping existing title: ${JSON.stringify(title)})`));
+  }
   const pipeline = new IngestionPipeline({
     supabase,
     openAiApiKey: settings.openaiApiKey,
