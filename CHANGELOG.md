@@ -9,6 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **`cerefox-local doctor` no longer reports bogus World-A findings.** Inside the
+  Cerefox Local container: the config check passes when settings resolve from
+  environment variables (the container has no `.env` file by design), the
+  Edge-Function check is skipped (a local backend has no Edge Functions), and
+  the MCP-clients check points at host-side `cerefox-local configure-agent`
+  instead of warning about configs it cannot see. A healthy local install now
+  reports "All checks passed" instead of an error + warning.
+
 Open roadmap.
 
 ---
