@@ -3562,6 +3562,19 @@ work. Candidates in priority order:
    (today 1.0.0 ships EFs labeled `1.0.0-rc.4` because no EF source changed after
    rc.4 — correct but confusing).
 
+6. **`document ingest --document-id` must not silently retitle** — the CLI derives
+   the title from the filename (`options.title ?? titleFromPath`) even on an
+   update-by-id, renaming the existing document (observed live: a Decision Log part
+   briefly renamed to "dlog"). Fix: when `--document-id` is set and `--title` is
+   absent, keep the existing title. (MCP is unaffected: `title` is an explicit
+   required parameter there.)
+7. **Missing-author warning parity on all CLI write paths** — `document ingest` /
+   `ingest-dir` warn "audit log will record this write as 'unknown'" when no
+   `--author` / `CEREFOX_AUTHOR_NAME` is set, but `document edit` (and the other
+   write verbs) silently record "unknown". Add the same warning everywhere a write
+   creates an audit entry. (Agent-facing docs already cover author/requestor; this
+   is CLI-UX parity with the iter-27 identity work from #18/#28.)
+
 Deferred past 1.0.1: Fireworks embedder wiring (v1.1+), Iteration 29.
 
 ## Iteration 29: Document Relations & Semantic Graph (post-v1.0, target v1.1+)
