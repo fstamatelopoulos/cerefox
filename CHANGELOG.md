@@ -107,6 +107,31 @@ update GPT Actions / remote-MCP clients to the token → revoke the legacy anon 
 
 ---
 
+## [v1.0.0-rc.2] -- 2026-07-11
+
+### Fixed
+- **`cerefox server reindex` now targets the ACTIVE embedder.** It hardcoded the
+  OpenAI model as its target, so after switching Cerefox Local to the local
+  embedder it reported "(nothing to reindex)" (existing OpenAI-embedded chunks
+  looked already-correct), and `--all` would have stamped the wrong
+  `embedder_primary` on locally-embedded vectors. The staleness filter, the
+  recorded embedder, and the API-key gate all follow `CEREFOX_EMBEDDER` now.
+
+
+### Fixed
+- **`cerefox-local` now persists the pinned image ref.** Installing/upgrading with
+  `CEREFOX_LOCAL_IMAGE=<ref>` stores the ref in the host config, and every verb
+  that recreates the container (`init`, `start` on a busy port, `upgrade`) uses
+  it. Previously the pin was one-shot: a later `cerefox-local init` silently
+  recreated from `:latest` — observed downgrading a pinned rc.1 install to a
+  stale local `:latest` image mid-init (which also re-applied that old image's
+  RPCs over a newer schema until the next correct boot).
+
+
+Open roadmap.
+
+---
+
 ## [v1.0.0-rc.1] -- 2026-07-11
 
 Feature freeze for 1.0.0 (release-candidate line): fixes only from here to stable.
