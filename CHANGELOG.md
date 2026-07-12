@@ -113,6 +113,39 @@ update GPT Actions / remote-MCP clients to the token → revoke the legacy anon 
 
 ---
 
+## [v1.0.0-rc.4] -- 2026-07-12
+
+### Fixed
+- **`cerefox-local doctor` no longer reports bogus World-A findings.** Inside the
+  Cerefox Local container: the config check passes when settings resolve from
+  environment variables (the container has no `.env` file by design), the
+  Edge-Function check is skipped (a local backend has no Edge Functions), and
+  the MCP-clients check points at host-side `cerefox-local configure-agent`
+  instead of warning about configs it cannot see. A healthy local install now
+  reports "All checks passed" instead of an error + warning.
+- **Search threshold auto-calibrates per embedder.** The default semantic floor
+  is now 0.6 with the local (nomic) embedder and 0.5 with OpenAI — nomic scores
+  unrelated text higher, so the OpenAI-calibrated 0.5 let weak matches through
+  on Cerefox Local. `CEREFOX_MIN_SEARCH_SCORE` / `--min-score` still override.
+
+Open roadmap.
+
+---
+
+## [v1.0.0-rc.3] -- 2026-07-12
+
+### Fixed
+- **Local-embedder inference is sub-batched (default 4 texts per call,
+  `CEREFOX_ONNX_BATCH`).** A 12-text single inference was OOM-killed (exit 137)
+  on Colima's default 2 GB Docker VM — the container shares that VM with
+  Postgres, PostgREST, and the web server. Sub-batching keeps peak memory flat,
+  fixing `server reindex` and large-document ingest on small VMs.
+  `setup-local.md` now documents the ≥ 4 GB VM recommendation.
+
+Open roadmap.
+
+---
+
 ## [v1.0.0-rc.2] -- 2026-07-11
 
 ### Fixed

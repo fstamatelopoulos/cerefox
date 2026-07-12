@@ -98,6 +98,18 @@ export function checkConfig(): CheckResult {
     };
   }
   if (!existsSync(envPath)) {
+    // No file is fine when the settings resolve from the ENVIRONMENT — that is
+    // how the Cerefox Local container is configured (boot-minted credentials in
+    // /run/cerefox-runtime.env; no .env file exists by design). The check's real
+    // question is "is the client configured?", not "does a file exist?".
+    const settings = loadSettings();
+    if (settings.supabaseUrl && settings.supabaseKey) {
+      return {
+        name: "config",
+        status: "ok",
+        detail: "configured via environment variables (no .env file — normal for Cerefox Local)",
+      };
+    }
     return {
       name: "config",
       status: "error",
@@ -476,9 +488,13 @@ export function checkMcpConfigs(): CheckResult {
   if (found.length === 0) {
     return {
       name: "mcp clients",
-      status: "warn",
-      detail: "No MCP client configs reference Cerefox.",
-      hint: "Run `cerefox configure-agent --tool claude-code` (or `--tool claude-desktop`) to wire up a client.",
+      status: isLocalBackend() ? "skipped" : "warn",
+      detail: isLocalBackend()
+        ? "checked from inside the container — host MCP configs are not visible here."
+        : "No MCP client configs reference Cerefox.",
+      hint: isLocalBackend()
+        ? "Configure agents on the host with `cerefox-local configure-agent`."
+        : "Run `cerefox configure-agent --tool claude-code` (or `--tool claude-desktop`) to wire up a client.",
     };
   }
   return {
@@ -579,7 +595,20 @@ export async function checkPostgres(): Promise<CheckResult> {
  * `cerefox token generate`), or before the EFs are deployed (aggregator 404),
  * the check reports `skipped` rather than failing — expected transitional states.
  */
+/** True inside the Cerefox Local all-in-one container (World B): the server
+ * fronts a local PostgREST — there are no Edge Functions in this world. */
+function isLocalBackend(): boolean {
+  return Boolean(process.env.CEREFOX_POSTGREST_UPSTREAM);
+}
+
 export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
+  if (isLocalBackend()) {
+    return {
+      name: "edge functions",
+      status: "skipped",
+      detail: "local backend — Edge Functions are not used (cloud-only surface).",
+    };
+  }
   const settings = loadSettings();
   if (!settings.supabaseUrl) {
     return {

@@ -208,8 +208,32 @@ export async function warmup(): Promise<void> {
  * Mean pooling + L2 normalisation (sentence-transformers convention; nomic
  * expects both). Returns plain `number[][]` to match the OpenAI path.
  */
+/**
+ * Per-inference sub-batch. Peak tensor memory scales with the batch, and the
+ * container shares a (often small) Docker VM with Postgres + PostgREST + the
+ * web server — a 12-text single call was OOM-killed on Colima's default 2 GB
+ * VM (rc.2 dogfood, exit 137). 4 keeps peak memory flat at personal scale;
+ * override with CEREFOX_ONNX_BATCH.
+ */
+const DEFAULT_ONNX_BATCH = 4;
+
+function onnxBatchSize(): number {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env ?? {};
+  const n = Number.parseInt(env.CEREFOX_ONNX_BATCH ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_ONNX_BATCH;
+}
+
 export async function onnxEmbed(texts: string[], role: EmbedRole): Promise<number[][]> {
   if (texts.length === 0) return [];
+  const batch = onnxBatchSize();
+  if (texts.length > batch) {
+    const out: number[][] = [];
+    for (let i = 0; i < texts.length; i += batch) {
+      out.push(...(await onnxEmbed(texts.slice(i, i + batch), role)));
+    }
+    return out;
+  }
   const pipeline = await ensurePipeline();
   const inputs = buildPrefixedInputs(texts, role);
   const out = await pipeline(inputs, { pooling: "mean", normalize: true });

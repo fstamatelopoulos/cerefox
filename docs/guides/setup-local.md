@@ -49,12 +49,20 @@ install; switching later requires a re-index (see below).
 The local model (~130 MB) downloads once — at install/init when selected — into the
 data volume, so it survives `cerefox-local upgrade`.
 
+> **Memory**: give the Docker VM **≥ 4 GB** for comfortable local-embedder use
+> (Colima defaults to 2 GB: `colima start --memory 4`). Inference is
+> sub-batched to keep peak memory flat, so smaller VMs work — just slower.
+
 > **Switching embedders on existing data is breaking**: the two models produce
 > incompatible vector spaces, so documents embedded with one are invisible to
 > semantic search under the other. `cerefox-local init` warns and requires
 > confirmation (`--force` non-interactively); after switching, run
 > `cerefox-local server reindex` to re-embed everything. `cerefox-local doctor`
 > flags any mismatch.
+
+> Scores are calibrated per embedder: with the local model the default semantic
+> threshold is **0.6** (vs 0.5 for OpenAI) because nomic scores unrelated text
+> higher. Override per call with `--min-score` or via `CEREFOX_MIN_SEARCH_SCORE`.
 
 ---
 
