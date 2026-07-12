@@ -1,6 +1,6 @@
 {
   "name": "@cerefox/memory",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "description": "Cerefox — user-owned shared memory for AI agents. The local TypeScript runtime: stdio MCP server in v0.4; CLI binary added in v0.5; in-process web server in v0.6; ingestion pipeline in v0.7.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/fstamatelopoulos/cerefox",

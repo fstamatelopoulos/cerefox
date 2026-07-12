@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-rc.2] -- 2026-07-11
+
 ### Fixed
 - **`cerefox server reindex` now targets the ACTIVE embedder.** It hardcoded the
   OpenAI model as its target, so after switching Cerefox Local to the local
