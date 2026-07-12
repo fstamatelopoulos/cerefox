@@ -3556,11 +3556,16 @@ work. Candidates in priority order:
    VM below ~3 GB, `install-local.sh --local-embedder` / `cerefox-local init` print
    the `colima start --memory 4` hint at the decision moment (the rc.3 OOM found a
    1.9 GB default VM).
-5. **Doctor EF-version warning polish** — clearer text for the "deployed EF older
-   than bundled" case, plus (pending decision) bump `EF_VERSION` unconditionally at
-   *stable* cuts so stable-era deployments never display a pre-release EF label
-   (today 1.0.0 ships EFs labeled `1.0.0-rc.4` because no EF source changed after
-   rc.4 — correct but confusing).
+5. **Doctor EF-version check polish (DECIDED 2026-07-12).** Three changes: (a) the
+   above-minimum "older than bundled" case downgrades **⚠ → ℹ** (⚠ stays reserved
+   for actual compatibility violations); (b) agreed text: *"Deployed Edge Functions
+   (vX) are older than the ones bundled with this client (vY). Compatible — nothing
+   is broken — but redeploying picks up the latest server-side fixes: `cerefox
+   server deploy --functions-only`"* (deliberately NOT "cosmetic": an older EF can
+   miss real fixes); (c) `cut_release.ts` bumps `EF_VERSION` **unconditionally at
+   stable cuts** (pre-releases keep change-detection) so stable-era deployments
+   never display a pre-release EF label (1.0.0 ships EFs labeled `1.0.0-rc.4`
+   because no EF source changed after rc.4 — correct but confusing).
 
 6. **`document ingest --document-id` must not silently retitle** — the CLI derives
    the title from the filename (`options.title ?? titleFromPath`) even on an
