@@ -3802,6 +3802,21 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-07-12): v1.0.0 IS READY TO CUT.** The pre-release line ran
+beta.1–beta.4 + rc.1–rc.4; every workstream in the 1.0.0 scope shipped and was
+dogfooded through published artifacts on both backends (cloud Supabase + Cerefox
+Local): 28D chunk fix, 28E/28F auth+docs, 28G Python retirement, 28B security
+audit, iter-31 local embedder, plus the rc-line fixes the soak surfaced (image
+pin, reindex targeting, ONNX OOM sub-batching, World-B doctor, embedder-aware
+search threshold, SemVer pre-release compare). The consolidated [1.0.0]
+CHANGELOG is on `release/1.0.0-changelog` (PR #105); cutting `1.0.0` promotes
+it, publishes npm under `latest`, and tags the ghcr image `:latest`. Remaining
+post-cut: install both worlds, `cerefox server deploy`, re-point the local image
+pin to `:latest`, Discord announcement (draft delivered to the maintainer),
+close the loop with @tdebasis. Post-1.0 backlog seeds: `cerefox-local upgrade
+--latest` convenience, VM-memory warning at local-embedder selection,
+Fireworks embedder wiring.
+
 **Update (2026-07-10): `1.0.0-beta.1` SHIPPED, migrated to prod, and FULLY VALIDATED. 28D is
 done.** (Supersedes the sequencing/NEXT blocks below.) What happened:
 - **Cut + published** `1.0.0-beta.1` under the **`beta`** npm dist-tag (`latest` stays on 0.11.1).
