@@ -142,8 +142,11 @@ embedding costs" below.
 
 If you want to keep costs as low as possible:
 
-- **Cheaper embedding models**: a lower-cost OpenAI-compatible provider (e.g. Fireworks AI)
-  is on the roadmap — **not yet wired in the TS runtime** (OpenAI only today).
+- **Zero-cost embeddings (Cerefox Local)**: the self-hosted backend can run a local
+  embedding model in-container (`CEREFOX_EMBEDDER=local`) — no API key, no per-token
+  cost at all. See [setup-local.md](setup-local.md#choose-your-embedder-openai-vs-fully-local).
+- **Cheaper cloud models**: a lower-cost OpenAI-compatible provider (e.g. Fireworks AI)
+  is on the roadmap — not yet wired.
 - **Batch ingest, don't re-ingest**: Cerefox deduplicates by content hash — re-ingesting the
   same file twice costs nothing. Only new or changed content triggers embedding calls.
 - **`cerefox server reindex`**: Re-embeds all existing chunks if you switch embedders. Run this once

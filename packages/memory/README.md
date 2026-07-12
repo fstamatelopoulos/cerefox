@@ -56,7 +56,7 @@ You deploy the server side with this package's CLI — `cerefox server deploy` s
 | Prerequisite | Why | How |
 |---|---|---|
 | A **Supabase project** | Hosts Postgres + pgvector + Edge Functions. Free tier is enough for most personal use. | [supabase.com](https://supabase.com) → New project |
-| An **embedding API key** | OpenAI `text-embedding-3-small` (the only embedder wired today). Pennies/month for typical personal use (see [operational-cost.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/operational-cost.md)). | Get an [OpenAI API key](https://platform.openai.com/api-keys). |
+| An **embedding API key** | OpenAI `text-embedding-3-small` (the cloud backend's embedder; Cerefox Local can instead run a fully-offline local model). Pennies/month for typical personal use (see [operational-cost.md](https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/operational-cost.md)). | Get an [OpenAI API key](https://platform.openai.com/api-keys). |
 | **Node ≥ 20** or **Bun ≥ 1.0** | Runtime for the `cerefox` bin (and the bundled `cerefox mcp` server). | [nodejs.org](https://nodejs.org) · [bun.sh](https://bun.sh). The one-line installer below bootstraps Bun if neither is present. |
 
 ### One-time server-side setup (~10 min — no clone needed)

@@ -4,9 +4,6 @@ Cerefox 1.0.0 is the first stable release. Two changes need attention when you
 upgrade an existing Supabase deployment; a third is automatic. **Nothing here
 affects the local/self-hosted (World B) backend.**
 
-Pre-releases are published on the `1.0.0-beta.N` line (breaking changes may still
-occur between betas) leading up to `1.0.0`.
-
 ## 1. Edge Function auth: anon key → Cerefox access token (action required)
 
 The legacy Supabase **anon JWT** is no longer accepted for calling Cerefox Edge
@@ -52,7 +49,7 @@ Claude uses OAuth).
 Rotating the token later: `cerefox token rotate` (accepts new + old for zero-downtime),
 then `cerefox token rotate --finalize` once every client is on the new token.
 
-## 2. New schema (0.7.0 → 0.8.0): document reconstruction fix (redeploy required, no data action)
+## 2. New schema (→ 0.8.1): document reconstruction fix (redeploy required, no data action)
 
 1.0.0 fixes a document-reconstruction bug that could corrupt documents containing large
 tables or blank-line-free paragraphs. It adds a `content_format` column on
@@ -90,7 +87,7 @@ unaffected — they are not Python and remain the source of truth for the schema
 ```bash
 cerefox self-update            # or: npm install -g @cerefox/memory@latest
 cerefox token generate         # change #1: mint + set the access token
-cerefox server deploy          # changes #1 + #2: token-gated EFs + schema 0.8.0
+cerefox server deploy          # changes #1 + #2: token-gated EFs + schema 0.8.1
 cerefox doctor                 # verify (edge-functions green; content-format ℹ)
 # then: update GPT Actions / remote MCP clients to the token; revoke the anon key
 ```
