@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-rc.4] -- 2026-07-12
+
 ### Fixed
 - **`cerefox-local doctor` no longer reports bogus World-A findings.** Inside the
   Cerefox Local container: the config check passes when settings resolve from
