@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.0-rc.3] -- 2026-07-12
+
 ### Fixed
 - **Local-embedder inference is sub-batched (default 4 texts per call,
   `CEREFOX_ONNX_BATCH`).** A 12-text single inference was OOM-killed (exit 137)
