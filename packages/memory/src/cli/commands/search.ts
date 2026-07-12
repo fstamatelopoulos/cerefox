@@ -283,7 +283,7 @@ export function registerSearch(program: Command): void {
     )
     .option("--mode <mode>", "Search mode: docs (default), hybrid, fts.", "docs")
     .option("--alpha <float>", "Semantic weight 0..1 (default: 0.7).", "0.7")
-    .option("--min-score <float>", "Minimum cosine similarity threshold (default: CEREFOX_MIN_SEARCH_SCORE or 0.5).")
+    .option("--min-score <float>", "Minimum cosine similarity threshold (default: CEREFOX_MIN_SEARCH_SCORE; else 0.5, or 0.6 with the local embedder).")
     .option("--max-bytes <n>", "Response size budget in bytes (default: CEREFOX_MAX_RESPONSE_BYTES or 200000).")
     .option("-r, --requestor <name>", "Agent / user name (recorded in usage log).")
     .option("--json", "Emit machine-readable JSON instead of the default text.")
