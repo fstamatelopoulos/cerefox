@@ -60,6 +60,10 @@ data volume, so it survives `cerefox-local upgrade`.
 > `cerefox-local server reindex` to re-embed everything. `cerefox-local doctor`
 > flags any mismatch.
 
+> Scores are calibrated per embedder: with the local model the default semantic
+> threshold is **0.6** (vs 0.5 for OpenAI) because nomic scores unrelated text
+> higher. Override per call with `--min-score` or via `CEREFOX_MIN_SEARCH_SCORE`.
+
 ---
 
 ## Step 1 — Install

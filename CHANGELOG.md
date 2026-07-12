@@ -17,6 +17,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the MCP-clients check points at host-side `cerefox-local configure-agent`
   instead of warning about configs it cannot see. A healthy local install now
   reports "All checks passed" instead of an error + warning.
+- **Search threshold auto-calibrates per embedder.** The default semantic floor
+  is now 0.6 with the local (nomic) embedder and 0.5 with OpenAI — nomic scores
+  unrelated text higher, so the OpenAI-calibrated 0.5 let weak matches through
+  on Cerefox Local. `CEREFOX_MIN_SEARCH_SCORE` / `--min-score` still override.
 
 Open roadmap.
 

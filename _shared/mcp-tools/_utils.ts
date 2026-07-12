@@ -36,6 +36,15 @@ export function getMaxResponseBytes(): number {
 export const DEFAULT_MIN_SEARCH_SCORE = 0.5;
 
 /**
+ * Nomic's cosine-score distribution sits higher than OpenAI's: unrelated text
+ * lands ~0.4–0.55 (vs ~0.1–0.3), so the 0.5 floor calibrated for
+ * text-embedding-3-small lets weak matches through on the local embedder
+ * (rc.3 dogfood: an unrelated doc passed at vec≈0.54). 0.6 restores the
+ * intended precision; relevant nomic matches score ~0.7+.
+ */
+export const DEFAULT_MIN_SEARCH_SCORE_LOCAL = 0.6;
+
+/**
  * Resolve the minimum cosine-similarity floor for hybrid/semantic search
  * (vector-only matches below this are dropped; FTS matches always pass).
  * Overridable via the `CEREFOX_MIN_SEARCH_SCORE` env var (0.0–1.0). The Python
@@ -49,9 +58,14 @@ export const DEFAULT_MIN_SEARCH_SCORE = 0.5;
 export function getMinSearchScore(): number {
   const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
     .process?.env?.CEREFOX_MIN_SEARCH_SCORE;
-  if (raw === undefined || raw === "") return DEFAULT_MIN_SEARCH_SCORE;
+  const fallback =
+    (globalThis as { process?: { env?: Record<string, string | undefined> } })
+      .process?.env?.CEREFOX_EMBEDDER === "local"
+      ? DEFAULT_MIN_SEARCH_SCORE_LOCAL
+      : DEFAULT_MIN_SEARCH_SCORE;
+  if (raw === undefined || raw === "") return fallback;
   const n = Number.parseFloat(raw);
-  return Number.isNaN(n) || n < 0 || n > 1 ? DEFAULT_MIN_SEARCH_SCORE : n;
+  return Number.isNaN(n) || n < 0 || n > 1 ? fallback : n;
 }
 
 export function applyByteBudget(
