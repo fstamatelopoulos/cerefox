@@ -16,6 +16,7 @@
 import type { Command } from "commander";
 
 import {
+  warn,
   c,
   notFound,
   println,
@@ -99,6 +100,11 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
 
   const author = resolveAuthor(options.author);
   const authorType = resolveAuthorType(options.authorType);
+  if (author === "unknown") {
+    warn(
+      "No --author / CEREFOX_AUTHOR_NAME set — audit log will record this write as 'unknown'.",
+    );
+  }
   await client.raw.rpc("cerefox_create_audit_entry", {
     p_document_id: documentId,
     p_operation: "update-metadata",
