@@ -9,6 +9,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **Explicit Data API grants for `service_role`** (#26; schema 0.8.1 → 0.8.2 —
+  redeploy with `cerefox server deploy`). Supabase is removing the implicit
+  privileges Data API roles get on `public` tables (already the default for
+  projects created after 2026-05-30; enforced on existing projects 2026-10-30);
+  without explicit GRANTs, tables become invisible to PostgREST even for
+  `service_role`. `anon`/`authenticated` deliberately get nothing.
+- **`cerefox self-update` refreshes the bundled docs via the newly installed
+  binary** (#106) — the version stamp and sync logic now come from the new
+  release, not the still-running old process. Also fixes a stale internal verb
+  (the sync ran the pre-v0.9 command name).
+- **`cerefox document ingest --document-id` no longer renames the document to
+  the local filename** when `--title` is omitted — it keeps the existing title.
+- **Missing-author warning on every CLI write verb**: `document edit` and
+  `document version archive` now warn (like ingest already did) when a write
+  will be attributed to "unknown".
+
+### Changed
+- **`cerefox doctor`'s Edge-Function check is calmer and clearer**: the
+  above-minimum "older than bundled" case is informational (ℹ, not ⚠ — warnings
+  are reserved for real compatibility violations) and names both versions
+  plainly. Releases also bump the Edge-Function version at every **stable** cut,
+  so stable deployments never display a pre-release EF label.
+- **`cerefox-local upgrade --latest`** (or `upgrade <tag>`) re-points the
+  persisted image pin in one command.
+- **Small-VM hint at local-embedder selection**: the installer and
+  `cerefox-local init` note when the Docker VM has under 3 GB of memory
+  (the local embedder is happiest with ≥ 4 GB).
+
 Open roadmap.
 
 ---
