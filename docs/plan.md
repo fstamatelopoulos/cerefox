@@ -3531,8 +3531,21 @@ Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-
 
 ### 28H — v1.0.1 (post-release fixes; first patch of the stable line)
 
-**Status: scoped 2026-07-12, not started.** Fixes-only patch release; no schema-breaking
-work. Candidates in priority order:
+**Status: BUILT + `1.0.1-beta.1` CUT (2026-07-18); dogfood + validation pending.**
+All 7 items implemented on `iter-28h/v1.0.1`, merged via PR #108; `1.0.1-beta.1`
+published to npm (beta dist-tag) and ghcr (`v1.0.1-beta.1`, `:latest` untouched).
+Live-validated during the build: retitle guard (item 6), author warnings (7),
+doctor ℹ text (5), VM hint on a real 1.9 GB VM (4), migration 0013 clean on local
+Postgres (1). **Pending before stable 1.0.1**: (a) install the beta on both worlds
+(cloud: `VERSION=beta sh install.sh` + `cerefox server deploy` — applies 0013 to
+the existing DB, the regression half of #26; local: `cerefox-local upgrade
+v1.0.1-beta.1` — itself the item-3 live test) and dogfood a few days; (b) validate
+#26 on a **freshly created Supabase project** (grant-enforcement environment,
+supervised session); (c) stable cut — first to exercise the unconditional
+`EF_VERSION` bump (item 5c), so pair it with `server deploy --functions-only`.
+Note: the ghcr image is NOT part of `cut_release.ts --npm-publish`; it needs
+`--docker-publish` (or a manual `gh workflow run local-image.yml`) — beta.1's
+image was dispatched manually post-cut. Items as scoped (priority order):
 
 1. **Explicit Data API GRANTs (#26) — the headline, time-sensitive.** Supabase is
    removing the implicit `anon`/`authenticated`/`service_role` grants on `public`
@@ -3868,11 +3881,16 @@ dogfood caught and why) is in the **Cerefox Decision Log, 2026 Q3 Part 1** (KB �
 the repo). Post-release housekeeping done: self-docs metadata stamps corrected, #106
 filed, Debasis thanked on both closed issues + the announcement.
 
-**NEXT: v1.0.1 — see the new 28H block (under Iteration 28)** for the scoped list.
-Headline: **#26 explicit Data API GRANTs** (time-sensitive — already the default on new
-Supabase projects; enforced on existing ones 2026-10-30), plus #106, the local-image
-`upgrade --latest` convenience, the VM-memory hint, and the doctor EF-label polish.
-Then Iteration 29 / Fireworks / the deferred menu for v1.1+.
+**Update (2026-07-18): v1.0.1 BUILT; `1.0.1-beta.1` CUT.** All 7 items of the 28H
+block implemented on `iter-28h/v1.0.1`, merged (PR #108), published to npm (beta
+dist-tag) + ghcr (`v1.0.1-beta.1`; the image needed a manual `local-image.yml`
+dispatch — `--npm-publish` alone doesn't build it). **NEXT (see the 28H block's
+Status for full detail)**: install the beta on both worlds and dogfood; validate
+#26 on a fresh Supabase project (supervised); then the stable 1.0.1 cut (which
+also exercises the new unconditional `EF_VERSION` bump → redeploy EFs with it).
+Headline remains **#26 explicit Data API GRANTs** (time-sensitive — already the
+default on new Supabase projects; enforced on existing ones 2026-10-30). Then
+Iteration 29 / Fireworks / the deferred menu for v1.1+.
 
 **Update (2026-07-12): v1.0.0 IS READY TO CUT.** The pre-release line ran
 beta.1–beta.4 + rc.1–rc.4; every workstream in the 1.0.0 scope shipped and was
