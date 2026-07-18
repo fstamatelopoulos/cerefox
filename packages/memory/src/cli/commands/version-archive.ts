@@ -11,6 +11,7 @@
 import type { Command } from "commander";
 
 import {
+  warn,
   c,
   notFound,
   println,
@@ -44,6 +45,11 @@ async function setArchived(
 
   const author = resolveAuthor(options.author);
   const authorType = resolveAuthorType(options.authorType);
+  if (author === "unknown") {
+    warn(
+      "No --author / CEREFOX_AUTHOR_NAME set — audit log will record this write as 'unknown'.",
+    );
+  }
   const op = archived ? "archive" : "unarchive";
 
   await client.raw.rpc("cerefox_create_audit_entry", {

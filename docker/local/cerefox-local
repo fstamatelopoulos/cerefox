@@ -60,6 +60,18 @@ set_env_port() {
 # EXCLUDES container-managed vars (SUPABASE_URL/KEY, DATABASE_URL, POSTGREST_UPSTREAM,
 # the JWT secret) — those are generated/owned inside the container. The single codebase
 # reads these the same way in-container as it does for the cloud CLI.
+# 28H item 4: local-embedder memory hint. Peak inference memory is sub-batched,
+# so small VMs work, but ≥ 4 GB is the comfortable recommendation (Colima
+# defaults to 2 GB and the difference is very noticeable).
+warn_if_small_vm() {
+  _mem=$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)
+  if [ "${_mem:-0}" -gt 0 ] && [ "$_mem" -lt 3221225472 ]; then
+    _gb=$(awk "BEGIN{printf \"%.1f\", $_mem/1073741824}")
+    echo "ℹ Your Docker VM has ${_gb} GB of memory. The local embedder works but is"
+    echo "  happier with ≥ 4 GB (Colima: colima start --memory 4)."
+  fi
+}
+
 PASSTHROUGH_VARS="CEREFOX_EMBEDDER CEREFOX_MIN_SEARCH_SCORE CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_VERSION_RETENTION_HOURS CEREFOX_VERSION_CLEANUP_ENABLED CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
 
 # Emit `-e VAR=value` for each passthrough var present in $ENV_FILE.
@@ -236,6 +248,7 @@ case "$cmd" in
     [ -n "$key" ] || echo "  (no OpenAI key set — ingest + semantic search stay disabled; re-run 'cerefox-local init' to add one)"
     recreate
     if [ "$embedder" = "local" ] && [ "$cur_embedder" != "local" ]; then
+      warn_if_small_vm
       echo "Downloading the local embedding model (one-time)…"
       docker exec -i "$CONTAINER" cerefox embedder-warmup || \
         echo "⚠ warmup failed (model downloads on first search instead)"
@@ -265,6 +278,15 @@ case "$cmd" in
   logs)          need_docker; docker logs "$@" "$CONTAINER" ;;
 
   upgrade)
+    # Optional target (28H item 3): `upgrade --latest` re-points the persisted
+    # pin to the moving :latest tag; `upgrade <tag>` (e.g. v1.0.1) pins that tag.
+    # No argument keeps the current pin (explicit CEREFOX_LOCAL_IMAGE env wins).
+    case "${1:-}" in
+      --latest) IMAGE="ghcr.io/fstamatelopoulos/cerefox-local:latest"; shift ;;
+      v*)       IMAGE="ghcr.io/fstamatelopoulos/cerefox-local:$1"; shift ;;
+      "") ;;
+      *) die "unknown upgrade option: $1 (use --latest or a version tag like v1.0.1)" ;;
+    esac
     need_docker
     echo "Pulling $IMAGE …"; docker pull "$IMAGE"
     # Persist the image ref so every later verb (init, start, …) recreates from

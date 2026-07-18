@@ -570,13 +570,22 @@ async function main(): Promise<void> {
   assertSchemaVersionGuard();
   ok("schema_version guard passed.");
 
-  // EF_VERSION bumps only when EF code changed since the last tag.
-  const bumpEf = efsChangedSinceLastTag();
+  // EF_VERSION bumps when EF code changed since the last tag — OR
+  // unconditionally at a STABLE cut (28H item 5, decided 2026-07-12): a stable
+  // release must never ship Edge Functions labeled with a pre-release version
+  // (1.0.0 shipped EFs labeled 1.0.0-rc.4 because nothing EF-side changed after
+  // rc.4 — correct but confusing in doctor forever after). The cost is one
+  // redeploy of identical EF code at the stable cut, which users do anyway.
+  const isStableCut = !newVersion.includes("-");
+  const efChanged = efsChangedSinceLastTag();
+  const bumpEf = efChanged || isStableCut;
   const literalsToBump: VersionLiteralFile[] = bumpEf
     ? [...VERSION_LITERAL_FILES, EF_VERSION_LITERAL]
     : VERSION_LITERAL_FILES;
-  if (bumpEf) {
+  if (efChanged) {
     info("Edge Function source changed since last tag — EF_VERSION will bump.");
+  } else if (isStableCut) {
+    info("Stable cut — EF_VERSION bumps unconditionally (no pre-release EF labels on stable).");
   } else {
     info("No Edge Function changes since last tag — leaving EF_VERSION as-is.");
   }

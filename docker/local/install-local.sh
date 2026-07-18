@@ -115,6 +115,18 @@ for arg in "$@"; do
   esac
 done
 
+# 28H item 4: local-embedder memory hint. Peak inference memory is sub-batched,
+# so small VMs work, but ≥ 4 GB is the comfortable recommendation (Colima
+# defaults to 2 GB and the difference is very noticeable).
+warn_if_small_vm() {
+  _mem=$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)
+  if [ "${_mem:-0}" -gt 0 ] && [ "$_mem" -lt 3221225472 ]; then
+    _gb=$(awk "BEGIN{printf \"%.1f\", $_mem/1073741824}")
+    echo "ℹ Your Docker VM has ${_gb} GB of memory. The local embedder works but is"
+    echo "  happier with ≥ 4 GB (Colima: colima start --memory 4)."
+  fi
+}
+
 PRESERVED_OVERRIDES=""
 ENV_ARGS=""
 if [ -f "$CONFIG_DIR/.env" ]; then
@@ -169,6 +181,7 @@ umask 077
 # Local embedder selected → download the model NOW (one-time, with progress) so the
 # first search isn't slow. Failure is non-fatal: it downloads on first use instead.
 if [ "${CEREFOX_EMBEDDER:-}" = "local" ]; then
+  warn_if_small_vm
   echo "Downloading the local embedding model (~130 MB, one-time)…"
   docker exec -i "$CONTAINER" cerefox embedder-warmup || \
     echo "⚠ warmup failed (the model will download on first search instead)"
