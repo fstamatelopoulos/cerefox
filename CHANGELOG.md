@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.1-beta.1] -- 2026-07-18
+
 ### Fixed
 - **Explicit Data API grants for `service_role`** (#26; schema 0.8.1 → 0.8.2 —
   redeploy with `cerefox server deploy`). Supabase is removing the implicit
