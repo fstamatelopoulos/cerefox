@@ -91,6 +91,34 @@ describe("cerefox read commands (live)", () => {
     expect(stderr).toContain("not found");
   });
 
+  test(
+    "list-docs: --project scoping doesn't error at scale, for every project in the KB",
+    () => {
+      // Regression coverage for the unbounded `id=in.(...)` bug: a
+      // project-scoped `document list` used to build its filter from every
+      // active document_id in the project before applying `--limit`, so once
+      // a project's document count pushed that URL past ~16KB, Node's fetch
+      // threw UND_ERR_HEADERS_OVERFLOW before the request ever reached the
+      // server. Iterating every real project here (rather than a fixed doc
+      // count) means this catches the regression in any KB the moment a
+      // project grows past that threshold, with no synthetic fixture needed.
+      const projects = JSON.parse(run(["project", "list", "--json"]).stdout) as Array<{
+        id: string;
+        name: string;
+      }>;
+      expect(Array.isArray(projects)).toBe(true);
+      for (const p of projects) {
+        const { status, stderr } = run(["document", "list", "--project", p.name, "--json"]);
+        expect(status).toBe(0);
+        if (status !== 0) {
+          // eslint-disable-next-line no-console
+          console.error(`project "${p.name}" failed:`, stderr);
+        }
+      }
+    },
+    30000,
+  );
+
   test("list-metadata-keys: returns key/doc_count/example_values", () => {
     const { stdout, status } = run(["metadata", "keys", "--json"]);
     expect(status).toBe(0);
