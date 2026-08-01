@@ -9,29 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-### Fixed
-- **`cerefox document list --project` no longer fails on large projects** (#109,
-  #110 — thanks [@tdebasis](https://github.com/tdebasis)!). Project-scoped
-  listing used to fetch every document id in the project and replay them in an
-  `id=in.(…)` filter, whose URL blew past the Node fetch ~16KB header budget
-  once a project crossed roughly 400 active documents
-  (`UND_ERR_HEADERS_OVERFLOW`). It is now a single PostgREST embedded-resource
-  query, filtered server-side and genuinely bounded by `--limit`.
-
-### Added
-- **`cerefox server deploy --yes`** — skip the deployment confirmation for
-  scripted or agent-driven runs.
-
-### Changed
-- **EF deploys on macOS: keychain heads-up + `SUPABASE_ACCESS_TOKEN` documented.**
-  The Supabase CLI reads its login token from the macOS Keychain, firing a
-  password dialog per function deploy; the deploy pre-flight now warns about
-  this up-front, and `configuration.md` documents setting `SUPABASE_ACCESS_TOKEN`
-  in `~/.cerefox/.env` to skip the dialogs entirely.
-
----
-
-## [v1.0.1-beta.1] -- 2026-07-18
+<!-- Consolidated 1.0.1 section (RELEASING.md: "Consolidate the CHANGELOG when
+     cutting the stable X.Y.Z"). Cutting v1.0.1 promotes this whole block to
+     [1.0.1]. It aggregates everything since v1.0.0, absorbing the
+     [v1.0.1-beta.1] pre-release section. -->
 
 ### Fixed
 - **Explicit Data API grants for `service_role`** (#26; schema 0.8.1 → 0.8.2 —
@@ -40,6 +21,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   projects created after 2026-05-30; enforced on existing projects 2026-10-30);
   without explicit GRANTs, tables become invisible to PostgREST even for
   `service_role`. `anon`/`authenticated` deliberately get nothing.
+- **`cerefox document list --project` no longer fails on large projects** (#109,
+  #110 — thanks [@tdebasis](https://github.com/tdebasis)!). Project-scoped
+  listing used to fetch every document id in the project and replay them in an
+  `id=in.(…)` filter, whose URL blew past the Node fetch ~16KB header budget
+  once a project crossed roughly 400 active documents
+  (`UND_ERR_HEADERS_OVERFLOW`). It is now a single PostgREST embedded-resource
+  query, filtered server-side and genuinely bounded by `--limit`.
 - **`cerefox self-update` refreshes the bundled docs via the newly installed
   binary** (#106) — the version stamp and sync logic now come from the new
   release, not the still-running old process. Also fixes a stale internal verb
@@ -49,6 +37,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - **Missing-author warning on every CLI write verb**: `document edit` and
   `document version archive` now warn (like ingest already did) when a write
   will be attributed to "unknown".
+
+### Added
+- **`cerefox server deploy --yes`** — skip the deployment confirmation for
+  scripted or agent-driven runs.
 
 ### Changed
 - **`cerefox doctor`'s Edge-Function check is calmer and clearer**: the
@@ -61,8 +53,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - **Small-VM hint at local-embedder selection**: the installer and
   `cerefox-local init` note when the Docker VM has under 3 GB of memory
   (the local embedder is happiest with ≥ 4 GB).
-
-Open roadmap.
+- **EF deploys on macOS: keychain heads-up + `SUPABASE_ACCESS_TOKEN` documented.**
+  The Supabase CLI reads its login token from the macOS Keychain, firing a
+  password dialog per function deploy; the deploy pre-flight now warns about
+  this up-front, and `configuration.md` documents setting `SUPABASE_ACCESS_TOKEN`
+  in `~/.cerefox/.env` to skip the dialogs entirely.
 
 ---
 
