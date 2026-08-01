@@ -43,11 +43,13 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 | `CEREFOX_ACCESS_TOKENS` | `""` | Server-side (Function secret) | The **server-side accepted set** — a comma-separated list of Cerefox tokens, set as a Supabase **Function secret** (not local `.env`). A request is accepted if its Bearer matches any token in the set, enabling zero-downtime rotation. Managed by `cerefox token generate` / `rotate`. |
 | `CEREFOX_SUPABASE_ANON_KEY` | `""` | *(deprecated / unused)* | Formerly the legacy anon JWT Bearer for Edge Function calls. **Retired in iter-28E** — Edge Functions now authenticate the Cerefox access token in-function. Retained only so an old `.env` still parses; no longer read. |
 | `CEREFOX_DATABASE_URL` | `""` | For scripts | Direct Postgres URL for deployment scripts. **Use the Session Pooler** (port `5432`) — Transaction Pooler (`6543`) does not support DDL. Username must include the project-ref suffix (`postgres.<project-ref>`). Append `?sslmode=require`. See [`setup-supabase.md` → Connection pooling (2026)](setup-supabase.md#connection-pooling-2026). |
+| `SUPABASE_ACCESS_TOKEN` | *(unset)* | For EF deploys (optional) | Supabase **personal access token** (`sbp_…`, from [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens)), read by the **Supabase CLI** that `cerefox server deploy` shells out to for Edge Function deploys. Optional — without it the CLI falls back to its `supabase login` credential, which on **macOS lives in the Keychain and triggers a password dialog per function deploy** (9 per full deploy; a denied dialog fails that function with `LegacyPlatformAuthRequiredError`). Setting it in `~/.cerefox/.env` avoids the dialogs entirely: Cerefox exports every key from its `.env` to the environment, so the child CLI inherits it. Not a `CEREFOX_` variable — the name is the Supabase CLI's own. **Keep secret** (it grants management access to your Supabase account). |
 
 **When each is needed:**
 - `CEREFOX_SUPABASE_URL` + `CEREFOX_SUPABASE_KEY` — used by the CLI, web UI, and local MCP server (ingestion, search) via the Supabase Data API
 - `CEREFOX_ACCESS_TOKEN` — used to call the Edge Functions (remote MCP, GPT Actions, direct HTTP) and by `cerefox doctor` / the live e2e tests; `CEREFOX_ACCESS_TOKENS` is its server-side counterpart (the accepted set). Generate both with `cerefox token generate`.
 - `CEREFOX_DATABASE_URL` — used only for schema deploys (`cerefox server deploy`, or the contributor scripts `bun scripts/db_*.ts`) via a direct Postgres connection
+- `SUPABASE_ACCESS_TOKEN` — optional; only consumed by the Supabase CLI during `cerefox server deploy` Edge Function deploys (recommended on macOS to avoid per-function Keychain dialogs)
 
 ---
 

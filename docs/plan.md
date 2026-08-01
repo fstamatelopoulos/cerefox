@@ -3531,6 +3531,19 @@ Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-
 
 ### 28H — v1.0.1 (post-release fixes; first patch of the stable line)
 
+**Update (2026-08-01): beta.1 installed + validated on BOTH worlds.** Cloud:
+migration 0013 applied to prod (schema 0.8.2 — the existing-DB half of #26
+validated), 9 EFs redeployed, doctor green. Local: upgraded via the env-override
+path (the 1.0.0 host script predates the `upgrade <tag>` verb — bootstrap
+chicken-and-egg, same class as #106; the verb itself gets its live test on the
+NEXT upgrade). Also merged **#110** (@tdebasis's fix for #109: project-scoped
+`document list` blowing the ~16KB fetch header budget past ~400 docs — single
+`!inner` embed now) and scoped a **beta.2** with it + two dogfood findings:
+`server deploy --yes`, and the macOS Keychain dialog storm on EF deploys
+(pre-flight heads-up + `SUPABASE_ACCESS_TOKEN` documented in configuration.md).
+Branch: `iter-28h/beta2-followups`. Fresh-Supabase #26 validation still pending
+(supervised) before stable 1.0.1.
+
 **Status: BUILT + `1.0.1-beta.1` CUT (2026-07-18); dogfood + validation pending.**
 All 7 items implemented on `iter-28h/v1.0.1`, merged via PR #108; `1.0.1-beta.1`
 published to npm (beta dist-tag) and ghcr (`v1.0.1-beta.1`, `:latest` untouched).

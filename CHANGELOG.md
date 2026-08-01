@@ -9,7 +9,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+- **`cerefox document list --project` no longer fails on large projects** (#109,
+  #110 — thanks [@tdebasis](https://github.com/tdebasis)!). Project-scoped
+  listing used to fetch every document id in the project and replay them in an
+  `id=in.(…)` filter, whose URL blew past the Node fetch ~16KB header budget
+  once a project crossed roughly 400 active documents
+  (`UND_ERR_HEADERS_OVERFLOW`). It is now a single PostgREST embedded-resource
+  query, filtered server-side and genuinely bounded by `--limit`.
+
+### Added
+- **`cerefox server deploy --yes`** — skip the deployment confirmation for
+  scripted or agent-driven runs.
+
+### Changed
+- **EF deploys on macOS: keychain heads-up + `SUPABASE_ACCESS_TOKEN` documented.**
+  The Supabase CLI reads its login token from the macOS Keychain, firing a
+  password dialog per function deploy; the deploy pre-flight now warns about
+  this up-front, and `configuration.md` documents setting `SUPABASE_ACCESS_TOKEN`
+  in `~/.cerefox/.env` to skip the dialogs entirely.
 
 ---
 
