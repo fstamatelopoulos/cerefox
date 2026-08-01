@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.1] -- 2026-08-01
+
 <!-- Consolidated 1.0.1 section (RELEASING.md: "Consolidate the CHANGELOG when
      cutting the stable X.Y.Z"). Cutting v1.0.1 promotes this whole block to
      [1.0.1]. It aggregates everything since v1.0.0, absorbing the
