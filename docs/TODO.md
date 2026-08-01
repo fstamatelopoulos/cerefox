@@ -13,6 +13,18 @@
 
 ## Known Tasks (Not Yet Scheduled)
 
+### Deploy UX (found dogfooding 1.0.1-beta.1, 2026-08-01)
+- [ ] **`cerefox server deploy --yes`** — there is no non-interactive confirm, so
+  scripted/agent-driven deploys must pipe `y` into stdin. Add a `--yes` flag
+  (mirroring `self-update --yes`).
+- [ ] **Document `SUPABASE_ACCESS_TOKEN` in `configuration.md` + deploy pre-flight**
+  — on macOS the Supabase CLI reads its login token from the Keychain, which fires
+  a password dialog *per function deploy* (9× per full deploy; denying strands the
+  deploy mid-run with `LegacyPlatformAuthRequiredError`). Setting
+  `SUPABASE_ACCESS_TOKEN` in `~/.cerefox/.env` bypasses the keychain entirely
+  (the config loader exports it to the child CLI). Document it; consider having
+  the deploy pre-flight suggest it when the token is absent on darwin.
+
 ### Data Safety
 - [ ] **Metadata versioning / recovery** — version snapshots capture content only;
   a metadata wipe is unrecoverable (bit us in the v0.11.1 incident). Proposal with
