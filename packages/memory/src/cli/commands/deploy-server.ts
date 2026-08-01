@@ -24,7 +24,8 @@
  *
  * Flags: --dry-run (plan only, no prompt), --schema-only, --functions-only,
  * --project-ref (override the ref derived from CEREFOX_SUPABASE_URL for EF
- * deploys). There is deliberately NO --reset (drop-everything) here — a full wipe is a
+ * deploys), --yes (skip the confirmation, for scripted/agent-driven runs).
+ * There is deliberately NO --reset (drop-everything) here — a full wipe is a
  * contributor/recovery operation; use `bun scripts/db_deploy.ts --reset`
  * (repo clone, typed-`yes` guard) if you truly need it.
  */
@@ -56,6 +57,7 @@ interface DeployServerOptions {
   schemaOnly?: boolean;
   functionsOnly?: boolean;
   projectRef?: string;
+  yes?: boolean;
 }
 
 /** One pre-flight check + its remediation when failed. */
@@ -216,6 +218,23 @@ async function action(options: DeployServerOptions): Promise<void> {
   }
   println(c.green("\n✓ All prerequisites satisfied."));
 
+  // On macOS the Supabase CLI reads its login token from the Keychain, firing a
+  // password dialog PER function deploy (9× per full run) — and a denied dialog
+  // strands the deploy mid-run with LegacyPlatformAuthRequiredError. Setting
+  // SUPABASE_ACCESS_TOKEN skips the Keychain entirely; the config loader exports
+  // ~/.cerefox/.env into process.env, so the child CLI inherits it from there.
+  if (doFunctions && process.platform === "darwin" && !process.env.SUPABASE_ACCESS_TOKEN) {
+    println(
+      c.cyan(
+        "\n  ℹ  Heads-up (macOS): the Supabase CLI will read its login token from the\n" +
+          "     Keychain — expect a password dialog per function (click \"Always Allow\").\n" +
+          "     To skip the dialogs entirely, put a personal access token\n" +
+          "     (supabase.com/dashboard/account/tokens) in ~/.cerefox/.env:\n" +
+          "       SUPABASE_ACCESS_TOKEN=sbp_…",
+      ),
+    );
+  }
+
   // ── Detect fresh vs existing (read-only probe) ───────────────────────────
   let schemaMode: "fresh" | "existing" | "unknown" = "unknown";
   let pending: string[] = [];
@@ -264,10 +283,12 @@ async function action(options: DeployServerOptions): Promise<void> {
     process.exit(0);
   }
 
-  const proceed = await confirm("\nProceed with deployment to Supabase?", true /* default No */);
-  if (!proceed) {
-    println(c.dim("Aborted."));
-    process.exit(0);
+  if (!options.yes) {
+    const proceed = await confirm("\nProceed with deployment to Supabase?", true /* default No */);
+    if (!proceed) {
+      println(c.dim("Aborted."));
+      process.exit(0);
+    }
   }
 
   // ── Schema ────────────────────────────────────────────────────────────────
@@ -411,5 +432,6 @@ export function registerDeployServer(program: Command): void {
       "--project-ref <ref>",
       "Supabase project ref for Edge Function deploys (default: derived from CEREFOX_SUPABASE_URL).",
     )
+    .option("--yes", "Non-interactive (skip the deployment confirmation).")
     .action(action);
 }

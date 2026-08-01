@@ -109,11 +109,11 @@ describe("cerefox read commands (live)", () => {
       expect(Array.isArray(projects)).toBe(true);
       for (const p of projects) {
         const { status, stderr } = run(["document", "list", "--project", p.name, "--json"]);
-        expect(status).toBe(0);
         if (status !== 0) {
           // eslint-disable-next-line no-console
           console.error(`project "${p.name}" failed:`, stderr);
         }
+        expect(status).toBe(0);
       }
     },
     30000,

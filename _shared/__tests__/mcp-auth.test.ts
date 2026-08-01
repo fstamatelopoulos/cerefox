@@ -35,7 +35,9 @@ function strToB64Url(s: string): string {
 }
 
 let keyPair: CryptoKeyPair;
-let publicJwk: JsonWebKey;
+// `kid` is a standard JWK member (RFC 7517 §4.5) but missing from the TS lib's
+// JsonWebKey type, so widen it here.
+let publicJwk: JsonWebKey & { kid?: string };
 
 beforeAll(async () => {
   keyPair = (await crypto.subtle.generateKey(
