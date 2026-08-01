@@ -3531,7 +3531,21 @@ Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-
 
 ### 28H — v1.0.1 (post-release fixes; first patch of the stable line)
 
-**Update (2026-08-01): beta.1 installed + validated on BOTH worlds.** Cloud:
+**Update (2026-08-01): 🎉 v1.0.1 SHIPPED** — cut, published (npm `latest` + ghcr
+`v1.0.1`/`:latest`), installed + validated on both worlds the same day. The
+release path itself live-tested the last deferred items: `self-update` synced
+docs via the new binary (#106 ✅), doctor showed the new ℹ EF wording pre-redeploy
+(item 5 ✅), `server deploy --functions-only --yes` shipped the 1.0.1-labeled EFs
+(item 5c bump ✅ — first stable cut with the unconditional `EF_VERSION` bump),
+and `cerefox-local upgrade v1.0.1` exercised the new tag verb (item 3 ✅). Scope
+grew beyond the original 7 items to include #109/#110 (@tdebasis's large-project
+`document list` fix — first external code contribution, merged + credited),
+`server deploy --yes`, and the macOS Keychain/`SUPABASE_ACCESS_TOKEN` deploy UX.
+**Only remaining #26 validation: a deploy onto a freshly created Supabase
+project** (grant-enforcement environment) — now post-release verification, in
+the supervised clean-install session. Issue tracker at zero open issues.
+
+**Update (2026-08-01, earlier): beta.1 installed + validated on BOTH worlds.** Cloud:
 migration 0013 applied to prod (schema 0.8.2 — the existing-DB half of #26
 validated), 9 EFs redeployed, doctor green. Local: upgraded via the env-override
 path (the 1.0.0 host script predates the `upgrade <tag>` verb — bootstrap
@@ -3886,6 +3900,23 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 ---
 
 ## Current Focus
+
+**Update (2026-08-01): 🎉 v1.0.1 SHIPPED — both worlds upgraded + validated same
+day.** Full detail in the 28H block (Iteration 28). Highlights: all 7 scoped
+items landed and live-tested end-to-end via the release itself; plus #109/#110
+(**@tdebasis's large-project `document list` fix — the project's first external
+code contribution**, merged with credit in the CHANGELOG); plus `server deploy
+--yes` and the macOS Keychain/`SUPABASE_ACCESS_TOKEN` deploy UX found while
+dogfooding beta.1. Cloud on schema 0.8.2 + EFs v1.0.1; Cerefox Local on
+`v1.0.1` (pin + `:latest` both moved). Zero open issues.
+
+**NEXT**:
+1. **Fresh-Supabase #26 verification** (supervised clean-install session, pairs
+   with the setup-supabase.md walkthrough refresh) — the one 28H item validated
+   only on local Postgres so far. Post-release verification, not a gate.
+2. Optionally announce 1.0.1 on Discord (Debasis thanks + upgrade one-liner).
+3. Then the v1.1+ menu: Iteration 29 (Document Relations), Fireworks embedder
+   wiring, deferred polish.
 
 **Update (2026-07-12): 🎉 v1.0.0 SHIPPED.** Cut, published (npm `latest` +
 ghcr `:latest`), installed + validated on both backends, announced on Discord
