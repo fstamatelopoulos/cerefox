@@ -55,33 +55,29 @@ async function action(options: {
     projectId = project.id;
   }
 
-  let query = client.raw
-    .from("cerefox_documents")
-    .select("id, title, source, metadata, created_at, updated_at, review_status, deleted_at")
-    .limit(limit);
+  const docCols = "id, title, source, metadata, created_at, updated_at, review_status, deleted_at";
+  // Widened to `string`: the postgrest-js select-string parser's type-level
+  // grammar doesn't recognize the `!inner` embed-hint syntax below, so a
+  // literal-typed ternary here fails to typecheck on the projectId branch
+  // even though it's valid at runtime.
+  const selectCols: string = projectId
+    ? `${docCols}, cerefox_document_projects!inner(project_id)`
+    : docCols;
+
+  let query = client.raw.from("cerefox_documents").select(selectCols).limit(limit);
   query = deleted
     ? query.not("deleted_at", "is", null).order("deleted_at", { ascending: false, nullsFirst: false })
     : query.is("deleted_at", null).order("updated_at", { ascending: false, nullsFirst: false });
 
   if (projectId) {
-    // PostgREST embedding: filter docs through the M2M junction.
-    const { data: junctionRows, error: junctionError } = await client.raw
-      .from("cerefox_document_projects")
-      .select("document_id")
-      .eq("project_id", projectId);
-    if (junctionError) {
-      throw systemError(`Project membership lookup failed: ${junctionError.message}`);
-    }
-    const docIds = (junctionRows ?? []).map((r) => (r as { document_id: string }).document_id);
-    if (docIds.length === 0) {
-      if (options.json) {
-        printJson([]);
-      } else {
-        process.stdout.write(`(no documents in project "${options.project}")\n`);
-      }
-      return;
-    }
-    query = query.in("id", docIds);
+    // PostgREST embedding: filter docs through the M2M junction in a single
+    // query, bounded by `limit` regardless of project size. (Previously:
+    // fetched every document_id for the project unbounded, then re-queried
+    // with `.in("id", docIds)` — that in-list grows with project size and
+    // eventually exceeds the client's ~16KB request-header budget, throwing
+    // `UND_ERR_HEADERS_OVERFLOW` before the request reaches the server. Any
+    // project past ~390-400 active documents hit this 100% of the time.)
+    query = query.eq("cerefox_document_projects.project_id", projectId);
   }
 
   const { data, error } = await query;
@@ -89,7 +85,15 @@ async function action(options: {
     throw systemError(`Could not list documents: ${error.message}`);
   }
 
-  const rows = (data ?? []) as DocRow[];
+  // The embedded `cerefox_document_projects` relation is only present to let
+  // PostgREST filter on it server-side (`.eq()` above); it's not part of the
+  // documented row shape, so drop it before returning/printing.
+  const rows = ((data ?? []) as unknown[]).map((row) => {
+    const { cerefox_document_projects: _junction, ...doc } = row as DocRow & {
+      cerefox_document_projects?: unknown;
+    };
+    return doc as DocRow;
+  });
 
   if (options.json) {
     printJson(rows);
@@ -97,7 +101,11 @@ async function action(options: {
   }
 
   if (rows.length === 0) {
-    process.stdout.write(deleted ? "(trash is empty)\n" : "(no documents)\n");
+    if (projectId) {
+      process.stdout.write(`(no documents in project "${options.project}")\n`);
+    } else {
+      process.stdout.write(deleted ? "(trash is empty)\n" : "(no documents)\n");
+    }
     return;
   }
 
