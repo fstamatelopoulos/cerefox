@@ -30,7 +30,9 @@ cerefox doctor           # verify
 database it applies **every** pending migration (regardless of which version
 you're coming from — so there are no per-version steps to follow), re-applies
 `rpcs.sql`, and redeploys all nine Edge Functions from npm-bundled assets. No
-repo clone required.
+repo clone required. On **macOS**, set `SUPABASE_ACCESS_TOKEN` in
+`~/.cerefox/.env` first to avoid a Keychain password dialog per function deploy
+(see [`configuration.md`](configuration.md#supabase--database)).
 
 **Re-embed only when a release says so.** If a release changes the embedding
 model or FTS / title weighting, also run `cerefox server reindex --all` — that's

@@ -128,6 +128,15 @@ npx supabase link         # prompts for your project ref (the ID in your Supabas
 Your project ref is in the Supabase dashboard URL:
 `https://supabase.com/dashboard/project/<project-ref>`
 
+> **macOS Keychain dialogs**: the Supabase CLI stores the `login` token in the
+> Keychain and reads it back **once per function deploy** — expect up to 9
+> password dialogs per full deploy (click **"Always Allow"**; denying one fails
+> that function with `LegacyPlatformAuthRequiredError`). To skip the Keychain
+> entirely, create a personal access token at
+> [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens)
+> and set it in `~/.cerefox/.env` as `SUPABASE_ACCESS_TOKEN=sbp_…` — see
+> [`configuration.md`](configuration.md#supabase--database).
+
 After it finishes, verify in the Supabase Dashboard → **Edge Functions** — all 9
 functions should appear with a green "Active" status.
 

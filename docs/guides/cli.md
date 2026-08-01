@@ -518,6 +518,13 @@ The success message echoes the resolved author / author_type back so you can sur
 | `--schema-only` | flag | off | Deploy only schema + RPCs (skip Edge Functions). |
 | `--functions-only` | flag | off | Deploy only the 9 Edge Functions (skip schema). |
 | `--dry-run` | flag | off | Preview what would happen; make no changes. |
+| `--project-ref <ref>` | string | derived from `CEREFOX_SUPABASE_URL` | Supabase project ref for the Edge Function deploys (needed only for custom domains, where the ref can't be derived). |
+| `--yes` | flag | off | Skip the deployment confirmation (for scripted/non-interactive runs). |
+
+> **macOS**: the Edge Function step shells out to the Supabase CLI, which reads its
+> login token from the Keychain — expect a password dialog per function (click
+> "Always Allow"). To skip the dialogs, set `SUPABASE_ACCESS_TOKEN` in
+> `~/.cerefox/.env` — see [`configuration.md`](configuration.md#supabase--database).
 
 Detects fresh vs. existing databases: a fresh DB gets schema + RPCs + migration stamps; an existing DB gets pending migrations applied and `rpcs.sql` re-applied in place. There is deliberately **no `--reset`** here — the destructive wipe lives only in the contributor script `bun scripts/db_deploy.ts --reset`. See [`setup-supabase.md`](setup-supabase.md).
 
