@@ -3901,6 +3901,22 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-08-03): v1.0.2 SHIPPED (security/maintenance patch) + supply-chain regime.**
+Full-repo doc sanity pass + security audit (PR #112; audit addendum in
+`docs/specs/security-audit-1.0.md`): dependency refresh (19 advisories → 3
+accepted-unreachable, incl. the `@hono/node-server` serve-static fix relevant
+to `cerefox web`), `bun.lock` now committed with strict `--frozen-lockfile` CI
+installs, a `bun audit` CI gate (accepted-GHSA allowlist in `ci.yml` — keep in
+sync with the audit doc), all Actions SHA-pinned, Dependabot live (weekly
+grouped minors/patches; **semver-majors ignored** — the 6 pending majors are
+batched in **#124** for the 1.1 era; delete the ignore block to resume).
+Release + image workflows smoke-tested under the bumped actions. Both worlds
+upgraded + validated same day; announced on Discord. New: **#127** (doctor:
+suppress the EF-drift ℹ when the version delta is label-only — the 5c
+trade-off's follow-up). CLI verb husks: kept indefinitely (decision
+2026-08-02). Still open: gitleaks CI step; fresh-Supabase #26 verification
+(supervised session).
+
 **Update (2026-08-01): 🎉 v1.0.1 SHIPPED — both worlds upgraded + validated same
 day.** Full detail in the 28H block (Iteration 28). Highlights: all 7 scoped
 items landed and live-tested end-to-end via the release itself; plus #109/#110
