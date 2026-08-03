@@ -87,7 +87,7 @@ unaffected — they are not Python and remain the source of truth for the schema
 ```bash
 cerefox self-update            # or: npm install -g @cerefox/memory@latest
 cerefox token generate         # change #1: mint + set the access token
-cerefox server deploy          # changes #1 + #2: token-gated EFs + schema 0.8.1
+cerefox server deploy          # changes #1 + #2: token-gated EFs + schema 0.8.1 (0.8.2 as of v1.0.1)
 cerefox doctor                 # verify (edge-functions green; content-format ℹ)
 # then: update GPT Actions / remote MCP clients to the token; revoke the anon key
 ```

@@ -74,11 +74,17 @@ bun scripts/cut_release.ts <version> --dry-run
 
 # Then for real (tag + GitHub Release; add --npm-publish to also publish):
 bun scripts/cut_release.ts <version> --npm-publish
+
+# Stable cuts: ALSO pass --docker-publish. --npm-publish alone does NOT build
+# the Cerefox Local image (it only triggers the npm release workflow); the
+# image is a separate explicit dispatch of local-image.yml. Forgetting it has
+# bitten twice (1.0.0 betas, 1.0.1-beta.1).
+bun scripts/cut_release.ts <version> --npm-publish --docker-publish
 ```
 
 `cut_release.ts`:
 - bumps `VERSION`, every `package.json`, and `PKG_VERSION`;
-- bumps `EF_VERSION` only if Edge Function source changed since the last tag;
+- bumps `EF_VERSION` if Edge Function source changed since the last tag, and **unconditionally at every stable cut** (v1.0.1+ — so stable deployments never carry a pre-release EF label);
 - promotes the CHANGELOG `[Unreleased]` section;
 - commits, creates an annotated tag, pushes, and (with `--npm-publish`)
   triggers the release workflow that publishes to npm via trusted publishing.
@@ -106,11 +112,11 @@ Breaking changes are allowed **between betas**; freeze them at `-rc`. Promote to
 `1.0.0` (which publishes under `latest`) once the RC has soaked. Do NOT skip the
 `[Unreleased]` → versioned CHANGELOG promotion for a beta — each beta gets its own section.
 
-**Consolidate the CHANGELOG when cutting the stable `X.0.0`.** Because each beta/rc holds only
+**Consolidate the CHANGELOG when cutting any stable version that follows pre-releases** (done for both `1.0.0` and `1.0.1`). Because each beta/rc holds only
 *its* delta, the final stable section would otherwise contain just the delta since the last rc
-— not the whole story since the previous stable. Before running `cut_release.ts X.0.0`, hand-
-edit `[Unreleased]` so the `[X.0.0]` section aggregates **every** change across all the
-`X.0.0-beta.N` / `-rc.N` sections since the last stable, deduped and organized by
+— not the whole story since the previous stable. Before running `cut_release.ts` for the stable, hand-
+edit `[Unreleased]` so the stable section aggregates **every** change across all its
+`-beta.N` / `-rc.N` sections since the last stable, deduped and organized by
 Added / Changed / Fixed / Removed / Security. That consolidated section is the source for the
 release announcement. Leave the individual pre-release sections beneath it as granular history.
 

@@ -126,6 +126,7 @@ Your machine
 └── Docker container       (free)
     └── Postgres + pgvector + cerefox web/MCP
         Embeddings via OpenAI API  (pay-per-use)
+        — or the in-container local embedder  ($0, no API key)
 ```
 
 **Typical cost for personal use**: just the **OpenAI embedding spend** (the same pay-per-use

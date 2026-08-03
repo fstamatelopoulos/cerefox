@@ -36,7 +36,7 @@ All contributions must follow Cerefox's architecture:
 
 **Markdown-first**: all content is stored as Markdown documents. Derived structures (embeddings, indexes, metadata) are regenerable from the document corpus.
 
-**Cloud embeddings**: Cerefox uses cloud embedding APIs. The live embedder is TypeScript in `_shared/embeddings/` (OpenAI `text-embedding-3-small`, 768-dim — the only one wired today; a Fireworks/OpenAI-compatible option is roadmap, not implemented). Any embedder must output **768-dim** vectors to match the `vector(768)` schema; changing the model/dimensions is a breaking change requiring `cerefox server reindex`.
+**Embeddings**: the embedders are TypeScript in `_shared/embeddings/`. Two are wired: OpenAI `text-embedding-3-small` (cloud, default) and the local ONNX `nomic-embed-text-v1.5` (`CEREFOX_EMBEDDER=local`, Cerefox Local only — v1.0.0). A Fireworks/OpenAI-compatible option is roadmap, not implemented. Any embedder must output **768-dim** vectors to match the `vector(768)` schema; switching embedders is a breaking change requiring `cerefox server reindex`.
 
 See `docs/solution-design.md` and `docs/research/vision.md` for the full architecture and project direction.
 
@@ -158,7 +158,7 @@ _shared/
   db-client/   thin @supabase/supabase-js wrapper with zod-typed responses
   db-status/   reusable schema-introspection (used by db_status.ts; v0.5's
                `cerefox doctor` will import the same module)
-  embeddings/  OpenAI / Fireworks embedding helpers (extracted from EFs)
+  embeddings/  OpenAI + local ONNX (nomic) embedding helpers
   mcp-tools/   the 10 MCP tool handlers, shared by the remote Edge Function
                and the local @cerefox/memory server
   __tests__/   Bun tests — run `cd _shared && bun test`
