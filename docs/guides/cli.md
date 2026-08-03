@@ -20,7 +20,7 @@ This section is for the **cloud / Supabase** backend. Every command reads config
 
 The CLI is the TypeScript `@cerefox/memory` package. Invoke any command as plain `cerefox <subcommand>` (installed via the installer or `npm install -g @cerefox/memory` — see [`quickstart.md`](quickstart.md#1-install)).
 
-> **v0.9 verb rename**: commands now follow a `resource verb` shape (e.g. `cerefox document get`, `cerefox project list`). The old flat verbs (`get-doc`, `list-docs`, `ingest`, `list-versions`, `config-get`, `deploy-server`, `docs`, …) survive as hidden husks — they don't run; they print a pointer to the new form and exit non-zero. Still present throughout the 1.x line; removal happens at the next major version. Use the new forms below.
+> **v0.9 verb rename**: commands now follow a `resource verb` shape (e.g. `cerefox document get`, `cerefox project list`). The old flat verbs (`get-doc`, `list-docs`, `ingest`, `list-versions`, `config-get`, `deploy-server`, `docs`, …) survive as hidden husks — they don't run; they print a pointer to the new form and exit non-zero. These pointers are kept indefinitely. Use the new forms below.
 
 ## Commands
 

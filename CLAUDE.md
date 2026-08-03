@@ -107,8 +107,9 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
   group. New top-level groups are rare — prefer an existing one.
 - **Renames are breaking**: the old flat verbs (pre-v0.9) survive as hidden
   husks (`RENAMED_VERBS` in `program.ts`) that exit non-zero with a pointer.
-  Removing husks is a breaking change — deliberately kept through the 1.x line
-  (they still helped during 1.0.x); remove them at the next major (v2.0).
+  Kept **indefinitely** (decision 2026-08-02): they cost ~nothing, are hidden
+  from --help, and make old scripts fail loudly with a fix. Only revisit if a
+  husked name is ever wanted for a new command.
 - Genuinely new commands (not renames) are additive/non-breaking and slot into
   a minor (e.g., v0.9.1) — see plan.md Iteration 27's v0.9.1 block.
 
