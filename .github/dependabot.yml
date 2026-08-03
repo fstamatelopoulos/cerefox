@@ -1,0 +1,20 @@
+# Automated dependency bumps. Pairs with the committed bun.lock (supply-chain
+# pinning) and the CI `bun audit` gate: Dependabot proposes the refresh PRs,
+# CI proves them safe. See docs/specs/security-audit-1.0.md (2026-08-02).
+version: 2
+updates:
+  # Bun workspace (root bun.lock covers _shared, packages/*, frontend).
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions — understands our SHA pins and bumps SHA + version comment.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

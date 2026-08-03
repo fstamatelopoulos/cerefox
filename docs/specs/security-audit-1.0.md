@@ -102,12 +102,10 @@ the Bearer token is the gate); the #110 query is parameterized.
 - `cerefox-local` sources its own config file; values there are writable only
   by the local user (self-affecting only).
 
-**Open item — no committed lockfile.** `bun.lock` is gitignored, so CI,
-contributor installs, and release builds all re-resolve dependency ranges at
-install time. That made this pass self-healing (fixed in-range releases flow in
-automatically) but it is the inverse risk the rest of the ecosystem pins
-against: a compromised in-range release of any dependency would flow into the
-next CI run and published artifact with no diff to review. Recommendation:
-start committing `bun.lock` (drop it from `.gitignore`) and refresh it
-deliberately; revisit alongside the still-open CI gates from the 28B list
-(gitleaks, a `bun audit` CI step).
+**Resolved in the same pass (2026-08-02, follow-up commits):** the repo now
+**commits `bun.lock`** (root workspace lock; CI installs are strict
+`--frozen-lockfile`), CI gained a **`bun audit` gate** that fails on any
+advisory not on the accepted list (the three above, referenced by GHSA id in
+`ci.yml` — keep that list and this document in sync), and **Dependabot** is
+configured for weekly grouped bun-workspace bumps plus GitHub Actions SHA-pin
+updates. Still open from the 28B list: a gitleaks (secret-scanning) CI step.
