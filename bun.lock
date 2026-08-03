@@ -29,7 +29,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@mantine/core": "^8.3.18",
-        "@mantine/form": "^8.3.18",
+        "@mantine/form": "^9.5.0",
         "@mantine/hooks": "^8.3.18",
         "@mantine/notifications": "^8.3.18",
         "@nivo/bar": "^0.99.0",
@@ -254,7 +254,7 @@
 
     "@mantine/core": ["@mantine/core@8.3.18", "", { "dependencies": { "@floating-ui/react": "^0.27.16", "clsx": "^2.1.1", "react-number-format": "^5.4.4", "react-remove-scroll": "^2.7.1", "react-textarea-autosize": "8.5.9", "type-fest": "^4.41.0" }, "peerDependencies": { "@mantine/hooks": "8.3.18", "react": "^18.x || ^19.x", "react-dom": "^18.x || ^19.x" } }, "sha512-9tph1lTVogKPjTx02eUxDUOdXacPzK62UuSqb4TdGliI54/Xgxftq0Dfqu6XuhCxn9J5MDJaNiLDvL/1KRkYqA=="],
 
-    "@mantine/form": ["@mantine/form@8.3.18", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "klona": "^2.0.6" }, "peerDependencies": { "react": "^18.x || ^19.x" } }, "sha512-r5OGLJWTkmIruFjRZRZy9oA7maNYlyt50jB4Pmd2X5360WOmJLd4KH8MFhHZQC7vN+z8/rmBl3t3XGAR2I8xig=="],
+    "@mantine/form": ["@mantine/form@9.5.0", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "fast-deep-equal": "^3.1.3", "klona": "^2.0.6" }, "peerDependencies": { "react": "^19.2.0" } }, "sha512-sYlWMfh2F8L3vBAWhXg597JM06lu4/ermmjC/31ftcl91pjp3vvQxwbIHd3wyQVbTV3f3kgTFqPlrR6BuBYOpw=="],
 
     "@mantine/hooks": ["@mantine/hooks@8.3.18", "", { "peerDependencies": { "react": "^18.x || ^19.x" } }, "sha512-QoWr9+S8gg5050TQ06aTSxtlpGjYOpIllRbjYYXlRvZeTsUqiTbVfvQROLexu4rEaK+yy9Wwriwl9PMRgbLqPw=="],
 
