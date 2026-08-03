@@ -22,7 +22,7 @@
     "@tanstack/react-query": "^5.101.4",
     "@types/d3": "^7.4.3",
     "d3": "^7.9.0",
-    "diff": "^8.0.4",
+    "diff": "^9.0.0",
     "postcss": "^8.5.25",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
