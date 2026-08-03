@@ -229,23 +229,14 @@ frontend/.vite/
 
 # Shared TS modules (Bun) — install artifacts are not checked in
 _shared/node_modules/
-_shared/bun.lock
-_shared/bun.lockb
-
 # Repo-root TS script deps (Bun) — same story
 /node_modules/
-/bun.lock
-/bun.lockb
-
 # Per-package Bun/npm workspace install artifacts. The `packages/*/node_modules/`
 # pattern matches `@cerefox/memory`'s and any future sibling packages' install
 # dirs. (The v0.4.0 merge accidentally tracked these as symlinks — see iter-22
 # Decision Log for the cleanup story.)
 packages/*/node_modules/
 packages/*/dist/
-packages/*/bun.lock
-packages/*/bun.lockb
-
 # Bundled-at-publish-time docs in @cerefox/memory. Source of truth is
 # the repo root; `scripts/bundle_package_docs.ts` copies into the
 # package at `prepublishOnly` time. Don't track copies.

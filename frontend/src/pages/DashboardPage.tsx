@@ -16,7 +16,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchUsageSummary } from "../api/analytics";
@@ -60,13 +60,16 @@ function sourceChip(source: string | null): { icon: typeof IconMapPin; label: st
   }
 }
 
+// Agent activity window: last 30 days, anchored at app load (avoids impure
+// Date.now() during render, per react-hooks purity rules).
+const SINCE_30D = new Date(Date.now() - 30 * 864e5).toISOString();
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const [quick, setQuick] = useState("");
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
 
-  // Agent activity over the last 30 days (from the usage log, if tracking is on).
-  const since = useMemo(() => new Date(Date.now() - 30 * 864e5).toISOString(), []);
+  const since = SINCE_30D;
   const { data: usage } = useQuery({
     queryKey: ["usage-summary-30d", since],
     queryFn: () => fetchUsageSummary({ start: since }),

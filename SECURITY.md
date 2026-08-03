@@ -2,17 +2,16 @@
 
 ## Supported Versions
 
-Cerefox is pre-1.0. Only the **latest released minor version** receives security
-fixes. Older releases — even recent ones — should be upgraded rather than
-patched in place.
+Only the **latest stable release** receives security fixes. Older releases —
+even recent ones — should be upgraded rather than patched in place
+(`cerefox self-update` + `cerefox server deploy` make this a two-command
+operation; see [docs/guides/upgrading.md](docs/guides/upgrading.md)).
 
 | Version line | Security fixes |
 |---|---|
-| Latest `v0.x.y` on `main` | ✅ Yes |
-| Any older line | ❌ No (upgrade to the latest) |
-
-Once Cerefox ships v1.0.0 this policy becomes more conservative — the matrix
-above will be revised at that time.
+| Latest `v1.x.y` on `main` | ✅ Yes |
+| Pre-release channels (`beta`/`rc` dist-tags) | ⚠ Fixed by the next release on that line |
+| Any `v0.x` release | ❌ No (upgrade to the latest stable) |
 
 ## Reporting a Vulnerability
 

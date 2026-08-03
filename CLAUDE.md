@@ -12,7 +12,7 @@ Single-user, open-source (Apache 2.0), designed to be cheap/free to operate. See
 
 - **Language**: TypeScript via Bun (CLI, web server, local MCP server, build/release scripts, Edge Functions). The Python implementation was **fully removed at v1.0.0** (iter-28G) — only the SQL schema assets under `src/cerefox/db/` remain (they are not Python).
 - **Database**: PostgreSQL 16+ with pgvector (Supabase free tier or local Docker)
-- **Embeddings**: OpenAI `text-embedding-3-small` (768-dim, cloud API); Fireworks AI as alternative; Edge Functions handle embedding server-side for agents
+- **Embeddings**: OpenAI `text-embedding-3-small` (768-dim, cloud API, default) or the local ONNX `nomic-embed-text-v1.5` (768-dim, `CEREFOX_EMBEDDER=local` — Cerefox Local only, shipped at v1.0.0); Fireworks AI is roadmap (not wired); Edge Functions handle embedding server-side for agents (cloud path)
 - **Web framework**: Hono on Bun/Node (TypeScript), in `packages/memory` — served by `cerefox web`.
 - **Web UI**: React + TypeScript SPA (Mantine UI, TanStack Query, Vite); served at `/app/`
 - **CLI**: commander (TypeScript) in `@cerefox/memory`; resource-verb shape (v0.9.0).
@@ -42,7 +42,7 @@ cerefox/
 │   ├── config/                    # paths, env loading
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
 │   ├── db-status/                 # Schema-version-mismatch banner, status checks
-│   ├── embeddings/                # OpenAI/Fireworks embedding helpers
+│   ├── embeddings/                # OpenAI + local ONNX (nomic) embedding helpers
 │   ├── mcp-tools/                 # 10 MCP tool handlers shared by remote + local
 │   └── cli-core/                  # CLI helpers (exit, output, argv, prompts)
 ├── packages/
@@ -107,7 +107,9 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
   group. New top-level groups are rare — prefer an existing one.
 - **Renames are breaking**: the old flat verbs (pre-v0.9) survive as hidden
   husks (`RENAMED_VERBS` in `program.ts`) that exit non-zero with a pointer.
-  Remove husks only at a major version (v1.0).
+  Kept **indefinitely** (decision 2026-08-02): they cost ~nothing, are hidden
+  from --help, and make old scripts fail loudly with a fix. Only revisit if a
+  husked name is ever wanted for a new command.
 - Genuinely new commands (not renames) are additive/non-breaking and slot into
   a minor (e.g., v0.9.1) — see plan.md Iteration 27's v0.9.1 block.
 
@@ -343,7 +345,7 @@ For **local** agents (Claude Code, Cursor, Codex, Gemini, Desktop) the **preferr
 2. **768-dim vectors** standardized across all embedders — choose models that output 768 dims or use dimensionality reduction
 3. **JSONB metadata** on both documents and chunks — evolvable without schema changes
 4. **Greedy section accumulation** — sections (H1/H2/H3) are accumulated into a buffer until adding the next would exceed `max_chunk_chars`; no hard heading-level boundaries
-5. **Cloud-only embeddings** (OpenAI / Fireworks) — local models (mpnet, Ollama) removed; they caused platform-specific failures and added install complexity
+5. **Cloud-first embeddings, one curated local option** — OpenAI is the default; the early local models (mpnet, Ollama) were removed pre-1.0 for platform-specific failures and install complexity, but iter-31 (v1.0.0) reintroduced exactly ONE local embedder — ONNX `nomic-embed-text-v1.5` inside the Cerefox Local container (`CEREFOX_EMBEDDER=local`), where the runtime environment is controlled so the old failure modes don't apply. Cloud/Supabase deployments remain cloud-embedding only (Edge Functions can't serve a local model)
 6. **Edge Function per operation** — each operation has a dedicated Edge Function that is a thin HTTP adapter over a Postgres RPC; `cerefox-mcp` calls those same RPCs directly (no delegation/fan-out to other Edge Functions); single implementation principle (see above)
 7. **Chunks-anchored versioning** — `version_id IS NULL` = current version; `version_id = <uuid>` = archived; partial indexes automatically exclude archived chunks from search; no separate content table
 8. **Title boosting** — `cerefox_chunks.fts` is a regular `TSVECTOR` (not `GENERATED`) because `GENERATED` columns cannot cross-reference another table. The `cerefox_ingest_document` RPC computes `fts` inline using its `p_title` parameter: document title at weight A, chunk heading at weight A, body at weight B. Embeddings are similarly enriched: `# {doc_title}\n{chunk.content}` is the embedding input (stored content is unchanged). Title changes trigger `cerefox_update_chunk_fts` + re-embed of current chunks.

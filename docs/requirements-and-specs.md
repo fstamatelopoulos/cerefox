@@ -90,7 +90,7 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 | FR-3.1 | Compute primary embeddings via cloud API (OpenAI) | P0 |
 | FR-3.2 | Support pluggable embedder interface | P0 |
 | FR-3.3 | Default embedder: OpenAI text-embedding-3-small (768-dim) | P0 |
-| FR-3.4 | Support Fireworks AI as alternative cloud embedder | P0 |
+| FR-3.4 | Support Fireworks AI as alternative cloud embedder (roadmap — not wired as of v1.0.1; the local ONNX embedder shipped instead at v1.0.0) | P2 |
 | FR-3.5 | Support optional "upgrade" embedding field per chunk | P1 |
 | FR-3.6 | Track which embedder produced each embedding | P0 |
 | FR-3.7 | Standardize on 768-dim vectors | P0 |
@@ -160,8 +160,8 @@ This makes it easy to filter, audit, or exclude agent-authored content from sear
 The CLI is the TypeScript commander program in `@cerefox/memory` and uses a
 **resource-verb** shape as of v0.9.0 (`cerefox <resource> <verb>`). The flat
 pre-v0.9 verbs below survive only as hidden husks that exit non-zero with a
-pointer to the new form. (The Python Click CLI is a husk that redirects to the
-TS CLI.)
+pointer to the new form. (The Python Click CLI was removed entirely at
+v1.0.0.)
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
@@ -304,7 +304,7 @@ plain text snapshots for recovery purposes only.
 |----|-------------|
 | NFR-1.1 | Operate at low cost: Supabase free tier + cloud embedding API (see `docs/guides/operational-cost.md`) |
 | NFR-1.2 | Embedding cost is the only ongoing API cost for core functionality |
-| NFR-1.3 | Alternative cloud embedders (Fireworks AI) are supported as drop-in replacements |
+| NFR-1.3 | Alternative embedders are drop-in replacements behind `_shared/embeddings/` (shipped: local ONNX `nomic-embed-text-v1.5` for Cerefox Local; roadmap: Fireworks AI) |
 
 ### NFR-2: Performance
 
@@ -338,7 +338,7 @@ plain text snapshots for recovery purposes only.
 |----|-------------|
 | NFR-5.1 | Single-user system (no auth complexity in V1) |
 | NFR-5.2 | Minimal dependencies — prefer standard library when possible |
-| NFR-5.3 | Web UI is a React + TypeScript SPA with a standard build step (`bun run build`); `cerefox web` (Hono on Bun/Node) serves the built output at `/app/` (the former FastAPI web app is a husk) |
+| NFR-5.3 | Web UI is a React + TypeScript SPA with a standard build step (`bun run build`); `cerefox web` (Hono on Bun/Node) serves the built output at `/app/` (the former FastAPI web app was removed at v1.0.0) |
 | NFR-5.4 | Docker Compose for full local deployment |
 
 ### NFR-7: Documentation & Onboarding
@@ -381,7 +381,7 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 ### 4.2 Embeddings
 
 - **Default**: OpenAI `text-embedding-3-small` (768-dim, cloud API)
-- **Alternative**: Fireworks AI (same OpenAI-compatible API, different base URL + model)
+- **Alternative**: Fireworks AI (same OpenAI-compatible API, different base URL + model) — roadmap, not wired; the local ONNX `nomic-embed-text-v1.5` embedder (Cerefox Local) shipped first
 - **Future**: Vertex AI (parameterized, opt-in)
 - **Normalization**: all embeddings are L2-normalized before storage
 - **Distance metric**: cosine similarity (via `<=>` operator)
@@ -404,15 +404,15 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 
 | Component | Technology |
 |-----------|------------|
-| Language | TypeScript on Bun/Node (the `@cerefox/memory` npm package). Python 3.11+ is **legacy/frozen** — only `uv run cerefox mcp` survives as a fallback |
-| Package management | Bun workspaces (TS); uv (frozen Python fallback) |
-| Web framework | Hono on Bun/Node, served by `cerefox web` (JSON API at `/api/v1/*`). The former Python FastAPI web app is a husk |
+| Language | TypeScript on Bun/Node (the `@cerefox/memory` npm package). The Python implementation was **fully removed at v1.0.0** — only the SQL assets under `src/cerefox/db/` remain |
+| Package management | Bun workspaces |
+| Web framework | Hono on Bun/Node, served by `cerefox web` (JSON API at `/api/v1/*`) |
 | Frontend | React + TypeScript (Vite, Mantine UI, TanStack Query) |
-| CLI | commander (TypeScript), resource-verb shape. The Python Click CLI is a husk |
-| Database client | Supabase JS client / RPC wrapper (`_shared/db-client/`); supabase-py only in the frozen Python fallback |
-| Embeddings | OpenAI / Fireworks (cloud API) via `_shared/embeddings/` |
+| CLI | commander (TypeScript), resource-verb shape |
+| Database client | Supabase JS client / RPC wrapper (`_shared/db-client/`) |
+| Embeddings | OpenAI `text-embedding-3-small` (cloud, default) or local ONNX `nomic-embed-text-v1.5` (Cerefox Local) via `_shared/embeddings/`; Fireworks is roadmap |
 | Testing | `bun test` (the only runner; pytest is retired) |
-| Linting | biome / tsc (TS); ruff (frozen Python fallback) |
+| Linting | biome / tsc |
 | Containerization | Docker |
 | License | Apache 2.0 |
 

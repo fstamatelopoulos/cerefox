@@ -60,3 +60,52 @@ The codebase is well-hardened — the earlier auth migration (iter-28E) and the
 OAuth-surface work (iter-28B) closed the material risks. This review found only
 low-severity items; the one concrete code fix (Finding 1) is applied. No
 release-blocking issue was found for 1.0.0.
+
+---
+
+## Addendum: post-1.0.1 review (2026-08-02)
+
+A follow-up defensive pass over the delta since the review above (the 1.0.x
+releases, PR #110, CI, the Cerefox Local packaging) plus a dependency audit.
+All referenced advisories are public.
+
+**Re-verified solid**: migration `0013` grants reach only `service_role`
+(`anon`/`authenticated` deliberately get nothing); no secrets in tracked files;
+the shipped Cerefox Local image binds `127.0.0.1` by default and mints a
+per-install random JWT secret (0600, in-volume); installers download over HTTPS
+only; CI uses `pull_request` (fork PRs run without secrets); Edge Functions set
+`Access-Control-Allow-Origin: *` **without** credentials (public-API pattern —
+the Bearer token is the gate); the #110 query is parameterized.
+
+**Fixed in this pass**:
+
+| Area | Change |
+|---|---|
+| Dependencies | Version floors raised in `package.json`: `@hono/node-server` ^2.0.12 (serve-static path-traversal fix), `@modelcontextprotocol/sdk` ^1.30.0, `vite` ^8.2.0; remaining ranges already admit the fixed releases, so fresh installs resolve clean (`bun audit` on a fresh resolution: 19 advisories → 3 accepted ones, below). Note: the repo does not commit a lockfile (see open item), so every fresh install re-resolves ranges. |
+| CI supply chain | All GitHub Actions pinned to commit SHAs (tag kept as a comment). Updates are now deliberate. |
+| Dev spike stack | `docker/local/compose.yml` (contributor-only) ports bound to `127.0.0.1` — it previously published Postgres/PostgREST on all interfaces with a placeholder JWT secret. |
+
+**Accepted (with reasoning)**:
+
+- `adm-zip` / `tar` / `sharp` advisories via the `onnxruntime-node` /
+  `@huggingface/transformers` tree: these libraries only unpack the runtimes'
+  own release artifacts at install time (adm-zip/tar) or serve vision-model
+  paths Cerefox never invokes (sharp — embeddings are text-only). No current
+  upstream release resolves them (`onnxruntime-node` pins `adm-zip ^0.5.x`
+  across all lines). Revisit on `@huggingface/transformers` major bumps.
+- `react-router` RSC-mode advisory: fixed only in v8; Cerefox's SPA does not
+  use RSC/SSR, so the affected code never runs. Revisit at a react-router v8
+  migration.
+- The container-minted `service_role` JWT has no expiry; it never leaves the
+  container, and rotating it is deleting `.cerefox_jwt_secret` from the data
+  volume.
+- `cerefox-local` sources its own config file; values there are writable only
+  by the local user (self-affecting only).
+
+**Resolved in the same pass (2026-08-02, follow-up commits):** the repo now
+**commits `bun.lock`** (root workspace lock; CI installs are strict
+`--frozen-lockfile`), CI gained a **`bun audit` gate** that fails on any
+advisory not on the accepted list (the three above, referenced by GHSA id in
+`ci.yml` — keep that list and this document in sync), and **Dependabot** is
+configured for weekly grouped bun-workspace bumps plus GitHub Actions SHA-pin
+updates. Still open from the 28B list: a gitleaks (secret-scanning) CI step.

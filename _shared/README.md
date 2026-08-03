@@ -19,7 +19,7 @@ either the Deno functions tree or the npm package.
 | `db-client/` | Supabase client, RPC wrapper, introspection helpers |
 | `db-status/` | schema-version checks + the mismatch banner |
 | `db-deploy/` | in-process schema + RPC deploy (shared by `cerefox server deploy` and `scripts/db_{deploy,migrate}.ts`) |
-| `embeddings/` | OpenAI / Fireworks embedding helpers |
+| `embeddings/` | OpenAI + local ONNX (nomic) embedding helpers |
 | `mcp-tools/` | the 10 MCP tool handlers — imported by both the remote `cerefox-mcp` EF and the local `cerefox mcp` server |
 | `ingest/` | chunking + embedding orchestration |
 | `cli-core/` | CLI helpers (exit codes, output, argv parsing, prompts) |

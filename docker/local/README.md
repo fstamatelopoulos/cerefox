@@ -127,7 +127,7 @@ OPENAI_API_KEY=sk-... sh docker/local/install-local.sh
 #   → http://localhost:8000/app/   (PORT=8017 etc. to change)
 #   Then:  cerefox-local status | search "…" | document ingest notes.md
 #          cerefox-local configure-agent       # wire an MCP client
-#          cerefox-local upgrade | stop | start | uninstall [--purge]
+#          cerefox-local upgrade [--latest|<tag>] | stop | start | uninstall [--purge]
 
 # Contributor / pre-release — build locally and point the installer at it:
 docker build -f docker/local/Dockerfile -t cerefox-local:dev .

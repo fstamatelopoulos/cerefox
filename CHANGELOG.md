@@ -9,7 +9,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Security
+- **Dependency refresh**: `@hono/node-server` ≥ 2.0.12 (fixes a `serve-static`
+  path-traversal advisory relevant to `cerefox web` on Windows), `hono` 4.12.34,
+  `@modelcontextprotocol/sdk` 1.30.0, `vite` 8.2.0, `react-router` 7.18.2, plus
+  transitive refreshes. Three remaining public advisories are accepted as
+  unreachable, with reasoning recorded in `docs/specs/security-audit-1.0.md`
+  (2026-08-02 addendum).
+- **Supply-chain hardening**: `bun.lock` is now committed (CI installs are
+  strict `--frozen-lockfile`), CI gained a `bun audit` gate that fails on any
+  new advisory, all GitHub Actions are pinned to commit SHAs, and Dependabot
+  proposes weekly grouped dependency and Actions updates.
+
+### Changed
+- **Documentation sanity pass**: corrected stale claims across the repo docs —
+  the Python implementation is described as fully removed at v1.0.0 (not a
+  "frozen fallback"), the embedder story reflects OpenAI + the local ONNX
+  model (Fireworks is roadmap), SECURITY.md states the 1.x support policy, and
+  the release playbook records the stable-cut rules (`--docker-publish`,
+  unconditional `EF_VERSION` bump, CHANGELOG consolidation). The pre-v0.9 CLI
+  verb husks are now documented as kept indefinitely.
 
 ---
 

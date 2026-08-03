@@ -19,7 +19,7 @@ The primary use case is **shared memory across AI agents**: knowledge written by
 
 The web UI covers management (browse, metadata, projects) and ingestion (upload, paste). It deliberately has no rich authoring features — that's the human/writing layer's responsibility. Agents write directly via MCP tools.
 
-The entire runtime — CLI, MCP server, web server, and the ingestion + retrieval pipelines — is TypeScript in the `@cerefox/memory` npm package. Python survives only as a frozen/legacy MCP-server fallback (`uv run cerefox mcp`); the Python CLI (Click) and web app (FastAPI) are husks.
+The entire runtime — CLI, MCP server, web server, and the ingestion + retrieval pipelines — is TypeScript in the `@cerefox/memory` npm package. The Python implementation (Click CLI, FastAPI web app, and the `uv run cerefox mcp` fallback) was **fully removed at v1.0.0**; only the SQL schema assets under `src/cerefox/db/` remain from that lineage.
 
 ```mermaid
 flowchart TD
@@ -126,7 +126,7 @@ CREATE TABLE cerefox_chunks (
   content TEXT NOT NULL,
   char_count INT NOT NULL,
 
-  -- Embeddings (768 dims, cloud-only: OpenAI text-embedding-3-small default)
+  -- Embeddings (768 dims: OpenAI text-embedding-3-small default; local ONNX nomic on Cerefox Local)
   -- Only current chunks (version_id IS NULL) need embeddings; archived chunks retain their
   -- original embeddings but are excluded from search.
   embedding_primary VECTOR(768) NOT NULL,
@@ -280,11 +280,14 @@ The live embedder interface is a TypeScript protocol in `_shared/embeddings/`,
 imported by both the Edge Functions (Deno) and the local `@cerefox/memory`
 server (Node/Bun). It exposes `name`, `dimensions`, and `embed` / `embedBatch`.
 An embedder is any object satisfying that shape — concrete implementations cover
-OpenAI and Fireworks. (The Python `Embedder` base in `embeddings/base.py` is the
-frozen-legacy equivalent, shown below for the design rationale only.)
+OpenAI (cloud, default) and the local ONNX `nomic-embed-text-v1.5` embedder
+(Cerefox Local, `CEREFOX_EMBEDDER=local`); a Fireworks/OpenAI-compatible
+alternative is roadmap, not wired. (The Python `Embedder` protocol below is
+shown for design rationale only — the Python implementation was removed at
+v1.0.0.)
 
 ```python
-# Legacy Python equivalent (frozen):
+# Original Python protocol (removed at v1.0.0; design rationale only):
 from typing import Protocol
 
 class Embedder(Protocol):
@@ -939,8 +942,8 @@ update, and audit entry in one atomic transaction.
 
 React + TypeScript SPA (Mantine UI, TanStack Query, React Router) served by
 `cerefox web` (Hono on Bun/Node) at `/app/`. The same server provides the JSON
-API backend at `/api/v1/*`. (The former Python FastAPI web app is a husk as of
-v0.9.0.)
+API backend at `/api/v1/*`. (The former Python FastAPI web app became a husk at
+v0.9.0 and was removed at v1.0.0.)
 
 Rationale:
 - The TS web server is part of the single `@cerefox/memory` runtime — one process serves the API, the SPA, and integrates with the MCP/ingestion layers
@@ -991,8 +994,7 @@ flowchart TD
 ```
 
 Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
-subprocess via npx (Node ≥20 / Bun ≥1.0); the frozen Python `uv run cerefox mcp`
-remains only as a legacy fallback. Path 2 (`cerefox-mcp` Edge Function, MCP
+subprocess via npx (Node ≥20 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
 as the local server, so both expose the identical 10 tools. Path 3's primitive
@@ -1003,7 +1005,7 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 
 **Key constraint for Path 1**: `cerefox mcp` is a stdio process — it only runs on the local machine. Desktop clients launch it as a subprocess. Cloud clients cannot reach it.
 
-**Path 2 vs Path 1 trade-offs**: Path 2 (remote) requires no local install and works from any machine with just a URL + a Cerefox access token. Path 1 (local) is slightly faster (no HTTPS round-trip to Supabase) and avoids Edge Function billing; it runs the TS `@cerefox/memory` server via npx (Node/Bun). The frozen Python `uv run cerefox mcp` remains only as a legacy fallback.
+**Path 2 vs Path 1 trade-offs**: Path 2 (remote) requires no local install and works from any machine with just a URL + a Cerefox access token. Path 1 (local) is slightly faster (no HTTPS round-trip to Supabase) and avoids Edge Function billing; it runs the TS `@cerefox/memory` server via npx (Node/Bun).
 
 ### 10.2 MCP Tools
 
@@ -1054,8 +1056,8 @@ access token. They are the backend for ChatGPT GPT Actions, curl / scripted acce
 
 | Edge Function | Operation | Called By |
 |--------------|-----------|-----------|
-| `cerefox-search` | Search | GPT Actions, Python client, direct HTTP |
-| `cerefox-ingest` | Write | GPT Actions, Python client, direct HTTP |
+| `cerefox-search` | Search | GPT Actions, direct HTTP |
+| `cerefox-ingest` | Write | GPT Actions, direct HTTP |
 | `cerefox-metadata` | Metadata | GPT Actions, direct HTTP |
 | `cerefox-get-document` | Read | GPT Actions, direct HTTP |
 | `cerefox-list-versions` | Read | GPT Actions, direct HTTP |
