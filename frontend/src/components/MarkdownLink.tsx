@@ -27,8 +27,8 @@ interface MarkdownLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   fromDocId?: string;
 }
 
-/** Classify an href so we know whether to intercept. Exported for tests. */
-export function classifyHref(href: string | undefined): "external" | "anchor" | "absolute" | "relative" | "empty" {
+/** Classify an href so we know whether to intercept. */
+function classifyHref(href: string | undefined): "external" | "anchor" | "absolute" | "relative" | "empty" {
   if (!href || href.trim() === "") return "empty";
   const trimmed = href.trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return "external"; // http:, https:, mailto:, tel:, etc.

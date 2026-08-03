@@ -22,7 +22,7 @@ services:
       POSTGRES_PASSWORD: cerefox
       POSTGRES_DB: cerefox
     ports:
-      - "55432:5432" # non-default host port → won't clash with a local Postgres on 5432
+      - "127.0.0.1:55432:5432" # loopback-only; non-default port → won't clash with a local Postgres on 5432
     volumes:
       - cfx_spike_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -53,7 +53,7 @@ services:
       PGRST_JWT_SECRET: "cerefox-local-dev-secret-change-me-please-0123456789"
       PGRST_DB_USE_LEGACY_GUCS: "false"
     ports:
-      - "33000:3000" # non-default host port for the local Data API
+      - "127.0.0.1:33000:3000" # loopback-only; non-default port for the local Data API
 
   # Gateway: presents the Supabase URL layout (`/rest/v1/*`) that supabase-js
   # expects, mapping it onto PostgREST's root. Supabase uses Kong for this; here a
@@ -67,7 +67,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
-      - "33001:33001" # ← point CEREFOX_SUPABASE_URL here
+      - "127.0.0.1:33001:33001" # loopback-only ← point CEREFOX_SUPABASE_URL here
 
 volumes:
   cfx_spike_pgdata:
