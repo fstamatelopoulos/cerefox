@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.2] -- 2026-08-03
+
 ### Security
 - **Dependency refresh**: `@hono/node-server` ≥ 2.0.12 (fixes a `serve-static`
   path-traversal advisory relevant to `cerefox web` on Windows), `hono` 4.12.34,
