@@ -3917,6 +3917,28 @@ trade-off's follow-up). CLI verb husks: kept indefinitely (decision
 2026-08-02). Still open: gitleaks CI step; fresh-Supabase #26 verification
 (supervised session).
 
+**NEXT RELEASE — v1.1.0 (planning rationale, 2026-08-03).** The next release is
+the **v1.1.0 minor**: new functionality, no breaking CLI/MCP/API changes.
+Sequencing when the 1.1 era opens:
+1. **Plan Iteration 29** (Document Relations — the headline feature; design in
+   `docs/research/document-relations-and-semantic-graph.md`); optionally
+   Fireworks embedder wiring from the deferred menu.
+2. **Take the #124 dependency-major batch FIRST** on the 1.1 branch (delete the
+   Dependabot semver-major ignore block in `.github/dependabot.yml` to re-file
+   pending majors): get the foundation current before building features on it.
+   These are *internal* majors (commander 15, transformers 4.x, Mantine 9, …) —
+   SemVer would even allow them in a patch if behavior is unchanged — but they
+   carry real migration risk (CLI framework, UI framework, embedder runtime),
+   so they get feature-grade treatment: a branch, full validation incl. the
+   in-container embedder check + audit-allowlist reconciliation, dogfooded
+   through the beta line. Amortizing that inside a minor cycle we're doing
+   anyway beats a standalone patch effort.
+3. Feature work → beta(s) → promote to v1.1.0 per RELEASING.md.
+Escape hatch: if 1.1 stays far off and a #124 item becomes pressing (e.g. a
+real vulnerability in a pinned major), pull that single upgrade forward into a
+1.0.x patch on its own merits. Small 1.0.x candidates meanwhile: #127 (doctor
+label-only EF drift), gitleaks CI step.
+
 **Update (2026-08-01): 🎉 v1.0.1 SHIPPED — both worlds upgraded + validated same
 day.** Full detail in the 28H block (Iteration 28). Highlights: all 7 scoped
 items landed and live-tested end-to-end via the release itself; plus #109/#110
