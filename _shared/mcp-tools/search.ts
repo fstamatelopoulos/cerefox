@@ -18,7 +18,8 @@
 import type { MCPSupabaseClient } from "./types.ts";
 
 import { getEmbedding, resolveEmbedderKind } from "../embeddings/index.ts";
-import { applyByteBudget, getMaxResponseBytes, getMinSearchScore, logUsage } from "./_utils.ts";
+import { applyByteBudget, getMaxResponseBytes, getMinSearchScore,
+  getMinTermCoverage, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
@@ -33,6 +34,11 @@ async function handler(
   const mode = (args.mode as string | undefined) ?? "docs";
   const alpha = (args.alpha as number | undefined) ?? 0.7;
   const min_score = (args.min_score as number | undefined) ?? getMinSearchScore();
+  // v1.0.4: coverage gate default from CEREFOX_MIN_TERM_COVERAGE; only sent
+  // when configured (see getMinTermCoverage — keeps pre-0.9.1 servers working).
+  const min_term_coverage = getMinTermCoverage();
+  const coverageParam =
+    min_term_coverage !== undefined ? { p_min_term_coverage: min_term_coverage } : {};
   const metadata_filter =
     (args.metadata_filter as Record<string, string> | null | undefined) ?? null;
   const requested_max_bytes = args.max_bytes as number | undefined;
@@ -84,6 +90,7 @@ async function handler(
       p_match_count: match_count,
       p_project_id: projectId,
       ...metaFilterParam,
+      ...coverageParam,
     };
   } else if (mode === "hybrid") {
     rpcName = "cerefox_hybrid_search";
@@ -96,6 +103,7 @@ async function handler(
       p_project_id: projectId,
       p_min_score: min_score,
       ...metaFilterParam,
+      ...coverageParam,
     };
   } else {
     rpcName = "cerefox_search_docs";
@@ -107,6 +115,7 @@ async function handler(
       p_project_id: projectId,
       p_min_score: min_score,
       ...metaFilterParam,
+      ...coverageParam,
     };
   }
 
