@@ -68,6 +68,21 @@ export function getMinSearchScore(): number {
   return Number.isNaN(n) || n < 0 || n > 1 ? fallback : n;
 }
 
+/**
+ * CEREFOX_MIN_TERM_COVERAGE (v1.0.4): user-configurable default for the
+ * OR-fallback term-coverage gate. Returns undefined when unset/invalid —
+ * callers then OMIT p_min_term_coverage from the RPC call, deferring to the
+ * server default (0.5) and staying compatible with pre-0.9.1 servers
+ * (an unknown named argument fails the PostgREST function match).
+ */
+export function getMinTermCoverage(): number | undefined {
+  const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env?.CEREFOX_MIN_TERM_COVERAGE;
+  if (raw === undefined || raw === "") return undefined;
+  const n = Number.parseFloat(raw);
+  return Number.isNaN(n) || n < 0 || n > 1 ? undefined : n;
+}
+
 export function applyByteBudget(
   rows: unknown[],
   maxBytes: number,

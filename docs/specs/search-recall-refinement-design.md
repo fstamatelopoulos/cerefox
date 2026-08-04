@@ -88,6 +88,30 @@ lists; if a search comes back below-confidence, the flag means "weak signal",
 not "absent". (After change 1, keyword lists stop being punished — this is
 guidance, not a workaround.)
 
+## Addendum (v1.0.4): the term-coverage gate
+
+Dogfooding v1.0.3 for a day surfaced the symmetric failure: the "FTS match ⇒
+unconditional pass" rule predates the OR-fallback, where a match meant **all**
+terms were present. Under OR it fires on **any single term** — a query of five
+nonsense tokens plus one common word (observed live: `sh`, matching every
+shell-command snippet in the KB) returned five *confident-looking* irrelevant
+results. Fix: in OR-fallback mode the unconditional pass must be **earned by
+term coverage** — the chunk must match at least `p_min_term_coverage`
+(default **0.5**) of the query's meaningful terms (stopword-free, deduplicated
+by normalized lexeme, so "run running" counts once). Chunks below the bar keep
+contributing their rank to the fusion but pass only via the vector threshold,
+else they surface as below-confidence candidates — so nothing is hidden,
+miscalibration degrades to "honestly labeled". AND-mode matches have 100%
+coverage by construction: byte-identical behavior, zero added cost on the
+common path. `cerefox_fts_search` (explicit keyword mode, no fallback flag)
+returns only coverage-passing rows — honest-empty otherwise. The parameter is
+exposed through `cerefox_search_docs` and the CLI (`--min-term-coverage`;
+sent only when explicitly set, so older servers keep working); `0` restores
+the pre-gate OR behavior. Schema 0.9.0 → 0.9.1 (signature change: the old
+overloads are dropped). Known interaction: non-English content has no
+stopword filtering under the hardcoded `english` config, so common foreign
+words count as meaningful terms — tracked as #129 (multi-language FTS).
+
 ## Non-goals
 
 - No threshold retuning, no chunking changes, no title-boost rework — all

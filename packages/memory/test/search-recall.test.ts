@@ -47,16 +47,16 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
 const probe = run(["project", "list", "--json"]);
 const LIVE_OK = probe.status === 0;
 
-// The below_confidence column ships with schema 0.9.0 — against an older
-// deployed server these tests would fail on shape, so skip instead.
+// below_confidence ships with schema 0.9.0; the term-coverage gate with
+// 0.9.1 — gate on 0.9.1 so the whole file tests the current contract.
 const SCHEMA_OK = await (async () => {
   if (!LIVE_OK) return false;
   try {
     const settings = loadSettings();
     const client = createClient(settings);
     const ver = await client.rpc<string>("cerefox_schema_version", {});
-    const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
-    return maj > 0 || min >= 9;
+    const [maj = 0, min = 0, patch = 0] = String(ver ?? "0.0.0").split(".").map(Number);
+    return maj > 0 || min > 9 || (min === 9 && patch >= 1);
   } catch {
     return false;
   }
@@ -126,6 +126,17 @@ describe("search recall refinement (28I, live)", () => {
     const res = run(["search", [...PRESENT, ABSENT].join(" "), "--mode", "fts"]);
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("Recall Seed");
+  });
+
+  test("coverage gate: one real term among nonsense is never a confident hit (v1.0.4)", () => {
+    // 1-of-5 coverage — the post-1.0.3 over-relaxation returned these as
+    // unflagged results; now they must be flagged fallback or empty.
+    const res = run(["search", `${PRESENT[0]} zzqix vvbot kktle wmtos`, "--json"]);
+    expect(res.status).toBe(0);
+    const results = JSON.parse(res.stdout).results as Array<{ below_confidence?: boolean }>;
+    if (results.length > 0) {
+      expect(results.every((r) => r.below_confidence === true)).toBe(true);
+    }
   });
 
   test("nothing-matches query: flagged candidates or clean no-results — never an error", () => {

@@ -3632,7 +3632,19 @@ matches, incl. the project-filtered case that produced the original zero);
 precision guards byte-identical (same docs, same scores as the agent's session);
 below-confidence banner verified on gibberish; live e2e suite self-activated
 and passed 4/4 against production, self-cleaning. Remaining: Cerefox Local
-upgrade to v1.0.3 (image published), Discord announcement. All scope items implemented on `fix/search-recall-1.0.3` incl.
+upgrade to v1.0.3 (image published), Discord announcement.
+
+**Follow-up (v1.0.4, same day): term-coverage gate.** Dogfooding 1.0.3 surfaced
+the symmetric failure — one real word among gibberish (live case: `sh` matching
+every shell snippet) returned 5 confident-looking irrelevant results, because
+the OR-fallback inherited the all-terms-era unconditional FTS pass. Fix: the
+pass is earned by matching ≥ `p_min_term_coverage` (default 0.5) of the
+query's meaningful terms (deduped, stopword-free); weaker matches fall to the
+below-confidence path. Schema 0.9.1; param exposed via search_docs + CLI
+`--min-term-coverage` (sent only when set — old-server compatible); multi-lang
+stopword interaction filed as #129. Validated: 16-scenario throwaway-Postgres
+suite (10 regression + 6 coverage), live e2e extended + re-gated to 0.9.1.
+Branch `fix/coverage-gate-1.0.4`. All scope items implemented on `fix/search-recall-1.0.3` incl.
 #127 and gitleaks. Validated: 10-scenario behavioral suite on a throwaway
 pgvector Postgres (AND-precision guard, OR-fallback recall, below-confidence
 flag/propagation, project-filter isolation, stopword edge), 4 new unit tests

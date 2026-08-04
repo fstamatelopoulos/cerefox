@@ -69,6 +69,13 @@ DROP FUNCTION IF EXISTS cerefox_get_document(UUID, UUID);
 DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOOLEAN, UUID, FLOAT, JSONB);
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB);
 
+-- Iteration 28I follow-up (v1.0.4, term-coverage gate): p_min_term_coverage
+-- added to the search RPC signatures (new arg count = new function; the old
+-- overloads must go or PostgREST calls become ambiguous).
+DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOOLEAN, UUID, FLOAT, JSONB);
+DROP FUNCTION IF EXISTS cerefox_fts_search(TEXT, INT, UUID, JSONB);
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB);
+
 -- ── Shared return type note ────────────────────────────────────────────────────
 -- All chunk-level search RPCs return the same shape for consistency:
 --   chunk_id, document_id, chunk_index, title, content, heading_path,
@@ -96,7 +103,14 @@ CREATE OR REPLACE FUNCTION cerefox_hybrid_search(
     p_use_upgrade     BOOLEAN DEFAULT FALSE,
     p_project_id      UUID    DEFAULT NULL,
     p_min_score       FLOAT   DEFAULT 0.0,
-    p_metadata_filter JSONB   DEFAULT NULL
+    p_metadata_filter JSONB   DEFAULT NULL,
+    -- 28I follow-up (v1.0.4): in OR-fallback mode, the unconditional FTS pass
+    -- requires at least this fraction of the query's meaningful (non-stopword,
+    -- deduplicated) terms to match the chunk. Under AND semantics a match
+    -- meant 100% of terms — the pass this gate generalizes. Chunks below the
+    -- bar can still pass via the vector threshold, else they are
+    -- below-confidence material. 0 restores the pre-gate OR behavior.
+    p_min_term_coverage FLOAT DEFAULT 0.5
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -144,18 +158,26 @@ DECLARE
     tok           TEXT;
     tok_q         tsquery;
     and_matches   BOOLEAN := FALSE;
+    -- v1.0.4 coverage gate: the per-token queries (deduplicated by normalized
+    -- lexeme text, so "run running" counts once) and their count.
+    tok_queries   tsquery[] := '{}';
+    seen_tokens   TEXT[]    := '{}';
+    total_tokens  INT;
     candidate_count INT := p_match_count * 5;
 BEGIN
     -- Build the OR-composed query: plainto each whitespace token (so tokens get
     -- the same normalization/stemming as the AND path), skip stopword-only
-    -- tokens, fold with the tsquery OR operator (||).
+    -- tokens, dedupe by normalized form, fold with the tsquery OR operator (||).
     FOR tok IN SELECT unnest(regexp_split_to_array(trim(p_query_text), '\s+')) LOOP
         tok_q := plainto_tsquery('english', tok);
-        IF numnode(tok_q) > 0 THEN
+        IF numnode(tok_q) > 0 AND NOT (tok_q::TEXT = ANY(seen_tokens)) THEN
+            seen_tokens := seen_tokens || tok_q::TEXT;
+            tok_queries := tok_queries || tok_q;
             query_fts_or := CASE WHEN query_fts_or IS NULL
                                  THEN tok_q ELSE query_fts_or || tok_q END;
         END IF;
     END LOOP;
+    total_tokens := COALESCE(array_length(tok_queries, 1), 0);
 
     -- Does the strict AND query match anything at all (under the caller's
     -- filters)? Cheap probe against the partial FTS index.
@@ -183,7 +205,20 @@ BEGIN
         fts_results AS (
             SELECT
                 c.id,
-                ts_rank_cd(c.fts, query_fts)::FLOAT AS fts_score
+                ts_rank_cd(c.fts, query_fts)::FLOAT AS fts_score,
+                -- v1.0.4 coverage gate: in AND mode a match means 100% of the
+                -- query's terms are present, so the unconditional pass is
+                -- earned by construction. In OR-fallback mode, earn it only
+                -- when at least p_min_term_coverage of the meaningful terms
+                -- match this chunk; weaker matches keep contributing their
+                -- fts_score to the fusion but must pass via the vector
+                -- threshold (or surface as below-confidence candidates).
+                CASE
+                    WHEN and_matches OR total_tokens = 0 THEN TRUE
+                    ELSE (SELECT COUNT(*) FROM unnest(tok_queries) tq
+                          WHERE c.fts @@ tq)::FLOAT
+                         >= p_min_term_coverage * total_tokens
+                END AS coverage_ok
             FROM cerefox_chunks c
             JOIN cerefox_documents d ON c.document_id = d.id
             WHERE c.version_id IS NULL
@@ -230,12 +265,14 @@ BEGIN
                     (1.0 - p_alpha) * COALESCE(f.fts_score, 0.0)
                 ) AS score,
                 COALESCE(v.vec_score, 0.0) AS vec_score,
-                -- TRUE when the chunk matched the @@ FTS operator.
-                -- We use this flag rather than vec_score to decide whether a chunk
-                -- passes the threshold, because in small corpora every chunk appears
-                -- in vec_results (LIMIT candidate_count covers all rows), so
-                -- vec_score is never NULL even for FTS-only matches.
-                f.id IS NOT NULL AS has_fts_match
+                -- TRUE when the chunk matched the @@ FTS operator WITH enough
+                -- term coverage to earn the unconditional pass (v1.0.4; always
+                -- true for AND-mode matches). We use this flag rather than
+                -- vec_score to decide whether a chunk passes the threshold,
+                -- because in small corpora every chunk appears in vec_results
+                -- (LIMIT candidate_count covers all rows), so vec_score is
+                -- never NULL even for FTS-only matches.
+                (f.id IS NOT NULL AND f.coverage_ok) AS has_fts_match
             FROM fts_results f
             FULL OUTER JOIN vec_results v ON f.id = v.id
         ),
@@ -293,7 +330,10 @@ CREATE OR REPLACE FUNCTION cerefox_fts_search(
     p_query_text      TEXT,
     p_match_count     INT  DEFAULT 10,
     p_project_id      UUID DEFAULT NULL,
-    p_metadata_filter JSONB DEFAULT NULL
+    p_metadata_filter JSONB DEFAULT NULL,
+    -- v1.0.4: see cerefox_hybrid_search. In OR-fallback mode results must
+    -- match at least this fraction of the query's meaningful terms.
+    p_min_term_coverage FLOAT DEFAULT 0.5
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -324,14 +364,20 @@ DECLARE
     tok           TEXT;
     tok_q         tsquery;
     and_matches   BOOLEAN := FALSE;
+    tok_queries   tsquery[] := '{}';
+    seen_tokens   TEXT[]    := '{}';
+    total_tokens  INT;
 BEGIN
     FOR tok IN SELECT unnest(regexp_split_to_array(trim(p_query_text), '\s+')) LOOP
         tok_q := plainto_tsquery('english', tok);
-        IF numnode(tok_q) > 0 THEN
+        IF numnode(tok_q) > 0 AND NOT (tok_q::TEXT = ANY(seen_tokens)) THEN
+            seen_tokens := seen_tokens || tok_q::TEXT;
+            tok_queries := tok_queries || tok_q;
             query_fts_or := CASE WHEN query_fts_or IS NULL
                                  THEN tok_q ELSE query_fts_or || tok_q END;
         END IF;
     END LOOP;
+    total_tokens := COALESCE(array_length(tok_queries, 1), 0);
 
     IF numnode(query_fts_and) > 0 THEN
         SELECT EXISTS (
@@ -377,6 +423,11 @@ BEGIN
     WHERE c.version_id IS NULL
               AND d.deleted_at IS NULL
       AND c.fts @@ query_fts
+      -- v1.0.4 coverage gate (OR-fallback mode only): pure keyword search
+      -- returns only chunks matching enough of the query's terms.
+      AND (and_matches OR total_tokens = 0
+           OR (SELECT COUNT(*) FROM unnest(tok_queries) tq
+               WHERE c.fts @@ tq)::FLOAT >= p_min_term_coverage * total_tokens)
       AND (p_project_id IS NULL OR EXISTS (
               SELECT 1 FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id AND dp.project_id = p_project_id
@@ -687,7 +738,8 @@ CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_min_score              FLOAT DEFAULT 0.0,
     p_small_to_big_threshold INT   DEFAULT 20000,
     p_context_window         INT   DEFAULT 1,
-    p_metadata_filter        JSONB DEFAULT NULL
+    p_metadata_filter        JSONB DEFAULT NULL,
+    p_min_term_coverage      FLOAT DEFAULT 0.5
 )
 RETURNS TABLE (
     document_id              UUID,
@@ -727,7 +779,8 @@ AS $$
             p_use_upgrade     := FALSE,
             p_project_id      := p_project_id,
             p_min_score       := p_min_score,
-            p_metadata_filter := p_metadata_filter
+            p_metadata_filter := p_metadata_filter,
+            p_min_term_coverage := p_min_term_coverage
         )
     ),
     best_per_doc AS (
@@ -1885,7 +1938,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.9.0'::TEXT;
+    SELECT '0.9.1'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────
