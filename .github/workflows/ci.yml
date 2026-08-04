@@ -139,3 +139,17 @@ jobs:
           --ignore=GHSA-xcpc-8h2w-3j85
           --ignore=GHSA-f88m-g3jw-g9cj
           --ignore=GHSA-qwww-vcr4-c8h2
+
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0 # full history — gitleaks scans all commits
+      - name: gitleaks
+        # Free for user-owned repos (GITLEAKS_LICENSE only needed for orgs).
+        # Closes the last CI gate from the 28B security-audit backlog.
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

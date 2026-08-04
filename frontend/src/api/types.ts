@@ -16,6 +16,7 @@ export interface DocSearchResult {
   total_chars: number;
   doc_updated_at: string | null;
   is_partial: boolean;
+  below_confidence?: boolean;
 }
 
 export interface ChunkSearchResult {

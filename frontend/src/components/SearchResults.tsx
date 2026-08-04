@@ -97,8 +97,21 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
   const maxScore = Math.max(0, ...rawScores);
   const normScore = (s: number) => (maxScore > 1 ? s / maxScore : Math.max(0, Math.min(1, s)));
 
+  // 28I: every-row below_confidence means nothing cleared the relevance
+  // threshold and the server returned best-effort candidates instead of empty.
+  const belowConfidence =
+    data.results.length > 0 &&
+    data.results.every((r) => (r as DocSearchResult).below_confidence === true);
+
   return (
     <>
+      {belowConfidence && (
+        <div className={styles.resultMeta} style={{ color: "var(--warning, #b58900)" }}>
+          ⚠ No results cleared the confidence threshold — showing the closest{" "}
+          {data.results.length} candidate{data.results.length !== 1 ? "s" : ""}; judge
+          relevance by their scores.
+        </div>
+      )}
       <div className={styles.resultMeta}>
         <span>
           <b className={ui.mono} style={{ color: "var(--text)" }}>

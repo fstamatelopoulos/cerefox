@@ -132,16 +132,24 @@ async function handler(
     doc_title?: string;
     full_content?: string;
     best_score?: number;
+    score?: number;
     is_partial?: boolean;
     chunk_count?: number;
     total_chars?: number;
     content_hash?: string;
+    below_confidence?: boolean;
   }>;
+
+  // 28I: nothing cleared the relevance threshold, so the server returned its
+  // best-effort top candidates flagged below_confidence instead of an empty
+  // set (which agents misread as "this knowledge does not exist").
+  const belowConfidence = rows.length > 0 && rows.every((r) => r.below_confidence === true);
 
   const parts: string[] = rows.map((row) => {
     const title = row.doc_title ?? "Untitled";
     const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
-    const score = row.best_score != null ? ` (score: ${row.best_score.toFixed(3)})` : "";
+    const rawScore = row.best_score ?? row.score;
+    const score = rawScore != null ? ` (score: ${rawScore.toFixed(3)})` : "";
     const partial = row.is_partial
       ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
       : "";
@@ -151,6 +159,12 @@ async function handler(
   });
 
   let output = parts.join("\n\n---\n\n");
+  if (belowConfidence) {
+    output =
+      `⚠ No results cleared the confidence threshold. Showing the closest ${rows.length} ` +
+      `candidate(s) with scores — judge relevance yourself; a low score means weak signal, ` +
+      `not necessarily absent knowledge.\n\n` + output;
+  }
   if (truncated) {
     output +=
       `\n\n[Results truncated at ${usedBytes} bytes. Use a more specific query or a smaller match_count to see more.]`;

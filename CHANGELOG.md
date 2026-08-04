@@ -9,7 +9,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+- **Hybrid/FTS search recall: one absent query term no longer hides matching
+  documents.** Feedback from AI agents using Cerefox surfaced that multi-term
+  concept queries could return nothing even when a document contained most of
+  the query's terms verbatim: full-text matching required *every* term
+  (AND semantics), so each added term made recall strictly worse. Search now
+  relaxes progressively — the strict AND query stays primary (identical
+  behavior whenever it matches), and only when it matches nothing does an
+  OR-composition of the same terms take over, letting multi-term evidence
+  accumulate. Schema 0.8.2 → 0.9.0; redeploy with `cerefox server deploy`.
+- **Search never comes back silently empty.** When nothing clears the
+  relevance threshold, Cerefox now returns the closest candidates flagged
+  `below_confidence` (with scores) instead of an empty set — an empty result
+  reads to agent callers as "this knowledge does not exist", the most
+  expensive wrong conclusion a memory layer can produce. All surfaces (MCP,
+  CLI, web UI) annotate these results clearly; a truly empty response now
+  reliably means nothing even weakly related exists.
+- **`cerefox doctor` stays quiet on label-only Edge-Function drift** (#127).
+  Stable releases bump the EF version label even when no EF code changed;
+  doctor now tracks the last *actual* EF change and shows the redeploy hint
+  only when the deployed functions really predate it.
+
+### Changed
+- Agent guidance (`cerefox_get_help` / AGENT_QUICK_REFERENCE): prefer a few
+  distinctive search terms; a `below confidence` result means weak signal,
+  not absent knowledge.
+- CI gained a secret-scanning job (gitleaks), closing the last hardening gate
+  from the 1.0 security-audit backlog.
 
 ---
 

@@ -17,7 +17,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { PKG_VERSION } from "../../meta.ts";
-import { EF_VERSION } from "../../../../../_shared/ef-meta/index.ts";
+import { EF_LAST_CHANGED, EF_VERSION } from "../../../../../_shared/ef-meta/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import {
   resolveConfigDir,
@@ -29,6 +29,7 @@ import {
   checkServerCompatibility,
   classifyCompat,
   COMPATIBILITY,
+  compareSemver,
 } from "../../../../../_shared/compatibility/index.ts";
 import { resolveServerAssets } from "../../../../../_shared/server-assets/index.ts";
 
@@ -663,6 +664,20 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
         hint: "Update the Edge Functions (see remediation below).",
       };
     case "above-min-but-old":
+      // #127: EF_VERSION bumps unconditionally at stable cuts, so a version
+      // delta can be label-only. Only surface the info line when the deployed
+      // EFs actually predate the last real EF source change; label-only drift
+      // is a clean ✓ (deployed behaviour is identical to bundled).
+      if (compareSemver(deployed, EF_LAST_CHANGED) >= 0) {
+        return {
+          name: "edge functions",
+          status: "ok",
+          detail:
+            `Deployed EF v${deployed} (≥ required v${compat.edgeFunctions.min}; ` +
+            `matches the latest server-side changes — the newer bundled label ` +
+            `v${EF_VERSION} is cosmetic).`,
+        };
+      }
       return {
         name: "edge functions",
         // Above-minimum ⇒ informational, not a warning (28H item 5, decided

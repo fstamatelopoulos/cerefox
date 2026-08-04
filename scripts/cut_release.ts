@@ -92,6 +92,14 @@ const EF_VERSION_LITERAL: VersionLiteralFile = {
   suffix: '";',
 };
 
+// #127: bumped ONLY when EF source actually changed — doctor uses it to
+// suppress the drift info line when an EF_VERSION delta is label-only.
+const EF_LAST_CHANGED_LITERAL: VersionLiteralFile = {
+  path: join(REPO_ROOT, "_shared", "ef-meta", "index.ts"),
+  prefix: 'export const EF_LAST_CHANGED = "',
+  suffix: '";',
+};
+
 /**
  * Paths whose changes since the last tag mean the deployed EF behaviour
  * changed: the EFs themselves + the `_shared` subtrees bundled with them.
@@ -580,7 +588,9 @@ async function main(): Promise<void> {
   const efChanged = efsChangedSinceLastTag();
   const bumpEf = efChanged || isStableCut;
   const literalsToBump: VersionLiteralFile[] = bumpEf
-    ? [...VERSION_LITERAL_FILES, EF_VERSION_LITERAL]
+    ? efChanged
+      ? [...VERSION_LITERAL_FILES, EF_VERSION_LITERAL, EF_LAST_CHANGED_LITERAL]
+      : [...VERSION_LITERAL_FILES, EF_VERSION_LITERAL]
     : VERSION_LITERAL_FILES;
   if (efChanged) {
     info("Edge Function source changed since last tag — EF_VERSION will bump.");
