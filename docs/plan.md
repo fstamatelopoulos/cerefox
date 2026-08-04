@@ -3624,8 +3624,15 @@ Deferred past 1.0.1: Fireworks embedder wiring (v1.1+), Iteration 29.
 
 ### 28I — v1.0.3 (search recall refinement; agent-feedback-driven)
 
-**Status: BUILT 2026-08-03 (spec: `docs/specs/search-recall-refinement-design.md`);
-release pending.** All scope items implemented on `fix/search-recall-1.0.3` incl.
+**Status: ✅ SHIPPED as v1.0.3 (2026-08-03) + production-validated.** Cloud on
+schema 0.9.0 / EFs v1.0.3 (doctor all green; `EF_LAST_CHANGED` machinery
+exercised on its first real EF change). Production validation: all four
+originally-reported failing queries now hit (target doc #1 or #2, genuine FTS
+matches, incl. the project-filtered case that produced the original zero);
+precision guards byte-identical (same docs, same scores as the agent's session);
+below-confidence banner verified on gibberish; live e2e suite self-activated
+and passed 4/4 against production, self-cleaning. Remaining: Cerefox Local
+upgrade to v1.0.3 (image published), Discord announcement. All scope items implemented on `fix/search-recall-1.0.3` incl.
 #127 and gitleaks. Validated: 10-scenario behavioral suite on a throwaway
 pgvector Postgres (AND-precision guard, OR-fallback recall, below-confidence
 flag/propagation, project-filter isolation, stopword edge), 4 new unit tests
