@@ -21,6 +21,16 @@
 export const EF_VERSION = "1.0.2";
 
 /**
+ * The most recent version whose EF-side SOURCE actually changed (#127).
+ * `EF_VERSION` bumps unconditionally at stable cuts (so stable deployments
+ * never display a pre-release label), which means a version delta no longer
+ * implies the deployed behaviour differs. This constant is bumped by
+ * `cut_release.ts` ONLY when EF source changed since the last tag; doctor
+ * uses it to stay silent on label-only drift.
+ */
+export const EF_LAST_CHANGED = "1.0.0-rc.4";
+
+/**
  * The 8 peer EFs the cerefox-mcp aggregator probes (excludes cerefox-mcp
  * itself). Order is the probe order.
  */

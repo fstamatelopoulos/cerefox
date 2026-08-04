@@ -63,6 +63,12 @@ DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID,
 DROP FUNCTION IF EXISTS cerefox_reconstruct_doc(UUID);
 DROP FUNCTION IF EXISTS cerefox_get_document(UUID, UUID);
 
+-- Iteration 28I (v1.0.3, search recall): below_confidence BOOLEAN added to the
+-- return types of cerefox_hybrid_search and cerefox_search_docs (never-silently-
+-- empty fallback). Drop the pre-change signatures first.
+DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOOLEAN, UUID, FLOAT, JSONB);
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB);
+
 -- ── Shared return type note ────────────────────────────────────────────────────
 -- All chunk-level search RPCs return the same shape for consistency:
 --   chunk_id, document_id, chunk_index, title, content, heading_path,
@@ -106,7 +112,11 @@ RETURNS TABLE (
     doc_project_ids UUID[],
     doc_project_names TEXT[],
     doc_metadata    JSONB,
-    version_count   INT
+    version_count   INT,
+    -- 28I: TRUE on every row of a below-confidence fallback response — nothing
+    -- cleared the pass-filter, so these are the best-effort top candidates for
+    -- the caller to judge (scores included). FALSE on all normal results.
+    below_confidence BOOLEAN
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -120,9 +130,54 @@ DECLARE
     -- websearch operators (phrase, OR, NOT); semantic ranking is the soft-match
     -- layer for "broadly related". If operator support is ever needed, gate it
     -- behind an opt-in flag rather than changing the default.
-    query_fts tsquery := plainto_tsquery('english', p_query_text);
+    --
+    -- 28I progressive relaxation: AND-first, OR-fallback. The AND query stays
+    -- the primary match (byte-identical behavior whenever it matches anything),
+    -- but when it matches ZERO chunks (under the same project/metadata filters),
+    -- we retry with an OR-composition of the same tokens: one absent term then
+    -- no longer vetoes the terms that DO occur, and ts_rank_cd naturally ranks
+    -- chunks matching more terms higher. Multi-term evidence accumulates
+    -- instead of vetoing.
+    query_fts_and tsquery := plainto_tsquery('english', p_query_text);
+    query_fts_or  tsquery := NULL;
+    query_fts     tsquery;
+    tok           TEXT;
+    tok_q         tsquery;
+    and_matches   BOOLEAN := FALSE;
     candidate_count INT := p_match_count * 5;
 BEGIN
+    -- Build the OR-composed query: plainto each whitespace token (so tokens get
+    -- the same normalization/stemming as the AND path), skip stopword-only
+    -- tokens, fold with the tsquery OR operator (||).
+    FOR tok IN SELECT unnest(regexp_split_to_array(trim(p_query_text), '\s+')) LOOP
+        tok_q := plainto_tsquery('english', tok);
+        IF numnode(tok_q) > 0 THEN
+            query_fts_or := CASE WHEN query_fts_or IS NULL
+                                 THEN tok_q ELSE query_fts_or || tok_q END;
+        END IF;
+    END LOOP;
+
+    -- Does the strict AND query match anything at all (under the caller's
+    -- filters)? Cheap probe against the partial FTS index.
+    IF numnode(query_fts_and) > 0 THEN
+        SELECT EXISTS (
+            SELECT 1
+            FROM cerefox_chunks c
+            JOIN cerefox_documents d ON c.document_id = d.id
+            WHERE c.version_id IS NULL
+              AND d.deleted_at IS NULL
+              AND c.fts @@ query_fts_and
+              AND (p_project_id IS NULL OR EXISTS (
+                      SELECT 1 FROM cerefox_document_projects dp
+                      WHERE dp.document_id = d.id AND dp.project_id = p_project_id
+                  ))
+              AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
+        ) INTO and_matches;
+    END IF;
+
+    query_fts := CASE WHEN and_matches THEN query_fts_and
+                      ELSE COALESCE(query_fts_or, query_fts_and) END;
+
     RETURN QUERY
     WITH
         fts_results AS (
@@ -183,7 +238,17 @@ BEGIN
                 f.id IS NOT NULL AS has_fts_match
             FROM fts_results f
             FULL OUTER JOIN vec_results v ON f.id = v.id
-        )
+        ),
+        -- 28I: pass-filter as a flag rather than a WHERE, so we can fall back.
+        -- FTS matches pass through unconditionally: the @@ operator is a hard
+        -- gate and guarantees the query terms appear in the chunk. Vector-only
+        -- results (no FTS match) are filtered by the cosine threshold.
+        flagged AS (
+            SELECT *,
+                   (combined.has_fts_match OR combined.vec_score >= p_min_score) AS passes
+            FROM combined
+        ),
+        any_pass AS (SELECT bool_or(fl.passes) AS ok FROM flagged fl)
     SELECT
         c.id            AS chunk_id,
         c.document_id,
@@ -202,16 +267,22 @@ BEGIN
               WHERE dp.document_id = d.id) AS doc_project_names,
         d.metadata      AS doc_metadata,
         (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
-         WHERE dv.document_id = d.id) AS version_count
-    FROM combined cm
+         WHERE dv.document_id = d.id) AS version_count,
+        -- 28I: when NOTHING clears the pass-filter, return the top candidates
+        -- anyway, flagged — an empty response reads to agent callers as "this
+        -- knowledge does not exist", the most expensive wrong conclusion a
+        -- memory layer can produce. "Truly nothing" (no candidates at all)
+        -- still returns zero rows.
+        NOT ap.ok       AS below_confidence
+    FROM flagged cm
+    CROSS JOIN any_pass ap
     JOIN cerefox_chunks   c ON c.id = cm.id
     JOIN cerefox_documents d ON c.document_id = d.id
-    -- FTS matches pass through unconditionally: the @@ operator is a hard gate
-    -- and guarantees the query terms appear in the chunk.
-    -- Vector-only results (no FTS match) are filtered by the cosine threshold.
-    WHERE cm.has_fts_match OR cm.vec_score >= p_min_score
+    WHERE cm.passes OR NOT ap.ok
     ORDER BY cm.score DESC
-    LIMIT p_match_count;
+    LIMIT (SELECT CASE WHEN ap2.ok THEN p_match_count
+                       ELSE LEAST(p_match_count, 3) END
+           FROM any_pass ap2);
 END;
 $$;
 
@@ -245,9 +316,42 @@ SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    -- plainto_tsquery: see rationale comment in cerefox_hybrid_search above.
-    query_fts tsquery := plainto_tsquery('english', p_query_text);
+    -- plainto_tsquery + 28I AND-first/OR-fallback: see the rationale comments
+    -- in cerefox_hybrid_search above.
+    query_fts_and tsquery := plainto_tsquery('english', p_query_text);
+    query_fts_or  tsquery := NULL;
+    query_fts     tsquery;
+    tok           TEXT;
+    tok_q         tsquery;
+    and_matches   BOOLEAN := FALSE;
 BEGIN
+    FOR tok IN SELECT unnest(regexp_split_to_array(trim(p_query_text), '\s+')) LOOP
+        tok_q := plainto_tsquery('english', tok);
+        IF numnode(tok_q) > 0 THEN
+            query_fts_or := CASE WHEN query_fts_or IS NULL
+                                 THEN tok_q ELSE query_fts_or || tok_q END;
+        END IF;
+    END LOOP;
+
+    IF numnode(query_fts_and) > 0 THEN
+        SELECT EXISTS (
+            SELECT 1
+            FROM cerefox_chunks c
+            JOIN cerefox_documents d ON c.document_id = d.id
+            WHERE c.version_id IS NULL
+              AND d.deleted_at IS NULL
+              AND c.fts @@ query_fts_and
+              AND (p_project_id IS NULL OR EXISTS (
+                      SELECT 1 FROM cerefox_document_projects dp
+                      WHERE dp.document_id = d.id AND dp.project_id = p_project_id
+                  ))
+              AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
+        ) INTO and_matches;
+    END IF;
+
+    query_fts := CASE WHEN and_matches THEN query_fts_and
+                      ELSE COALESCE(query_fts_or, query_fts_and) END;
+
     RETURN QUERY
     SELECT
         c.id            AS chunk_id,
@@ -602,7 +706,10 @@ RETURNS TABLE (
     is_partial               BOOL,
     -- Optimistic-concurrency token (iter-32): the document's current
     -- content_hash, to pass back as expected_content_hash on update.
-    content_hash             TEXT
+    content_hash             TEXT,
+    -- 28I: TRUE when this is a below-confidence fallback response (nothing
+    -- cleared the hybrid pass-filter). See cerefox_hybrid_search.
+    below_confidence         BOOLEAN
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -635,6 +742,7 @@ AS $$
             cr.doc_project_ids,
             cr.doc_project_names,
             cr.version_count,
+            cr.below_confidence,
             d.updated_at       AS doc_updated_at,
             d.content_hash
         FROM chunk_results cr
@@ -720,7 +828,8 @@ AS $$
         td.doc_updated_at,
         td.version_count,
         ac.is_partial,
-        td.content_hash
+        td.content_hash,
+        td.below_confidence
     FROM top_docs td
     JOIN doc_sizes ds ON ds.document_id = td.document_id
     JOIN all_content ac ON ac.document_id = td.document_id
@@ -1776,7 +1885,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.8.2'::TEXT;
+    SELECT '0.9.0'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

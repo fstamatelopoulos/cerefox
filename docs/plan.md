@@ -3624,8 +3624,15 @@ Deferred past 1.0.1: Fireworks embedder wiring (v1.1+), Iteration 29.
 
 ### 28I — v1.0.3 (search recall refinement; agent-feedback-driven)
 
-**Status: designed 2026-08-03 (spec: `docs/specs/search-recall-refinement-design.md`);
-implementation next.** Origin: voice-of-the-customer feedback from an AI agent
+**Status: BUILT 2026-08-03 (spec: `docs/specs/search-recall-refinement-design.md`);
+release pending.** All scope items implemented on `fix/search-recall-1.0.3` incl.
+#127 and gitleaks. Validated: 10-scenario behavioral suite on a throwaway
+pgvector Postgres (AND-precision guard, OR-fallback recall, below-confidence
+flag/propagation, project-filter isolation, stopword edge), 4 new unit tests
+(banner formatting incl. legacy-server rows), full battery green. New live e2e
+(`search-recall.test.ts`) skips until a ≥0.9.0 server is deployed, then runs
+the seeded four-term/three-present regression automatically. Post-release: re-run
+the originally-reported failing queries on production. Origin: voice-of-the-customer feedback from an AI agent
 using Cerefox as its memory layer — multi-term concept queries returned empty
 even when the target doc contained most terms verbatim. Diagnosis on the
 production instance: (1) `plainto_tsquery` AND-semantics lets one absent term

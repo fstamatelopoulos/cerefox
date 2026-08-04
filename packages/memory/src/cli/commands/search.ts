@@ -44,6 +44,7 @@ interface DocResult {
   version_count: number;
   doc_project_ids: string[] | null;
   content_hash: string | null;
+  below_confidence?: boolean;
 }
 
 interface ChunkResult {
@@ -54,6 +55,7 @@ interface ChunkResult {
   content: string;
   score: number;
   doc_title: string;
+  below_confidence?: boolean;
 }
 
 async function action(
@@ -208,6 +210,22 @@ async function action(
   if (accepted.length === 0) {
     println("No results found.");
     return;
+  }
+
+  // 28I: the server returns its best-effort top candidates flagged
+  // below_confidence instead of an empty set when nothing clears the
+  // relevance threshold. Surface that clearly before the results.
+  const belowConfidence =
+    accepted.length > 0 &&
+    accepted.every((r) => (r as { below_confidence?: boolean }).below_confidence === true);
+  if (belowConfidence) {
+    println(
+      c.yellow(
+        `⚠ No results cleared the confidence threshold — showing the closest ` +
+          `${accepted.length} candidate(s). Judge relevance by the scores below.`,
+      ),
+    );
+    println("");
   }
 
   for (const row of accepted) {
