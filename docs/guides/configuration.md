@@ -117,6 +117,14 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 
 ## Retrieval
 
+> **Which paths read these?** Client-side tunables in this section are read
+> from *your* `.env` by the **CLI**, the **local MCP server**, and `cerefox
+> web`. The **remote MCP / Edge Function path** runs on Supabase and does not
+> see your `.env` — it uses the server defaults unless the caller passes the
+> per-call parameter (e.g. `min_score`, `min_term_coverage` on
+> `cerefox_search`). Setting them as Supabase **Function secrets** may also
+> work but is not a tested configuration.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Maximum bytes in a single search response (local MCP path). See explanation below. |

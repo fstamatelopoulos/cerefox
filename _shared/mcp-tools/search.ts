@@ -36,7 +36,8 @@ async function handler(
   const min_score = (args.min_score as number | undefined) ?? getMinSearchScore();
   // v1.0.4: coverage gate default from CEREFOX_MIN_TERM_COVERAGE; only sent
   // when configured (see getMinTermCoverage — keeps pre-0.9.1 servers working).
-  const min_term_coverage = getMinTermCoverage();
+  const min_term_coverage =
+    (args.min_term_coverage as number | undefined) ?? getMinTermCoverage();
   const coverageParam =
     min_term_coverage !== undefined ? { p_min_term_coverage: min_term_coverage } : {};
   const metadata_filter =
@@ -203,6 +204,27 @@ export const searchTool: ToolDefinition = {
         description:
           'Optional JSONB containment filter. Only documents whose metadata contains ALL specified key-value pairs are returned. Example: {"type": "decision", "status": "active"}. Call cerefox_list_metadata_keys first to discover available keys and values. Omit to search all documents.',
         additionalProperties: { type: "string" },
+      },
+      mode: {
+        type: "string",
+        enum: ["docs", "hybrid", "fts", "semantic"],
+        description:
+          "Search mode (default: docs — full reconstructed documents). hybrid: ranked chunks; fts: keyword-only (no embedding); semantic: vector-only.",
+      },
+      alpha: {
+        type: "number",
+        description:
+          "Hybrid fusion weight 0–1 (default 0.7): 1 = pure semantic, 0 = pure keyword.",
+      },
+      min_score: {
+        type: "number",
+        description:
+          "Minimum cosine similarity for vector-side results (default: server-configured, 0.5 OpenAI / 0.6 local embedder).",
+      },
+      min_term_coverage: {
+        type: "number",
+        description:
+          "Keyword OR-fallback confidence bar 0–1 (default 0.5): fraction of the query's meaningful terms a result must match to count as a confident hit; weaker matches return flagged below-confidence. 0 = any matching term. Needs schema ≥ 0.9.1.",
       },
       max_bytes: {
         type: "integer",
