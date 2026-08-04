@@ -26,7 +26,7 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { getMaxResponseBytes, getMinSearchScore } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { getMaxResponseBytes, getMinSearchScore, getMinTermCoverage } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
 
@@ -67,6 +67,7 @@ async function action(
     mode?: string;
     alpha?: string;
     minScore?: string;
+    minTermCoverage?: string;
     maxBytes?: string;
     requestor?: string;
     json?: boolean;
@@ -80,6 +81,17 @@ async function action(
   const matchCount = parsePositiveInt(options.matchCount, "--match-count", 5);
   const alpha = parseFloat01(options.alpha, "--alpha", 0.7);
   const minScore = parseFloat01(options.minScore, "--min-score", getMinSearchScore());
+  // v1.0.4 coverage gate: flag > CEREFOX_MIN_TERM_COVERAGE env > server
+  // default (0.5). Only sent when one of the first two is set — omitting it
+  // keeps the call compatible with pre-0.9.1 servers (unknown named args fail
+  // the PostgREST function match).
+  const envCoverage = getMinTermCoverage();
+  const coverageParam =
+    options.minTermCoverage !== undefined
+      ? { p_min_term_coverage: parseFloat01(options.minTermCoverage, "--min-term-coverage", envCoverage ?? 0.5) }
+      : envCoverage !== undefined
+        ? { p_min_term_coverage: envCoverage }
+        : {};
   const maxBytes = parseNonNegativeInt(options.maxBytes, "--max-bytes", getMaxResponseBytes());
   const mode = options.mode ?? "docs";
   if (!["docs", "hybrid", "fts"].includes(mode)) {
@@ -125,6 +137,7 @@ async function action(
       p_match_count: matchCount,
       p_project_id: projectId,
       ...metaFilterParam,
+      ...coverageParam,
     };
   } else if (mode === "hybrid") {
     rpcName = "cerefox_hybrid_search";
@@ -137,6 +150,7 @@ async function action(
       p_project_id: projectId,
       p_min_score: minScore,
       ...metaFilterParam,
+      ...coverageParam,
     };
   } else {
     rpcName = "cerefox_search_docs";
@@ -148,6 +162,7 @@ async function action(
       p_project_id: projectId,
       p_min_score: minScore,
       ...metaFilterParam,
+      ...coverageParam,
     };
   }
 
@@ -302,6 +317,7 @@ export function registerSearch(program: Command): void {
     .option("--mode <mode>", "Search mode: docs (default), hybrid, fts.", "docs")
     .option("--alpha <float>", "Semantic weight 0..1 (default: 0.7).", "0.7")
     .option("--min-score <float>", "Minimum cosine similarity threshold (default: CEREFOX_MIN_SEARCH_SCORE; else 0.5, or 0.6 with the local embedder).")
+    .option("--min-term-coverage <float>", "OR-fallback keyword matches must cover at least this fraction of the query's meaningful terms to count as confident hits (default: CEREFOX_MIN_TERM_COVERAGE; else the server default 0.5; needs schema ≥ 0.9.1).")
     .option("--max-bytes <n>", "Response size budget in bytes (default: CEREFOX_MAX_RESPONSE_BYTES or 200000).")
     .option("-r, --requestor <name>", "Agent / user name (recorded in usage log).")
     .option("--json", "Emit machine-readable JSON instead of the default text.")

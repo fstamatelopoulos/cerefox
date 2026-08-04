@@ -117,10 +117,19 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 
 ## Retrieval
 
+> **Which paths read these?** Client-side tunables in this section are read
+> from *your* `.env` by the **CLI**, the **local MCP server**, and `cerefox
+> web`. The **remote MCP / Edge Function path** runs on Supabase and does not
+> see your `.env` — it uses the server defaults unless the caller passes the
+> per-call parameter (e.g. `min_score`, `min_term_coverage` on
+> `cerefox_search`). Setting them as Supabase **Function secrets** may also
+> work but is not a tested configuration.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Maximum bytes in a single search response (local MCP path). See explanation below. |
 | `CEREFOX_MIN_SEARCH_SCORE` | `0.50` (`0.60` with the local embedder) | Minimum cosine similarity for hybrid and semantic search results (0.0–1.0). The default is embedder-aware: nomic scores unrelated text higher than OpenAI, so `CEREFOX_EMBEDDER=local` raises the floor to 0.60. In **hybrid search**, chunks that matched the FTS keyword operator (`@@`) always pass through regardless of their vector score — the threshold only filters vector-only results. In **semantic search**, all results are filtered. The pure **FTS search** mode is unaffected. Increase for stricter precision; decrease for wider recall. |
+| `CEREFOX_MIN_TERM_COVERAGE` | *(unset — server default `0.5`)* | Confidence bar for the keyword OR-fallback (v1.0.4, schema ≥ 0.9.1): when a strict all-terms match fails and search relaxes to any-term matching, a result counts as a confident hit only if it matches at least this fraction of the query's meaningful terms; weaker matches surface as below-confidence candidates. `0` restores pre-gate behavior (any matching term passes); `1` requires every term. Per-call override: `cerefox search --min-term-coverage`. Leave unset against pre-0.9.1 servers. |
 | `CEREFOX_EMBED_MAX_INPUT_CHARS` | `20000` | Safety cap on the characters sent to the embedding model per input. The full chunk content is always stored and reconstructed untouched; only the embedding uses the (rare) truncated prefix, so an oversized chunk can never fail an ingest. |
 | `CEREFOX_MODELS_DIR` | `~/.cerefox/models` (in-container: inside the data volume) | Where the local embedder caches downloaded model weights (Cerefox Local; `CEREFOX_EMBEDDER=local`). |
 | `CEREFOX_ONNX_BATCH` | `4` | Texts per local-embedder inference call. Peak memory scales with this; the small default keeps ingest/reindex safe on small Docker VMs. |

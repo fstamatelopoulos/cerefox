@@ -122,3 +122,28 @@ describe("cerefox_search below-confidence annotation (28I)", () => {
     expect(out).toBe("No results found.");
   });
 });
+
+describe("getMinTermCoverage env parsing (v1.0.4)", () => {
+  const { getMinTermCoverage } = require("../mcp-tools/_utils.ts");
+  const KEY = "CEREFOX_MIN_TERM_COVERAGE";
+  const prior = process.env[KEY];
+  afterAll(() => {
+    if (prior === undefined) delete process.env[KEY];
+    else process.env[KEY] = prior;
+  });
+
+  test("unset → undefined (param omitted; server default rules)", () => {
+    delete process.env[KEY];
+    expect(getMinTermCoverage()).toBeUndefined();
+  });
+  test("valid value parses", () => {
+    process.env[KEY] = "0.3";
+    expect(getMinTermCoverage()).toBe(0.3);
+  });
+  test("out-of-range / junk → undefined", () => {
+    process.env[KEY] = "1.5";
+    expect(getMinTermCoverage()).toBeUndefined();
+    process.env[KEY] = "abc";
+    expect(getMinTermCoverage()).toBeUndefined();
+  });
+});

@@ -20,6 +20,12 @@
   [`docs/research/metadata-versioning.md`](research/metadata-versioning.md).
 
 ### Search & Ranking
+- [ ] `CEREFOX_SEARCH_ALPHA` env default for the hybrid fusion weight (parity
+  with `CEREFOX_MIN_SEARCH_SCORE` / `CEREFOX_MIN_TERM_COVERAGE`; today alpha is
+  per-call only). Found in the v1.0.4 tunables-consistency audit.
+- [ ] Verify whether Supabase Edge Functions populate `process.env` from
+  Function secrets (Node-compat) — if yes, the client-side retrieval tunables
+  could be honored on the remote-MCP path too; document either way.
 - [ ] Reciprocal Rank Fusion (RRF) for hybrid search instead of linear alpha blending
 - [ ] True BM25 ranking via pg_textsearch or ParadeDB extension
 - [ ] Query embedding caching (avoid re-embedding repeated queries)

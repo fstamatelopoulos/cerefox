@@ -21,7 +21,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   counted server-side. Known unpaginated siblings (project-scoped web
   listing prefilter, `scripts/cerefox_export.ts`) are documented in #131.
 
-Open roadmap.
+- **Term-coverage gate on the OR-fallback search** (follow-up to v1.0.3's
+  recall fix, found dogfooding it): a query of mostly-nonsense terms plus one
+  common word could return confident-looking irrelevant results, because the
+  OR-fallback inherited the "any FTS match passes unconditionally" rule that
+  was only sound under AND semantics (where a match meant *every* term was
+  present). OR-fallback matches now earn the confident pass only by matching
+  at least half of the query's meaningful terms (`p_min_term_coverage`,
+  default 0.5; exposed as `cerefox search --min-term-coverage`); weaker
+  matches surface as below-confidence candidates instead. The 3-of-4-terms
+  recall win from v1.0.3 is unaffected. Schema 0.9.0 → 0.9.1 — redeploy with
+  `cerefox server deploy`.
 
 ---
 
