@@ -15,6 +15,7 @@ import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts"
 import { Hono } from "hono";
 
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
+import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getMinSearchScore } from "../../../../../_shared/mcp-tools/_utils.js";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
@@ -131,15 +132,22 @@ async function getProjectDocCounts(
   }
   if (projectIds.length === 0) return { active, deleted };
   try {
-    const { data, error } = await ctx.supabase
-      .from("cerefox_document_projects")
-      .select("project_id, cerefox_documents(deleted_at)")
-      .in("project_id", projectIds);
-    if (error) throw error;
-    for (const row of (data ?? []) as Array<{
+    // Paginated: the unbounded scan capped at the PostgREST row limit
+    // (1000), silently under-counting every project once the KB crossed
+    // 1000 junction rows (#131). One walk covers active + deleted counts.
+    const rows = await fetchAllPages<{
       project_id: string;
       cerefox_documents: { deleted_at: string | null } | null;
-    }>) {
+    }>((from, to) =>
+      ctx.supabase
+        .from("cerefox_document_projects")
+        .select("project_id, cerefox_documents(deleted_at)")
+        .in("project_id", projectIds)
+        .order("document_id", { ascending: true })
+        .order("project_id", { ascending: true })
+        .range(from, to),
+    );
+    for (const row of rows) {
       const pid = row.project_id;
       if (!(pid in active)) continue;
       const doc = row.cerefox_documents ?? null;
@@ -200,20 +208,22 @@ async function countDocumentsForProject(
   projectId: string,
 ): Promise<number> {
   // Match Python: count junction rows whose linked document is not deleted.
-  const { data, error } = await ctx.supabase
+  // Counted server-side (the `countActiveDocuments` pattern): the previous
+  // fetch-and-count capped at the PostgREST row limit (1000), so projects
+  // past ~1000 documents under-reported their total (#131). The `!inner`
+  // embed makes the deleted_at filter an inner join, so junction rows whose
+  // document is deleted (or missing) are excluded — same rows the old JS
+  // filter kept.
+  const { count, error } = await ctx.supabase
     .from("cerefox_document_projects")
-    .select("document_id, cerefox_documents(deleted_at)")
-    .eq("project_id", projectId);
+    .select("document_id, cerefox_documents!inner(deleted_at)", {
+      count: "exact",
+      head: true,
+    })
+    .eq("project_id", projectId)
+    .is("cerefox_documents.deleted_at", null);
   if (error) throw error;
-  let n = 0;
-  for (const row of (data ?? []) as Array<{
-    cerefox_documents: { deleted_at: string | null } | null;
-  }>) {
-    if (row.cerefox_documents && row.cerefox_documents.deleted_at === null) {
-      n += 1;
-    }
-  }
-  return n;
+  return count ?? 0;
 }
 
 function dashboardDocFromRow(

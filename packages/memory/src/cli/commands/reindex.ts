@@ -27,6 +27,7 @@ import {
   userError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
+import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 
@@ -71,22 +72,35 @@ async function action(options: ReindexOptions): Promise<void> {
   const reindexAll = Boolean(options.all);
   const dryRun = Boolean(options.dryRun);
 
-  let query = supabase
-    .from("cerefox_chunks")
-    .select("id, document_id, content, embedder_primary, cerefox_documents(title)")
-    .is("version_id", null);
-
-  if (options.documentId) {
-    query = query.eq("document_id", options.documentId);
-  }
   const targetModel = activeEmbedderName();
-  if (!reindexAll) {
-    query = query.neq("embedder_primary", targetModel);
-  }
 
-  const { data, error } = await query;
-  if (error) throw systemError(`Failed to list chunks: ${error.message}`);
-  const chunks = (data ?? []) as ChunkRow[];
+  // Paginated: an unbounded select caps at the PostgREST row limit (1000),
+  // so past that size reindex would process a prefix of the chunks and
+  // report the capped count as the whole job (#131). The full list is
+  // fetched up front (snapshot), then written batch-wise below — so the
+  // stale-only filter can't interact with page boundaries mid-walk.
+  let chunks: ChunkRow[];
+  try {
+    chunks = await fetchAllPages<ChunkRow>((from, to) => {
+      let query = supabase
+        .from("cerefox_chunks")
+        .select("id, document_id, content, embedder_primary, cerefox_documents(title)")
+        .is("version_id", null);
+      if (options.documentId) {
+        query = query.eq("document_id", options.documentId);
+      }
+      if (!reindexAll) {
+        query = query.neq("embedder_primary", targetModel);
+      }
+      return query.order("id", { ascending: true }).range(from, to);
+      // Page size 1000 = the PostgREST cap itself: listing rows are light
+      // (no embedding vectors), so larger pages just mean fewer round-trips.
+    }, 1000);
+  } catch (err) {
+    throw systemError(
+      `Failed to list chunks: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   if (chunks.length === 0) {
     println(c.dim("(nothing to reindex)"));
