@@ -3622,6 +3622,30 @@ image was dispatched manually post-cut. Items as scoped (priority order):
 
 Deferred past 1.0.1: Fireworks embedder wiring (v1.1+), Iteration 29.
 
+### 28I — v1.0.3 (search recall refinement; agent-feedback-driven)
+
+**Status: designed 2026-08-03 (spec: `docs/specs/search-recall-refinement-design.md`);
+implementation next.** Origin: voice-of-the-customer feedback from an AI agent
+using Cerefox as its memory layer — multi-term concept queries returned empty
+even when the target doc contained most terms verbatim. Diagnosis on the
+production instance: (1) `plainto_tsquery` AND-semantics lets one absent term
+veto all matching ones (more terms = strictly worse recall); (2) with FTS dead,
+a relevant doc measured cosine ≈0.47 against the 0.50 floor — dropped by the
+knife-edge; (3) the resulting empty response reads to agents as "this knowledge
+does not exist". Title boosting and chunking were investigated and cleared.
+Scope:
+1. **Progressive FTS relaxation** — AND-first (byte-identical behavior when it
+   matches), OR-fallback when AND matches zero chunks (`ts_rank_cd` rewards
+   multi-term evidence). `cerefox_hybrid_search` + `cerefox_fts_search`.
+2. **Never silently empty** — zero rows past the pass-filter → return top-3 by
+   combined score flagged `below_confidence` (new output column; DROP+recreate,
+   schema bump); response layers annotate. Threshold defaults unchanged.
+3. **Agent guidance** in AGENT_QUICK_REFERENCE / get_help (+ re-bundle).
+4. Bundled riders: **#127** (doctor label-only EF-drift ℹ suppression) and the
+   **gitleaks CI step** (28B backlog).
+Branch: `fix/search-recall-1.0.3`. Validation per the spec (unit + seeded live
+e2e + precision regression guard + re-running the originally-failing queries).
+
 ## Iteration 29: Document Relations & Semantic Graph (post-v1.0, target v1.1+)
 
 **Goal**: Add explicit document-to-document relations (`related_to`, `references`,
@@ -3938,6 +3962,12 @@ Escape hatch: if 1.1 stays far off and a #124 item becomes pressing (e.g. a
 real vulnerability in a pinned major), pull that single upgrade forward into a
 1.0.x patch on its own merits. Small 1.0.x candidates meanwhile: #127 (doctor
 label-only EF drift), gitleaks CI step.
+
+**Update (2026-08-03, later): NEXT is v1.0.3 — search recall refinement (28I).**
+Agent voice-of-the-customer feedback exposed real recall failures in hybrid
+search; diagnosis + design in `docs/specs/search-recall-refinement-design.md`,
+scope + status in the **28I block** (Iteration 28). Bundles #127 + gitleaks.
+v1.1.0 planning above stands unchanged behind it.
 
 **Update (2026-08-01): 🎉 v1.0.1 SHIPPED — both worlds upgraded + validated same
 day.** Full detail in the 28H block (Iteration 28). Highlights: all 7 scoped
