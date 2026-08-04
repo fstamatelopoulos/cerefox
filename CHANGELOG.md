@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.4] -- 2026-08-04
+
 ### Fixed
 - **Unbounded PostgREST selects no longer silently truncate at the 1000-row
   server cap** (#131). `backup create` backed up a 1000-document prefix of
