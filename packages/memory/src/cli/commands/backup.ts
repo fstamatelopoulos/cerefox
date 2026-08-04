@@ -20,6 +20,7 @@ import {
   println,
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getClient } from "../util/client.ts";
 
 interface BackupOptions {
@@ -62,17 +63,27 @@ async function action(options: BackupOptions): Promise<void> {
 
   const client = getClient();
 
-  // Pull all non-deleted documents.
-  const { data: docsData, error: docsErr } = await client.raw
-    .from("cerefox_documents")
-    .select(
-      "id, title, content_hash, source, metadata, total_chars, chunk_count, " +
-        "review_status, created_at, updated_at, deleted_at",
-    )
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true });
-  if (docsErr) throw systemError(`Document fetch failed: ${docsErr.message}`);
-  const docs = (docsData ?? []) as Array<Record<string, unknown>>;
+  // Pull all non-deleted documents. Paginated: an unbounded select caps at
+  // the PostgREST row limit (1000) and silently truncates the backup (#131).
+  let docs: Array<Record<string, unknown>>;
+  try {
+    docs = await fetchAllPages<Record<string, unknown>>((from, to) =>
+      client.raw
+        .from("cerefox_documents")
+        .select(
+          "id, title, content_hash, source, metadata, total_chars, chunk_count, " +
+            "review_status, created_at, updated_at, deleted_at",
+        )
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+  } catch (err) {
+    throw systemError(
+      `Document fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   // For each doc, pull its chunks.
   let chunkTotal = 0;
@@ -80,17 +91,26 @@ async function action(options: BackupOptions): Promise<void> {
   for (let i = 0; i < docs.length; i++) {
     const doc = docs[i];
     const docId = doc.id as string;
-    const { data: chunks, error: chunkErr } = await client.raw
-      .from("cerefox_chunks")
-      .select("*")
-      .eq("document_id", docId)
-      .is("version_id", null)
-      .order("chunk_index", { ascending: true });
-    if (chunkErr) {
-      throw systemError(`Chunk fetch failed for ${docId}: ${chunkErr.message}`);
+    // Paginated for the same reason: a single document with >1000 chunks
+    // would otherwise back up a truncated chunk list.
+    let chunks: Array<Record<string, unknown>>;
+    try {
+      chunks = await fetchAllPages<Record<string, unknown>>((from, to) =>
+        client.raw
+          .from("cerefox_chunks")
+          .select("*")
+          .eq("document_id", docId)
+          .is("version_id", null)
+          .order("chunk_index", { ascending: true })
+          .range(from, to),
+      );
+    } catch (err) {
+      throw systemError(
+        `Chunk fetch failed for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-    chunkTotal += (chunks ?? []).length;
-    enriched.push({ ...doc, chunks: chunks ?? [] });
+    chunkTotal += chunks.length;
+    enriched.push({ ...doc, chunks });
     if (process.stdout.isTTY) {
       process.stderr.write(
         `\r  Dumping documents: ${i + 1}/${docs.length} (${chunkTotal} chunks so far)…`,

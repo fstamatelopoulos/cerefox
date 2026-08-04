@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **Unbounded PostgREST selects no longer silently truncate at the 1000-row
+  server cap** (#131). `backup create` backed up a 1000-document prefix of
+  larger knowledge bases while reporting success (the reported
+  `document_count` came from the same truncated fetch); `server reindex`
+  would process the first 1000 chunks and print that count as the whole job;
+  the web UI's per-project document counts under-reported once the KB
+  crossed 1000 project memberships. Reads that can exceed one page now
+  paginate via a shared `fetchAllPages` helper, and per-project totals are
+  counted server-side. Known unpaginated siblings (project-scoped web
+  listing prefilter, `scripts/cerefox_export.ts`) are documented in #131.
+
 Open roadmap.
 
 ---

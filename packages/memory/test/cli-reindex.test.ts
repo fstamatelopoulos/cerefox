@@ -80,14 +80,20 @@ describe("cerefox reindex CLI", () => {
     expect(stdout).toMatch(/Reindexing \d+ chunk|nothing to reindex/);
   });
 
-  test("--all + --dry-run reports all chunks", () => {
-    if (!LIVE_OK) return;
-    const { stdout, status } = run(["server", "reindex", "--all", "--dry-run"]);
-    expect(status).toBe(0);
-    expect(stdout).toMatch(/Reindexing \d+ chunk|nothing to reindex/);
-    // --all path should mention "(--all)" tag, not "(stale only)"
-    expect(stdout).not.toMatch(/stale only/);
-  });
+  test(
+    "--all + --dry-run reports all chunks",
+    () => {
+      if (!LIVE_OK) return;
+      const { stdout, status } = run(["server", "reindex", "--all", "--dry-run"]);
+      expect(status).toBe(0);
+      expect(stdout).toMatch(/Reindexing \d+ chunk|nothing to reindex/);
+      // --all path should mention "(--all)" tag, not "(stale only)"
+      expect(stdout).not.toMatch(/stale only/);
+    },
+    // The listing now pages past the PostgREST row cap (#131): --all does one
+    // round-trip per 1000 chunks instead of a single silently-capped request.
+    30_000,
+  );
 
   test("--document-id with a fake UUID returns 'nothing to reindex'", () => {
     if (!LIVE_OK) return;
