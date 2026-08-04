@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.3] -- 2026-08-04
+
 ### Fixed
 - **Hybrid/FTS search recall: one absent query term no longer hides matching
   documents.** Feedback from AI agents using Cerefox surfaced that multi-term
