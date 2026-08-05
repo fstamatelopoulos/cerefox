@@ -8,7 +8,49 @@
 > and "what next", not every commit.
 >
 > **How to use it:**
-> - **Read [`## Current Focus`](#current-focus) (at the very bottom) first.** It is
+> - **Read [`## Current Focus
+
+## Iteration 33 — v1.1.0 (first minor of the 1.x line)
+
+**Status: scoped 2026-08-05, branch `feat/1.1.0` created.** First release since
+1.0.0 to add functionality rather than fix it. Sequencing is deliberate — the
+dependency foundation moves first, then features land on top of it:
+
+**Phase 1 — foundation (do first).**
+1. **#124 dependency major batch.** Delete the `semver-major` ignore block in
+   `.github/dependabot.yml` so the parked majors re-file, then take them
+   deliberately: `commander` 12→15 (touches all ~35 subcommand registrations),
+   `@huggingface/transformers` 3.8→4.x (**needs in-container revalidation** of
+   the local embedder: embed + reindex + search smoke, plus reconciling the
+   `bun audit` allowlist and the security-audit addendum, since 4.x moves the
+   `onnxruntime-node`/`sharp` tree), `@mantine/core`+`form` 8→9 (UI major:
+   full visual pass + Playwright e2e), `@eslint/js` 10, `diff` 9.
+
+**Phase 2 — the headline feature.**
+2. **Iteration 29 — Document Relations & Semantic Graph.** Design of record:
+   `docs/research/document-relations-and-semantic-graph.md` (typed edges in a
+   `cerefox_document_relations` junction, lifecycle metadata, retrieve-then-
+   traverse search). Schema + RPCs + MCP tool surface + web UI; the largest
+   piece of 1.1 by far. Re-read the design before scoping tasks — it predates
+   the M2M projects model and the concurrency work, so parts may need revision.
+
+**Phase 3 — carried polish (small, independent).**
+3. **#133 DB-backed retrieval config** — promote the retrieval tunables into
+   `cerefox_config` so one setting governs every access path
+   (`COALESCE(p_param, config, default)` inside the RPCs). v1.0.6's Function-secret
+   support closed part of this gap; this closes the rest.
+4. **#153 Cerefox Local upgrade UX** — bare `upgrade` resolves the newest
+   release (explicit `upgrade` moves the pin; `init`/`start`/`restart` still
+   never do, per #100), npm-lifecycle verbs intercepted with a pointer, and
+   `spawnSync` ENOENT reported as "not found" rather than "exit undefined".
+5. **#152 doctor summary + `--strict`** — stop printing "✓ All checks passed
+   (2 warnings)"; add an opt-in non-zero exit on warnings.
+
+**Deliberately out of scope**: #129 (multi-language FTS — own design cycle),
+#150 (maintainer dashboard action), the #140–#149 backlog issues.
+
+**Release shape**: dogfooded through `1.1.0-beta.N` on both worlds per
+RELEASING.md, since Phase 1 and Phase 2 both carry real regression risk.`](#current-focus) (at the very bottom) first.** It is
 >   the live status + what's next. Everything above it is the dated iteration log
 >   — newest work appended over time — kept as the high-level history record.
 > - **Keep it current — this is non-negotiable.** Whenever work starts, completes,
@@ -3951,6 +3993,48 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 ---
 
 ## Current Focus
+
+## Iteration 33 — v1.1.0 (first minor of the 1.x line)
+
+**Status: scoped 2026-08-05, branch `feat/1.1.0` created.** First release since
+1.0.0 to add functionality rather than fix it. Sequencing is deliberate — the
+dependency foundation moves first, then features land on top of it:
+
+**Phase 1 — foundation (do first).**
+1. **#124 dependency major batch.** Delete the `semver-major` ignore block in
+   `.github/dependabot.yml` so the parked majors re-file, then take them
+   deliberately: `commander` 12→15 (touches all ~35 subcommand registrations),
+   `@huggingface/transformers` 3.8→4.x (**needs in-container revalidation** of
+   the local embedder: embed + reindex + search smoke, plus reconciling the
+   `bun audit` allowlist and the security-audit addendum, since 4.x moves the
+   `onnxruntime-node`/`sharp` tree), `@mantine/core`+`form` 8→9 (UI major:
+   full visual pass + Playwright e2e), `@eslint/js` 10, `diff` 9.
+
+**Phase 2 — the headline feature.**
+2. **Iteration 29 — Document Relations & Semantic Graph.** Design of record:
+   `docs/research/document-relations-and-semantic-graph.md` (typed edges in a
+   `cerefox_document_relations` junction, lifecycle metadata, retrieve-then-
+   traverse search). Schema + RPCs + MCP tool surface + web UI; the largest
+   piece of 1.1 by far. Re-read the design before scoping tasks — it predates
+   the M2M projects model and the concurrency work, so parts may need revision.
+
+**Phase 3 — carried polish (small, independent).**
+3. **#133 DB-backed retrieval config** — promote the retrieval tunables into
+   `cerefox_config` so one setting governs every access path
+   (`COALESCE(p_param, config, default)` inside the RPCs). v1.0.6's Function-secret
+   support closed part of this gap; this closes the rest.
+4. **#153 Cerefox Local upgrade UX** — bare `upgrade` resolves the newest
+   release (explicit `upgrade` moves the pin; `init`/`start`/`restart` still
+   never do, per #100), npm-lifecycle verbs intercepted with a pointer, and
+   `spawnSync` ENOENT reported as "not found" rather than "exit undefined".
+5. **#152 doctor summary + `--strict`** — stop printing "✓ All checks passed
+   (2 warnings)"; add an opt-in non-zero exit on warnings.
+
+**Deliberately out of scope**: #129 (multi-language FTS — own design cycle),
+#150 (maintainer dashboard action), the #140–#149 backlog issues.
+
+**Release shape**: dogfooded through `1.1.0-beta.N` on both worlds per
+RELEASING.md, since Phase 1 and Phase 2 both carry real regression risk.
 
 **Update (2026-08-03): v1.0.2 SHIPPED (security/maintenance patch) + supply-chain regime.**
 Full-repo doc sanity pass + security audit (PR #112; audit addendum in
