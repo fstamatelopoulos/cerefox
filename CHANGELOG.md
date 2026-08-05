@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.0-beta.1] -- 2026-08-05
+
 ### Added
 - **Document relations: a typed graph over your knowledge base** (iteration 29;
   schema 0.9.3 → 0.10.0 — redeploy with `cerefox server deploy`). Link documents
