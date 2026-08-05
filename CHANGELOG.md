@@ -9,6 +9,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **Backups now capture project memberships** (#166). `backup create` never
+  read the document↔project junction, so every restore silently landed
+  documents with **no project assignments** — and the restore command's help
+  text claimed the opposite. Snapshots now include projects and memberships
+  (backup format 2) and restore recreates them idempotently. Older snapshots
+  still restore, with a warning that memberships are absent. Verified with a
+  full round trip: seed → back up → wipe → restore, memberships intact.
+- **`cerefox server reindex` no longer claimed to convert legacy chunk
+  formats** (#164, reported by [@tdebasis](https://github.com/tdebasis)).
+  Reindex refreshes embeddings on existing chunk rows; it never re-chunks, so
+  it cannot advance `content_format` — verified on a 3,203-chunk store where
+  it touched every chunk and moved exactly zero. `cerefox doctor` and
+  `content-format.md` both told users to run it anyway.
+
+### Added
+- **`cerefox server migrate-format`** — the command that actually does the
+  conversion #164 promised: re-ingests legacy documents through the normal
+  pipeline so they are re-chunked, re-embedded, and stamped with the current
+  format. Opt-in (it costs embedding spend), with `--dry-run`, `--limit`, and
+  `--document-id`. Each document converts under optimistic concurrency, so an
+  edit made mid-run is skipped rather than overwritten, and documents whose
+  content is byte-identical to another document are reported as
+  un-convertible rather than failing the run.
+
 Open roadmap.
 
 ---

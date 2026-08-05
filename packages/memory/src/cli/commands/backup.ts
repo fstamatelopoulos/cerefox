@@ -22,6 +22,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getClient } from "../util/client.ts";
+import { PKG_VERSION } from "../../meta.ts";
 
 interface BackupOptions {
   outputDir?: string;
@@ -63,6 +64,15 @@ async function action(options: BackupOptions): Promise<void> {
 
   const client = getClient();
 
+  // Stamped into the payload so a restore (possibly on a different Cerefox
+  // version) can tell which schema produced it.
+  let schemaVersion = "unknown";
+  try {
+    schemaVersion = (await client.rpc<string>("cerefox_schema_version", {})) ?? "unknown";
+  } catch {
+    // Non-fatal: an older server without the RPC still backs up fine.
+  }
+
   // Pull all non-deleted documents. Paginated: an unbounded select caps at
   // the PostgREST row limit (1000) and silently truncates the backup (#131).
   let docs: Array<Record<string, unknown>>;
@@ -82,6 +92,35 @@ async function action(options: BackupOptions): Promise<void> {
   } catch (err) {
     throw systemError(
       `Document fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Projects + memberships (#166). These were never captured, so every
+  // restore silently landed documents with no project assignments — and the
+  // restore command's help text claimed the opposite. Both tables are small
+  // (tens of projects, one row per membership) but paginated anyway: the
+  // membership count tracks the document count, which is unbounded.
+  let projects: Array<Record<string, unknown>> = [];
+  let memberships: Array<Record<string, unknown>> = [];
+  try {
+    projects = await fetchAllPages<Record<string, unknown>>((from, to) =>
+      client.raw
+        .from("cerefox_projects")
+        .select("id, name, description, created_at, updated_at")
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    memberships = await fetchAllPages<Record<string, unknown>>((from, to) =>
+      client.raw
+        .from("cerefox_document_projects")
+        .select("document_id, project_id")
+        .order("document_id", { ascending: true })
+        .order("project_id", { ascending: true })
+        .range(from, to),
+    );
+  } catch (err) {
+    throw systemError(
+      `Project/membership fetch failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
@@ -119,11 +158,20 @@ async function action(options: BackupOptions): Promise<void> {
   }
   if (process.stdout.isTTY) process.stderr.write("\n");
 
+  // backup_format 2 (#166) adds projects + memberships. Restore accepts
+  // format 1 (documents + chunks only) unchanged, so older snapshots keep
+  // working — they simply have no memberships to recreate.
   const payload = {
     created_at: new Date().toISOString(),
-    cerefox_version: process.env.npm_package_version ?? "unknown",
+    cerefox_version: PKG_VERSION,
+    backup_format: 2,
+    schema_version: schemaVersion,
     document_count: docs.length,
     chunk_count: chunkTotal,
+    project_count: projects.length,
+    membership_count: memberships.length,
+    projects,
+    memberships,
     documents: enriched,
   };
 
@@ -131,7 +179,12 @@ async function action(options: BackupOptions): Promise<void> {
 
   println("");
   println(c.green("✓ ") + `Backup written: ${dest}`);
-  println(c.dim(`  documents: ${docs.length} · chunks: ${chunkTotal}`));
+  println(
+    c.dim(
+      `  documents: ${docs.length} · chunks: ${chunkTotal} · ` +
+        `projects: ${projects.length} · memberships: ${memberships.length}`,
+    ),
+  );
 
   if (options.git) {
     println(c.yellow("⚠ ") + "--git commit is not implemented; the snapshot was written without a git checkpoint.");
