@@ -101,7 +101,9 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
   // threshold and the server returned best-effort candidates instead of empty.
   const belowConfidence =
     data.results.length > 0 &&
-    data.results.every((r) => (r as DocSearchResult).below_confidence === true);
+    data.results.every(
+      (r) => (r as DocSearchResult | ChunkSearchResult).below_confidence === true,
+    );
 
   return (
     <>

@@ -76,3 +76,29 @@ describe("fetchAllPages", () => {
     ).rejects.toThrow("boom");
   });
 });
+
+describe("fetchAllPages count self-check (#135)", () => {
+  test("passes silently when the row count matches the server total", async () => {
+    const server = makeCappedServer(450);
+    const rows = await fetchAllPages((from, to) =>
+      server.query(from, to).then((r) => ({ ...r, count: 450 })), 200);
+    expect(rows.length).toBe(450);
+  });
+
+  test("throws instead of returning a prefix when the total disagrees", async () => {
+    // Simulates the #131 failure mode: the walk yields fewer rows than the
+    // server says exist. Without this guard the caller would report the
+    // truncated count as the whole result.
+    const server = makeCappedServer(450);
+    await expect(
+      fetchAllPages((from, to) =>
+        server.query(from, to).then((r) => ({ ...r, count: 1403 })), 200),
+    ).rejects.toThrow(/450 row\(s\) but the server reports 1403/);
+  });
+
+  test("no count requested → no assertion (back-compatible)", async () => {
+    const server = makeCappedServer(450);
+    const rows = await fetchAllPages((from, to) => server.query(from, to), 200);
+    expect(rows.length).toBe(450);
+  });
+});

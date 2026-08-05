@@ -23,6 +23,8 @@ interface SupabaseLike {
   };
 }
 
+import { fetchAllPages } from "../db-client/paginate.js";
+
 export function makeBackupDb(raw: SupabaseLike): BackupDb {
   return {
     async listAllDocuments() {
@@ -46,14 +48,17 @@ export function makeBackupDb(raw: SupabaseLike): BackupDb {
     },
 
     async listChunksForDocument(documentId: string) {
-      const { data, error } = await raw
-        .from("cerefox_chunks")
-        .select(CHUNK_COLUMNS)
-        .eq("document_id", documentId)
-        .is("version_id", null)
-        .order("chunk_index");
-      if (error) throw new Error(error.message ?? JSON.stringify(error));
-      return (data ?? []) as Record<string, unknown>[];
+      // Paginated: a single document can exceed the 1000-row cap, which would
+      // silently back up a truncated chunk list (#135, same class as #131).
+      return await fetchAllPages<Record<string, unknown>>((from, to) =>
+        raw
+          .from("cerefox_chunks")
+          .select(CHUNK_COLUMNS)
+          .eq("document_id", documentId)
+          .is("version_id", null)
+          .order("chunk_index")
+          .range(from, to),
+      );
     },
 
     async getDocumentByHash(contentHash: string) {
