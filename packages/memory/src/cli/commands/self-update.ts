@@ -140,9 +140,18 @@ async function action(options: SelfUpdateOptions): Promise<void> {
     stdio: "inherit",
   });
   if (result.status !== 0) {
+    // spawnSync sets `error` (and leaves status null) when the binary could
+    // not be launched at all — reporting `status` then printed the nonsense
+    // "exit undefined" (#153). Say which case it is.
+    const notFound =
+      (result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
     throw systemError(
-      `${runtime.description} install failed (exit ${result.status}).`,
-      `Try the manual command: \`${runtime.command} ${runtime.args(target).join(" ")}\``,
+      notFound
+        ? `${runtime.description} was not found on PATH (tried \`${runtime.command}\`).`
+        : `${runtime.description} install failed (exit ${result.status}).`,
+      notFound
+        ? `Install ${runtime.description}, or upgrade manually: \`${runtime.command} ${runtime.args(target).join(" ")}\``
+        : `Try the manual command: \`${runtime.command} ${runtime.args(target).join(" ")}\``,
     );
   }
 

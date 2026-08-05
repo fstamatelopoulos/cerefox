@@ -22,7 +22,8 @@ CONFIG_DIR="${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}"
 # any verb that recreates (init, start-on-busy-port) silently reverted a pinned
 # install back to :latest — observed as an rc.1 container downgrading to the
 # stale local :latest image mid-`init`.
-_DEFAULT_IMAGE="ghcr.io/fstamatelopoulos/cerefox-local:latest"
+_IMAGE_REPO="ghcr.io/fstamatelopoulos/cerefox-local"
+_DEFAULT_IMAGE="$_IMAGE_REPO:latest"
 _persisted_image=""
 [ -f "${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}/.env" ] &&   _persisted_image="$(. "${CEREFOX_LOCAL_CONFIG_DIR:-$HOME/.cerefox/local}/.env" 2>/dev/null; echo "${CEREFOX_LOCAL_IMAGE:-}")"
 IMAGE="${CEREFOX_LOCAL_IMAGE:-${_persisted_image:-$_DEFAULT_IMAGE}}"
@@ -30,6 +31,13 @@ VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
 ENV_FILE="$CONFIG_DIR/.env"
 
 die() { echo "✗ $*" >&2; exit 1; }
+# Newest published release tag (e.g. v1.1.0), or empty when offline / rate
+# limited. Uses the GitHub releases API — the image registry has no ordering.
+latest_release_tag() {
+  curl -fsSL --max-time 10 \
+    https://api.github.com/repos/fstamatelopoulos/cerefox/releases/latest 2>/dev/null |
+    sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+}
 need_docker() { command -v docker >/dev/null 2>&1 || die "docker not found"; }
 is_running() { [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo false)" = "true" ]; }
 host_port() {
@@ -125,7 +133,8 @@ Lifecycle (handled on the host):
   start | up            start the stopped container
   stop  | down          stop the container (data persists in the volume)
   restart               restart the container
-  upgrade               pull the latest image + recreate (keeps your data + OPENAI key)
+  upgrade [tag|--latest] upgrade to the newest release (or a specific version /
+                        the moving :latest tag) + recreate; keeps your data + keys
   uninstall [--purge]   remove the container (--purge also DELETES the data volume)
   status                show container state + URL
   logs [-f]             show container logs
@@ -278,13 +287,35 @@ case "$cmd" in
   logs)          need_docker; docker logs "$@" "$CONTAINER" ;;
 
   upgrade)
-    # Optional target (28H item 3): `upgrade --latest` re-points the persisted
-    # pin to the moving :latest tag; `upgrade <tag>` (e.g. v1.0.1) pins that tag.
-    # No argument keeps the current pin (explicit CEREFOX_LOCAL_IMAGE env wins).
+    # `upgrade` with no argument resolves the newest published release and
+    # moves the pin to it — what the verb means, and what every other package
+    # manager does (#153). Before v1.1.0 a bare `upgrade` re-pulled the pinned
+    # tag and printed a success line while changing nothing.
+    #
+    # The #100 lesson still holds and is unaffected: *automatic* operations
+    # (init / start / restart) must never follow a moving tag — they recreate
+    # from the persisted pin. Only an explicit `upgrade` moves it.
+    #   upgrade            newest release (pins that version)
+    #   upgrade <tag>      pin an exact version, e.g. v1.0.4 (also downgrades)
+    #   upgrade --latest   follow the moving :latest tag from now on
     case "${1:-}" in
-      --latest) IMAGE="ghcr.io/fstamatelopoulos/cerefox-local:latest"; shift ;;
-      v*)       IMAGE="ghcr.io/fstamatelopoulos/cerefox-local:$1"; shift ;;
-      "") ;;
+      --latest) IMAGE="$_IMAGE_REPO:latest"; shift ;;
+      v*)       IMAGE="$_IMAGE_REPO:$1"; shift ;;
+      "")
+        printf 'Resolving the newest release…\n' >&2
+        _newest="$(latest_release_tag)"
+        if [ -z "$_newest" ]; then
+          warn "Could not reach GitHub to resolve the newest release."
+          echo "  Staying on the current pin: $IMAGE"
+          echo "  Retry, or pin explicitly:  cerefox-local upgrade v1.2.3"
+        elif [ "$IMAGE" = "$_IMAGE_REPO:$_newest" ]; then
+          echo "✓ Already on the newest release ($_newest). Nothing to do."
+          exit 0
+        else
+          echo "  $IMAGE → $_IMAGE_REPO:$_newest"
+          IMAGE="$_IMAGE_REPO:$_newest"
+        fi
+        ;;
       *) die "unknown upgrade option: $1 (use --latest or a version tag like v1.0.1)" ;;
     esac
     need_docker
@@ -372,6 +403,22 @@ case "$cmd" in
         die "unknown --tool '$tool' (claude-code | claude-desktop | cursor | codex | gemini)"
         ;;
     esac
+    ;;
+
+  self-update|upgrade-cli)
+    # #153: the catch-all below proxies unknown verbs into the container's
+    # bundled CLI, which exposed npm-lifecycle commands that cannot work here:
+    # `self-update` ran `npm install -g @cerefox/memory` INSIDE the container,
+    # where npm may not exist and where the change would be destroyed on the
+    # next recreate. Shell completion advertised it, which is how it was found.
+    cat >&2 <<'EOM'
+✗ `cerefox-local self-update` does not apply to a container install.
+  Cerefox Local updates by image:
+      cerefox-local upgrade              # newest release
+      cerefox-local upgrade v1.2.3       # a specific version
+      cerefox-local upgrade --latest     # follow the moving :latest tag
+EOM
+    exit 2
     ;;
 
   *)
