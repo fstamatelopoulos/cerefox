@@ -10,6 +10,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 ### Added
+- **Document relations: a typed graph over your knowledge base** (iteration 29;
+  schema 0.9.3 → 0.10.0 — redeploy with `cerefox server deploy`). Link documents
+  with directed, typed edges — `supersedes`, `contradicts`, `references`,
+  `related_to`, `follows`, or any type string you invent — and Cerefox tracks
+  what that means. `supersedes` marks the older document **superseded**;
+  `contradicts` marks **both** stale; symmetric types write both directions in
+  one transaction. Every document now carries a `lifecycle_status`, so an agent
+  retrieving a document can tell whether the knowledge still stands instead of
+  presenting outdated notes as current. Four new MCP tools
+  (`cerefox_set_relation`, `cerefox_delete_relation`, `cerefox_get_relations`,
+  `cerefox_get_neighbors` — 14 tools total) and a matching CLI group
+  (`cerefox relation set|delete|list|neighbors`). `cerefox_get_neighbors` walks
+  one relation type outward, following chains and terminating safely on cycles.
+  Search ranking is deliberately untouched in this release; relation-aware
+  retrieval is the next slice.
 - **Deployment-wide search settings** (#133; schema 0.9.2 → 0.9.3 — redeploy
   with `cerefox server deploy`). `min_search_score`, `min_term_coverage`, and
   `search_alpha` can now be set once with `cerefox config set` and every access
