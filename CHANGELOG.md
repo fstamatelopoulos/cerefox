@@ -9,6 +9,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **Search result counts are consistent between chunk and document views**
+  (schema 0.9.1 → 0.9.2 — redeploy with `cerefox server deploy`). When no
+  result cleared the confidence threshold, the fallback capped *chunks* before
+  they were grouped into documents, so a knowledge base where one document
+  owned several of the top chunks returned fewer results than one where they
+  were spread out. The cap now counts documents.
+- **Search results header no longer conflates two different things.** It read
+  "ranked by documents relevance" in document mode, borrowing the result shape
+  into a slot that otherwise names a ranking method. It now states both, the
+  way the search controls already do: "12 results · documents ranked by hybrid
+  relevance".
+
+### Added
+- **`CEREFOX_SEARCH_ALPHA`** sets the default hybrid fusion weight (1.0 = pure
+  semantic, 0.0 = pure keyword), matching the other retrieval tunables; it was
+  previously per-call only.
+- **Retrieval tunables now apply to the remote MCP / Edge Function path too**,
+  when set as Supabase Function secrets — the shared helpers read `Deno.env`
+  in addition to `process.env`. Previously a server-side search silently used
+  built-in defaults no matter how the deployment was configured.
+
+### Changed
+- **`docs/TODO.md` is retired.** Its unscheduled items moved to GitHub issues
+  (#140–#149), where contributors actually look; obsolete entries (a bug fixed
+  by atomic ingestion, a script deleted with Python) were dropped. The file
+  remains as a pointer.
+
 Open roadmap.
 
 ---

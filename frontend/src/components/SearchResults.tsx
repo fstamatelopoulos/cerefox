@@ -25,8 +25,19 @@ function colorForProject(name: string): string {
   return `var(${PROJECT_COLORS[h % PROJECT_COLORS.length]})`;
 }
 
-const MODE_LABEL: Record<SearchMode, string> = {
+// A search has two independent axes — what is returned and how it was ranked
+// — and the controls already present them separately ("Documents"/"Chunks" +
+// a ranker). The results summary used to flatten them into one word, so
+// documents mode read "ranked by documents relevance": grammatically odd and
+// category-confused (the other three values are ranking methods). Keep both.
+const MODE_SHAPE: Record<SearchMode, string> = {
   docs: "documents",
+  hybrid: "chunks",
+  fts: "chunks",
+  semantic: "chunks",
+};
+const MODE_RANKER: Record<SearchMode, string> = {
+  docs: "hybrid", // docs mode is always hybrid-ranked, then assembled per document
   hybrid: "hybrid",
   fts: "keyword",
   semantic: "semantic",
@@ -119,9 +130,13 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
           <b className={ui.mono} style={{ color: "var(--text)" }}>
             {data.total_found}
           </b>{" "}
-          result{data.total_found !== 1 ? "s" : ""} · ranked by{" "}
+          result{data.total_found !== 1 ? "s" : ""} ·{" "}
           <span className={ui.mono} style={{ color: "var(--primary)" }}>
-            {MODE_LABEL[data.mode]}
+            {MODE_SHAPE[data.mode]}
+          </span>{" "}
+          ranked by{" "}
+          <span className={ui.mono} style={{ color: "var(--primary)" }}>
+            {MODE_RANKER[data.mode]}
           </span>{" "}
           relevance
         </span>

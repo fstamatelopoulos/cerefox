@@ -19,7 +19,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { getEmbedding, resolveEmbedderKind } from "../embeddings/index.ts";
 import { applyByteBudget, getMaxResponseBytes, getMinSearchScore,
-  getMinTermCoverage, logUsage } from "./_utils.ts";
+  getMinTermCoverage, getSearchAlpha, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
@@ -32,7 +32,7 @@ async function handler(
   const project_name = args.project_name as string | undefined;
   const match_count = (args.match_count as number | undefined) ?? 5;
   const mode = (args.mode as string | undefined) ?? "docs";
-  const alpha = (args.alpha as number | undefined) ?? 0.7;
+  const alpha = (args.alpha as number | undefined) ?? getSearchAlpha();
   const min_score = (args.min_score as number | undefined) ?? getMinSearchScore();
   // v1.0.4: coverage gate default from CEREFOX_MIN_TERM_COVERAGE; only sent
   // when configured (see getMinTermCoverage — keeps pre-0.9.1 servers working).

@@ -31,7 +31,7 @@ cerefox/
 │   ├── requirements-and-specs.md  # Source of truth for requirements
 │   ├── solution-design.md         # Architecture and design decisions
 │   ├── plan.md                    # Implementation plan with progress
-│   └── TODO.md                    # Backlog and future ideas
+│   └── TODO.md                    # RETIRED at v1.0.6 — backlog lives in GitHub issues
 ├── src/
 │   └── cerefox/
 │       └── db/                    # SQL assets ONLY (not Python) — bundled by the TS deploy
@@ -364,7 +364,7 @@ Kept accurate and current at all times:
 | `docs/requirements-and-specs.md` | Requirements | A requirement changes or is added/removed |
 | `docs/solution-design.md` | Architecture | A design decision is made or revised |
 | `docs/plan.md` | Progress + **cross-session hand-off** | A task starts, completes, or is re-scoped |
-| `docs/TODO.md` | Backlog | A new idea or future task surfaces |
+| GitHub issues | Backlog | A new idea or future task surfaces (`docs/TODO.md` retired at v1.0.6) |
 | `docs/e2e-use-cases.md` | Testing | An e2e test is added, removed, or changes status |
 | `CLAUDE.md` | Conventions | Project conventions or structure changes |
 
@@ -404,7 +404,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 
 ## Quick Reference
 
-- **Docs**: `docs/plan.md` for current status, `docs/TODO.md` for backlog
+- **Docs**: `docs/plan.md` for current status; GitHub issues for the backlog
 - **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 8 tools, key rules, workflows)
 - **Schema**: `src/cerefox/db/schema.sql`
 - **Config**: `.env` file or environment variables (see `_shared/config/`)
