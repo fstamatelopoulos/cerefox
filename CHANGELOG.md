@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.5] -- 2026-08-05
+
 ### Fixed
 - **Web UI now shows the low-confidence search warning** (#138). The
   below-confidence banner shipped in v1.0.3 never appeared in the browser: the
