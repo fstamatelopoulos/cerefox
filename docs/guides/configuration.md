@@ -117,6 +117,21 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 
 ## Retrieval
 
+> **Deployment-wide defaults (v1.1.0+).** `min_search_score`,
+> `min_term_coverage`, and `search_alpha` can also be set **once, in the
+> database**, and every access path obeys — CLI, local and remote MCP, Edge
+> Functions, web — because they all resolve through the same search RPCs:
+>
+> ```bash
+> cerefox config set min_search_score 0.6
+> cerefox config list          # shows every settable key
+> ```
+>
+> Resolution order, highest first: **per-call argument** (`--min-score`, the
+> `min_score` MCP parameter) → **client env var** below → **`cerefox_config`**
+> → built-in default. A malformed stored value is ignored in favour of the
+> built-in, so a bad setting can never break search.
+
 > **Which paths read these?** Client-side tunables in this section are read
 > from *your* `.env` by the **CLI**, the **local MCP server**, and `cerefox
 > web`. Since **v1.0.6** the same values are also honored on the **remote MCP /

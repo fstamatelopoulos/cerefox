@@ -9,6 +9,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+- **Deployment-wide search settings** (#133; schema 0.9.2 → 0.9.3 — redeploy
+  with `cerefox server deploy`). `min_search_score`, `min_term_coverage`, and
+  `search_alpha` can now be set once with `cerefox config set` and every access
+  path obeys — CLI, local and remote MCP, Edge Functions, and the web UI —
+  because they all resolve through the same search RPCs. Previously these were
+  client-side only, so a search issued by a cloud agent silently used built-in
+  defaults no matter how the deployment was configured. Order of precedence:
+  per-call argument, then the client's `CEREFOX_*` env var, then the stored
+  setting, then the built-in default; a malformed stored value falls back to
+  the built-in rather than breaking search.
+- **`cerefox doctor --strict`** exits non-zero when any check warns, for use as
+  a gate. The default still exits 0 on warnings, because the client is updated
+  before the server and a normal upgrade window would otherwise fail CI.
+
+### Fixed
+- **`cerefox doctor` no longer reports "All checks passed" alongside warnings**
+  (#152) — it contradicted the remediation printed directly above it.
+- **`cerefox-local upgrade` actually upgrades** (#153). With no argument it
+  resolved nothing and re-pulled the pinned image while printing a success
+  message; it now finds the newest release, reports the move, and pins it
+  (`upgrade <tag>` still pins an exact version, `upgrade --latest` follows the
+  moving tag). Container installs also stopped exposing `self-update`, which
+  ran npm inside the container and could not work; it now points at the image
+  upgrade path. A missing command reports "not found on PATH" instead of
+  "exit undefined".
+
+### Changed
+- **Dependency majors taken** (#124): Mantine 8 → 9, `@huggingface/transformers`
+  3 → 4 (local embedder re-validated end to end), `diff` 8 → 9, `@eslint/js`
+  9 → 10, `commander` 12 → 14. Commander 15 was deliberately skipped: it
+  requires Node ≥ 22.12, which is a support-policy decision tracked in #154.
+
 Open roadmap.
 
 ---

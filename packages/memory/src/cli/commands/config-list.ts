@@ -26,6 +26,25 @@ const CONFIG_KEYS: ReadonlyArray<{ key: string; description: string }> = [
     key: "requestor_identity_format",
     description: "Regex the requestor/author must match (only enforced when the above is on).",
   },
+  // Retrieval tunables (#133). Set here and every access path obeys — CLI,
+  // local + remote MCP, Edge Functions, web — because all of them resolve
+  // through the search RPCs. A per-call argument or a client-side
+  // CEREFOX_* env var still overrides.
+  {
+    key: "min_search_score",
+    description:
+      "0–1 — minimum cosine similarity for vector-side results. Default 0.5 (use 0.6 with the local embedder).",
+  },
+  {
+    key: "min_term_coverage",
+    description:
+      "0–1 — fraction of a query's meaningful terms a keyword OR-fallback match must cover to count as confident. Default 0.5.",
+  },
+  {
+    key: "search_alpha",
+    description:
+      "0–1 — hybrid fusion weight: 1 = pure semantic, 0 = pure keyword. Default 0.7.",
+  },
 ];
 
 function action(options: { json?: boolean }): void {

@@ -99,10 +99,13 @@ CREATE OR REPLACE FUNCTION cerefox_hybrid_search(
     p_query_text      TEXT,
     p_query_embedding VECTOR(768),
     p_match_count     INT     DEFAULT 10,
-    p_alpha           FLOAT   DEFAULT 0.7,
+    p_alpha           FLOAT   DEFAULT NULL,
     p_use_upgrade     BOOLEAN DEFAULT FALSE,
     p_project_id      UUID    DEFAULT NULL,
-    p_min_score       FLOAT   DEFAULT 0.0,
+    -- NULL means "not specified by the caller" (#133): resolve from
+    -- cerefox_config, else the built-in default. Callers that pass a value
+    -- still win — the chain is per-call > client .env > DB config > default.
+    p_min_score       FLOAT   DEFAULT NULL,
     p_metadata_filter JSONB   DEFAULT NULL,
     -- 28I follow-up (v1.0.4): in OR-fallback mode, the unconditional FTS pass
     -- requires at least this fraction of the query's meaningful (non-stopword,
@@ -110,7 +113,7 @@ CREATE OR REPLACE FUNCTION cerefox_hybrid_search(
     -- meant 100% of terms — the pass this gate generalizes. Chunks below the
     -- bar can still pass via the vector threshold, else they are
     -- below-confidence material. 0 restores the pre-gate OR behavior.
-    p_min_term_coverage FLOAT DEFAULT 0.5
+    p_min_term_coverage FLOAT DEFAULT NULL
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -164,6 +167,13 @@ DECLARE
     seen_tokens   TEXT[]    := '{}';
     total_tokens  INT;
     candidate_count INT := p_match_count * 5;
+    -- #133 resolution: caller value, else deployment config, else built-in.
+    v_min_score     FLOAT := COALESCE(p_min_score,
+                                      cerefox_config_float('min_search_score', 0.5));
+    v_alpha         FLOAT := COALESCE(p_alpha,
+                                      cerefox_config_float('search_alpha', 0.7));
+    v_min_coverage  FLOAT := COALESCE(p_min_term_coverage,
+                                      cerefox_config_float('min_term_coverage', 0.5));
 BEGIN
     -- Build the OR-composed query: plainto each whitespace token (so tokens get
     -- the same normalization/stemming as the AND path), skip stopword-only
@@ -217,7 +227,7 @@ BEGIN
                     WHEN and_matches OR total_tokens = 0 THEN TRUE
                     ELSE (SELECT COUNT(*) FROM unnest(tok_queries) tq
                           WHERE c.fts @@ tq)::FLOAT
-                         >= p_min_term_coverage * total_tokens
+                         >= v_min_coverage * total_tokens
                 END AS coverage_ok
             FROM cerefox_chunks c
             JOIN cerefox_documents d ON c.document_id = d.id
@@ -261,8 +271,8 @@ BEGIN
         combined AS (
             SELECT
                 COALESCE(f.id, v.id) AS id,
-                (   p_alpha * COALESCE(v.vec_score, 0.0) +
-                    (1.0 - p_alpha) * COALESCE(f.fts_score, 0.0)
+                (   v_alpha * COALESCE(v.vec_score, 0.0) +
+                    (1.0 - v_alpha) * COALESCE(f.fts_score, 0.0)
                 ) AS score,
                 COALESCE(v.vec_score, 0.0) AS vec_score,
                 -- TRUE when the chunk matched the @@ FTS operator WITH enough
@@ -282,7 +292,7 @@ BEGIN
         -- results (no FTS match) are filtered by the cosine threshold.
         flagged AS (
             SELECT *,
-                   (combined.has_fts_match OR combined.vec_score >= p_min_score) AS passes
+                   (combined.has_fts_match OR combined.vec_score >= v_min_score) AS passes
             FROM combined
         ),
         any_pass AS (SELECT bool_or(fl.passes) AS ok FROM flagged fl),
@@ -349,7 +359,7 @@ CREATE OR REPLACE FUNCTION cerefox_fts_search(
     p_metadata_filter JSONB DEFAULT NULL,
     -- v1.0.4: see cerefox_hybrid_search. In OR-fallback mode results must
     -- match at least this fraction of the query's meaningful terms.
-    p_min_term_coverage FLOAT DEFAULT 0.5
+    p_min_term_coverage FLOAT DEFAULT NULL
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -383,6 +393,8 @@ DECLARE
     tok_queries   tsquery[] := '{}';
     seen_tokens   TEXT[]    := '{}';
     total_tokens  INT;
+    v_min_coverage FLOAT := COALESCE(p_min_term_coverage,
+                                     cerefox_config_float('min_term_coverage', 0.5));
 BEGIN
     FOR tok IN SELECT unnest(regexp_split_to_array(trim(p_query_text), '\s+')) LOOP
         tok_q := plainto_tsquery('english', tok);
@@ -443,7 +455,7 @@ BEGIN
       -- returns only chunks matching enough of the query's terms.
       AND (and_matches OR total_tokens = 0
            OR (SELECT COUNT(*) FROM unnest(tok_queries) tq
-               WHERE c.fts @@ tq)::FLOAT >= p_min_term_coverage * total_tokens)
+               WHERE c.fts @@ tq)::FLOAT >= v_min_coverage * total_tokens)
       AND (p_project_id IS NULL OR EXISTS (
               SELECT 1 FROM cerefox_document_projects dp
               WHERE dp.document_id = d.id AND dp.project_id = p_project_id
@@ -749,13 +761,15 @@ CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_query_text             TEXT,
     p_query_embedding        VECTOR(768),
     p_match_count            INT   DEFAULT 5,
-    p_alpha                  FLOAT DEFAULT 0.7,
+    p_alpha                  FLOAT DEFAULT NULL,
     p_project_id             UUID  DEFAULT NULL,
-    p_min_score              FLOAT DEFAULT 0.0,
+    p_min_score              FLOAT DEFAULT NULL,
     p_small_to_big_threshold INT   DEFAULT 20000,
     p_context_window         INT   DEFAULT 1,
     p_metadata_filter        JSONB DEFAULT NULL,
-    p_min_term_coverage      FLOAT DEFAULT 0.5
+    -- NULL flows through to cerefox_hybrid_search, which resolves the
+    -- caller > cerefox_config > built-in chain in one place (#133).
+    p_min_term_coverage      FLOAT DEFAULT NULL
 )
 RETURNS TABLE (
     document_id              UUID,
@@ -1753,6 +1767,31 @@ AS $$
     SELECT value FROM cerefox_config WHERE key = p_key;
 $$;
 
+-- Numeric config reader with a fallback (v1.1.0, #133). Returns p_fallback
+-- when the key is unset or unparseable, so a malformed row can never break
+-- search — it just reverts to the built-in default.
+CREATE OR REPLACE FUNCTION cerefox_config_float(p_key TEXT, p_fallback FLOAT)
+RETURNS FLOAT
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_raw TEXT;
+    v_num FLOAT;
+BEGIN
+    SELECT value INTO v_raw FROM cerefox_config WHERE key = p_key;
+    IF v_raw IS NULL OR v_raw = '' THEN RETURN p_fallback; END IF;
+    BEGIN
+        v_num := v_raw::FLOAT;
+    EXCEPTION WHEN others THEN
+        RETURN p_fallback;
+    END;
+    RETURN v_num;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION cerefox_set_config(p_key TEXT, p_value TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -1760,7 +1799,13 @@ SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    v_allowed TEXT[] := ARRAY['usage_tracking_enabled', 'require_requestor_identity', 'requestor_identity_format'];
+    -- Retrieval tunables (#133) join the governance keys: setting one here
+    -- governs EVERY access path (CLI, local + remote MCP, Edge Functions, web),
+    -- because they all resolve through these RPCs.
+    v_allowed TEXT[] := ARRAY[
+        'usage_tracking_enabled', 'require_requestor_identity', 'requestor_identity_format',
+        'min_search_score', 'min_term_coverage', 'search_alpha'
+    ];
 BEGIN
     IF NOT (p_key = ANY(v_allowed)) THEN
         RAISE EXCEPTION 'Unknown config key: %. Allowed keys: %', p_key, v_allowed;
@@ -1954,7 +1999,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.9.2'::TEXT;
+    SELECT '0.9.3'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────
