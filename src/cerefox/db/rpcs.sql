@@ -1754,6 +1754,239 @@ BEGIN
 END;
 $$;
 
+-- ══ Document relations (iteration 29) ═════════════════════════════════════════
+-- Typed edges between documents. Design:
+-- docs/research/document-relations-and-semantic-graph.md
+--
+-- Type dictionary: rel_type is free text (any string is accepted and returned),
+-- but a few KNOWN types carry behaviour. Keeping the dictionary in one place
+-- here — rather than scattered CASE expressions — is what lets the set/delete
+-- RPCs stay symmetric with each other.
+--   symmetric   both directions are written/removed together
+--   supersedes  target becomes 'superseded'
+--   contradicts both documents become 'stale'
+CREATE OR REPLACE FUNCTION cerefox_relation_is_symmetric(p_rel_type TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public, pg_catalog
+AS $$
+    SELECT p_rel_type IN ('related_to', 'contradicts', 'duplicates');
+$$;
+
+-- Create (or update) a relation. Symmetric types write both directions in one
+-- transaction, so a half-written pair is impossible.
+CREATE OR REPLACE FUNCTION cerefox_set_relation(
+    p_source_id   UUID,
+    p_target_id   UUID,
+    p_rel_type    TEXT,
+    p_author      TEXT    DEFAULT 'unknown',
+    p_author_type TEXT    DEFAULT 'agent',
+    p_metadata    JSONB   DEFAULT '{}'::jsonb
+)
+RETURNS TABLE (
+    relation_id UUID,
+    source_id   UUID,
+    target_id   UUID,
+    rel_type      TEXT,
+    is_symmetric  BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+-- The OUT columns (source_id, target_id, rel_type) share names with the
+-- table's columns; inside the INSERT/ON CONFLICT below the COLUMN is meant.
+#variable_conflict use_column
+DECLARE
+    v_symmetric BOOLEAN := cerefox_relation_is_symmetric(p_rel_type);
+    v_id        UUID;
+BEGIN
+    IF p_source_id = p_target_id THEN
+        RAISE EXCEPTION 'A document cannot relate to itself (%).', p_source_id
+            USING ERRCODE = '22023';
+    END IF;
+    IF p_rel_type IS NULL OR btrim(p_rel_type) = '' THEN
+        RAISE EXCEPTION 'rel_type is required.' USING ERRCODE = '22023';
+    END IF;
+    -- Explicit existence checks give a clear error instead of an FK violation.
+    IF NOT EXISTS (SELECT 1 FROM cerefox_documents d
+                   WHERE d.id = p_source_id AND d.deleted_at IS NULL) THEN
+        RAISE EXCEPTION 'Source document % not found (or deleted).', p_source_id
+            USING ERRCODE = '22023';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM cerefox_documents d
+                   WHERE d.id = p_target_id AND d.deleted_at IS NULL) THEN
+        RAISE EXCEPTION 'Target document % not found (or deleted).', p_target_id
+            USING ERRCODE = '22023';
+    END IF;
+
+    INSERT INTO cerefox_document_relations AS r
+        (source_id, target_id, rel_type, metadata, author, author_type)
+    VALUES (p_source_id, p_target_id, btrim(p_rel_type), COALESCE(p_metadata, '{}'::jsonb),
+            p_author, p_author_type)
+    ON CONFLICT (source_id, target_id, rel_type) DO UPDATE
+        SET metadata = EXCLUDED.metadata,
+            author = EXCLUDED.author,
+            author_type = EXCLUDED.author_type
+    RETURNING r.id INTO v_id;
+
+    IF v_symmetric THEN
+        INSERT INTO cerefox_document_relations
+            (source_id, target_id, rel_type, metadata, author, author_type)
+        VALUES (p_target_id, p_source_id, btrim(p_rel_type),
+                COALESCE(p_metadata, '{}'::jsonb), p_author, p_author_type)
+        ON CONFLICT (source_id, target_id, rel_type) DO UPDATE
+            SET metadata = EXCLUDED.metadata,
+                author = EXCLUDED.author,
+                author_type = EXCLUDED.author_type;
+    END IF;
+
+    -- Lifecycle side effects (type dictionary).
+    IF btrim(p_rel_type) = 'supersedes' THEN
+        UPDATE cerefox_documents SET lifecycle_status = 'superseded'
+        WHERE id = p_target_id;
+    ELSIF btrim(p_rel_type) = 'contradicts' THEN
+        UPDATE cerefox_documents SET lifecycle_status = 'stale'
+        WHERE id IN (p_source_id, p_target_id);
+    END IF;
+
+    INSERT INTO cerefox_audit_log (document_id, operation, author, author_type, description)
+    VALUES (p_source_id, 'relation-set', p_author, p_author_type,
+            format('%s → %s (%s)', p_source_id, p_target_id, btrim(p_rel_type)));
+
+    RETURN QUERY SELECT v_id, p_source_id, p_target_id, btrim(p_rel_type), v_symmetric;
+END;
+$$;
+
+-- Remove a relation. Symmetric types remove both directions. Lifecycle side
+-- effects are NOT auto-reverted: a document marked superseded may have been
+-- superseded by something else too, and guessing wrong is worse than leaving
+-- the operator to set it explicitly.
+CREATE OR REPLACE FUNCTION cerefox_delete_relation(
+    p_source_id   UUID,
+    p_target_id   UUID,
+    p_rel_type    TEXT,
+    p_author      TEXT DEFAULT 'unknown',
+    p_author_type TEXT DEFAULT 'agent'
+)
+RETURNS INT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_deleted INT := 0;
+    v_n       INT;
+BEGIN
+    DELETE FROM cerefox_document_relations
+    WHERE source_id = p_source_id AND target_id = p_target_id
+      AND rel_type = btrim(p_rel_type);
+    GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
+
+    IF cerefox_relation_is_symmetric(p_rel_type) THEN
+        DELETE FROM cerefox_document_relations
+        WHERE source_id = p_target_id AND target_id = p_source_id
+          AND rel_type = btrim(p_rel_type);
+        GET DIAGNOSTICS v_n = ROW_COUNT; v_deleted := v_deleted + v_n;
+    END IF;
+
+    IF v_deleted > 0 THEN
+        INSERT INTO cerefox_audit_log (document_id, operation, author, author_type, description)
+        VALUES (p_source_id, 'relation-delete', p_author, p_author_type,
+                format('%s → %s (%s)', p_source_id, p_target_id, btrim(p_rel_type)));
+    END IF;
+    RETURN v_deleted;
+END;
+$$;
+
+-- All edges touching a document, in both directions. `direction` tells the
+-- caller which way each edge points relative to the document asked about.
+CREATE OR REPLACE FUNCTION cerefox_get_relations(p_document_id UUID)
+RETURNS TABLE (
+    relation_id      UUID,
+    direction        TEXT,
+    rel_type         TEXT,
+    other_id         UUID,
+    other_title      TEXT,
+    other_lifecycle  TEXT,
+    metadata         JSONB,
+    author           TEXT,
+    created_at       TIMESTAMPTZ
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+    SELECT r.id, 'outbound'::TEXT, r.rel_type, r.target_id, d.title,
+           d.lifecycle_status, r.metadata, r.author, r.created_at
+    FROM cerefox_document_relations r
+    JOIN cerefox_documents d ON d.id = r.target_id
+    WHERE r.source_id = p_document_id AND d.deleted_at IS NULL
+    UNION ALL
+    SELECT r.id, 'inbound'::TEXT, r.rel_type, r.source_id, d.title,
+           d.lifecycle_status, r.metadata, r.author, r.created_at
+    FROM cerefox_document_relations r
+    JOIN cerefox_documents d ON d.id = r.source_id
+    WHERE r.target_id = p_document_id AND d.deleted_at IS NULL
+    ORDER BY 3, 9 DESC;
+$$;
+
+-- Walk the graph from a document along ONE relation type. Depth > 1 follows
+-- chains (meaningful for e.g. `follows` / `reply_to`); a visited-set stops
+-- cycles, which free-text types make possible.
+CREATE OR REPLACE FUNCTION cerefox_get_neighbors(
+    p_document_id UUID,
+    p_rel_type    TEXT,
+    p_depth       INT DEFAULT 1,
+    p_from_time   TIMESTAMPTZ DEFAULT NULL,
+    p_to_time     TIMESTAMPTZ DEFAULT NULL,
+    p_limit       INT DEFAULT 50
+)
+RETURNS TABLE (
+    document_id     UUID,
+    title           TEXT,
+    lifecycle_status TEXT,
+    depth           INT,
+    direction       TEXT,
+    doc_created_at  TIMESTAMPTZ
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+    WITH RECURSIVE walk AS (
+        SELECT p_document_id AS id, 0 AS depth, 'self'::TEXT AS direction,
+               ARRAY[p_document_id] AS seen
+        UNION ALL
+        SELECT nxt.id, w.depth + 1, nxt.direction, w.seen || nxt.id
+        FROM walk w
+        CROSS JOIN LATERAL (
+            SELECT r.target_id AS id, 'outbound'::TEXT AS direction
+            FROM cerefox_document_relations r
+            WHERE r.source_id = w.id AND r.rel_type = btrim(p_rel_type)
+            UNION ALL
+            SELECT r.source_id, 'inbound'::TEXT
+            FROM cerefox_document_relations r
+            WHERE r.target_id = w.id AND r.rel_type = btrim(p_rel_type)
+        ) nxt
+        WHERE w.depth < GREATEST(p_depth, 1)
+          AND NOT (nxt.id = ANY(w.seen))   -- cycle guard
+    )
+    SELECT DISTINCT ON (w.id)
+           w.id, d.title, d.lifecycle_status, w.depth, w.direction, d.created_at
+    FROM walk w
+    JOIN cerefox_documents d ON d.id = w.id
+    WHERE w.depth > 0
+      AND d.deleted_at IS NULL
+      AND (p_from_time IS NULL OR d.created_at >= p_from_time)
+      AND (p_to_time   IS NULL OR d.created_at <= p_to_time)
+    ORDER BY w.id, w.depth
+    LIMIT GREATEST(p_limit, 1);
+$$;
+
 -- ── cerefox_get_config / cerefox_set_config ──────────────────────────────────
 -- Read/write key-value config from cerefox_config table.
 
@@ -1999,7 +2232,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.9.3'::TEXT;
+    SELECT '0.10.0'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────
