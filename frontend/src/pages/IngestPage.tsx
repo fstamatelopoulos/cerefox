@@ -133,7 +133,7 @@ export function IngestPage() {
       <div className={ui.pageHead}>
         <div>
           <p className={ui.eyebrow}>Add to memory</p>
-          <h1 className={ui.pageTitle}>Ingest content</h1>
+          <h1 className={ui.pageTitle} data-testid="page-title">Ingest content</h1>
         </div>
       </div>
 

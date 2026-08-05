@@ -104,7 +104,7 @@ export function DashboardPage() {
       <div className={`${styles.dashHero} ${ui.rise}`}>
         <div style={{ minWidth: 0 }}>
           <p className={ui.eyebrow}>Memory layer · online</p>
-          <h1 className={ui.pageTitle}>{greeting()}, operator.</h1>
+          <h1 className={ui.pageTitle} data-testid="page-title">{greeting()}, operator.</h1>
         </div>
         <div className={styles.dashHeroActions}>
           <form
@@ -247,7 +247,7 @@ export function DashboardPage() {
                   const ChipIcon = chip.icon;
                   const pending = doc.review_status !== "approved";
                   return (
-                    <tr key={doc.id} onClick={() => navigate(`/document/${doc.id}`)}>
+                    <tr key={doc.id} data-testid="recent-doc-row" onClick={() => navigate(`/document/${doc.id}`)}>
                       <td>
                         <div className={styles.docCell}>
                           <span className={styles.docDot} style={{ background: projColor(doc) }} />

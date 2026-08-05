@@ -75,7 +75,7 @@ export function ListPage<T>({
       <div className={ui.pageHead}>
         <div>
           <p className={ui.eyebrow}>{eyebrow}</p>
-          <h1 className={ui.pageTitle}>{title}</h1>
+          <h1 className={ui.pageTitle} data-testid="page-title">{title}</h1>
           {subtitle && <p className={ui.pageSub}>{subtitle}</p>}
         </div>
         {headerRight}

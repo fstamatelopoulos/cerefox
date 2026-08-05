@@ -70,7 +70,7 @@ export function MetadataSearchPage() {
       <div className={ui.pageHead}>
         <div>
           <p className={ui.eyebrow}>Knowledge base</p>
-          <h1 className={ui.pageTitle}>Metadata Search</h1>
+          <h1 className={ui.pageTitle} data-testid="page-title">Metadata Search</h1>
           <p className={ui.pageSub}>Find documents by their metadata keys and values.</p>
         </div>
         <CliHint cmd="cerefox metadata search" args={cliArgs} />
@@ -121,7 +121,7 @@ export function MetadataSearchPage() {
             <TextInput label="Created since" type="date" value={createdSince} onChange={(e) => setCreatedSince(e.currentTarget.value)} size="sm" />
           </Group>
 
-          <Button leftSection={<IconSearch size={16} />} onClick={handleSearch} disabled={validFilterCount === 0} loading={isPending} style={{ alignSelf: "flex-start" }}>
+          <Button data-testid="metadata-search-submit" leftSection={<IconSearch size={16} />} onClick={handleSearch} disabled={validFilterCount === 0} loading={isPending} style={{ alignSelf: "flex-start" }}>
             Search
           </Button>
         </Stack>
