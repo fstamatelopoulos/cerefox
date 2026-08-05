@@ -12,12 +12,12 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
-    # Majors are deliberate, batched maintenance (tracked in a milestone issue),
-    # not weekly drive-by PRs. Delete this ignore block when starting a major
-    # batch so Dependabot re-files the pending ones.
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+    # Majors were parked here during the 1.0.x line and taken as a batch in
+    # v1.1.0 (#124). Re-add this block if majors start arriving faster than
+    # they can be validated:
+    #   ignore:
+    #     - dependency-name: "*"
+    #       update-types: ["version-update:semver-major"]
 
   # GitHub Actions — understands our SHA pins and bumps SHA + version comment.
   - package-ecosystem: "github-actions"
