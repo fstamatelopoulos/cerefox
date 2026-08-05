@@ -4007,6 +4007,38 @@ and the web UI relation panel — re-opening search ranking so soon after the
 **Release shape**: dogfooded through `1.1.0-beta.N` on both worlds per
 RELEASING.md, since Phase 1 and Phase 2 both carry real regression risk.
 
+### beta.2 workstream (branch `feat/beta2-playwright-config-ui`)
+
+Cut from main after `1.1.0-beta.1`. Not released yet — beta.1 is deliberately
+untested against production until a staging Supabase project exists (below).
+
+- ✅ **#155 UI e2e repair.** The Playwright suite had drifted to 8 failures +
+  2 *silent skips* out of 13; every failure was a stale selector, not a broken
+  app (copy polished ASCII `...`→`…`, headings renamed, project creation moved
+  into a modal, two buttons now matching "Search"). Now 13/13 in ~32s (was
+  3.7min — three failures were 60s `page.fill` timeouts). Page identity is
+  asserted via `data-testid` hooks, because the dashboard heading is a
+  time-of-day greeting that should never have been in a test.
+- ✅ **Relations ship dormant** (`relations_enabled`, default false). The
+  maintainer's stability requirement for v1: the table and column were already
+  inert, but the four tools appeared in every agent's list. Gated in both
+  transports, fail-closed, guarded on the call path too. Verified live: 10
+  tools advertised with the flag off, 14 with it on. Schema 0.10.1.
+- ✅ **#165 keyboard accessibility.** Dashboard document/project rows were
+  click-only `<tr>`s — unreachable by keyboard, no cmd/middle-click, no copy
+  link. Real links now. (This also caused the e2e suite's silent skips.)
+- ⏳ **Config web UI** — a settings surface for the `cerefox_config` keys
+  (`cerefox config set` equivalents, incl. the retrieval tunables from #133 and
+  `relations_enabled`). Next up.
+
+**Open decisions carried to the staging session:**
+- Staging Supabase project (separate project, same account) — gives an isolated
+  DB *and* finally exercises the never-validated fresh-install path (the
+  original #26 concern). Needs a config-switching story (a second config dir or
+  env-file selection) so the CLI can target staging without touching prod.
+- Relation-aware search: agreed as an **optional extension**, designed and
+  discussed before any implementation.
+
 **Update (2026-08-03): v1.0.2 SHIPPED (security/maintenance patch) + supply-chain regime.**
 Full-repo doc sanity pass + security audit (PR #112; audit addendum in
 `docs/specs/security-audit-1.0.md`): dependency refresh (19 advisories → 3
