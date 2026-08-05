@@ -52,26 +52,33 @@ async function listDocuments(
   opts: { projectId?: string | null; limit: number; offset?: number },
 ): Promise<Record<string, unknown>[]> {
   const { projectId, limit, offset = 0 } = opts;
-  let docIds: string[] | null = null;
-  if (projectId) {
-    const { data, error } = await ctx.supabase
-      .from("cerefox_document_projects")
-      .select("document_id")
-      .eq("project_id", projectId);
-    if (error) throw error;
-    docIds = (data ?? []).map((r: { document_id: string }) => r.document_id);
-    if (docIds.length === 0) return [];
-  }
+  // Project scoping is a server-side inner join, not a prefetched id list
+  // (#134, same fix as #109/#110 on the CLI side). The old shape fetched every
+  // document_id in the project unpaginated and fed them to `.in("id", …)`,
+  // which broke twice over past ~1000 memberships: the junction read capped at
+  // the PostgREST row limit (so a project's later documents vanished from
+  // EVERY page, not just the last), and the id list inflated the request URL
+  // past the client's header budget.
+  //
+  // Widened to `string`: postgrest-js's select-string parser doesn't model the
+  // `!inner` embed hint at the type level, though it is valid at runtime.
+  const selectCols: string = projectId
+    ? `${DOC_COLS}, cerefox_document_projects!inner(project_id)`
+    : DOC_COLS;
   let q = ctx.supabase
     .from("cerefox_documents")
-    .select(DOC_COLS)
+    .select(selectCols)
     .is("deleted_at", null)
     .order("updated_at", { ascending: false });
-  if (docIds) q = q.in("id", docIds);
+  if (projectId) q = q.eq("cerefox_document_projects.project_id", projectId);
   q = q.range(offset, offset + limit - 1);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as Record<string, unknown>[];
+  // Strip the embedded junction rows — they exist only to drive the join.
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const { cerefox_document_projects: _j, ...doc } = row;
+    return doc;
+  });
 }
 
 async function listAllProjects(
@@ -257,6 +264,7 @@ interface DocResultRow {
   total_chars?: number;
   doc_updated_at?: string | null;
   is_partial?: boolean;
+  below_confidence?: boolean;
 }
 
 interface ChunkResultRow {
@@ -272,6 +280,7 @@ interface ChunkResultRow {
   doc_source?: string | null;
   doc_project_ids?: string[];
   doc_metadata?: Record<string, unknown>;
+  below_confidence?: boolean;
 }
 
 function projectDocResult(r: DocResultRow): Record<string, unknown> {
@@ -288,6 +297,12 @@ function projectDocResult(r: DocResultRow): Record<string, unknown> {
     total_chars: r.total_chars ?? 0,
     doc_updated_at: r.doc_updated_at ?? null,
     is_partial: r.is_partial ?? false,
+    // 28I: nothing cleared the relevance threshold — these are best-effort
+    // candidates and the SPA renders a warning banner (#138). NOTE: this
+    // projection is an allowlist; a new RPC output column is invisible to the
+    // web UI until it is added here. Source of truth: cerefox_search_docs /
+    // cerefox_hybrid_search in src/cerefox/db/rpcs.sql.
+    below_confidence: r.below_confidence ?? false,
   };
 }
 
@@ -305,6 +320,8 @@ function projectChunkResult(r: ChunkResultRow): Record<string, unknown> {
     doc_source: r.doc_source ?? null,
     doc_project_ids: r.doc_project_ids ?? [],
     doc_metadata: r.doc_metadata ?? {},
+    // See projectDocResult — same allowlist caveat (#138).
+    below_confidence: r.below_confidence ?? false,
   };
 }
 

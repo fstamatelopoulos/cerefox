@@ -678,16 +678,21 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
             `v${EF_VERSION} is cosmetic).`,
         };
       }
+      // Real drift (deployed predates the last actual EF source change).
+      // Severity matches the schema check's "above-min-but-old" case (#137):
+      // both mean "your server is behind this client — redeploy", and they
+      // must agree, or the consolidated remediation below misfires. Before
+      // #137 this returned "skipped", which excluded it from that block —
+      // so a doubly-stale server was told to run --schema-only and silently
+      // left the Edge Functions behind.
       return {
         name: "edge functions",
-        // Above-minimum ⇒ informational, not a warning (28H item 5, decided
-        // 2026-07-12): ⚠ is reserved for actual compatibility violations.
-        status: "skipped",
+        status: "warn",
         detail:
-          `Deployed Edge Functions (v${deployed}) are older than the ones bundled with ` +
-          `this client (v${EF_VERSION}). Compatible — nothing is broken — but redeploying ` +
-          `picks up the latest server-side fixes.`,
-        hint: "Redeploy with: cerefox server deploy --functions-only",
+          `Deployed Edge Functions (v${deployed}) are older than this client's ` +
+          `bundled v${EF_VERSION} and predate server-side fixes shipped in ` +
+          `v${EF_LAST_CHANGED}. Still compatible, but you are missing those fixes.`,
+        hint: "Update the Edge Functions (see remediation below).",
       };
     default:
       return {

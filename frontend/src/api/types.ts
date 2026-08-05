@@ -20,6 +20,7 @@ export interface DocSearchResult {
 }
 
 export interface ChunkSearchResult {
+  below_confidence?: boolean;
   chunk_id: string;
   document_id: string;
   chunk_index: number;

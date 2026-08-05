@@ -200,7 +200,10 @@ export function registerDocumentReadRoutes(app: Hono, ctx: WebContext): void {
       )
       .eq("document_id", documentId)
       .is("version_id", null)
-      .order("chunk_index");
+      .order("chunk_index")
+      // #135: a document can exceed the 1000-row cap — an unbounded read here
+      // would render a truncated document in the web UI with no indication.
+      .range(0, 4999);
     if (error) return c.json({ detail: error.message }, 500);
     const rows = (data ?? []) as Array<Record<string, unknown>>;
     return c.json(

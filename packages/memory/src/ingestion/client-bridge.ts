@@ -28,6 +28,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
 
 import {
   ConcurrencyConflictError,
@@ -153,14 +154,18 @@ export class IngestionDbBridge {
   }
 
   async listChunksForDocument(documentId: string): Promise<ChunkRowForUpdate[]> {
-    const { data } = await this.supabase
-      .from("cerefox_chunks")
-      .select(
-        "id, document_id, chunk_index, heading_path, heading_level, title, content, char_count",
-      )
-      .eq("document_id", documentId)
-      .is("version_id", null)
-      .order("chunk_index");
+    // Paginated: a document can exceed the 1000-row cap (#135).
+    const data = await fetchAllPages<ChunkRowForUpdate>((from, to) =>
+      this.supabase
+        .from("cerefox_chunks")
+        .select(
+          "id, document_id, chunk_index, heading_path, heading_level, title, content, char_count",
+        )
+        .eq("document_id", documentId)
+        .is("version_id", null)
+        .order("chunk_index")
+        .range(from, to),
+    );
     return (data ?? []) as ChunkRowForUpdate[];
   }
 

@@ -79,12 +79,19 @@ async function action(options: { json?: boolean }): Promise<void> {
     const needsSchema = stale("schema + RPCs");
     const needsEf = stale("edge functions");
     let remediation: string | null = null;
+    // #137: a client release that ships schema/RPC or Edge Function changes
+    // leaves those fixes INERT until the server is redeployed — so state the
+    // next step plainly rather than leaving the user to synthesize it from
+    // two independently-worded rows.
     if (needsSchema && needsEf) {
-      remediation = "Update the server (schema + RPCs + Edge Functions): cerefox server deploy";
+      remediation =
+        "This release needs a server update (schema + RPCs + Edge Functions): cerefox server deploy";
     } else if (needsSchema) {
-      remediation = "Update the schema + RPCs: cerefox server deploy --schema-only";
+      remediation =
+        "This release needs a schema + RPC update: cerefox server deploy --schema-only";
     } else if (needsEf) {
-      remediation = "Update the Edge Functions: cerefox server deploy --functions-only";
+      remediation =
+        "This release needs an Edge Function update: cerefox server deploy --functions-only";
     }
     if (remediation) {
       println(cErr.yellow("→ " + remediation));

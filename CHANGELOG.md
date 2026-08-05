@@ -9,6 +9,32 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **Web UI now shows the low-confidence search warning** (#138). The
+  below-confidence banner shipped in v1.0.3 never appeared in the browser: the
+  web API projects search rows through an explicit field allowlist that didn't
+  include the flag, so it was stripped before reaching the SPA.
+- **`cerefox doctor` reports a stale server consistently** (#137). The schema
+  and Edge-Function checks disagreed on severity for the same condition, and
+  because the EF drift was merely informational it was excluded from the
+  consolidated remediation — a server behind on *both* was told to run
+  `--schema-only`, silently leaving the Edge Functions stale. Both now warn,
+  the wording states what is actually missing, and the next step is spelled
+  out ("This release needs a server update: cerefox server deploy").
+- **More silent 1000-row truncations removed** (#134, follow-up to #131):
+  `cerefox_export.ts` truncated large exports, and the web UI's project-scoped
+  document listing prefetched an unbounded id list (which also inflated the
+  request URL — the #109 shape); both now scope server-side and paginate.
+  Per-document chunk reads in backup, ingestion, and the web document view are
+  bounded too, so a document with more than 1000 chunks can't render or back
+  up truncated.
+
+### Added
+- **Guards against silent row-cap truncation** (#135): `fetchAllPages` now
+  verifies its result against the server's own row count when the caller
+  requests one, and a repo-wide test fails CI on new unbounded PostgREST
+  selects (bound them, count server-side, or allowlist with a reason).
+
 Open roadmap.
 
 ---

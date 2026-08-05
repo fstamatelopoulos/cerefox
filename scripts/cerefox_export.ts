@@ -29,6 +29,7 @@ import { join } from "node:path";
 
 import { loadSettings } from "../_shared/config/index.js";
 import { createClient } from "../_shared/db-client/index.js";
+import { fetchAllPages } from "../_shared/db-client/paginate.js";
 import {
   EXIT_OK,
   EXIT_USER_ERROR,
@@ -167,34 +168,36 @@ async function main(): Promise<void> {
     projectName.set(p.id, p.name);
   }
 
-  // Fetch the live (non-deleted) documents to export.
-  let docQuery = client.raw
-    .from("cerefox_documents")
-    .select("id, title")
-    .is("deleted_at", null);
-  if (projectFilterId) {
-    const { data: junction, error: jErr } = await client.raw
-      .from("cerefox_document_projects")
-      .select("document_id")
-      .eq("project_id", projectFilterId);
-    if (jErr) {
-      errorln(`Project membership lookup failed: ${jErr.message}`);
-      process.exit(EXIT_SYSTEM_ERROR);
-    }
-    const ids = (junction ?? []).map((r) => (r as { document_id: string }).document_id);
-    if (ids.length === 0) {
-      println(`No documents in project "${args.project}". Nothing to export.`);
-      process.exit(EXIT_OK);
-    }
-    docQuery = docQuery.in("id", ids);
-  }
-
-  const { data: docs, error: docErr } = await docQuery;
-  if (docErr) {
-    errorln(`Could not list documents: ${docErr.message}`);
+  // Fetch the live (non-deleted) documents to export. Paginated, and project
+  // scoping is a server-side inner join rather than a prefetched id list
+  // (#134): the old shape silently truncated the export at the PostgREST row
+  // cap (1000) and inflated the request URL with every membership id.
+  //
+  // Widened to `string`: postgrest-js's select-string parser doesn't model the
+  // `!inner` embed hint at the type level, though it is valid at runtime.
+  const selectCols: string = projectFilterId
+    ? "id, title, cerefox_document_projects!inner(project_id)"
+    : "id, title";
+  let docRows: DocRow[];
+  try {
+    docRows = await fetchAllPages<DocRow>((from, to) => {
+      let q = client.raw
+        .from("cerefox_documents")
+        .select(selectCols)
+        .is("deleted_at", null);
+      if (projectFilterId) {
+        q = q.eq("cerefox_document_projects.project_id", projectFilterId);
+      }
+      return q.order("id", { ascending: true }).range(from, to);
+    });
+  } catch (err) {
+    errorln(`Could not list documents: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(EXIT_SYSTEM_ERROR);
   }
-  const docRows = (docs ?? []) as DocRow[];
+  if (projectFilterId && docRows.length === 0) {
+    println(`No documents in project "${args.project}". Nothing to export.`);
+    process.exit(EXIT_OK);
+  }
   if (docRows.length === 0) {
     println("No documents to export.");
     process.exit(EXIT_OK);

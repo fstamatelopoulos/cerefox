@@ -20,6 +20,9 @@
 interface PageResult<T> {
   data: T[] | null;
   error: { message?: string } | null;
+  /** PostgREST's total row count, present when the query requested
+   *  `count: "exact"`. Used as a self-check (#135). */
+  count?: number | null;
 }
 
 /** The query parameter accepts any thenable resolving to a `{ data, error }`
@@ -33,16 +36,31 @@ export async function fetchAllPages<T>(
 ): Promise<T[]> {
   const results: T[] = [];
   let offset = 0;
+  let serverTotal: number | null = null;
   for (;;) {
-    const { data, error } = (await makeQuery(
+    const { data, error, count } = (await makeQuery(
       offset,
       offset + batchSize - 1,
     )) as PageResult<T>;
     if (error) throw new Error(error.message ?? JSON.stringify(error));
+    // PostgREST reports the unpaginated total when the caller asked for
+    // `count: "exact"`. Remember it so we can prove completeness below.
+    if (typeof count === "number") serverTotal = count;
     const page = data ?? [];
     results.push(...page);
     if (page.length < batchSize) break;
     offset += batchSize;
+  }
+  // Self-check (#135): a short read is otherwise indistinguishable from a
+  // complete one — the failure mode behind #131 (a truncated backup that
+  // reported success). When the caller opted into `count: "exact"`, refuse to
+  // return a prefix silently.
+  if (serverTotal !== null && results.length !== serverTotal) {
+    throw new Error(
+      `Paginated read returned ${results.length} row(s) but the server reports ` +
+        `${serverTotal}. Refusing to return a partial result — retry, and if this ` +
+        `persists please report it (the rows may be changing under the read).`,
+    );
   }
   return results;
 }
