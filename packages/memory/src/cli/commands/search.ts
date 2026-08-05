@@ -26,7 +26,7 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { getMaxResponseBytes, getMinSearchScore, getMinTermCoverage } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { getMaxResponseBytes, getMinSearchScore, getMinTermCoverage, getSearchAlpha } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
 
@@ -79,7 +79,7 @@ async function action(
   }
 
   const matchCount = parsePositiveInt(options.matchCount, "--match-count", 5);
-  const alpha = parseFloat01(options.alpha, "--alpha", 0.7);
+  const alpha = parseFloat01(options.alpha, "--alpha", getSearchAlpha());
   const minScore = parseFloat01(options.minScore, "--min-score", getMinSearchScore());
   // v1.0.4 coverage gate: flag > CEREFOX_MIN_TERM_COVERAGE env > server
   // default (0.5). Only sent when one of the first two is set — omitting it
@@ -315,7 +315,7 @@ export function registerSearch(program: Command): void {
       "JSON containment filter; only docs whose metadata contains ALL pairs are returned.",
     )
     .option("--mode <mode>", "Search mode: docs (default), hybrid, fts.", "docs")
-    .option("--alpha <float>", "Semantic weight 0..1 (default: 0.7).", "0.7")
+    .option("--alpha <float>", "Semantic weight 0..1 (default: CEREFOX_SEARCH_ALPHA; else 0.7).")
     .option("--min-score <float>", "Minimum cosine similarity threshold (default: CEREFOX_MIN_SEARCH_SCORE; else 0.5, or 0.6 with the local embedder).")
     .option("--min-term-coverage <float>", "OR-fallback keyword matches must cover at least this fraction of the query's meaningful terms to count as confident hits (default: CEREFOX_MIN_TERM_COVERAGE; else the server default 0.5; needs schema ≥ 0.9.1).")
     .option("--max-bytes <n>", "Response size budget in bytes (default: CEREFOX_MAX_RESPONSE_BYTES or 200000).")

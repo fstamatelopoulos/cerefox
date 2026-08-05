@@ -16,7 +16,7 @@ import { Hono } from "hono";
 
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
-import { getMinSearchScore } from "../../../../../_shared/mcp-tools/_utils.js";
+import { getMinSearchScore, getSearchAlpha } from "../../../../../_shared/mcp-tools/_utils.js";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
 
@@ -376,7 +376,7 @@ async function runSearch(
       p_query_text: query,
       p_query_embedding: embedding,
       p_match_count: count,
-      p_alpha: 0.7,
+      p_alpha: getSearchAlpha(),
       p_use_upgrade: false,
       p_project_id: projectId,
       p_min_score: getMinSearchScore(),
@@ -395,7 +395,7 @@ async function runSearch(
     p_query_text: query,
     p_query_embedding: embedding,
     p_match_count: Math.min(count, 5),
-    p_alpha: 0.7,
+    p_alpha: getSearchAlpha(),
     p_project_id: projectId,
     p_min_score: getMinSearchScore(),
   };

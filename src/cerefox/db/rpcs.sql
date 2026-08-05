@@ -285,7 +285,21 @@ BEGIN
                    (combined.has_fts_match OR combined.vec_score >= p_min_score) AS passes
             FROM combined
         ),
-        any_pass AS (SELECT bool_or(fl.passes) AS ok FROM flagged fl)
+        any_pass AS (SELECT bool_or(fl.passes) AS ok FROM flagged fl),
+        -- v1.0.6: in the below-confidence fallback, rank each candidate WITHIN
+        -- its parent document so we can return one chunk per document. The cap
+        -- used to apply to chunks, so when a document owned several of the top
+        -- chunks the caller saw fewer than 3 results after document-level
+        -- de-duplication (cerefox_search_docs, CLI and web) — the count varied
+        -- with corpus shape rather than with the cap.
+        ranked AS (
+            SELECT fl.*,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY ch.document_id ORDER BY fl.score DESC
+                   ) AS rank_in_doc
+            FROM flagged fl
+            JOIN cerefox_chunks ch ON ch.id = fl.id
+        )
     SELECT
         c.id            AS chunk_id,
         c.document_id,
@@ -311,11 +325,13 @@ BEGIN
         -- memory layer can produce. "Truly nothing" (no candidates at all)
         -- still returns zero rows.
         NOT ap.ok       AS below_confidence
-    FROM flagged cm
+    FROM ranked cm
     CROSS JOIN any_pass ap
     JOIN cerefox_chunks   c ON c.id = cm.id
     JOIN cerefox_documents d ON c.document_id = d.id
-    WHERE cm.passes OR NOT ap.ok
+    -- Normal results are unchanged; fallback rows are restricted to each
+    -- document's best chunk so the cap below counts documents, not chunks.
+    WHERE cm.passes OR (NOT ap.ok AND cm.rank_in_doc = 1)
     ORDER BY cm.score DESC
     LIMIT (SELECT CASE WHEN ap2.ok THEN p_match_count
                        ELSE LEAST(p_match_count, 3) END
@@ -1938,7 +1954,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.9.1'::TEXT;
+    SELECT '0.9.2'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

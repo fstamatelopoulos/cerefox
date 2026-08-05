@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Cerefox! This guide explains what
 
 ## Where to Start
 
-Check `docs/TODO.md` for the current backlog of ideas and planned features. Pick something that interests you and fits your expertise. If you have a new idea, open an issue to discuss it before starting work.
+Check the [GitHub issues](https://github.com/fstamatelopoulos/cerefox/issues) for the current backlog — bugs, planned work, and unscheduled ideas all live there (`docs/TODO.md` was retired at v1.0.6). Pick something that interests you and fits your expertise; `docs/plan.md` shows what is actively in flight. If you have a new idea, open an issue to discuss it before starting work.
 
 ---
 

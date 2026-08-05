@@ -3919,8 +3919,9 @@ correctness across the guides).
 **Still deferred (lower-value / heavier):**
 - [ ] Local live-test wiring: point the read/write suites at the local container (extract
   its in-container JWT for the test) so the same suite runs against cloud **and** local.
-- [ ] `schema-version.bundled=null` image cosmetic (doctor shows a null bundled-schema in
-  the container context). Cosmetic only.
+- [x] ~~`schema-version.bundled=null` image cosmetic~~ — **stale note, verified fixed
+  (2026-08-04)**: the image bundles `dist/server-assets/`, so `readBundledSchemaVersion()`
+  resolves in-container; Cerefox Local doctor shows `(bundled vX.Y.Z)` correctly.
 
 **Testing convention (local):** use the **single** default local container
 (`cerefox-local` / volume `cerefox_local_pgdata`) — the local analogue of the maintainer's

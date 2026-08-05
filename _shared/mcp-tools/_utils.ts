@@ -45,6 +45,51 @@ export const DEFAULT_MIN_SEARCH_SCORE = 0.5;
 export const DEFAULT_MIN_SEARCH_SCORE_LOCAL = 0.6;
 
 /**
+ * Read an env var in any of Cerefox's three runtimes.
+ *
+ * Node/Bun expose `process.env` (populated from the user's `.env` by
+ * `_shared/config`). Supabase Edge Functions run Deno, where `process` may be
+ * absent but **Function secrets are readable via `Deno.env`** — so reading
+ * both means a secret set on the project configures the remote MCP / EF path
+ * the same way `.env` configures the local one. (Before this, the retrieval
+ * tunables silently fell back to built-in defaults on the remote path.)
+ */
+function readEnv(name: string): string | undefined {
+  const g = globalThis as {
+    process?: { env?: Record<string, string | undefined> };
+    Deno?: { env?: { get(k: string): string | undefined } };
+  };
+  const fromProcess = g.process?.env?.[name];
+  if (fromProcess !== undefined && fromProcess !== "") return fromProcess;
+  try {
+    const fromDeno = g.Deno?.env?.get(name);
+    return fromDeno === "" ? undefined : fromDeno;
+  } catch {
+    // Deno without --allow-env: treat as unset.
+    return undefined;
+  }
+}
+
+/** Parse a 0–1 env value; undefined when unset or out of range. */
+function readUnitInterval(name: string): number | undefined {
+  const raw = readEnv(name);
+  if (raw === undefined) return undefined;
+  const n = Number.parseFloat(raw);
+  return Number.isNaN(n) || n < 0 || n > 1 ? undefined : n;
+}
+
+/**
+ * Default hybrid fusion weight: 1.0 = pure semantic, 0.0 = pure keyword.
+ * Overridable via `CEREFOX_SEARCH_ALPHA` (parity with the other retrieval
+ * tunables; previously alpha was per-call only).
+ */
+export const DEFAULT_SEARCH_ALPHA = 0.7;
+
+export function getSearchAlpha(): number {
+  return readUnitInterval("CEREFOX_SEARCH_ALPHA") ?? DEFAULT_SEARCH_ALPHA;
+}
+
+/**
  * Resolve the minimum cosine-similarity floor for hybrid/semantic search
  * (vector-only matches below this are dropped; FTS matches always pass).
  * Overridable via the `CEREFOX_MIN_SEARCH_SCORE` env var (0.0–1.0). The Python
@@ -56,16 +101,11 @@ export const DEFAULT_MIN_SEARCH_SCORE_LOCAL = 0.6;
  * EF path doesn't use the host `.env` anyway).
  */
 export function getMinSearchScore(): number {
-  const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env?.CEREFOX_MIN_SEARCH_SCORE;
   const fallback =
-    (globalThis as { process?: { env?: Record<string, string | undefined> } })
-      .process?.env?.CEREFOX_EMBEDDER === "local"
+    readEnv("CEREFOX_EMBEDDER") === "local"
       ? DEFAULT_MIN_SEARCH_SCORE_LOCAL
       : DEFAULT_MIN_SEARCH_SCORE;
-  if (raw === undefined || raw === "") return fallback;
-  const n = Number.parseFloat(raw);
-  return Number.isNaN(n) || n < 0 || n > 1 ? fallback : n;
+  return readUnitInterval("CEREFOX_MIN_SEARCH_SCORE") ?? fallback;
 }
 
 /**
@@ -76,11 +116,7 @@ export function getMinSearchScore(): number {
  * (an unknown named argument fails the PostgREST function match).
  */
 export function getMinTermCoverage(): number | undefined {
-  const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env?.CEREFOX_MIN_TERM_COVERAGE;
-  if (raw === undefined || raw === "") return undefined;
-  const n = Number.parseFloat(raw);
-  return Number.isNaN(n) || n < 0 || n > 1 ? undefined : n;
+  return readUnitInterval("CEREFOX_MIN_TERM_COVERAGE");
 }
 
 export function applyByteBudget(
