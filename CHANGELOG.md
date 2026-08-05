@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.6] -- 2026-08-05
+
 ### Fixed
 - **Search result counts are consistent between chunk and document views**
   (schema 0.9.1 → 0.9.2 — redeploy with `cerefox server deploy`). When no
