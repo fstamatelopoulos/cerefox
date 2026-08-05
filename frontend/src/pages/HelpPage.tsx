@@ -107,7 +107,7 @@ export function HelpPage() {
   return (
     <Container fluid py="xs">
       <p className={ui.eyebrow}>Reference</p>
-      <Grid gutter="md">
+      <Grid gap="md">
         <Grid.Col span={{ base: 12, md: 3 }}>
           <Stack gap={2}>
             <Title order={5} mb="xs">

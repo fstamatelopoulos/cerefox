@@ -90,6 +90,32 @@ export function getSearchAlpha(): number {
 }
 
 /**
+ * The retrieval tunables a client should actually SEND to the RPCs (#133).
+ *
+ * Returns undefined when the operator has expressed no preference, so the
+ * parameter is omitted and the server resolves it: `cerefox_config` first,
+ * then the built-in default. That is what lets one `cerefox config set` govern
+ * every access path. When a value IS configured here it wins, preserving the
+ * chain: per-call argument > client env > deployment config > built-in.
+ *
+ * `min_search_score` has one subtlety: the local embedder needs a higher floor
+ * (nomic scores unrelated text ~0.4–0.55), so an explicitly local embedder
+ * counts as "configured" even when CEREFOX_MIN_SEARCH_SCORE is unset —
+ * otherwise omitting the parameter would silently apply the OpenAI-calibrated
+ * default to a local deployment.
+ */
+export function getConfiguredMinSearchScore(): number | undefined {
+  const explicit = readUnitInterval("CEREFOX_MIN_SEARCH_SCORE");
+  if (explicit !== undefined) return explicit;
+  if (readEnv("CEREFOX_EMBEDDER") === "local") return DEFAULT_MIN_SEARCH_SCORE_LOCAL;
+  return undefined;
+}
+
+export function getConfiguredSearchAlpha(): number | undefined {
+  return readUnitInterval("CEREFOX_SEARCH_ALPHA");
+}
+
+/**
  * Resolve the minimum cosine-similarity floor for hybrid/semantic search
  * (vector-only matches below this are dropped; FTS matches always pass).
  * Overridable via the `CEREFOX_MIN_SEARCH_SCORE` env var (0.0–1.0). The Python

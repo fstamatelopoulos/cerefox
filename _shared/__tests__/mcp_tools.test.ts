@@ -35,8 +35,8 @@ function noopClient(): SupabaseClient {
 }
 
 describe("ALL_TOOLS registration", () => {
-  test("contains exactly 10 tools (9 existing + cerefox_get_help)", () => {
-    expect(ALL_TOOLS.length).toBe(10);
+  test("contains exactly 14 tools (10 + the 4 relation tools)", () => {
+    expect(ALL_TOOLS.length).toBe(14);
   });
 
   test("every tool name starts with cerefox_", () => {

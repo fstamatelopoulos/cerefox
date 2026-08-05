@@ -26,7 +26,12 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { getMaxResponseBytes, getMinSearchScore, getMinTermCoverage, getSearchAlpha } from "../../../../../_shared/mcp-tools/_utils.ts";
+import {
+  getConfiguredMinSearchScore,
+  getConfiguredSearchAlpha,
+  getMaxResponseBytes,
+  getMinTermCoverage,
+} from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
 
@@ -79,8 +84,22 @@ async function action(
   }
 
   const matchCount = parsePositiveInt(options.matchCount, "--match-count", 5);
-  const alpha = parseFloat01(options.alpha, "--alpha", getSearchAlpha());
-  const minScore = parseFloat01(options.minScore, "--min-score", getMinSearchScore());
+  const envAlpha = getConfiguredSearchAlpha();
+  const alphaParam =
+    options.alpha !== undefined
+      ? { p_alpha: parseFloat01(options.alpha, "--alpha", envAlpha ?? 0.7) }
+      : envAlpha !== undefined
+        ? { p_alpha: envAlpha }
+        : {};
+  // #133: send a tunable only when the operator expressed a preference (flag
+  // or env); otherwise omit it so the server resolves cerefox_config → default.
+  const envScore = getConfiguredMinSearchScore();
+  const scoreParam =
+    options.minScore !== undefined
+      ? { p_min_score: parseFloat01(options.minScore, "--min-score", envScore ?? 0.5) }
+      : envScore !== undefined
+        ? { p_min_score: envScore }
+        : {};
   // v1.0.4 coverage gate: flag > CEREFOX_MIN_TERM_COVERAGE env > server
   // default (0.5). Only sent when one of the first two is set — omitting it
   // keeps the call compatible with pre-0.9.1 servers (unknown named args fail
@@ -145,10 +164,10 @@ async function action(
       p_query_text: query,
       p_query_embedding: embedding,
       p_match_count: matchCount,
-      p_alpha: alpha,
       p_use_upgrade: false,
       p_project_id: projectId,
-      p_min_score: minScore,
+      ...alphaParam,
+      ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
     };
@@ -158,9 +177,9 @@ async function action(
       p_query_text: query,
       p_query_embedding: embedding,
       p_match_count: matchCount,
-      p_alpha: alpha,
       p_project_id: projectId,
-      p_min_score: minScore,
+      ...alphaParam,
+      ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
     };

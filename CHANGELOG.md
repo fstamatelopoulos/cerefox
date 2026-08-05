@@ -9,6 +9,54 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+- **Document relations: a typed graph over your knowledge base** (iteration 29;
+  schema 0.9.3 → 0.10.0 — redeploy with `cerefox server deploy`). Link documents
+  with directed, typed edges — `supersedes`, `contradicts`, `references`,
+  `related_to`, `follows`, or any type string you invent — and Cerefox tracks
+  what that means. `supersedes` marks the older document **superseded**;
+  `contradicts` marks **both** stale; symmetric types write both directions in
+  one transaction. Every document now carries a `lifecycle_status`, so an agent
+  retrieving a document can tell whether the knowledge still stands instead of
+  presenting outdated notes as current. Four new MCP tools
+  (`cerefox_set_relation`, `cerefox_delete_relation`, `cerefox_get_relations`,
+  `cerefox_get_neighbors` — 14 tools total) and a matching CLI group
+  (`cerefox relation set|delete|list|neighbors`). `cerefox_get_neighbors` walks
+  one relation type outward, following chains and terminating safely on cycles.
+  Search ranking is deliberately untouched in this release; relation-aware
+  retrieval is the next slice.
+- **Deployment-wide search settings** (#133; schema 0.9.2 → 0.9.3 — redeploy
+  with `cerefox server deploy`). `min_search_score`, `min_term_coverage`, and
+  `search_alpha` can now be set once with `cerefox config set` and every access
+  path obeys — CLI, local and remote MCP, Edge Functions, and the web UI —
+  because they all resolve through the same search RPCs. Previously these were
+  client-side only, so a search issued by a cloud agent silently used built-in
+  defaults no matter how the deployment was configured. Order of precedence:
+  per-call argument, then the client's `CEREFOX_*` env var, then the stored
+  setting, then the built-in default; a malformed stored value falls back to
+  the built-in rather than breaking search.
+- **`cerefox doctor --strict`** exits non-zero when any check warns, for use as
+  a gate. The default still exits 0 on warnings, because the client is updated
+  before the server and a normal upgrade window would otherwise fail CI.
+
+### Fixed
+- **`cerefox doctor` no longer reports "All checks passed" alongside warnings**
+  (#152) — it contradicted the remediation printed directly above it.
+- **`cerefox-local upgrade` actually upgrades** (#153). With no argument it
+  resolved nothing and re-pulled the pinned image while printing a success
+  message; it now finds the newest release, reports the move, and pins it
+  (`upgrade <tag>` still pins an exact version, `upgrade --latest` follows the
+  moving tag). Container installs also stopped exposing `self-update`, which
+  ran npm inside the container and could not work; it now points at the image
+  upgrade path. A missing command reports "not found on PATH" instead of
+  "exit undefined".
+
+### Changed
+- **Dependency majors taken** (#124): Mantine 8 → 9, `@huggingface/transformers`
+  3 → 4 (local embedder re-validated end to end), `diff` 8 → 9, `@eslint/js`
+  9 → 10, `commander` 12 → 14. Commander 15 was deliberately skipped: it
+  requires Node ≥ 22.12, which is a support-policy decision tracked in #154.
+
 Open roadmap.
 
 ---

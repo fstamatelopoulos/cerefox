@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.9.2
+-- @version: 0.10.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     -- 'pending_review' = modified by agent, not yet reviewed.
     -- Content is searchable in both states.
     review_status   TEXT        NOT NULL DEFAULT 'approved',
+    -- lifecycle_status: where this document stands relative to the graph —
+    -- 'active' | 'superseded' | 'stale' | 'archived'. Distinct from
+    -- review_status (editorial state) and deleted_at (existence). Maintained by
+    -- the relation RPCs (e.g. `supersedes` marks its target superseded).
+    lifecycle_status TEXT       NOT NULL DEFAULT 'active',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- Soft delete: NULL = active, timestamp = deleted (recoverable).
@@ -118,7 +123,9 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
 
     CONSTRAINT cerefox_audit_log_operation_check CHECK (
         operation IN ('create', 'update-content', 'update-metadata', 'delete',
-                      'status-change', 'archive', 'unarchive', 'restore')
+                      'status-change', 'archive', 'unarchive', 'restore',
+                      -- iteration 29: graph edges are auditable writes too
+                      'relation-set', 'relation-delete')
     ),
     CONSTRAINT cerefox_audit_log_author_type_check CHECK (author_type IN ('user', 'agent'))
 );
@@ -131,6 +138,32 @@ CREATE TABLE IF NOT EXISTS cerefox_document_projects (
     project_id  UUID NOT NULL REFERENCES cerefox_projects(id)  ON DELETE CASCADE,
     PRIMARY KEY (document_id, project_id)
 );
+
+-- ── Document relations (iteration 29) ─────────────────────────────────────────
+-- Typed, directed edges between documents. rel_type is free text by design so
+-- agents can define new types without a migration; the type dictionary lives in
+-- the RPCs and gives KNOWN types behaviour (symmetry, lifecycle side effects).
+-- Design: docs/research/document-relations-and-semantic-graph.md §2.2.
+
+CREATE TABLE IF NOT EXISTS cerefox_document_relations (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_id    UUID        NOT NULL REFERENCES cerefox_documents(id) ON DELETE CASCADE,
+    target_id    UUID        NOT NULL REFERENCES cerefox_documents(id) ON DELETE CASCADE,
+    rel_type     TEXT        NOT NULL,
+    metadata     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    author       TEXT        NOT NULL DEFAULT 'unknown',
+    author_type  TEXT        NOT NULL DEFAULT 'agent',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (source_id, target_id, rel_type),
+    CONSTRAINT cerefox_relations_no_self_edge CHECK (source_id <> target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cerefox_relations_source ON cerefox_document_relations(source_id);
+CREATE INDEX IF NOT EXISTS idx_cerefox_relations_target ON cerefox_document_relations(target_id);
+CREATE INDEX IF NOT EXISTS idx_cerefox_relations_type   ON cerefox_document_relations(rel_type);
+CREATE INDEX IF NOT EXISTS idx_cerefox_docs_lifecycle
+    ON cerefox_documents(lifecycle_status)
+    WHERE lifecycle_status <> 'active';
 
 -- ── Chunks ────────────────────────────────────────────────────────────────────
 -- One row per chunk of a document. Embeddings and FTS live here.

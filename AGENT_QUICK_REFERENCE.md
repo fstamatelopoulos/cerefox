@@ -1,6 +1,6 @@
 # Cerefox Knowledge Base -- Agent Quick Reference
 
-Cerefox is a persistent, shared knowledge base. You have **10 MCP tools** (9 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
+Cerefox is a persistent, shared knowledge base. You have **14 MCP tools** (13 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
 
 ## Tools
 
@@ -10,6 +10,10 @@ Cerefox is a persistent, shared knowledge base. You have **10 MCP tools** (9 of 
 | `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `expected_content_hash` (**required on content updates** — see rule 9), `last_write_wins`, `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata` (omit on update to keep existing tags; `{}` clears), `author` |
 | `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token) | `document_id` (required) |
 | `cerefox_list_versions` | Version history of a document | `document_id` (required) |
+| `cerefox_set_relation` | Link two documents (`source --rel_type--> target`) | `source_id`, `target_id`, `rel_type` (required), `metadata`, `author` |
+| `cerefox_delete_relation` | Remove a relation | `source_id`, `target_id`, `rel_type` |
+| `cerefox_get_relations` | All relations touching a document, both directions | `document_id` |
+| `cerefox_get_neighbors` | Walk the graph along ONE relation type | `document_id`, `rel_type` (required), `depth`, `from_time`, `to_time`, `limit` |
 | `cerefox_metadata_search` | Find or list docs by metadata, project, or time (no text query) | `metadata_filter`, `project_name` (list a project's docs), `updated_since`, `include_content` — **at least one** of metadata_filter/project_name/updated_since/created_since |
 | `cerefox_list_metadata_keys` | Discover available metadata keys | (none required) |
 | `cerefox_list_projects` | List all projects | (none required) |
@@ -29,7 +33,8 @@ Cerefox is a persistent, shared knowledge base. You have **10 MCP tools** (9 of 
 8. **Cross-doc links inside content**: **always use `[Text](document-uuid)`.** UUIDs are the only fully reliable link form — stable across title changes, never ambiguous, no encoding gotchas. Every `cerefox_search` result shows `[id: <uuid>]` after the title; grab it and use it. Title-based linking (`[Text](<Title With Spaces>)`) is fragile (breaks on colons, parens, ampersands, brackets — silently navigates to wrong page) — **don't write title-based links**; do an extra search to get the UUID instead. Repo-path forms (`[Text](docs/path.md)`) exist for repo-ingested files; don't construct manually. See `AGENT_GUIDE.md → Writing linkable content` for the full rule.
 9. **Concurrency: content updates require `expected_content_hash`.** Pass the `content_hash` you read (shown by `cerefox_get_document`, `cerefox_search`, and `cerefox_metadata_search`) when updating a document. If it's stale you get a **conflict** — re-read the document, merge your changes into the latest content, retry with the new hash. **Never resolve a conflict by overwriting blindly** — the current content includes another writer's work. `last_write_wins: true` skips the check; use it ONLY when an external source of truth makes conflicts meaningless (file re-sync), never to silence a conflict.
 10. **Search: prefer a few distinctive terms; heed `below confidence`.** When nothing clears the relevance threshold, `cerefox_search` returns the closest candidates prefixed with a `below confidence` warning instead of an empty set — that flag means **weak signal, not absent knowledge**: check the candidates' scores and titles before concluding the KB lacks the content. A truly empty response means nothing even weakly related exists.
-11. **Project memberships — non-destructive by default**: on `cerefox_ingest` updates, **`project_name` (singular) is a non-destructive add** (ensures membership, preserves others). Use **`project_names` (list)** when you want to set the doc's full project set in one call (destructive replace). For metadata-only project changes without writing content, use **`cerefox_set_document_projects(document_id, project_names)`** — that tool is the destructive-replace contract made explicit. Never call `cerefox_set_document_projects` with a single name when you mean "add" — that would REMOVE the doc from all other projects. When in doubt, use `cerefox_ingest` with singular `project_name`.
+11. **Relations express how documents relate; lifecycle tells you if knowledge is still good.** Use `cerefox_set_relation` when one document supersedes, contradicts, references, or continues another. `supersedes` marks the target **superseded**; `contradicts` marks **both** stale; `related_to`/`duplicates`/`contradicts` are symmetric (both directions written). Any other type string is accepted without special behaviour. When a search result or `cerefox_get_relations` shows a neighbour marked `[superseded]` or `[stale]`, say so rather than presenting it as current.
+12. **Project memberships — non-destructive by default**: on `cerefox_ingest` updates, **`project_name` (singular) is a non-destructive add** (ensures membership, preserves others). Use **`project_names` (list)** when you want to set the doc's full project set in one call (destructive replace). For metadata-only project changes without writing content, use **`cerefox_set_document_projects(document_id, project_names)`** — that tool is the destructive-replace contract made explicit. Never call `cerefox_set_document_projects` with a single name when you mean "add" — that would REMOVE the doc from all other projects. When in doubt, use `cerefox_ingest` with singular `project_name`.
 
 ## Update Workflow (ID-based -- preferred)
 
@@ -70,6 +75,10 @@ Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/g
 | `cerefox_list_versions` | `cerefox document version list <id> --requestor "<your-name>"` |
 | `cerefox_list_projects` | `cerefox project list --requestor "<your-name>"` |
 | `cerefox_list_metadata_keys` | `cerefox metadata keys` |
+| `cerefox_set_relation` | Link two documents (`source --rel_type--> target`) | `source_id`, `target_id`, `rel_type` (required), `metadata`, `author` |
+| `cerefox_delete_relation` | Remove a relation | `source_id`, `target_id`, `rel_type` |
+| `cerefox_get_relations` | All relations touching a document, both directions | `document_id` |
+| `cerefox_get_neighbors` | Walk the graph along ONE relation type | `document_id`, `rel_type` (required), `depth`, `from_time`, `to_time`, `limit` |
 | `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --requestor "<your-name>"` (list a project: `cerefox document list --project <name>`) |
 | `cerefox_set_document_projects` | `cerefox document set-projects <id> <name...> --author "<your-name>" --author-type agent` (or `--clear` to remove all) |
 | `cerefox_get_audit_log` | `cerefox audit list --requestor "<your-name>"` (add `--json` for scripted access) |

@@ -40,6 +40,12 @@ import { registerProjectEdit } from "./commands/project-edit.ts";
 import { registerVersionArchive } from "./commands/version-archive.ts";
 import { registerDoctor } from "./commands/doctor.ts";
 import { registerGetAuditLog } from "./commands/get-audit-log.ts";
+import {
+  registerRelationDelete,
+  registerRelationList,
+  registerRelationNeighbors,
+  registerRelationSet,
+} from "./commands/relation.ts";
 import { registerGetDoc } from "./commands/get-doc.ts";
 import { registerIngest } from "./commands/ingest.ts";
 import { registerIngestDir } from "./commands/ingest-dir.ts";
@@ -207,6 +213,15 @@ export function buildProgram(): Command {
   const metadata = program.command("metadata").description("Metadata: keys, search.");
   moveInto(metadata, registerListMetadataKeys, "keys");
   moveInto(metadata, registerMetadataSearch, "search");
+
+  // iteration 29: the document graph.
+  const relation = program
+    .command("relation")
+    .description("Document relations: set, delete, list, neighbors.");
+  registerRelationSet(relation);
+  registerRelationDelete(relation);
+  registerRelationList(relation);
+  registerRelationNeighbors(relation);
 
   const audit = program.command("audit").description("Audit log: list.");
   moveInto(audit, registerGetAuditLog, "list");

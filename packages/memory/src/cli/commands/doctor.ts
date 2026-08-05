@@ -29,7 +29,7 @@ function symbol(status: CheckStatus): string {
   }
 }
 
-async function action(options: { json?: boolean }): Promise<void> {
+async function action(options: { json?: boolean; strict?: boolean }): Promise<void> {
   // Spinner only when writing to a TTY and not in --json mode. Matches the
   // pattern from `scripts/db_status.ts`: spinner writes to stderr (ora
   // default), JSON output goes to stdout — so the two never collide, and
@@ -107,12 +107,22 @@ async function action(options: { json?: boolean }): Promise<void> {
     }
     process.exit(1);
   }
+  // #152: don't claim "all checks passed" when checks warned — the old line
+  // contradicted the remediation printed directly above it.
   if (!options.json) {
-    println(
-      cErr.green("✓") +
-        ` All checks passed${warnCount > 0 ? ` (${warnCount} warning${warnCount === 1 ? "" : "s"})` : ""}.`,
-    );
+    if (warnCount > 0) {
+      println(
+        cErr.yellow("⚠ ") +
+          `${warnCount} warning${warnCount === 1 ? "" : "s"} — see above.`,
+      );
+    } else {
+      println(cErr.green("✓") + " All checks passed.");
+    }
   }
+  // Warnings exit 0 by default: the client is always updated before the
+  // server, so a normal upgrade window would otherwise fail scripts and CI.
+  // `--strict` opts into treating them as failures.
+  if (options.strict && warnCount > 0) process.exit(1);
 }
 
 export function registerDoctor(program: Command): void {
@@ -120,5 +130,6 @@ export function registerDoctor(program: Command): void {
     .command("doctor")
     .description("Run diagnostic checks against the installed Cerefox.")
     .option("--json", "Emit machine-readable JSON (no colours, structured output).")
+    .option("--strict", "Exit non-zero when any check warns (default: only errors fail).")
     .action(action);
 }

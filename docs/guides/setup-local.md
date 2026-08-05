@@ -143,7 +143,9 @@ cerefox-local start          # start a stopped container
 cerefox-local stop           # stop it (your data persists in the Docker volume)
 cerefox-local restart
 cerefox-local logs -f        # follow the logs
-cerefox-local upgrade        # pull the latest image + recreate (keeps data + OPENAI key)
+cerefox-local upgrade        # upgrade to the newest release + recreate (keeps data + OPENAI key)
+cerefox-local upgrade v1.2.3 # pin an exact version (also how you downgrade)
+cerefox-local upgrade --latest  # follow the moving :latest tag from now on
 cerefox-local uninstall          # remove the container, KEEP the data volume
 cerefox-local uninstall --purge  # remove the container AND delete the data volume
 ```

@@ -51,7 +51,7 @@ describe("stdio MCP server smoke", () => {
     }
   });
 
-  test("tools/list returns 10 tools over stdio", async () => {
+  test("tools/list returns 14 tools over stdio", async () => {
     if (!existsSync(BIN)) {
       throw new Error(`run \`bun run build\` first`);
     }
@@ -152,7 +152,7 @@ describe("stdio MCP server smoke", () => {
       result?: { tools?: Array<{ name: string }> };
     };
     expect(Array.isArray(tools.result?.tools)).toBe(true);
-    expect(tools.result?.tools?.length).toBe(10);
+    expect(tools.result?.tools?.length).toBe(14);
     const names = tools.result?.tools?.map((t) => t.name).sort();
     expect(names).toEqual(
       [

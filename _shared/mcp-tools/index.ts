@@ -12,6 +12,12 @@
  */
 
 import { auditLogTool } from "./audit-log.ts";
+import {
+  deleteRelationTool,
+  getNeighborsTool,
+  getRelationsTool,
+  setRelationTool,
+} from "./relations.ts";
 import { getDocumentTool } from "./get-document.ts";
 import { getHelpTool } from "./get-help.ts";
 import { ingestTool } from "./ingest.ts";
@@ -34,6 +40,11 @@ export const ALL_TOOLS: ToolDefinition[] = [
   listProjectsTool,
   setDocumentProjectsTool,
   auditLogTool,
+  // Document relations (iteration 29): the graph surface.
+  setRelationTool,
+  deleteRelationTool,
+  getRelationsTool,
+  getNeighborsTool,
   getHelpTool,
 ];
 
