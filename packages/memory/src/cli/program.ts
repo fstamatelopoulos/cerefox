@@ -58,6 +58,7 @@ import { registerMcp } from "./commands/mcp.ts";
 import { registerEmbedderWarmup } from "./commands/embedder-warmup.ts";
 import { registerMetadataSearch } from "./commands/metadata-search.ts";
 import { registerReindex } from "./commands/reindex.ts";
+import { registerMigrateFormat } from "./commands/migrate-format.ts";
 import { registerRestore } from "./commands/restore.ts";
 import { registerSearch } from "./commands/search.ts";
 import { registerSelfUpdate } from "./commands/self-update.ts";
@@ -245,6 +246,7 @@ export function buildProgram(): Command {
   const server = program.command("server").description("Server side: deploy, reindex.");
   moveInto(server, registerDeployServer, "deploy");
   moveInto(server, registerReindex, "reindex");
+  registerMigrateFormat(server); // #164: reindex re-embeds; this re-chunks
 
   // v0.9.1: the bundled documentation — renamed from flat `docs` (disambiguates
   // from the `document` resource) + merged with `sync-self-docs` as `ingest`.
