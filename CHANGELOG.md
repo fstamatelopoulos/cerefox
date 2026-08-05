@@ -31,6 +31,13 @@ Open roadmap.
   one relation type outward, following chains and terminating safely on cycles.
   Search ranking is deliberately untouched in this release; relation-aware
   retrieval is the next slice.
+
+  **The feature ships dormant.** The relation tools are hidden from agents
+  until a deployment opts in with `cerefox config set relations_enabled true`
+  — a tool an agent can see is a tool an agent may use, and this design is
+  meant to evolve through experimentation before it becomes part of the
+  default surface. With the flag off, Cerefox behaves exactly as it did in
+  1.0.6: an empty table, a defaulted column, and 10 visible tools.
 - **Deployment-wide search settings** (#133; schema 0.9.2 → 0.9.3 — redeploy
   with `cerefox server deploy`). `min_search_score`, `min_term_coverage`, and
   `search_alpha` can now be set once with `cerefox config set` and every access
@@ -46,6 +53,16 @@ Open roadmap.
   before the server and a normal upgrade window would otherwise fail CI.
 
 ### Fixed
+- **UI end-to-end tests repaired** (#155). The Playwright suite had drifted to
+  8 failures and 2 silent skips out of 13 — every one a stale selector rather
+  than a broken app (polished copy, renamed headings, a form moved into a
+  modal). It now passes 13/13 in ~32 seconds instead of 3.7 minutes, and page
+  identity is asserted through stable test hooks so copy changes cannot break
+  it again.
+- **Dashboard rows are keyboard reachable** (#165). Recent documents and
+  projects navigated via a click handler on the table row, so keyboard and
+  screen-reader users could not open them at all, and cmd/middle-click and
+  "copy link" did nothing. They are real links now.
 - **`cerefox doctor` no longer reports "All checks passed" alongside warnings**
   (#152) — it contradicted the remediation printed directly above it.
 - **`cerefox-local upgrade` actually upgrades** (#153). With no argument it

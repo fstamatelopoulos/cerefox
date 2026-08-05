@@ -28,6 +28,8 @@ import { loadSettings } from "../../../_shared/config/index.ts";
 import { resolveServerAssets } from "../../../_shared/server-assets/index.ts";
 import {
   ALL_TOOLS,
+  assertToolEnabled,
+  listEnabledTools,
   McpInvalidParams,
   TOOLS_BY_NAME,
   type ToolContext,
@@ -82,7 +84,8 @@ export function buildServer(): ServerHandle {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: ALL_TOOLS.map((t) => ({
+    // Optional features stay invisible until enabled deployment-wide.
+    tools: (await listEnabledTools(supabase)).map((t) => ({
       name: t.name,
       description: t.description,
       inputSchema: t.inputSchema as Record<string, unknown>,
@@ -97,6 +100,7 @@ export function buildServer(): ServerHandle {
       throw new McpInvalidParams(`Unknown tool: ${name}`);
     }
     try {
+      await assertToolEnabled(supabase, name);
       const text = await tool.handler(supabase, args, ctx);
       return { content: [{ type: "text", text }] };
     } catch (err) {

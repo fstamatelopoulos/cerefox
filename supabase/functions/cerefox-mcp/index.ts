@@ -34,12 +34,15 @@ import {
   unauthorizedChallenge,
 } from "./oauth.ts";
 import type { AuthResult, McpAuthenticator } from "../../../_shared/mcp-auth/index.ts";
+import type { MCPSupabaseClient } from "../../../_shared/mcp-tools/types.ts";
 import { checkAccessToken, parseAccessTokens } from "../../../_shared/ef-auth/index.ts";
 import {
   ALL_TOOLS,
   McpInvalidParams,
   TOOLS_BY_NAME,
   type ToolContext,
+  assertToolEnabled,
+  listEnabledTools,
 } from "../../../_shared/mcp-tools/index.ts";
 import {
   type AggregatedVersions,
@@ -57,11 +60,16 @@ const SERVER_VERSION = "0.4.0";
 
 // ── Tool list (derived from _shared/mcp-tools/) ─────────────────────────────
 
-const TOOLS = ALL_TOOLS.map((t) => ({
-  name: t.name,
-  description: t.description,
-  inputSchema: t.inputSchema,
-}));
+// Built per request rather than at module load: the tool surface depends on
+// deployment config (optional features are hidden until enabled), and an
+// isolate can outlive a config change.
+async function buildToolList(supabase: MCPSupabaseClient) {
+  return (await listEnabledTools(supabase)).map((t) => ({
+    name: t.name,
+    description: t.description,
+    inputSchema: t.inputSchema,
+  }));
+}
 
 // ── Method handlers ──────────────────────────────────────────────────────────
 
@@ -77,8 +85,8 @@ function handleInitialize(id: unknown): Response {
   });
 }
 
-function handleToolsList(id: unknown): Response {
-  return jsonResponse({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
+async function handleToolsList(id: unknown, supabase: MCPSupabaseClient): Promise<Response> {
+  return jsonResponse({ jsonrpc: "2.0", id, result: { tools: await buildToolList(supabase) } });
 }
 
 async function handleToolsCall(
@@ -104,6 +112,14 @@ async function handleToolsCall(
 
   // deno-lint-ignore no-explicit-any
   const supabase: any = makeSupabaseClient();
+
+  // Optional features: a session that listed tools before the flag changed can
+  // still name a gated tool.
+  try {
+    await assertToolEnabled(supabase, toolName);
+  } catch (err) {
+    return errorResponse(id, -32602, err instanceof Error ? err.message : String(err));
+  }
 
   try {
     const { data: requireConfig } = await supabase.rpc("cerefox_get_config", {
@@ -336,7 +352,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     case "ping":
       return jsonResponse({ jsonrpc: "2.0", id, result: {} });
     case "tools/list":
-      return handleToolsList(id);
+      // deno-lint-ignore no-explicit-any
+      return await handleToolsList(id, makeSupabaseClient() as any);
     case "tools/call":
       return await handleToolsCall(
         id,

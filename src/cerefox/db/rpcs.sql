@@ -2037,7 +2037,9 @@ DECLARE
     -- because they all resolve through these RPCs.
     v_allowed TEXT[] := ARRAY[
         'usage_tracking_enabled', 'require_requestor_identity', 'requestor_identity_format',
-        'min_search_score', 'min_term_coverage', 'search_alpha'
+        'min_search_score', 'min_term_coverage', 'search_alpha',
+        -- Optional features, off by default (iteration 29).
+        'relations_enabled'
     ];
 BEGIN
     IF NOT (p_key = ANY(v_allowed)) THEN
@@ -2232,7 +2234,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.10.0'::TEXT;
+    SELECT '0.10.1'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

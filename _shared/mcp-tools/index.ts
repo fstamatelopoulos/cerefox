@@ -13,6 +13,11 @@
 
 import { auditLogTool } from "./audit-log.ts";
 import {
+  disabledToolMessage,
+  relationsEnabled,
+  RELATION_TOOL_NAMES,
+} from "./feature-flags.ts";
+import {
   deleteRelationTool,
   getNeighborsTool,
   getRelationsTool,
@@ -27,7 +32,7 @@ import { listVersionsTool } from "./list-versions.ts";
 import { metadataSearchTool } from "./metadata-search.ts";
 import { searchTool } from "./search.ts";
 import { setDocumentProjectsTool } from "./set-document-projects.ts";
-import type { ToolDefinition } from "./types.ts";
+import { McpInvalidParams, type MCPSupabaseClient, type ToolDefinition } from "./types.ts";
 
 /** All Cerefox MCP tools, in canonical order (matches AGENT_QUICK_REFERENCE.md). */
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -47,6 +52,31 @@ export const ALL_TOOLS: ToolDefinition[] = [
   getNeighborsTool,
   getHelpTool,
 ];
+
+/**
+ * The tools an agent should SEE, given deployment config. Optional features are
+ * hidden until enabled (see feature-flags.ts) — a tool an agent can see is a
+ * tool an agent may use, so "dormant" has to mean invisible, not just unused.
+ */
+export async function listEnabledTools(
+  supabase: MCPSupabaseClient,
+): Promise<ToolDefinition[]> {
+  const relations = await relationsEnabled(supabase);
+  return ALL_TOOLS.filter((t) => relations || !RELATION_TOOL_NAMES.has(t.name));
+}
+
+/**
+ * Guard for the call path: a session that listed tools before the flag changed
+ * (or a hand-written client) can still name a gated tool.
+ */
+export async function assertToolEnabled(
+  supabase: MCPSupabaseClient,
+  name: string,
+): Promise<void> {
+  if (!RELATION_TOOL_NAMES.has(name)) return;
+  if (await relationsEnabled(supabase)) return;
+  throw new McpInvalidParams(disabledToolMessage(name));
+}
 
 /** Build a name → definition map for fast dispatch. */
 export const TOOLS_BY_NAME: Record<string, ToolDefinition> = Object.fromEntries(

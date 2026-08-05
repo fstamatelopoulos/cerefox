@@ -41,6 +41,11 @@ const CONFIG_KEYS: ReadonlyArray<{ key: string; description: string }> = [
       "0–1 — fraction of a query's meaningful terms a keyword OR-fallback match must cover to count as confident. Default 0.5.",
   },
   {
+    key: "relations_enabled",
+    description:
+      "'true'/'false' — expose the document-relation tools to agents. Off by default; the feature is dormant until enabled (iteration 29).",
+  },
+  {
     key: "search_alpha",
     description:
       "0–1 — hybrid fusion weight: 1 = pure semantic, 0 = pure keyword. Default 0.7.",
