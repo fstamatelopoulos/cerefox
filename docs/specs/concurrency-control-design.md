@@ -62,7 +62,26 @@ Two distinct failures, raised in the RPC so every transport behaves identically
 | Condition | SQLSTATE | Meaning |
 |---|---|---|
 | Token absent on update (and not `last_write_wins`) | `22023` (invalid_parameter_value) | caller didn't follow the read-before-write contract |
-| Token stale | `40001` (serialization_failure) | the document changed underneath the caller |
+| Token stale | `PT409` → HTTP 409 Conflict | the document changed underneath the caller |
+
+> **Why not `40001`?** Stale-token conflicts used to raise `40001`
+> (serialization_failure). That is the one PostgreSQL class whose contract says
+> "transient — retry and it may succeed", and PostgREST maps it to a retryable
+> HTTP status. But this conflict is *deterministic*: the same request fails
+> identically forever. Retry-aware infrastructure believed the contract and
+> looped. Measured before the fix: **one** HTTP request executed the RPC 68,825
+> times in 125s, returned 504, and kept running after the client was gone —
+> past 153,000 executions. A contributor hit the same loop for ~24h and 47
+> million calls, exhausting their project's Disk IO budget. The same probe
+> under `PT409` executed **once** and returned 409 in 636ms. Never raise a
+> permanent application error under a SQLSTATE that means "retryable".
+> Fixed in v1.1.0-beta.6 (schema 0.10.2, migration 0015).
+>
+> A **blank** token (empty or whitespace) is likewise treated as *absent* — it
+> raises `CEREFOX_TOKEN_REQUIRED` (400), not a conflict. `''` is not NULL, so it
+> previously slipped into the conflict branch and could never match a real hash:
+> a permanent failure wearing a retryable code, which is what triggered the
+> incident.
 
 Messages are prefixed `CEREFOX_CONFLICT:` / `CEREFOX_TOKEN_REQUIRED:` so transport
 handlers can detect them without parsing prose. Each handler maps them to an

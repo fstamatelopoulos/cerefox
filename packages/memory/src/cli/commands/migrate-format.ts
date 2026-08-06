@@ -125,14 +125,16 @@ async function action(options: MigrateOptions): Promise<void> {
     );
   }
   // Heaviest write path in the CLI: per document this re-chunks, archives the
-  // previous chunks as a version snapshot, and inserts new rows — so the
-  // threshold is deliberately lower than reindex's. ~200 documents is already
-  // on the order of a thousand chunk inserts plus version rows, comparable to
-  // the reindex that depleted a contributor's Disk IO Budget. The warning is
-  // cheap and this command is rare and opt-in; erring quiet helps nobody.
+  // previous chunks as a version snapshot, and inserts new rows.
+  //
+  // Threshold raised from 200 back up once the Disk IO incident that motivated
+  // the lower number was traced to a retry loop rather than to bulk rewrites
+  // (see bulk-write-warning.ts). A few hundred documents is an ordinary
+  // maintenance run on a real knowledge base; warning there is noise. A
+  // thousand is unambiguously a large job.
   warnLargeBulkWrite({
     count: targets.length,
-    threshold: 200,
+    threshold: 1000,
     unit: "document",
     batchHint: "run it in batches with --limit 100",
   });

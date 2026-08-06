@@ -1253,7 +1253,7 @@ $$;
 --   p_expected_content_hash : optimistic-concurrency token (iter-32). On the UPDATE
 --                       path this must equal the document's current content_hash —
 --                       the caller proves they based their edit on the live version.
---                       Mismatch → CEREFOX_CONFLICT (SQLSTATE 40001). Absent (NULL)
+--                       Mismatch → CEREFOX_CONFLICT (SQLSTATE PT409 → HTTP 409). Absent (NULL)
 --                       without p_last_write_wins → CEREFOX_TOKEN_REQUIRED (22023).
 --                       Ignored on the CREATE path.
 --   p_last_write_wins : explicit opt-out of the concurrency check (filesystem-sync
@@ -1368,7 +1368,17 @@ BEGIN
         -- choose last-write-wins. Message prefixes are machine-detectable:
         -- transport handlers map them to agent-first retry instructions.
         IF NOT p_last_write_wins THEN
-            IF p_expected_content_hash IS NULL THEN
+            -- A blank token is an ABSENT token, not a stale one.
+            --
+            -- '' is not NULL, so an empty string used to skip the
+            -- TOKEN_REQUIRED branch and fall into the conflict branch below:
+            -- it can never equal a real hash, so it failed deterministically
+            -- and forever. That is precisely the shape that drove the retry
+            -- storm — a permanent failure reported as a retryable one. Even
+            -- with PT409 now closing the loop, classifying it as a conflict is
+            -- wrong: nobody read '' from a document, so the caller has not
+            -- followed the read-before-write contract, which is a 400.
+            IF NULLIF(BTRIM(p_expected_content_hash), '') IS NULL THEN
                 RAISE EXCEPTION
                     'CEREFOX_TOKEN_REQUIRED: content updates require expected_content_hash (the content_hash you read) or last_write_wins=true. Current hash: %',
                     v_current_hash
@@ -1377,7 +1387,27 @@ BEGIN
                 RAISE EXCEPTION
                     'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, merge your changes, and retry with the new hash.',
                     v_doc_id, p_expected_content_hash, v_current_hash
-                    USING ERRCODE = '40001';  -- serialization_failure
+                    -- PT409 → HTTP 409 Conflict (PostgREST's PTxxx convention).
+                    --
+                    -- This was '40001' (serialization_failure) until v1.1.0-beta.6,
+                    -- which was a category error with severe consequences. 40001 is
+                    -- the ONE PostgreSQL class that promises "this was transient,
+                    -- retry and it may succeed" — but a stale-token conflict is
+                    -- DETERMINISTIC: the same request fails identically forever.
+                    -- Retry-aware layers took the promise at face value and looped.
+                    --
+                    -- Measured on a real project: one HTTP request carrying a stale
+                    -- hash executed this function 68,825 times in 125s before the
+                    -- gateway returned 504 — and kept going after the client was
+                    -- gone, passing 153,000 executions before the backend was killed
+                    -- manually. A contributor hit the same loop for ~24h and 47
+                    -- MILLION calls, which is what depleted their Disk IO budget.
+                    -- The same probe raising PT409 executed exactly ONCE and
+                    -- returned 409 in 636ms.
+                    --
+                    -- Rule of thumb: never raise a permanent application error under
+                    -- a SQLSTATE whose contract says "retryable".
+                    USING ERRCODE = 'PT409';
             END IF;
         END IF;
 
@@ -2234,7 +2264,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.10.1'::TEXT;
+    SELECT '0.10.2'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

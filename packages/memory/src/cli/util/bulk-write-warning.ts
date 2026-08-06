@@ -1,20 +1,28 @@
 /**
  * Warn before a bulk rewrite large enough to strain a small Postgres instance.
  *
- * Reported by a contributor (@tdebasis) after reindexing a ~1,300-document
- * store on Supabase: the project depleted its **Disk IO Budget**, and Supabase
- * emailed to say response times would degrade, CPU would rise on IO wait, and
- * the instance could become unresponsive. Nothing was corrupted — but a user
- * who runs a maintenance command and then finds their database crawling
- * deserves to have been told first.
+ * **Provenance, corrected.** This warning was originally added because a
+ * contributor's Supabase project depleted its Disk IO Budget after a large
+ * reindex, and the reindex looked like the cause. It was not. The real cause
+ * was an infinite retry loop: `cerefox_ingest_document` raised its
+ * optimistic-concurrency conflict under SQLSTATE 40001 (serialization_failure),
+ * which promises "transient, retry me", so retry-aware infrastructure replayed
+ * a permanently-failing request ~47 million times over about a day. That is
+ * fixed at the source (PT409 → HTTP 409; see `rpcs.sql` and migration 0015),
+ * and it had nothing to do with bulk rewrites.
  *
- * `migrate-format` is the heavier of the two: every document is re-chunked,
- * its previous chunks are archived as a version snapshot, and new rows are
- * inserted — several writes per document, against a shared IO budget.
+ * The warning is kept because the underlying point stands on its own: rewriting
+ * thousands of rows on a small instance is genuinely heavy, and an operator
+ * about to do it deserves to know. But the thresholds are now set for "this is
+ * objectively a large job", not for a scale that was wrongly blamed for an
+ * incident.
  *
- * This is advisory only. It never blocks: the operator's store, the operator's
- * call. It exists so the trade-off is visible *before* the run rather than in a
- * support email afterwards.
+ * `migrate-format` is the heavier of the two: every document is re-chunked, its
+ * previous chunks are archived as a version snapshot, and new rows are
+ * inserted — several writes per document, versus one embedding update per chunk
+ * for reindex.
+ *
+ * Advisory only. It never blocks: the operator's store, the operator's call.
  */
 
 import { c, println } from "../../../../../_shared/cli-core/index.ts";
