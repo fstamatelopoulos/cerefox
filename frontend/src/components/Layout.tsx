@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { label: "Audit Log", path: "/audit-log" },
   { label: "Trash", path: "/trash" },
   { label: "Analytics", path: "/analytics" },
+  { label: "Settings", path: "/settings" },
   { label: "Help", path: "/help" },
 ];
 

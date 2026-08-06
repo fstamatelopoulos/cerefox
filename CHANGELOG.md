@@ -9,7 +9,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+- **Settings page in the web UI** — the browser face of `cerefox config
+  get/set`. Every `cerefox_config` key with its description, current value and
+  default, grouped into Retrieval / Governance / Features. Keys that change what
+  *other software* sees require an explicit confirmation naming the consequence
+  rather than a bare toggle: turning on `relations_enabled` adds four tools to
+  every connected agent's list, and `require_requestor_identity` starts
+  rejecting agents that don't identify themselves. Verified end to end —
+  flipping the switch in the browser moved the advertised MCP tool list from 10
+  to 14 and back.
+
+  A `CEREFOX_*` variable set on the server is shown **read-only** as an
+  override, because it beats the stored value on that machine; without this the
+  page would report success while the server kept using a different number. It
+  is deliberately **not** an `.env` editor — that file holds the service-role
+  key, OpenAI key and database password, and the server only reads it at boot.
+
+  The key catalog now lives in `_shared/config-catalog/`, so `cerefox config
+  list` and the page cannot disagree about what a key means or defaults to.
+  Value validation lives there too: the RPC allow-lists the *key* but stores the
+  value as opaque text, so `min_search_score = 5` was previously accepted and
+  silently suppressed every search result. Bad values now get a 400.
+
+### Changed
+- **`migrate-format`'s bulk-write warning now triggers at 200 documents**
+  (was 500). Converting ~200 documents already means on the order of a thousand
+  chunk inserts plus version rows — comparable write volume to the reindex that
+  depleted a contributor's Disk IO Budget. The command is rare and opt-in, so
+  erring quiet helped nobody.
 
 ---
 

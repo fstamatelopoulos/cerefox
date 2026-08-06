@@ -4063,9 +4063,20 @@ untested against production until a staging Supabase project exists (below).
   trash** (`deleted_at` replayed; every read/search RPC filters it), with
   `--no-trash` to opt out. Proven end to end: 331 captured (12 trashed) →
   319 live + 12 trashed in staging, exact match; re-run 0/331/0.
-- ⏳ **Config web UI** — a settings surface for the `cerefox_config` keys
-  (`cerefox config set` equivalents, incl. the retrieval tunables from #133 and
-  `relations_enabled`). Next up.
+- ✅ **Config web UI** (beta.4) — a **Settings** page for the `cerefox_config`
+  keys, grouped Retrieval / Governance / Features. The key catalog moved to
+  `_shared/config-catalog/` so `cerefox config list` and the page cannot
+  disagree about a key's meaning or default, and value validation lives there
+  too (the RPC allow-lists the *key* but stores the value as opaque text, so
+  `min_search_score = 5` used to be accepted and silently suppress every
+  result). Two deliberate behaviours: keys that change what agents see
+  (`relations_enabled`, `require_requestor_identity`) require a confirmation
+  naming the consequence, never a bare toggle; and a `CEREFOX_*` variable set on
+  the server is shown read-only as an override, because it beats the stored
+  value on that machine and a page that hid it would report success while the
+  server used a different number. **Not** an `.env` editor — that file holds the
+  service-role key, OpenAI key and DB password. Verified end to end: flipping
+  `relations_enabled` in the browser moved the MCP tool list 10 → 14 → 10.
 
 ### beta.3 / beta.4 — the staging environment starts paying for itself
 

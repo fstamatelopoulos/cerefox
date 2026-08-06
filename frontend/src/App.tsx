@@ -12,6 +12,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { MetadataSearchPage } from "./pages/MetadataSearchPage";
 import { SearchPage } from "./pages/SearchPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { TrashPage } from "./pages/TrashPage";
 
 export function App() {
@@ -29,6 +30,7 @@ export function App() {
         <Route path="/audit-log" element={<AuditLogPage />} />
         <Route path="/trash" element={<TrashPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/help/*" element={<HelpPage />} />
       </Route>
