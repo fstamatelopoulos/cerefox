@@ -65,6 +65,8 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       // 2 = includes projects + memberships (#166). Absent/1 = documents and
       // chunks only; those snapshots still restore, just without memberships.
       backup_format?: number;
+      /** Environment that produced the snapshot (format 4+); null/absent on a normal install. */
+      env_label?: string | null;
       schema_version?: string;
       document_count?: number;
       chunk_count?: number;
@@ -111,6 +113,22 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       "This backup predates project-membership capture (format 1) — documents " +
         "will be restored WITHOUT their project assignments.",
     );
+  }
+
+  // Cross-environment restores are legitimate (seeding staging from production
+  // is the main reason staging exists) but the reverse is a mistake you only
+  // make once. Since `CEREFOX_BACKUP_DIR` does not follow `CEREFOX_CONFIG_DIR`,
+  // snapshots from both environments can sit in one directory — so say out loud
+  // when the file and the target disagree instead of restoring silently.
+  {
+    const fileEnv = (payload.env_label ?? "").trim();
+    const targetEnv = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
+    if (fileEnv !== targetEnv) {
+      warn(
+        `This snapshot came from ${fileEnv ? `the "${fileEnv}" environment` : "an unlabelled (production) environment"}, ` +
+          `but you are restoring into ${targetEnv ? `"${targetEnv}"` : "an unlabelled (production) environment"}.`,
+      );
+    }
   }
 
   // Trashed documents (format 4+) are restored *as trash*: the row carries its

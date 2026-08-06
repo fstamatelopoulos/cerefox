@@ -204,3 +204,28 @@ test.describe("Audit Log", () => {
     await expect(page.getByTestId("page-title")).toHaveText(/Audit/i);
   });
 });
+
+// ── Environment banner ────────────────────────────────────────────────────
+// Asserts the contract rather than a fixed outcome: the banner appears if and
+// only if the server reports an `env_label`. That way the test is meaningful
+// on a normal install (where it guards against a banner ever showing up
+// uninvited) and on a labelled staging server, without needing two harnesses.
+test.describe("Environment banner", () => {
+  test("shown only when the server reports an env_label", async ({ page, request }) => {
+    const info = await (await request.get("/api/v1/version")).json();
+    const label = (info.env_label ?? "").trim();
+
+    await page.goto(`${APP}/`);
+    const banner = page.getByTestId("environment-banner");
+
+    if (label) {
+      await expect(banner).toBeVisible({ timeout: 15_000 });
+      await expect(banner).toContainText(label.toUpperCase());
+      await expect(banner).toContainText("not production");
+    } else {
+      // The overwhelmingly common case: a normal single-environment install
+      // must never see this.
+      await expect(banner).toHaveCount(0);
+    }
+  });
+});

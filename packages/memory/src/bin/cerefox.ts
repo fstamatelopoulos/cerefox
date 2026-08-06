@@ -64,6 +64,29 @@ async function bareEntryPoint(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Load `.env` once, before any command body runs.
+  //
+  // Nothing used to do this: `loadSettings()` was called lazily deep inside
+  // whichever helper first needed Supabase credentials, so any code reading
+  // `process.env.CEREFOX_*` directly saw an unpopulated environment and
+  // silently fell back to its default. That produced two separate bugs —
+  // `CEREFOX_BACKUP_DIR` in `.env` was ignored outright, and
+  // `CEREFOX_ENV_LABEL` never reached `doctor` — and would keep producing them
+  // for every new setting read that way.
+  //
+  // loadEnv() is idempotent and reads one small file, so the later
+  // loadSettings() calls are unaffected and `--help` / `--version` stay fast.
+  {
+    const { loadEnv } = await import("../../../../_shared/config/index.ts");
+    try {
+      loadEnv();
+    } catch {
+      // A missing or unreadable .env is not fatal here: settings can come from
+      // the real environment (Cerefox Local does exactly that), and the
+      // commands that genuinely need credentials report it themselves.
+    }
+  }
+
   // Bare invocation (just `cerefox` with no args): show the state-aware
   // friendly entry instead of commander's default help dump.
   if (process.argv.length === 2) {

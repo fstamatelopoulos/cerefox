@@ -264,7 +264,8 @@ cerefox document get <document-id> --version-id <version-id>
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CEREFOX_BACKUP_DIR` | dev mode: `./backups` · user-state mode: `~/.cerefox/backups` (v0.3.0+) | Local directory where file system backups are stored. Created automatically if it doesn't exist. The default tracks the resolved config dir — dev users see no change. |
+| `CEREFOX_BACKUP_DIR` | `~/.cerefox/backups` | Local directory where file system backups are stored. Created automatically if it doesn't exist. **Use an absolute path** — a relative value (such as the pre-v0.3.0 `./backups`) resolves against the current working directory, so snapshots scatter depending on where you run the command; `backup create` warns when it sees one. Does **not** follow `CEREFOX_CONFIG_DIR`, so a second environment must set it explicitly. |
+| `CEREFOX_ENV_LABEL` | _(unset)_ | Names a non-production environment (e.g. `staging`). Purely cosmetic and inert when unset. When set: the web UI shows a banner on every page, `doctor` appends `[LABEL]` to its config line, `backup create` puts the label in the snapshot filename and payload, and `backup restore` warns when a snapshot's environment differs from the target's. See [`staging-env.md`](staging-env.md). |
 | `CEREFOX_VERSION_RETENTION_HOURS` | `48` | How long to retain archived document versions (hours). The most recent version is always kept regardless of this setting. |
 
 ---

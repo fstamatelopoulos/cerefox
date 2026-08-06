@@ -29,16 +29,21 @@ describe("meta endpoints (HTTP boundary)", () => {
 
   // ── /api/v1/version ────────────────────────────────────────────────────────
 
-  test("/version returns {version, git_commit_short, build_date}", async () => {
+  test("/version returns {version, git_commit_short, build_date, env_label}", async () => {
     if (!server) return;
     const resp = await fetch(`${server.base}/api/v1/version`);
     expect(resp.status).toBe(200);
     const body = await resp.json();
     expect(Object.keys(body).sort()).toEqual(
-      ["build_date", "git_commit_short", "version"].sort(),
+      ["build_date", "env_label", "git_commit_short", "version"].sort(),
     );
     expect(typeof body.version).toBe("string");
     expect(body.version).toMatch(/^\d+\.\d+\.\d+/);
+    // Null unless CEREFOX_ENV_LABEL names an environment. The web UI banner
+    // keys off exactly this, so a normal install must report null rather than
+    // an empty string.
+    expect(body.env_label === null || typeof body.env_label === "string").toBe(true);
+    expect(body.env_label).not.toBe("");
   });
 
   // ── /api/v1/docs ───────────────────────────────────────────────────────────
