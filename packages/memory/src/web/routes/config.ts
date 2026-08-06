@@ -9,6 +9,9 @@
  * RPCs — allowlist validation lives in the RPC, not here.
  */
 
+import { homedir } from "node:os";
+import { sep } from "node:path";
+
 import { Hono } from "hono";
 
 import {
@@ -80,7 +83,13 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
     // the database password), but the human owns that file.
     let configFile: string | null = null;
     try {
-      configFile = resolveEnvFile();
+      const abs = resolveEnvFile();
+      // Contract the home prefix: `~/.cerefox/.env` is still valid in a shell,
+      // is shorter to read, and keeps the operator's username out of any
+      // screenshot of this page. Paths outside home are shown in full.
+      const home = homedir();
+      configFile =
+        abs === home || abs.startsWith(home + sep) ? `~${abs.slice(home.length)}` : abs;
     } catch {
       // Unresolvable config dir — the page just omits the path.
     }
