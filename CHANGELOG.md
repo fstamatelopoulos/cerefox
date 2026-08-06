@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.0.7] -- 2026-08-06
+
 ### Fixed
 - **Backups now capture project memberships** (#166). `backup create` never
   read the document↔project junction, so every restore silently landed
