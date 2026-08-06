@@ -10,6 +10,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 ### Fixed
+- **`cerefox web` daemon state is now per-environment.** The pidfile and log
+  were written to `~/.cerefox/web.{pid,log}` regardless of
+  `CEREFOX_CONFIG_DIR`, so starting a web server in a second environment
+  overwrote the first one's bookkeeping — and a later `web stop` then targeted
+  the wrong process, killing the other environment's server. State now follows
+  an explicitly-set `CEREFOX_CONFIG_DIR`. **No change for normal installs**:
+  without the override the location is exactly as before, and the resolver is
+  deliberately keyed on the env var rather than the config-dir resolver so repo
+  dev-mode never drops `web.pid` into a working tree.
 - **Backups now capture project memberships** (#166). `backup create` never
   read the document↔project junction, so every restore silently landed
   documents with **no project assignments** — and the restore command's help

@@ -28,7 +28,27 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const STATE_DIR = join(homedir(), ".cerefox");
+/**
+ * Where the pidfile and log live.
+ *
+ * Normally `~/.cerefox`. When `CEREFOX_CONFIG_DIR` is set — the parallel-
+ * environment escape hatch (docs/guides/staging-env.md) — the daemon's
+ * bookkeeping follows it, so a staging server does not overwrite production's
+ * pidfile and leave `web stop` aiming at the wrong process.
+ *
+ * Deliberately keyed on the env var rather than `resolveConfigDir()`: that
+ * resolver also returns the CWD in repo dev-mode, which would drop `web.pid`
+ * and `web.log` into a working tree. Only an explicit override relocates state.
+ */
+export function resolveStateDir(override = process.env.CEREFOX_CONFIG_DIR, home = homedir()): string {
+  override = (override ?? "").trim();
+  if (!override) return join(home, ".cerefox");
+  return override === "~" || override.startsWith("~/")
+    ? join(home, override.slice(2))
+    : override;
+}
+
+const STATE_DIR = resolveStateDir();
 const PID_FILE = join(STATE_DIR, "web.pid");
 const LOG_FILE = join(STATE_DIR, "web.log");
 
