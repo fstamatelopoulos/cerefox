@@ -70,6 +70,7 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       chunk_count?: number;
       projects?: Array<{ id: string; name: string; description?: string | null }>;
       memberships?: Array<{ document_id: string; project_id: string }>;
+      relations?: Array<{ source_id: string; target_id: string; rel_type: string }>;
       documents: Array<{
         id: string;
         title: string;
@@ -169,6 +170,7 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   // are skipped for format-1 snapshots that carry neither.
   let projectsRestored = 0;
   let membershipsRestored = 0;
+  let relationsRestored = 0;
   if (!options.dryRun && hasMemberships) {
     const projects = payload.projects ?? [];
     if (projects.length > 0) {
@@ -213,6 +215,35 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       }
       membershipsRestored += links.slice(i, i + 500).length;
     }
+
+    // Relations (iteration 29). Only edges whose BOTH endpoints landed — a
+    // half-present edge would violate the foreign keys, and silently dropping
+    // the other half would be worse than not restoring it.
+    const relations = (payload.relations ?? []).filter(
+      (r) => presentDocIds.has(r.source_id) && presentDocIds.has(r.target_id),
+    );
+    if (relations.length > 0) {
+      for (let i = 0; i < relations.length; i += 500) {
+        const { error: relErr } = await client.raw
+          .from("cerefox_document_relations")
+          .upsert(relations.slice(i, i + 500), {
+            onConflict: "source_id,target_id,rel_type",
+            ignoreDuplicates: true,
+          });
+        if (relErr) {
+          // A pre-0.10.0 target has no relations table: report once and move
+          // on rather than failing a restore that is otherwise complete.
+          errorDetails.push({ title: "(relations)", error: relErr.message });
+          errors++;
+          break;
+        }
+        relationsRestored += relations.slice(i, i + 500).length;
+      }
+      const dropped = (payload.relations?.length ?? 0) - relations.length;
+      if (dropped > 0) {
+        warn(`${dropped} relation(s) skipped — one or both documents were not restored.`);
+      }
+    }
   }
 
   println("");
@@ -222,7 +253,10 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   );
   if (hasMemberships && !options.dryRun) {
     println(
-      c.dim(`  projects: ${projectsRestored} · memberships: ${membershipsRestored}`),
+      c.dim(
+        `  projects: ${projectsRestored} · memberships: ${membershipsRestored}` +
+          (relationsRestored > 0 ? ` · relations: ${relationsRestored}` : ""),
+      ),
     );
   }
 

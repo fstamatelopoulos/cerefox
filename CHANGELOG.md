@@ -78,6 +78,15 @@ Open roadmap.
   before the server and a normal upgrade window would otherwise fail CI.
 
 ### Fixed
+- **Backups capture the full picture** — projects, memberships (ported from
+  v1.0.7, #166) and now **relations + `lifecycle_status`** too, so the graph
+  and each document's standing survive a restore. Relations are only restored
+  when both endpoint documents landed, and a snapshot from an older Cerefox
+  still restores (with a note about what it cannot recreate).
+- **`cerefox doctor`'s content-format hint is legible.** It ended with
+  "What this means: `cerefox guides show content-format`", which read as
+  though the command were the explanation. It now says plainly that the legacy
+  format is harmless, how to convert, and what to run to read about it.
 - **UI end-to-end tests repaired** (#155). The Playwright suite had drifted to
   8 failures and 2 silent skips out of 13 — every one a stale selector rather
   than a broken app (polished copy, renamed headings, a form moved into a

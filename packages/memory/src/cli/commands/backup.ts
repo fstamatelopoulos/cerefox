@@ -82,7 +82,10 @@ async function action(options: BackupOptions): Promise<void> {
         .from("cerefox_documents")
         .select(
           "id, title, content_hash, source, metadata, total_chars, chunk_count, " +
-            "review_status, created_at, updated_at, deleted_at",
+            // lifecycle_status (iteration 29) must be listed explicitly: this
+            // select is an allow-list, which is how the previous columns went
+            // missing in the first place (#166).
+            "review_status, lifecycle_status, created_at, updated_at, deleted_at",
         )
         .is("deleted_at", null)
         .order("created_at", { ascending: true })
@@ -122,6 +125,23 @@ async function action(options: BackupOptions): Promise<void> {
     throw systemError(
       `Project/membership fetch failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+
+  // Document relations (iteration 29). Absent on pre-0.10.0 servers, so a
+  // missing table is not an error — it just means this store has no graph.
+  let relations: Array<Record<string, unknown>> = [];
+  try {
+    relations = await fetchAllPages<Record<string, unknown>>((from, to) =>
+      client.raw
+        .from("cerefox_document_relations")
+        .select("source_id, target_id, rel_type, metadata, author, author_type, created_at")
+        .order("source_id", { ascending: true })
+        .order("target_id", { ascending: true })
+        .order("rel_type", { ascending: true })
+        .range(from, to),
+    );
+  } catch {
+    // Older server without the relations table — nothing to capture.
   }
 
   // For each doc, pull its chunks.
@@ -164,14 +184,17 @@ async function action(options: BackupOptions): Promise<void> {
   const payload = {
     created_at: new Date().toISOString(),
     cerefox_version: PKG_VERSION,
-    backup_format: 2,
+    // 3 = adds relations + lifecycle_status (iteration 29).
+    backup_format: 3,
     schema_version: schemaVersion,
     document_count: docs.length,
     chunk_count: chunkTotal,
     project_count: projects.length,
     membership_count: memberships.length,
+    relation_count: relations.length,
     projects,
     memberships,
+    relations,
     documents: enriched,
   };
 
@@ -182,7 +205,8 @@ async function action(options: BackupOptions): Promise<void> {
   println(
     c.dim(
       `  documents: ${docs.length} · chunks: ${chunkTotal} · ` +
-        `projects: ${projects.length} · memberships: ${memberships.length}`,
+        `projects: ${projects.length} · memberships: ${memberships.length}` +
+          (relations.length > 0 ? ` · relations: ${relations.length}` : ""),
     ),
   );
 
