@@ -154,6 +154,14 @@ Use one of:
 `doctor` is the one to reach for; the migration list is only interesting when a
 deploy behaved unexpectedly.
 
+> **Contributor scripts and a repo `.env`.** The `bun scripts/*.ts` tools honour
+> `CEREFOX_CONFIG_DIR` — but only from the version that fixed this. Bun
+> auto-loads `.env` from the working directory, so on **v1.1.0-beta.1 and
+> earlier** a repo clone with its own `.env` silently outranked the config dir:
+> `CEREFOX_CONFIG_DIR=…/staging bun scripts/db_migrate.ts --status` reported
+> *production*. If you're on an older build, run those scripts from a directory
+> with no `.env`, and confirm the target before trusting the output.
+
 ---
 
 ## 5. Populate from a production snapshot
@@ -190,6 +198,16 @@ Two count details that look like bugs and are not:
 The daemon's pidfile and log follow `CEREFOX_CONFIG_DIR`, so staging writes to
 `~/.cerefox/staging/web.{pid,log}` and production to `~/.cerefox/web.{pid,log}`.
 Each `web stop` / `web status` acts only on its own environment.
+
+> **Requires v1.1.0-beta.2 or later.** On **beta.1 and earlier** both
+> environments shared `~/.cerefox/web.pid`, so `cfx-stg web start` refuses with
+> *"A Cerefox web daemon is already running on :8000"* — it is reading
+> production's pidfile. Until staging is on a build with the fix, start it in
+> the **foreground** instead, which never touches the pidfile:
+>
+> ```bash
+> cfx-stg web --port 8030      # no `start` subcommand; Ctrl-C to stop
+> ```
 
 Pick a different port for staging so the two can run simultaneously:
 

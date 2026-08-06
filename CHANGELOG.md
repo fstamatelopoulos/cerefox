@@ -10,6 +10,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 ### Fixed
+- **`CEREFOX_CONFIG_DIR` now outranks an ambient `.env`.** Bun auto-loads `.env`
+  from the working directory, so every `bun scripts/*.ts` run inside a repo
+  clone arrived with that file's credentials already in `process.env` — and
+  `loadEnv()` only filled *unset* keys, so the named config directory was
+  silently ignored. `CEREFOX_CONFIG_DIR=…/staging bun scripts/db_migrate.ts
+  --status` reported **production**, and the same resolution path through
+  `db_deploy.ts --reset` would have wiped production while naming staging on
+  the command line. When the config dir is explicitly named, its `.env` is now
+  the authority. Unchanged when the override is unset, which is every
+  single-environment install.
+- **`db_deploy.ts --reset` now names the database it is about to drop.** The
+  confirmation prompt asked for a typed `yes` without ever saying *which*
+  project would be wiped. It now prints the target project ref, host, and the
+  config file the connection came from.
 - **`cerefox web` daemon state is now per-environment.** The pidfile and log
   were written to `~/.cerefox/web.{pid,log}` regardless of
   `CEREFOX_CONFIG_DIR`, so starting a web server in a second environment

@@ -52,9 +52,26 @@ export function loadEnv(opts: ResolverOptions = {}): { path: string; vars: numbe
     return { path: envPath, vars: 0 };
   }
 
+  // Normally the ambient environment wins: an exported var is an explicit
+  // override of the file. But when the caller has *named an environment* with
+  // CEREFOX_CONFIG_DIR, that directory's .env is the authority — otherwise a
+  // stray ambient value silently redirects the command at a different backend.
+  //
+  // This is not hypothetical. Bun auto-loads `.env` from the working directory,
+  // so every `bun scripts/*.ts` run inside a repo clone that has its own `.env`
+  // arrived here with production credentials already in `env`, and the config
+  // dir was ignored. `CEREFOX_CONFIG_DIR=…/staging bun scripts/db_migrate.ts
+  // --status` reported production; the same path through `db_deploy.ts --reset`
+  // would have wiped production while naming staging on the command line.
+  //
+  // CEREFOX_CONFIG_DIR itself is never overridden — it selects the file, so
+  // letting the file rewrite it would be circular.
+  const configDirNamed = (env.CEREFOX_CONFIG_DIR ?? "").trim() !== "";
+
   let count = 0;
   for (const [k, v] of Object.entries(parseDotenv(content))) {
-    if (env[k] === undefined) {
+    if (k === "CEREFOX_CONFIG_DIR") continue;
+    if (env[k] === undefined || configDirNamed) {
       env[k] = v;
       count++;
     }
