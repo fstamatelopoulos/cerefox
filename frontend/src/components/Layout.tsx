@@ -9,6 +9,7 @@ import {
 import { IconCheck, IconDeviceDesktop, IconMoon, IconSun } from "@tabler/icons-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useThemePreference } from "../hooks/useThemePreference";
+import { EnvironmentBanner } from "./EnvironmentBanner";
 import { SchemaVersionBanner } from "./SchemaVersionBanner";
 import { VersionFooter } from "./VersionFooter";
 
@@ -118,6 +119,7 @@ export function Layout() {
       </AppShell.Header>
 
       <AppShell.Main>
+        <EnvironmentBanner />
         <SchemaVersionBanner />
         <Outlet />
         <VersionFooter />

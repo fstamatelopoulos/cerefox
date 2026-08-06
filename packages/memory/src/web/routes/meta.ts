@@ -44,7 +44,17 @@ const VERSION_INFO = {
 const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
 
 export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
-  app.get("/api/v1/version", (c) => c.json(VERSION_INFO));
+  // `env_label` is read per-request, not folded into the module-level
+  // VERSION_INFO: the label comes from `.env`, which is loaded during server
+  // startup, and this module is imported before that happens.
+  //
+  // Purely cosmetic, and deliberately so — it exists to stop someone acting on
+  // a staging tab believing it is production. Empty/whitespace is treated as
+  // unset so a stray `CEREFOX_ENV_LABEL=` never paints a blank badge.
+  app.get("/api/v1/version", (c) => {
+    const label = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
+    return c.json({ ...VERSION_INFO, env_label: label.length > 0 ? label : null });
+  });
 
   app.get("/api/v1/docs", (c) => c.json(listBundledDocs()));
 

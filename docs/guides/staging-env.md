@@ -73,11 +73,20 @@ CEREFOX_DATABASE_URL=postgresql://postgres.<staging-ref>:…@aws-0-<region>.pool
 
 # Isolate snapshots. CEREFOX_BACKUP_DIR does NOT follow the config dir, so
 # without this line staging backups land beside production's.
+# Use an ABSOLUTE path: a relative value resolves against the working
+# directory, so snapshots scatter wherever you happen to run the command.
 CEREFOX_BACKUP_DIR=~/.cerefox/staging/backups
 
 OPENAI_API_KEY=sk-…
 SUPABASE_ACCESS_TOKEN=sbp_…                       # account-level; same as prod
 ```
+
+> **Snapshot isolation needs v1.1.0-beta.3 or later.** On **beta.2 and
+> earlier**, `backup create` read `CEREFOX_BACKUP_DIR` *before* loading the
+> `.env` file, so the setting above was silently ignored and staging snapshots
+> landed in production's directory. Until staging is on a build with the fix,
+> pass the destination explicitly: `cfx-stg backup create --output-dir
+> ~/.cerefox/staging/backups`.
 
 **Mirror production's tuning** (`CEREFOX_MIN_SEARCH_SCORE`,
 `CEREFOX_MAX_CHUNK_CHARS`, `CEREFOX_MIN_CHUNK_CHARS`, `CEREFOX_EMBEDDER`, …).
@@ -217,8 +226,24 @@ cfx-stg web status      # staging only
 cerefox web status      # production only — unaffected
 ```
 
-Set `CEREFOX_ENV_LABEL=staging` in the staging `.env` (Step 2) and the web UI
-labels itself, so a stray browser tab can't be mistaken for production.
+Set `CEREFOX_ENV_LABEL=staging` in the staging `.env` (Step 2) and the
+environment names itself everywhere it matters — two tabs that look identical
+otherwise:
+
+| Surface | With the label set |
+|---|---|
+| Web UI | A banner on every page: *"STAGING environment — not production."* |
+| `doctor` | `✓ config  …/staging/.env (mode 0600) [STAGING]` |
+| `backup create` | Filename becomes `cerefox-staging-<stamp>.json`, and the label is stored in the payload |
+| `backup restore` | Warns when the snapshot's environment differs from the target's |
+
+The filename and restore warning matter because `CEREFOX_BACKUP_DIR` does not
+follow `CEREFOX_CONFIG_DIR`: staging and production snapshots can end up in one
+directory, and a restore that picks "the most recent file" there would
+otherwise seed production from staging without saying so.
+
+**Requires v1.1.0-beta.3 or later** — on earlier builds `CEREFOX_ENV_LABEL` is
+read but nothing acts on it.
 
 ---
 

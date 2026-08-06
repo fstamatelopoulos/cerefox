@@ -9,6 +9,37 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+- **`CEREFOX_ENV_LABEL` — name a non-production environment.** Inert when
+  unset (every normal install). When set, the environment identifies itself
+  wherever it could otherwise be confused for production: a banner on every
+  web UI page, `[LABEL]` on `doctor`'s config line, the label in the backup
+  filename (`cerefox-staging-<stamp>.json`) and payload, and a warning from
+  `backup restore` when a snapshot's environment differs from the target's.
+  That last pair matters because `CEREFOX_BACKUP_DIR` does not follow
+  `CEREFOX_CONFIG_DIR`, so snapshots from two environments can share a
+  directory and a "most recent file" restore could seed production from
+  staging.
+
+### Fixed
+- **`.env` is now loaded once at CLI startup.** Nothing did this: settings were
+  loaded lazily, deep inside whichever helper first needed Supabase
+  credentials, so any code reading `process.env.CEREFOX_*` directly saw an
+  unpopulated environment and silently used its default. That produced two
+  independent bugs — `CEREFOX_BACKUP_DIR` ignored outright, and
+  `CEREFOX_ENV_LABEL` never reaching `doctor` — and would have produced one for
+  every future setting read that way.
+- **`CEREFOX_BACKUP_DIR` set in `.env` was silently ignored.** `backup create`
+  read the variable *before* anything loaded the config file — nothing loads
+  `.env` at CLI startup; `loadSettings()` runs later, inside `getClient()` — so
+  snapshots always went to the built-in `~/.cerefox/backups` no matter what was
+  configured. The setting appeared to work only when the variable was exported
+  in the shell or when Bun's auto-dotenv injected a working-directory `.env`,
+  which is how one machine's snapshots ended up split across two directories.
+  This also broke the staging guide's snapshot isolation: a staging `.env`
+  pointing at its own backup directory had no effect, so staging snapshots
+  landed beside production's.
+
 Open roadmap.
 
 ---

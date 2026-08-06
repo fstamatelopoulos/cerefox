@@ -136,10 +136,15 @@ export function checkConfig(): CheckResult {
       // Couldn't stat; surface as a warn but don't block.
     }
   }
+  // Name the environment when the operator has labelled one. `doctor` is the
+  // command people run to answer "what am I actually pointed at?", so a
+  // staging run should say so on the very first line rather than leaving the
+  // config path as the only clue.
+  const envLabel = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
   return {
     name: "config",
     status: "ok",
-    detail: `${envPath}${modeDetail}`,
+    detail: `${envPath}${modeDetail}${envLabel ? ` [${envLabel.toUpperCase()}]` : ""}`,
   };
 }
 

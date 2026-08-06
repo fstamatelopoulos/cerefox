@@ -20,6 +20,7 @@ import {
   println,
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { loadEnv } from "../../../../../_shared/config/index.ts";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getClient } from "../util/client.ts";
 import { PKG_VERSION } from "../../meta.ts";
@@ -54,6 +55,21 @@ function utcStamp(): string {
 }
 
 async function action(options: BackupOptions): Promise<void> {
+  // Load `.env` BEFORE reading CEREFOX_BACKUP_DIR.
+  //
+  // Nothing loads it at CLI startup — `loadSettings()` runs inside
+  // `getClient()`, which happens further down. So this line used to read a
+  // `process.env` that the config file had not been merged into yet, and
+  // `CEREFOX_BACKUP_DIR` set in `.env` was silently ignored: snapshots went to
+  // the built-in default no matter what the user configured. It appeared to
+  // work only when the variable was exported in the shell, or when Bun's
+  // auto-dotenv happened to inject a working-directory `.env`, which is why
+  // the same setting sent two machines' backups to two different places.
+  //
+  // loadEnv() is idempotent, so calling it here is free when something else
+  // already did.
+  loadEnv();
+
   const configuredDir = options.outputDir ?? process.env.CEREFOX_BACKUP_DIR;
   const outDir = resolve(expandHome(configuredDir ?? "~/.cerefox/backups"));
 
@@ -81,8 +97,25 @@ async function action(options: BackupOptions): Promise<void> {
 
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
+  // Stamp the environment into the filename when one is labelled.
+  //
+  // `CEREFOX_BACKUP_DIR` does not follow `CEREFOX_CONFIG_DIR`, so a staging
+  // snapshot can legitimately land in the shared backup directory — and a
+  // restore picking the "most recent" file there would then quietly seed
+  // production from staging. The name is the last line of defence: a snapshot
+  // should say where it came from without anyone having to open it.
+  //
+  // Sanitised because it becomes a path segment: anything outside
+  // [A-Za-z0-9._-] is collapsed to `-`.
+  const envLabel = (process.env.CEREFOX_ENV_LABEL ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
   const stamp = utcStamp();
-  const filename = `cerefox-${stamp}${options.label ? "-" + options.label : ""}.json`;
+  const filename =
+    `cerefox-${envLabel ? envLabel + "-" : ""}${stamp}` +
+    `${options.label ? "-" + options.label : ""}.json`;
   const dest = join(outDir, filename);
 
   const client = getClient();
@@ -272,6 +305,10 @@ async function action(options: BackupOptions): Promise<void> {
     document_count: docs.length,
     trashed_count: trashedCount,
     includes_trash: includeTrash,
+    // Which environment produced this snapshot (null on a normal install).
+    // Restore surfaces it, so seeding production from a staging file is a
+    // visible act rather than an accident.
+    env_label: envLabel || null,
     // False when taken against a pre-0.10.0 server, so a restore can tell an
     // absent lifecycle_status from one that was genuinely never set.
     includes_lifecycle_status: lifecycleCaptured,
