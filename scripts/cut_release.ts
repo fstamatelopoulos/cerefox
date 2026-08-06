@@ -678,7 +678,27 @@ async function main(): Promise<void> {
   // immediately re-runnable. (Through v0.9.0 the script mutated + committed +
   // tagged FIRST and prompted last; a declined prompt left a local commit +
   // tag that tripped the `checkTagDoesNotExist` preflight on the next run.)
-  if (!args.dryRun && !args.yes) {
+  // `--yes` is honoured only on main. A maintenance-branch cut is the case
+  // where the banner exists to be READ — that is exactly where an unattended
+  // "yes" would defeat it, and where the mistakes are unrecoverable (immutable
+  // tags on the wrong line). Ignore it there, loudly.
+  const branchNeedsEyes = releaseBranch !== "main";
+  const skipPrompt = args.yes && !branchNeedsEyes;
+  if (!args.dryRun && args.yes && branchNeedsEyes) {
+    warn(
+      `Ignoring --yes: this cut is from '${releaseBranch}', not main. ` +
+        "Release-line mistakes here cannot be undone (tags are immutable), so " +
+        "the confirmation below must be answered by a human.",
+    );
+    if (!process.stdin.isTTY) {
+      die(
+        `Refusing to cut from '${releaseBranch}' without an interactive terminal.\n` +
+          `    --yes does not apply to maintenance branches, and there is no TTY to confirm on.\n` +
+          `    Run this cut from an interactive shell.`,
+      );
+    }
+  }
+  if (!args.dryRun && !skipPrompt) {
     console.log("");
     {
       const extras = [
