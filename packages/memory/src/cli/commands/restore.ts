@@ -75,6 +75,8 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
         id: string;
         title: string;
         content_hash: string;
+        /** Non-null on soft-deleted documents; replayed verbatim (format 4+). */
+        deleted_at?: string | null;
         chunks: Array<Record<string, unknown>>;
         [k: string]: unknown;
       }>;
@@ -110,6 +112,20 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
         "will be restored WITHOUT their project assignments.",
     );
   }
+
+  // Trashed documents (format 4+) are restored *as trash*: the row carries its
+  // original `deleted_at`, and every read/search RPC filters on that column, so
+  // nothing the operator deleted comes back visible. Announced up front so a
+  // restore never quietly reinstates deleted content.
+  const trashedInFile = payload.documents.filter((d) => d.deleted_at != null).length;
+  if (trashedInFile > 0) {
+    println(
+      c.dim(
+        `  trashed documents in file: ${trashedInFile} — restored as trash ` +
+          "(still deleted; recover with `cerefox document restore`)",
+      ),
+    );
+  }
   println("");
 
   const client = getClient();
@@ -120,11 +136,26 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   const errorDetails: Array<{ title: string; error: string }> = [];
 
   for (const doc of payload.documents) {
-    // Skip if a doc with the same content_hash already exists.
+    // Skip if this document is already present — by id *or* by content hash.
+    //
+    // Matching on content_hash alone was not enough to make restore
+    // re-runnable, which is the property its help text promises. A document
+    // edited between two snapshots keeps its id but changes its hash, so the
+    // hash probe missed it and the insert then died on the primary key:
+    //   duplicate key value violates unique constraint "cerefox_documents_pkey"
+    // Three documents hit exactly that restoring a fresh production snapshot
+    // over a slightly older copy.
+    //
+    // Skipping (rather than overwriting) keeps restore additive and
+    // non-destructive: re-running it can never replace content in the target
+    // with an older revision. Recovering a *specific* superseded document is a
+    // deliberate act — restore that snapshot into an empty store, or use
+    // `document version` — not something a bulk re-run should do silently.
     const { data: existing } = await client.raw
       .from("cerefox_documents")
       .select("id")
-      .eq("content_hash", doc.content_hash)
+      .or(`id.eq.${doc.id},content_hash.eq.${doc.content_hash}`)
+      .limit(1)
       .maybeSingle();
 
     if (existing) {
@@ -258,6 +289,9 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
           (relationsRestored > 0 ? ` · relations: ${relationsRestored}` : ""),
       ),
     );
+  }
+  if (trashedInFile > 0) {
+    println(c.dim(`  ${trashedInFile} of those are trashed and stay trashed.`));
   }
 
   if (errors > 0) {

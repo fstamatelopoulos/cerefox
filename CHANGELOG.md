@@ -10,6 +10,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ## [Unreleased]
 
 ### Fixed
+- **`backup create` no longer fails against a pre-0.10.0 server.** The document
+  select named `lifecycle_status` unconditionally, so a v1.1.0 CLI pointed at a
+  v1.0.x database aborted with *"column cerefox_documents.lifecycle_status does
+  not exist"* — breaking backups at the one moment they matter most, taking a
+  snapshot of production **before** upgrading it. The column is now probed and
+  dropped from the select if the server predates it, recorded in the payload as
+  `includes_lifecycle_status: false`.
+- **Schema-status output no longer points at deleted Python scripts.**
+  `db_status` told users to "run db_deploy.py" on a version mismatch; the Python
+  implementation was removed at v1.0.0. All three messages now say
+  `cerefox server deploy`.
 - **`CEREFOX_CONFIG_DIR` now outranks an ambient `.env`.** Bun auto-loads `.env`
   from the working directory, so every `bun scripts/*.ts` run inside a repo
   clone arrived with that file's credentials already in `process.env` — and
@@ -48,6 +59,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   `content-format.md` both told users to run it anyway.
 
 ### Added
+- **Backups now capture trashed documents** (backup format 4). Soft-delete is
+  not a purge — `cerefox_delete_document` only stamps `deleted_at`, and nothing
+  ever collects it (the 48h retention sweep prunes document *versions*, never
+  the trash). Snapshots silently omitted that durable state, so a restore
+  permanently lost everything in the trash. Trashed documents are now captured
+  and **restored as trash**: `deleted_at` is replayed verbatim, and since every
+  read and search RPC filters on it, nothing deleted comes back visible —
+  `cerefox document restore` still recovers it. Counted on its own line by both
+  commands; `--no-trash` opts out.
 - **`cerefox server migrate-format`** — the command that actually does the
   conversion #164 promised: re-ingests legacy documents through the normal
   pipeline so they are re-chunked, re-embedded, and stamped with the current

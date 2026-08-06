@@ -29,6 +29,7 @@ interface BackupOptions {
   includeVersions?: boolean;
   label?: string;
   git?: boolean;
+  trash?: boolean;
 }
 
 function expandHome(path: string): string {
@@ -73,30 +74,70 @@ async function action(options: BackupOptions): Promise<void> {
     // Non-fatal: an older server without the RPC still backs up fine.
   }
 
-  // Pull all non-deleted documents. Paginated: an unbounded select caps at
-  // the PostgREST row limit (1000) and silently truncates the backup (#131).
-  let docs: Array<Record<string, unknown>>;
-  try {
-    docs = await fetchAllPages<Record<string, unknown>>((from, to) =>
-      client.raw
-        .from("cerefox_documents")
-        .select(
-          "id, title, content_hash, source, metadata, total_chars, chunk_count, " +
-            // lifecycle_status (iteration 29) must be listed explicitly: this
-            // select is an allow-list, which is how the previous columns went
-            // missing in the first place (#166).
-            "review_status, lifecycle_status, created_at, updated_at, deleted_at",
-        )
-        .is("deleted_at", null)
+  // Trashed documents are captured by default (backup format 4).
+  //
+  // Soft-delete is not a purge: `cerefox_delete_document` only stamps
+  // `deleted_at`, and nothing ever collects it — the 48h retention sweep prunes
+  // document *versions*, never the trash. So the trash is durable state that
+  // survives indefinitely until someone runs an explicit purge, and a snapshot
+  // that omitted it was quietly the one lossy part of "back up everything".
+  //
+  // Restore replays `deleted_at` verbatim, so trashed documents come back
+  // trashed, never resurrected. That is what makes this safe to default on:
+  // every read and search RPC filters `deleted_at IS NULL`, so restored trash
+  // is as invisible as it was on the source, and `document restore` still
+  // recovers it. `--no-trash` opts out for anyone who deletes at volume.
+  const includeTrash = options.trash !== false;
+
+  // The column allow-list is explicit on purpose: a `select("*")` is how the
+  // membership columns went missing unnoticed in the first place (#166).
+  //
+  // `lifecycle_status` arrived with schema 0.10.0, but a newer CLI is routinely
+  // pointed at an older server — backing up production before upgrading it is
+  // the single most important time this command has to work. Naming the column
+  // unconditionally made `backup create` fail outright against any 0.9.x
+  // database ("column cerefox_documents.lifecycle_status does not exist"), so
+  // the fallback below drops it and re-runs. Restore already tolerates its
+  // absence.
+  const BASE_COLUMNS =
+    "id, title, content_hash, source, metadata, total_chars, chunk_count, " +
+    "review_status, created_at, updated_at, deleted_at";
+
+  const fetchDocs = (columns: string): Promise<Array<Record<string, unknown>>> =>
+    fetchAllPages<Record<string, unknown>>((from, to) => {
+      // Paginated: an unbounded select caps at the PostgREST row limit (1000)
+      // and silently truncates the backup (#131).
+      const q = client.raw.from("cerefox_documents").select(columns);
+      return (includeTrash ? q : q.is("deleted_at", null))
         .order("created_at", { ascending: true })
         .order("id", { ascending: true })
-        .range(from, to),
-    );
+        .range(from, to);
+    });
+
+  let docs: Array<Record<string, unknown>>;
+  let lifecycleCaptured = true;
+  try {
+    docs = await fetchDocs(`${BASE_COLUMNS}, lifecycle_status`);
   } catch (err) {
-    throw systemError(
-      `Document fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/lifecycle_status/.test(message)) {
+      throw systemError(`Document fetch failed: ${message}`);
+    }
+    lifecycleCaptured = false;
+    try {
+      docs = await fetchDocs(BASE_COLUMNS);
+    } catch (retryErr) {
+      throw systemError(
+        `Document fetch failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
+      );
+    }
+    println(
+      c.dim("  (server predates lifecycle_status — captured without it)"),
     );
   }
+
+  const trashedCount = docs.filter((d) => d.deleted_at != null).length;
+
 
   // Projects + memberships (#166). These were never captured, so every
   // restore silently landed documents with no project assignments — and the
@@ -144,9 +185,10 @@ async function action(options: BackupOptions): Promise<void> {
     // Older server without the relations table — nothing to capture.
   }
 
-  // Drop memberships whose document is not in this snapshot. Backups capture
-  // live documents only, but the junction carries rows for soft-deleted ones
-  // too — 7 of 369 on the maintainer's store. Restore already ignores them, so
+  // Drop memberships whose document is not in this snapshot. With trash
+  // captured (format 4) this is usually a no-op, but it still matters under
+  // `--no-trash`, and it guards the general case of a junction row outliving
+  // its document. Restore already ignores such rows, so
   // this is about the file being internally consistent: every membership in a
   // snapshot should point at a document the snapshot contains.
   {
@@ -202,9 +244,15 @@ async function action(options: BackupOptions): Promise<void> {
     created_at: new Date().toISOString(),
     cerefox_version: PKG_VERSION,
     // 3 = adds relations + lifecycle_status (iteration 29).
-    backup_format: 3,
+    // 4 = trashed documents are captured (with deleted_at preserved).
+    backup_format: 4,
     schema_version: schemaVersion,
     document_count: docs.length,
+    trashed_count: trashedCount,
+    includes_trash: includeTrash,
+    // False when taken against a pre-0.10.0 server, so a restore can tell an
+    // absent lifecycle_status from one that was genuinely never set.
+    includes_lifecycle_status: lifecycleCaptured,
     chunk_count: chunkTotal,
     project_count: projects.length,
     membership_count: memberships.length,
@@ -226,6 +274,18 @@ async function action(options: BackupOptions): Promise<void> {
           (relations.length > 0 ? ` · relations: ${relations.length}` : ""),
     ),
   );
+  // Counted on its own line: the trash is included in document_count, and a
+  // silent inclusion is exactly the kind of surprise this feature exists to
+  // remove. Say so either way.
+  if (!includeTrash) {
+    println(c.dim("  trashed documents: excluded (--no-trash)"));
+  } else if (trashedCount > 0) {
+    println(
+      c.dim(
+        `  of which trashed: ${trashedCount} (restored as trash, not resurrected)`,
+      ),
+    );
+  }
 
   if (options.git) {
     println(c.yellow("⚠ ") + "--git commit is not implemented; the snapshot was written without a git checkpoint.");
@@ -244,5 +304,9 @@ export function registerBackup(program: Command): void {
     .option("-l, --label <label>", "Optional suffix added to the filename.")
     .option("--include-versions", "Include archived versions in the snapshot. (v0.5: ignored — current chunks only.)")
     .option("--git", "Commit the snapshot to the output dir as a git checkpoint. (v0.5: ignored.)")
+    .option(
+      "--no-trash",
+      "Exclude soft-deleted documents. Default: they are captured and restored as trash.",
+    )
     .action(action);
 }
