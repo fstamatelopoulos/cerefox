@@ -57,3 +57,8 @@ ALTER TABLE cerefox_audit_log ADD CONSTRAINT cerefox_audit_log_operation_check C
                   'status-change', 'archive', 'unarchive', 'restore',
                   'relation-set', 'relation-delete')
 );
+
+-- Relations ship dormant: the MCP tools stay hidden until a deployment opts in.
+INSERT INTO cerefox_config (key, value)
+VALUES ('relations_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;

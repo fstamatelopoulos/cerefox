@@ -44,7 +44,7 @@ export function SearchPage() {
       <div className={ui.pageHead}>
         <div>
           <p className={ui.eyebrow}>Knowledge base</p>
-          <h1 className={ui.pageTitle}>Search memory</h1>
+          <h1 className={ui.pageTitle} data-testid="page-title">Search memory</h1>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
           {dash && (

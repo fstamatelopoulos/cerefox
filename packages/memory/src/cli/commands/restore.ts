@@ -22,6 +22,7 @@ import {
   printTable,
   systemError,
   userError,
+  warn,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
 
@@ -61,12 +62,21 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   try {
     payload = JSON.parse(readFileSync(file, "utf8")) as {
       cerefox_version?: string;
+      // 2 = includes projects + memberships (#166). Absent/1 = documents and
+      // chunks only; those snapshots still restore, just without memberships.
+      backup_format?: number;
+      schema_version?: string;
       document_count?: number;
       chunk_count?: number;
+      projects?: Array<{ id: string; name: string; description?: string | null }>;
+      memberships?: Array<{ document_id: string; project_id: string }>;
+      relations?: Array<{ source_id: string; target_id: string; rel_type: string }>;
       documents: Array<{
         id: string;
         title: string;
         content_hash: string;
+        /** Non-null on soft-deleted documents; replayed verbatim (format 4+). */
+        deleted_at?: string | null;
         chunks: Array<Record<string, unknown>>;
         [k: string]: unknown;
       }>;
@@ -80,12 +90,42 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   }
 
   println(c.bold(`Restoring from ${file}`));
+  const hasMemberships = Array.isArray(payload.memberships);
   println(
     c.dim(
       `  cerefox_version: ${payload.cerefox_version ?? "?"} · ` +
+        `schema: ${payload.schema_version ?? "?"} · ` +
         `documents in file: ${payload.documents.length} · chunks in file: ${payload.chunk_count ?? "?"}`,
     ),
   );
+  // Say plainly what will and will not be recreated — the previous silence
+  // here is what let membership loss go unnoticed (#166).
+  if (hasMemberships) {
+    println(
+      c.dim(
+        `  projects: ${payload.projects?.length ?? 0} · memberships: ${payload.memberships?.length ?? 0}`,
+      ),
+    );
+  } else {
+    warn(
+      "This backup predates project-membership capture (format 1) — documents " +
+        "will be restored WITHOUT their project assignments.",
+    );
+  }
+
+  // Trashed documents (format 4+) are restored *as trash*: the row carries its
+  // original `deleted_at`, and every read/search RPC filters on that column, so
+  // nothing the operator deleted comes back visible. Announced up front so a
+  // restore never quietly reinstates deleted content.
+  const trashedInFile = payload.documents.filter((d) => d.deleted_at != null).length;
+  if (trashedInFile > 0) {
+    println(
+      c.dim(
+        `  trashed documents in file: ${trashedInFile} — restored as trash ` +
+          "(still deleted; recover with `cerefox document restore`)",
+      ),
+    );
+  }
   println("");
 
   const client = getClient();
@@ -96,11 +136,26 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   const errorDetails: Array<{ title: string; error: string }> = [];
 
   for (const doc of payload.documents) {
-    // Skip if a doc with the same content_hash already exists.
+    // Skip if this document is already present — by id *or* by content hash.
+    //
+    // Matching on content_hash alone was not enough to make restore
+    // re-runnable, which is the property its help text promises. A document
+    // edited between two snapshots keeps its id but changes its hash, so the
+    // hash probe missed it and the insert then died on the primary key:
+    //   duplicate key value violates unique constraint "cerefox_documents_pkey"
+    // Three documents hit exactly that restoring a fresh production snapshot
+    // over a slightly older copy.
+    //
+    // Skipping (rather than overwriting) keeps restore additive and
+    // non-destructive: re-running it can never replace content in the target
+    // with an older revision. Recovering a *specific* superseded document is a
+    // deliberate act — restore that snapshot into an empty store, or use
+    // `document version` — not something a bulk re-run should do silently.
     const { data: existing } = await client.raw
       .from("cerefox_documents")
       .select("id")
-      .eq("content_hash", doc.content_hash)
+      .or(`id.eq.${doc.id},content_hash.eq.${doc.content_hash}`)
+      .limit(1)
       .maybeSingle();
 
     if (existing) {
@@ -140,11 +195,104 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     restored++;
   }
 
+  // ── Projects + memberships (#166) ────────────────────────────────────────
+  // After documents exist, so foreign keys resolve. Both steps are idempotent
+  // (upsert / ignore-duplicates) because restore is safe to re-run, and both
+  // are skipped for format-1 snapshots that carry neither.
+  let projectsRestored = 0;
+  let membershipsRestored = 0;
+  let relationsRestored = 0;
+  if (!options.dryRun && hasMemberships) {
+    const projects = payload.projects ?? [];
+    if (projects.length > 0) {
+      // Keep existing rows authoritative: a project that already exists keeps
+      // its current name/description rather than being overwritten.
+      const { error: projErr } = await client.raw
+        .from("cerefox_projects")
+        .upsert(projects, { onConflict: "id", ignoreDuplicates: true });
+      if (projErr) {
+        errors++;
+        errorDetails.push({ title: "(projects)", error: projErr.message });
+      } else {
+        projectsRestored = projects.length;
+      }
+    }
+
+    // Only memberships whose document actually landed — a skipped duplicate or
+    // a failed insert must not leave a dangling edge.
+    const presentDocIds = new Set<string>();
+    {
+      const ids = (payload.documents ?? []).map((d) => d.id);
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data } = await client.raw
+          .from("cerefox_documents")
+          .select("id")
+          .in("id", ids.slice(i, i + 200));
+        for (const row of (data ?? []) as Array<{ id: string }>) presentDocIds.add(row.id);
+      }
+    }
+    const links = (payload.memberships ?? []).filter((m) => presentDocIds.has(m.document_id));
+    for (let i = 0; i < links.length; i += 500) {
+      const { error: linkErr } = await client.raw
+        .from("cerefox_document_projects")
+        .upsert(links.slice(i, i + 500), {
+          onConflict: "document_id,project_id",
+          ignoreDuplicates: true,
+        });
+      if (linkErr) {
+        errors++;
+        errorDetails.push({ title: "(memberships)", error: linkErr.message });
+        break;
+      }
+      membershipsRestored += links.slice(i, i + 500).length;
+    }
+
+    // Relations (iteration 29). Only edges whose BOTH endpoints landed — a
+    // half-present edge would violate the foreign keys, and silently dropping
+    // the other half would be worse than not restoring it.
+    const relations = (payload.relations ?? []).filter(
+      (r) => presentDocIds.has(r.source_id) && presentDocIds.has(r.target_id),
+    );
+    if (relations.length > 0) {
+      for (let i = 0; i < relations.length; i += 500) {
+        const { error: relErr } = await client.raw
+          .from("cerefox_document_relations")
+          .upsert(relations.slice(i, i + 500), {
+            onConflict: "source_id,target_id,rel_type",
+            ignoreDuplicates: true,
+          });
+        if (relErr) {
+          // A pre-0.10.0 target has no relations table: report once and move
+          // on rather than failing a restore that is otherwise complete.
+          errorDetails.push({ title: "(relations)", error: relErr.message });
+          errors++;
+          break;
+        }
+        relationsRestored += relations.slice(i, i + 500).length;
+      }
+      const dropped = (payload.relations?.length ?? 0) - relations.length;
+      if (dropped > 0) {
+        warn(`${dropped} relation(s) skipped — one or both documents were not restored.`);
+      }
+    }
+  }
+
   println("");
   println(
     (options.dryRun ? c.yellow("(dry-run) ") : "") +
       c.bold(`Summary: ${restored} restored · ${skipped} skipped · ${errors} errors`),
   );
+  if (hasMemberships && !options.dryRun) {
+    println(
+      c.dim(
+        `  projects: ${projectsRestored} · memberships: ${membershipsRestored}` +
+          (relationsRestored > 0 ? ` · relations: ${relationsRestored}` : ""),
+      ),
+    );
+  }
+  if (trashedInFile > 0) {
+    println(c.dim(`  ${trashedInFile} of those are trashed and stay trashed.`));
+  }
 
   if (errors > 0) {
     println("");
@@ -161,7 +309,7 @@ export function registerRestore(program: Command): void {
     .option("--dry-run", "Print what would be restored without writing.")
     .option(
       "-p, --project-name <name>",
-      "Reserved for future use; currently ignored (project memberships ride along with each doc's metadata).",
+      "Reserved for future use; currently ignored. Project memberships are restored from the backup itself (format 2+).",
     )
     .action(action);
 }

@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.10.0
+-- @version: 0.10.1
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -367,6 +367,11 @@ VALUES ('require_requestor_identity', 'false')
 ON CONFLICT (key) DO NOTHING;
 INSERT INTO cerefox_config (key, value)
 VALUES ('requestor_identity_format', '^[a-zA-Z0-9_:.\- ]+$')
+ON CONFLICT (key) DO NOTHING;
+-- Document relations ship dormant: the tools stay hidden from agents until a
+-- deployment opts in (iteration 29).
+INSERT INTO cerefox_config (key, value)
+VALUES ('relations_enabled', 'false')
 ON CONFLICT (key) DO NOTHING;
 
 

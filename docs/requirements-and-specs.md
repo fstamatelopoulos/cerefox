@@ -431,7 +431,7 @@ All parameters use `CEREFOX_` prefix and can be set via environment variables or
 | `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Max response size for MCP/search |
 | `CEREFOX_MAX_CHUNK_CHARS` | `4000` | Max characters per chunk |
 | `CEREFOX_MIN_CHUNK_CHARS` | `100` | Min characters per chunk |
-| `CEREFOX_BACKUP_DIR` | `./backups` | Directory for file system backups |
+| `CEREFOX_BACKUP_DIR` | `~/.cerefox/backups` | Directory for file system backups. Use an absolute path — a relative value resolves against the working directory, so snapshots scatter. (`./backups` was the pre-v0.3.0 default and may linger in older `.env` files.) |
 | `CEREFOX_VECTOR_DIMENSIONS` | `768` | Embedding vector dimensions |
 | `CEREFOX_LOG_LEVEL` | `INFO` | Logging level |
 | `CEREFOX_SMALL_TO_BIG_THRESHOLD` | `20000` | Doc size (chars) above which search returns chunks + neighbors instead of full document |

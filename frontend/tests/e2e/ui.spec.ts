@@ -47,17 +47,16 @@ async function purgeProjectByName(name: string): Promise<void> {
 test.describe("Dashboard", () => {
   test("loads and shows stats", async ({ page }) => {
     await page.goto(APP);
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByTestId("page-title")).toBeVisible();
     await expect(page.getByText("Documents", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Recent Documents")).toBeVisible();
   });
 
   test("quick search navigates to search", async ({ page }) => {
     await page.goto(APP);
-    await page.fill('input[placeholder="Quick search..."]', "cerefox");
-    await page.click('button:has-text("Go")');
+    await page.fill('input[placeholder="Quick search…"]', "cerefox");
+    await page.getByRole("button", { name: "Search" }).first().click();
     await page.waitForURL("**/search**");
-    await expect(page.getByRole("heading", { name: "Search Knowledge Base" })).toBeVisible();
+    await expect(page.getByTestId("page-title")).toHaveText(/Search/i);
   });
 });
 
@@ -66,11 +65,11 @@ test.describe("Ingest (paste)", () => {
   test("paste ingest creates a document", async ({ page }) => {
     const title = uniqueTitle("Playwright Paste Test");
     await page.goto(`${APP}/ingest`);
-    await expect(page.getByRole("heading", { name: "Ingest Content" })).toBeVisible();
+    await expect(page.getByTestId("page-title")).toHaveText(/Ingest/i);
 
     await page.fill('input[placeholder="Document title"]', title);
     await page.fill(
-      'textarea[placeholder="Paste your Markdown content here..."]',
+      'textarea[placeholder="# Paste your Markdown here…"]',
       `# Test Document\n\nPlaywright e2e ${crypto.randomUUID()}.`,
     );
     await page.click('button[type="submit"]:has-text("Ingest")');
@@ -87,12 +86,12 @@ test.describe("Ingest (paste)", () => {
 test.describe("Search", () => {
   test("search page loads", async ({ page }) => {
     await page.goto(`${APP}/search`);
-    await expect(page.getByRole("heading", { name: "Search Knowledge Base" })).toBeVisible();
+    await expect(page.getByTestId("page-title")).toHaveText(/Search/i);
   });
 
   test("search returns results", async ({ page }) => {
     await page.goto(`${APP}/search?q=cerefox&mode=docs`);
-    await expect(page.getByText("results found")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/\d+ results? ·/)).toBeVisible({ timeout: 15_000 });
   });
 });
 
@@ -101,8 +100,9 @@ test.describe("Projects", () => {
   test("project create → verify → delete", async ({ page }) => {
     const projectName = uniqueTitle("Test Project");
     await page.goto(`${APP}/projects`);
-    await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
+    await expect(page.getByTestId("page-title")).toHaveText("Projects");
 
+    await page.getByRole("button", { name: "New project" }).click();
     await page.fill('input[placeholder="Project name"]', projectName);
     await page.fill('input[placeholder="Optional description"]', "E2E test project");
     await page.click('button[type="submit"]:has-text("Create")');
@@ -119,12 +119,12 @@ test.describe("Document detail", () => {
   test("document page loads with action buttons", async ({ page }) => {
     await page.goto(APP);
     await page.waitForTimeout(2000);
-    const docLinks = page.locator("a[href*='/document/']");
-    if ((await docLinks.count()) === 0) {
+    const docRows = page.getByTestId("recent-doc-row");
+    if ((await docRows.count()) === 0) {
       test.skip(true, "No documents in the database to test");
       return;
     }
-    await docLinks.first().click();
+    await docRows.first().click();
     await page.waitForTimeout(2000);
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Download" })).toBeVisible();
@@ -133,14 +133,16 @@ test.describe("Document detail", () => {
   test("review status toggle visible", async ({ page }) => {
     await page.goto(APP);
     await page.waitForTimeout(2000);
-    const docLinks = page.locator("a[href*='/document/']");
-    if ((await docLinks.count()) === 0) {
+    const docRows = page.getByTestId("recent-doc-row");
+    if ((await docRows.count()) === 0) {
       test.skip(true, "No documents in the database to test");
       return;
     }
-    await docLinks.first().click();
+    await docRows.first().click();
     await page.waitForTimeout(2000);
-    await expect(page.getByText("Approved")).toBeVisible();
+    // The toggle shows the CURRENT state — either is correct; the point is that
+    // the control renders.
+    await expect(page.getByText(/^(Approved|Pending)$/)).toBeVisible();
   });
 });
 
@@ -148,9 +150,9 @@ test.describe("Document detail", () => {
 test.describe("Metadata Search", () => {
   test("page loads with filter builder", async ({ page }) => {
     await page.goto(`${APP}/metadata-search`);
-    await expect(page.getByRole("heading", { name: "Metadata Search" })).toBeVisible();
+    await expect(page.getByTestId("page-title")).toHaveText(/Metadata/i);
     await expect(page.getByText("Metadata Filters")).toBeVisible();
-    await expect(page.getByRole("main").getByRole("button", { name: "Search" })).toBeVisible();
+    await expect(page.getByTestId("metadata-search-submit")).toBeVisible();
   });
 
   test("returns results or empty message", async ({ page }) => {
@@ -167,7 +169,7 @@ test.describe("Metadata Search", () => {
       await option.click();
     }
     await page.locator('input[placeholder="Value"]').first().fill("e2e-test-suite");
-    await page.getByRole("main").getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("metadata-search-submit").click();
     await page.waitForTimeout(5000);
 
     await expect(
@@ -199,6 +201,6 @@ test.describe("Analytics", () => {
 test.describe("Audit Log", () => {
   test("page loads", async ({ page }) => {
     await page.goto(`${APP}/audit-log`);
-    await expect(page.getByRole("heading", { name: "Audit Log" })).toBeVisible();
+    await expect(page.getByTestId("page-title")).toHaveText(/Audit/i);
   });
 });

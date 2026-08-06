@@ -436,7 +436,7 @@ export async function checkContentFormat(): Promise<CheckResult> {
       name: CONTENT_FORMAT_CHECK_NAME,
       status: "skipped", // informational (ℹ), never a gate
       detail: `${legacy} of ${total} document(s) use the legacy reconstruction format (format 1).`,
-      hint: "They auto-convert on next edit; run `cerefox server reindex` to convert all now. What this means: `cerefox guides show content-format`.",
+      hint: "Harmless — they auto-convert on next edit. To convert them all now: `cerefox server migrate-format` (re-embeds, so try `--dry-run` first). To read what chunk formats are: `cerefox guides show content-format`.",
     };
   } catch (err) {
     return {

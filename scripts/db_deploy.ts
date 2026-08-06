@@ -21,7 +21,7 @@
 import { existsSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 
-import { loadEnv } from "../_shared/config/index.js";
+import { loadEnv, resolveEnvFile } from "../_shared/config/index.js";
 import { resolveServerAssets } from "../_shared/server-assets/index.js";
 import { runDbDeploy } from "../_shared/db-deploy/index.js";
 import {
@@ -71,10 +71,30 @@ function parseArgs(argv: string[]): Args {
   return out;
 }
 
-async function confirmReset(): Promise<boolean> {
+/**
+ * Name the target before wiping it. A destructive prompt that doesn't say
+ * *which* database it will drop can only be answered on faith — and the
+ * environment this resolves from has been wrong before (a working-directory
+ * `.env` silently outranking CEREFOX_CONFIG_DIR). Printing the project ref
+ * makes a wrong-database reset visible at the one moment it can still be
+ * stopped.
+ */
+async function confirmReset(dbUrl: string): Promise<boolean> {
+  let target = "(unparseable connection string)";
+  try {
+    const u = new URL(dbUrl);
+    // Supabase encodes the project ref in the pooler username (postgres.<ref>).
+    const ref = u.username.includes(".") ? u.username.split(".").slice(1).join(".") : null;
+    target = ref ? `${ref} — ${u.host}` : u.host;
+  } catch {
+    /* fall through to the placeholder */
+  }
+
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await rl.question(
-    "\n⚠️  --reset will DROP all Cerefox tables. All data will be lost. " +
+    `\n⚠️  --reset will DROP all Cerefox tables. All data will be lost.\n` +
+      `   Target database: ${target}\n` +
+      `   Config: ${resolveEnvFile()}\n` +
       "Type 'yes' to continue: ",
   );
   rl.close();
@@ -108,7 +128,7 @@ async function main(): Promise<void> {
   }
 
   if (args.reset && !args.dryRun) {
-    const ok = await confirmReset();
+    const ok = await confirmReset(dbUrl);
     if (!ok) {
       println("Aborted.");
       process.exit(EXIT_OK);

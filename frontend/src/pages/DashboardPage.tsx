@@ -17,7 +17,7 @@ import {
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { fetchUsageSummary } from "../api/analytics";
 import { CliCard } from "../components/CliCard";
@@ -104,7 +104,7 @@ export function DashboardPage() {
       <div className={`${styles.dashHero} ${ui.rise}`}>
         <div style={{ minWidth: 0 }}>
           <p className={ui.eyebrow}>Memory layer · online</p>
-          <h1 className={ui.pageTitle}>{greeting()}, operator.</h1>
+          <h1 className={ui.pageTitle} data-testid="page-title">{greeting()}, operator.</h1>
         </div>
         <div className={styles.dashHeroActions}>
           <form
@@ -247,14 +247,22 @@ export function DashboardPage() {
                   const ChipIcon = chip.icon;
                   const pending = doc.review_status !== "approved";
                   return (
-                    <tr key={doc.id} onClick={() => navigate(`/document/${doc.id}`)}>
+                    <tr key={doc.id} data-testid="recent-doc-row" onClick={() => navigate(`/document/${doc.id}`)}>
                       <td>
                         <div className={styles.docCell}>
                           <span className={styles.docDot} style={{ background: projColor(doc) }} />
                           <div className={ui.col} style={{ gap: 3, minWidth: 0 }}>
-                            <span className={`${ui.link} ${styles.docTitle}`}>
+                            {/* A real link, not just a row click (#165): keyboard
+                                users can reach it, and cmd/middle-click, "copy
+                                link", and hover preview all work again. The row
+                                click below stays as a convenience. */}
+                            <Link
+                              to={`/document/${doc.id}`}
+                              className={`${ui.link} ${styles.docTitle}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {doc.title || "Untitled"}
-                            </span>
+                            </Link>
                             <div className={ui.row} style={{ gap: 6 }}>
                               {doc.project_ids
                                 .filter((pid) => projectMap.has(pid))
@@ -335,7 +343,14 @@ export function DashboardPage() {
                       <span className={styles.projDot} style={{ background: color }} />
                       <div className={ui.col} style={{ gap: 5, minWidth: 0, flex: 1 }}>
                         <div className={ui.row} style={{ justifyContent: "space-between", gap: 8 }}>
-                          <span className={styles.projName}>{p.name}</span>
+                          {/* Real link for the same reasons as the document rows (#165). */}
+                          <Link
+                            to={`/projects/${p.id}/documents`}
+                            className={styles.projName}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {p.name}
+                          </Link>
                           <span className={styles.projCounts}>
                             <span>{docs}</span>
                             {trash > 0 && (

@@ -9,6 +9,74 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **`backup create` no longer fails against a pre-0.10.0 server.** The document
+  select named `lifecycle_status` unconditionally, so a v1.1.0 CLI pointed at a
+  v1.0.x database aborted with *"column cerefox_documents.lifecycle_status does
+  not exist"* — breaking backups at the one moment they matter most, taking a
+  snapshot of production **before** upgrading it. The column is now probed and
+  dropped from the select if the server predates it, recorded in the payload as
+  `includes_lifecycle_status: false`.
+- **Schema-status output no longer points at deleted Python scripts.**
+  `db_status` told users to "run db_deploy.py" on a version mismatch; the Python
+  implementation was removed at v1.0.0. All three messages now say
+  `cerefox server deploy`.
+- **`CEREFOX_CONFIG_DIR` now outranks an ambient `.env`.** Bun auto-loads `.env`
+  from the working directory, so every `bun scripts/*.ts` run inside a repo
+  clone arrived with that file's credentials already in `process.env` — and
+  `loadEnv()` only filled *unset* keys, so the named config directory was
+  silently ignored. `CEREFOX_CONFIG_DIR=…/staging bun scripts/db_migrate.ts
+  --status` reported **production**, and the same resolution path through
+  `db_deploy.ts --reset` would have wiped production while naming staging on
+  the command line. When the config dir is explicitly named, its `.env` is now
+  the authority. Unchanged when the override is unset, which is every
+  single-environment install.
+- **`db_deploy.ts --reset` now names the database it is about to drop.** The
+  confirmation prompt asked for a typed `yes` without ever saying *which*
+  project would be wiped. It now prints the target project ref, host, and the
+  config file the connection came from.
+- **`cerefox web` daemon state is now per-environment.** The pidfile and log
+  were written to `~/.cerefox/web.{pid,log}` regardless of
+  `CEREFOX_CONFIG_DIR`, so starting a web server in a second environment
+  overwrote the first one's bookkeeping — and a later `web stop` then targeted
+  the wrong process, killing the other environment's server. State now follows
+  an explicitly-set `CEREFOX_CONFIG_DIR`. **No change for normal installs**:
+  without the override the location is exactly as before, and the resolver is
+  deliberately keyed on the env var rather than the config-dir resolver so repo
+  dev-mode never drops `web.pid` into a working tree.
+- **Backups now capture project memberships** (#166). `backup create` never
+  read the document↔project junction, so every restore silently landed
+  documents with **no project assignments** — and the restore command's help
+  text claimed the opposite. Snapshots now include projects and memberships
+  (backup format 2) and restore recreates them idempotently. Older snapshots
+  still restore, with a warning that memberships are absent. Verified with a
+  full round trip: seed → back up → wipe → restore, memberships intact.
+- **`cerefox server reindex` no longer claimed to convert legacy chunk
+  formats** (#164, reported by [@tdebasis](https://github.com/tdebasis)).
+  Reindex refreshes embeddings on existing chunk rows; it never re-chunks, so
+  it cannot advance `content_format` — verified on a 3,203-chunk store where
+  it touched every chunk and moved exactly zero. `cerefox doctor` and
+  `content-format.md` both told users to run it anyway.
+
+### Added
+- **Backups now capture trashed documents** (backup format 4). Soft-delete is
+  not a purge — `cerefox_delete_document` only stamps `deleted_at`, and nothing
+  ever collects it (the 48h retention sweep prunes document *versions*, never
+  the trash). Snapshots silently omitted that durable state, so a restore
+  permanently lost everything in the trash. Trashed documents are now captured
+  and **restored as trash**: `deleted_at` is replayed verbatim, and since every
+  read and search RPC filters on it, nothing deleted comes back visible —
+  `cerefox document restore` still recovers it. Counted on its own line by both
+  commands; `--no-trash` opts out.
+- **`cerefox server migrate-format`** — the command that actually does the
+  conversion #164 promised: re-ingests legacy documents through the normal
+  pipeline so they are re-chunked, re-embedded, and stamped with the current
+  format. Opt-in (it costs embedding spend), with `--dry-run`, `--limit`, and
+  `--document-id`. Each document converts under optimistic concurrency, so an
+  edit made mid-run is skipped rather than overwritten, and documents whose
+  content is byte-identical to another document are reported as
+  un-convertible rather than failing the run.
+
 Open roadmap.
 
 ---
@@ -31,6 +99,13 @@ Open roadmap.
   one relation type outward, following chains and terminating safely on cycles.
   Search ranking is deliberately untouched in this release; relation-aware
   retrieval is the next slice.
+
+  **The feature ships dormant.** The relation tools are hidden from agents
+  until a deployment opts in with `cerefox config set relations_enabled true`
+  — a tool an agent can see is a tool an agent may use, and this design is
+  meant to evolve through experimentation before it becomes part of the
+  default surface. With the flag off, Cerefox behaves exactly as it did in
+  1.0.6: an empty table, a defaulted column, and 10 visible tools.
 - **Deployment-wide search settings** (#133; schema 0.9.2 → 0.9.3 — redeploy
   with `cerefox server deploy`). `min_search_score`, `min_term_coverage`, and
   `search_alpha` can now be set once with `cerefox config set` and every access
@@ -46,6 +121,25 @@ Open roadmap.
   before the server and a normal upgrade window would otherwise fail CI.
 
 ### Fixed
+- **Backups capture the full picture** — projects, memberships (ported from
+  v1.0.7, #166) and now **relations + `lifecycle_status`** too, so the graph
+  and each document's standing survive a restore. Relations are only restored
+  when both endpoint documents landed, and a snapshot from an older Cerefox
+  still restores (with a note about what it cannot recreate).
+- **`cerefox doctor`'s content-format hint is legible.** It ended with
+  "What this means: `cerefox guides show content-format`", which read as
+  though the command were the explanation. It now says plainly that the legacy
+  format is harmless, how to convert, and what to run to read about it.
+- **UI end-to-end tests repaired** (#155). The Playwright suite had drifted to
+  8 failures and 2 silent skips out of 13 — every one a stale selector rather
+  than a broken app (polished copy, renamed headings, a form moved into a
+  modal). It now passes 13/13 in ~32 seconds instead of 3.7 minutes, and page
+  identity is asserted through stable test hooks so copy changes cannot break
+  it again.
+- **Dashboard rows are keyboard reachable** (#165). Recent documents and
+  projects navigated via a click handler on the table row, so keyboard and
+  screen-reader users could not open them at all, and cmd/middle-click and
+  "copy link" did nothing. They are real links now.
 - **`cerefox doctor` no longer reports "All checks passed" alongside warnings**
   (#152) — it contradicted the remediation printed directly above it.
 - **`cerefox-local upgrade` actually upgrades** (#153). With no argument it

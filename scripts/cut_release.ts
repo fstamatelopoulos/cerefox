@@ -36,6 +36,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { exit } from "node:process";
 
+import { compareSemver } from "../_shared/compatibility/index.ts";
+
 // ── paths ────────────────────────────────────────────────────────────────
 
 const REPO_ROOT = join(import.meta.dir, "..");
@@ -263,20 +265,82 @@ function checkCleanTree(): void {
   }
 }
 
-function checkBranch(): void {
+/**
+ * Releases come from `main`, or from a `release/*` maintenance branch when a
+ * patch must ship for an older line while main has already moved on (1.0.7 was
+ * cut from `release/1.0.7` off the v1.0.6 tag, because main already carried
+ * all of 1.1.0). Returns the branch so the push/sync steps target the right
+ * one — pushing `main` from a release branch would strand the version bump.
+ */
+function checkBranch(expected?: string): string {
   const branch = runOrDie("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (branch !== "main") {
-    die(`Must be on 'main' branch, currently on '${branch}'.`);
+  if (branch !== "main" && !branch.startsWith("release/")) {
+    die(
+      `Must be on 'main' or a 'release/*' maintenance branch, currently on '${branch}'.`,
+    );
   }
+  // `--branch` ASSERTS intent; it never selects. A flag that could pick a
+  // different branch than the working tree would resurrect the bug this
+  // function exists to prevent: pushing one branch while tagging another's
+  // commit, stranding the version bump. Omitting it is fine — the branch you
+  // are standing on is the branch that is cut.
+  if (expected && expected !== branch) {
+    die(
+      `--branch ${expected} does not match the checked-out branch '${branch}'.\n` +
+        `    Check out ${expected} and retry (this flag states intent; it cannot switch branches).`,
+    );
+  }
+  return branch;
 }
 
-function checkUpToDateWithOrigin(): void {
-  runOrDie("git", ["fetch", "origin", "main", "--quiet"]);
+/**
+ * The mistake this exists to prevent: standing on a branch that is AHEAD of the
+ * version you are cutting. Cutting 1.0.7 while on main (VERSION 1.1.0-beta.1)
+ * would tag main's tree — all of 1.1.0 — as a 1.0.x patch, published to the
+ * stable channel. The tag is immutable, so there is no clean recovery.
+ */
+/**
+ * A maintenance branch may only cut versions on its own line.
+ *
+ * The forward-only check below does NOT catch this direction: standing on
+ * `release/1.0.7` (VERSION 1.0.6) and cutting `1.1.0-beta.2` moves the version
+ * forward, so it would be allowed — and would tag a branch that contains none
+ * of the 1.1.0 work as a 1.1.0 pre-release. This is the structural guard for
+ * that; unlike `--branch`, it needs no discipline from the caller.
+ */
+function checkVersionMatchesBranchLine(newVersion: string, branch: string): void {
+  if (!branch.startsWith("release/")) return; // main may cut any line
+  const branchLine = branch.slice("release/".length).split(".").slice(0, 2).join(".");
+  const versionLine = newVersion.split(".").slice(0, 2).join(".");
+  if (branchLine === versionLine) return;
+  die(
+    `Refusing to cut ${newVersion} from '${branch}': that branch is the ${branchLine}.x line.\n` +
+      `    A maintenance branch can only release its own line. Cut ${versionLine}.x from main\n` +
+      `    (or from the release/${versionLine}.x branch for that line).`,
+  );
+}
+
+function checkVersionMovesForward(currentVersion: string, newVersion: string, branch: string): void {
+  if (compareSemver(newVersion, currentVersion) > 0) return;
+  die(
+    `Refusing to cut ${newVersion}: this branch ('${branch}') is at ${currentVersion}.\n` +
+      `    A release must move the version forward. If you meant to patch an older line, cut\n` +
+      `    from a 'release/*' branch based on that line's tag — not from a branch that is ahead.`,
+  );
+}
+
+function checkUpToDateWithOrigin(branch: string): void {
+  // A brand-new release branch may not exist on origin yet; that is fine —
+  // the push below creates it.
+  const hasRemote =
+    run("git", ["ls-remote", "--exit-code", "--heads", "origin", branch]).status === 0;
+  if (!hasRemote) return;
+  runOrDie("git", ["fetch", "origin", branch, "--quiet"]);
   const local = runOrDie("git", ["rev-parse", "HEAD"]);
-  const remote = runOrDie("git", ["rev-parse", "origin/main"]);
+  const remote = runOrDie("git", ["rev-parse", `origin/${branch}`]);
   if (local !== remote) {
     die(
-      `Local main is not in sync with origin/main.\n` +
+      `Local ${branch} is not in sync with origin/${branch}.\n` +
         `  local : ${local}\n` +
         `  origin: ${remote}\n` +
         `Run 'git pull --ff-only' (or push your local commits) and retry.`,
@@ -436,6 +500,8 @@ interface Args {
   yes: boolean;
   npmPublish: boolean;
   dockerPublish: boolean;
+  /** Optional assertion: the branch you believe you are cutting from. */
+  branch?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -446,9 +512,11 @@ function parseArgs(argv: string[]): Args {
     yes: false,
     npmPublish: false,
     dockerPublish: false,
+    branch: undefined,
   };
   for (const a of argv) {
-    if (a === "--dry-run") out.dryRun = true;
+    if (a.startsWith("--branch=")) out.branch = a.slice("--branch=".length);
+    else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--check") out.check = true;
     else if (a === "--yes" || a === "-y") out.yes = true;
     else if (a === "--npm-publish") out.npmPublish = true;
@@ -547,10 +615,13 @@ async function main(): Promise<void> {
 
   // 1. Preflight: working tree, branch, sync, tag
   info("Preflight checks…");
+  let releaseBranch = "main";
   if (!args.dryRun) {
     checkCleanTree();
-    checkBranch();
-    checkUpToDateWithOrigin();
+    releaseBranch = checkBranch(args.branch);
+    checkVersionMatchesBranchLine(newVersion, releaseBranch);
+    checkVersionMovesForward(currentVersion, newVersion, releaseBranch);
+    checkUpToDateWithOrigin(releaseBranch);
     checkTagDoesNotExist(newVersion);
   } else {
     info("  (dry-run: skipping git state checks)");
@@ -607,7 +678,27 @@ async function main(): Promise<void> {
   // immediately re-runnable. (Through v0.9.0 the script mutated + committed +
   // tagged FIRST and prompted last; a declined prompt left a local commit +
   // tag that tripped the `checkTagDoesNotExist` preflight on the next run.)
-  if (!args.dryRun && !args.yes) {
+  // `--yes` is honoured only on main. A maintenance-branch cut is the case
+  // where the banner exists to be READ — that is exactly where an unattended
+  // "yes" would defeat it, and where the mistakes are unrecoverable (immutable
+  // tags on the wrong line). Ignore it there, loudly.
+  const branchNeedsEyes = releaseBranch !== "main";
+  const skipPrompt = args.yes && !branchNeedsEyes;
+  if (!args.dryRun && args.yes && branchNeedsEyes) {
+    warn(
+      `Ignoring --yes: this cut is from '${releaseBranch}', not main. ` +
+        "Release-line mistakes here cannot be undone (tags are immutable), so " +
+        "the confirmation below must be answered by a human.",
+    );
+    if (!process.stdin.isTTY) {
+      die(
+        `Refusing to cut from '${releaseBranch}' without an interactive terminal.\n` +
+          `    --yes does not apply to maintenance branches, and there is no TTY to confirm on.\n` +
+          `    Run this cut from an interactive shell.`,
+      );
+    }
+  }
+  if (!args.dryRun && !skipPrompt) {
     console.log("");
     {
       const extras = [
@@ -625,6 +716,22 @@ async function main(): Promise<void> {
         `moves — any later fix ships as a NEW patch version, not a re-tag. ` +
         `(The "force-move tags only on objective failure" rule; see CONTRIBUTING.md.)`,
     );
+    // The branch is the single most consequential fact here and was previously
+    // absent from the prompt — you could confirm a cut without ever being told
+    // where it came from.
+    const bannerLines = [
+      `You are about to cut ${tag} from branch '${releaseBranch}'`,
+      `  ${currentVersion}  →  ${newVersion}`,
+    ];
+    const width = Math.max(...bannerLines.map((l) => l.length)) + 2;
+    console.log("");
+    console.log(ansi.yellow(`┌${"─".repeat(width)}┐`));
+    for (const line of bannerLines) {
+      console.log(ansi.yellow("│ ") + line.padEnd(width - 2) + ansi.yellow(" │"));
+    }
+    console.log(ansi.yellow(`└${"─".repeat(width)}┘`));
+    console.log("");
+
     const yes = await confirm("Proceed?");
     if (!yes) {
       warn("Aborted before any changes — working tree untouched, nothing committed/tagged/pushed. Re-run when ready.");
@@ -708,7 +815,7 @@ async function main(): Promise<void> {
   // 5. Push + GitHub Release (already confirmed before any mutation, above)
 
   if (args.dryRun) {
-    info(`DRY-RUN: would 'git push origin main'`);
+    info(`DRY-RUN: would 'git push origin <current branch>'`);
     info(`DRY-RUN: would 'git push origin ${tag}'`);
     info(`DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>'`);
     info(`DRY-RUN: would upload install.sh + docker/local/install-local.sh as Release assets`);
@@ -727,8 +834,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  info("Pushing main and tag to origin…");
-  runOrDie("git", ["push", "origin", "main"]);
+  info(`Pushing ${releaseBranch} and tag to origin…`);
+  // The branch we are actually on — pushing "main" from a release branch would
+  // strand the version bump and CHANGELOG on an unpushed local commit.
+  runOrDie("git", ["push", "origin", releaseBranch]);
   runOrDie("git", ["push", "origin", tag]);
   ok(`Pushed ${tag} to origin.`);
 

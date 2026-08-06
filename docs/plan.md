@@ -4007,6 +4007,76 @@ and the web UI relation panel — re-opening search ranking so soon after the
 **Release shape**: dogfooded through `1.1.0-beta.N` on both worlds per
 RELEASING.md, since Phase 1 and Phase 2 both carry real regression risk.
 
+### beta.2 workstream (branch `feat/beta2-playwright-config-ui`)
+
+Cut from main after `1.1.0-beta.1`. Not released yet — beta.1 is deliberately
+untested against production until a staging Supabase project exists (below).
+
+- ✅ **#155 UI e2e repair.** The Playwright suite had drifted to 8 failures +
+  2 *silent skips* out of 13; every failure was a stale selector, not a broken
+  app (copy polished ASCII `...`→`…`, headings renamed, project creation moved
+  into a modal, two buttons now matching "Search"). Now 13/13 in ~32s (was
+  3.7min — three failures were 60s `page.fill` timeouts). Page identity is
+  asserted via `data-testid` hooks, because the dashboard heading is a
+  time-of-day greeting that should never have been in a test.
+- ✅ **Relations ship dormant** (`relations_enabled`, default false). The
+  maintainer's stability requirement for v1: the table and column were already
+  inert, but the four tools appeared in every agent's list. Gated in both
+  transports, fail-closed, guarded on the call path too. Verified live: 10
+  tools advertised with the flag off, 14 with it on. Schema 0.10.1.
+- ✅ **#165 keyboard accessibility.** Dashboard document/project rows were
+  click-only `<tr>`s — unreachable by keyboard, no cmd/middle-click, no copy
+  link. Real links now. (This also caused the e2e suite's silent skips.)
+- ✅ **Staging environment stood up and validated** (2026-08-05).
+  `cerefox-staging` Supabase project deployed from scratch — which finally
+  exercised the never-validated fresh-install path and confirmed the #26
+  explicit `service_role` grants work on a project with "automatically expose
+  new tables" **disabled**. Production data imported (319 docs / 17 projects).
+  The parallel-worlds story is a **convention, not a feature** (maintainer
+  decision: "simpler is better, I am the only user") — `CEREFOX_CONFIG_DIR`
+  for the database, a separate `npm --prefix` install tree for the *version*,
+  and one alias binding both axes. No `--env` flag, no profiles, so a normal
+  single-environment install is untouched. Written up in
+  `docs/guides/staging-env.md`.
+- ✅ **Five defects the staging exercise found**, all fixed here. Each was
+  invisible from a single-environment machine, which is the argument for
+  keeping staging:
+  1. **`CEREFOX_CONFIG_DIR` was silently ignored by every `bun scripts/*.ts`.**
+     Bun auto-loads `.env` from the working directory, and `loadEnv()` only
+     filled *unset* keys, so the repo's production credentials won.
+     `db_migrate.ts --status` reported production while naming staging; the
+     same path through `db_deploy.ts --reset` **would have wiped production**.
+     The named config dir is now authoritative, and `--reset` prints the target
+     project ref before asking.
+  2. **Web daemon state was global** — `web.{pid,log}` ignored the config dir,
+     so a staging `web stop` would have killed the production server.
+  3. **`backup create` aborted against any pre-0.10.0 server** (named
+     `lifecycle_status` unconditionally) — i.e. it failed at the one moment it
+     matters most, snapshotting production *before* an upgrade.
+  4. **`backup restore` was not idempotent**, contrary to its help text: it
+     deduped on `content_hash`, so a document edited between snapshots kept its
+     id, changed its hash, and collided on the primary key.
+  5. **`db_status` pointed users at `db_deploy.py`**, deleted at v1.0.0.
+- ✅ **Backup format 4 — the trash is captured.** Soft-delete is not a purge
+  and nothing ever collects it (the 48h sweep prunes *versions*), so snapshots
+  were silently lossy. Trashed documents now round-trip and are restored **as
+  trash** (`deleted_at` replayed; every read/search RPC filters it), with
+  `--no-trash` to opt out. Proven end to end: 331 captured (12 trashed) →
+  319 live + 12 trashed in staging, exact match; re-run 0/331/0.
+- ⏳ **Config web UI** — a settings surface for the `cerefox_config` keys
+  (`cerefox config set` equivalents, incl. the retrieval tunables from #133 and
+  `relations_enabled`). Next up.
+
+**Open decisions carried forward:**
+- **#168 — `configure-agent` overwrites production MCP wiring** when run from a
+  second environment (fixed server name `cerefox`). The last un-separated axis;
+  proposal is to derive the name from `CEREFOX_ENV_LABEL`.
+- `migrate-format` on production: rehearsed on staging (3 of 214 converted
+  cleanly, content intact) but **not yet run on prod** — 214 legacy documents
+  there, real embedding spend.
+- Relation-aware search: agreed as an **optional extension**, designed and
+  discussed before any implementation.
+
 **Update (2026-08-03): v1.0.2 SHIPPED (security/maintenance patch) + supply-chain regime.**
 Full-repo doc sanity pass + security audit (PR #112; audit addendum in
 `docs/specs/security-audit-1.0.md`): dependency refresh (19 advisories → 3

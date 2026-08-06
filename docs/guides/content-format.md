@@ -40,7 +40,14 @@ in — even after the current version has moved to format 2.
 - A document **moves to format 2 automatically the next time it is edited/saved**
   (it gets re-chunked by the new chunker).
 - If you want to convert everything now rather than on next edit, run
-  `cerefox server reindex` (re-chunks + re-embeds the whole knowledge base).
+  `cerefox server migrate-format`. It re-ingests each legacy document through
+  the normal pipeline (re-chunk + re-embed + stamp the current format), which
+  costs embedding spend — so it is opt-in, supports `--dry-run` and `--limit`,
+  and skips any document that changes mid-run rather than overwriting it.
+
+  > **Not `cerefox server reindex`.** Reindex refreshes *embeddings* on the
+  > existing chunk rows; it never re-chunks, so it cannot advance the stored
+  > format. Earlier versions of this guide said otherwise (#164).
 
 `cerefox doctor` reports how many documents still use the legacy format — purely
 informational, never a failure. A fresh install shows zero.

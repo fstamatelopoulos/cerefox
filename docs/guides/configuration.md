@@ -117,6 +117,12 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 
 ## Retrieval
 
+> **Optional features.** `relations_enabled` (default `false`) controls whether
+> the document-relation tools are exposed to agents. The feature ships
+> **dormant**: the table stays empty, `lifecycle_status` defaults to `active`,
+> search is untouched, and the tools do not appear in any agent's tool list
+> until you opt in with `cerefox config set relations_enabled true`.
+
 > **Deployment-wide defaults (v1.1.0+).** `min_search_score`,
 > `min_term_coverage`, and `search_alpha` can also be set **once, in the
 > database**, and every access path obeys — CLI, local and remote MCP, Edge

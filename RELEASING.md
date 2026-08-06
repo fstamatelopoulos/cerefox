@@ -120,6 +120,43 @@ edit `[Unreleased]` so the stable section aggregates **every** change across all
 Added / Changed / Fixed / Removed / Security. That consolidated section is the source for the
 release announcement. Leave the individual pre-release sections beneath it as granular history.
 
+## Patching an older line (maintenance branch)
+
+When main has already moved on — main carried all of 1.1.0 while 1.0.7 needed
+to ship — the patch cannot be cut from main: doing so would tag main's tree as
+a 1.0.x release. Cut from a maintenance branch instead:
+
+```bash
+git checkout -b release/1.0.7 v1.0.6     # branch from the LAST TAG of that line
+# apply the fixes, commit, push
+bun scripts/cut_release.ts 1.0.7 --npm-publish
+```
+
+`cut_release.ts` supports this: it accepts `main` or any `release/*` branch, and
+pushes the branch you are on. Two guards make the dangerous mistakes loud:
+
+- **Forward-only.** A release must increase the version. Cutting `1.0.7` while
+  standing on main (VERSION `1.1.0-beta.1`) is refused — that would publish
+  1.1.0's tree to the stable channel under a patch number, and tags here are
+  immutable.
+- **Own line only.** A `release/X.Y.*` branch can only cut `X.Y.z` versions.
+  (The forward-only rule alone would not catch cutting `1.1.0-beta.2` from
+  `release/1.0.7` — that moves forward, but tags a tree with none of the 1.1.0
+  work.)
+- **`--yes` does not apply off main.** The confirmation names the branch, and a
+  maintenance cut is exactly where an unattended yes would defeat it, so `--yes`
+  is ignored (loudly) and a human must answer. Without a TTY the cut is refused
+  rather than left hanging.
+- **`--branch=<name>` (optional)** asserts which branch you believe you are on
+  and fails if it disagrees. It never switches branches; omit it and the
+  checked-out branch is used.
+
+**Forward-port with cherry-picks, not a branch merge.** Merging `release/1.0.7`
+into main would drag its version bump along and regress main from
+`1.1.0-beta.1` to `1.0.7`. Cherry-pick the fix commits onto main (and any live
+feature branch) instead, and leave the release branch unmerged as the record of
+that line.
+
 ## Post-release verification
 
 1. The release workflow run is green (build + test, then publish).

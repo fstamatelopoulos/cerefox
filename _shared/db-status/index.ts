@@ -257,7 +257,9 @@ export function formatReport(report: DbStatusReport): string {
   lines.push(`  bundled : ${report.schemaVersion.bundled ?? "(unknown)"}`);
   lines.push(`  deployed: ${report.schemaVersion.deployed ?? "(not reported)"}`);
   if (report.schemaVersion.mismatch) {
-    lines.push("  ⚠️  bundled and deployed schema versions differ — run db_deploy.py");
+    lines.push(
+      "  ⚠️  bundled and deployed schema versions differ — run `cerefox server deploy`",
+    );
   }
 
   lines.push("");
@@ -265,10 +267,10 @@ export function formatReport(report: DbStatusReport): string {
   if (report.allOk) {
     lines.push("✓  All checks passed. Schema looks healthy.");
   } else if (anyUnknown) {
-    lines.push("?  Function checks unavailable. Run db_deploy.py to install");
-    lines.push("   the introspection helper RPC, then re-run.");
+    lines.push("?  Function checks unavailable. Run `cerefox server deploy` to");
+    lines.push("   install the introspection helper RPC, then re-run.");
   } else {
-    lines.push("✗  Some checks failed. Run db_deploy.py to fix missing objects.");
+    lines.push("✗  Some checks failed. Run `cerefox server deploy` to fix missing objects.");
   }
 
   return lines.join("\n");
