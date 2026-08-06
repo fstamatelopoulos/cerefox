@@ -395,10 +395,23 @@ function parseChangelog(text: string): ChangelogParts {
   };
 }
 
+/**
+ * The placeholder this script writes into a fresh `[Unreleased]` after a cut.
+ * Kept as a constant so the emptiness check below and `buildNewChangelog`
+ * cannot drift apart.
+ */
+const UNRELEASED_PLACEHOLDER = "Open roadmap.";
+
 function unreleasedHasContent(body: string): boolean {
   const stripped = body
     .replace(/^---\s*$/gm, "")  // section dividers
     .trim();
+  // The placeholder is not content. Without this the check was defeated by the
+  // script's OWN output: every cut leaves `[Unreleased]` reading "Open
+  // roadmap.", which is non-empty, so a subsequent cut with nothing new to say
+  // sailed through. That is how v1.0.8 shipped with a GitHub Release whose
+  // entire body reads "Open roadmap." and no CHANGELOG section describing it.
+  if (stripped === UNRELEASED_PLACEHOLDER) return false;
   return stripped.length > 0;
 }
 
@@ -415,7 +428,7 @@ function buildNewChangelog(parts: ChangelogParts, version: string): {
   releaseNotes: string;
 } {
   const date = today();
-  const newUnreleasedSection = `## [Unreleased]\n\nOpen roadmap.\n\n---\n\n`;
+  const newUnreleasedSection = `## [Unreleased]\n\n${UNRELEASED_PLACEHOLDER}\n\n---\n\n`;
   const promoted = `## [v${version}] -- ${date}\n${parts.unreleasedBody}`;
   const newText = parts.preamble + newUnreleasedSection + promoted + parts.rest;
 
