@@ -367,8 +367,12 @@ enable it.
 
 ### How it works
 
-A `cerefox_config` table in Postgres stores runtime configuration as key-value pairs. The only
-key currently in use is `usage_tracking_enabled`. Every usage logging call goes through the
+A `cerefox_config` table in Postgres stores runtime configuration as key-value
+pairs. The allow-list lives in the `cerefox_set_config` RPC; run `cerefox config
+list` (or open **Settings** in the web UI) for the current set — today that is
+usage tracking, the two requestor-identity keys, three retrieval tunables, and
+`relations_enabled`. Usage logging is the illustrative case below: every logging
+call goes through the
 `cerefox_log_usage` RPC, which checks this config value first:
 
 - If `usage_tracking_enabled` is `"true"` -- the RPC inserts a row into `cerefox_usage_log`
@@ -398,7 +402,30 @@ cerefox config set usage_tracking_enabled false
 cerefox config get usage_tracking_enabled
 ```
 
-The canonical path is the CLI (`cerefox config set <key> <value>` / `cerefox config get <key>`) above; it works regardless of whether the web server is running. The web UI's JSON API exposes the same config under `/api/v1/config/<key>` if you need programmatic access while `cerefox web` is running.
+**Via the web UI:** `cerefox web` → **Settings**. Every runtime key is listed
+with its description, current value and default, grouped into Retrieval,
+Governance and Features.
+
+Two things the page does deliberately:
+
+- **Keys that change what agents see require confirmation.** Turning on
+  `relations_enabled` adds four tools to every connected agent's tool list, and
+  `require_requestor_identity` starts rejecting agents that don't identify
+  themselves. Neither is a bare toggle — you get a dialog naming the
+  consequence first.
+- **Local overrides are shown, read-only.** If the server has
+  `CEREFOX_MIN_SEARCH_SCORE` (or the `..._TERM_COVERAGE` / `..._SEARCH_ALPHA`
+  equivalents) in its environment, that value beats the stored one *on that
+  machine*, and the row says so. Without this the page would report a value the
+  server isn't using. The page never edits `.env` — that file holds your
+  service-role key, OpenAI key and database password, and the server only reads
+  it at boot.
+
+The CLI (`cerefox config set <key> <value>` / `cerefox config get <key>`) remains
+the canonical path and works whether or not the web server is running. Both go
+through the same `cerefox_set_config` RPC, so they cannot disagree.
+`/api/v1/config` (list) and `/api/v1/config/<key>` (read/write) expose the same
+data for programmatic access while `cerefox web` runs.
 
 ### What gets logged
 

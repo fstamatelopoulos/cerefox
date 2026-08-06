@@ -229,3 +229,68 @@ test.describe("Environment banner", () => {
     }
   });
 });
+
+// ── Settings ──────────────────────────────────────────────────────────────
+test.describe("Settings", () => {
+  test("page loads and lists config groups", async ({ page }) => {
+    await page.goto(`${APP}/settings`);
+    await expect(page.getByTestId("page-title")).toHaveText(/Settings/i);
+    await expect(page.getByTestId("config-row-relations_enabled")).toBeVisible();
+    await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
+  });
+
+  test("a locally-overridden key says so", async ({ page, request }) => {
+    const cfg = await (await request.get("/api/v1/config")).json();
+    const overridden = (cfg.keys as Array<{ key: string; env_override: unknown }>).filter(
+      (k) => k.env_override !== null,
+    );
+
+    await page.goto(`${APP}/settings`);
+    for (const k of overridden) {
+      // The whole point of the badge: the stored value is NOT what this server
+      // uses, and the page must not imply otherwise.
+      await expect(page.getByTestId(`config-override-${k.key}`)).toBeVisible();
+    }
+    if (overridden.length === 0) {
+      await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
+    }
+  });
+
+  test("toggling a high-impact key asks for confirmation first", async ({ page, request }) => {
+    const before = await (await request.get("/api/v1/config")).json();
+    const relations = (before.keys as Array<{ key: string; effective: string }>).find(
+      (k) => k.key === "relations_enabled",
+    );
+
+    await page.goto(`${APP}/settings`);
+    const row = page.getByTestId("config-row-relations_enabled");
+    // Click the track, not the input: Mantine's switch input is visually
+    // hidden and does not receive the click.
+    await row.locator(".mantine-Switch-track").click();
+
+    // Nothing is written until the consequence has been read and accepted:
+    // this switch decides whether four tools appear in every agent's list.
+    // Assert on the modal BODY — `data-testid` on <Modal> lands on Mantine's
+    // positioning root, which reports as hidden even while open.
+    const modal = page.getByTestId("config-confirm-body");
+    await expect(modal).toBeVisible();
+    await expect(modal).toContainText("agent");
+
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await expect(modal).toBeHidden();
+
+    const after = await (await request.get("/api/v1/config")).json();
+    const relationsAfter = (after.keys as Array<{ key: string; effective: string }>).find(
+      (k) => k.key === "relations_enabled",
+    );
+    expect(relationsAfter?.effective).toBe(relations?.effective);
+  });
+
+  test("rejects an out-of-range value", async ({ request }) => {
+    const resp = await request.put("/api/v1/config/min_search_score", {
+      data: { value: "5" },
+    });
+    expect(resp.status()).toBe(400);
+    expect(await resp.text()).toContain("min_search_score");
+  });
+});
