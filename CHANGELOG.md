@@ -119,8 +119,6 @@ Open roadmap.
   pointing at its own backup directory had no effect, so staging snapshots
   landed beside production's.
 
-Open roadmap.
-
 ---
 
 ## [v1.1.0-beta.2] -- 2026-08-06
@@ -192,8 +190,6 @@ Open roadmap.
   edit made mid-run is skipped rather than overwritten, and documents whose
   content is byte-identical to another document are reported as
   un-convertible rather than failing the run.
-
-Open roadmap.
 
 ---
 
@@ -273,7 +269,68 @@ Open roadmap.
   9 → 10, `commander` 12 → 14. Commander 15 was deliberately skipped: it
   requires Node ≥ 22.12, which is a support-policy decision tracked in #154.
 
-Open roadmap.
+---
+
+## [v1.0.8] -- 2026-08-06
+
+> Back-filled. This release was cut from the `release/1.0.7` maintenance branch
+> and shipped **without release notes** — its GitHub Release body reads only
+> "Open roadmap.", because the cut script's emptiness check was satisfied by its
+> own placeholder. The entry below was reconstructed from the commits in
+> `v1.0.7..v1.0.8`; the gate was fixed afterwards so this cannot recur.
+
+### Fixed
+- **The false `reindex` claim from #164 survived in a second file.** The 1.0.7
+  doc pass corrected `content-format.md` and `doctor`, but `migration-1.0.md`
+  still told users to run `cerefox server reindex` to convert legacy chunk
+  formats. That one mattered more than a repo typo: guides ship **inside the npm
+  package**, so `cerefox guides show migration-1.0` served the wrong instruction
+  to anyone upgrading. Now points at `server migrate-format`.
+  (Note: `migrate-format` itself did not work until v1.1.0-beta.4 — see that
+  entry.)
+- **`cut_release.ts` push log named the wrong branch.** Cosmetic, but the line
+  is read during a release to confirm what is being pushed.
+
+### Changed
+- `docs/guides/cli.md` documents what a backup actually contains (documents,
+  chunks, projects, memberships) and the `server migrate-format` command.
+
+---
+
+## [v1.0.7] -- 2026-08-06
+
+> Back-filled from the `release/1.0.7` maintenance branch, where this release
+> was cut. The code shipped to `main` via cherry-pick; only these notes were
+> missing.
+
+### Fixed
+- **Backups now capture project memberships** (#166). `backup create` never
+  read the document↔project junction, so every restore silently landed
+  documents with **no project assignments** — and the restore command's help
+  text claimed the opposite. Snapshots now include projects and memberships
+  (backup format 2) and restore recreates them idempotently. Older snapshots
+  still restore, with a warning that memberships are absent. Verified with a
+  full round trip: seed → back up → wipe → restore, memberships intact.
+  **Applies to Cerefox Local too** — this is CLI-side logic, so a self-hosted
+  instance on ≤1.0.6 produces snapshots that restore without memberships.
+- **`cerefox server reindex` no longer claimed to convert legacy chunk
+  formats** (#164, reported by [@tdebasis](https://github.com/tdebasis)).
+  Reindex refreshes embeddings on existing chunk rows; it never re-chunks, so
+  it cannot advance `content_format` — verified on a 3,203-chunk store where
+  it touched every chunk and moved exactly zero. `cerefox doctor` and
+  `content-format.md` both told users to run it anyway.
+
+### Added
+- **`cerefox server migrate-format`** — the command that actually does the
+  conversion #164 promised: re-ingests legacy documents through the normal
+  pipeline so they are re-chunked, re-embedded, and stamped with the current
+  format. Opt-in (it costs embedding spend), with `--dry-run`, `--limit`, and
+  `--document-id`. Each document converts under optimistic concurrency, so an
+  edit made mid-run is skipped rather than overwritten, and documents whose
+  content is byte-identical to another document are reported as
+  un-convertible rather than failing the run.
+  **This command did not work as shipped** — it reported success while
+  converting nothing. Fixed in v1.1.0-beta.4.
 
 ---
 
@@ -307,8 +364,6 @@ Open roadmap.
   by atomic ingestion, a script deleted with Python) were dropped. The file
   remains as a pointer.
 
-Open roadmap.
-
 ---
 
 ## [v1.0.5] -- 2026-08-05
@@ -338,8 +393,6 @@ Open roadmap.
   verifies its result against the server's own row count when the caller
   requests one, and a repo-wide test fails CI on new unbounded PostgREST
   selects (bound them, count server-side, or allowlist with a reason).
-
-Open roadmap.
 
 ---
 
@@ -613,8 +666,6 @@ update GPT Actions / remote-MCP clients to the token → revoke the legacy anon 
   unrelated text higher, so the OpenAI-calibrated 0.5 let weak matches through
   on Cerefox Local. `CEREFOX_MIN_SEARCH_SCORE` / `--min-score` still override.
 
-Open roadmap.
-
 ---
 
 ## [v1.0.0-rc.3] -- 2026-07-12
@@ -626,8 +677,6 @@ Open roadmap.
   Postgres, PostgREST, and the web server. Sub-batching keeps peak memory flat,
   fixing `server reindex` and large-document ingest on small VMs.
   `setup-local.md` now documents the ≥ 4 GB VM recommendation.
-
-Open roadmap.
 
 ---
 
@@ -652,8 +701,6 @@ Open roadmap.
   RPCs over a newer schema until the next correct boot).
 
 
-Open roadmap.
-
 ---
 
 ## [v1.0.0-rc.1] -- 2026-07-11
@@ -670,8 +717,6 @@ Feature freeze for 1.0.0 (release-candidate line): fixes only from here to stabl
 - **`cerefox-local init` asks for the embedder first** — choosing `[2] Local`
   now skips the OpenAI-key prompt entirely (the local embedder needs no key;
   an existing key is kept silently).
-
-Open roadmap.
 
 ---
 
@@ -829,8 +874,6 @@ Open roadmap.
   identically in the TS and Python chunkers. Affected documents re-chunk cleanly on their
   next write; no schema change. (See `docs/specs/…` / the chunker regression tests, which
   now assert `reconstruct(chunks) === original`.)
-
-Open roadmap.
 
 ---
 

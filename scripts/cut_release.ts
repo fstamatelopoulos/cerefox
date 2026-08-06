@@ -395,10 +395,23 @@ function parseChangelog(text: string): ChangelogParts {
   };
 }
 
+/**
+ * The placeholder this script writes into a fresh `[Unreleased]` after a cut.
+ * Kept as a constant so the emptiness check below and `buildNewChangelog`
+ * cannot drift apart.
+ */
+const UNRELEASED_PLACEHOLDER = "Open roadmap.";
+
 function unreleasedHasContent(body: string): boolean {
   const stripped = body
     .replace(/^---\s*$/gm, "")  // section dividers
     .trim();
+  // The placeholder is not content. Without this the check was defeated by the
+  // script's OWN output: every cut leaves `[Unreleased]` reading "Open
+  // roadmap.", which is non-empty, so a subsequent cut with nothing new to say
+  // sailed through. That is how v1.0.8 shipped with a GitHub Release whose
+  // entire body reads "Open roadmap." and no CHANGELOG section describing it.
+  if (stripped === UNRELEASED_PLACEHOLDER) return false;
   return stripped.length > 0;
 }
 
@@ -415,13 +428,22 @@ function buildNewChangelog(parts: ChangelogParts, version: string): {
   releaseNotes: string;
 } {
   const date = today();
-  const newUnreleasedSection = `## [Unreleased]\n\nOpen roadmap.\n\n---\n\n`;
-  const promoted = `## [v${version}] -- ${date}\n${parts.unreleasedBody}`;
+  const newUnreleasedSection = `## [Unreleased]\n\n${UNRELEASED_PLACEHOLDER}\n\n---\n\n`;
+
+  // Drop the placeholder before promoting. Notes are usually added ABOVE the
+  // existing "Open roadmap." line rather than replacing it, so without this the
+  // placeholder rides along into the released section — and from there into the
+  // GitHub Release body. Ten historical sections carry that stray line.
+  const body = parts.unreleasedBody.replace(
+    new RegExp(`^${UNRELEASED_PLACEHOLDER.replace(".", "\\.")}\\s*$\\n?`, "m"),
+    "",
+  );
+  const promoted = `## [v${version}] -- ${date}\n${body}`;
   const newText = parts.preamble + newUnreleasedSection + promoted + parts.rest;
 
   // Release notes shown on GitHub Release: skip the heading line, trim
   // surrounding blank lines and the trailing horizontal rule (`---`).
-  const releaseNotes = parts.unreleasedBody
+  const releaseNotes = body
     .replace(/\n---\s*\n?$/, "\n")
     .trim();
 
@@ -817,7 +839,10 @@ async function main(): Promise<void> {
   if (args.dryRun) {
     info(`DRY-RUN: would 'git push origin <current branch>'`);
     info(`DRY-RUN: would 'git push origin ${tag}'`);
-    info(`DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>'`);
+    info(
+      `DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>` +
+        `${newVersion.includes("-") ? " --prerelease" : ""}'`,
+    );
     info(`DRY-RUN: would upload install.sh + docker/local/install-local.sh as Release assets`);
     if (args.dockerPublish) {
       const publishLatest = !newVersion.includes("-");
@@ -844,6 +869,14 @@ async function main(): Promise<void> {
   info("Creating GitHub Release…");
   const tmpNotesFile = join(REPO_ROOT, `.release-notes-${tag}.tmp`);
   writeFileSync(tmpNotesFile, releaseNotes + "\n", "utf8");
+  // Mark pre-releases as such on GitHub. Without this every beta/rc was created
+  // as a normal release, so the repo's Releases page presented the newest beta
+  // as "Latest" — a visitor landing there saw a pre-release offered as the
+  // current version. The npm side was always correct (pre-releases publish under
+  // their channel dist-tag, never `latest`), which is exactly why this went
+  // unnoticed: nothing broke, it just misrepresented the release on the one
+  // page people browse. Same suffix test the Docker `:latest` decision uses.
+  const isPrerelease = newVersion.includes("-");
   try {
     runOrDie("gh", [
       "release",
@@ -853,6 +886,7 @@ async function main(): Promise<void> {
       tag,
       "--notes-file",
       tmpNotesFile,
+      ...(isPrerelease ? ["--prerelease"] : []),
     ]);
   } finally {
     run("rm", ["-f", tmpNotesFile]);
