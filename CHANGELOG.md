@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.0-beta.4] -- 2026-08-06
+
 ### Added
 - **Bulk-rewrite scale warning on `server migrate-format` and `server
   reindex`.** Reported by [@tdebasis](https://github.com/tdebasis) after
