@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **`CEREFOX_BACKUP_DIR` set in `.env` was silently ignored.** `backup create`
+  read the variable *before* anything loaded the config file — nothing loads
+  `.env` at CLI startup; `loadSettings()` runs later, inside `getClient()` — so
+  snapshots always went to the built-in `~/.cerefox/backups` no matter what was
+  configured. The setting appeared to work only when the variable was exported
+  in the shell or when Bun's auto-dotenv injected a working-directory `.env`,
+  which is how one machine's snapshots ended up split across two directories.
+  This also broke the staging guide's snapshot isolation: a staging `.env`
+  pointing at its own backup directory had no effect, so staging snapshots
+  landed beside production's.
+
 Open roadmap.
 
 ---

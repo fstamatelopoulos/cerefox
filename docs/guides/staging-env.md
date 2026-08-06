@@ -73,11 +73,20 @@ CEREFOX_DATABASE_URL=postgresql://postgres.<staging-ref>:…@aws-0-<region>.pool
 
 # Isolate snapshots. CEREFOX_BACKUP_DIR does NOT follow the config dir, so
 # without this line staging backups land beside production's.
+# Use an ABSOLUTE path: a relative value resolves against the working
+# directory, so snapshots scatter wherever you happen to run the command.
 CEREFOX_BACKUP_DIR=~/.cerefox/staging/backups
 
 OPENAI_API_KEY=sk-…
 SUPABASE_ACCESS_TOKEN=sbp_…                       # account-level; same as prod
 ```
+
+> **Snapshot isolation needs v1.1.0-beta.3 or later.** On **beta.2 and
+> earlier**, `backup create` read `CEREFOX_BACKUP_DIR` *before* loading the
+> `.env` file, so the setting above was silently ignored and staging snapshots
+> landed in production's directory. Until staging is on a build with the fix,
+> pass the destination explicitly: `cfx-stg backup create --output-dir
+> ~/.cerefox/staging/backups`.
 
 **Mirror production's tuning** (`CEREFOX_MIN_SEARCH_SCORE`,
 `CEREFOX_MAX_CHUNK_CHARS`, `CEREFOX_MIN_CHUNK_CHARS`, `CEREFOX_EMBEDDER`, …).
