@@ -9,23 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
-
----
-
-## [v1.1.0-beta.3] -- 2026-08-06
-
 ### Added
-- **`CEREFOX_ENV_LABEL` — name a non-production environment.** Inert when
-  unset (every normal install). When set, the environment identifies itself
-  wherever it could otherwise be confused for production: a banner on every
-  web UI page, `[LABEL]` on `doctor`'s config line, the label in the backup
-  filename (`cerefox-staging-<stamp>.json`) and payload, and a warning from
-  `backup restore` when a snapshot's environment differs from the target's.
-  That last pair matters because `CEREFOX_BACKUP_DIR` does not follow
-  `CEREFOX_CONFIG_DIR`, so snapshots from two environments can share a
-  directory and a "most recent file" restore could seed production from
-  staging.
+- **Bulk-rewrite scale warning on `server migrate-format` and `server
+  reindex`.** Reported by [@tdebasis](https://github.com/tdebasis) after
+  reindexing a ~1,300-document store: the Supabase project depleted its **Disk
+  IO Budget**, and Supabase warned that response times would degrade, CPU would
+  rise on IO wait, and the instance could become briefly unresponsive. Nothing
+  was corrupted, but a maintenance command that can do that should say so
+  first. Both commands now warn above a scale threshold (500 documents / 1,000
+  chunks), explain the symptom, and suggest batching during a quiet period.
+  Advisory only — it never blocks.
 
 ### Fixed
 - **`cerefox server migrate-format` did not actually convert anything** — it
@@ -46,6 +39,28 @@ Open roadmap.
   `doctor` reported 207 — two numbers for the same question — and would have
   spent embedding budget re-chunking deleted content. Soft-deleted documents
   are now excluded and reported separately.
+- **The environment label moved to `doctor`'s title line.** It was a suffix on
+  the config row — the fifth line of output, easy to scan past. `doctor` is the
+  command you run to answer "what am I pointed at?", so the answer now leads:
+  `Cerefox doctor [STAGING]`. Stated once rather than twice.
+
+---
+
+## [v1.1.0-beta.3] -- 2026-08-06
+
+### Added
+- **`CEREFOX_ENV_LABEL` — name a non-production environment.** Inert when
+  unset (every normal install). When set, the environment identifies itself
+  wherever it could otherwise be confused for production: a banner on every
+  web UI page, `[LABEL]` on `doctor`'s config line, the label in the backup
+  filename (`cerefox-staging-<stamp>.json`) and payload, and a warning from
+  `backup restore` when a snapshot's environment differs from the target's.
+  That last pair matters because `CEREFOX_BACKUP_DIR` does not follow
+  `CEREFOX_CONFIG_DIR`, so snapshots from two environments can share a
+  directory and a "most recent file" restore could seed production from
+  staging.
+
+### Fixed
 - **`.env` is now loaded once at CLI startup.** Nothing did this: settings were
   loaded lazily, deep inside whichever helper first needed Supabase
   credentials, so any code reading `process.env.CEREFOX_*` directly saw an

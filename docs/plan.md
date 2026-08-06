@@ -4067,6 +4067,35 @@ untested against production until a staging Supabase project exists (below).
   (`cerefox config set` equivalents, incl. the retrieval tunables from #133 and
   `relations_enabled`). Next up.
 
+### beta.3 / beta.4 — the staging environment starts paying for itself
+
+**beta.3 (shipped 2026-08-06)**: `CEREFOX_ENV_LABEL` (web banner, `doctor`,
+backup filename + payload, cross-environment restore warning) and the fix that
+made it possible — **nothing loaded `.env` at CLI startup**. Settings were
+loaded lazily inside whichever helper first needed Supabase credentials, so any
+code reading `process.env.CEREFOX_*` directly saw an unpopulated environment.
+That single defect had already produced two bugs (`CEREFOX_BACKUP_DIR` ignored
+outright; `CEREFOX_ENV_LABEL` never reaching `doctor`) and would have produced
+one for every future setting read that way.
+
+**beta.4 (pending) — `migrate-format` never worked.** The command shipped in
+v1.0.7 to fix #164 reported `Converted N` while converting nothing. It
+re-ingests byte-identical content by design, and the pipeline answers an
+unchanged content hash with a metadata-only update: no re-chunk, therefore no
+format advance. It counted every non-throwing call as a success.
+
+**The lesson worth carrying**: this is the #164 defect reproduced inside its own
+fix — `reindex` claimed to convert and didn't, then so did its replacement. It
+survived a release *and* a "validation" session because both times the summary
+line was trusted instead of the underlying state. It was caught only when the
+maintainer noticed the pending count hadn't moved. The regression test now
+asserts the chunk rows carry the current format, not merely that the call
+returned `reindexed: true`.
+
+Corollary for anything similar: **a command that reports success must be
+verified against the thing it claims to have changed.** Same class as the
+silent-truncation guards (#131) and the membership-loss bug (#166).
+
 **Open decisions carried forward:**
 - **#168 — `configure-agent` overwrites production MCP wiring** when run from a
   second environment (fixed server name `cerefox`). The last un-separated axis;

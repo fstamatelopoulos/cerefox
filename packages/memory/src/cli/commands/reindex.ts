@@ -30,6 +30,7 @@ import {
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
+import { warnLargeBulkWrite } from "../util/bulk-write-warning.ts";
 
 interface ReindexOptions {
   all?: boolean;
@@ -114,6 +115,13 @@ async function action(options: ReindexOptions): Promise<void> {
       }`,
     ),
   );
+
+  warnLargeBulkWrite({
+    count: chunks.length,
+    threshold: 1000,
+    unit: "chunk",
+    batchHint: "reindex in stages with --document-id",
+  });
 
   if (dryRun) {
     const byDoc = new Map<string, number>();

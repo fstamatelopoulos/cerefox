@@ -49,6 +49,24 @@ in — even after the current version has moved to format 2.
   > existing chunk rows; it never re-chunks, so it cannot advance the stored
   > format. Earlier versions of this guide said otherwise (#164).
 
+  > **Large stores: batch it.** Converting a few hundred documents or more is a
+  > heavy bulk rewrite — each one is re-chunked, its previous chunks archived as
+  > a version snapshot, and new rows inserted. A contributor reindexing a
+  > ~1,300-document store on Supabase depleted the project's **Disk IO Budget**
+  > and got a warning email: slower responses, CPU climbing on IO wait, and
+  > potentially a briefly unresponsive instance (it recovers once the budget
+  > refills). Nothing is corrupted, but prefer `--limit 200` in stages during a
+  > quiet period. The command warns above 500 documents and is resumable.
+
+  > **Requires v1.1.0-beta.4 or later.** On **v1.0.7 through v1.1.0-beta.3**
+  > `migrate-format` printed `Converted N` while converting nothing: it
+  > re-ingests byte-identical content by design, and the pipeline answered an
+  > unchanged content hash with a metadata-only update — no re-chunk, so no
+  > format advance. If you ran it on one of those versions, the documents are
+  > untouched and still on format 1 (no data was harmed and no embedding spend
+  > was incurred); re-run it on a current build. Check with `cerefox doctor`,
+  > which reports the real count.
+
 `cerefox doctor` reports how many documents still use the legacy format — purely
 informational, never a failure. A fresh install shows zero.
 

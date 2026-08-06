@@ -40,6 +40,7 @@ import {
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { IngestionPipeline } from "../../ingestion/pipeline.ts";
+import { warnLargeBulkWrite } from "../util/bulk-write-warning.ts";
 import { getClient } from "../util/client.ts";
 
 /** The format written by the current chunker (see docs/guides/content-format.md). */
@@ -123,6 +124,15 @@ async function action(options: MigrateOptions): Promise<void> {
       c.dim(`  (${trashedSkipped} trashed document(s) on the legacy format ignored)`),
     );
   }
+  // Heaviest write path in the CLI: per document this re-chunks, archives the
+  // previous chunks as a version snapshot, and inserts new rows.
+  warnLargeBulkWrite({
+    count: targets.length,
+    threshold: 500,
+    unit: "document",
+    batchHint: "run it in batches with --limit 200",
+  });
+
   if (options.dryRun) {
     println(c.yellow("⚠  --dry-run: nothing was written."));
     println(c.dim("   Each document would be re-chunked and RE-EMBEDDED (embedding spend)."));
