@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.0-beta.2] -- 2026-08-06
+
 ### Fixed
 - **`backup create` no longer fails against a pre-0.10.0 server.** The document
   select named `lifecycle_status` unconditionally, so a v1.1.0 CLI pointed at a
