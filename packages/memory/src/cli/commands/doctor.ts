@@ -9,6 +9,7 @@ import type { Command } from "commander";
 import ora from "ora";
 
 import {
+  c,
   cErr,
   errorln,
   printJson,
@@ -53,7 +54,15 @@ async function action(options: { json?: boolean; strict?: boolean }): Promise<vo
   if (options.json) {
     printJson(results);
   } else {
-    println("Cerefox doctor");
+    // The environment belongs on the title line, not buried in the config
+    // row: `doctor` is what you run to answer "what am I pointed at?", and the
+    // answer should be the first thing read, not the fifth.
+    const envLabel = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
+    println(
+      envLabel
+        ? `Cerefox doctor ${c.yellow(`[${envLabel.toUpperCase()}]`)}`
+        : "Cerefox doctor",
+    );
     println("");
     // Pad name column for readability.
     const nameWidth = Math.max(...results.map((r) => r.name.length));

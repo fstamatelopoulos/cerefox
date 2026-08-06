@@ -233,7 +233,7 @@ otherwise:
 | Surface | With the label set |
 |---|---|
 | Web UI | A banner on every page: *"STAGING environment — not production."* |
-| `doctor` | `✓ config  …/staging/.env (mode 0600) [STAGING]` |
+| `doctor` | Title line reads `Cerefox doctor [STAGING]` |
 | `backup create` | Filename becomes `cerefox-staging-<stamp>.json`, and the label is stored in the payload |
 | `backup restore` | Warns when the snapshot's environment differs from the target's |
 
