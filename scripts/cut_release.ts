@@ -272,11 +272,22 @@ function checkCleanTree(): void {
  * all of 1.1.0). Returns the branch so the push/sync steps target the right
  * one — pushing `main` from a release branch would strand the version bump.
  */
-function checkBranch(): string {
+function checkBranch(expected?: string): string {
   const branch = runOrDie("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (branch !== "main" && !branch.startsWith("release/")) {
     die(
       `Must be on 'main' or a 'release/*' maintenance branch, currently on '${branch}'.`,
+    );
+  }
+  // `--branch` ASSERTS intent; it never selects. A flag that could pick a
+  // different branch than the working tree would resurrect the bug this
+  // function exists to prevent: pushing one branch while tagging another's
+  // commit, stranding the version bump. Omitting it is fine — the branch you
+  // are standing on is the branch that is cut.
+  if (expected && expected !== branch) {
+    die(
+      `--branch ${expected} does not match the checked-out branch '${branch}'.\n` +
+        `    Check out ${expected} and retry (this flag states intent; it cannot switch branches).`,
     );
   }
   return branch;
@@ -468,6 +479,8 @@ interface Args {
   yes: boolean;
   npmPublish: boolean;
   dockerPublish: boolean;
+  /** Optional assertion: the branch you believe you are cutting from. */
+  branch?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -478,9 +491,11 @@ function parseArgs(argv: string[]): Args {
     yes: false,
     npmPublish: false,
     dockerPublish: false,
+    branch: undefined,
   };
   for (const a of argv) {
-    if (a === "--dry-run") out.dryRun = true;
+    if (a.startsWith("--branch=")) out.branch = a.slice("--branch=".length);
+    else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--check") out.check = true;
     else if (a === "--yes" || a === "-y") out.yes = true;
     else if (a === "--npm-publish") out.npmPublish = true;
@@ -582,7 +597,7 @@ async function main(): Promise<void> {
   let releaseBranch = "main";
   if (!args.dryRun) {
     checkCleanTree();
-    releaseBranch = checkBranch();
+    releaseBranch = checkBranch(args.branch);
     checkVersionMovesForward(currentVersion, newVersion, releaseBranch);
     checkUpToDateWithOrigin(releaseBranch);
     checkTagDoesNotExist(newVersion);
