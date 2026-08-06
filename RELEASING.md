@@ -139,6 +139,14 @@ pushes the branch you are on. Two guards make the dangerous mistakes loud:
   standing on main (VERSION `1.1.0-beta.1`) is refused — that would publish
   1.1.0's tree to the stable channel under a patch number, and tags here are
   immutable.
+- **Own line only.** A `release/X.Y.*` branch can only cut `X.Y.z` versions.
+  (The forward-only rule alone would not catch cutting `1.1.0-beta.2` from
+  `release/1.0.7` — that moves forward, but tags a tree with none of the 1.1.0
+  work.)
+- **`--yes` does not apply off main.** The confirmation names the branch, and a
+  maintenance cut is exactly where an unattended yes would defeat it, so `--yes`
+  is ignored (loudly) and a human must answer. Without a TTY the cut is refused
+  rather than left hanging.
 - **`--branch=<name>` (optional)** asserts which branch you believe you are on
   and fails if it disagrees. It never switches branches; omit it and the
   checked-out branch is used.
