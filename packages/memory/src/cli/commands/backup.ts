@@ -144,6 +144,23 @@ async function action(options: BackupOptions): Promise<void> {
     // Older server without the relations table — nothing to capture.
   }
 
+  // Drop memberships whose document is not in this snapshot. Backups capture
+  // live documents only, but the junction carries rows for soft-deleted ones
+  // too — 7 of 369 on the maintainer's store. Restore already ignores them, so
+  // this is about the file being internally consistent: every membership in a
+  // snapshot should point at a document the snapshot contains.
+  {
+    const captured = new Set(docs.map((d) => d.id as string));
+    const before = memberships.length;
+    memberships = memberships.filter((m) => captured.has(m.document_id as string));
+    const dropped = before - memberships.length;
+    if (dropped > 0) {
+      println(
+        c.dim(`  (skipped ${dropped} membership(s) belonging to trashed documents)`),
+      );
+    }
+  }
+
   // For each doc, pull its chunks.
   let chunkTotal = 0;
   const enriched: Array<Record<string, unknown>> = [];
