@@ -397,6 +397,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `connect-agents.md` | MCP setup for Claude, Cursor, and generic clients |
 | `configuration.md` | All `CEREFOX_` environment variables with defaults |
 | `ops-scripts.md` | All `scripts/` — deploy, migrate, backup, restore |
+| `staging-env.md` | Running a staging environment alongside production (opt-in; `CEREFOX_CONFIG_DIR`) |
 | `operational-cost.md` | Embedding and hosting cost estimates |
 | `CONTRIBUTING.md` (repo root) | How to contribute to Cerefox |
 
