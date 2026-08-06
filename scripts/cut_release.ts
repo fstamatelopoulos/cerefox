@@ -299,6 +299,27 @@ function checkBranch(expected?: string): string {
  * would tag main's tree — all of 1.1.0 — as a 1.0.x patch, published to the
  * stable channel. The tag is immutable, so there is no clean recovery.
  */
+/**
+ * A maintenance branch may only cut versions on its own line.
+ *
+ * The forward-only check below does NOT catch this direction: standing on
+ * `release/1.0.7` (VERSION 1.0.6) and cutting `1.1.0-beta.2` moves the version
+ * forward, so it would be allowed — and would tag a branch that contains none
+ * of the 1.1.0 work as a 1.1.0 pre-release. This is the structural guard for
+ * that; unlike `--branch`, it needs no discipline from the caller.
+ */
+function checkVersionMatchesBranchLine(newVersion: string, branch: string): void {
+  if (!branch.startsWith("release/")) return; // main may cut any line
+  const branchLine = branch.slice("release/".length).split(".").slice(0, 2).join(".");
+  const versionLine = newVersion.split(".").slice(0, 2).join(".");
+  if (branchLine === versionLine) return;
+  die(
+    `Refusing to cut ${newVersion} from '${branch}': that branch is the ${branchLine}.x line.\n` +
+      `    A maintenance branch can only release its own line. Cut ${versionLine}.x from main\n` +
+      `    (or from the release/${versionLine}.x branch for that line).`,
+  );
+}
+
 function checkVersionMovesForward(currentVersion: string, newVersion: string, branch: string): void {
   if (compareSemver(newVersion, currentVersion) > 0) return;
   die(
@@ -598,6 +619,7 @@ async function main(): Promise<void> {
   if (!args.dryRun) {
     checkCleanTree();
     releaseBranch = checkBranch(args.branch);
+    checkVersionMatchesBranchLine(newVersion, releaseBranch);
     checkVersionMovesForward(currentVersion, newVersion, releaseBranch);
     checkUpToDateWithOrigin(releaseBranch);
     checkTagDoesNotExist(newVersion);
@@ -674,6 +696,22 @@ async function main(): Promise<void> {
         `moves — any later fix ships as a NEW patch version, not a re-tag. ` +
         `(The "force-move tags only on objective failure" rule; see CONTRIBUTING.md.)`,
     );
+    // The branch is the single most consequential fact here and was previously
+    // absent from the prompt — you could confirm a cut without ever being told
+    // where it came from.
+    const bannerLines = [
+      `You are about to cut ${tag} from branch '${releaseBranch}'`,
+      `  ${currentVersion}  →  ${newVersion}`,
+    ];
+    const width = Math.max(...bannerLines.map((l) => l.length)) + 2;
+    console.log("");
+    console.log(ansi.yellow(`┌${"─".repeat(width)}┐`));
+    for (const line of bannerLines) {
+      console.log(ansi.yellow("│ ") + line.padEnd(width - 2) + ansi.yellow(" │"));
+    }
+    console.log(ansi.yellow(`└${"─".repeat(width)}┘`));
+    console.log("");
+
     const yes = await confirm("Proceed?");
     if (!yes) {
       warn("Aborted before any changes — working tree untouched, nothing committed/tagged/pushed. Re-run when ready.");
