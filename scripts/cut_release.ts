@@ -36,6 +36,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { exit } from "node:process";
 
+import { compareSemver } from "../_shared/compatibility/index.ts";
+
 // ── paths ────────────────────────────────────────────────────────────────
 
 const REPO_ROOT = join(import.meta.dir, "..");
@@ -263,20 +265,50 @@ function checkCleanTree(): void {
   }
 }
 
-function checkBranch(): void {
+/**
+ * Releases come from `main`, or from a `release/*` maintenance branch when a
+ * patch must ship for an older line while main has already moved on (1.0.7 was
+ * cut from `release/1.0.7` off the v1.0.6 tag, because main already carried
+ * all of 1.1.0). Returns the branch so the push/sync steps target the right
+ * one — pushing `main` from a release branch would strand the version bump.
+ */
+function checkBranch(): string {
   const branch = runOrDie("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (branch !== "main") {
-    die(`Must be on 'main' branch, currently on '${branch}'.`);
+  if (branch !== "main" && !branch.startsWith("release/")) {
+    die(
+      `Must be on 'main' or a 'release/*' maintenance branch, currently on '${branch}'.`,
+    );
   }
+  return branch;
 }
 
-function checkUpToDateWithOrigin(): void {
-  runOrDie("git", ["fetch", "origin", "main", "--quiet"]);
+/**
+ * The mistake this exists to prevent: standing on a branch that is AHEAD of the
+ * version you are cutting. Cutting 1.0.7 while on main (VERSION 1.1.0-beta.1)
+ * would tag main's tree — all of 1.1.0 — as a 1.0.x patch, published to the
+ * stable channel. The tag is immutable, so there is no clean recovery.
+ */
+function checkVersionMovesForward(currentVersion: string, newVersion: string, branch: string): void {
+  if (compareSemver(newVersion, currentVersion) > 0) return;
+  die(
+    `Refusing to cut ${newVersion}: this branch ('${branch}') is at ${currentVersion}.\n` +
+      `    A release must move the version forward. If you meant to patch an older line, cut\n` +
+      `    from a 'release/*' branch based on that line's tag — not from a branch that is ahead.`,
+  );
+}
+
+function checkUpToDateWithOrigin(branch: string): void {
+  // A brand-new release branch may not exist on origin yet; that is fine —
+  // the push below creates it.
+  const hasRemote =
+    run("git", ["ls-remote", "--exit-code", "--heads", "origin", branch]).status === 0;
+  if (!hasRemote) return;
+  runOrDie("git", ["fetch", "origin", branch, "--quiet"]);
   const local = runOrDie("git", ["rev-parse", "HEAD"]);
-  const remote = runOrDie("git", ["rev-parse", "origin/main"]);
+  const remote = runOrDie("git", ["rev-parse", `origin/${branch}`]);
   if (local !== remote) {
     die(
-      `Local main is not in sync with origin/main.\n` +
+      `Local ${branch} is not in sync with origin/${branch}.\n` +
         `  local : ${local}\n` +
         `  origin: ${remote}\n` +
         `Run 'git pull --ff-only' (or push your local commits) and retry.`,
@@ -547,10 +579,12 @@ async function main(): Promise<void> {
 
   // 1. Preflight: working tree, branch, sync, tag
   info("Preflight checks…");
+  let releaseBranch = "main";
   if (!args.dryRun) {
     checkCleanTree();
-    checkBranch();
-    checkUpToDateWithOrigin();
+    releaseBranch = checkBranch();
+    checkVersionMovesForward(currentVersion, newVersion, releaseBranch);
+    checkUpToDateWithOrigin(releaseBranch);
     checkTagDoesNotExist(newVersion);
   } else {
     info("  (dry-run: skipping git state checks)");
@@ -708,7 +742,7 @@ async function main(): Promise<void> {
   // 5. Push + GitHub Release (already confirmed before any mutation, above)
 
   if (args.dryRun) {
-    info(`DRY-RUN: would 'git push origin main'`);
+    info(`DRY-RUN: would 'git push origin <current branch>'`);
     info(`DRY-RUN: would 'git push origin ${tag}'`);
     info(`DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>'`);
     info(`DRY-RUN: would upload install.sh + docker/local/install-local.sh as Release assets`);
@@ -728,7 +762,9 @@ async function main(): Promise<void> {
   }
 
   info("Pushing main and tag to origin…");
-  runOrDie("git", ["push", "origin", "main"]);
+  // The branch we are actually on — pushing "main" from a release branch would
+  // strand the version bump and CHANGELOG on an unpushed local commit.
+  runOrDie("git", ["push", "origin", releaseBranch]);
   runOrDie("git", ["push", "origin", tag]);
   ok(`Pushed ${tag} to origin.`);
 
