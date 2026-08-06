@@ -27,8 +27,14 @@ export interface ConfigEntry {
   env_override: ConfigEnvOverride | null;
 }
 
-export async function fetchConfig(): Promise<{ keys: ConfigEntry[] }> {
-  return apiFetch<{ keys: ConfigEntry[] }>("/config");
+export interface ConfigListResponse {
+  keys: ConfigEntry[];
+  /** Path to the .env this server read, so the UI can point at it. */
+  config_file: string | null;
+}
+
+export async function fetchConfig(): Promise<ConfigListResponse> {
+  return apiFetch<ConfigListResponse>("/config");
 }
 
 export async function setConfigValue(

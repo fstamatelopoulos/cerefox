@@ -32,6 +32,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   value as opaque text, so `min_search_score = 5` was previously accepted and
   silently suppressed every search result. Bad values now get a 400.
 
+### Changed
+- **`migrate-format`'s bulk-write warning now triggers at 200 documents**
+  (was 500). Converting ~200 documents already means on the order of a thousand
+  chunk inserts plus version rows — comparable write volume to the reindex that
+  depleted a contributor's Disk IO Budget. The command is rare and opt-in, so
+  erring quiet helped nobody.
+
 ---
 
 ## [v1.1.0-beta.4] -- 2026-08-06

@@ -249,7 +249,12 @@ test.describe("Settings", () => {
     for (const k of overridden) {
       // The whole point of the badge: the stored value is NOT what this server
       // uses, and the page must not imply otherwise.
-      await expect(page.getByTestId(`config-override-${k.key}`)).toBeVisible();
+      const badge = page.getByTestId(`config-override-${k.key}`);
+      await expect(badge).toBeVisible();
+      // ...and it must say how to change it, plus why the UI will not: that
+      // file also holds the Supabase secret key and the database password.
+      await expect(badge).toContainText("restart the server");
+      await expect(badge).toContainText("database password");
     }
     if (overridden.length === 0) {
       await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();

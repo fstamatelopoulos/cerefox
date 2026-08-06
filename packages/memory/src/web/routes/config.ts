@@ -15,6 +15,7 @@ import {
   CONFIG_CATALOG,
   validateConfigValue,
 } from "../../../../../_shared/config-catalog/index.ts";
+import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import type { WebContext } from "../context.ts";
 
 function unwrapScalarRpc(data: unknown): string | null {
@@ -73,7 +74,17 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
         };
       }),
     );
-    return c.json({ keys: entries });
+    // Where the operator would go to change an override. Shown so the page can
+    // point at the file instead of pretending overrides are unchangeable — the
+    // UI will not edit it (it holds the service-role key, the OpenAI key and
+    // the database password), but the human owns that file.
+    let configFile: string | null = null;
+    try {
+      configFile = resolveEnvFile();
+    } catch {
+      // Unresolvable config dir — the page just omits the path.
+    }
+    return c.json({ keys: entries, config_file: configFile });
   });
 
   app.get("/api/v1/config/:key", async (c) => {

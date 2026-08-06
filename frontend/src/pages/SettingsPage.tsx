@@ -120,6 +120,7 @@ export function SettingsPage() {
                   onDraft={(v) => setDrafts((d) => ({ ...d, [entry.key]: v }))}
                   onSave={(v) => save(entry, v)}
                   saving={mutation.isPending}
+                  configFile={data?.config_file ?? null}
                 />
               ))}
             </Stack>
@@ -183,12 +184,14 @@ function ConfigRow({
   onDraft,
   onSave,
   saving,
+  configFile,
 }: {
   entry: ConfigEntry;
   draft: string | undefined;
   onDraft: (v: string) => void;
   onSave: (v: string) => void;
   saving: boolean;
+  configFile: string | null;
 }) {
   const current = draft ?? entry.effective;
   const dirty = draft !== undefined && draft !== entry.effective;
@@ -227,6 +230,18 @@ function ConfigRow({
                 Overridden on this server by <Code>{entry.env_override?.name}</Code> ={" "}
                 <Code>{entry.env_override?.value}</Code>. The stored value below still
                 applies to clients that do not set that variable.
+              </Text>
+              <Text size="xs" mt={6}>
+                To change it, edit{" "}
+                {configFile ? <Code>{configFile}</Code> : <Code>your .env</Code>} on this
+                machine and restart the server — it is read once at startup. Cerefox never
+                writes that file from the browser:{" "}
+                <Text span fw={600}>
+                  it also holds your Supabase secret key, OpenAI API key and database
+                  password
+                </Text>
+                , so treat it like a password store — keep it at mode 0600 and out of
+                version control.
               </Text>
             </Alert>
           )}
