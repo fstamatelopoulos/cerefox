@@ -688,7 +688,7 @@ updated atomically with the chunk insert.
 **Optimistic concurrency (v0.11 / schema 0.5.0)**: the update path locks the
 document row (`SELECT … FOR UPDATE`) and compares the caller-supplied
 `p_expected_content_hash` against the current `content_hash` before writing.
-Stale → `CEREFOX_CONFLICT` (SQLSTATE 40001); absent (without
+Stale → `CEREFOX_CONFLICT` (SQLSTATE `PT409` → HTTP 409); absent, blank (without
 `p_last_write_wins`) → `CEREFOX_TOKEN_REQUIRED` (22023). This closes the
 read→chunk+embed→write race in which two concurrent writers would silently
 last-write-wins each other — the check is atomic at the one place all

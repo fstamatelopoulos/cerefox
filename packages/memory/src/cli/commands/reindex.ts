@@ -118,7 +118,7 @@ async function action(options: ReindexOptions): Promise<void> {
 
   warnLargeBulkWrite({
     count: chunks.length,
-    threshold: 1000,
+    threshold: 5000,
     unit: "chunk",
     batchHint: "reindex in stages with --document-id",
   });
