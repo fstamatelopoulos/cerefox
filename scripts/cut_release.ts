@@ -834,7 +834,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  info("Pushing main and tag to origin…");
+  info(`Pushing ${releaseBranch} and tag to origin…`);
   // The branch we are actually on — pushing "main" from a release branch would
   // strand the version bump and CHANGELOG on an unpushed local commit.
   runOrDie("git", ["push", "origin", releaseBranch]);
