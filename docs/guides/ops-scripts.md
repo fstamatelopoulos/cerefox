@@ -126,7 +126,7 @@ bun scripts/backup_create.ts && bun scripts/db_migrate.ts
 
 ## backup_create.ts — Create a backup
 
-Exports all documents, chunks, and metadata to a JSON file in the backup directory. (End users use `cerefox backup create`.)
+Exports all documents, chunks, metadata, **projects and project memberships** to a JSON file in the backup directory. (End users use `cerefox backup create`.)
 
 ```bash
 bun scripts/backup_create.ts [OPTIONS]
@@ -153,7 +153,7 @@ Output: `backup-data/cerefox-20260308T143022Z-before-v2-migration.json`
 
 ## backup_restore.ts — Restore from a backup
 
-Restores documents and chunks from a previously created backup file. Idempotent — documents with the same content hash are skipped. (End users use `cerefox backup restore`.)
+Restores documents, chunks, projects and project memberships from a previously created backup file. Idempotent — documents with the same content hash are skipped, and projects/memberships are upserted. Snapshots taken before v1.0.7 contain no memberships; restoring one warns and recreates documents only. (End users use `cerefox backup restore`.)
 
 ```bash
 bun scripts/backup_restore.ts BACKUP_FILE [OPTIONS]

@@ -544,6 +544,42 @@ Detects fresh vs. existing databases: a fresh DB gets schema + RPCs + migration 
 | `--all` | flag | off | Reindex every chunk regardless of embedder. |
 | `--dry-run` | flag | off | Count what would be re-embedded; do nothing. |
 
+> **Reindex refreshes embeddings only.** It rewrites `embedding_primary` on
+> existing chunk rows and never re-chunks, so it cannot change a document's
+> stored `content_format`. Use `server migrate-format` for that (#164).
+
+---
+
+### `cerefox server migrate-format`
+
+**Purpose**: convert documents still stored under the legacy chunk-reconstruction
+format to the current one, by re-ingesting them through the normal pipeline
+(re-chunk → re-embed → stamp the current format). `cerefox doctor` reports how
+many documents are affected.
+
+**Synopsis**: `cerefox server migrate-format [OPTIONS]`
+
+**Options**:
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--dry-run` | flag | off | Report how many documents would convert; write nothing. |
+| `-l, --limit <n>` | int | all | Convert at most N documents (re-run to continue). |
+| `--document-id <uuid>` | string | — | Convert a single document. |
+| `--author <name>` | string | `CEREFOX_AUTHOR_NAME` | Recorded in the audit log per conversion. |
+
+**This costs embedding spend** — every converted document is re-embedded — so it
+is opt-in and never runs automatically. Legacy-format documents are *not*
+broken: they reconstruct exactly as they always have, and convert on their own
+the next time they are edited. Each conversion runs under optimistic
+concurrency, so a document edited mid-run is skipped rather than overwritten,
+and documents whose content is byte-identical to another document cannot be
+converted (the ingestion pipeline's dedup check rejects them) — those are
+reported rather than failing the run.
+
+**Take a backup first** (`cerefox backup create`). The previous chunks are
+archived as a document version, but version retention defaults to 48 hours.
+
 ---
 
 ### `cerefox token generate` / `cerefox token rotate` / `cerefox token list`
