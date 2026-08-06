@@ -101,6 +101,7 @@ export class IngestionPipeline {
       authorType = "user",
       expectedContentHash,
       lastWriteWins = false,
+      forceRechunk = false,
     } = opts;
 
     const listFormProvided =
@@ -132,6 +133,7 @@ export class IngestionPipeline {
         authorType,
         expectedContentHash,
         lastWriteWins,
+        forceRechunk,
       });
       if (!listFormProvided && (projectId || projectName)) {
         const singular = await resolveProjectIds(
@@ -323,6 +325,7 @@ export class IngestionPipeline {
       authorType = "user",
       expectedContentHash,
       lastWriteWins = false,
+      forceRechunk = false,
     } = opts;
 
     // ── (1) Verify document exists ───────────────────────────────────────
@@ -376,7 +379,14 @@ export class IngestionPipeline {
     const actualChunks = await this.db.listChunksForDocument(documentId);
     const hasChunks = actualChunks.length > 0;
 
-    if (contentUnchanged && hasChunks) {
+    // `forceRechunk` deliberately falls through to the full re-chunk path even
+    // though the content is identical. A format migration re-ingests the same
+    // text on purpose — the point is to rewrite the chunk rows under the
+    // current chunker. Without this escape hatch the short-circuit below wins
+    // silently: `server migrate-format` reported "Converted N" while every
+    // document stayed on the legacy format, reproducing the exact #164 defect
+    // the command was written to fix.
+    if (contentUnchanged && hasChunks && !forceRechunk) {
       const oldTitle = existing.title ?? "";
       const titleChanged = oldTitle !== title;
 
@@ -499,7 +509,16 @@ export class IngestionPipeline {
       sourceLabel: source,
       retentionHours: this.settings.versionRetentionHours,
       cleanupEnabled: this.settings.versionCleanupEnabled,
-      expectedContentHash: expectedContentHash ?? null,
+      // A forced re-chunk of *identical* content needs no caller-supplied
+      // token: the pipeline already treats content-unchanged saves as exempt
+      // from the concurrency check (nothing can be lost when the bytes match),
+      // but the RPC does not know that and rejects the write with
+      // CEREFOX_TOKEN_REQUIRED. Satisfy it with the hash we just compared
+      // against, so `forceRechunk` works standalone instead of forcing every
+      // caller to thread a token through for a no-op-equivalent write.
+      expectedContentHash:
+        expectedContentHash ??
+        (forceRechunk && contentUnchanged ? existing.content_hash : null),
       lastWriteWins,
     });
 

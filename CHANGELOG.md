@@ -28,6 +28,24 @@ Open roadmap.
   staging.
 
 ### Fixed
+- **`cerefox server migrate-format` did not actually convert anything** — it
+  reported `Converted N` while every document stayed on the legacy format.
+  The command re-ingests byte-identical content on purpose (the goal is to
+  rewrite chunk rows under the current chunker), but the pipeline answers an
+  unchanged content hash with a metadata-only update: no re-chunk, so no format
+  advance. It then counted every non-throwing call as a conversion. This is the
+  **exact #164 defect the command was written to fix**, reproduced one layer up:
+  `reindex` claimed to convert and didn't, and so did its replacement. Shipped
+  broken in v1.0.7. Fixed with a `forceRechunk` path that bypasses the
+  short-circuit, and the command now counts only results the pipeline reports as
+  re-indexed — so a silent no-op fails loudly instead of being reported as
+  success. Verified by measurement on staging: converting 2 documents moved the
+  format-1 count 214 → 212 and format-2 117 → 119 (before the fix, converting 3
+  moved nothing).
+- **`migrate-format` counted trashed documents**, so it reported 214 where
+  `doctor` reported 207 — two numbers for the same question — and would have
+  spent embedding budget re-chunking deleted content. Soft-deleted documents
+  are now excluded and reported separately.
 - **`.env` is now loaded once at CLI startup.** Nothing did this: settings were
   loaded lazily, deep inside whichever helper first needed Supabase
   credentials, so any code reading `process.env.CEREFOX_*` directly saw an

@@ -76,7 +76,34 @@ async function action(options: MigrateOptions): Promise<void> {
     );
   }
 
-  const docIds = [...new Set(legacyChunkRows.map((r) => r.document_id))];
+  // Exclude trashed documents.
+  //
+  // Chunks outlive a soft delete, so the query above happily returns documents
+  // sitting in the trash — which is both a waste of embedding spend on content
+  // the user deleted, and a reporting mismatch: `doctor` counts live documents
+  // only, so it said "207 of 319" while this command said 214. Two numbers for
+  // the same question is how people stop trusting either. Anything restored
+  // later still converts on its next edit.
+  let liveIds = new Set<string>();
+  try {
+    const liveRows = await fetchAllPages<{ id: string }>((from, to) =>
+      supabase
+        .from("cerefox_documents")
+        .select("id")
+        .is("deleted_at", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    liveIds = new Set(liveRows.map((r) => r.id));
+  } catch (err) {
+    throw systemError(
+      `Could not list documents: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const allLegacy = [...new Set(legacyChunkRows.map((r) => r.document_id))];
+  const docIds = allLegacy.filter((id) => liveIds.has(id));
+  const trashedSkipped = allLegacy.length - docIds.length;
   const limit = options.limit ? parsePositiveInt(options.limit, "--limit", docIds.length) : docIds.length;
   const targets = docIds.slice(0, limit);
 
@@ -91,6 +118,11 @@ async function action(options: MigrateOptions): Promise<void> {
         (targets.length < docIds.length ? `; converting ${targets.length} (--limit)` : ""),
     ),
   );
+  if (trashedSkipped > 0) {
+    println(
+      c.dim(`  (${trashedSkipped} trashed document(s) on the legacy format ignored)`),
+    );
+  }
   if (options.dryRun) {
     println(c.yellow("⚠  --dry-run: nothing was written."));
     println(c.dim("   Each document would be re-chunked and RE-EMBEDDED (embedding spend)."));
@@ -141,7 +173,7 @@ async function action(options: MigrateOptions): Promise<void> {
     }
 
     try {
-      await pipeline.ingestText({
+      const result = await pipeline.ingestText({
         text: doc.full_content,
         title: doc.doc_title,
         documentId: id,
@@ -151,8 +183,26 @@ async function action(options: MigrateOptions): Promise<void> {
         // Compare-and-swap against what we just read: a concurrent edit makes
         // this document skip rather than lose that edit.
         expectedContentHash: doc.content_hash,
+        // Essential, not an optimisation. This command re-ingests byte-
+        // identical content by design, and the pipeline's normal response to
+        // an unchanged hash is a metadata-only update: no re-chunk, so no
+        // format advance. Without this the command reported "Converted N"
+        // while every document stayed on the legacy format — the exact #164
+        // defect it exists to fix, reproduced one layer up.
+        forceRechunk: true,
       });
-      converted++;
+      // Trust the outcome, not the absence of an exception. `reindexed` is
+      // the pipeline's own statement that chunks were rewritten; anything else
+      // means the document did NOT convert, and reporting it as converted is
+      // how this class of silent no-op survived a release.
+      if (result.reindexed) {
+        converted++;
+      } else {
+        failures.push({
+          document: `${doc.doc_title} (${id})`,
+          reason: `pipeline reported no re-chunk (action=${result.action}); format not advanced`,
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (/conflict/i.test(message)) {

@@ -69,6 +69,17 @@ export interface IngestTextOptions {
   expectedContentHash?: string | null;
   /** Explicitly skip the concurrency check (filesystem-sync flows). */
   lastWriteWins?: boolean;
+  /**
+   * Re-chunk and re-embed even when the content is byte-identical.
+   *
+   * Normally identical content takes the metadata-only path — re-doing the
+   * work would be pure waste. But a *format* migration re-ingests exactly the
+   * same text on purpose: the goal is to rewrite the chunk rows under the
+   * current chunker, not to change the content. Without this the short-circuit
+   * silently wins and `content_format` never advances (see
+   * `server migrate-format`).
+   */
+  forceRechunk?: boolean;
 }
 
 /** Options for `updateDocument`. Mirrors Python's `update_document(...)`. */
@@ -86,6 +97,17 @@ export interface UpdateDocumentOptions {
   expectedContentHash?: string | null;
   /** Explicitly skip the concurrency check (filesystem-sync flows). */
   lastWriteWins?: boolean;
+  /**
+   * Re-chunk and re-embed even when the content is byte-identical.
+   *
+   * Normally identical content takes the metadata-only path — re-doing the
+   * work would be pure waste. But a *format* migration re-ingests exactly the
+   * same text on purpose: the goal is to rewrite the chunk rows under the
+   * current chunker, not to change the content. Without this the short-circuit
+   * silently wins and `content_format` never advances (see
+   * `server migrate-format`).
+   */
+  forceRechunk?: boolean;
 }
 
 /**

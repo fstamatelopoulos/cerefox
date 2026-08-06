@@ -351,4 +351,55 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       }),
     ).rejects.toThrow(/not found/i);
   });
+
+
+  // Regression: `server migrate-format` re-ingests byte-identical content on
+  // purpose — the goal is to rewrite chunk rows under the current chunker, not
+  // to change the content. Without `forceRechunk` the unchanged-content
+  // short-circuit wins and the command reports "Converted N" while every
+  // document stays on the legacy format, which is precisely the #164 defect
+  // that command exists to fix. Verified on staging: converting 3 documents
+  // moved the format counts by zero.
+  test("forceRechunk: identical content still re-chunks → reindexed=true", async () => {
+    if (!pipeline || !supabase) return;
+
+    const title = `${TITLE_PREFIX} force-rechunk-${RUN_TAG}`;
+    const text = "# Body\n\nIdentical content, re-ingested on purpose. " + RUN_TAG + "\n";
+    const created1 = await pipeline.ingestText({
+      text,
+      title,
+      author: "pipeline-update-test",
+    });
+    created.push(created1.documentId);
+
+    // Same text, same title. Without the flag this is a metadata-only no-op.
+    const noop = await pipeline.updateDocument({
+      documentId: created1.documentId,
+      text,
+      title,
+      author: "pipeline-update-test",
+    });
+    expect(noop.reindexed).toBe(false);
+
+    const forcedRechunk = await pipeline.updateDocument({
+      documentId: created1.documentId,
+      text,
+      title,
+      author: "pipeline-update-test",
+      forceRechunk: true,
+    });
+    expect(forcedRechunk.reindexed).toBe(true);
+
+    // The chunks must actually carry the current format afterwards — the whole
+    // point. Asserting on `reindexed` alone is what let the no-op hide.
+    const { data: chunks } = await supabase
+      .from("cerefox_chunks")
+      .select("content_format")
+      .eq("document_id", created1.documentId)
+      .is("version_id", null);
+    expect(chunks && chunks.length > 0).toBe(true);
+    for (const ch of chunks ?? []) {
+      expect(ch.content_format).toBe(2);
+    }
+  });
 });
