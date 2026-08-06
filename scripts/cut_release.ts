@@ -817,7 +817,10 @@ async function main(): Promise<void> {
   if (args.dryRun) {
     info(`DRY-RUN: would 'git push origin <current branch>'`);
     info(`DRY-RUN: would 'git push origin ${tag}'`);
-    info(`DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>'`);
+    info(
+      `DRY-RUN: would 'gh release create ${tag} --title ${tag} --notes-file <release-notes>` +
+        `${newVersion.includes("-") ? " --prerelease" : ""}'`,
+    );
     info(`DRY-RUN: would upload install.sh + docker/local/install-local.sh as Release assets`);
     if (args.dockerPublish) {
       const publishLatest = !newVersion.includes("-");
@@ -844,6 +847,14 @@ async function main(): Promise<void> {
   info("Creating GitHub Release…");
   const tmpNotesFile = join(REPO_ROOT, `.release-notes-${tag}.tmp`);
   writeFileSync(tmpNotesFile, releaseNotes + "\n", "utf8");
+  // Mark pre-releases as such on GitHub. Without this every beta/rc was created
+  // as a normal release, so the repo's Releases page presented the newest beta
+  // as "Latest" — a visitor landing there saw a pre-release offered as the
+  // current version. The npm side was always correct (pre-releases publish under
+  // their channel dist-tag, never `latest`), which is exactly why this went
+  // unnoticed: nothing broke, it just misrepresented the release on the one
+  // page people browse. Same suffix test the Docker `:latest` decision uses.
+  const isPrerelease = newVersion.includes("-");
   try {
     runOrDie("gh", [
       "release",
@@ -853,6 +864,7 @@ async function main(): Promise<void> {
       tag,
       "--notes-file",
       tmpNotesFile,
+      ...(isPrerelease ? ["--prerelease"] : []),
     ]);
   } finally {
     run("rm", ["-f", tmpNotesFile]);
