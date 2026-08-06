@@ -21,7 +21,22 @@ This guide walks you from a blank Supabase project to a fully deployed Cerefox s
 1. Go to [app.supabase.com](https://app.supabase.com) and sign in
 2. Click **New project**
 3. Choose a name (e.g. `cerefox`), set a strong database password, pick a region close to you
-4. Click **Create new project** and wait ~2 minutes for it to provision
+4. Review the security options offered at creation (defaults in brackets):
+   - **Enable Data API** *[on]* — **keep it on.** The CLI, web UI, and local MCP all reach
+     Supabase through PostgREST; without it nothing works.
+   - **Automatically expose new tables** *[on]* — **turn it off.** Cerefox grants its tables
+     to `service_role` explicitly (migration `0013`), so it does not rely on implicit
+     exposure, and leaving it on means any future table is exposed to the Data API roles by
+     default. Supabase recommends disabling it too.
+   - **Enable automatic RLS** *[off]* — optional. Cerefox's schema already runs
+     `ENABLE ROW LEVEL SECURITY` on every table it creates, so this only covers tables
+     Cerefox doesn't own. Harmless either way; every Cerefox access path authenticates as
+     `service_role`, which bypasses RLS by design.
+5. Click **Create new project** and wait ~2 minutes for it to provision
+
+> **Note on the database password**: it is used *only* by `cerefox server deploy` (a direct
+> Postgres connection for DDL). Everyday CLI, web, and MCP traffic uses the secret key
+> instead. Store it in a password manager — Supabase will not show it again.
 
 ---
 
@@ -56,14 +71,24 @@ Either way: keep this key secret — it bypasses Row Level Security and grants f
 
 This is used by `cerefox server deploy` (and the contributor scripts `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts`). See the **[Connection pooling in 2026](#connection-pooling-2026)** reference section near the end of this guide for context. The short version:
 
-1. Open **Project Settings → Database → Connection pooling** (not the "Connect" dialog — that one usually omits the Session Pooler in the new UI).
+1. From the **project overview**, click the **Copy** button beside the project URL, then
+   **Get Connected** in the dropdown. Under **Direct Connection Pooling**, choose
+   **Session pooler**. *(Verified against a project created 2026-08-05. Supabase moves this
+   regularly — it used to live under Project Settings → Database → Connection pooling, which
+   may still work.)*
 2. Copy the **Session Pooler** URI (host ends in `.pooler.supabase.com`, port `5432`).
 3. Confirm the username has the form `postgres.<project-ref>` — without that suffix you'll get "Tenant or user not found".
 4. Append `?sslmode=require` to enforce TLS explicitly.
 
+The result looks like this — note both the ref-suffixed username **and** the pooler host:
+
+```
+postgresql://postgres.abcdefghijklmnop:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
 If you only see Direct Connection and Transaction Pooler in your dashboard, take the Transaction Pooler URI and change `:6543` → `:5432`. That gives you the Session Pooler. **Do not use port 6543** — Transaction Pooler does not support DDL and the schema deploy will fail mid-schema.
 
-The Direct Connection (`db.<project-ref>.supabase.co:5432`) is IPv6-only on the free tier and unusable on most home/office networks. The dashboard now warns about this directly.
+> **Don't take the Direct connection string** (`postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres`). It is the most prominent option in the dialog, but it is IPv6-only on the free tier, so it times out on most home and office networks. The dashboard warns about this directly.
 
 ---
 
@@ -380,7 +405,13 @@ Not yet. The Supabase docs explicitly state: *"You can still use old anon and se
 
 ## Connection pooling in 2026 <a id="connection-pooling-2026"></a>
 
-Supabase's "Connect" dialog was redesigned in 2026 and the **Session Pooler** is no longer a first-class tab in many projects. The other two surfaces (Direct Connection and Transaction Pooler) are present but neither works for Cerefox's deployment scripts. Here's the full picture.
+Supabase's "Connect" dialog has been redesigned repeatedly through 2026, and where the
+**Session Pooler** lives has moved with it. As of **2026-08-05** it is inside the Connect
+dialog: project overview → **Copy** (beside the project URL) → **Get Connected** →
+**Direct Connection Pooling** → **Session pooler**. Earlier in the year it was only under
+Project Settings → Database → Connection pooling. Check both if one comes up empty — and the
+shape of the URI is the reliable signal, not the menu path: **ref-suffixed username plus a
+`.pooler.supabase.com` host on port 5432**. Here's the full picture.
 
 ### The three Postgres connection types
 
