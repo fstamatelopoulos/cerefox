@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.0-beta.5] -- 2026-08-06
+
 ### Added
 - **Settings page in the web UI** — the browser face of `cerefox config
   get/set`. Every `cerefox_config` key with its description, current value and
