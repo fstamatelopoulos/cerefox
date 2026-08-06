@@ -54,9 +54,31 @@ function utcStamp(): string {
 }
 
 async function action(options: BackupOptions): Promise<void> {
-  const outDir = resolve(
-    expandHome(options.outputDir ?? process.env.CEREFOX_BACKUP_DIR ?? "~/.cerefox/backups"),
-  );
+  const configuredDir = options.outputDir ?? process.env.CEREFOX_BACKUP_DIR;
+  const outDir = resolve(expandHome(configuredDir ?? "~/.cerefox/backups"));
+
+  // A *relative* CEREFOX_BACKUP_DIR resolves against the working directory, so
+  // the same command writes to a different place depending on where it is run
+  // from — and the snapshots quietly scatter. `./backups` was the pre-v0.3.0
+  // default and still sits in `.env` files created back then, which is how one
+  // store ended up with backups split between `~/.cerefox/backups` and a repo
+  // checkout. Harmless individually, dangerous in aggregate: you believe you
+  // have backups and cannot find them. Say so rather than silently complying.
+  if (
+    configuredDir !== undefined &&
+    !configuredDir.startsWith("/") &&
+    !configuredDir.startsWith("~")
+  ) {
+    println(
+      c.yellow("⚠ ") +
+        `Backup directory "${configuredDir}" is relative — it resolves against the ` +
+        "current working directory, so backups land in different places depending " +
+        "on where you run this from.",
+    );
+    println(c.dim(`  Writing to: ${outDir}`));
+    println(c.dim("  Set an absolute path (e.g. ~/.cerefox/backups) to keep them together."));
+  }
+
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
   const stamp = utcStamp();
