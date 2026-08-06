@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.0-beta.6] -- 2026-08-06
+
 ### Fixed
 - **A deterministic conflict was raised under a "retryable" SQLSTATE, causing
   unbounded retry storms** (reported by
