@@ -4027,15 +4027,53 @@ untested against production until a staging Supabase project exists (below).
 - ✅ **#165 keyboard accessibility.** Dashboard document/project rows were
   click-only `<tr>`s — unreachable by keyboard, no cmd/middle-click, no copy
   link. Real links now. (This also caused the e2e suite's silent skips.)
+- ✅ **Staging environment stood up and validated** (2026-08-05).
+  `cerefox-staging` Supabase project deployed from scratch — which finally
+  exercised the never-validated fresh-install path and confirmed the #26
+  explicit `service_role` grants work on a project with "automatically expose
+  new tables" **disabled**. Production data imported (319 docs / 17 projects).
+  The parallel-worlds story is a **convention, not a feature** (maintainer
+  decision: "simpler is better, I am the only user") — `CEREFOX_CONFIG_DIR`
+  for the database, a separate `npm --prefix` install tree for the *version*,
+  and one alias binding both axes. No `--env` flag, no profiles, so a normal
+  single-environment install is untouched. Written up in
+  `docs/guides/staging-env.md`.
+- ✅ **Five defects the staging exercise found**, all fixed here. Each was
+  invisible from a single-environment machine, which is the argument for
+  keeping staging:
+  1. **`CEREFOX_CONFIG_DIR` was silently ignored by every `bun scripts/*.ts`.**
+     Bun auto-loads `.env` from the working directory, and `loadEnv()` only
+     filled *unset* keys, so the repo's production credentials won.
+     `db_migrate.ts --status` reported production while naming staging; the
+     same path through `db_deploy.ts --reset` **would have wiped production**.
+     The named config dir is now authoritative, and `--reset` prints the target
+     project ref before asking.
+  2. **Web daemon state was global** — `web.{pid,log}` ignored the config dir,
+     so a staging `web stop` would have killed the production server.
+  3. **`backup create` aborted against any pre-0.10.0 server** (named
+     `lifecycle_status` unconditionally) — i.e. it failed at the one moment it
+     matters most, snapshotting production *before* an upgrade.
+  4. **`backup restore` was not idempotent**, contrary to its help text: it
+     deduped on `content_hash`, so a document edited between snapshots kept its
+     id, changed its hash, and collided on the primary key.
+  5. **`db_status` pointed users at `db_deploy.py`**, deleted at v1.0.0.
+- ✅ **Backup format 4 — the trash is captured.** Soft-delete is not a purge
+  and nothing ever collects it (the 48h sweep prunes *versions*), so snapshots
+  were silently lossy. Trashed documents now round-trip and are restored **as
+  trash** (`deleted_at` replayed; every read/search RPC filters it), with
+  `--no-trash` to opt out. Proven end to end: 331 captured (12 trashed) →
+  319 live + 12 trashed in staging, exact match; re-run 0/331/0.
 - ⏳ **Config web UI** — a settings surface for the `cerefox_config` keys
   (`cerefox config set` equivalents, incl. the retrieval tunables from #133 and
   `relations_enabled`). Next up.
 
-**Open decisions carried to the staging session:**
-- Staging Supabase project (separate project, same account) — gives an isolated
-  DB *and* finally exercises the never-validated fresh-install path (the
-  original #26 concern). Needs a config-switching story (a second config dir or
-  env-file selection) so the CLI can target staging without touching prod.
+**Open decisions carried forward:**
+- **#168 — `configure-agent` overwrites production MCP wiring** when run from a
+  second environment (fixed server name `cerefox`). The last un-separated axis;
+  proposal is to derive the name from `CEREFOX_ENV_LABEL`.
+- `migrate-format` on production: rehearsed on staging (3 of 214 converted
+  cleanly, content intact) but **not yet run on prod** — 214 legacy documents
+  there, real embedding spend.
 - Relation-aware search: agreed as an **optional extension**, designed and
   discussed before any implementation.
 
