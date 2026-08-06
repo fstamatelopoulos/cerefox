@@ -429,12 +429,21 @@ function buildNewChangelog(parts: ChangelogParts, version: string): {
 } {
   const date = today();
   const newUnreleasedSection = `## [Unreleased]\n\n${UNRELEASED_PLACEHOLDER}\n\n---\n\n`;
-  const promoted = `## [v${version}] -- ${date}\n${parts.unreleasedBody}`;
+
+  // Drop the placeholder before promoting. Notes are usually added ABOVE the
+  // existing "Open roadmap." line rather than replacing it, so without this the
+  // placeholder rides along into the released section — and from there into the
+  // GitHub Release body. Ten historical sections carry that stray line.
+  const body = parts.unreleasedBody.replace(
+    new RegExp(`^${UNRELEASED_PLACEHOLDER.replace(".", "\\.")}\\s*$\\n?`, "m"),
+    "",
+  );
+  const promoted = `## [v${version}] -- ${date}\n${body}`;
   const newText = parts.preamble + newUnreleasedSection + promoted + parts.rest;
 
   // Release notes shown on GitHub Release: skip the heading line, trim
   // surrounding blank lines and the trailing horizontal rule (`---`).
-  const releaseNotes = parts.unreleasedBody
+  const releaseNotes = body
     .replace(/\n---\s*\n?$/, "\n")
     .trim();
 
