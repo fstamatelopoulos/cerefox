@@ -574,6 +574,46 @@ cerefox token list               # show masked fingerprints of the accepted set 
 
 ---
 
+### `cerefox relation set` / `delete` / `list` / `neighbors`
+
+> **Off by default.** The relation feature ships **dormant**: the four MCP
+> relation tools are hidden from agents, and the CLI group is inert, until an
+> operator opts in with `cerefox config set relations_enabled true` (or the
+> **Settings** page in the web UI). The table and schema exist either way, so
+> enabling and disabling are both non-destructive — turning it off hides the
+> tools again without deleting a single edge.
+
+**Purpose**: typed, directed links between documents — `source --rel_type--> target`.
+`rel_type` is free text; a dictionary in SQL marks some types symmetric (setting
+one direction implies the other, and deleting removes both).
+
+**Synopsis**:
+```
+cerefox relation set    SOURCE_ID REL_TYPE TARGET_ID
+cerefox relation delete SOURCE_ID REL_TYPE TARGET_ID
+cerefox relation list   DOCUMENT_ID            # every relation touching it, both directions
+cerefox relation neighbors DOCUMENT_ID REL_TYPE   # walk the graph along one type
+```
+
+**Notes**:
+
+- `neighbors` walks to a bounded `--depth` and is cycle-safe: a document already
+  visited on the walk is not revisited, so a loop in the graph terminates rather
+  than recursing forever.
+- Self-edges are rejected, as are edges to a document that does not exist.
+- Deleting a document cascades to its edges; soft-deleting one hides them from
+  traversal without removing them, so a restore brings the graph back intact.
+- Every write is recorded in the audit log (`relation-set`).
+
+**Enabling it**:
+```
+cerefox config set relations_enabled true    # tools appear in every agent's list
+cerefox config set relations_enabled false   # hidden again; no data removed
+```
+
+Agents see 10 tools with the flag off and 14 with it on. See
+[`configuration.md`](configuration.md) for the full runtime-config surface.
+
 ### `cerefox config list` / `cerefox config get` / `cerefox config set`
 
 **Purpose**: read/write runtime config in `cerefox_config` (e.g. `usage_tracking_enabled`, `require_requestor_identity`).

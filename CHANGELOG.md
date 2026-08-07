@@ -49,6 +49,23 @@ Open roadmap.
   0.10.2, migration 0015. Client detection is unchanged: every transport matches
   the `CEREFOX_CONFLICT:` message prefix, never the SQLSTATE.
 
+### Documentation
+- **Relations are now documented for users.** The headline 1.1.0 feature shipped
+  with no user-facing docs: `cli.md` never mentioned the `cerefox relation`
+  group, and `AGENT_GUIDE.md` still told agents to use `cerefox_set_relation`
+  *"when it ships"* — a stale claim in a guide that ships **inside the npm
+  package**, the same class of defect that reached users in v1.0.8. Both fixed,
+  plus a `cerefox relation` reference covering the commands, symmetry, cycle-safe
+  traversal, and how to enable/disable the feature non-destructively.
+- **`AGENT_QUICK_REFERENCE.md` no longer implies the relation tools are always
+  present.** They are opt-in and hidden by default, so an agent reading the
+  reference would try to call tools that were not in its list. The four tools are
+  marked ⚑ with a legend telling agents to trust their own tool list and treat
+  absence as normal. Re-bundled into `cerefox_get_help`.
+- **`upgrading.md` flags v1.1.0's server deploy as non-deferrable**, because the
+  retry-storm fix lives in `rpcs.sql` and upgrading the client alone leaves the
+  database on the old behaviour.
+
 ### Changed
 - **Bulk-rewrite warning thresholds raised** — `migrate-format` 200 → 1,000
   documents, `reindex` 1,000 → 5,000 chunks. The thresholds were originally set

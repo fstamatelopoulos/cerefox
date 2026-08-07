@@ -398,7 +398,7 @@ Good: `[Job Hunting - Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d)`.
 - **You don't need to escape `#` anchors.** `[Section](abc123#configuration)` works — the resolver splits the anchor off and reattaches it to the target document URL.
 - **You don't need to handle external URLs.** Links starting with `http://`, `https://`, `mailto:`, etc. pass through unchanged and open in a new tab.
 - **You don't need to handle absolute SPA paths.** Links starting with `/` (e.g. `/search?q=foo`) pass through to the SPA router unchanged.
-- **You don't need to create relation rows** for these links. The resolver does not populate the relation graph at this stage — that's a separate, future feature. If you want explicit relations between documents, use `cerefox_set_relation` when it ships.
+- **You don't need to create relation rows** for these links. The resolver does not populate the relation graph — that is a separate feature. Explicit relations are available via `cerefox_set_relation`, but they are **off by default**: the four relation tools are hidden unless the operator sets `relations_enabled`. If you do not see them in your tool list, they are switched off — do not try to call them, and do not treat their absence as an error.
 
 ### A note on agents on Path C (CLI via Bash tool)
 
