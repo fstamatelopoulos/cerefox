@@ -18,7 +18,7 @@
  * doesn't touch `supabase/functions/` leaves it alone).
  */
 
-export const EF_VERSION = "1.1.0";
+export const EF_VERSION = "1.1.1";
 
 /**
  * The most recent version whose EF-side SOURCE actually changed (#127).

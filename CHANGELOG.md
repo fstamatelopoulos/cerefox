@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.1] -- 2026-08-07
+
 ### Fixed
 - `cerefox web start` now prints the reason when the daemon refuses to boot
   (e.g. a schema below the client's minimum) instead of "not responding yet …
