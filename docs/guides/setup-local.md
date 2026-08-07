@@ -145,12 +145,19 @@ cerefox-local start          # start a stopped container
 cerefox-local stop           # stop it (your data persists in the Docker volume)
 cerefox-local restart
 cerefox-local logs -f        # follow the logs
-cerefox-local upgrade        # upgrade to the newest release + recreate (keeps data + OPENAI key)
+cerefox-local upgrade        # newest stable release + recreate (keeps data + OPENAI key)
 cerefox-local upgrade v1.2.3 # pin an exact version (also how you downgrade)
 cerefox-local upgrade --latest  # follow the moving :latest tag from now on
 cerefox-local uninstall          # remove the container, KEEP the data volume
 cerefox-local uninstall --purge  # remove the container AND delete the data volume
 ```
+
+> **Coming from an image older than v1.1.0?** Run `cerefox-local upgrade v1.1.1`
+> (an explicit tag) once. A bare `upgrade` on those versions re-pulled the pinned
+> tag and reported success without changing anything (#153), and it cannot fix
+> itself: the launcher on your host is refreshed out of the container image, so an
+> old image keeps reinstalling the old launcher. See
+> [`upgrading.md`](upgrading.md).
 
 `upgrade` is the single update path: it pulls the newest image, recreates the container,
 and refreshes the `cerefox-local` script itself. Because the CLI, web server, PostgREST,

@@ -18,6 +18,33 @@ to re-run.
 > repo `.env` to `~/.cerefox/.env`, deploy the server, and wire up your agent.
 > After that you're on the end-user path below.
 
+> ### Cerefox Local on an image older than v1.1.0: upgrade once with an explicit tag
+>
+> If your container is on **v1.0.6 or earlier**, run this once:
+>
+> ```bash
+> cerefox-local upgrade v1.1.1     # or any newer tag
+> ```
+>
+> A bare `cerefox-local upgrade` will **not** get you off an old image, and it
+> fails quietly: it prints "Pulling …", "container (re)started" and "refreshed
+> cerefox-local from the new image", having changed nothing. Before v1.1.0 a bare
+> `upgrade` re-pulled the **pinned** tag rather than resolving the newest release
+> (#153).
+>
+> The reason it cannot fix itself is a bootstrap loop: the `cerefox-local`
+> launcher on your host is refreshed *out of the container image* at the end of
+> every upgrade, so an old image keeps reinstalling the old launcher. Naming a
+> tag explicitly bypasses the pin, pulls the new image, and the new launcher
+> comes with it. `curl … install-local.sh | sh` also works, since the installer
+> writes the launcher directly.
+>
+> **After that, a bare `cerefox-local upgrade` behaves as you would expect**: it
+> resolves the newest *stable* release and pins that exact version. It does not
+> start following the moving `:latest` tag — that is what `upgrade --latest`
+> does, and automatic operations (`init`, `start`, `restart`) never follow a
+> moving tag by design (#100).
+
 ## End-user upgrade
 
 > ### Upgrading to v1.1.0 — `cerefox server deploy` is required
