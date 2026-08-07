@@ -62,6 +62,9 @@ export function SettingsPage() {
     onSuccess: (_res, vars) => {
       showSuccess(`Saved ${vars.key}`);
       void queryClient.invalidateQueries({ queryKey: ["config"] });
+      // AnalyticsPage caches this key separately (["config", <key>]); without
+      // this it keeps showing the pre-toggle value.
+      void queryClient.invalidateQueries({ queryKey: ["config", vars.key] });
       setDrafts((d) => {
         const next = { ...d };
         delete next[vars.key];
@@ -132,8 +135,11 @@ export function SettingsPage() {
         title="CLI equivalent"
         commands={[
           { cmd: "cerefox config list" },
-          { cmd: "cerefox config get", args: "relations_enabled" },
-          { cmd: "cerefox config set", args: "relations_enabled true" },
+          { cmd: "cerefox config get", args: "min_search_score" },
+          // Deliberately a neutral key. `relations_enabled true` would be a
+          // copy-pasteable command that switches on the one feature shipped
+          // dormant on purpose — an example should show the syntax, not nudge.
+          { cmd: "cerefox config set", args: "min_search_score 0.6" },
         ]}
       />
 
@@ -201,8 +207,10 @@ function ConfigRow({
     <Card withBorder padding="sm" radius="sm" data-testid={`config-row-${entry.key}`}>
       <Group justify="space-between" align="flex-start" wrap="nowrap">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Group gap="xs">
-            <Code>{entry.key}</Code>
+          <Group gap="xs" wrap="nowrap" align="baseline">
+            <Text size="sm" fw={500}>
+              {entry.description}
+            </Text>
             {entry.value === null && (
               <Badge size="xs" variant="light" color="gray">
                 default
@@ -214,9 +222,16 @@ function ConfigRow({
               </Badge>
             )}
           </Group>
-          <Text size="sm" c="dimmed" mt={4}>
-            {entry.description}
-          </Text>
+          {/* The key is the identifier used by `cerefox config set` and the
+              docs — needed, but secondary to what the setting actually does. */}
+          <Code style={{ fontSize: "0.72rem" }}>{entry.key}</Code>
+
+          {!overridden && entry.env_var && (
+            <Text size="xs" c="dimmed" mt={6} data-testid={`config-overridable-${entry.key}`}>
+              Can be overridden per machine with <Code>{entry.env_var}</Code>. Not set
+              here, so the value above is what this server uses.
+            </Text>
+          )}
 
           {overridden && (
             <Alert
