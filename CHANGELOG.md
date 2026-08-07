@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.0] -- 2026-08-07
+
 First minor since 1.0.0. Consolidated from `1.1.0-beta.1` … `beta.8`; the
 per-beta sections below remain as granular history.
 
