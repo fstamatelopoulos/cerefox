@@ -21,8 +21,14 @@ export interface ConfigEntry {
   high_impact: boolean;
   impact_note: string | null;
   /**
-   * Set when a CEREFOX_* variable on this server overrides the stored value.
-   * The DB value is then not what this server actually uses.
+   * Name of the CEREFOX_* variable that CAN override this key on a given
+   * machine, or null if the key has no local override. Always reported, so the
+   * escape hatch is discoverable before it surprises anyone.
+   */
+  env_var?: string | null;
+  /**
+   * Set when that variable IS overriding the stored value on this server —
+   * meaning the DB value is not what this server actually uses.
    */
   env_override: ConfigEnvOverride | null;
 }

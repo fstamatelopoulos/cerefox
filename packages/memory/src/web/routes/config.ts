@@ -73,6 +73,13 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
           group: spec.group,
           high_impact: spec.highImpact ?? false,
           impact_note: spec.impactNote ?? null,
+          // Two distinct facts, deliberately separate:
+          //   env_var       — this key CAN be overridden per machine (always
+          //                   reported, so the escape hatch is discoverable
+          //                   before it ever surprises anyone).
+          //   env_override  — it IS being overridden right now, on this server,
+          //                   which means the stored value is not what runs.
+          env_var: envVar ?? null,
           env_override: envValue ? { name: envVar, value: envValue } : null,
         };
       }),

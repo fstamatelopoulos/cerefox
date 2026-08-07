@@ -259,6 +259,17 @@ test.describe("Settings", () => {
     if (overridden.length === 0) {
       await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
     }
+
+    // Overridable-but-not-overridden is a DIFFERENT, quieter statement: the
+    // escape hatch should be discoverable before it ever surprises anyone,
+    // without implying the shown value is wrong.
+    const overridable = (cfg.keys as Array<{ key: string; env_var?: string | null; env_override: unknown }>)
+      .filter((k) => k.env_var && k.env_override === null);
+    for (const k of overridable) {
+      await expect(page.getByTestId(`config-overridable-${k.key}`)).toBeVisible();
+      // ...and it must NOT also claim to be overridden.
+      await expect(page.getByTestId(`config-override-${k.key}`)).toHaveCount(0);
+    }
   });
 
   test("toggling a high-impact key asks for confirmation first", async ({ page, request }) => {
