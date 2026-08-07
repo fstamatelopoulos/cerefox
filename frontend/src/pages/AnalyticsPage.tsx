@@ -181,7 +181,7 @@ export function AnalyticsPage() {
         <Title order={2}>Analytics</Title>
         <Group gap="md">
           <Tooltip
-            label="Opt-in. Logs each read/write (operation metadata only — no content) to the usage log, powering these charts and the dashboard's agent-activity card."
+            label="Opt-in. Logs each read/write (operation metadata only — no content) to the usage log, powering these charts and the dashboard's agent-activity card. Same setting as usage_tracking_enabled on the Settings page — either place works."
             multiline
             w={300}
             withArrow
