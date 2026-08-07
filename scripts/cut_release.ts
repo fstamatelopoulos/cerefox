@@ -402,6 +402,51 @@ function parseChangelog(text: string): ChangelogParts {
  */
 const UNRELEASED_PLACEHOLDER = "Open roadmap.";
 
+/**
+ * A released CHANGELOG section must still match the tag it was cut from.
+ *
+ * Entries intended for the next release keep landing in the PREVIOUS one. The
+ * mechanism is subtle: an author (human or agent) anchors an edit on nearby
+ * entry text, then a cut promotes that text out of [Unreleased] and into the
+ * versioned section — so the next edit finds the anchor inside a released
+ * section and inserts there. [Unreleased] is left holding only the placeholder
+ * and the notes are attributed to a version that never contained them.
+ *
+ * This has happened three times (beta.3, beta.4, beta.6). The empty-[Unreleased]
+ * gate catches the symptom; this catches the cause, and says where the text went.
+ *
+ * Only the most recent released section is checked: that is where a promoted
+ * anchor lives, so it is where the misfiling always lands.
+ */
+function checkReleasedSectionUnchanged(changelogText: string): void {
+  const m = changelogText.match(/^## \[(v[^\]]+)\][^\n]*$/m);
+  if (!m) return;                       // no released sections yet
+  const tag = m[1];
+
+  const atTag = run("git", ["show", `${tag}:CHANGELOG.md`]);
+  if (atTag.status !== 0) return;       // tag or file absent — nothing to compare
+
+  const sectionOf = (text: string): string | null => {
+    const start = text.indexOf(`## [${tag}]`);
+    if (start === -1) return null;
+    const next = text.indexOf("\n## [", start + 5);
+    return next === -1 ? text.slice(start) : text.slice(start, next);
+  };
+
+  const released = sectionOf(atTag.stdout);
+  const current = sectionOf(changelogText);
+  if (released === null || current === null) return;
+  if (released.trim() === current.trim()) return;
+
+  die(
+    `The ${tag} section of CHANGELOG.md has changed since that release was cut.\n` +
+      `  A released section is history and should never move. This almost always means\n` +
+      `  notes meant for the NEXT release were inserted into the previous one — check\n` +
+      `  whether the ${tag} section contains entries that belong under [Unreleased],\n` +
+      `  and move them. Compare with:  git diff ${tag} -- CHANGELOG.md`,
+  );
+}
+
 function unreleasedHasContent(body: string): boolean {
   const stripped = body
     .replace(/^---\s*$/gm, "")  // section dividers
@@ -654,6 +699,7 @@ async function main(): Promise<void> {
   info("Parsing CHANGELOG.md…");
   const changelogText = readFileSync(CHANGELOG_FILE, "utf8");
   const parts = parseChangelog(changelogText);
+  checkReleasedSectionUnchanged(changelogText);
   if (!unreleasedHasContent(parts.unreleasedBody)) {
     die(
       "[Unreleased] section in CHANGELOG.md is empty. " +
