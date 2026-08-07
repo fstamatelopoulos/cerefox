@@ -100,6 +100,28 @@ Open roadmap.
   **Requires a server redeploy** — schema 0.10.2 → 0.10.3, migration 0016. The
   1.1.0 upgrade already mandates one for the retry-storm fix, so this adds no
   extra step.
+- **Retrieval tuning moved into the store as well; the `.env` overrides are
+  retired.** `CEREFOX_MIN_SEARCH_SCORE`, `CEREFOX_MIN_TERM_COVERAGE` and
+  `CEREFOX_SEARCH_ALPHA` are no longer read. They describe the *store*, not the
+  machine asking: the right similarity floor depends on which embedder produced
+  the vectors, and every client querying one database must use the same embedder
+  (`doctor` enforces exactly that). So there was never a case where two clients
+  should legitimately disagree — only a way for search to rank differently
+  depending on who asked. One `cerefox config set` (or the Settings page) now
+  governs the CLI, the web UI, local and remote MCP, and the Edge Functions
+  alike. The same applies to the Edge Functions' `Deno.env` secrets, which could
+  previously override the store from the other side.
+
+  Per-call overrides are unchanged and still win: `cerefox search --min-score`,
+  the MCP `min_score` / `alpha` parameters.
+
+  **Cerefox Local** keeps its higher floor for the nomic embedder by seeding
+  `min_search_score = 0.6` into its own `cerefox_config` at container init,
+  rather than carrying it in the environment.
+
+  Stale `.env` lines are surfaced in two places rather than silently ignored:
+  `cerefox doctor` lists them with a copy-pasteable command carrying your value
+  into the store, and the **Settings** page flags the affected key directly.
 - **Bulk-rewrite warning thresholds raised** — `migrate-format` 200 → 1,000
   documents, `reindex` 1,000 → 5,000 chunks. The thresholds were originally set
   low because a contributor's Disk IO depletion appeared to follow a large

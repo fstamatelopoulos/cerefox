@@ -86,33 +86,7 @@ function readUnitInterval(name: string): number | undefined {
 export const DEFAULT_SEARCH_ALPHA = 0.7;
 
 export function getSearchAlpha(): number {
-  return readUnitInterval("CEREFOX_SEARCH_ALPHA") ?? DEFAULT_SEARCH_ALPHA;
-}
-
-/**
- * The retrieval tunables a client should actually SEND to the RPCs (#133).
- *
- * Returns undefined when the operator has expressed no preference, so the
- * parameter is omitted and the server resolves it: `cerefox_config` first,
- * then the built-in default. That is what lets one `cerefox config set` govern
- * every access path. When a value IS configured here it wins, preserving the
- * chain: per-call argument > client env > deployment config > built-in.
- *
- * `min_search_score` has one subtlety: the local embedder needs a higher floor
- * (nomic scores unrelated text ~0.4–0.55), so an explicitly local embedder
- * counts as "configured" even when CEREFOX_MIN_SEARCH_SCORE is unset —
- * otherwise omitting the parameter would silently apply the OpenAI-calibrated
- * default to a local deployment.
- */
-export function getConfiguredMinSearchScore(): number | undefined {
-  const explicit = readUnitInterval("CEREFOX_MIN_SEARCH_SCORE");
-  if (explicit !== undefined) return explicit;
-  if (readEnv("CEREFOX_EMBEDDER") === "local") return DEFAULT_MIN_SEARCH_SCORE_LOCAL;
-  return undefined;
-}
-
-export function getConfiguredSearchAlpha(): number | undefined {
-  return readUnitInterval("CEREFOX_SEARCH_ALPHA");
+  return DEFAULT_SEARCH_ALPHA;
 }
 
 /**
@@ -127,23 +101,46 @@ export function getConfiguredSearchAlpha(): number | undefined {
  * EF path doesn't use the host `.env` anyway).
  */
 export function getMinSearchScore(): number {
-  const fallback =
-    readEnv("CEREFOX_EMBEDDER") === "local"
-      ? DEFAULT_MIN_SEARCH_SCORE_LOCAL
-      : DEFAULT_MIN_SEARCH_SCORE;
-  return readUnitInterval("CEREFOX_MIN_SEARCH_SCORE") ?? fallback;
+  return readEnv("CEREFOX_EMBEDDER") === "local"
+    ? DEFAULT_MIN_SEARCH_SCORE_LOCAL
+    : DEFAULT_MIN_SEARCH_SCORE;
 }
 
 /**
- * CEREFOX_MIN_TERM_COVERAGE (v1.0.4): user-configurable default for the
- * OR-fallback term-coverage gate. Returns undefined when unset/invalid —
- * callers then OMIT p_min_term_coverage from the RPC call, deferring to the
- * server default (0.5) and staying compatible with pre-0.9.1 servers
- * (an unknown named argument fails the PostgREST function match).
+ * Retrieval tuning is server-side state, not a per-machine preference.
+ *
+ * These used to read CEREFOX_MIN_SEARCH_SCORE / CEREFOX_SEARCH_ALPHA /
+ * CEREFOX_MIN_TERM_COVERAGE so a client could override the store's setting.
+ * That was the wrong model: the right similarity floor depends on which
+ * embedder produced the vectors, and the embedder is a property of the STORE —
+ * every client querying one database must use the same one (`doctor` enforces
+ * exactly that). So there is no case where two clients should legitimately
+ * disagree, and an override only creates a way for search to behave differently
+ * depending on who asked.
+ *
+ * All three now return undefined: the parameter is omitted and the RPC resolves
+ * `cerefox_config`, then the built-in default. One `cerefox config set` — or the
+ * Settings page — governs every access path.
+ *
+ * Cerefox Local still needs its higher floor for the nomic embedder; it seeds
+ * `min_search_score` into its own `cerefox_config` at container init rather than
+ * carrying it in the environment.
+ *
+ * A per-call argument (`--min-score`, the MCP `min_score` param) still wins, as
+ * it always did. `cerefox doctor` reports the retired variables if still set.
  */
-export function getMinTermCoverage(): number | undefined {
-  return readUnitInterval("CEREFOX_MIN_TERM_COVERAGE");
+export function getConfiguredMinSearchScore(): number | undefined {
+  return undefined;
 }
+
+export function getConfiguredSearchAlpha(): number | undefined {
+  return undefined;
+}
+
+export function getMinTermCoverage(): number | undefined {
+  return undefined;
+}
+
 
 export function applyByteBudget(
   rows: unknown[],

@@ -40,10 +40,18 @@ function unwrapScalarRpc(data: unknown): string | null {
  * success on save, and the server keeps searching at `0.7` — a page that lies
  * about the system it configures is worse than no page.
  */
-const ENV_OVERRIDES: Record<string, string> = {
+/**
+ * Variables that used to override these keys per machine and are no longer
+ * read (v1.1.0). Reported so the UI can warn that a stale `.env` line is inert
+ * — the same job `cerefox doctor` does, at the moment someone is looking at the
+ * setting it refers to.
+ */
+const RETIRED_ENV_VARS: Record<string, string> = {
   min_search_score: "CEREFOX_MIN_SEARCH_SCORE",
   min_term_coverage: "CEREFOX_MIN_TERM_COVERAGE",
   search_alpha: "CEREFOX_SEARCH_ALPHA",
+  version_retention_hours: "CEREFOX_VERSION_RETENTION_HOURS",
+  version_cleanup_enabled: "CEREFOX_VERSION_CLEANUP_ENABLED",
 };
 
 export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
@@ -56,7 +64,7 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
           p_key: spec.key,
         });
         const stored = error ? null : unwrapScalarRpc(data);
-        const envVar = ENV_OVERRIDES[spec.key];
+        const envVar = RETIRED_ENV_VARS[spec.key];
         // Report the override only when it is actually set *on this server*.
         // Another machine running its own MCP server may differ, which the UI
         // says rather than pretending this is the whole picture.
@@ -74,13 +82,14 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
           high_impact: spec.highImpact ?? false,
           impact_note: spec.impactNote ?? null,
           // Two distinct facts, deliberately separate:
-          //   env_var       — this key CAN be overridden per machine (always
-          //                   reported, so the escape hatch is discoverable
-          //                   before it ever surprises anyone).
-          //   env_override  — it IS being overridden right now, on this server,
-          //                   which means the stored value is not what runs.
+          //   env_var        — the retired variable that used to control this
+          //                    key, if any (informational only).
+          //   retired_env_set — that variable is STILL present in this server's
+          //                    environment and is now inert. Worth saying out
+          //                    loud: a stale line that looks applied but does
+          //                    nothing is the failure mode this release fixes.
           env_var: envVar ?? null,
-          env_override: envValue ? { name: envVar, value: envValue } : null,
+          retired_env_set: envValue ? { name: envVar, value: envValue } : null,
         };
       }),
     );

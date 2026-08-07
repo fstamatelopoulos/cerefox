@@ -131,7 +131,11 @@ describe("search recall refinement (28I, live)", () => {
   test("coverage gate: one real term among nonsense is never a confident hit (v1.0.4)", () => {
     // 1-of-5 coverage — the post-1.0.3 over-relaxation returned these as
     // unflagged results; now they must be flagged fallback or empty.
-    const res = run(["search", `${PRESENT[0]} zzqix vvbot kktle wmtos`, "--json"]);
+    // Explicit --min-score: this test is about the COVERAGE gate, so it must not
+    // silently depend on whatever floor the store happens to be configured with.
+    // It previously inherited one from CEREFOX_MIN_SEARCH_SCORE, which v1.1.0
+    // retired — leaving the test asserting the store's config rather than the gate.
+    const res = run(["search", `${PRESENT[0]} zzqix vvbot kktle wmtos`, "--min-score", "0.7", "--json"]);
     expect(res.status).toBe(0);
     const results = JSON.parse(res.stdout).results as Array<{ below_confidence?: boolean }>;
     if (results.length > 0) {
@@ -140,7 +144,7 @@ describe("search recall refinement (28I, live)", () => {
   });
 
   test("nothing-matches query: flagged candidates or clean no-results — never an error", () => {
-    const res = run(["search", `${ABSENT} vandrobar plixofene`]);
+    const res = run(["search", `${ABSENT} vandrobar plixofene`, "--min-score", "0.7"]);
     expect(res.status).toBe(0);
     const flagged = res.stdout.includes("confidence threshold");
     const empty = res.stdout.includes("No results found.");

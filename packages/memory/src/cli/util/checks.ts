@@ -157,6 +157,9 @@ export function checkConfig(): CheckResult {
 const RETIRED_ENV_VARS: ReadonlyArray<{ name: string; configKey: string; since: string }> = [
   { name: "CEREFOX_VERSION_RETENTION_HOURS", configKey: "version_retention_hours", since: "v1.1.0" },
   { name: "CEREFOX_VERSION_CLEANUP_ENABLED", configKey: "version_cleanup_enabled", since: "v1.1.0" },
+  { name: "CEREFOX_MIN_SEARCH_SCORE", configKey: "min_search_score", since: "v1.1.0" },
+  { name: "CEREFOX_MIN_TERM_COVERAGE", configKey: "min_term_coverage", since: "v1.1.0" },
+  { name: "CEREFOX_SEARCH_ALPHA", configKey: "search_alpha", since: "v1.1.0" },
 ];
 
 export function checkRetiredEnvVars(): CheckResult {
@@ -164,25 +167,29 @@ export function checkRetiredEnvVars(): CheckResult {
   if (set.length === 0) {
     return { name: "retired env", status: "ok", detail: "no retired variables set" };
   }
-  const names = set.map((v) => v.name).join(", ");
-  // Carry their value across. Someone who set this deliberately should not have
-  // to look up what they chose in order to keep it — the command below is
-  // copy-pasteable and preserves their intent exactly.
+  // Carry their values across. Someone who chose these deliberately should not
+  // have to look up what they picked in order to keep it.
   const moves = set
     .map((v) => `cerefox config set ${v.configKey} ${(process.env[v.name] ?? "").trim()}`)
-    .join("  &&  ");
+    .join("\n      ");
+  const names = set.map((v) => v.name).join(", ");
+  const prunedWasDisabled = set.some((v) => v.configKey.startsWith("version_"));
+
   return {
     name: "retired env",
     status: "warn",
-    detail: `${names} ${set.length === 1 ? "is" : "are"} set but no longer read (since ${set[0].since}).`,
+    detail:
+      `${names} ${set.length === 1 ? "is" : "are"} set in your .env but ` +
+      `${set.length === 1 ? "is" : "are"} no longer read (moved into the database in ${set[0].since}).`,
     hint:
-      "Version retention moved into the store, so one policy governs every client — " +
-      "it used to depend on whichever client wrote last. Nothing has been deleted: " +
-      "the upgrade DISABLED version pruning on this store so a silent config change " +
-      "could not quietly discard history. Set your policy explicitly — to keep what " +
-      "your .env asked for: " +
+      "These are server-side settings, so they now live in the database and one value " +
+      "governs every client.\n    " +
+      (prunedWasDisabled
+        ? "Your data is safe: the upgrade switched version pruning OFF and deleted nothing.\n    "
+        : "") +
+      "To carry your settings over, run:\n      " +
       moves +
-      "  — then delete the variable from your .env. Safe to delete: nothing reads it.",
+      "\n    Then delete those lines from your .env — nothing reads them.",
   };
 }
 

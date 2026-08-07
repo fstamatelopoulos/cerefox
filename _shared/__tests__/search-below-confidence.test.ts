@@ -136,9 +136,11 @@ describe("getMinTermCoverage env parsing (v1.0.4)", () => {
     delete process.env[KEY];
     expect(getMinTermCoverage()).toBeUndefined();
   });
-  test("valid value parses", () => {
+  // Retired in v1.1.0: the coverage gate is the store's policy, so the client
+  // omits the parameter and cerefox_config resolves it for every access path.
+  test("a set value is ignored — the store's config governs", () => {
     process.env[KEY] = "0.3";
-    expect(getMinTermCoverage()).toBe(0.3);
+    expect(getMinTermCoverage()).toBeUndefined();
   });
   test("out-of-range / junk → undefined", () => {
     process.env[KEY] = "1.5";
@@ -148,7 +150,7 @@ describe("getMinTermCoverage env parsing (v1.0.4)", () => {
   });
 });
 
-describe("getSearchAlpha + Deno.env fallback (v1.0.6)", () => {
+describe("getSearchAlpha — retired env override (v1.1.0)", () => {
   const { getSearchAlpha, DEFAULT_SEARCH_ALPHA } = require("../mcp-tools/_utils.ts");
   const KEY = "CEREFOX_SEARCH_ALPHA";
   const prior = process.env[KEY];
@@ -163,29 +165,21 @@ describe("getSearchAlpha + Deno.env fallback (v1.0.6)", () => {
     expect(getSearchAlpha()).toBe(DEFAULT_SEARCH_ALPHA);
   });
 
-  test("valid env value wins", () => {
+  // Retired in v1.1.0. Retrieval tuning describes the store, so it lives in
+  // cerefox_config and one value governs every access path. A client variable
+  // that could change ranking for one caller and not another was the bug.
+  test("process.env no longer overrides", () => {
     process.env[KEY] = "0.25";
-    expect(getSearchAlpha()).toBe(0.25);
-  });
-
-  test("out-of-range falls back to the default", () => {
-    process.env[KEY] = "7";
     expect(getSearchAlpha()).toBe(DEFAULT_SEARCH_ALPHA);
   });
 
-  test("Deno.env is read when process.env has nothing (Edge Function secrets)", () => {
+  // Same reasoning for the Edge Function path: a Function secret overriding the
+  // store's policy is the identical category error, just hosted elsewhere.
+  test("Deno.env (Edge Function secrets) no longer overrides either", () => {
     delete process.env[KEY];
     (globalThis as { Deno?: unknown }).Deno = {
       env: { get: (k: string) => (k === KEY ? "0.9" : undefined) },
     };
-    expect(getSearchAlpha()).toBe(0.9);
-  });
-
-  test("process.env still wins over Deno.env", () => {
-    process.env[KEY] = "0.1";
-    (globalThis as { Deno?: unknown }).Deno = {
-      env: { get: () => "0.9" },
-    };
-    expect(getSearchAlpha()).toBe(0.1);
+    expect(getSearchAlpha()).toBe(DEFAULT_SEARCH_ALPHA);
   });
 });
