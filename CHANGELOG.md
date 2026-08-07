@@ -9,46 +9,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
-
----
-
-## [v1.1.0-beta.6] -- 2026-08-06
-
-### Fixed
-- **A deterministic conflict was raised under a "retryable" SQLSTATE, causing
-  unbounded retry storms** (reported by
-  [@tdebasis](https://github.com/tdebasis)). `cerefox_ingest_document` raised
-  `CEREFOX_CONFLICT` with SQLSTATE `40001` (`serialization_failure`) — the one
-  PostgreSQL class whose contract promises *"this was transient, retry and it
-  may succeed"*. PostgREST maps it to a retryable HTTP status, so retry-aware
-  infrastructure replayed the request. But an optimistic-concurrency conflict is
-  **deterministic**: the same stale token fails identically forever, so "retry
-  until it clears" meant retry until something died.
-
-  Reproduced and measured on a live project:
-
-  | | Before (`40001`) | After (`PT409`) |
-  |---|---|---|
-  | HTTP response | 504 after 125s | **409 after 636ms** |
-  | RPC executions per request | **68,825** | **1** |
-  | After the client gave up | kept running past 153,000 executions | stopped |
-
-  The contributor's project ran the loop for roughly a day — **~47 million
-  calls** — which exhausted its Disk IO budget and needed a hung connection
-  killed by hand. Conflicts now raise `PT409` (PostgREST's convention → HTTP 409
-  Conflict), which nothing retries.
-
-  Also: a **blank** `expected_content_hash` (empty or whitespace) is now treated
-  as *absent* rather than stale, raising `CEREFOX_TOKEN_REQUIRED` (400). `''` is
-  not NULL, so it slipped past the absent-token branch into the conflict branch,
-  where it could never match a real hash — a permanent failure wearing a
-  retryable code, which is the exact shape that triggered the incident.
-
-  **Requires a server redeploy** (`cerefox server deploy`) — schema 0.10.1 →
-  0.10.2, migration 0015. Client detection is unchanged: every transport matches
-  the `CEREFOX_CONFLICT:` message prefix, never the SQLSTATE.
-
 ### Documentation
 - **Relations are now documented for users.** The headline 1.1.0 feature shipped
   with no user-facing docs: `cli.md` never mentioned the `cerefox relation`
@@ -66,7 +26,6 @@ Open roadmap.
   retry-storm fix lives in `rpcs.sql` and upgrading the client alone leaves the
   database on the old behaviour.
 
-### Changed
 - **Version retention is now a property of the store, not of each client.**
   `cerefox_snapshot_version` took the retention window and cleanup flag as
   parameters, and every client filled them from its own environment — so the
@@ -122,6 +81,46 @@ Open roadmap.
   Stale `.env` lines are surfaced in two places rather than silently ignored:
   `cerefox doctor` lists them with a copy-pasteable command carrying your value
   into the store, and the **Settings** page flags the affected key directly.
+
+---
+
+## [v1.1.0-beta.6] -- 2026-08-06
+
+### Fixed
+- **A deterministic conflict was raised under a "retryable" SQLSTATE, causing
+  unbounded retry storms** (reported by
+  [@tdebasis](https://github.com/tdebasis)). `cerefox_ingest_document` raised
+  `CEREFOX_CONFLICT` with SQLSTATE `40001` (`serialization_failure`) — the one
+  PostgreSQL class whose contract promises *"this was transient, retry and it
+  may succeed"*. PostgREST maps it to a retryable HTTP status, so retry-aware
+  infrastructure replayed the request. But an optimistic-concurrency conflict is
+  **deterministic**: the same stale token fails identically forever, so "retry
+  until it clears" meant retry until something died.
+
+  Reproduced and measured on a live project:
+
+  | | Before (`40001`) | After (`PT409`) |
+  |---|---|---|
+  | HTTP response | 504 after 125s | **409 after 636ms** |
+  | RPC executions per request | **68,825** | **1** |
+  | After the client gave up | kept running past 153,000 executions | stopped |
+
+  The contributor's project ran the loop for roughly a day — **~47 million
+  calls** — which exhausted its Disk IO budget and needed a hung connection
+  killed by hand. Conflicts now raise `PT409` (PostgREST's convention → HTTP 409
+  Conflict), which nothing retries.
+
+  Also: a **blank** `expected_content_hash` (empty or whitespace) is now treated
+  as *absent* rather than stale, raising `CEREFOX_TOKEN_REQUIRED` (400). `''` is
+  not NULL, so it slipped past the absent-token branch into the conflict branch,
+  where it could never match a real hash — a permanent failure wearing a
+  retryable code, which is the exact shape that triggered the incident.
+
+  **Requires a server redeploy** (`cerefox server deploy`) — schema 0.10.1 →
+  0.10.2, migration 0015. Client detection is unchanged: every transport matches
+  the `CEREFOX_CONFLICT:` message prefix, never the SQLSTATE.
+
+### Changed
 - **Bulk-rewrite warning thresholds raised** — `migrate-format` 200 → 1,000
   documents, `reindex` 1,000 → 5,000 chunks. The thresholds were originally set
   low because a contributor's Disk IO depletion appeared to follow a large
