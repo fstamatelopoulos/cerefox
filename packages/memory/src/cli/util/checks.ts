@@ -145,6 +145,44 @@ export function checkConfig(): CheckResult {
   };
 }
 
+
+/**
+ * Env vars that used to configure something and no longer do.
+ *
+ * Silently-ignored configuration is the failure mode that produced two separate
+ * bugs in one week (`CEREFOX_BACKUP_DIR` read before `.env` was loaded;
+ * `CEREFOX_ENV_LABEL` never wired). A setting that looks applied but does
+ * nothing is worse than one that was never offered, so `doctor` names them.
+ */
+const RETIRED_ENV_VARS: ReadonlyArray<{ name: string; configKey: string; since: string }> = [
+  { name: "CEREFOX_VERSION_RETENTION_HOURS", configKey: "version_retention_hours", since: "v1.1.0" },
+  { name: "CEREFOX_VERSION_CLEANUP_ENABLED", configKey: "version_cleanup_enabled", since: "v1.1.0" },
+];
+
+export function checkRetiredEnvVars(): CheckResult {
+  const set = RETIRED_ENV_VARS.filter((v) => (process.env[v.name] ?? "").trim() !== "");
+  if (set.length === 0) {
+    return { name: "retired env", status: "ok", detail: "no retired variables set" };
+  }
+  const names = set.map((v) => v.name).join(", ");
+  // Carry their value across. Someone who set this deliberately should not have
+  // to look up what they chose in order to keep it — the command below is
+  // copy-pasteable and preserves their intent exactly.
+  const moves = set
+    .map((v) => `cerefox config set ${v.configKey} ${(process.env[v.name] ?? "").trim()}`)
+    .join("  &&  ");
+  return {
+    name: "retired env",
+    status: "warn",
+    detail: `${names} ${set.length === 1 ? "is" : "are"} set but no longer read (since ${set[0].since}).`,
+    hint:
+      "Version retention moved into the store, so one policy governs every client — " +
+      "it used to depend on whichever client wrote last. To keep your current setting: " +
+      moves +
+      "  — then delete the variable from your .env. Safe to delete: nothing reads it.",
+  };
+}
+
 export async function checkSupabase(): Promise<CheckResult> {
   let settings;
   try {
@@ -757,6 +795,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "version", phase: "Reading package version", run: () => checkVersion() },
     { name: "config", phase: "Resolving config", run: () => checkConfig() },
     { name: "legacy env", phase: "Checking legacy env shadowing", run: () => checkLegacyShadowEnv() },
+    { name: "retired env", phase: "Checking retired env vars", run: () => checkRetiredEnvVars() },
     { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },

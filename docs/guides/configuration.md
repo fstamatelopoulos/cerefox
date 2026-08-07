@@ -240,8 +240,8 @@ Cerefox automatically archives previous document content whenever a document is 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CEREFOX_VERSION_RETENTION_HOURS` | `48` | How many hours to keep archived document versions. Versions older than this are lazily deleted the next time the same document is updated. Always keeps at least the most recent version regardless of age. |
-| `CEREFOX_VERSION_CLEANUP_ENABLED` | `true` | When `true`, old versions are lazily deleted during updates (respecting `VERSION_RETENTION_HOURS`). Versions marked as `archived` are always protected. When `false`, all versions are retained indefinitely (immutable mode). |
+| `CEREFOX_VERSION_RETENTION_HOURS` | **Retired in v1.1.0 — no longer read.** | Version retention is now a property of the store: `cerefox config set version_retention_hours <hours>`, or the **Settings** page. It moved because it used to be passed per-call from each client's environment, so the surviving history depended on which client wrote last. `cerefox doctor` reports the variable if it is still set. |
+| `CEREFOX_VERSION_CLEANUP_ENABLED` | **Retired in v1.1.0 — no longer read.** | Use `cerefox config set version_cleanup_enabled <true\|false>` (or **Settings**). Set to `false` to keep every version forever. Cleanup never deletes the most recent version, nor any version marked `archived`. |
 
 **How versioning works:**
 
@@ -266,7 +266,7 @@ cerefox document get <document-id> --version-id <version-id>
 |----------|---------|-------------|
 | `CEREFOX_BACKUP_DIR` | `~/.cerefox/backups` | Local directory where file system backups are stored. Created automatically if it doesn't exist. **Use an absolute path** — a relative value (such as the pre-v0.3.0 `./backups`) resolves against the current working directory, so snapshots scatter depending on where you run the command; `backup create` warns when it sees one. Does **not** follow `CEREFOX_CONFIG_DIR`, so a second environment must set it explicitly. |
 | `CEREFOX_ENV_LABEL` | _(unset)_ | Names a non-production environment (e.g. `staging`). Purely cosmetic and inert when unset. When set: the web UI shows a banner on every page, `doctor` shows `[LABEL]` on its title line, `backup create` puts the label in the snapshot filename and payload, and `backup restore` warns when a snapshot's environment differs from the target's. See [`staging-env.md`](staging-env.md). |
-| `CEREFOX_VERSION_RETENTION_HOURS` | `48` | How long to retain archived document versions (hours). The most recent version is always kept regardless of this setting. |
+| `CEREFOX_VERSION_RETENTION_HOURS` | **Retired in v1.1.0 — no longer read.** | Version retention is now a property of the store: `cerefox config set version_retention_hours <hours>`, or the **Settings** page. It moved because it used to be passed per-call from each client's environment, so the surviving history depended on which client wrote last. `cerefox doctor` reports the variable if it is still set. |
 
 ---
 

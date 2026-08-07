@@ -67,6 +67,29 @@ Open roadmap.
   database on the old behaviour.
 
 ### Changed
+- **Version retention is now a property of the store, not of each client.**
+  `cerefox_snapshot_version` took the retention window and cleanup flag as
+  parameters, and every client filled them from its own environment — so the
+  surviving version history depended on **which client wrote last**. An operator
+  could set "keep everything" on their machine and still lose versions the
+  moment an agent running defaults saved a document. Retention describes the
+  data, so it now lives with the data: `version_retention_hours` and
+  `version_cleanup_enabled` in `cerefox_config`, editable from the CLI
+  (`cerefox config set`) or the **Settings** page.
+
+  `CEREFOX_VERSION_RETENTION_HOURS` and `CEREFOX_VERSION_CLEANUP_ENABLED` are
+  **retired and no longer read**. `cerefox doctor` reports them if still set,
+  and prints a copy-pasteable command carrying your existing value across, so
+  keeping your current policy is one paste and a `.env` line deletion.
+
+  Unchanged, and worth restating: cleanup never deletes the most recent version,
+  nor any version marked `archived`. Setting `version_cleanup_enabled=false`
+  keeps every version forever — useful for audit-trail stores, at the cost of
+  unbounded growth, since versions carry embeddings.
+
+  **Requires a server redeploy** — schema 0.10.2 → 0.10.3, migration 0016. The
+  1.1.0 upgrade already mandates one for the retry-storm fix, so this adds no
+  extra step.
 - **Bulk-rewrite warning thresholds raised** — `migrate-format` 200 → 1,000
   documents, `reindex` 1,000 → 5,000 chunks. The thresholds were originally set
   low because a contributor's Disk IO depletion appeared to follow a large

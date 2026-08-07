@@ -37,11 +37,12 @@ import { showError, showSuccess } from "../utils/notifications";
  * report success while the server kept using a different number.
  */
 
-const GROUP_ORDER = ["Retrieval", "Governance", "Features"] as const;
+const GROUP_ORDER = ["Retrieval", "Retention", "Governance", "Features"] as const;
 
 const GROUP_BLURB: Record<string, string> = {
   Retrieval: "How search ranks and filters results.",
   Governance: "Attribution and audit requirements for agent calls.",
+  Retention: "How long document version history is kept.",
   Features: "Optional capabilities, off until you turn them on.",
 };
 
