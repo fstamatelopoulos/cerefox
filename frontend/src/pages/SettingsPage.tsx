@@ -198,6 +198,19 @@ function ConfigRow({
   saving: boolean;
 }) {
   const current = draft ?? entry.effective;
+  // Mirrors `doctor`'s logic (v1.1.0): a leftover .env line whose value is
+  // already in the store is inert trivia; one that DIFFERS means the operator's
+  // tuning is silently not in effect, which is the case worth shouting about.
+  // Numeric compare so 0.7 and 0.70 are the same value, not a false alarm.
+  const retiredMatchesStored = (() => {
+    const envValue = entry.retired_env_set?.value;
+    if (envValue === undefined) return false;
+    const a = Number(envValue);
+    const b = Number(entry.effective);
+    return Number.isFinite(a) && Number.isFinite(b)
+      ? a === b
+      : envValue.trim() === entry.effective.trim();
+  })();
   const dirty = draft !== undefined && draft !== entry.effective;
 
   return (
@@ -226,7 +239,7 @@ function ConfigRow({
           {entry.retired_env_set && (
             <Alert
               icon={<IconAlertTriangle size={14} />}
-              color="yellow"
+              color={retiredMatchesStored ? "gray" : "yellow"}
               mt="xs"
               p="xs"
               data-testid={`config-retired-env-${entry.key}`}
@@ -238,8 +251,19 @@ function ConfigRow({
                   no longer read
                 </Text>
                 . This setting moved into the database in v1.1.0 so one value governs
-                every client. The value shown here is what actually runs — delete that
-                line from your <Code>.env</Code>; nothing reads it.
+                every client.{" "}
+                {retiredMatchesStored ? (
+                  <>
+                    The stored value already matches, so nothing changes: delete that line
+                    from your <Code>.env</Code>.
+                  </>
+                ) : (
+                  <Text span fw={600}>
+                    Your .env asked for {entry.retired_env_set.value}, but{" "}
+                    {entry.effective} is what actually runs. Set it here if you want the
+                    old value back, then delete the line from your .env.
+                  </Text>
+                )}
               </Text>
             </Alert>
           )}

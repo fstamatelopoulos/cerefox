@@ -15,6 +15,7 @@
  */
 
 import type { Command } from "commander";
+import { readFileSync } from "node:fs";
 
 import { c, eprintln, info, localTimestamp, println } from "../../../../../_shared/cli-core/index.ts";
 import { buildWebServer, CompatibilityError } from "../../web/server.ts";
@@ -70,6 +71,24 @@ async function runForeground(host: string, port: number, watch?: boolean): Promi
   }
 }
 
+/**
+ * Pull a "Refusing to start" block out of the tail of the daemon log.
+ *
+ * `web start` detaches, so a refusal lands in the log rather than on the
+ * operator's terminal — and "not responding yet" reads like a slow boot when it
+ * is actually a hard, permanent stop with a known remedy.
+ */
+function readStartupRefusal(): string | null {
+  try {
+    const tail = readFileSync(daemonPaths.logFile, "utf8").slice(-4000);
+    const idx = tail.lastIndexOf("Refusing to start:");
+    if (idx === -1) return null;
+    return tail.slice(idx).trim();
+  } catch {
+    return null;
+  }
+}
+
 export function registerWeb(program: Command): void {
   const web = program
     .command("web")
@@ -118,10 +137,21 @@ export function registerWeb(program: Command): void {
               println(c.dim(`  Logs:    ${daemonPaths.logFile}`));
               println(c.dim(`  Stop:    cerefox web stop`));
             } else {
-              eprintln(
-                `Started (pid ${outcome.pid}) but it is not responding on :${port} yet.\n` +
-                  `Check the log for errors: ${daemonPaths.logFile}`,
-              );
+              // The most common reason a daemon fails to answer is not a slow
+              // boot: it is the compatibility gate refusing outright, which
+              // happens to every user upgrading across a minimum-schema bump.
+              // The log already explains it precisely, so surface that instead
+              // of sending someone to go find it.
+              const refusal = readStartupRefusal();
+              if (refusal) {
+                eprintln(refusal);
+                eprintln(`\nFull log: ${daemonPaths.logFile}`);
+              } else {
+                eprintln(
+                  `Started (pid ${outcome.pid}) but it is not responding on :${port} yet.\n` +
+                    `Check the log for errors: ${daemonPaths.logFile}`,
+                );
+              }
               process.exit(1);
             }
             break;

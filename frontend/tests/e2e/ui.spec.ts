@@ -252,6 +252,12 @@ test.describe("Settings", () => {
       const warn = page.getByTestId(`config-retired-env-${k.key}`);
       await expect(warn).toBeVisible();
       await expect(warn).toContainText("no longer read");
+      // It must distinguish "already carried over" (inert leftover) from "your
+      // tuning is NOT in effect" — the second is the only one that needs action,
+      // and saying "just delete the line" there would be actively wrong.
+      const entry = k as unknown as { effective: string; retired_env_set: { value: string } };
+      const same = Number(entry.retired_env_set.value) === Number(entry.effective);
+      await expect(warn).toContainText(same ? "already matches" : "is what actually runs");
     }
     // Whether or not any are set, the page itself must render.
     await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
