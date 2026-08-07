@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.1.0-beta.7] -- 2026-08-07
+
 ### Documentation
 - **Relations are now documented for users.** The headline 1.1.0 feature shipped
   with no user-facing docs: `cli.md` never mentioned the `cerefox relation`
