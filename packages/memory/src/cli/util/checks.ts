@@ -162,25 +162,81 @@ const RETIRED_ENV_VARS: ReadonlyArray<{ name: string; configKey: string; since: 
   { name: "CEREFOX_SEARCH_ALPHA", configKey: "search_alpha", since: "v1.1.0" },
 ];
 
-export function checkRetiredEnvVars(): CheckResult {
+export async function checkRetiredEnvVars(): Promise<CheckResult> {
   const set = RETIRED_ENV_VARS.filter((v) => (process.env[v.name] ?? "").trim() !== "");
   if (set.length === 0) {
     return { name: "retired env", status: "ok", detail: "no retired variables set" };
   }
-  // Carry their values across. Someone who chose these deliberately should not
-  // have to look up what they picked in order to keep it.
-  const moves = set
+
+  // Compare against what the store actually holds. Telling someone to run a
+  // command they have already run is how a warning teaches people to ignore it —
+  // and once the value is carried over, a leftover .env line is inert trivia,
+  // not a problem. Severity should track whether anything is actually at stake.
+  const settings = loadSettings();
+  const stored = new Map<string, string | null>();
+  if (settings.supabaseUrl && settings.supabaseKey) {
+    await Promise.all(
+      set.map(async (v) => {
+        try {
+          const resp = await fetch(
+            `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/cerefox_get_config`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: settings.supabaseKey,
+                Authorization: `Bearer ${settings.supabaseKey}`,
+              },
+              body: JSON.stringify({ p_key: v.configKey }),
+            },
+          );
+          if (!resp.ok) return;
+          const body = (await resp.json()) as unknown;
+          stored.set(v.configKey, typeof body === "string" ? body : null);
+        } catch {
+          // Unreachable store: fall through to the conservative message below.
+        }
+      }),
+    );
+  }
+
+  const sameNumber = (a: string, b: string): boolean => {
+    const x = Number(a);
+    const y = Number(b);
+    return Number.isFinite(x) && Number.isFinite(y) ? x === y : a.trim() === b.trim();
+  };
+
+  const pending = set.filter((v) => {
+    const dbValue = stored.get(v.configKey);
+    if (dbValue == null) return true;                       // not carried over yet
+    return !sameNumber(dbValue, (process.env[v.name] ?? "").trim());
+  });
+
+  const names = set.map((v) => v.name).join(", ");
+  const isAre = set.length === 1 ? "is" : "are";
+
+  if (pending.length === 0) {
+    // Everything already lives in the store — nothing is at stake, so this is
+    // informational rather than a warning.
+    return {
+      name: "retired env",
+      status: "skipped",
+      detail: `${names} ${isAre} set in your .env but no longer read — the store already has the same value.`,
+      hint: "Safe to delete those lines; nothing reads them.",
+    };
+  }
+
+  const moves = pending
     .map((v) => `cerefox config set ${v.configKey} ${(process.env[v.name] ?? "").trim()}`)
     .join("\n      ");
-  const names = set.map((v) => v.name).join(", ");
-  const prunedWasDisabled = set.some((v) => v.configKey.startsWith("version_"));
+  const prunedWasDisabled = pending.some((v) => v.configKey.startsWith("version_"));
 
   return {
     name: "retired env",
     status: "warn",
     detail:
-      `${names} ${set.length === 1 ? "is" : "are"} set in your .env but ` +
-      `${set.length === 1 ? "is" : "are"} no longer read (moved into the database in ${set[0].since}).`,
+      `${names} ${isAre} set in your .env but ${isAre} no longer read ` +
+      `(moved into the database in ${set[0].since}).`,
     hint:
       "These are server-side settings, so they now live in the database and one value " +
       "governs every client.\n    " +
