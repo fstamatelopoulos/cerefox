@@ -9,7 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+- `cerefox web start` now prints the reason when the daemon refuses to boot
+  (e.g. a schema below the client's minimum) instead of "not responding yet …
+  check the log". The log already said it precisely; you had to go find it.
+- The Settings page distinguishes a retired `.env` line that **matches** the
+  stored value (inert, safe to delete) from one that **differs** (your tuning is
+  silently not in effect). It previously said "delete that line" in both cases.
+  `doctor` already made this distinction; the web UI did not.
 
 ---
 
