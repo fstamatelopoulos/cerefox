@@ -28,7 +28,7 @@ export interface ConfigKeySpec {
   min?: number;
   max?: number;
   /** Grouping for display. */
-  group: "Governance" | "Retrieval" | "Features";
+  group: "Governance" | "Retrieval" | "Retention" | "Features";
   /**
    * True when flipping this key changes what other software sees — not just
    * how this install behaves. Surfaces get an explicit confirmation step
@@ -93,6 +93,26 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
     min: 0,
     max: 1,
     group: "Retrieval",
+  },
+  {
+    key: "version_retention_hours",
+    description:
+      "How long to keep archived versions of a document. The most recent version and any explicitly archived one are always kept, whatever this says.",
+    kind: "number",
+    defaultValue: "48",
+    min: 0,
+    group: "Retention",
+  },
+  {
+    key: "version_cleanup_enabled",
+    description:
+      "Prune versions past the retention window. Turn off to keep every version forever (immutable history).",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "Retention",
+    highImpact: true,
+    impactNote:
+      "Turning this OFF keeps every version of every document forever. Versions carry embeddings, so storage grows without bound — on a busy store that is the largest table. Turning it back ON prunes on the next save, which permanently deletes versions outside the window (the newest and any archived ones survive).",
   },
   {
     key: "relations_enabled",

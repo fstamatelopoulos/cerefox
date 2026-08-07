@@ -940,7 +940,10 @@ $$;
 -- Parameters:
 --   p_document_id     : Document to snapshot
 --   p_source          : How the update was triggered ('file','paste','agent','manual')
---   p_retention_hours : Retention window in hours (default: 48)
+--   p_retention_hours : Retention window in hours. NULL (default) reads
+--                       `version_retention_hours` from cerefox_config, else 48.
+--                       A non-NULL value overrides the store policy for this
+--                       call only.
 --
 -- Returns: (version_id, version_number, chunk_count, total_chars) of the new version
 
@@ -949,8 +952,11 @@ DROP FUNCTION IF EXISTS cerefox_snapshot_version(UUID, TEXT, INT, BOOLEAN);
 CREATE FUNCTION cerefox_snapshot_version(
     p_document_id       UUID,
     p_source            TEXT    DEFAULT 'manual',
-    p_retention_hours   INT     DEFAULT 48,
-    p_cleanup_enabled   BOOLEAN DEFAULT TRUE
+    -- NULL (the new default) means "use the store's policy from
+    -- cerefox_config". Passing a value still overrides, for deliberate one-off
+    -- admin operations — but callers no longer supply one by accident.
+    p_retention_hours   INT     DEFAULT NULL,
+    p_cleanup_enabled   BOOLEAN DEFAULT NULL
 )
 RETURNS TABLE (
     version_id     UUID,
@@ -967,6 +973,18 @@ DECLARE
     v_version_number INT;
     v_chunk_count    INT;
     v_total_chars    INT;
+    -- Resolve the retention policy from the STORE, not the caller.
+    --
+    -- These used to arrive as parameters filled from each client's own env, so
+    -- the surviving version history depended on which client wrote last: an
+    -- agent running defaults would prune versions that an operator had
+    -- configured to keep. Retention describes the data, so it belongs to the
+    -- data. Same COALESCE(param, config, default) shape the retrieval tunables
+    -- already use.
+    v_retention      INT     := COALESCE(p_retention_hours,
+                                         cerefox_config_int('version_retention_hours', 48));
+    v_cleanup        BOOLEAN := COALESCE(p_cleanup_enabled,
+                                         cerefox_config_bool('version_cleanup_enabled', TRUE));
 BEGIN
     -- Count current chunks to record in the version metadata
     SELECT COUNT(*), COALESCE(SUM(char_count), 0)
@@ -999,11 +1017,11 @@ BEGIN
     -- but always keep the most recently created version (the one we just made).
     -- Skip archived versions (archived=true) -- they are protected from cleanup.
     -- Skip cleanup entirely if p_cleanup_enabled is false (immutable mode).
-    IF p_cleanup_enabled THEN
+    IF v_cleanup THEN
         DELETE FROM cerefox_document_versions dv
         WHERE dv.document_id = p_document_id
           AND dv.archived IS NOT TRUE
-          AND dv.created_at < NOW() - (p_retention_hours || ' hours')::INTERVAL
+          AND dv.created_at < NOW() - (v_retention || ' hours')::INTERVAL
           AND dv.id != (
               SELECT id FROM cerefox_document_versions
               WHERE document_id = p_document_id
@@ -2055,6 +2073,43 @@ BEGIN
 END;
 $$;
 
+-- Integer/boolean companions to cerefox_config_float. Same contract: fall back
+-- to the caller's default when the key is unset or unparseable, so a malformed
+-- row can never break a write path.
+CREATE OR REPLACE FUNCTION cerefox_config_int(p_key TEXT, p_fallback INT)
+RETURNS INT
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_raw TEXT;
+BEGIN
+    SELECT value INTO v_raw FROM cerefox_config WHERE key = p_key;
+    IF v_raw IS NULL OR btrim(v_raw) = '' THEN RETURN p_fallback; END IF;
+    RETURN v_raw::INT;
+EXCEPTION WHEN others THEN
+    RETURN p_fallback;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cerefox_config_bool(p_key TEXT, p_fallback BOOLEAN)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_raw TEXT;
+BEGIN
+    SELECT value INTO v_raw FROM cerefox_config WHERE key = p_key;
+    IF v_raw IS NULL OR btrim(v_raw) = '' THEN RETURN p_fallback; END IF;
+    RETURN lower(btrim(v_raw)) = 'true';
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION cerefox_set_config(p_key TEXT, p_value TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -2068,6 +2123,10 @@ DECLARE
     v_allowed TEXT[] := ARRAY[
         'usage_tracking_enabled', 'require_requestor_identity', 'requestor_identity_format',
         'min_search_score', 'min_term_coverage', 'search_alpha',
+        -- Version retention: a property of the STORE, not of whichever client
+        -- happens to write. Previously passed per-call from client env, so the
+        -- surviving history depended on who saved last.
+        'version_retention_hours', 'version_cleanup_enabled',
         -- Optional features, off by default (iteration 29).
         'relations_enabled'
     ];
@@ -2264,7 +2323,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.10.2'::TEXT;
+    SELECT '0.10.3'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

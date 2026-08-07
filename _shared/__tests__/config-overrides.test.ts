@@ -21,6 +21,7 @@ const TOUCHED = [
   "CEREFOX_OPENAI_BASE_URL",
   "CEREFOX_OPENAI_EMBEDDING_MODEL",
   "CEREFOX_OPENAI_EMBEDDING_DIMENSIONS",
+  "CEREFOX_EMBEDDER",
 ];
 
 function clear() {
@@ -31,17 +32,22 @@ afterEach(clear);
 
 describe("getMinSearchScore", () => {
   it("defaults to 0.5", () => expect(getMinSearchScore()).toBe(0.5));
-  it("honors a valid override", () => {
+
+  // Retired in v1.1.0. The similarity floor depends on which embedder produced
+  // the vectors, and the embedder belongs to the STORE — every client querying
+  // one database must use the same one. So the value lives in cerefox_config,
+  // and a client-side variable must NOT be able to make search behave
+  // differently depending on who asked.
+  it("ignores CEREFOX_MIN_SEARCH_SCORE — the store's config governs", () => {
     process.env.CEREFOX_MIN_SEARCH_SCORE = "0.7";
-    expect(getMinSearchScore()).toBe(0.7);
+    expect(getMinSearchScore()).toBe(0.5);
   });
-  it("falls back to 0.5 on out-of-range or non-numeric values", () => {
-    process.env.CEREFOX_MIN_SEARCH_SCORE = "2";
-    expect(getMinSearchScore()).toBe(0.5);
-    process.env.CEREFOX_MIN_SEARCH_SCORE = "-1";
-    expect(getMinSearchScore()).toBe(0.5);
-    process.env.CEREFOX_MIN_SEARCH_SCORE = "bogus";
-    expect(getMinSearchScore()).toBe(0.5);
+
+  // Still keyed on the embedder: this is the built-in fallback used when the
+  // store has expressed no preference, not an override of one.
+  it("still uses the higher local-embedder default", () => {
+    process.env.CEREFOX_EMBEDDER = "local";
+    expect(getMinSearchScore()).toBe(0.6);
   });
 });
 

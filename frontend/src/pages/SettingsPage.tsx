@@ -13,7 +13,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -37,11 +37,12 @@ import { showError, showSuccess } from "../utils/notifications";
  * report success while the server kept using a different number.
  */
 
-const GROUP_ORDER = ["Retrieval", "Governance", "Features"] as const;
+const GROUP_ORDER = ["Retrieval", "Retention", "Governance", "Features"] as const;
 
 const GROUP_BLURB: Record<string, string> = {
   Retrieval: "How search ranks and filters results.",
   Governance: "Attribution and audit requirements for agent calls.",
+  Retention: "How long document version history is kept.",
   Features: "Optional capabilities, off until you turn them on.",
 };
 
@@ -123,7 +124,6 @@ export function SettingsPage() {
                   onDraft={(v) => setDrafts((d) => ({ ...d, [entry.key]: v }))}
                   onSave={(v) => save(entry, v)}
                   saving={mutation.isPending}
-                  configFile={data?.config_file ?? null}
                 />
               ))}
             </Stack>
@@ -190,18 +190,15 @@ function ConfigRow({
   onDraft,
   onSave,
   saving,
-  configFile,
 }: {
   entry: ConfigEntry;
   draft: string | undefined;
   onDraft: (v: string) => void;
   onSave: (v: string) => void;
   saving: boolean;
-  configFile: string | null;
 }) {
   const current = draft ?? entry.effective;
   const dirty = draft !== undefined && draft !== entry.effective;
-  const overridden = entry.env_override !== null;
 
   return (
     <Card withBorder padding="sm" radius="sm" data-testid={`config-row-${entry.key}`}>
@@ -226,37 +223,23 @@ function ConfigRow({
               docs — needed, but secondary to what the setting actually does. */}
           <Code style={{ fontSize: "0.72rem" }}>{entry.key}</Code>
 
-          {!overridden && entry.env_var && (
-            <Text size="xs" c="dimmed" mt={6} data-testid={`config-overridable-${entry.key}`}>
-              Can be overridden per machine with <Code>{entry.env_var}</Code>. Not set
-              here, so the value above is what this server uses.
-            </Text>
-          )}
-
-          {overridden && (
+          {entry.retired_env_set && (
             <Alert
-              icon={<IconInfoCircle size={14} />}
-              color="blue"
+              icon={<IconAlertTriangle size={14} />}
+              color="yellow"
               mt="xs"
               p="xs"
-              data-testid={`config-override-${entry.key}`}
+              data-testid={`config-retired-env-${entry.key}`}
             >
               <Text size="xs">
-                Overridden on this server by <Code>{entry.env_override?.name}</Code> ={" "}
-                <Code>{entry.env_override?.value}</Code>. The stored value below still
-                applies to clients that do not set that variable.
-              </Text>
-              <Text size="xs" mt={6}>
-                To change it, edit{" "}
-                {configFile ? <Code>{configFile}</Code> : <Code>your .env</Code>} on this
-                machine and restart the server — it is read once at startup. Cerefox never
-                writes that file from the browser:{" "}
+                <Code>{entry.retired_env_set.name}</Code> is still set in this server's
+                environment (to <Code>{entry.retired_env_set.value}</Code>) but is{" "}
                 <Text span fw={600}>
-                  it also holds your Supabase secret key, OpenAI API key and database
-                  password
+                  no longer read
                 </Text>
-                , so treat it like a password store — keep it at mode 0600 and out of
-                version control.
+                . This setting moved into the database in v1.1.0 so one value governs
+                every client. The value shown here is what actually runs — delete that
+                line from your <Code>.env</Code>; nothing reads it.
               </Text>
             </Alert>
           )}

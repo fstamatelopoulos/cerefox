@@ -22,13 +22,19 @@ which is why none of it can destabilise a normal single-environment install.
 
 ## Why bother
 
-Two things are hard to test safely against production:
+Three things, and the third turned out to matter most:
 
 - **Upgrades.** A release that changes the schema will run its migrations
   against your real data exactly once. Staging lets you rehearse that on a copy.
 - **Destructive or expensive operations.** `server migrate-format` re-embeds
   every legacy document (real spend, rewrites chunks). Proving it on a copy
   first turns an act of faith into a measurement.
+- **Development.** A store you are willing to break is the cheapest way to turn
+  a claim about runtime behaviour into a measurement. During the 1.1.0 cycle this
+  found a retry loop executing 68,825 times per request, a `migrate-format` that
+  reported success while converting nothing, and a `backup create` that failed
+  against older servers — none visible from the code or the test suite. Keep it
+  available during development stretches, not only around releases.
 
 ---
 

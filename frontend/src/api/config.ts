@@ -20,17 +20,14 @@ export interface ConfigEntry {
   /** Flipping this changes what other software sees; confirm before writing. */
   high_impact: boolean;
   impact_note: string | null;
-  /**
-   * Name of the CEREFOX_* variable that CAN override this key on a given
-   * machine, or null if the key has no local override. Always reported, so the
-   * escape hatch is discoverable before it surprises anyone.
-   */
+  /** The retired CEREFOX_* variable that used to control this key, if any. */
   env_var?: string | null;
   /**
-   * Set when that variable IS overriding the stored value on this server —
-   * meaning the DB value is not what this server actually uses.
+   * Set when that retired variable is still present in the server's
+   * environment. It no longer does anything — the value shown here is what
+   * runs — but a stale line that looks applied is worth flagging.
    */
-  env_override: ConfigEnvOverride | null;
+  retired_env_set?: ConfigEnvOverride | null;
 }
 
 export interface ConfigListResponse {

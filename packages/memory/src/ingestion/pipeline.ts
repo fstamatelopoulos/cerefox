@@ -507,8 +507,12 @@ export class IngestionPipeline {
       author,
       authorType,
       sourceLabel: source,
-      retentionHours: this.settings.versionRetentionHours,
-      cleanupEnabled: this.settings.versionCleanupEnabled,
+      // Deliberately NOT passed: version retention is the store's policy, read
+      // by the RPC from cerefox_config. Sending this client's env values here is
+      // what made the surviving history depend on which client wrote last — an
+      // agent on defaults would prune versions an operator had chosen to keep.
+      // Configure it with `cerefox config set version_retention_hours` or the
+      // Settings page.
       // A forced re-chunk of *identical* content needs no caller-supplied
       // token: the pipeline already treats content-unchanged saves as exempt
       // from the concurrency check (nothing can be lost when the bytes match),

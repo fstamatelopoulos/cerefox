@@ -239,37 +239,22 @@ test.describe("Settings", () => {
     await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
   });
 
-  test("a locally-overridden key says so", async ({ page, request }) => {
+  test("a stale retired env var is flagged as inert", async ({ page, request }) => {
     const cfg = await (await request.get("/api/v1/config")).json();
-    const overridden = (cfg.keys as Array<{ key: string; env_override: unknown }>).filter(
-      (k) => k.env_override !== null,
+    const stale = (cfg.keys as Array<{ key: string; retired_env_set: unknown }>).filter(
+      (k) => k.retired_env_set !== null && k.retired_env_set !== undefined,
     );
 
     await page.goto(`${APP}/settings`);
-    for (const k of overridden) {
-      // The whole point of the badge: the stored value is NOT what this server
-      // uses, and the page must not imply otherwise.
-      const badge = page.getByTestId(`config-override-${k.key}`);
-      await expect(badge).toBeVisible();
-      // ...and it must say how to change it, plus why the UI will not: that
-      // file also holds the Supabase secret key and the database password.
-      await expect(badge).toContainText("restart the server");
-      await expect(badge).toContainText("database password");
+    for (const k of stale) {
+      // A leftover .env line that looks applied but does nothing is exactly the
+      // failure mode v1.1.0 fixes, so the page must say so where the setting is.
+      const warn = page.getByTestId(`config-retired-env-${k.key}`);
+      await expect(warn).toBeVisible();
+      await expect(warn).toContainText("no longer read");
     }
-    if (overridden.length === 0) {
-      await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
-    }
-
-    // Overridable-but-not-overridden is a DIFFERENT, quieter statement: the
-    // escape hatch should be discoverable before it ever surprises anyone,
-    // without implying the shown value is wrong.
-    const overridable = (cfg.keys as Array<{ key: string; env_var?: string | null; env_override: unknown }>)
-      .filter((k) => k.env_var && k.env_override === null);
-    for (const k of overridable) {
-      await expect(page.getByTestId(`config-overridable-${k.key}`)).toBeVisible();
-      // ...and it must NOT also claim to be overridden.
-      await expect(page.getByTestId(`config-override-${k.key}`)).toHaveCount(0);
-    }
+    // Whether or not any are set, the page itself must render.
+    await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
   });
 
   test("toggling a high-impact key asks for confirmation first", async ({ page, request }) => {

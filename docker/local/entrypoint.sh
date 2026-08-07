@@ -26,6 +26,19 @@ echo "[db-init] deploying schema + RPCs (idempotent)…"
 # its behavior against a local-only, non-Supabase DB first).
 ( cd "$APP_DIR" && bun scripts/db_deploy.ts )
 
+# Cerefox Local runs the ONNX nomic embedder, whose cosine scores sit lower than
+# OpenAI's — unrelated text lands around 0.4–0.55, so the OpenAI-calibrated 0.5
+# floor lets weak matches through. This used to travel as CEREFOX_MIN_SEARCH_SCORE
+# in the container environment, but retrieval tuning is a property of the STORE
+# (v1.1.0): one value in cerefox_config governs the CLI, the web UI and every
+# agent alike, instead of depending on which client asked.
+#
+# ON CONFLICT DO NOTHING so an operator who has tuned this keeps their value
+# across container restarts and upgrades.
+echo "[db-init] seeding local-embedder retrieval defaults (idempotent)…"
+psql "$CEREFOX_DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+  "INSERT INTO cerefox_config (key, value) VALUES ('min_search_score', '0.6') ON CONFLICT (key) DO NOTHING;"
+
 echo "[db-init] applying PostgREST roles + grants (idempotent)…"
 psql "$CEREFOX_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROLES_SQL"
 

@@ -145,6 +145,54 @@ export function checkConfig(): CheckResult {
   };
 }
 
+
+/**
+ * Env vars that used to configure something and no longer do.
+ *
+ * Silently-ignored configuration is the failure mode that produced two separate
+ * bugs in one week (`CEREFOX_BACKUP_DIR` read before `.env` was loaded;
+ * `CEREFOX_ENV_LABEL` never wired). A setting that looks applied but does
+ * nothing is worse than one that was never offered, so `doctor` names them.
+ */
+const RETIRED_ENV_VARS: ReadonlyArray<{ name: string; configKey: string; since: string }> = [
+  { name: "CEREFOX_VERSION_RETENTION_HOURS", configKey: "version_retention_hours", since: "v1.1.0" },
+  { name: "CEREFOX_VERSION_CLEANUP_ENABLED", configKey: "version_cleanup_enabled", since: "v1.1.0" },
+  { name: "CEREFOX_MIN_SEARCH_SCORE", configKey: "min_search_score", since: "v1.1.0" },
+  { name: "CEREFOX_MIN_TERM_COVERAGE", configKey: "min_term_coverage", since: "v1.1.0" },
+  { name: "CEREFOX_SEARCH_ALPHA", configKey: "search_alpha", since: "v1.1.0" },
+];
+
+export function checkRetiredEnvVars(): CheckResult {
+  const set = RETIRED_ENV_VARS.filter((v) => (process.env[v.name] ?? "").trim() !== "");
+  if (set.length === 0) {
+    return { name: "retired env", status: "ok", detail: "no retired variables set" };
+  }
+  // Carry their values across. Someone who chose these deliberately should not
+  // have to look up what they picked in order to keep it.
+  const moves = set
+    .map((v) => `cerefox config set ${v.configKey} ${(process.env[v.name] ?? "").trim()}`)
+    .join("\n      ");
+  const names = set.map((v) => v.name).join(", ");
+  const prunedWasDisabled = set.some((v) => v.configKey.startsWith("version_"));
+
+  return {
+    name: "retired env",
+    status: "warn",
+    detail:
+      `${names} ${set.length === 1 ? "is" : "are"} set in your .env but ` +
+      `${set.length === 1 ? "is" : "are"} no longer read (moved into the database in ${set[0].since}).`,
+    hint:
+      "These are server-side settings, so they now live in the database and one value " +
+      "governs every client.\n    " +
+      (prunedWasDisabled
+        ? "Your data is safe: the upgrade switched version pruning OFF and deleted nothing.\n    "
+        : "") +
+      "To carry your settings over, run:\n      " +
+      moves +
+      "\n    Then delete those lines from your .env — nothing reads them.",
+  };
+}
+
 export async function checkSupabase(): Promise<CheckResult> {
   let settings;
   try {
@@ -757,6 +805,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "version", phase: "Reading package version", run: () => checkVersion() },
     { name: "config", phase: "Resolving config", run: () => checkConfig() },
     { name: "legacy env", phase: "Checking legacy env shadowing", run: () => checkLegacyShadowEnv() },
+    { name: "retired env", phase: "Checking retired env vars", run: () => checkRetiredEnvVars() },
     { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
