@@ -94,8 +94,10 @@ SUPABASE_ACCESS_TOKEN=sbp_…                       # account-level; same as pro
 > pass the destination explicitly: `cfx-stg backup create --output-dir
 > ~/.cerefox/staging/backups`.
 
-**Mirror production's tuning** (`CEREFOX_MIN_SEARCH_SCORE`,
-`CEREFOX_MAX_CHUNK_CHARS`, `CEREFOX_MIN_CHUNK_CHARS`, `CEREFOX_EMBEDDER`, …).
+**Mirror production's tuning.** Chunking and embedder settings still live in
+`.env` (`CEREFOX_MAX_CHUNK_CHARS`, `CEREFOX_MIN_CHUNK_CHARS`, `CEREFOX_EMBEDDER`);
+retrieval and retention moved into the database in v1.1.0, so mirror those with
+`cerefox config set` against staging (or the Settings page).
 A staging result only means something if the knobs match; different chunk sizes
 make every comparison noise. **Do not** copy credentials — staging has its own.
 

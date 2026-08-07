@@ -56,9 +56,14 @@ export interface SpawnedServer {
   stop: () => Promise<void>;
 }
 
-export async function waitForPort(url: string, deadlineMs = 5_000): Promise<boolean> {
+export async function waitForPort(
+  url: string,
+  deadlineMs = 5_000,
+  hasExited?: () => boolean,
+): Promise<boolean> {
   const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
+    if (hasExited?.()) return false;   // process gave up; no point polling on
     try {
       const resp = await fetch(url, { method: "GET" });
       if (resp.ok || resp.status === 404) return true;
@@ -70,7 +75,7 @@ export async function waitForPort(url: string, deadlineMs = 5_000): Promise<bool
   return false;
 }
 
-export async function spawnWebServer(): Promise<SpawnedServer> {
+export async function spawnWebServer(): Promise<SpawnedServer | null> {
   if (!existsSync(BIN)) {
     throw new Error(`Built bin not found at ${BIN}. Run \`bun run build\` first.`);
   }
@@ -84,10 +89,24 @@ export async function spawnWebServer(): Promise<SpawnedServer> {
   child.stderr?.on("data", (c: Buffer) => {
     stderr += c.toString();
   });
+  // A compatibility refusal EXITS immediately. Without noticing that we would
+  // poll the full deadline and blow the hook's own timeout, turning a clean
+  // skip into an opaque failure.
+  let exited = false;
+  child.on("exit", () => {
+    exited = true;
+  });
   const base = `http://127.0.0.1:${port}`;
-  const ready = await waitForPort(`${base}/api/v1/version`);
+  const ready = await waitForPort(`${base}/api/v1/version`, 5_000, () => exited);
   if (!ready) {
     child.kill("SIGTERM");
+    // `cerefox web` refuses to boot when the deployed schema is below this
+    // client's minimum. That is correct behaviour, so surface it as a skip
+    // (null) rather than a failure — the same treatment an unreachable Supabase
+    // already gets. Callers already handle a null server by skipping.
+    if (/Refusing to start|below the required/.test(stderr)) {
+      return null;
+    }
     throw new Error(`Web server did not become ready within 5s. stderr:\n${stderr}`);
   }
   const stop = async () => {

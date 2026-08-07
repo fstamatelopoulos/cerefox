@@ -317,7 +317,10 @@ describe("doctor / status (live)", () => {
 
   test("doctor --json returns an array of checks", () => {
     const { stdout, status } = run(["doctor", "--json"]);
-    expect(status).toBe(0);
+    // 0 when everything passes, 1 when a check errors — e.g. a store that is
+    // legitimately behind on schema. This test is about the JSON SHAPE, so it
+    // must not require the environment it happens to run against to be current.
+    expect([0, 1]).toContain(status);
     const parsed = JSON.parse(stdout) as Array<{ name: string; status: string }>;
     expect(Array.isArray(parsed)).toBe(true);
     // We expect at least binary, runtime, version, config, supabase, openai, schema + RPCs.

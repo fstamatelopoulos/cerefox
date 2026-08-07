@@ -9,7 +9,115 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+First minor since 1.0.0. Consolidated from `1.1.0-beta.1` … `beta.8`; the
+per-beta sections below remain as granular history.
+
+> ### Upgrading — read this first
+>
+> **1. `cerefox server deploy` is required, not optional.** Schema 0.9.2 →
+> 0.10.3. The most important fix in this release lives in `rpcs.sql`, so
+> upgrading the client alone leaves your database on the old, defective
+> behaviour. `cerefox doctor` and the web UI both say so until you redeploy.
+> Cerefox Local users need no separate step — the schema ships in the image.
+>
+> **2. Retrieval and retention settings moved into the database.** These five
+> environment variables are no longer read:
+> `CEREFOX_MIN_SEARCH_SCORE`, `CEREFOX_MIN_TERM_COVERAGE`,
+> `CEREFOX_SEARCH_ALPHA`, `CEREFOX_VERSION_RETENTION_HOURS`,
+> `CEREFOX_VERSION_CLEANUP_ENABLED`.
+> If you tuned any of them, **carry the value over** or your store silently
+> reverts to defaults — a lower search-score floor means noisier results.
+> `cerefox doctor` lists exactly what to run and drops the warning once done.
+>
+> **3. Version pruning is switched off on existing stores as a precaution**, so
+> the change above cannot quietly discard version history. Nothing is deleted.
+> Set your policy when convenient: `cerefox config set version_cleanup_enabled true`.
+>
+> **4. If you ran `cerefox server migrate-format` on v1.0.7–v1.1.0-beta.3**, it
+> reported success while converting nothing. Your documents are untouched and no
+> embedding spend was incurred; re-run it on this version.
+
+### Added
+- **Document relations — a typed graph over your knowledge base.** Directed,
+  typed edges between documents (`source --rel_type--> target`), a symmetric-type
+  dictionary, `lifecycle_status`, four RPCs, four MCP tools, and a
+  `cerefox relation` CLI group. **Ships dormant**: the tools are hidden from every
+  agent until `cerefox config set relations_enabled true`. Enabling and disabling
+  are both non-destructive — the flag controls visibility, never data.
+- **Settings page in the web UI** — the browser face of `cerefox config`. Every
+  runtime key with its description, current value and default, grouped Retrieval
+  / Retention / Governance / Features. Settings that change what *other software*
+  sees require an explicit confirmation naming the consequence.
+- **Deployment-wide search settings** (#133) — `min_search_score`,
+  `min_term_coverage` and `search_alpha` in `cerefox_config`, so one value governs
+  the CLI, the web UI, local and remote MCP, and the Edge Functions alike.
+- **`cerefox server migrate-format`** — converts legacy-format documents to the
+  current chunk format by re-ingesting them (re-chunk, re-embed). Opt-in, with
+  `--dry-run`, `--limit` and `--document-id`; resumable, and it skips any document
+  edited mid-run rather than overwriting it.
+- **Backups capture projects, memberships, relations and trashed documents**
+  (format 4). Trash is restored **as trash** — `deleted_at` is replayed, so
+  nothing deleted returns visible. `--no-trash` opts out.
+- **`CEREFOX_ENV_LABEL`** — names a non-production environment. Inert when unset.
+  When set, the label appears on `doctor`'s title line, as a banner on every web
+  UI page, in the backup filename, and in a warning when a snapshot's environment
+  differs from the target's.
+- **`cerefox doctor --strict`** exits non-zero when any check warns, for CI.
+- **Bulk-rewrite scale warning** on `server migrate-format` and `server reindex`,
+  explaining the disk-IO cost before a large job and suggesting batching.
+
+### Changed
+- **Retrieval and retention settings are properties of the store, not of each
+  client.** Previously every client sent its own values from its own environment,
+  so behaviour depended on *which client wrote last* — an agent running defaults
+  could prune version history an operator had deliberately kept, and search could
+  rank differently depending on who asked. They now live in `cerefox_config`.
+  Per-call arguments (`--min-score`, `--alpha`, the MCP equivalents) still win.
+  Cerefox Local seeds its higher nomic floor into its own config at container
+  init. See **Upgrading** above.
+- **Dependency majors taken** (#124): Mantine 8 → 9, `@huggingface/transformers`
+  3 → 4, `commander` 12 → 14, and others. Commander 15 deliberately skipped — it
+  requires Node ≥ 22.12 (#154).
+
+### Fixed
+- **A permanent conflict was raised under a "retryable" SQLSTATE, causing
+  unbounded retry storms** (reported by [@tdebasis](https://github.com/tdebasis)).
+  `cerefox_ingest_document` raised `CEREFOX_CONFLICT` as `40001`
+  (`serialization_failure`) — the one PostgreSQL class that promises "transient,
+  retry me". The conflict is deterministic, so retry-aware infrastructure looped
+  without limit. Measured: **one HTTP request executed the RPC 68,825 times in
+  125s**, and kept running after the client was gone. A contributor's project ran
+  it for ~24 hours and ~47 million calls, exhausting its disk-IO budget.
+  Conflicts now raise `PT409` → HTTP 409, which nothing retries; a blank
+  `expected_content_hash` is treated as *absent* (400) rather than stale.
+  **This is the fix that makes `server deploy` mandatory.**
+- **`server migrate-format` reported success while converting nothing** — the
+  same #164 defect it was written to fix, shipped in v1.0.7. It re-ingests
+  identical content by design, and the pipeline answered an unchanged hash with a
+  metadata-only update. It now forces the re-chunk and counts only documents the
+  pipeline confirms were re-indexed.
+- **Backups**: project memberships were never captured, so every restore landed
+  documents with no project assignments (#166); `backup create` aborted against
+  pre-0.10.0 servers, breaking snapshots taken *before* an upgrade; `restore` was
+  not idempotent, colliding on the primary key for documents edited between
+  snapshots; and `CEREFOX_BACKUP_DIR` set in `.env` was ignored entirely.
+- **`CEREFOX_CONFIG_DIR` was silently ignored by contributor scripts.** Bun
+  auto-loads `.env` from the working directory, so `bun scripts/*.ts` used the
+  repo's credentials — `db_deploy.ts --reset` would have wiped the wrong
+  database while naming another on the command line. The named config directory
+  is now authoritative, and `--reset` prints the project it is about to drop.
+- **`.env` is now loaded once at CLI startup.** Settings were loaded lazily, so
+  code reading `process.env.CEREFOX_*` directly saw an unpopulated environment —
+  the root cause behind two separate ignored-setting bugs.
+- **`cerefox web` daemon state follows the active environment**, so a second
+  environment's `web stop` can no longer target the first one's server.
+- **`cerefox doctor`**: no longer claims "All checks passed" alongside warnings
+  (#152); the content-format hint is legible; stale-schema output no longer
+  points at Python scripts deleted at v1.0.0; and `server reindex` no longer
+  claims to convert chunk formats (#164) — it cannot.
+- **UI**: end-to-end tests repaired (#155, 13 → 18 passing); dashboard rows are
+  keyboard reachable and open in a new tab (#165).
+- **`cerefox-local upgrade` actually upgrades** (#153).
 
 ---
 

@@ -18,8 +18,24 @@
  */
 
 export const COMPATIBILITY = {
-  /** Minimum deployed Postgres schema version this client requires. */
-  minSchema: "0.3.1",
+  /**
+   * Minimum deployed Postgres schema version this client requires.
+   *
+   * Raised to 0.10.3 for v1.1.0 — the one release where the client genuinely
+   * hard-requires the server surface rather than merely preferring it.
+   *
+   * From v1.1.0 the client STOPS sending retention and retrieval parameters and
+   * delegates their resolution to `cerefox_config` in the RPCs. Against an older
+   * server those keys are not read, so the RPC falls back to its own built-in
+   * defaults — and an operator who had configured "keep every version" silently
+   * gets pruning at 48 hours on the next save. That is not graceful degradation,
+   * it is quiet data loss, so it warrants an error rather than the usual
+   * "a newer server is available" nudge.
+   *
+   * This raises `doctor` from a warning to an error (exit 1) and turns the web
+   * banner red until `cerefox server deploy` runs. It does not block operations.
+   */
+  minSchema: "0.10.3",
   /** Minimum deployed Edge Function version this client requires. */
   minEdgeFunctions: "0.6.0",
 } as const;

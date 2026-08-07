@@ -62,7 +62,9 @@ data volume, so it survives `cerefox-local upgrade`.
 
 > Scores are calibrated per embedder: with the local model the default semantic
 > threshold is **0.6** (vs 0.5 for OpenAI) because nomic scores unrelated text
-> higher. Override per call with `--min-score` or via `CEREFOX_MIN_SEARCH_SCORE`.
+> higher. The container seeds `min_search_score = 0.6` into its own config at
+> first boot; change it with `cerefox config set min_search_score <value>` or the
+> Settings page, or override a single query with `--min-score`.
 
 ---
 
