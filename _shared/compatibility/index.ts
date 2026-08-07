@@ -35,7 +35,7 @@ export const COMPATIBILITY = {
    * This raises `doctor` from a warning to an error (exit 1) and turns the web
    * banner red until `cerefox server deploy` runs. It does not block operations.
    */
-  minSchema: "0.10.3",
+  minSchema: "0.10.4",
   /** Minimum deployed Edge Function version this client requires. */
   minEdgeFunctions: "0.6.0",
 } as const;

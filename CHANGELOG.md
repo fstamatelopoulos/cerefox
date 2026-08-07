@@ -15,7 +15,10 @@ per-beta sections below remain as granular history.
 > ### Upgrading — read this first
 >
 > **1. `cerefox server deploy` is required, not optional.** Schema 0.9.2 →
-> 0.10.3. The most important fix in this release lives in `rpcs.sql`, so
+> 0.10.4. The minimum supported schema rises with it, which means
+> **`cerefox web` will not start until you redeploy** — the CLI and MCP servers
+> keep working. See [`upgrading.md`](docs/guides/upgrading.md) for exactly what
+> is gated. The most important fix in this release lives in `rpcs.sql`, so
 > upgrading the client alone leaves your database on the old, defective
 > behaviour. `cerefox doctor` and the web UI both say so until you redeploy.
 > Cerefox Local users need no separate step — the schema ships in the image.
@@ -32,6 +35,8 @@ per-beta sections below remain as granular history.
 > **3. Version pruning is switched off on existing stores as a precaution**, so
 > the change above cannot quietly discard version history. Nothing is deleted.
 > Set your policy when convenient: `cerefox config set version_cleanup_enabled true`.
+> The default retention window is now **120 hours** (was 48) — 48 did not survive
+> a weekend, and a Friday mistake found on Monday is exactly when you need it.
 >
 > **4. If you ran `cerefox server migrate-format` on v1.0.7–v1.1.0-beta.3**, it
 > reported success while converting nothing. Your documents are untouched and no

@@ -97,9 +97,9 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
   {
     key: "version_retention_hours",
     description:
-      "How long to keep archived versions of a document. The most recent version and any explicitly archived one are always kept, whatever this says.",
+      "How long to keep archived versions of a document (hours). The most recent version and any explicitly archived one are always kept, whatever this says.",
     kind: "number",
-    defaultValue: "48",
+    defaultValue: "120",
     min: 0,
     group: "Retention",
   },

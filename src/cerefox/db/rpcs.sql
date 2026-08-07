@@ -941,7 +941,9 @@ $$;
 --   p_document_id     : Document to snapshot
 --   p_source          : How the update was triggered ('file','paste','agent','manual')
 --   p_retention_hours : Retention window in hours. NULL (default) reads
---                       `version_retention_hours` from cerefox_config, else 48.
+--                       `version_retention_hours` from cerefox_config, else 120
+--                       (5 days — long enough that a bad edit made on a Friday
+--                       is still recoverable on Monday; 48h was not).
 --                       A non-NULL value overrides the store policy for this
 --                       call only.
 --
@@ -982,7 +984,7 @@ DECLARE
     -- data. Same COALESCE(param, config, default) shape the retrieval tunables
     -- already use.
     v_retention      INT     := COALESCE(p_retention_hours,
-                                         cerefox_config_int('version_retention_hours', 48));
+                                         cerefox_config_int('version_retention_hours', 120));
     v_cleanup        BOOLEAN := COALESCE(p_cleanup_enabled,
                                          cerefox_config_bool('version_cleanup_enabled', TRUE));
 BEGIN
@@ -2323,7 +2325,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.10.3'::TEXT;
+    SELECT '0.10.4'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────
