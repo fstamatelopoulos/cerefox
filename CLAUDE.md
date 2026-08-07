@@ -356,6 +356,23 @@ independent semver line — do **not** sync it to the npm package version. This
 was missed in v0.9.6 (added RPCs without bumping); the gate exists so it can't
 recur.
 
+**Do NOT raise `minSchema` just because the schema moved.** They answer
+different questions:
+
+- *Schema version* — "what does this client bundle?" A deployed server behind it
+  is `above-min-but-old`: a **warning**, everything keeps working.
+- *`minSchema`* (`_shared/compatibility/`) — "below this, the client
+  **misbehaves**." That makes `doctor` error and makes **`cerefox web` refuse to
+  start**. It is a hard gate on a running install.
+
+Raise the minimum only when a client against an older server does something
+*wrong*, not merely something old. The v1.1.0 example: schema went
+0.10.2 → 0.10.3 → 0.10.4, but the minimum is **0.10.3** — that is where the RPCs
+began resolving retention from `cerefox_config`, which the client now depends on
+(against anything older, a "keep every version" policy silently reverts to
+pruning). 0.10.4 only changed a fallback *value*, which degrades gracefully, so
+it does not justify blocking anyone.
+
 ### Rule: before opening a release-intent PR, follow `RELEASING.md`
 
 **Any PR meant to ship a release (or that a release will be cut from) must run

@@ -34,7 +34,11 @@ to re-run.
 >   reverts to pruning — quiet data loss.
 >
 > Because of that second point, v1.1.0 raises the **minimum supported schema**
-> to `0.10.4`. What that actually gates:
+> to `0.10.3` — the version where the RPCs began resolving those settings from
+> `cerefox_config`. (The release ships schema `0.10.4`; the extra step only
+> changed a default value, which degrades gracefully, so it is not part of the
+> minimum. A schema bump does **not** normally raise the minimum.) What the
+> minimum actually gates:
 >
 > | Surface | Below the minimum |
 > |---|---|

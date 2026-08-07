@@ -15,7 +15,7 @@ per-beta sections below remain as granular history.
 > ### Upgrading — read this first
 >
 > **1. `cerefox server deploy` is required, not optional.** Schema 0.9.2 →
-> 0.10.4. The minimum supported schema rises with it, which means
+> 0.10.4, and the minimum supported schema rises to 0.10.3, which means
 > **`cerefox web` will not start until you redeploy** — the CLI and MCP servers
 > keep working. See [`upgrading.md`](docs/guides/upgrading.md) for exactly what
 > is gated. The most important fix in this release lives in `rpcs.sql`, so
