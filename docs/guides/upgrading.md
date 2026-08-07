@@ -20,18 +20,55 @@ to re-run.
 
 ## End-user upgrade
 
-> **Upgrading to v1.1.0: run `cerefox server deploy`, don't defer it.** Most
-> releases let you postpone the server step. This one should not be postponed:
-> schema **0.10.2** fixes a defect where a stale or blank
-> `expected_content_hash` raised its conflict under a SQLSTATE that infrastructure
-> treats as *retryable*. Because the conflict is permanent, retry-aware layers
-> could replay the request without limit — one report reached ~47 million calls
-> over about a day and exhausted the project's disk-IO budget. The fix lives in
-> `rpcs.sql`, so **upgrading the client alone does not apply it**; the database
-> keeps the old behaviour until the RPCs are redeployed. `cerefox doctor` will
-> say so, and the web UI shows a banner.
+> ### Upgrading to v1.1.0 — `cerefox server deploy` is required
 >
-> Cerefox Local users need no separate step — the schema ships inside the image.
+> Most releases let you postpone the server step. **This one does not.** Until
+> you redeploy, the client and the database disagree in ways that cost data:
+>
+> - The conflict fix that stops [unbounded retry
+>   storms](../../CHANGELOG.md) lives in `rpcs.sql`, so upgrading the client
+>   alone leaves the defect live.
+> - The v1.1.0 client stops sending retention and retrieval settings and expects
+>   the **server** to resolve them from `cerefox_config`. An older server does
+>   not read those keys, so a store configured to "keep every version" silently
+>   reverts to pruning — quiet data loss.
+>
+> Because of that second point, v1.1.0 raises the **minimum supported schema**
+> to `0.10.3` — the version where the RPCs began resolving those settings from
+> `cerefox_config`. (The release ships schema `0.10.4`; the extra step only
+> changed a default value, which degrades gracefully, so it is not part of the
+> minimum. A schema bump does **not** normally raise the minimum.) What the
+> minimum actually gates:
+>
+> | Surface | Below the minimum |
+> |---|---|
+> | `cerefox web` | **Refuses to start** — "Refusing to start: the deployed Cerefox server is incompatible with this client" |
+> | `cerefox doctor` | Reports an error and exits non-zero |
+> | Web UI banner | Red, blocking |
+> | CLI commands (`search`, `document`, `ingest`, …) | **Keep working** |
+> | MCP servers (local and remote) | **Keep working** |
+>
+> So the practical effect is: **your web UI is unavailable between upgrading the
+> client and running `server deploy`.** Run them together and the window is
+> seconds. Nothing is destroyed by being in that state — it exists to stop you
+> operating a mismatched pair for days without noticing.
+>
+> **After redeploying**, carry over any settings you had tuned in `.env`.
+> `cerefox doctor` lists them with the exact commands, and stops mentioning them
+> once the store matches. The five retired variables are
+> `CEREFOX_MIN_SEARCH_SCORE`, `CEREFOX_MIN_TERM_COVERAGE`, `CEREFOX_SEARCH_ALPHA`,
+> `CEREFOX_VERSION_RETENTION_HOURS`, `CEREFOX_VERSION_CLEANUP_ENABLED`.
+>
+> **Version pruning is switched off on existing stores** by migration 0016, so
+> the change above cannot quietly discard history. Nothing is deleted. Re-enable
+> when you have chosen a policy:
+> `cerefox config set version_cleanup_enabled true`. The default retention
+> window is now 120 hours (was 48) — long enough that a Friday mistake is still
+> recoverable on Monday.
+>
+> **Cerefox Local** users need no separate step: the schema ships inside the
+> image, so `cerefox-local upgrade` moves both halves together.
+
 
 ```bash
 cerefox self-update      # or: re-run the installer, or bun/npm update -g @cerefox/memory

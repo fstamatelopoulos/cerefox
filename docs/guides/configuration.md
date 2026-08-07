@@ -140,10 +140,10 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 
 > **Which paths read these?** Client-side tunables in this section are read
 > from *your* `.env` by the **CLI**, the **local MCP server**, and `cerefox
-> web`. Since **v1.0.6** the same values are also honored on the **remote MCP /
-> Edge Function path** when set as Supabase **Function secrets**
-> (`supabase secrets set CEREFOX_MIN_SEARCH_SCORE=0.55 --project-ref <ref>`) —
-> the shared helpers read `Deno.env` as well as `process.env`. Per-call
+> web`. **Since v1.1.0 these are database settings only** — the `CEREFOX_*`
+> variables and the equivalent Supabase **Function secrets** are no longer read,
+> on any path. One `cerefox config set` (or the Settings page) governs the CLI,
+> the web UI, local and remote MCP, and the Edge Functions alike. Per-call
 > parameters (`min_score`, `min_term_coverage`, `alpha` on `cerefox_search`)
 > override both. A single setting that governs every path without secrets is
 > tracked as issue #133 (DB-backed config).
@@ -248,7 +248,7 @@ Cerefox automatically archives previous document content whenever a document is 
 When a document's content changes during ingestion, Cerefox calls the `cerefox_snapshot_version` database function before writing new chunks. This function:
 1. Creates a version record in `cerefox_document_versions`
 2. Moves all current chunks to that version (by setting their `version_id`)
-3. If `CEREFOX_VERSION_CLEANUP_ENABLED` is `true`, deletes stale versions older than `CEREFOX_VERSION_RETENTION_HOURS` (skipping archived versions)
+3. If `version_cleanup_enabled` is `true`, deletes versions older than `version_retention_hours` — skipping archived versions and always keeping the most recent one. Both are `cerefox_config` settings (v1.1.0+); before that they came from each client's environment.
 
 Metadata-only updates (same content, different title or project) do **not** create a new version.
 
@@ -413,11 +413,10 @@ Two things the page does deliberately:
   `require_requestor_identity` starts rejecting agents that don't identify
   themselves. Neither is a bare toggle — you get a dialog naming the
   consequence first.
-- **Local overrides are shown, read-only.** If the server has
-  `CEREFOX_MIN_SEARCH_SCORE` (or the `..._TERM_COVERAGE` / `..._SEARCH_ALPHA`
-  equivalents) in its environment, that value beats the stored one *on that
-  machine*, and the row says so. Without this the page would report a value the
-  server isn't using. The page never edits `.env` — that file holds your
+- **Retired `.env` lines are flagged.** If a variable that used to control a
+  setting is still present in the server's environment, the row says so — it no
+  longer does anything, and the value shown is what actually runs. The page
+  never edits `.env` — that file holds your
   service-role key, OpenAI key and database password, and the server only reads
   it at boot.
 

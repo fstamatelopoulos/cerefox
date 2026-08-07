@@ -25,9 +25,14 @@ const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
 const PORT = 18000 + Math.floor(Math.random() * 1000);
 const BASE = `http://127.0.0.1:${PORT}`;
 
-async function waitForPort(url: string, deadlineMs = 5_000): Promise<boolean> {
+async function waitForPort(
+  url: string,
+  deadlineMs = 5_000,
+  hasExited?: () => boolean,
+): Promise<boolean> {
   const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
+    if (hasExited?.()) return false;   // process gave up; no point polling on
     try {
       const resp = await fetch(url, { method: "GET" });
       if (resp.ok || resp.status === 404) return true;
@@ -61,10 +66,27 @@ describe("cerefox web smoke", () => {
     child.stderr.on("data", (c: Buffer) => {
       stderr += c.toString();
     });
+    // A compatibility refusal exits immediately; noticing that turns a 5s
+    // timeout into an instant, explicable skip.
+    let exited = false;
+    child.on("exit", () => {
+      exited = true;
+    });
 
     try {
-      const ready = await waitForPort(`${BASE}/api/v1/version`);
+      const ready = await waitForPort(`${BASE}/api/v1/version`, 5_000, () => exited);
       if (!ready) {
+        // `cerefox web` deliberately refuses to boot when the deployed schema is
+        // below this client's minimum ("Refusing to start"). That is correct
+        // behaviour, not a broken build — a developer whose store is mid-upgrade
+        // should see a skip here, not a red suite. Same probe-and-skip spirit as
+        // the Supabase-backed suites.
+        if (/Refusing to start|below the required/.test(stderr)) {
+          console.log(
+            "(skipped: deployed schema is below this client's minimum — run `cerefox server deploy`)",
+          );
+          return;
+        }
         throw new Error(`Web server did not become ready within 5s. stderr:\n${stderr}`);
       }
 

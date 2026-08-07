@@ -18,8 +18,35 @@
  */
 
 export const COMPATIBILITY = {
-  /** Minimum deployed Postgres schema version this client requires. */
-  minSchema: "0.3.1",
+  /**
+   * Minimum deployed Postgres schema version this client requires.
+   *
+   * Raised to 0.10.3 for v1.1.0 — the one release so far where the client
+   * genuinely hard-requires the server surface rather than merely preferring it.
+   *
+   * From v1.1.0 the client STOPS sending retention and retrieval parameters and
+   * delegates their resolution to `cerefox_config` in the RPCs. Against an older
+   * server those keys are not read, so the RPC falls back to its own built-in
+   * defaults — and an operator who had configured "keep every version" silently
+   * gets pruning at 48 hours on the next save. That is not graceful degradation,
+   * it is quiet data loss, so it warrants an error rather than the usual
+   * "a newer server is available" nudge.
+   *
+   * **This is NOT bumped with every schema change.** A schema bump alone makes
+   * the deployed version merely *older than bundled* — a warning, and everything
+   * keeps running. Raising the MINIMUM says something stronger: "this client
+   * misbehaves against anything older", which makes `doctor` error and makes
+   * `cerefox web` refuse to start. Reserve it for exactly that.
+   *
+   * Worked example, from this release: schema went 0.10.2 -> 0.10.3 -> 0.10.4,
+   * but the minimum is 0.10.3, not 0.10.4. 0.10.3 is where the RPCs began
+   * resolving retention from `cerefox_config`, which the client depends on.
+   * 0.10.4 only changed a fallback VALUE (48h -> 120h) — a 1.1.0 client against
+   * a 0.10.3 server behaves correctly, just with the older default when no
+   * config row exists. That degrades gracefully, so it does not justify
+   * blocking anyone.
+   */
+  minSchema: "0.10.3",
   /** Minimum deployed Edge Function version this client requires. */
   minEdgeFunctions: "0.6.0",
 } as const;

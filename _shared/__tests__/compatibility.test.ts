@@ -8,6 +8,12 @@
 
 import { describe, expect, test } from "bun:test";
 
+// Fixtures track the CURRENT minimum rather than a hardcoded version. These
+// tests are about the classification logic — "at the minimum", "below it" — not
+// about any particular release, and hardcoding a version means every bump of
+// COMPATIBILITY.minSchema breaks them for no real reason (it did, at 1.1.0).
+const AT_MIN = () => COMPATIBILITY.minSchema;
+
 import {
   aggregatorUrlFor,
   checkServerCompatibility,
@@ -109,12 +115,12 @@ describe("checkServerCompatibility", () => {
     const r = await checkServerCompatibility({
       aggregatorUrl: url,
       bearer: "eyJ-fake",
-      bundledSchema: "0.3.1",
+      bundledSchema: AT_MIN(),
       bundledEf: "0.8.0",
       fetchImpl: mockFetch(200, {
         name: "cerefox-mcp",
         version: "0.8.0",
-        schema: "0.3.1",
+        schema: AT_MIN(),
         efs: [
           { name: "cerefox-search", version: "0.8.0" },
           { name: "cerefox-ingest", version: "0.8.0" },
@@ -135,7 +141,7 @@ describe("checkServerCompatibility", () => {
       fetchImpl: mockFetch(200, {
         name: "cerefox-mcp",
         version: "0.8.0",
-        schema: "0.3.1",
+        schema: AT_MIN(),
         efs: [
           { name: "cerefox-search", version: "0.8.0" },
           { name: "cerefox-ingest", version: "0.5.0" }, // stale peer
@@ -168,12 +174,12 @@ describe("checkServerCompatibility", () => {
     const r = await checkServerCompatibility({
       aggregatorUrl: url,
       bearer: "eyJ-fake",
-      bundledSchema: "0.3.1",
+      bundledSchema: AT_MIN(),
       bundledEf: "0.9.0",
       fetchImpl: mockFetch(200, {
         name: "cerefox-mcp",
         version: "0.7.0",
-        schema: "0.3.1",
+        schema: AT_MIN(),
         efs: [{ name: "cerefox-search", version: "0.7.0" }],
         errors: [],
       }),
