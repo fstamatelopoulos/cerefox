@@ -20,6 +20,19 @@ to re-run.
 
 ## End-user upgrade
 
+> **Upgrading to v1.1.0: run `cerefox server deploy`, don't defer it.** Most
+> releases let you postpone the server step. This one should not be postponed:
+> schema **0.10.2** fixes a defect where a stale or blank
+> `expected_content_hash` raised its conflict under a SQLSTATE that infrastructure
+> treats as *retryable*. Because the conflict is permanent, retry-aware layers
+> could replay the request without limit — one report reached ~47 million calls
+> over about a day and exhausted the project's disk-IO budget. The fix lives in
+> `rpcs.sql`, so **upgrading the client alone does not apply it**; the database
+> keeps the old behaviour until the RPCs are redeployed. `cerefox doctor` will
+> say so, and the web UI shows a banner.
+>
+> Cerefox Local users need no separate step — the schema ships inside the image.
+
 ```bash
 cerefox self-update      # or: re-run the installer, or bun/npm update -g @cerefox/memory
 cerefox server deploy    # applies pending migrations, re-applies RPCs, redeploys the 9 Edge Functions
