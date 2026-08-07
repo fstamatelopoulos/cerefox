@@ -177,7 +177,10 @@ export function checkRetiredEnvVars(): CheckResult {
     detail: `${names} ${set.length === 1 ? "is" : "are"} set but no longer read (since ${set[0].since}).`,
     hint:
       "Version retention moved into the store, so one policy governs every client — " +
-      "it used to depend on whichever client wrote last. To keep your current setting: " +
+      "it used to depend on whichever client wrote last. Nothing has been deleted: " +
+      "the upgrade DISABLED version pruning on this store so a silent config change " +
+      "could not quietly discard history. Set your policy explicitly — to keep what " +
+      "your .env asked for: " +
       moves +
       "  — then delete the variable from your .env. Safe to delete: nothing reads it.",
   };

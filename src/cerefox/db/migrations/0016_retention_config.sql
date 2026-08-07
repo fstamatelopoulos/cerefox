@@ -33,10 +33,37 @@
 --
 -- Idempotent: safe to re-run.
 
+-- ── Fail-safe for EXISTING stores ────────────────────────────────────────────
+--
+-- Upgrading silently changes where retention comes from. An operator running
+-- `CEREFOX_VERSION_CLEANUP_ENABLED=false` (or a long window) would, on their
+-- very next save, fall back to the 48-hour default and lose the history they had
+-- deliberately kept. The env var stops being read the moment the client updates,
+-- which is before anyone reads a release note.
+--
+-- So this migration disables pruning on existing stores. Nothing is deleted;
+-- cleanup simply does not run until the operator states a policy. Pruning is
+-- irreversible and not-pruning is not, so the safe default during an unattended
+-- upgrade is to do nothing. `cerefox doctor` and the Settings page both show the
+-- value, and turning it back on is one command.
+--
+-- Only existing databases get this. A fresh deploy STAMPS migrations as applied
+-- rather than running them (see `_shared/db-deploy`), so new installs keep the
+-- ordinary bounded default (48h, cleanup on) — there is no history there to
+-- lose, and unbounded version growth is a poor default to saddle them with.
+--
+-- ON CONFLICT DO NOTHING: if the operator has already chosen a policy, this must
+-- never overwrite it, including on a re-run.
+INSERT INTO cerefox_config (key, value)
+VALUES ('version_cleanup_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;
+
 DO $$
 BEGIN
     RAISE NOTICE
         'Migration 0016: version retention now reads cerefox_config '
         '(version_retention_hours, version_cleanup_enabled). The CEREFOX_VERSION_* '
-        'environment variables are no longer read; `cerefox doctor` reports them if set.';
+        'environment variables are no longer read. Version pruning has been DISABLED '
+        'on this store as an upgrade precaution — nothing was deleted. Set your policy '
+        'with `cerefox config set version_cleanup_enabled true` or the Settings page.';
 END $$;

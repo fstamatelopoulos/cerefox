@@ -127,6 +127,48 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
 - All config has sensible defaults for local development
 - Key settings: `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`, `OPENAI_API_KEY`, `CEREFOX_EMBEDDER`, `CEREFOX_MAX_RESPONSE_BYTES`
 
+### SOP: use the staging environment for live verification
+
+**If a staging environment is configured, prefer it over reasoning for anything
+that touches the database, the RPCs, or a live code path.** It exists to be
+broken; production does not.
+
+This started as a release-rehearsal tool and turned out to be far more useful as
+a *development* tool. Everything below was found by running against staging
+rather than by reading code, and none of it would have been caught by the test
+suite:
+
+- A conflict raised under a retryable SQLSTATE looped **68,825 times per HTTP
+  request** and kept running after the client was gone. The rate and the
+  survival-past-the-client are what sized the incident and proved the fix; both
+  came from a sequence-counted probe against a real PostgREST.
+- `migrate-format` reported success while converting nothing. Only the pending
+  count, measured server-side, exposed it.
+- `backup create` aborted against an older server — visible only by pointing a
+  new client at an old database, which is exactly what two environments give you.
+
+**How to use it:**
+
+```bash
+CEREFOX_CONFIG_DIR=~/.cerefox/staging cerefox <command>   # or the cfx-stg alias
+```
+
+**Rules that keep it trustworthy:**
+
+1. **Never point a destructive experiment at production.** Check the `doctor`
+   title line says `[STAGING]` before anything that writes.
+2. **Clean up after yourself.** Probe functions, sequences, test documents and
+   orphaned transactions all outlive the experiment. A probe that spawns a
+   runaway loop needs `pg_terminate_backend`, not patience.
+3. **Leave it as you found it.** Restore any config you flipped
+   (`relations_enabled` back to its dormant default, retention policy, etc.), so
+   the next session starts from a known state.
+4. **Say what you ran.** Live experiments change data the maintainer may be
+   looking at; a conversion or a purge that goes unmentioned reads as a bug
+   later.
+
+Setup and the parallel-environment convention: [`docs/guides/staging-env.md`](docs/guides/staging-env.md).
+
 ### Testing
 - **`bun test` is the only test runner as of v0.9.0** — `pytest` is retired and `tests/**/*.py` is deleted. Write TS tests alongside new TS code.
 - TS tests live in `packages/memory/test/`, `_shared/__tests__/`, and `frontend/tests/e2e/` (Playwright).

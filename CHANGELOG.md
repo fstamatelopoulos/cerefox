@@ -87,6 +87,16 @@ Open roadmap.
   keeps every version forever — useful for audit-trail stores, at the cost of
   unbounded growth, since versions carry embeddings.
 
+  **Upgrades disable pruning as a precaution.** Because the env vars stop being
+  read the moment the client updates — before anyone reads a release note — an
+  operator running "keep everything" would otherwise fall back to the 48-hour
+  default and lose that history on their next save. Migration 0016 therefore
+  seeds `version_cleanup_enabled=false` on **existing** stores: nothing is
+  deleted, and cleanup does not run until you state a policy. Fresh installs are
+  unaffected and keep the ordinary bounded default (48h, cleanup on) — they have
+  no history to lose. If you have already chosen a policy, the seed never
+  overwrites it.
+
   **Requires a server redeploy** — schema 0.10.2 → 0.10.3, migration 0016. The
   1.1.0 upgrade already mandates one for the retry-storm fix, so this adds no
   extra step.
