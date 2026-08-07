@@ -9,7 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+- `doctor` no longer repeats the "carry this setting over" command for a retired
+  env var whose value is already in the store. Shows ℹ and "safe to delete"
+  instead, and lists only the keys still pending.
 
 ---
 
