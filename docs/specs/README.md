@@ -17,6 +17,10 @@ Current contents:
 - `ui-redesign-spa-python-api.md` — the Iteration 14 web-app SPA refactor design
   (shipped). Superseded in one respect: the API backend it targeted is now Hono
   on Bun/Node, not the FastAPI named in the doc.
+- `partial-document-edits-design.md` - **DRAFT, not implemented** (2026-08-08):
+  let agents send only what changed (`append`, later `replace_section`) instead of
+  resending a whole document to edit part of it. Open for feedback from real agent
+  sessions before the semantics are fixed. Tracked in #186.
 - `concurrency-control-design.md` — Iteration 32 design: optimistic concurrency on
   content updates (`expected_content_hash` / `last_write_wins`). Shipped in v0.11.0.
 - `chunk-reconstruction-design.md` — Iteration 28D design (2026-07-09): fix the
