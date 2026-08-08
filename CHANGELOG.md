@@ -9,7 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+- **MCP tools now declare annotations** (spec 2025-03-26): `readOnlyHint`,
+  `destructiveHint`, `idempotentHint`, `openWorldHint` and a display title, on
+  all 14 tools, over both the local stdio server and the remote Edge Function.
+  Declaring nothing was not neutral: the spec defaults are *not read-only,
+  possibly destructive*, so clients were told `cerefox_search` was as dangerous
+  as a destructive write. The usual response is to blanket-approve the server,
+  which drains the meaning from the prompt on the tools that warrant one. Ten
+  read-only tools are now marked as such; three are marked destructive:
+  `cerefox_set_document_projects`, `cerefox_delete_relation`, and
+  `cerefox_ingest` — the last because `project_names` **replaces** project
+  memberships, and unlike document content, memberships have no version history.
 
 ---
 
