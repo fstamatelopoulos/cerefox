@@ -89,6 +89,9 @@ export function buildServer(): ServerHandle {
       name: t.name,
       description: t.description,
       inputSchema: t.inputSchema as Record<string, unknown>,
+      // MCP 2025-03-26 tool annotations. Without them a client must assume the
+      // spec defaults (not read-only, possibly destructive) for every tool.
+      ...(t.annotations ? { annotations: t.annotations } : {}),
     })),
   }));
 

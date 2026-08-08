@@ -72,6 +72,15 @@ export const setDocumentProjectsTool: ToolDefinition = {
   name: "cerefox_set_document_projects",
   description:
     "Set the document's project memberships to EXACTLY the given list. Destructive replace: any existing memberships not in this list are removed. Pass an empty list to clear all project memberships. Projects are looked up by name (case-insensitive); missing projects are created. Logged as update-metadata in the audit log — content is untouched. Use cerefox_ingest with project_names if you want to set memberships AND update content in one call. Use this tool when you only need to change project membership without re-writing the document body.",
+  /** Destructive by contract: any membership not in the list is removed, and an
+ *  empty list clears all of them. No version history for memberships. */
+  annotations: {
+    title: "Replace project memberships",
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["document_id", "project_names"],

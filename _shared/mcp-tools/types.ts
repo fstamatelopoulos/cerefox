@@ -66,10 +66,44 @@ export interface ToolContext {
   accessPath: AccessPath;
 }
 
+/**
+ * MCP tool annotations (spec revision 2025-03-26).
+ *
+ * Hints that let a client reason about a tool BEFORE calling it. Without them a
+ * tool inherits the spec defaults `readOnlyHint: false` and
+ * `destructiveHint: true` — i.e. "may do something irreversible" — so declaring
+ * nothing tells every client that `cerefox_search` is as dangerous as a
+ * destructive write. The usual result is that users blanket-approve the server,
+ * which drains the meaning from the prompt on the tools that genuinely warrant
+ * one.
+ *
+ * These are hints from a server the client may not trust, so a client must not
+ * use them as a security boundary. They exist to inform UX, not to enforce it.
+ */
+export interface ToolAnnotations {
+  /** Human-readable label for UIs. */
+  title?: string;
+  /** The tool does not modify anything. */
+  readOnlyHint?: boolean;
+  /** The tool may perform IRREVERSIBLE updates. Only meaningful when the tool
+   *  is not read-only. Static per tool: if any argument shape can destroy, the
+   *  tool is destructive. */
+  destructiveHint?: boolean;
+  /** Repeated calls with the same arguments have no additional effect. */
+  idempotentHint?: boolean;
+  /** The tool reaches external entities (a web search) rather than a closed
+   *  domain. False throughout Cerefox: every tool talks to the operator's own
+   *  store. */
+  openWorldHint?: boolean;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: JsonSchema;
+  /** See `ToolAnnotations`. Required in practice: a unit test fails if a tool
+   *  omits it, so adding a tool forces the read-only/destructive decision. */
+  annotations?: ToolAnnotations;
   /** Returns the MCP `TextContent.text` body. Tools that fail throw; the
    *  consumer's request wrapper translates thrown errors into JSON-RPC
    *  `-32603` (internal error) responses, or `-32602` (invalid params)

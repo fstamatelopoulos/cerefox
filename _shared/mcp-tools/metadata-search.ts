@@ -124,6 +124,13 @@ export const metadataSearchTool: ToolDefinition = {
   name: "cerefox_metadata_search",
   description:
     "Find or list documents by metadata key-value criteria without a text search term. Use to discover documents tagged with specific attributes, browse by taxonomy, retrieve messages/tasks by type and status, or list all documents in a project (pass project_name alone). At least one of metadata_filter, project_name, updated_since, or created_since must be supplied; results are ordered newest-updated first.",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "Find documents by metadata",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     properties: {

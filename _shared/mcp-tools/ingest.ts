@@ -350,6 +350,17 @@ async function handler(
 export const ingestTool: ToolDefinition = {
   name: "cerefox_ingest",
   description: "Save a note or document to the Cerefox knowledge base.",
+  /** Destructive: `project_names` REPLACES the document's project memberships, and
+ *  memberships have no version history — a partial list silently drops the rest.
+ *  Content itself is version-snapshotted and guarded by expected_content_hash, so
+ *  the destructive part is the membership replace, not the body. */
+  annotations: {
+    title: "Save or update a document",
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["title", "content"],

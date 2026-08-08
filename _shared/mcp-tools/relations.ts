@@ -81,6 +81,14 @@ export const setRelationTool: ToolDefinition = {
     "contradicts, duplicates) write both directions. `supersedes` marks the target " +
     "superseded; `contradicts` marks both stale. Any other type string is accepted " +
     "and stored, just without special behaviour. Re-setting the same edge updates it.",
+  /** Upsert: re-running with the same edge changes nothing. Adds an edge; removes nothing. */
+  annotations: {
+    title: "Link two documents",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["source_id", "target_id", "rel_type"],
@@ -143,6 +151,14 @@ export const deleteRelationTool: ToolDefinition = {
   description:
     "Remove a typed relation between two documents. Symmetric types remove both " +
     "directions. Lifecycle status set by an earlier relation is NOT reverted.",
+  /** Removes an edge (and its mirror for symmetric types). Relations are not versioned, so the edge is gone. */
+  annotations: {
+    title: "Remove a relation",
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["source_id", "target_id", "rel_type"],
@@ -203,6 +219,13 @@ export const getRelationsTool: ToolDefinition = {
     "List every relation touching a document, in both directions (→ outbound, " +
     "← inbound). Shows each neighbour's title and lifecycle status, so an agent " +
     "can tell whether retrieved knowledge has been superseded or contradicted.",
+  // Read-only: traversal only, mutates nothing.
+  annotations: {
+    title: "List a document's relations",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["document_id"],
@@ -267,6 +290,13 @@ export const getNeighborsTool: ToolDefinition = {
     "Use after cerefox_get_relations shows which types exist. depth > 1 follows " +
     "chains (useful for follows / reply_to); cycles terminate safely. Optional " +
     "from_time / to_time filter neighbours by their creation time.",
+  // Read-only: traversal only, mutates nothing.
+  annotations: {
+    title: "Walk the relation graph",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["document_id", "rel_type"],

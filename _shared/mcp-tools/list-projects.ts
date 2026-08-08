@@ -45,6 +45,13 @@ export const listProjectsTool: ToolDefinition = {
   name: "cerefox_list_projects",
   description:
     "List all projects with their names and IDs. Use this to discover available projects before filtering by project_name in other tools.",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "List projects",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     properties: {
