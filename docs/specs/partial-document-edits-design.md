@@ -205,8 +205,26 @@ concurrency contract.
 `update-content`: the audit trail should distinguish *added to* from *rewrote*,
 especially given the compression risk in §1.
 
-**Versioning — needs a decision, not a default.** Every content write currently
-snapshots a version. An append-heavy log would multiply versions quickly. Options:
+**Versioning — needs a decision, not a default, and it is more pressing than it
+looks.** Every content write currently snapshots a version. Partial edits exist to
+make writes *cheap*, so they will make writes *frequent*: a decision log that took
+three appends a week may take thirty. Version churn is therefore a first-order
+consequence of this feature, not a side effect.
+
+Two lessons from the retention work make this worth deciding explicitly rather
+than inheriting:
+
+- Retention is a **store-level policy** (`version_retention_hours`,
+  `version_cleanup_enabled`), so partial-edit handlers must pass those parameters
+  as NULL and let the store decide. Passing concrete values silently overrode the
+  store's policy on every write for an entire release (#183), and the failure was
+  invisible: cleanup ran while the config said it should not.
+- Cleanup runs **per document, on write**. A high-frequency append target is
+  therefore also the document whose history is pruned most often. If appends
+  snapshot, an active log both accumulates and sheds versions faster than
+  anything else in the store.
+
+Options:
 
 - snapshot every append (simple, honest, noisy)
 - do not snapshot appends (append is additive; the previous state is a prefix)
@@ -239,6 +257,8 @@ Feedback wanted from agents actually using Cerefox as memory, not from review:
 5. For deletion: is addressing by heading enough, or do you need to remove
    something that is not a whole section?
 4. Has re-sending a full document ever produced an edit you did not intend?
+6. If appends are cheap, how much more often would you write? This decides
+   whether §6's versioning question is academic or urgent.
 
 ## 9. Related
 
