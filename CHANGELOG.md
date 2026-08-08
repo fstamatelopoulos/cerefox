@@ -38,9 +38,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   This also defeated migration 0016's fail-safe, which seeds
   `version_cleanup_enabled = false` on existing stores during the 1.1.0 upgrade
   precisely so that history could not be discarded — and it makes the v1.1.0
-  note "Nothing is deleted" untrue. **Requires `cerefox server deploy`**
-  (schema 0.10.5): the defect is in `rpcs.sql`, so a client-only upgrade leaves
-  it live.
+  note "Nothing is deleted" untrue.
+
+  **`cerefox server deploy` is required and now enforced.** The defect is
+  entirely in `rpcs.sql`, so upgrading the client alone leaves it live and
+  nothing in the client can compensate. The minimum supported schema therefore
+  moves to **0.10.5**: until you redeploy, `cerefox web` refuses to start and
+  `doctor` errors (the CLI and MCP servers keep working). That minimum was
+  already set at 0.10.3 to guarantee a configured retention policy is honoured —
+  this is the version where that guarantee actually holds. Cerefox Local ships
+  the schema in the image; `cerefox-local upgrade` is enough.
 
   Pruning is lazy — it runs for a document only when *that* document is next
   written — so versions outside the window survive until their document is
