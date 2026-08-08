@@ -54,11 +54,13 @@ Covers the dominant real pattern: decision logs, activity logs, journals, runnin
 notes, meeting records. In the session that motivated this document, **100% of the
 writes were appends**.
 
-**It is commutative.** Two agents appending concurrently do not destroy each
-other's work — both entries survive, only their order is uncertain. That has a
-direct consequence: append can safely **omit `expected_content_hash`**, removing
-the read-before-write round trip entirely. This is not a shortcut; it reflects the
-actual semantics of the operation. (See §5.)
+**The agent does not supply `expected_content_hash`** — but the write still uses
+one. The handler obtains it during its own read (§4) and passes it through. The
+agent is spared the read-before-write round trip; the database is not spared the
+concurrency check.
+
+*Earlier drafts of this document claimed append is commutative and could skip the
+token entirely. That is wrong, and the correction matters — see §5.*
 
 ### 3.2 `replace_section` — second, if usage justifies it
 
@@ -72,14 +74,26 @@ Markdown headings are unambiguous anchors, and the chunker is already
 heading-aware, so this aligns with how documents are structured rather than
 imposing a new addressing scheme.
 
-**Not commutative** — this one requires `expected_content_hash`.
+Requires the concurrency token like every other operation (§5); the difference
+from `append` is that a conflict must surface rather than auto-retry.
 
 Open questions: heading matched exactly or by normalised text? What if the heading
 appears twice? What if it is absent — error, or append? A design that guesses here
 will corrupt documents quietly, so these need answers before implementation, not
 during.
 
-### 3.3 Deliberately excluded from v1
+### 3.3 `delete_section` — same family as replace
+
+Remove the content under a heading. Shares every addressing question with
+`replace_section`, and adds one of its own: does the heading itself go, or only
+the body beneath it?
+
+Deletion deserves particular care. It is the one operation where a wrong anchor
+destroys content that the caller never saw and cannot diff, and where the agent's
+intent ("remove the obsolete section") is indistinguishable from the failure
+("removed the wrong section") in the response.
+
+### 3.4 Deliberately excluded from v1
 
 **Find/replace on arbitrary strings** and **diff/patch application**. Both fail in
 the worst possible way: silently editing the wrong location. String matching breaks
@@ -123,18 +137,45 @@ latency alone.
 
 ## 5. Concurrency
 
-| Operation | `expected_content_hash` | Rationale |
+**Every operation keeps optimistic locking. None of them may skip it.**
+
+An earlier draft argued that `append` is commutative — two agents appending both
+survive, so the token could be dropped. That reasoning describes an *abstract*
+append. It does not describe this implementation, which is a **read-modify-write
+of the whole document**: reconstruct, apply, re-chunk, re-embed, write everything
+back (§4). Concurrently:
+
+```
+A reads X, computes X+a
+B reads X, computes X+b
+A writes X+a
+B writes X+b        ← A's append is silently lost
+```
+
+Last-write-wins, which is exactly the failure that motivated
+`concurrency-control-design.md` in the first place. The operation would only be
+commutative if the storage layer supported a true atomic append, and it does not:
+content lives in chunks, not in a column you can concatenate onto.
+
+The earlier draft also contradicted itself — it proposed retrying on
+`CEREFOX_CONFLICT` while omitting the very token that makes a conflict
+detectable.
+
+| Operation | Token supplied by | Behaviour on conflict |
 |---|---|---|
-| `append` | **Not required** | Commutative; concurrent appends both survive |
-| `replace_section` | **Required** | Replacing a section can discard a concurrent edit |
+| `append` | Handler (from its own read) | Retry automatically: re-read, re-apply, re-write |
+| `replace_section` | Handler, or the agent if it held one | Surface to the caller |
+| `delete_section` | Handler, or the agent if it held one | Surface to the caller |
 
-For `append`, the handler should **retry automatically** on `CEREFOX_CONFLICT`:
-re-read, re-apply, re-write. That is safe precisely because the operation is
-commutative, and it means concurrent appends resolve without troubling the agent.
+The distinction that survives is narrower than commutativity, and still useful:
+for `append`, an automatic retry is **safe**, because re-applying the same text to
+newer content yields the intended result. For a replace or a delete it is not —
+the concurrent change may be exactly what the agent was editing around, so only
+the agent can decide.
 
-For `replace_section`, a conflict must surface to the caller as it does today — the
-agent has to re-read and decide, because only it knows whether the concurrent
-change invalidates its edit.
+The real win is therefore ergonomic rather than semantic: the agent never holds
+the document or the token, and the read→write window shrinks from an entire agent
+turn to one handler invocation.
 
 ## 6. Audit and versioning
 
@@ -172,9 +213,11 @@ Feedback wanted from agents actually using Cerefox as memory, not from review:
    complexity.
 2. When you do edit mid-document, what are you addressing — a heading, a known
    line, a semantic region ("the part about X")?
-3. Would you accept an append that does not tell you the resulting document, to
+3. Would you accept an append that does not return the resulting document, to
    avoid the response cost? Or do you need the new `content_hash` back for a
    follow-up edit?
+5. For deletion: is addressing by heading enough, or do you need to remove
+   something that is not a whole section?
 4. Has re-sending a full document ever produced an edit you did not intend?
 
 ## 9. Related
