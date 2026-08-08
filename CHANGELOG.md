@@ -22,6 +22,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   `cerefox_ingest` — the last because `project_names` **replaces** project
   memberships, and unlike document content, memberships have no version history.
 
+### Fixed
+- **`version_cleanup_enabled = false` was silently ignored, and version history
+  was pruned against it** (#183). v1.1.0 moved retention into `cerefox_config`
+  and made `cerefox_snapshot_version` default its parameters to NULL so
+  `COALESCE(param, config, built-in)` could reach the store's policy — but
+  `cerefox_ingest_document`, its only caller, kept the pre-1.1.0 concrete
+  defaults (`48` / `TRUE`) and passed them straight down. PostgreSQL substitutes
+  a declared default on every omitted argument, so the COALESCE short-circuited
+  immediately and the store's setting was never read on the one path that
+  writes. `version_retention_hours` was equally inert: the window stayed at 48
+  hours whatever you configured. Both parameters now default to NULL; an
+  explicit value still overrides for a single call.
+
+  This also defeated migration 0016's fail-safe, which seeds
+  `version_cleanup_enabled = false` on existing stores during the 1.1.0 upgrade
+  precisely so that history could not be discarded — and it makes the v1.1.0
+  note "Nothing is deleted" untrue. **Requires `cerefox server deploy`**
+  (schema 0.10.5): the defect is in `rpcs.sql`, so a client-only upgrade leaves
+  it live.
+
+  Pruning is lazy — it runs for a document only when *that* document is next
+  written — so versions outside the window survive until their document is
+  edited. If you were relying on `cleanup_enabled = false`, versions still
+  present are still present; redeploy before your next edit.
+
 ---
 
 ## [v1.1.1] -- 2026-08-07
