@@ -21,8 +21,7 @@ export const COMPATIBILITY = {
   /**
    * Minimum deployed Postgres schema version this client requires.
    *
-   * Raised to 0.10.3 for v1.1.0 — the one release so far where the client
-   * genuinely hard-requires the server surface rather than merely preferring it.
+   * Raised to 0.10.3 for v1.1.0, then to **0.10.5 for v1.2.0** (#183).
    *
    * From v1.1.0 the client STOPS sending retention and retrieval parameters and
    * delegates their resolution to `cerefox_config` in the RPCs. Against an older
@@ -32,21 +31,33 @@ export const COMPATIBILITY = {
    * it is quiet data loss, so it warrants an error rather than the usual
    * "a newer server is available" nudge.
    *
+   * 0.10.3 was chosen as the floor that guaranteed exactly that. It did not.
+   * `cerefox_ingest_document` kept concrete defaults (48 / TRUE) and passed them
+   * to `cerefox_snapshot_version`, so the config was never consulted on the one
+   * path that writes: the "keep every version" operator got pruning at 48 hours
+   * anyway, on 0.10.3 and 0.10.4 alike. The guarantee this minimum exists to
+   * make only becomes true at **0.10.5**.
+   *
+   * So this bump is not "the schema moved" — it is the same criterion applied to
+   * a floor that provably did not deliver it. The fix is entirely server-side
+   * (`rpcs.sql`), and nothing in the client can compensate: a 1.2.0 client
+   * against a 0.10.4 store still silently discards version history. Blocking is
+   * the only thing that reliably converts "npm upgraded" into "redeployed".
+   *
    * **This is NOT bumped with every schema change.** A schema bump alone makes
    * the deployed version merely *older than bundled* — a warning, and everything
    * keeps running. Raising the MINIMUM says something stronger: "this client
    * misbehaves against anything older", which makes `doctor` error and makes
    * `cerefox web` refuse to start. Reserve it for exactly that.
    *
-   * Worked example, from this release: schema went 0.10.2 -> 0.10.3 -> 0.10.4,
-   * but the minimum is 0.10.3, not 0.10.4. 0.10.3 is where the RPCs began
-   * resolving retention from `cerefox_config`, which the client depends on.
-   * 0.10.4 only changed a fallback VALUE (48h -> 120h) — a 1.1.0 client against
-   * a 0.10.3 server behaves correctly, just with the older default when no
-   * config row exists. That degrades gracefully, so it does not justify
-   * blocking anyone.
+   * Worked example of the distinction, still worth keeping: schema went
+   * 0.10.2 -> 0.10.3 -> 0.10.4, and the v1.1.0 minimum was 0.10.3, not 0.10.4.
+   * 0.10.4 only changed a fallback VALUE (48h -> 120h) — a client against a
+   * 0.10.3 server behaves correctly, just with the older default when no config
+   * row exists. That degrades gracefully, so it did not justify blocking anyone.
+   * 0.10.5 is different in kind: below it, a configured policy is ignored.
    */
-  minSchema: "0.10.3",
+  minSchema: "0.10.5",
   /** Minimum deployed Edge Function version this client requires. */
   minEdgeFunctions: "0.6.0",
 } as const;
