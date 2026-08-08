@@ -121,9 +121,21 @@ So the composition belongs in the **shared MCP tool handlers**
    agent's token**, so a concurrent write raises `CEREFOX_CONFLICT` rather than
    overwriting
 
-**No new RPC is strictly required**, and the single-implementation principle is
-preserved: local stdio and remote Edge Function get identical behaviour from one
-handler. The only schema change needed is §6.
+**No new RPC is required**, and the single-implementation principle is preserved:
+local stdio and remote Edge Function get identical behaviour from one handler.
+
+Two changes to the existing RPC and schema are, though, both from §6.1: the
+`operation` CHECK constraint gains the new values, and `cerefox_ingest_document`
+needs to be *told* which one to record. It writes the audit entry itself — that
+is deliberate, so the write and its trail are one transaction — and left alone it
+would label every partial edit `update-content`, which is precisely the
+distinction §6.1 exists to preserve. So it takes a nullable operation-label
+parameter, and NULL keeps today's behaviour (`create` on insert,
+`update-content` on update).
+
+Nullable, not defaulted to a concrete value: a parameter that silently
+substitutes its own default instead of deferring is how #183 happened, in this
+same function.
 
 Note what this preserves: the read still happens, but *inside the handler*, not in
 the agent's context. The agent sends only the delta. Both the token win and the
@@ -199,39 +211,58 @@ concurrency contract.
 
 ## 6. Audit and versioning
 
-**Audit.** `cerefox_audit_log.operation` is `CHECK`-constrained, so a distinct
-`append` (and later `replace-section`) value is a schema change, the same shape as
-`relation-set` in iteration 29. Worth doing rather than logging these as
-`update-content`: the audit trail should distinguish *added to* from *rewrote*,
-especially given the compression risk in §1.
+Both settled — recorded here as decisions, not options.
 
-**Versioning — needs a decision, not a default, and it is more pressing than it
-looks.** Every content write currently snapshots a version. Partial edits exist to
-make writes *cheap*, so they will make writes *frequent*: a decision log that took
-three appends a week may take thirty. Version churn is therefore a first-order
-consequence of this feature, not a side effect.
+### 6.1 Audit: one operation value per command
 
-Two lessons from the retention work make this worth deciding explicitly rather
-than inheriting:
+**Decided: each partial-edit command gets its own `operation` value** —
+`append`, and later `replace-section` and `delete-section`. That is a change to
+the `cerefox_audit_log_operation_check` constraint, the same shape as
+`relation-set` / `relation-delete` in iteration 29.
 
-- Retention is a **store-level policy** (`version_retention_hours`,
-  `version_cleanup_enabled`), so partial-edit handlers must pass those parameters
-  as NULL and let the store decide. Passing concrete values silently overrode the
-  store's policy on every write for an entire release (#183), and the failure was
-  invisible: cleanup ran while the config said it should not.
+The reasoning is worth stating because the implementation argues the other way.
+These commands are built *on top of* the ingest primitive, so it is tempting to
+log what actually ran: `update-content`. That would be the wrong record. The
+audit trail exists to answer "what did someone do to this document", and *added
+a paragraph* and *rewrote the document* are different answers even when they
+compile to the same write. `append` and `update-content` are separate terms in
+the contract between Cerefox and the agent or human on the other side of it; the
+fact that one is implemented with the other is Cerefox's business, not the
+reader's.
+
+This matters most for the failure mode in §1. A trail that records every write as
+`update-content` cannot distinguish an agent that appended from an agent that
+re-sent the whole document and quietly dropped half of it. Distinguishing them is
+much of the point.
+
+### 6.2 Versioning: every partial edit snapshots, like any other write
+
+**Decided: yes, every partial edit creates a version**, exactly as a full
+re-ingest does today. A partial edit *is* the efficient equivalent of the agent
+re-sending the whole document — the saving is in what crosses the wire and what
+the agent has to reproduce, not in what the store keeps. So there is no case for
+special-casing them: the same edit, expressed two ways, should leave the same
+history behind. The alternatives (skip the snapshot because an append is
+additive, or coalesce appends within a window) are both rejected — either would
+mean the version history depends on which command an agent happened to use.
+
+What does change is *frequency*. Partial edits make writes cheap to issue, so
+they will make them more common: a decision log that took three appends a week
+may take thirty. Version growth is a real consequence of this feature, but it is
+a **retention-tuning** matter, governed by `version_retention_hours` and
+`version_cleanup_enabled`, not something the write path should be clever about.
+
+Two constraints for whoever implements this, both learned the hard way in #183:
+
+- Retention is a **store-level policy**. Partial-edit handlers must pass those
+  parameters as NULL and let the RPC resolve them from `cerefox_config`. Passing
+  concrete values silently overrode the store's policy on every write for an
+  entire release, and the failure was invisible: cleanup ran while the config
+  said it should not. Any new write path inherits this trap.
 - Cleanup runs **per document, on write**. A high-frequency append target is
-  therefore also the document whose history is pruned most often. If appends
-  snapshot, an active log both accumulates and sheds versions faster than
-  anything else in the store.
-
-Options:
-
-- snapshot every append (simple, honest, noisy)
-- do not snapshot appends (append is additive; the previous state is a prefix)
-- coalesce appends within a window
-
-Retention is now configurable and defaults to 120 hours, which softens this, but it
-is a deliberate choice either way.
+  therefore also the document pruned most often — an active log both accumulates
+  and sheds versions faster than anything else in the store. Worth knowing before
+  someone reports that their busiest document has the shortest history.
 
 ## 7. Explicitly deferred
 
@@ -254,11 +285,12 @@ Feedback wanted from agents actually using Cerefox as memory, not from review:
 3. Would you accept an append that does not return the resulting document, to
    avoid the response cost? Or do you need the new `content_hash` back for a
    follow-up edit?
+4. Has re-sending a full document ever produced an edit you did not intend?
 5. For deletion: is addressing by heading enough, or do you need to remove
    something that is not a whole section?
-4. Has re-sending a full document ever produced an edit you did not intend?
-6. If appends are cheap, how much more often would you write? This decides
-   whether §6's versioning question is academic or urgent.
+6. If appends are cheap, how much more often would you write? Every one of them
+   snapshots a version (§6.2), so this is what tells us whether the 120-hour
+   retention default is still sensible once this ships.
 
 ## 9. Related
 
