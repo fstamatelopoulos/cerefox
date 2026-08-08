@@ -1268,8 +1268,10 @@ $$;
 --                        content, char_count, embedding (float[]), embedder (text)
 --   p_author, p_author_type : for audit entry
 --   p_source_label    : version source label for snapshot ('file','paste','agent','manual')
---   p_retention_hours : for version cleanup (default 48)
---   p_cleanup_enabled : whether version cleanup runs (default true)
+--   p_retention_hours : version-cleanup window. NULL (default) = use the store's
+--                       `version_retention_hours` from cerefox_config.
+--   p_cleanup_enabled : whether cleanup runs. NULL (default) = use the store's
+--                       `version_cleanup_enabled`.
 --   p_expected_content_hash : optimistic-concurrency token (iter-32). On the UPDATE
 --                       path this must equal the document's current content_hash —
 --                       the caller proves they based their edit on the live version.
@@ -1301,8 +1303,14 @@ CREATE FUNCTION cerefox_ingest_document(
     p_author            TEXT        DEFAULT 'unknown',
     p_author_type       TEXT        DEFAULT 'user',
     p_source_label      TEXT        DEFAULT 'manual',
-    p_retention_hours   INT         DEFAULT 48,
-    p_cleanup_enabled   BOOLEAN     DEFAULT TRUE,
+    -- NULL, so `cerefox_snapshot_version` falls through to the store's policy in
+    -- cerefox_config. These carried concrete defaults (48 / TRUE) until v1.1.2,
+    -- which silently defeated the whole store-level retention feature: this is
+    -- snapshot_version's ONLY caller, so it never once received NULL and never
+    -- once consulted the config (#183, reported by @tdebasis). A caller may still
+    -- pass explicit values to override the store for one call.
+    p_retention_hours   INT         DEFAULT NULL,
+    p_cleanup_enabled   BOOLEAN     DEFAULT NULL,
     p_expected_content_hash TEXT    DEFAULT NULL,
     p_last_write_wins   BOOLEAN     DEFAULT FALSE,
     -- content_format for the chunks being written (iter-28D). 2 = exact-partition
@@ -2325,7 +2333,7 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.10.4'::TEXT;
+    SELECT '0.10.5'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────
