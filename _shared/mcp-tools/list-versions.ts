@@ -53,6 +53,13 @@ export const listVersionsTool: ToolDefinition = {
   name: "cerefox_list_versions",
   description:
     "List all archived versions of a document, newest first. Returns version_id (use with cerefox_get_document), version_number, source, chunk_count, total_chars, and created_at.",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "List document versions",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["document_id"],

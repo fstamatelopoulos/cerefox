@@ -71,6 +71,13 @@ export const getHelpTool: ToolDefinition = {
   name: "cerefox_get_help",
   description:
     "Retrieve Cerefox's own agent-usage guidance (the AGENT_QUICK_REFERENCE.md content). Call with no arguments to get the full reference + a section index. Call with `topic` to get a single section (case-insensitive substring match against H2 headings). Use this whenever you're uncertain about Cerefox conventions — link forms, project-membership semantics, update workflows, etc.",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "Read Cerefox conventions",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     properties: {

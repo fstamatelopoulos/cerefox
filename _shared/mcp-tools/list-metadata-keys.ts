@@ -41,6 +41,13 @@ export const listMetadataKeysTool: ToolDefinition = {
   name: "cerefox_list_metadata_keys",
   description:
     "List all metadata keys currently in use across documents in the Cerefox knowledge base. Returns each key with its document count and up to 5 example values.",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "List metadata keys",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     properties: {

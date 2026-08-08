@@ -65,6 +65,13 @@ export const auditLogTool: ToolDefinition = {
   name: "cerefox_get_audit_log",
   description:
     "Retrieve audit log entries showing who changed what and when. Supports filtering by document, author, operation type, and time range. Returns entries with document titles, author attribution, size changes, and descriptions.",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "Read audit log",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: [],

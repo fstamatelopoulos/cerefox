@@ -397,3 +397,77 @@ describe("chunker (used by ingest)", () => {
     expect(normalizeContent("a\n\n\n\nb")).toBe("a\n\nb");
   });
 });
+
+describe("tool annotations (MCP 2025-03-26)", () => {
+  // Declaring nothing is not neutral: the spec defaults are readOnlyHint=false
+  // and destructiveHint=true, so an unannotated tool tells every client it may
+  // do something irreversible. That made `cerefox_search` look as dangerous as
+  // a destructive write, and the usual response is to blanket-approve the
+  // server — which drains the meaning from the prompt on the tools that
+  // genuinely warrant one.
+  const READ_ONLY = [
+    "cerefox_search",
+    "cerefox_get_document",
+    "cerefox_metadata_search",
+    "cerefox_list_projects",
+    "cerefox_list_versions",
+    "cerefox_list_metadata_keys",
+    "cerefox_get_audit_log",
+    "cerefox_get_help",
+    "cerefox_get_relations",
+    "cerefox_get_neighbors",
+  ];
+  // Irreversible, because what they remove has NO version history.
+  // cerefox_ingest belongs here for a non-obvious reason: `project_names`
+  // REPLACES the document's project memberships, so a partial list silently
+  // drops the rest. Its content edits are recoverable; its membership edits
+  // are not.
+  const DESTRUCTIVE = [
+    "cerefox_ingest",
+    "cerefox_set_document_projects",
+    "cerefox_delete_relation",
+  ];
+
+  test("every tool declares annotations", () => {
+    const missing = ALL_TOOLS.filter((t) => !t.annotations).map((t) => t.name);
+    expect(missing).toEqual([]);
+  });
+
+  test("read-only tools are marked read-only and not destructive", () => {
+    for (const name of READ_ONLY) {
+      const t = ALL_TOOLS.find((x) => x.name === name);
+      expect(t, `${name} missing`).toBeDefined();
+      expect(t!.annotations?.readOnlyHint, name).toBe(true);
+      expect(t!.annotations?.destructiveHint, name).not.toBe(true);
+    }
+  });
+
+  test("irreversible tools are marked destructive", () => {
+    for (const name of DESTRUCTIVE) {
+      const t = ALL_TOOLS.find((x) => x.name === name);
+      expect(t, `${name} missing`).toBeDefined();
+      expect(t!.annotations?.readOnlyHint, name).toBe(false);
+      expect(t!.annotations?.destructiveHint, name).toBe(true);
+    }
+  });
+
+  test("no tool is both read-only and destructive", () => {
+    for (const t of ALL_TOOLS) {
+      if (t.annotations?.readOnlyHint) {
+        expect(t.annotations.destructiveHint, t.name).not.toBe(true);
+      }
+    }
+  });
+
+  test("nothing claims to reach the open world — every tool talks to the operator's own store", () => {
+    for (const t of ALL_TOOLS) {
+      expect(t.annotations?.openWorldHint, t.name).toBe(false);
+    }
+  });
+
+  test("every tool carries a human-readable title", () => {
+    for (const t of ALL_TOOLS) {
+      expect(typeof t.annotations?.title, t.name).toBe("string");
+    }
+  });
+});

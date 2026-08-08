@@ -68,6 +68,8 @@ async function buildToolList(supabase: MCPSupabaseClient) {
     name: t.name,
     description: t.description,
     inputSchema: t.inputSchema,
+    // MCP 2025-03-26 tool annotations; MCP_VERSION already declares that revision.
+    ...(t.annotations ? { annotations: t.annotations } : {}),
   }));
 }
 

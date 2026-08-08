@@ -192,6 +192,13 @@ export const searchTool: ToolDefinition = {
   name: "cerefox_search",
   description:
     "Search the Cerefox personal knowledge base. Returns complete documents ranked by hybrid (FTS + semantic) relevance.",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "Search knowledge base",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["query"],

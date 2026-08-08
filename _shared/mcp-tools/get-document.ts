@@ -57,6 +57,13 @@ export const getDocumentTool: ToolDefinition = {
   name: "cerefox_get_document",
   description:
     "Retrieve the full reconstructed content of a document. Pass version_id to retrieve an archived version; omit it (or pass null) for the current version. Version UUIDs are returned by cerefox_list_versions. The response header includes the document's current content_hash — pass it back as expected_content_hash when updating via cerefox_ingest (optimistic concurrency).",
+  // Read-only: touches nothing. Safe for a client to run without prompting.
+  annotations: {
+    title: "Read document",
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: "object",
     required: ["document_id"],
