@@ -54,13 +54,10 @@ Covers the dominant real pattern: decision logs, activity logs, journals, runnin
 notes, meeting records. In the session that motivated this document, **100% of the
 writes were appends**.
 
-**The agent does not supply `expected_content_hash`** — but the write still uses
-one. The handler obtains it during its own read (§4) and passes it through. The
-agent is spared the read-before-write round trip; the database is not spared the
-concurrency check.
-
-*Earlier drafts of this document claimed append is commutative and could skip the
-token entirely. That is wrong, and the correction matters — see §5.*
+**Requires `expected_content_hash`, like every other content write** (§5). The
+agent supplies the hash it last saw — `cerefox_search`, `cerefox_metadata_search`
+and `cerefox_get_document` all already return one, so an agent that read the
+document in order to decide what to append is holding it already.
 
 ### 3.2 `replace_section` — second, if usage justifies it
 
@@ -74,8 +71,7 @@ Markdown headings are unambiguous anchors, and the chunker is already
 heading-aware, so this aligns with how documents are structured rather than
 imposing a new addressing scheme.
 
-Requires the concurrency token like every other operation (§5); the difference
-from `append` is that a conflict must surface rather than auto-retry.
+Requires the concurrency token, like every other content write (§5).
 
 Open questions: heading matched exactly or by normalised text? What if the heading
 appears twice? What if it is absent — error, or append? A design that guesses here
@@ -117,10 +113,13 @@ living in the database.
 So the composition belongs in the **shared MCP tool handlers**
 (`_shared/mcp-tools/`), which both transports already import. The flow:
 
-1. Handler calls `cerefox_get_document` → current text **and** `content_hash`
+1. Handler reconstructs the current text (the agent supplies the
+   `expected_content_hash` it last saw — §5)
 2. Handler applies the operation in TypeScript (pure string work)
 3. Handler chunks and embeds as the ingest path already does
-4. Handler calls `cerefox_ingest_document` with the assembled result
+4. Handler calls `cerefox_ingest_document` with the assembled result **and the
+   agent's token**, so a concurrent write raises `CEREFOX_CONFLICT` rather than
+   overwriting
 
 **No new RPC is strictly required**, and the single-implementation principle is
 preserved: local stdio and remote Edge Function get identical behaviour from one
@@ -130,20 +129,24 @@ Note what this preserves: the read still happens, but *inside the handler*, not 
 the agent's context. The agent sends only the delta. Both the token win and the
 transcription win survive intact.
 
-It also **shrinks the concurrency window dramatically**. Today the read→embed→write
-race spans an entire agent turn (see `concurrency-control-design.md` §1). Here it
-spans one handler invocation, so the exposure drops from minutes to the embedding
-latency alone.
+Note that this does **not** narrow the concurrency window. The agent's token dates
+from when it last read the document, so the race still spans an agent turn exactly
+as it does today (`concurrency-control-design.md` §1). That is deliberate: the
+window is what makes a concurrent write visible, and §5 explains why hiding it
+would be the wrong trade.
 
 ## 5. Concurrency
 
-**Every operation keeps optimistic locking. None of them may skip it.**
+**Every content-handling operation requires `expected_content_hash` and surfaces
+conflicts to the caller. None of them auto-retries, and none may skip the token.**
 
-An earlier draft argued that `append` is commutative — two agents appending both
-survive, so the token could be dropped. That reasoning describes an *abstract*
-append. It does not describe this implementation, which is a **read-modify-write
-of the whole document**: reconstruct, apply, re-chunk, re-embed, write everything
-back (§4). Concurrently:
+Two earlier drafts got this wrong in successive ways, and both are recorded here
+because the mistakes are attractive ones.
+
+**First draft**: `append` is commutative, so it can skip the token. Wrong.
+Commutativity describes an *abstract* append; this implementation is a
+read-modify-write of the whole document (§4). Two concurrent appends therefore
+lose one:
 
 ```
 A reads X, computes X+a
@@ -152,30 +155,47 @@ A writes X+a
 B writes X+b        ← A's append is silently lost
 ```
 
-Last-write-wins, which is exactly the failure that motivated
-`concurrency-control-design.md` in the first place. The operation would only be
-commutative if the storage layer supported a true atomic append, and it does not:
-content lives in chunks, not in a column you can concatenate onto.
+The storage layer offers nothing to append onto — content lives in chunks, not a
+concatenable column. That draft also contradicted itself, proposing a retry on
+`CEREFOX_CONFLICT` while omitting the token that makes a conflict detectable.
 
-The earlier draft also contradicted itself — it proposed retrying on
-`CEREFOX_CONFLICT` while omitting the very token that makes a conflict
-detectable.
+**Second draft**: keep the token, but let the handler fetch it and auto-retry
+`append` on conflict, since re-applying the same text to newer content still
+yields the intended result. Mechanically true, and still wrong — for a reason
+specific to what Cerefox is.
 
-| Operation | Token supplied by | Behaviour on conflict |
-|---|---|---|
-| `append` | Handler (from its own read) | Retry automatically: re-read, re-apply, re-write |
-| `replace_section` | Handler, or the agent if it held one | Surface to the caller |
-| `delete_section` | Handler, or the agent if it held one | Surface to the caller |
+**A conflict is information the agent needs.** Cerefox is asynchronous shared
+memory; agents coordinate *through* the document. If another session appended
+while this one was composing, the agent may want to know before writing: its
+entry might duplicate the other, contradict it, or push the document past a size
+threshold that should have triggered a split instead of an append. Auto-retry
+lands the text and reports success, having concealed exactly the fact the agent
+would have acted on.
 
-The distinction that survives is narrower than commutativity, and still useful:
-for `append`, an automatic retry is **safe**, because re-applying the same text to
-newer content yields the intended result. For a replace or a delete it is not —
-the concurrent change may be exactly what the agent was editing around, so only
-the agent can decide.
+Suppressing a concurrent write optimises for convenience over awareness, in the
+one system where awareness is the product. And the asymmetry decides it: a
+surfaced conflict is recoverable — re-read, reconsider, re-append — while a
+hidden one is not.
 
-The real win is therefore ergonomic rather than semantic: the agent never holds
-the document or the token, and the read→write window shrinks from an entire agent
-turn to one handler invocation.
+So all three operations behave identically: token required, conflict raised,
+`CEREFOX_CONFLICT` returned with the current hash, agent decides.
+
+### What the feature still buys
+
+Requiring the token costs less than it appears, because it was never the main
+prize:
+
+| Benefit | Survives? |
+|---|---|
+| **Transcription safety** — never reproduce a document verbatim to edit part of it | ✅ untouched, and this was always the point (§1) |
+| **Token cost** — send 3,000 characters instead of 24,000 | ✅ untouched |
+| **Embedding cost** | ⏸ deferred either way (§7) |
+| Skipping the read entirely | ❌ given up, deliberately |
+
+Only the last one goes, and an agent that read the document in order to decide
+what to append already holds a hash. If a future flow genuinely needs to append
+without having read, the right answer is a cheap hash-only lookup, not a weaker
+concurrency contract.
 
 ## 6. Audit and versioning
 
