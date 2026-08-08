@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.2.0] -- 2026-08-08
+
 ### Added
 - **MCP tools now declare annotations** (spec 2025-03-26): `readOnlyHint`,
   `destructiveHint`, `idempotentHint`, `openWorldHint` and a display title, on
