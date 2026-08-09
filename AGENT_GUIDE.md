@@ -34,7 +34,7 @@ The tool is intentionally MCP-only so an agent that has been dropped into Cerefo
 
 ---
 
-## The 10 Tools
+## The 12 Tools
 
 ### cerefox_search
 
@@ -121,9 +121,51 @@ Retrieve the complete text of a document by its UUID.
 |-----------|----------|-------------|
 | `document_id` | Yes | UUID from search results `[id: ...]`. |
 | `version_id` | No | UUID of an archived version (from `cerefox_list_versions`). |
+| `outline` | No | `true` returns the document's **structure instead of its content**: heading paths, levels, per-section sizes, plus `content_hash` and total size. Much cheaper than a full read. The paths are exactly what the edit tools take as `anchor_heading`. |
 | `requestor` | No | Your agent name. |
 
-Use this when search returns partial results, or to read a previous version before restoring it. The response header includes the document's current `content_hash` — pass it back as `expected_content_hash` when updating via `cerefox_ingest`.
+Use this when search returns partial results, or to read a previous version before restoring it. The response header includes the document's current `content_hash` — pass it back as `expected_content_hash` when updating via `cerefox_ingest` or editing via `cerefox_insert` / `cerefox_edit`.
+
+**Before editing a document you have not read this session, call it with `outline: true` first.** It answers the three questions an edit needs — what are the anchors, how big is each section, what is the current hash — without pulling the body into your context.
+
+---
+
+### cerefox_insert
+
+Add text to a document **without resending it**. Purely additive: this tool cannot remove or overwrite existing content, so a mistaken call cannot destroy anything.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `document_id` | Yes | UUID of the document. |
+| `text` | Yes | Markdown to insert. Blank-line separation from surrounding content is handled for you. |
+| `position` | Yes | `end_of_document` (plain append) · `end_of_section` (add to a section's body — the most common mid-document add) · `after_heading` (lead-in text) · `before_heading` (a new block above a section). |
+| `anchor_heading` | Unless `end_of_document` | The exact heading line (`## Intake`) or a ` > ` parent path (`## Intake > ### Notes`) when a heading appears more than once. |
+| `section_part` | Sometimes | Only when the target section has BOTH its own content and child sections: `own_body` (before the first child) or `subtree` (after everything nested under it). If it is needed, the error tells you and lists both options. |
+| `expected_content_hash` | **Yes** | The hash of the version you are basing this on. There is **no `last_write_wins` on this tool**. |
+| `requestor` | No | Your agent name. |
+
+Returns the **new `content_hash` and size — not the document**. Chain edits by passing each response's hash into the next call.
+
+Prefer this over re-ingesting for any addition: a decision-log entry, a bullet under a heading, a new section. Re-sending a whole document to add three paragraphs means reproducing every untouched character verbatim, and any drift silently corrupts content nobody asked you to touch.
+
+---
+
+### cerefox_edit
+
+Change parts of a document: **one to many operations applied atomically in a single write**.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `document_id` | Yes | UUID of the document. |
+| `operations` | Yes | Array of operations, applied **in order, all-or-nothing**. Each is `{op, ...}` with `op` one of `insert` (same fields as `cerefox_insert`), `replace_section` (`anchor_heading`, `text`; swaps the body, keeps the heading), `delete_section` (`anchor_heading`, optional `scope`: `body_only` default keeps the heading, `heading_and_body` removes it too). |
+| `expected_content_hash` | **Yes** | One token for the whole call. No `last_write_wins`. |
+| `requestor` | No | Your agent name. |
+
+**Put changes that belong together in ONE call.** Operations apply in order against the evolving document (op 2 sees op 1's result), and a half-applied state is impossible — so a table row and the running total it feeds cannot end up disagreeing. If any operation fails (bad anchor, ambiguity), nothing at all is written and the error names the failing operation.
+
+**To change a single line**, `replace_section` on its smallest enclosing heading and resend just that section. That is the intended granularity — line-level anchors were deliberately excluded because they silently edit the wrong place.
+
+The audit trail records each operation distinctly (`insert` / `replace-section` / `delete-section`), so *added to*, *rewrote* and *removed* stay distinguishable from a full rewrite.
 
 ---
 
@@ -275,7 +317,27 @@ Metadata is matched as **strings**, so store the flag as the string `"true"` (no
 
 ## Key Workflows
 
-### Search then update (ID-based -- preferred)
+### Add to or change part of a document (preferred over re-sending)
+
+```
+1. cerefox_get_document(id, outline=true)   -- anchors + sizes + content_hash,
+                                               no body in your context
+2a. Adding?   cerefox_insert(id, text, position, anchor_heading?,
+                             expected_content_hash)
+2b. Changing? cerefox_edit(id, operations=[...], expected_content_hash)
+    -- put coordinated changes in ONE call; they apply atomically
+3. Each response returns the NEW content_hash — chain further edits with it.
+On a conflict: re-read (outline is enough to re-anchor), decide whether your
+edit still applies, retry with the current hash. These tools cannot overwrite
+a concurrent writer's work.
+```
+
+Re-send the full document (the workflows below) only when the change genuinely
+spans most of it — a restructure, a rewrite. For anything less, partial edits
+remove the transcription risk entirely: you never reproduce content you are not
+changing.
+
+### Search then update (ID-based -- preferred for full rewrites)
 
 ```
 1. cerefox_search("topic")           -- find relevant docs, note [id: uuid]
