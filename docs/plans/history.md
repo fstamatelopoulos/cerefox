@@ -1,6 +1,6 @@
 # Cerefox Implementation Plan — History (iterations 1–32)
 
-> **This is the archive.** The live plan is [`plan.md`](plan.md): current focus,
+> **This is the archive.** The live plan is [`../plan.md`](../plan.md): current focus,
 > the active iteration, and near-term tracks. This file is the dated iteration
 > log for everything already shipped, kept verbatim as the high-level history
 > record — the "why" behind decisions whose reasoning outlives their release.
@@ -10,18 +10,18 @@
 > iteration turns out to be wrong, correct it in place rather than rewriting the
 > narrative around it.
 >
-> Release-by-release notes live in [`../CHANGELOG.md`](../CHANGELOG.md); design
-> rationale lives in [`specs/`](specs/).
+> Release-by-release notes live in [`../../CHANGELOG.md`](../../CHANGELOG.md); design
+> rationale lives in [`../specs/`](../specs/).
 >
 > **From iteration 34 on**, an iteration gets its own plan file under
-> [`plans/`](plans/) while it is active, and is listed below when it closes.
+> this folder while it is active, and is listed below when it closes.
 > Iterations 1–33 predate that convention and are inline in this file.
 
 ## Per-iteration plans
 
 | Iteration | Plan | Status |
 |---|---|---|
-| 34 — Partial Document Edits | [`plans/iteration-34-partial-edits.md`](plans/iteration-34-partial-edits.md) | active |
+| 34 — Partial Document Edits | [`iteration-34-partial-edits.md`](iteration-34-partial-edits.md) | active |
 
 ---
 
@@ -1650,7 +1650,7 @@ and absorbed** into a broader Polish & Distribution arc that covers v0.2.0 throu
 The TypeScript port of the local MCP server is now scheduled as **Iteration 22 (v0.4.0)** —
 the first migration step of the broader Python → TypeScript strangler-fig migration.
 
-Design-of-record: [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
+Design-of-record: [`docs/specs/polish-and-distribution-design.md`](../specs/polish-and-distribution-design.md).
 
 Rationale for the supersession: the original Iteration 18 motivation (dedup MCP tool
 handler drift between Python and TS) was correct but too narrow — it solved one symptom
@@ -1671,7 +1671,7 @@ is born in TS per the §12f script-language policy. No migration of EXISTING Pyt
 contributor prerequisite from this release; end users are unaffected until v0.4.
 Backward-compatible at every user-facing surface.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.2.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.2.0](../specs/polish-and-distribution-design.md).
 
 **Estimated effort**: 1-2 weeks part-time.
 
@@ -1720,7 +1720,7 @@ script-language policy (§12f of the design doc), because both are extended in
 this iteration. Establishes the `_shared/` TS module structure that grows
 through v0.4–v0.7.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §7 + §10 + §12f + §13 v0.3.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §7 + §10 + §12f + §13 v0.3.0](../specs/polish-and-distribution-design.md).
 
 **Estimated effort**: 3-4 weeks part-time.
 
@@ -1850,7 +1850,7 @@ existing `cerefox-mcp` Edge Function via a new `_shared/mcp-tools/` module. Publ
 
 **Supersedes**: the original Iteration 18.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §4 + §10d + §13 v0.4.0](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §4 + §10d + §13 v0.4.0](../specs/polish-and-distribution-design.md).
 
 **Estimated effort**: 3-4 weeks part-time.
 
@@ -1877,7 +1877,7 @@ Decision Log alongside the equivalent cfcf playbook.
 ### Refinements vs. the design-doc bullets
 
 A few small deviations from the v0.4.0 entry in
-[`docs/specs/polish-and-distribution-design.md` §13](specs/polish-and-distribution-design.md),
+[`docs/specs/polish-and-distribution-design.md` §13](../specs/polish-and-distribution-design.md),
 shaped by what we learned in iter-19 / iter-20 / iter-21 and by reviewing
 cfcf's existing npm-publish playbook (already ingested in Cerefox):
 
@@ -2133,7 +2133,7 @@ with both `cerefox` and `cerefox-mcp` bins. Python CLI deprecated but functional
 lifecycle commands (`init`, `doctor`, `self-update`, `configure-agent`, `sync-self-docs`)
 land. Self-docs ingestion (Layer 2 of MCP discoverability) ships.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.5.0](specs/polish-and-distribution-design.md),
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.5.0](../specs/polish-and-distribution-design.md),
 plus §3 (target UX), §6 (distribution), §8 (CLI polish), §10d (MCP discoverability layers).
 
 **Estimated effort**: 4-6 weeks part-time. **Largest single migration in the polish arc**;
@@ -2143,7 +2143,7 @@ primary recommendation for new users.
 ### Refinements vs. the design-doc bullets
 
 A few small deviations from the v0.5.0 entry in
-[`docs/specs/polish-and-distribution-design.md` §13](specs/polish-and-distribution-design.md),
+[`docs/specs/polish-and-distribution-design.md` §13](../specs/polish-and-distribution-design.md),
 shaped by what we learned shipping iter-22:
 
 1. **`cerefox web` stays Python-only for v0.5.** The TS web server is a v0.6 deliverable.
@@ -2437,7 +2437,7 @@ unchanged (already TS). **Web server code lands in the existing `packages/memory
 no new npm package. The v0.5.0 `cerefox web` subcommand boots the in-process Hono
 server instead of shelling out to a Python FastAPI process.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.6.0](specs/polish-and-distribution-design.md)
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.6.0](../specs/polish-and-distribution-design.md)
 (the design doc's "`packages/web-server/`" naming is superseded — see the
 "Living design notes" callout at the top of that file for the consolidated
 single-package model).
@@ -2455,7 +2455,7 @@ single-package model).
 - Python `api/app.py` + `api/routes_api.py` kept around through v0.7.x; deprecation banner added in v0.7.0 (Part 25L); prominent in v0.8, deleted in v0.9.
 - First-run UX in web UI: empty-state getting-started panel + graceful "v0.7 feature" handling when ingestion 503s.
 - **Configure-agent Phase 2**: add Cursor, Codex CLI, Gemini CLI writers + the round-trip smoke test that was missing in v0.5.0–v0.5.4 (the one that would have caught the v0.5.3 wrong-path bug).
-- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.6.0 section covering: `cerefox web` boot smoke (both Mode 1 / Mode 2 / Mode 3 of "Local testing" below), Hono response-shape parity against FastAPI snapshots, web UI loads served from the bundled `frontend/dist/`, frontend 503 toast on ingestion endpoints, configure-agent round-trip verification. **Python web deprecation messaging is NOT in v0.6's test plan** — moves to v0.7's section per the deferred-banner decision.
+- **Update [`docs/research/v0.7-manual-test-plan.md`](../research/v0.7-manual-test-plan.md)** with a v0.6.0 section covering: `cerefox web` boot smoke (both Mode 1 / Mode 2 / Mode 3 of "Local testing" below), Hono response-shape parity against FastAPI snapshots, web UI loads served from the bundled `frontend/dist/`, frontend 503 toast on ingestion endpoints, configure-agent round-trip verification. **Python web deprecation messaging is NOT in v0.6's test plan** — moves to v0.7's section per the deferred-banner decision.
 - **Add v0.6 entry to Cerefox Decision Log** (Part 4 or Part 5 — check size before writing) capturing the FastAPI → Hono port decisions, zod-schemas-as-contract pattern, ingestion 503 deferral rationale, frontend bundling pattern, and any platform gotchas surfaced during the cut.
 
 **Locked design decisions (2026-05-27, before iteration kickoff)**:
@@ -2596,7 +2596,7 @@ DOCX support **dropped** (never used; not worth porting). **Ingestion code lands
 `packages/memory/`** (under `_shared/ingest/` since the same modules are also used by the
 Edge Functions). No new npm package.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.7.0](specs/polish-and-distribution-design.md)
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.7.0](../specs/polish-and-distribution-design.md)
 (see the "Living design notes" callout at the top of that file for the
 consolidated single-package model).
 
@@ -2613,7 +2613,7 @@ consolidated single-package model).
 - **Remaining `scripts/*.py` ported** per §12f script-language policy: `db_deploy.py`, `db_migrate.py`, `backup_create.py`, `backup_restore.py`, `reindex_all.py`. Python originals become 1-line husks pointing at the TS equivalents (matches v0.5's `cerefox`-CLI deprecation pattern).
 - **Unit-test migration** (per design doc §19): port `tests/chunking/`, `tests/embeddings/`, `tests/ingestion/`, `tests/retrieval/`, `tests/db/test_versioning.py`, `tests/db/test_audit_and_governance.py` alongside their code. **`tests/test_db_client.py` STAYS in pytest** — `CerefoxClient` itself stays in Python through v0.9+ for the Python MCP server (per the 2026-05-28 Python-minimization policy clarification). Coverage matrix produced in the iter-25 design pass confirms MCP-only ↔ ingestion-only methods don't overlap.
 - **HTTP-boundary tests for the 3 unblocked ingest endpoints** at `packages/memory/test/web-integration/ingest.test.ts`. Probe-and-skip + self-cleaning shape, same as the v0.6 `destructive.test.ts`.
-- **Update [`docs/research/v0.7-manual-test-plan.md`](research/v0.7-manual-test-plan.md)** with a v0.7.0 § 13 covering: chunking byte-parity vs Python pipeline, embedding round-trip + cosine-similarity sanity, `cerefox ingest` end-to-end on a real repo, schema-deploy via the new `db_deploy.ts`, EF-vs-TS-CLI chunker parity smoke (any random markdown ingested via both paths produces the same content_hash + chunk boundaries).
+- **Update [`docs/research/v0.7-manual-test-plan.md`](../research/v0.7-manual-test-plan.md)** with a v0.7.0 § 13 covering: chunking byte-parity vs Python pipeline, embedding round-trip + cosine-similarity sanity, `cerefox ingest` end-to-end on a real repo, schema-deploy via the new `db_deploy.ts`, EF-vs-TS-CLI chunker parity smoke (any random markdown ingested via both paths produces the same content_hash + chunk boundaries).
 - **v0.7 entry in Cerefox Decision Log** capturing the chunking-parity strategy, EF-divergence acceptance, Postgres client choice, scripts-as-husks pattern, any platform gotchas surfaced during the cut.
 
 **Locked design decisions (2026-05-28, pre-iter-25 design pass)**:
@@ -2772,7 +2772,7 @@ Plus v0.7.x carryovers that don't justify their own patch (write-commands.test.t
 
 **v0.9.0 is now Iteration 27** (split out during the 2026-05-29 design review per Fotis-25). See below.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0 + §19 test migration policy](specs/polish-and-distribution-design.md).
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.8.0 + v0.9.0 + §19 test migration policy](../specs/polish-and-distribution-design.md).
 
 > **Correction to design doc §13**: item #2 of design-doc v0.8.0 says "Python code moved to `python-legacy/` subdirectory in repo". This is **SUPERSEDED** by the 2026-05-28 maintainer call ("Python minimization, not removal"). plan.md is the source of truth for v0.8 scope.
 
@@ -3044,7 +3044,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 
 **Python MCP retention** (per Fotis-13): the Python MCP server stays **through v1.x at minimum**, frozen/unmaintained. Removal considered post-v1.0. The long-tail Python footprint is accepted.
 
-**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.9.0](specs/polish-and-distribution-design.md). The §13 v0.9.0 entry is **stale** (says "python-legacy/ deleted; pyproject.toml deleted; all tests in vitest") — superseded by "Python minimization, not removal" (2026-05-28), the v1.x retention extension (2026-05-29), and these L1–L5 decisions. Rewritten in 27J closeout.
+**Design**: [`docs/specs/polish-and-distribution-design.md` §13 v0.9.0](../specs/polish-and-distribution-design.md). The §13 v0.9.0 entry is **stale** (says "python-legacy/ deleted; pyproject.toml deleted; all tests in vitest") — superseded by "Python minimization, not removal" (2026-05-28), the v1.x retention extension (2026-05-29), and these L1–L5 decisions. Rewritten in 27J closeout.
 
 **Size**: **M–L** (T-shirt) — the rename-only scope + delete-don't-port test decision shrink this below the original L estimate. ~9 Parts (27A–27I) + 2 validation walks, single PR, one cut.
 
@@ -3274,7 +3274,7 @@ unaffected by 28E.
 
 ### 28A: OAuth 2.1 on `cerefox-mcp` — cloud/mobile Claude connectivity
 
-**Design of record**: [`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md)
+**Design of record**: [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md)
 — read it first. Derived from the maintainer's 2026-07-07 research handoff (KB doc
 `92996524-…`). The unblock: Supabase shipped a native **OAuth 2.1 Server** (beta
 2025-11-26), dissolving the GoTrue `/.well-known` conflict that forced the 2026-03-15
@@ -3378,7 +3378,7 @@ FULL-codebase audit** of the 8 primitive EFs, GPT Actions, web app, and backup/r
 > + doctor migration check). **Python chunker parity dropped** (Python retired at v1.0, 28G).
 > One open item **(c)** for 1.0.
 
-**Design**: [`docs/specs/chunk-reconstruction-design.md`](specs/chunk-reconstruction-design.md).
+**Design**: [`docs/specs/chunk-reconstruction-design.md`](../specs/chunk-reconstruction-design.md).
 Branch `fix/chunk-reconstruction`. A serious data-corruption bug: `cerefox_reconstruct_doc`
 re-synthesizes a `\n\n` separator it never stored, so any chunk split not on a paragraph
 boundary corrupts on read (duplication via a 50%-overlap hard-split, or a blank line
@@ -3401,7 +3401,7 @@ mid-word/mid-row). 4 KB docs were corrupted.
 > EF removed. `cerefox doctor` green, live e2e 45/45, OAuth confirmed. Details below are the
 > as-built record.
 
-**Design-of-record**: [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md)
+**Design-of-record**: [`docs/specs/ef-auth-migration-design.md`](../specs/ef-auth-migration-design.md)
 (the full, self-contained design + defensive rollout order — start there).
 
 **Problem (surfaced by the 2026-07-09 rotation attempt).** Supabase's Edge Function gateway
@@ -3414,7 +3414,7 @@ revoked, not rotated** (revoking kills the whole EF path). So **any Cerefox user
 key leaks is stuck**: they can't cycle it without disabling GPT Actions / remote MCP. A real
 security gap for every user on the anon-key/EF path (not just the maintainer).
 
-**Fix — full design in [`docs/specs/ef-auth-migration-design.md`](specs/ef-auth-migration-design.md).**
+**Fix — full design in [`docs/specs/ef-auth-migration-design.md`](../specs/ef-auth-migration-design.md).**
 Deploy the 8 primitive EFs with `--no-verify-jwt` and validate the caller's credential
 **in-function**, using a **rotatable, appropriately-scoped Cerefox-managed access token** —
 NOT a Supabase key:
@@ -3527,7 +3527,7 @@ Deliverables:
 
 ### 28C: The contract
 
-Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-design.md` §13 v1.0.0](specs/polish-and-distribution-design.md).
+Strict SemVer becomes binding. **Design**: [`docs/specs/polish-and-distribution-design.md` §13 v1.0.0](../specs/polish-and-distribution-design.md).
 
 ---
 
@@ -3689,7 +3689,7 @@ a completely separate body of work that shares neither code nor schedule with it
 naming collision is historical — both got tagged "Iteration 18" at different points in
 2026 when each was the next thing planned.
 
-**Design**: [`docs/research/document-relations-and-semantic-graph.md`](research/document-relations-and-semantic-graph.md) —
+**Design**: [`docs/research/document-relations-and-semantic-graph.md`](../research/document-relations-and-semantic-graph.md) —
 562-line technical brief originally drafted April 2026 (filename changed
 2026-05-25 from `iteration-18-design.md` to match topic-based naming
 convention used by other docs in `docs/research/`). Covers:
@@ -3729,10 +3729,10 @@ sync). Worth breaking into 28a/28b/28c when scheduled.
 the `/rest/v1` proxy, ghcr multi-arch publish, `install-local.sh` + the `cerefox-local`
 host command, per-install JWT. The follow-up **Iteration 31 (local ONNX embedder,
 fully-offline World B) shipped at v1.0.0** — design of record:
-[`docs/research/local-embedder-design.md`](research/local-embedder-design.md); it never
+[`docs/research/local-embedder-design.md`](../research/local-embedder-design.md); it never
 got its own plan section (tracked through the Iteration 28 / 1.0.0 release line instead).
 The section below is kept as the design/history record. Design of record:
-[`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md) — **read
+[`docs/research/local-cerefox-design.md`](../research/local-cerefox-design.md) — **read
 it first**: topology, the data-access audit, the D1 decision, the supabase-js↔PostgREST
 version-coupling caveat, and the phase breakdown. Work lands on `feat/local-cerefox`.
 
@@ -4401,7 +4401,7 @@ release-sequencing notes under Iteration 28).
 release scope + remaining steps" table under Iteration 28.** On `feat/oauth-mcp`:
 28A OAuth MCP (working) + 28B security fixes (deployed, OAuth surface) + the interim
 chunker keep-whole fix. Newly scoped as design-of-record: **28D chunk-reconstruction**
-([`docs/specs/chunk-reconstruction-design.md`](specs/chunk-reconstruction-design.md),
+([`docs/specs/chunk-reconstruction-design.md`](../specs/chunk-reconstruction-design.md),
 branch `fix/chunk-reconstruction`). **Held priority TODOs** (in the scope table): anon-key
 rotation, secret cleanup, full-codebase security audit, recovery of the 4 chunker-corrupted
 docs, and (maybe) retiring the Python MCP fallback at v1.0. Branch strategy: separate
@@ -4415,7 +4415,7 @@ OAuth 2.1 Server (beta 2025-11-26) unblocked what was deferred 2026-03-15. Shipp
 20 tests), `cerefox-mcp` as an RFC 9728 protected resource (`--no-verify-jwt`), the
 `_shared/consent-page/` markup rendered by a free **Cloudflare Worker** (Supabase EFs
 can't serve HTML on the default domain), and the per-EF deploy-flag map. Design of record:
-[`docs/specs/oauth-mcp-server-design.md`](specs/oauth-mcp-server-design.md). Full decision
+[`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md). Full decision
 history + the R1/R2 live gotchas: Decision Log Q3 Part 1 (KB). Remaining in iter-28:
 Phase 5 regression matrix, then 28B (security audit, Fable 5) + 28C (v1.0 contract).
 **Not yet merged to `main` or released** — still on `feat/oauth-mcp`.
@@ -4445,4 +4445,4 @@ container self-generated JWT, `install-local.sh` as a Release asset, completion 
 `configure-agent` for both bins, port auto-selection, and the World-B guide rewrite
 all landed and were validated. v0.10.3 then fixed the `cerefox server deploy` EF
 bundler (`--use-api`, issue #84). Design of record:
-[`docs/research/local-cerefox-design.md`](research/local-cerefox-design.md).
+[`docs/research/local-cerefox-design.md`](../research/local-cerefox-design.md).

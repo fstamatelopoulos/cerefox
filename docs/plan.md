@@ -10,7 +10,7 @@
 > **How to use it:**
 > - **[`## Current Focus`](#current-focus) is at the top.** It is the live status
 >   and what's next; the active iteration follows it. Closed iterations move to
->   [`plan-history.md`](plan-history.md), so this file stays short enough to read
+>   [`plans/history.md`](plans/history.md), so this file stays short enough to read
 >   in full. (It was one 4,500-line file with the live status at the very bottom
 >   until 2026-08-09, when an automated edit searching for that heading matched
 >   this very sentence instead and truncated the entire history. Restored from
@@ -94,6 +94,6 @@ The dated iteration log above this section remains the high-level progress recor
 ## History
 
 Iterations 1–33 — everything shipped through v1.2.0 — are in
-[`plan-history.md`](plan-history.md), the master history log. From iteration 34
+[`plans/history.md`](plans/history.md), the master history log. From iteration 34
 on, an active iteration gets its own plan under [`plans/`](plans/), linked from
 Current Focus above and from the history log when it closes.
