@@ -173,10 +173,12 @@ async function action(options: MigrateOptions): Promise<void> {
     // other reader uses — so we convert exactly what a reader would see.
     // Column names are the RPC's own (doc_title / full_content), not the
     // table's — an easy mismatch to assume wrong, so it is spelled out here.
-    let doc: { doc_title: string; full_content: string; content_hash: string } | null = null;
+    let doc:
+      | { doc_title: string; doc_source: string; full_content: string; content_hash: string }
+      | null = null;
     try {
       const rows = await client.rpc<
-        Array<{ doc_title: string; full_content: string; content_hash: string }>
+        Array<{ doc_title: string; doc_source: string; full_content: string; content_hash: string }>
       >("cerefox_get_document", { p_document_id: id, p_version_id: null });
       doc = rows?.[0] ?? null;
     } catch (err) {
@@ -193,7 +195,12 @@ async function action(options: MigrateOptions): Promise<void> {
         text: doc.full_content,
         title: doc.doc_title,
         documentId: id,
-        source: "migrate-format",
+        // A format conversion is not a change of origin, so the document keeps
+        // the source it came in with (#191 — this used to hardcode
+        // "migrate-format" and overwrite provenance corpus-wide). The version
+        // row still records that this run performed the write.
+        source: doc.doc_source,
+        sourceLabel: "migrate-format",
         author,
         authorType,
         // Compare-and-swap against what we just read: a concurrent edit makes

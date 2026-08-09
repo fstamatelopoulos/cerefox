@@ -51,6 +51,17 @@ export interface IngestTextOptions {
   text: string;
   title: string;
   source?: string;            // default "paste"
+  /**
+   * Version-row label recording how THIS write was triggered, as distinct from
+   * `source`, which is the document's own origin. Defaults to `source`, which
+   * is right for ordinary saves where the two coincide.
+   *
+   * They diverge for maintenance commands that rewrite a document without
+   * changing where it came from: `server migrate-format` preserves the
+   * document's `source` and labels the version it archives "migrate-format",
+   * so the history still shows which run performed the conversion (#191).
+   */
+  sourceLabel?: string;
   sourcePath?: string | null;
   projectName?: string | null;
   projectId?: string | null;
@@ -88,6 +99,8 @@ export interface UpdateDocumentOptions {
   text: string;
   title: string;
   source?: string;             // default "manual"
+  /** Version-row label — see IngestTextOptions.sourceLabel. Defaults to `source`. */
+  sourceLabel?: string;
   projectId?: string | null;
   projectIds?: string[] | null;
   metadata?: Record<string, unknown> | null;
