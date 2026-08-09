@@ -256,7 +256,7 @@ describe("document insert / edit-parts / get --outline", () => {
     const out = run(["document", "insert", "--help"]);
     expect(out.status).toBe(0);
     expect(out.stdout).toContain("end_of_section");
-    expect(out.stdout).toContain("--expected-hash");
+    expect(out.stdout).toContain("--expected-content-hash");
   });
 
   test("document edit-parts is registered", () => {
@@ -274,12 +274,12 @@ describe("document insert / edit-parts / get --outline", () => {
   test("insert without the concurrency token fails rather than defaulting", () => {
     const out = run(["document", "insert", "some-id", "-t", "x"]);
     expect(out.status).not.toBe(0);
-    expect(out.stdout + out.stderr).toContain("expected-hash");
+    expect(out.stdout + out.stderr).toContain("expected-content-hash");
   });
 
   test("edit-parts rejects malformed JSON with an example", () => {
     const out = run([
-      "document", "edit-parts", "some-id", "-o", "{not json", "--expected-hash", "x",
+      "document", "edit-parts", "some-id", "-o", "{not json", "--expected-content-hash", "x",
     ]);
     expect(out.status).not.toBe(0);
     expect(out.stdout + out.stderr).toContain("not valid JSON");
