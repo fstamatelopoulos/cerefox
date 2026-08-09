@@ -66,12 +66,23 @@ location. Plus `get_document` outline mode, and #189 (create returns
      of operations inside a batch was unrecoverable → `clock_timestamp()`
    - the new config key was in the TS catalog but missing from
      `cerefox_set_config`'s in-RPC allow-list, so it was unsettable
-5. **⏳ MCP handlers** — `insert.ts`, `edit.ts`, `outline` on get-document.
-6. **⏳ CLI** — `document insert`, `document edit`, `document get --outline`.
-7. **⏳ Live e2e against staging** — probe-and-skip, self-cleaning; doubles as the
-   joint walkthrough script.
-8. **⏳ Docs + review** — CHANGELOG, agent guides, EF version, security and
-   regression pass.
+5. **✅ MCP handlers** — `cerefox_insert`, `cerefox_edit` (one shared write path
+   so the two cannot drift), `outline` on `get_document`. 22 handler tests.
+6. **✅ CLI** — `document insert`, `document edit-parts`, `document get --outline`,
+   through the same shared handlers. Round-tripped against staging.
+7. **✅ Live e2e against staging — 12/12**, real embeddings, real RPC. Guarded to
+   skip on any server below schema 0.11.0, so it cannot touch an
+   un-upgraded store. Three findings fixed: the create response did not carry
+   `content_hash` (so #189's fix never reached an agent), a store-wide unique
+   constraint surfaced as a raw duplicate-key error, and the suite's own cleanup
+   overran its timeout and stranded fixtures.
+8. **✅ Docs + review** — CHANGELOG, `AGENT_QUICK_REFERENCE.md` (+ rebundled for
+   `cerefox_get_help`), GPT Actions OpenAPI synced to 3.1.0, `EF_VERSION` 1.3.0.
+   Security pass: no new credential surface, no SQL assembled from input, no
+   unbounded reads, and the audit CHECK remains the allow-list. Regression pass:
+   existing live write/read suites 26/26 against the new schema.
+
+**Remaining for tomorrow**: joint staging walkthrough, then PR → `v1.3.0-beta.1`.
 
 ## Guardrails
 

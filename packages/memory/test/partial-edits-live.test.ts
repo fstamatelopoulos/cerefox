@@ -104,7 +104,24 @@ beforeAll(async () => {
       openaiApiKey: settings.openaiApiKey ?? "",
     } as ToolContext;
     const { error } = await client.raw.from("cerefox_documents").select("id").limit(1);
-    reachable = !error;
+    if (error) return;
+
+    // Refuse to run against a server that lacks the feature — which, until the
+    // rollout completes, means production. Without this the suite would seed
+    // documents and only then fail on the unknown RPC signature, writing to a
+    // store it was never meant to touch. Checking the schema costs one call and
+    // makes the blast radius zero.
+    const version = (await client.rpc<string>("cerefox_schema_version")) ?? "0.0.0";
+    const [maj, min, patch] = String(version).split(".").map((n) => parseInt(n, 10) || 0);
+    const supported = maj > 0 || min > 11 || (min === 11 && patch >= 0);
+    if (!supported) {
+      console.log(
+        `[partial-edits-live] skipped: server schema ${version} predates 0.11.0. ` +
+          `Point at a deployed environment: CEREFOX_CONFIG_DIR=~/.cerefox/staging`,
+      );
+      return;
+    }
+    reachable = true;
   } catch {
     reachable = false;
   }

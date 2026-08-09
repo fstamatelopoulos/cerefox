@@ -8,7 +8,9 @@ Cerefox is a persistent, shared knowledge base. You have **14 MCP tools** (13 of
 |------|---------|------------|
 | `cerefox_search` | Find documents (hybrid FTS + semantic) | `query` (required), `project_name`, `metadata_filter`, `requestor` |
 | `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `expected_content_hash` (**required on content updates** — see rule 9), `last_write_wins`, `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata` (omit on update to keep existing tags; `{}` clears), `author` |
-| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token) | `document_id` (required) |
+| `cerefox_insert` | **Add** to a document without resending it. Cannot destroy content. | `document_id`, `text`, `position` (`end_of_document`/`end_of_section`/`after_heading`/`before_heading`), `expected_content_hash` (required), `anchor_heading` (unless `end_of_document`), `section_part` |
+| `cerefox_edit` | **Change** parts of a document: 1..n operations applied atomically | `document_id`, `operations` (`insert`/`replace_section`/`delete_section`), `expected_content_hash` (required) |
+| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token), or with `outline: true` just its heading paths, sizes and hash | `document_id` (required), `outline` |
 | `cerefox_list_versions` | Version history of a document | `document_id` (required) |
 | `cerefox_set_relation` ⚑ | Link two documents (`source --rel_type--> target`) | `source_id`, `target_id`, `rel_type` (required), `metadata`, `author` |
 | `cerefox_delete_relation` ⚑ | Remove a relation | `source_id`, `target_id`, `rel_type` |
@@ -25,6 +27,33 @@ Cerefox is a persistent, shared knowledge base. You have **14 MCP tools** (13 of
 operator enables them (`relations_enabled`). **Trust your own tool list**: if
 they are not in it, the feature is switched off for this deployment. That is
 normal, not an error, and not something to work around.
+
+## Editing part of a document (prefer this over re-sending)
+
+**Re-sending a whole document to change part of it is the main way agents lose
+data.** You have to reproduce the untouched remainder verbatim, and any drift
+silently rewrites content nobody asked you to touch — which the caller cannot
+diff. Use the partial-edit tools instead:
+
+1. **Learn the anchors** — `cerefox_get_document(document_id, outline: true)`.
+   Returns heading paths, per-section sizes and the `content_hash`, without the
+   body. The paths it returns are exactly what `anchor_heading` accepts.
+2. **Add** → `cerefox_insert`. `end_of_document` is a plain append;
+   `end_of_section` adds inside a named section. It is structurally incapable of
+   removing anything, so "I meant to append" cannot become "I replaced the file".
+3. **Change or remove** → `cerefox_edit`. Put changes that belong together in
+   ONE call: they apply atomically, so a table row and the total it feeds cannot
+   end up disagreeing. To change a single line, `replace_section` on its
+   smallest enclosing heading — that is the intended granularity, not a
+   workaround.
+4. Both require `expected_content_hash` and **have no last-write-wins**. A
+   conflict means someone else changed the document; re-read and decide, do not
+   force it.
+
+**When an anchor is ambiguous the tool refuses and hands you the options** — a
+repeated heading returns the qualifying paths, and a section with both its own
+content and sub-sections returns both `section_part` choices. That is a
+recoverable answer, not a failure: retry with what it gave you.
 
 ## Essential Rules
 

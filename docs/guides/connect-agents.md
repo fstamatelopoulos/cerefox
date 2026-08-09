@@ -610,7 +610,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 3.0.0
+  version: 3.1.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -780,7 +780,9 @@ paths:
               project_id?, project_name?,   # set when a project was assigned on create
               skipped?,                      # true when identical content was deduplicated
               updated?,                      # true when an existing doc was updated
-              content_hash?,                 # the NEW hash after an update (the next edit's token)
+              content_hash,                  # the new hash — returned on CREATE as well as
+                                             # update, so a new document is born holding
+                                             # its own concurrency token (#189)
               message?,                      # human note on dedup/skip/update
               note? }                        # note when a flag (e.g. update_if_exists) was overridden
         '400':
