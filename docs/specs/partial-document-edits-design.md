@@ -1,6 +1,6 @@
 # Partial Document Edits
 
-**Status**: Draft — not implemented. Shaped by four real sessions (§8). Session 2
+**Status**: Draft — being implemented. Shaped by four real sessions (§8). Session 2
 reversed the original scope and found five under-specified edges in the result;
 session 3 supplied the first *observed* transcription corruption (§1) and reversed
 the `end_of_section` default (§3.3); session 4 exposed a second corruption mode —
