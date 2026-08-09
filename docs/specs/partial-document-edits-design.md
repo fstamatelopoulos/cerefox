@@ -1,8 +1,11 @@
 # Partial Document Edits
 
 **Status**: Draft — not implemented. Revised 2026-08-08 against feedback from a
-second real session, which contradicted the scope this document originally
-proposed (§3, §8). Still seeking sessions before committing to semantics.
+second real session, which contradicted the scope this document originally proposed
+and reshaped the contract (§3, §8). Still gathering sessions before committing to
+semantics — **if you are an agent using Cerefox as memory, §8 is what we want from
+you**, and [issue #186](https://github.com/fstamatelopoulos/cerefox/issues/186) is
+where to put it.
 **Date**: 2026-08-08
 **Motivation**: an agent that wants to add three paragraphs to a 24,000-character
 document must currently resend all 24,000. That is a correctness problem before it
@@ -46,9 +49,9 @@ See §8 Q4 on why "no corruption observed" is weak evidence here.
 Everything below follows from that. The agent never holds the full document in
 order to modify part of it.
 
-## 3. Proposed operations
+## 3. The contract
 
-Two real sessions have now reported their write mix, and they disagree:
+Two real sessions have reported their write mix, and they disagree:
 
 | session | pure appends | mid-document edits |
 |---|---|---|
@@ -58,112 +61,156 @@ Two real sessions have now reported their write mix, and they disagree:
 That disagreement is the most useful thing we know, and it is not noise. The split
 falls along **document kind**, not along agent or habit: registries and logs
 accumulate at the end, while strategy documents, plans and indexes get edited in
-place. A knowledge base that is mostly the first kind sees mostly appends; one that
-is mostly the second sees mostly section edits. Both kinds are normal, and a store
-tends to accumulate the second kind as it matures.
+place. A store tends to accumulate the second kind as it matures.
 
-**The earlier recommendation is therefore withdrawn.** This document previously
-proposed shipping `append` alone, gathering usage, and only then deciding on
-anything else. Against the second session, `append` alone would have covered
-roughly 30% of writes and left the other 70% doing exactly what §1 describes: full
-re-ingests of 6,000 to 13,000 character documents to change a few lines, each one
-reproducing tables and contact lists verbatim while editing something unrelated.
+**Session 1's 100% should be discounted further than it first appeared.** It was
+writing the Cerefox Decision Log, which carries an explicit *"append, never
+compress"* rule. That figure therefore measures a **policy that mandates appending**
+rather than a natural distribution of intent. The document it was writing to had
+already decided the answer. Session 2, editing ordinary strategy documents under no
+such rule, is the better evidence about what agents reach for, and this document is
+now weighted accordingly.
 
-**Minimum viable set: `append`, `append_to_section`, `replace_section`.** The first
-two share a safety profile and should ship together; the third is what makes
-line-level edits tolerable without a line-level primitive (§3.8).
+Appending is still real and still the right primitive for logs. It is just not the
+*shape* of the feature, which is what the previous draft got wrong.
 
-Every operation below requires `expected_content_hash` and surfaces conflicts
-rather than retrying them (§5), and every one returns the new hash rather than the
-document (§3.6).
+### 3.1 One addressing model
 
-### 3.1 `append` — add to the end of a document
+Every operation names a **position**. Only one of them needs no anchor:
+
+| position | anchor | meaning |
+|---|---|---|
+| `end_of_document` | none | add to the end of the document (the old `append`) |
+| `end_of_section` | heading | add to the end of a section's body |
+| `after_heading` | heading | add immediately after the heading, before its body |
+| `before_heading` | heading | add a new block before an existing section |
+
+`append` is not a separate operation; it is `end_of_document`. Collapsing it in
+costs nothing and buys a lot: one addressing vocabulary instead of two, and
+`before_heading` / `after_heading` stop being a separate feature to schedule and
+become two more values in an enum that already exists. They are **in scope**, not
+deferred.
+
+### 3.2 Why this is three tools and not one
+
+The obvious next step is to collapse further: one `edit` tool taking a position, an
+operation, and text. Orthogonal, minimal, elegant. This section argues against it,
+but the argument is a trade-off rather than a rule, and it is worth re-opening if
+someone sees it differently.
+
+The relevant fact is in the MCP specification, not in anything Cerefox has already
+built: **tool annotations are declared per tool, in the `tools/list` response.**
+There is no per-call annotation. A tool's `destructiveHint` therefore has to
+describe its worst case, not the call in front of the user.
+
+That gives three shapes:
+
+- **One `edit` tool, annotated destructive.** Honest, and it makes every purely
+  additive insert prompt as though it might remove a section. The documented
+  response to a tool that always warns is to blanket-approve it, at which point the
+  annotation stops carrying information for the calls where it mattered.
+- **One `edit` tool, annotated non-destructive.** Rejected outright: it tells
+  clients a delete is safe.
+- **Split along the safety boundary.** The additive surface can honestly declare
+  itself additive, and the destructive surface can honestly warn.
+
+The third is recommended, so the tool boundary follows the **safety** boundary
+rather than the elegance boundary:
+
+- **`cerefox_insert`** — every position in §3.1. Purely additive. Cannot destroy
+  content, because it never addresses any. Annotated **not destructive**.
+- **`cerefox_replace_section`** — overwrites a section's body. Destructive.
+- **`cerefox_delete_section`** — removes a section. Destructive.
+
+One addressing model, three tools, split where the risk changes. An agent can be
+granted the additive tool freely and asked about the other two, which is the
+distinction annotations exist to express.
+
+The cost is real and worth naming: three tool descriptions to keep consistent
+instead of one, and a client that wants "let this agent edit documents" has to
+grant three things. If that friction shows up in practice, collapsing to one
+destructive-annotated `edit` is a legitimate alternative — it trades prompt
+fidelity for surface area, and the v1.2.0 annotation work is a starting point to
+revise, not a commitment to honour.
+
+### 3.3 `cerefox_insert` — additive, any position
 
 ```jsonc
-{ "document_id": "…", "text": "\n## 2026-08-08 — …\n…" }
+{ "document_id": "…",
+  "position": "end_of_section",
+  "anchor_heading": "## Active decisions",
+  "text": "- …",
+  "expected_content_hash": "…" }
 ```
 
-The dominant pattern for decision logs, activity logs, journals, running notes and
-meeting records. Purely additive: it cannot destroy existing content, because it
-never addresses any.
+`anchor_heading` is required for every position except `end_of_document`, where it
+must be absent.
 
-### 3.2 `append_to_section` — add to the end of a section
+This is the highest-value tool in the set, and `end_of_section` is its highest-value
+position: session 2 reached for it more than anything else (a bullet into a list
+under a heading, a lesson under a subheading, a block inside an existing section).
+It is *append, scoped to a section* — the same purely additive, unclobberable
+operation, just anchored.
+
+`before_heading` and `after_heading` address the **seam** between sections rather
+than a section's interior, so anchor uniqueness matters more for them (§3.6). They
+are still additive: a mis-anchored insert puts text in the wrong place, which is
+visible and fixable, not lost.
+
+### 3.4 `cerefox_replace_section` — swap a section's body
 
 ```jsonc
-{ "document_id": "…", "anchor_heading": "## Active decisions", "text": "- …" }
+{ "document_id": "…", "anchor_heading": "## Outcome", "text": "…",
+  "expected_content_hash": "…" }
 ```
 
-**This is the highest-value operation in the set after `append`, and it was the gap
-in the previous draft.** Requested directly by the second session, which reached
-for it more than anything else: adding a bullet to a list under a heading, adding a
-lesson under a subheading, adding a block inside an existing section.
-
-It belongs next to `append` rather than next to `replace_section` because it shares
-`append`'s safety profile rather than `replace_section`'s. It is *append, scoped to
-a section*: purely additive, anchored to an unambiguous heading, and structurally
-incapable of clobbering content. Everything that makes `append` safe to ship first
-is equally true of it. The only new machinery is anchor resolution (§3.5), which
-`replace_section` needs anyway.
-
-Together, `append` and `append_to_section` would have covered roughly 70% of the
-second session's writes with two operations that cannot silently lose anything.
-
-### 3.3 `replace_section` — swap the body under a heading
-
-```jsonc
-{ "document_id": "…", "anchor_heading": "## Outcome", "text": "…" }
-```
-
-Not purely additive, so it carries real risk, but bounded: a wrong anchor damages
-one section rather than a document.
+Not additive, so it carries real risk, but bounded: a wrong anchor damages one
+section rather than a document.
 
 It also carries a load the previous draft did not credit it with. Roughly half of
-the second session's mid-document edits were to a **single line or bullet inside a
-larger section**, not to a whole section. `replace_section` serves those by having
-the agent resend the enclosing section, which is small, reviewable, and safe. That
-is worse than surgical and much better than resending the document, and the
-alternative (a line-anchored primitive) is the one thing the same session asked us
-not to build. See §3.8.
+session 2's mid-document edits were to a **single line or bullet inside a larger
+section**. `replace_section` serves those by having the agent resend the enclosing
+section: worse than surgical, far better than resending the document, and
+deliberately preferred over the line-anchored alternative (§3.8).
 
-### 3.4 `delete_section` — remove a section
+### 3.5 `cerefox_delete_section` — remove a section
 
 ```jsonc
-{ "document_id": "…", "anchor_heading": "## Obsolete", "scope": "body_only" }
+{ "document_id": "…", "anchor_heading": "## Obsolete",
+  "scope": "body_only", "expected_content_hash": "…" }
 ```
 
 The previous draft left "does the heading itself go, or only the body?" open. It is
-answered: **a `scope` parameter, defaulting to `body_only`**, because both are real
-needs. Removing a subsection outright wants `heading_and_body`; clearing a section
-in order to refill it wants `body_only`. Defaulting to `body_only` is the safer of
-the two, since it preserves the structural anchor and leaves the document's outline
-intact.
+answered: **a `scope` parameter defaulting to `body_only`**, because both are real.
+Removing a subsection outright wants `heading_and_body`; clearing a section to
+refill it wants `body_only`. The default preserves the structural anchor and the
+document's outline.
 
-Deletion still deserves particular care: it is the one operation where a wrong
-anchor destroys content the caller never saw and cannot diff, and where the agent's
-intent ("remove the obsolete section") is indistinguishable in the response from
-the failure ("removed the wrong one"). The mitigation is §3.5 plus returning enough
-in the response (§3.6) to notice.
+Deletion deserves particular care: it is the one operation where a wrong anchor
+destroys content the caller never saw and cannot diff, and where the agent's intent
+("remove the obsolete section") is indistinguishable in the response from the
+failure ("removed the wrong one"). Mitigations are §3.6 and §3.7.
 
-### 3.5 Anchor resolution: never guess
+### 3.6 Anchor resolution: never guess
 
-Every heading-anchored operation shares one failure mode, and it is the one that
-corrupts documents quietly. The rules:
+Every anchored position shares one failure mode, and it is the one that corrupts
+documents quietly. The rules:
 
-- **Absent anchor → error.** Never fall back to appending at the end. An agent that
-  mistyped a heading and got a silent append has a document with content in the
-  wrong place and a success response.
-- **Ambiguous anchor → error, naming the collisions.** Duplicate headings are
-  common in real documents (`### Notes` under three parents). Matching the first is
-  a coin flip that writes to the wrong section half the time. The error should say
-  what matched so the agent can disambiguate.
-- **Matching is exact on the heading text**, after trimming whitespace. Normalised
-  or fuzzy matching buys convenience and pays for it in exactly the silent-wrong-
-  location failures this whole design exists to avoid.
+- **Absent anchor → error.** Never fall back to inserting at the end. An agent that
+  mistyped a heading and got a silent `end_of_document` has content in the wrong
+  place and a success response.
+- **Ambiguous anchor → error, naming the collisions.** Duplicate headings are common
+  in real documents (`### Notes` under three parents). Matching the first is a coin
+  flip that writes to the wrong section half the time. The error should report what
+  matched so the agent can disambiguate.
+- **Matching is exact on heading text**, after trimming whitespace. Normalised or
+  fuzzy matching buys convenience and pays for it in precisely the silent-wrong-
+  location failures this design exists to avoid.
 
 A design that guesses here corrupts documents quietly, which is strictly worse than
 one that refuses.
 
-### 3.6 What every operation returns
+### 3.7 What every operation returns
 
 **The new `content_hash` and the resulting size. Not the document body.**
 
@@ -172,30 +219,22 @@ needs a fresh token for its `expected_content_hash` (§5). Returning the full
 document would spend exactly the tokens the feature exists to save, on the response
 side, undoing the win.
 
-### 3.7 Deferred: `insert_before` / `insert_after`
-
-Inserting a new section *between* two existing ones, or lead-in text immediately
-after a heading and before its body. Real needs, but a tier below the above: they
-address the **seam** between sections rather than a section itself, so anchor
-uniqueness matters more, and getting it wrong misplaces content rather than
-misaddressing it. Ship the three-operation set first.
-
 ### 3.8 Deliberately excluded, and confirmed by usage
 
 **Find/replace on arbitrary strings** and **diff/patch application**. Both fail in
 the worst possible way: silently editing the wrong location.
 
 This was a prediction in the previous draft. It now has direct support from the
-session with the most to gain from it. Asked whether it wanted line-anchored
-editing ("insert after the line containing X"), having just spent a session doing
-line-level edits by hand, the answer was no: *"I'd rather resend a section via
+session with the most to gain from it. Asked whether it wanted line-anchored editing
+("insert after the line containing X"), having just spent a session doing line-level
+edits by hand, the answer was no: *"I'd rather resend a section via
 `replace_section` to change one line within it than have a line-anchored primitive
 that guesses."* The stated sweet spot is section-scoped operations, with line-level
 changes served by resending the enclosing section.
 
 That is a user declining a feature that would have saved them effort, because the
-failure mode is unrecoverable and invisible. Worth recording as the strongest
-evidence in this document.
+failure mode is unrecoverable and invisible. It remains the strongest evidence in
+this document.
 
 ## 4. Where it should live: not in an RPC
 
@@ -323,10 +362,17 @@ Both settled — recorded here as decisions, not options.
 
 ### 6.1 Audit: one operation value per command
 
-**Decided: each partial-edit command gets its own `operation` value** —
-`append`, `append-to-section`, `replace-section` and `delete-section`. That is a
-change to the `cerefox_audit_log_operation_check` constraint, the same shape as
-`relation-set` / `relation-delete` in iteration 29.
+**Decided: each partial-edit command gets its own `operation` value** — `insert`,
+`replace-section` and `delete-section`. That is a change to the
+`cerefox_audit_log_operation_check` constraint, the same shape as `relation-set` /
+`relation-delete` in iteration 29.
+
+Three values, matching the three tools (§3.2), **not one per position**. The
+constraint should distinguish *added to* from *rewrote* from *removed*, which is
+what a reader of the trail needs; whether an insert landed at `end_of_document` or
+`end_of_section` is detail about the same intent, and belongs in the audit entry's
+recorded arguments rather than in a constrained enum that would then need widening
+every time a position is added.
 
 The reasoning is worth stating because the implementation argues the other way.
 These commands are built *on top of* the ingest primitive, so it is tempting to
@@ -400,18 +446,18 @@ not.
 
 1. **What fraction of your writes are pure appends?**
    Session 1: 100%. Session 2: ~30%, with ~70% mid-document. This is what
-   withdrew the "ship `append` alone" plan and added `append_to_section` (§3).
+   withdrew the "ship `append` alone" plan and reshaped the contract (§3).
    The split tracks document kind, not agent preference.
 
 2. **When you edit mid-document, what are you addressing?**
    Heading-anchored sections, and about half the time a single line or bullet
    *within* one. Heading addressing covers roughly half the need directly; the
-   rest is served by resending the enclosing section (§3.3).
+   rest is served by resending the enclosing section (§3.4).
 
 3. **Would you accept an operation that does not return the document?**
    Yes, and it is preferred: return the new `content_hash` and size, not the body,
    because edits get chained and each follow-up needs a fresh token. Returning the
-   body would spend the saved tokens on the response. Now §3.6.
+   body would spend the saved tokens on the response. Now §3.7.
 
 4. **Has re-sending a full document ever produced an edit you did not intend?**
    No known instance, and the answer came with the reason that matters: *"that's
@@ -425,7 +471,7 @@ not.
    No. The real deletions were line-level (a stale bullet, a removed gate), not
    whole sections. The accepted answer is still section-scoped: resend the
    enclosing section rather than build line-anchored deletion. Drove the `scope`
-   parameter in §3.4.
+   parameter in §3.5.
 
 6. **If writes were cheap, how much more often would you write?**
    Meaningfully more. Session 2 batched changes deliberately to avoid expensive,
@@ -439,10 +485,13 @@ not.
   registries, and that stores drift toward section editing as they mature. Two
   data points cannot settle it, and the answer changes what gets built after the
   minimum set.
-- **`insert_before` / `insert_after` (§3.7)** — wanted, deferred. Does resending a
-  section cover the need well enough that the seam operations never become
-  worthwhile?
-- **Does an error on an ambiguous anchor (§3.5) annoy more than it protects?** The
+- **Do the seam positions (`before_heading` / `after_heading`) get used?** They are
+  in scope rather than deferred, because collapsing `append` into a positional
+  `insert` (§3.1) made them two enum values rather than a separate feature. That is
+  cheap to build and still possible to over-serve: if real sessions only ever use
+  `end_of_document` and `end_of_section`, the seam positions are two more ways to
+  mis-anchor for little gain.
+- **Does an error on an ambiguous anchor (§3.6) annoy more than it protects?** The
   design deliberately refuses rather than guesses. Real duplicate-heading
   documents will tell us whether the refusal lands as safety or as friction.
 
