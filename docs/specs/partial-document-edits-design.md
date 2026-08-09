@@ -1,6 +1,9 @@
 # Partial Document Edits
 
-**Status**: Draft — not implemented. Shaped by four real sessions (§8). Session 2
+**Status**: **FROZEN for v1 implementation, 2026-08-09.** The contract below is
+the build's success criterion; changes now require a session finding, not a review.
+Technical design: [`partial-edits-technical-design.md`](partial-edits-technical-design.md).
+Shaped by four real sessions (§8). Session 2
 reversed the original scope and found five under-specified edges in the result;
 session 3 supplied the first *observed* transcription corruption (§1) and reversed
 the `end_of_section` default (§3.3); session 4 exposed a second corruption mode —
@@ -426,6 +429,15 @@ Deletion deserves particular care: it is the one operation where a wrong anchor
 destroys content the caller never saw and cannot diff, and where the agent's intent
 ("remove the obsolete section") is indistinguishable in the response from the
 failure ("removed the wrong one"). Mitigations are §3.7 and §3.8.
+
+**The §3.3 nesting rule applies to `replace_section` and `delete_section` targets
+identically** (freeze-pass clarification, 2026-08-09): when the anchored section
+has both its own body and child headings, "the section" is ambiguous in exactly
+the same two ways — its own body, or the whole subtree — and the stakes are higher
+here because the operation is destructive. Same resolution: a leaf section is
+unambiguous; a section with both errors with the two candidates and accepts
+`section_part` (`"own_body"` | `"subtree"`). One rule for every anchored
+operation, and none of them guesses.
 
 ### 3.7 Anchor resolution: never guess
 
