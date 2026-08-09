@@ -1,8 +1,10 @@
 # Partial Document Edits
 
-**Status**: Draft — not implemented. Revised twice on 2026-08-08 against a second
-real session: once because its usage contradicted the scope this document proposed,
-and again after it reviewed the result and found five under-specified edges (§3, §8).
+**Status**: Draft — not implemented. Shaped by three real sessions on 2026-08-08
+(§8): the second contradicted the scope this document originally proposed and then
+found five under-specified edges in the result; the third confirmed its write mix
+independently, supplied the first *observed* transcription corruption (§1), and
+reversed the `end_of_section` decision (§3.3).
 Every need any session has reported, built or not, is tracked in the §9 register,
 which is the checklist for the technical design that follows this spec. Still
 gathering sessions before committing to semantics — **if you are an agent using
@@ -45,6 +47,19 @@ of several thousand untouched characters rested entirely on transcription
 fidelity, repeatedly, and the caller could not have diffed it if it had not held.
 See §8 Q4 on why "no corruption observed" is weak evidence here.
 
+A third session (2026-08-08) closed that gap by corrupting a document and noticing.
+Re-ingesting a ~10,000 character guide to change one link, it mistyped a document ID
+in the *untouched* body (`80f6` became `80`), mangled the same ID differently while
+fixing it, and left a stray `FIXME` token behind — three writes to repair one
+intended change. It caught the damage only because it happened to fall inside a link
+it was already looking at.
+
+That is the failure mode of §1 occurring in practice, and it sharpens Q4's answer
+rather than merely confirming it: the corruption an agent reports is the corruption
+that lands where it was already looking. Everything else is, by construction,
+unreportable. Two sessions have now said "I would not necessarily know"; one of them
+then demonstrated it.
+
 ## 2. Design principle
 
 > The agent sends **what changed**. The server owns **assembling the result**.
@@ -58,13 +73,21 @@ Two real sessions have reported their write mix, and they disagree:
 
 | session | pure appends | mid-document edits |
 |---|---|---|
-| the one that motivated this doc (decision log) | 100% | 0% |
-| a strategy/registry knowledge base, 2026-08-08 | ~30% | ~70% |
+| 1 — the one that motivated this doc (decision log) | 100% | 0% |
+| 2 — a strategy/registry knowledge base, 2026-08-08 | ~30% | ~70% |
+| 3 — an opportunity index, guides and status docs, 2026-08-08 | almost none | overwhelmingly |
 
 That disagreement is the most useful thing we know, and it is not noise. The split
 falls along **document kind**, not along agent or habit: registries and logs
 accumulate at the end, while strategy documents, plans and indexes get edited in
 place. A store tends to accumulate the second kind as it matures.
+
+Session 3 lands with session 2 and independently proposed the same explanation,
+having never seen it: logs append, status-bearing documents get edited in place, and
+the mix follows what a store is *made of*. Its prediction, offered as reasoning
+rather than observation: session 2's mix is the norm for any store that outlives its
+first month. Two of three sessions is not a settled question, but the hypothesis now
+has agreement from sessions that did not compare notes.
 
 **Session 1's 100% should be discounted further than it first appeared.** It was
 writing the Cerefox Decision Log, which carries an explicit *"append, never
@@ -136,6 +159,20 @@ destructive-annotated `edit` is a legitimate alternative — it trades prompt
 fidelity for surface area, and the v1.2.0 annotation work is a starting point to
 revise, not a commitment to honour.
 
+**And the ergonomic benefit is smaller than this section first claimed.** The pitch
+is "grant the additive tool freely, ask about the other two" — which assumes the
+additive tool is the one in constant use. Session 3 pointed out that for a
+status-bearing store it is the opposite: most edits update content that already
+exists, so `replace_section` is the common path and `cerefox_insert`, the one safe
+to grant freely, is the one reached for least. Adding a checklist item and ticking
+an existing one are the same act to the user and route through different tools.
+
+That does not overturn the annotation argument, which is about honesty rather than
+convenience: a tool that can delete must say so. But it does mean the friction is
+likelier to appear than "if it shows up in practice" implies, and for the same
+document-kind reason §3 is built on. The escape hatch above is the pressure valve,
+and this is a note that it may actually be needed.
+
 **The larger cost is atomicity, and it is not specific to the split.** Restructuring
 a document is now a *sequence* — insert here, replace there, delete that — where a
 full re-ingest was one write. Each call carries its own token, so a concurrent
@@ -155,6 +192,29 @@ one atomic write.
 If it bites in practice, the answer is a batched form (§7), not merging the tools —
 the atomicity problem and the annotation problem have different solutions and
 should not be traded against each other.
+
+**It bites, and there is an interim rule.** Session 3 described a restructure of one
+document touching four locations — an assessment paragraph, a GTM subsection, a gaps
+list and a next-steps list — where the gaps entry *referenced* the assessment
+paragraph. Half-applied, that document is incoherent in a way no reader can repair.
+It was done as one re-ingest precisely because the changes were coordinated, and
+under the three-tool model it becomes four conflict-checkpointed calls a concurrent
+writer can land between.
+
+Left unsaid, that would make this feature **less safe than the thing it replaces**
+for the subset of edits that span sections, which is not a trade anyone agreed to.
+So until the batched form exists, the agent-facing guidance is explicit:
+
+> A coherent multi-location edit — where the parts reference each other and a
+> half-applied result would be wrong rather than merely incomplete — should be one
+> `replace_section` of the smallest heading that contains all of them, or a full
+> re-ingest if no single heading does. Use the sequence of small operations for
+> changes that are independently valid.
+
+That reframes §7's batched form: it is not an optimisation to add if convenient, it
+is what lifts this restriction. Until then, "several small safe writes" is the wrong
+default for coordinated work, and agents should be told so rather than left to
+discover it from a half-applied document.
 
 ### 3.3 `cerefox_insert` — additive, any position
 
@@ -183,20 +243,49 @@ visible and fixable, not lost.
 **Where `end_of_section` ends, when sections nest.** If `## Active decisions`
 contains `### Monday` and `### NOT doing`, "the end of the section" has two
 defensible readings: the end of the whole subtree, or the end of the parent's *own*
-body, before its first child heading. They are different places and the chunker will
+body, before its first child heading. They are different places, and something will
 pick one whether or not this document says which.
 
-**Specified: `end_of_section` inserts immediately before the next heading of
-equal-or-higher level — the end of the entire subtree.** That is what "the section"
-colloquially means, and it is the less surprising of the two when an agent is adding
-a new subsection to a section that already has some.
+A previous revision specified the subtree end, on the grounds that it is what "the
+section" colloquially means. **That has been withdrawn.** Session 3 supplied the
+case it fails on: a status section whose body is a checklist, followed by many
+subsections. Anchoring `end_of_section` there to add a checklist item puts the
+bullet after the last subsection, pages from the list it belongs to, with a success
+response. The agent's intent ("the end of this list I am looking at") and the
+colloquial reading diverge precisely when a section has both a body and children.
 
-The other reading needs no second position, because the addressing model already
-expresses it: *end of the parent's own body* is `before_heading` anchored to the
-first child. Two positions, no overlap, and nothing ambiguous left in the enum. This
-is a second argument for keeping the seam positions in scope rather than deferring
-them (§3.1): without `before_heading`, one of the two natural insertion points in a
-nested document would have no vocabulary at all.
+The earlier answer also leaned on an escape hatch — *end of the parent's own body*
+is `before_heading` on the first child — which requires the agent to already know
+the section has children. Discovering that means re-reading the structure, which is
+the cost this feature exists to remove.
+
+**Specified, applying §3.6's rule to positions as well as anchors:**
+
+- **A leaf section** (no child headings) is unambiguous. `end_of_section` inserts at
+  the end of its body. This is the common case and needs nothing extra.
+- **A section with both its own body and child headings is ambiguous, so the write
+  errors** rather than choosing, and returns both concrete insertion points.
+- The agent resolves it with `section_part`: `"own_body"` (end of the section's own
+  content, before the first child) or `"subtree"` (after everything nested under it).
+  Passing it up front skips the error.
+
+```jsonc
+// error: "## Status" has body content and 4 child sections
+{ "code": "CEREFOX_AMBIGUOUS_POSITION",
+  "candidates": [
+    { "section_part": "own_body", "before_heading": "### Applications" },
+    { "section_part": "subtree",  "before_heading": "## Next steps" }
+  ] }
+```
+
+Two sessions read this differently, which is the argument for refusing rather than
+defaulting: a silent choice is wrong for one of them every time, and wrong
+invisibly, since the insert succeeds and the text is simply somewhere else. The
+error costs a round trip on nested sections only, and it costs it in exchange for
+the agent not having to know the document's shape in advance.
+
+The seam positions stay in scope regardless (§3.1) — `before_heading` remains how an
+agent expresses a deliberate placement once it knows the structure.
 
 ### 3.4 `cerefox_replace_section` — swap a section's body
 
@@ -229,9 +318,22 @@ it can be added then; delete-then-insert serves it meanwhile, window and all.
 
 It also carries a load the previous draft did not credit it with. Roughly half of
 session 2's mid-document edits were to a **single line or bullet inside a larger
-section**. `replace_section` serves those by having the agent resend the enclosing
-section: worse than surgical, far better than resending the document, and
-deliberately preferred over the line-anchored alternative (§3.8).
+section**, and session 3 reported the same shape as its dominant one — toggling a
+checklist item, changing a status word, fixing a link. `replace_section` serves those
+by having the agent resend the enclosing section: worse than surgical, far better
+than resending the document, and deliberately preferred over the line-anchored
+alternative (§3.8). Session 3 measured its enclosing sections at 500 to 2,000
+characters against documents of 10,000 to 38,000 — a 90%+ reduction with no
+line-anchor guessing anywhere.
+
+**A consequence worth telling users about: how finely a document is sectioned is now
+a performance characteristic, not only a readability one.** The same one-line edit
+costs a 500-character write in a document with many small headings and a
+12,000-character one in a document with few large ones. That is new — under full
+re-ingest, structure had no bearing on write cost, so nobody had a reason to think
+about it. It belongs in the agent-facing guide and in whatever advice we give humans
+structuring knowledge bases: more, smaller headings make edits cheaper, and a
+document that is one enormous section gets almost none of this feature's benefit.
 
 ### 3.5 `cerefox_delete_section` — remove a section
 
@@ -336,6 +438,11 @@ saying so. It does **not** refuse: a size policy is not a correctness rule, and
 blocking a write on it would be a worse failure than the one it prevents. The flag
 puts the fact in front of the only party who can decide, at the moment it becomes
 true. (This implies a new config key for the threshold, dormant when unset.)
+
+**The flag rides the conflict response too, not only success.** An agent merging
+after a conflict is an agent about to add content to a document that is both
+contended and, often, already large — the exact moment the size matters most, and
+the one where a success-only flag stays silent.
 
 ### 3.8 Deliberately excluded, and confirmed by usage
 
@@ -486,6 +593,12 @@ Both settled — recorded here as decisions, not options.
 `cerefox_audit_log_operation_check` constraint, the same shape as `relation-set` /
 `relation-delete` in iteration 29.
 
+Session 3 supplied the case that shows what this buys. Its three writes to repair
+one mistyped link (§1) would, under a single `update-content` value, appear in the
+trail as three content changes indistinguishable from three real edits. Distinct
+terms let a reader tell *fixed a typo* from *rewrote the section*, which is most of
+what an audit trail is for.
+
 Three values, matching the three tools (§3.2), **not one per position**. The
 constraint should distinguish *added to* from *rewrote* from *removed*, which is
 what a reader of the trail needs; whether an insert landed at `end_of_document` or
@@ -541,8 +654,9 @@ Two constraints for whoever implements this, both learned the hard way in #183:
 
 ## 7. Explicitly deferred
 
-**A batched form: several operations, one transaction, one token.** The natural
-answer to the atomicity cost in §3.2 — a restructure applies wholly or not at all,
+**A batched form: several operations, one transaction, one token.** The answer to
+the atomicity cost in §3.2, and the thing that lifts the interim restriction stated
+there — a restructure applies wholly or not at all,
 against a single `expected_content_hash`, instead of as an interleavable sequence.
 Deliberately not in v1: it is only worth building once real restructures show the
 sequence actually breaking, and designing the batch semantics (ordering, anchor
@@ -580,6 +694,7 @@ decide what gets *heard*.
 
 **Session 1** — the decision-log session that motivated the document.
 **Session 2** — a strategy and registry knowledge base, 2026-08-08.
+**Session 3** — an opportunity index, guides and status documents, 2026-08-08.
 
 Session 2 also reviewed the revision its own feedback produced, which is where
 §3.3's nesting boundary, §3.6's path disambiguation, §3.7's conflict and size
@@ -629,6 +744,39 @@ not.
    Meaningfully more. Session 2 batched changes deliberately to avoid expensive,
    risky re-ingests, and would have written each decision as it happened. Confirms
    the frequency jump §6.2 predicts, and that retention tuning is where it lands.
+
+### Session 3, marked observed or reasoned
+
+Recorded in the format §8 asks for, because it is the first set to arrive after the
+rule existed.
+
+**Observed:**
+
+- **Write mix: almost no pure appends; overwhelmingly mid-document**, and dominated
+  by single-line changes inside large sections (a checklist toggle, a status word, a
+  link). Second independent session to land here.
+- **Caused and caught a transcription corruption** while re-ingesting to change one
+  link: a document ID mistyped in untouched body text, mangled again during the fix,
+  a stray `FIXME` left behind, three writes to repair one intended change (§1).
+- **Enclosing sections were 500–2,000 characters against 10,000–38,000 character
+  documents**, which is the size of the prize for `replace_section` and the basis
+  for the granularity guidance in §3.4.
+- **A coordinated four-location restructure** whose parts referenced each other, done
+  as one re-ingest because a half-applied version would be incoherent. Drove the
+  interim rule in §3.2.
+- **`end_of_section` would have surprised it**: a status section whose body is a
+  checklist, followed by many subsections. Reversed the §3.3 decision.
+- **Documents already near the split threshold** (~30,000 and ~38,000 characters)
+  with no visibility into total size while editing. Supports §3.7's flag.
+
+**Reasoned (weighted as such, per the rule above):**
+
+- Session 2's mix is the norm for any store that outlives its first month.
+- The three-tool split's ergonomic benefit is inverted for status-bearing stores
+  (§3.2), since the freely-grantable additive tool is the least used.
+- `end_of_section`'s parent's-own-body reading would win more often than the subtree
+  reading. §3.3 refuses to guess rather than adopting either, since sessions 2 and 3
+  read it in opposite directions.
 
 ### Still open
 
@@ -688,6 +836,10 @@ Three statuses, and the middle one is the one that matters:
 | 13 | Rename a section while replacing its content | Open, not foreclosed | §3.4 — reasoned, never observed; `scope` is addable |
 | 14 | Restructure atomically across several operations | Open, not foreclosed | batched form (§7) |
 | 15 | Insert or edit anchored to arbitrary text | **Excluded by design** | §3.8 — declined by the session that would have gained most |
+| 16 | Add to a nested section without knowing its shape in advance | **v1** | `end_of_section` errors with both candidates (§3.3) |
+| 17 | Apply a coordinated multi-location edit safely | **v1**, indirectly | interim rule: smallest common ancestor (§3.2); batch form lifts it (§7) |
+| 18 | Know a document is nearing its split point while merging | **v1** | size flag on the conflict path too (§3.7) |
+| 19 | Understand why one document edits cheaper than another | **v1**, as guidance | sectioning granularity is now a cost characteristic (§3.4) |
 
 **Rows 13 and 14 are the register's whole point.** Neither ships. Both were argued
 for and both lost on evidence, and both would otherwise have vanished from the
