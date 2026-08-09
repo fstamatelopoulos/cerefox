@@ -187,7 +187,12 @@ async function applyAndWrite(
   const { data, error } = await supabase.rpc("cerefox_ingest_document", {
     p_document_id: documentId,
     p_title: doc.title, // partial edits never retitle
-    p_source: "agent",
+    // NOT "agent": a partial edit changes a document's CONTENT, never where it
+    // came from. Passing a literal here would relabel provenance on every edit
+    // — the #191 defect, and an explicit value survives even that fix, so this
+    // has to be omitted rather than corrected server-side. NULL = keep existing
+    // (and the RPC's own default is 'agent', so this must stay explicit-NULL).
+    p_source: null,
     p_content_hash: newHash,
     p_metadata: null, // null = keep existing metadata
     // Agent writes land in review; a human at the CLI is the reviewer.

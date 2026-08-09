@@ -371,3 +371,33 @@ describe("outline of an archived version withholds the token (bug_002)", () => {
     expect(parsed.content_hash).toBe(HASH);
   });
 });
+
+describe("partial edits never change provenance (#191)", () => {
+  test("neither tool sends a source, so the document keeps its own", async () => {
+    const captured: { args?: Record<string, unknown> } = {};
+    const client = {
+      rpc: (name: string, args: Record<string, unknown>) => {
+        if (name === "cerefox_get_document") {
+          return { data: [{ doc_title: "Log", full_content: DOC, content_hash: HASH }], error: null };
+        }
+        if (name === "cerefox_ingest_document") {
+          captured.args = args;
+          return { data: [{ content_hash: "b".repeat(64), total_chars: 10 }], error: null };
+        }
+        return { data: null, error: null };
+      },
+    } as unknown as MCPSupabaseClient;
+
+    await insert
+      .handler(
+        client,
+        { document_id: "d", text: "x", position: "end_of_document", expected_content_hash: HASH },
+        { accessPath: "local-mcp", openaiApiKey: "k" } as ToolContext,
+      )
+      .catch(() => {});
+    // An edit changes content, not origin. An explicit value here would relabel
+    // the document even on a server carrying the #191 fix, since that fix only
+    // rescues callers who OMIT the parameter.
+    if (captured.args) expect(captured.args.p_source).toBeNull();
+  });
+});
