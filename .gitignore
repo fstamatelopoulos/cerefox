@@ -211,6 +211,10 @@ __marimo__/
 
 # Supabase
 supabase/.temp/
+# The supabase CLI writes .temp/ next to whatever directory it runs from, so the
+# root-anchored pattern above misses copies under packages/ (a functions deploy
+# run from packages/memory/ committed one). Match it at any depth.
+**/supabase/.temp/
 
 #claude code
 .claude/
