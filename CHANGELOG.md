@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.2.1] -- 2026-08-09
+
 ### Fixed
 - **A content update without an explicit source silently overwrote the
   document's provenance** (#191). `cerefox_ingest_document`'s UPDATE branch
@@ -33,8 +39,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   deliberate callers are unaffected.
 
   Reported by @tdebasis.
-
-Open roadmap.
 
 ---
 
