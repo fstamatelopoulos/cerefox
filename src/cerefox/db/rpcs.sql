@@ -1644,12 +1644,19 @@ SET search_path = public, pg_catalog
 AS $$
     INSERT INTO cerefox_audit_log (
         document_id, version_id, operation, author, author_type,
-        size_before, size_after, description
+        size_before, size_after, description, created_at
     )
     VALUES (
         p_document_id, p_version_id, p_operation, p_author,
         CASE WHEN p_author_type IN ('user', 'agent') THEN p_author_type ELSE 'user' END,
-        p_size_before, p_size_after, p_description
+        p_size_before, p_size_after, p_description,
+        -- clock_timestamp(), not the NOW() default: NOW() is the TRANSACTION's
+        -- start time, so every audit entry written by one cerefox_edit batch
+        -- would share a timestamp and the order of operations inside the batch
+        -- would be unrecoverable from the trail (iter-33). clock_timestamp()
+        -- advances within a transaction, so entries stay orderable. Outside a
+        -- batch this is indistinguishable from the old behaviour.
+        clock_timestamp()
     )
     RETURNING id AS audit_id, cerefox_audit_log.created_at;
 $$;
@@ -2208,7 +2215,12 @@ DECLARE
         -- surviving history depended on who saved last.
         'version_retention_hours', 'version_cleanup_enabled',
         -- Optional features, off by default (iteration 29).
-        'relations_enabled'
+        'relations_enabled',
+        -- Iteration 33: flag writes that push a document past this many chars
+        -- (0 = off). Partial edits make writes cheap, so an insert-only agent
+        -- never assembles the document and never sees it grow past its split
+        -- point. A signal in the write's response, never a refusal.
+        'document_size_warning_chars'
     ];
 BEGIN
     IF NOT (p_key = ANY(v_allowed)) THEN
