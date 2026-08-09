@@ -3,7 +3,7 @@
 **Implements**: [`partial-document-edits-design.md`](partial-document-edits-design.md)
 (the frozen spec; it is the success criterion — every §3 semantic and every §9
 **v1** register row must be traceable to a mechanism below).
-**Status**: v1 build, iteration 33. Branch `feat/partial-edits`.
+**Status**: v1 build, iteration 34. Branch `feat/partial-edits`.
 **Date**: 2026-08-09
 
 ## 1. Where the logic lives (settling the RPC-vs-EF question)
@@ -260,5 +260,5 @@ walkthrough script.
 1. Tonight: build + unit green + deploy schema/RPCs to **staging** + live suite
    green against staging (this branch deploys nothing to prod).
 2. Tomorrow: joint staging walkthrough (the live suite is the script), then PR.
-3. After merge: beta cut, `cerefox server deploy` on prod, maintainer's agents
+3. After merge: **v1.3.0-beta.1** cut (v1.2.0 is current; new tools + schema 0.11.0 make this a minor), `cerefox server deploy` on prod, maintainer's agents
    dogfood via MCP — their §8 feedback is the acceptance test the spec asks for.
