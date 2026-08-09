@@ -15,8 +15,10 @@
  * Data API only — ZERO Edge Function calls, so it does not consume free-tier
  * quota (see CLAUDE.md's note on conserving it).
  *
- * Run against staging, never production:
- *   CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test test/partial-edits-live.test.ts
+ * Requires a store on schema 0.11.0 or newer; skips with a message otherwise, so
+ * it can never write to a server that lacks the feature. Point it at whichever
+ * environment you deploy to for testing:
+ *   CEREFOX_CONFIG_DIR=/path/to/that/env bun test test/partial-edits-live.test.ts
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -116,8 +118,9 @@ beforeAll(async () => {
     const supported = maj > 0 || min > 11 || (min === 11 && patch >= 0);
     if (!supported) {
       console.log(
-        `[partial-edits-live] skipped: server schema ${version} predates 0.11.0. ` +
-          `Point at a deployed environment: CEREFOX_CONFIG_DIR=~/.cerefox/staging`,
+        `[partial-edits-live] skipped: partial edits need schema 0.11.0 or newer; ` +
+          `this server reports ${version}. Run \`cerefox server deploy\` against the ` +
+          `store you want to test, or point CEREFOX_CONFIG_DIR at one already on 0.11.0.`,
       );
       return;
     }
