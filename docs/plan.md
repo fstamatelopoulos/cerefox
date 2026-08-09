@@ -3952,6 +3952,15 @@ in-place supervise-restart) instead of relying on the Docker restart cycle.
 
 ## Current Focus
 
+**Update (2026-08-10): v1.2.1 shipped.** #191 — a content update without an
+explicit `source` silently overwrote a document's provenance, and
+`server migrate-format` hit it at corpus scale (one reported store: 1,317
+documents relabelled in a single run). Reported, diagnosed and fixed by
+@tdebasis; same family as #183. Schema 0.10.6, so **redeploy required**. The fix
+prevents further loss but does not repair damage already done — archived
+versions preserve the *content*, not the overwritten `source` value.
+
+
 ## Iteration 33 — v1.1.0 (first minor of the 1.x line)
 
 **Status: scoped 2026-08-05, branch `feat/1.1.0` created.** First release since
