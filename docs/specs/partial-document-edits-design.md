@@ -643,7 +643,57 @@ not.
   design deliberately refuses rather than guesses. Real duplicate-heading
   documents will tell us whether the refusal lands as safety or as friction.
 
-## 9. Related
+## 9. Needs register
+
+Every need reported by a real session, whether or not v1 serves it. Two rules in
+this document pull in opposite directions — *sessions outrank reasoning* (§8) prunes,
+*serve the reported need* accumulates — and without somewhere to put the difference,
+a need silently disappears the moment its justification fails the evidence bar. That
+is how a spec ends up quietly narrower than the usage it claims to serve.
+
+So pruning removes things from **§3, not from here**. A need that loses its
+implementation still keeps its row.
+
+Three statuses, and the middle one is the one that matters:
+
+- **v1** — the contract in §3 serves it.
+- **Open, not foreclosed** — not built, and the §3 contract is checked to make sure
+  it *could* be added later without a breaking change. This is a claim the technical
+  design must verify, not a hope.
+- **Excluded by design** — deliberately refused, with the reason on record.
+
+| # | Need | Status | Where |
+|---|---|---|---|
+| 1 | Add to end of document | **v1** | `insert` / `end_of_document` (§3.1) |
+| 2 | Add to end of a section | **v1** | `insert` / `end_of_section` (§3.3) |
+| 3 | Add lead-in text after a heading | **v1** | `insert` / `after_heading` |
+| 4 | Add a new section before an existing one | **v1** | `insert` / `before_heading` |
+| 5 | Add at end of a parent's own body, before its children | **v1** | `before_heading` on the first child (§3.3) |
+| 6 | Replace a section's body | **v1** | `replace_section` (§3.4) |
+| 7 | Delete a section, body only or with its heading | **v1** | `delete_section` + `scope` (§3.5) |
+| 8 | Change one line inside a larger section | **v1**, indirectly | resend the enclosing section (§3.4) |
+| 9 | Address a heading that appears more than once | **v1** | parent paths (§3.6) |
+| 10 | Get a fresh token without paying for the document | **v1** | hash + size, no body (§3.7) |
+| 11 | See a conflict rather than have it resolved silently | **v1** | §5 |
+| 12 | Know when a document is growing past its split point | **v1** | size flag (§3.7) |
+| 13 | Rename a section while replacing its content | Open, not foreclosed | §3.4 — reasoned, never observed; `scope` is addable |
+| 14 | Restructure atomically across several operations | Open, not foreclosed | batched form (§7) |
+| 15 | Insert or edit anchored to arbitrary text | **Excluded by design** | §3.8 — declined by the session that would have gained most |
+
+**Rows 13 and 14 are the register's whole point.** Neither ships. Both were argued
+for and both lost on evidence, and both would otherwise have vanished from the
+document along with the arguments — leaving a future reader to rediscover the need
+and a future implementer free to make a choice that precludes it. Row 15 is
+different in kind: it is not waiting for evidence, it was refused with evidence.
+
+**For the technical design that follows this spec**, this table is the checklist.
+Every **v1** row needs a mechanism. Every *open, not foreclosed* row needs a
+demonstration that adding it later is additive: a `scope` parameter defaulting to
+today's behaviour (13), and a batch entry point wrapping the same handlers under one
+token (14). If either turns out to require a breaking change, that is a finding
+about §3 and belongs back here, not a footnote in the implementation.
+
+## 10. Related
 
 - `docs/specs/concurrency-control-design.md` — the read→embed→write race this
   narrows
