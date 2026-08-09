@@ -138,6 +138,11 @@ afterAll(async () => {
     from: (t: string) => { delete: () => { in: (c: string, v: string[]) => Promise<unknown> } };
   };
   try {
+    // Remove this suite's audit rows FIRST, while document_id still points at
+    // them. Purging afterwards would leave those rows with a null document_id
+    // (the FK is ON DELETE SET NULL) — correct for a real purge, whose record
+    // is meant to outlive the document, but pure litter when the "document"
+    // was a fixture that existed for four seconds.
     await raw.from("cerefox_audit_log").delete().in("document_id", created);
     await raw.from("cerefox_document_versions").delete().in("document_id", created);
     await raw.from("cerefox_chunks").delete().in("document_id", created);
@@ -361,6 +366,60 @@ describe("partial edits — live (§3)", () => {
     // stamped with clock_timestamp() rather than the transaction's NOW().
     expect(ops.indexOf("insert")).toBeLessThan(ops.indexOf("replace-section"));
     expect(ops.indexOf("replace-section")).toBeLessThan(ops.indexOf("delete-section"));
+  });
+
+  it("purge requires a prior soft delete, and records itself (web-UI-only path)", async () => {
+    const { id } = await seedDoc("[E2E iter34] purge");
+    const raw = supabase as unknown as {
+      rpc: (n: string, a: Record<string, unknown>) => Promise<{ error: unknown }>;
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (c: string, v: string) => Promise<{ data: { deleted_at: string | null }[] }>;
+        };
+      };
+    };
+
+    // Purge refuses a live document: the recovery window cannot be skipped.
+    await raw.rpc("cerefox_purge_document", { p_document_id: id, p_author: "e2e-test" });
+    const stillThere = await raw.from("cerefox_documents").select("deleted_at").eq("id", id);
+    expect(stillThere.data?.length).toBe(1);
+    expect(stillThere.data?.[0].deleted_at).toBeNull();
+
+    // Soft delete first — the recoverable state an agent's mistake lands in.
+    await raw.rpc("cerefox_delete_document", { p_document_id: id, p_author: "e2e-test" });
+    const trashed = await raw.from("cerefox_documents").select("deleted_at").eq("id", id);
+    expect(trashed.data?.[0].deleted_at).not.toBeNull();
+
+    // Now purge succeeds and leaves a record of itself.
+    await raw.rpc("cerefox_purge_document", { p_document_id: id, p_author: "e2e-test" });
+    const gone = await raw.from("cerefox_documents").select("deleted_at").eq("id", id);
+    expect(gone.data?.length ?? 0).toBe(0);
+
+    const auditRaw = supabase as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (c: string, v: string) => {
+            like: (c: string, v: string) => Promise<{ data: { operation: string; description: string }[] }>;
+          };
+        };
+      };
+    };
+    const { data } = await auditRaw
+      .from("cerefox_audit_log")
+      .select("operation, description")
+      .eq("author", "e2e-test")
+      .like("description", "%[E2E iter34] purge%");
+    const descriptions = (data ?? []).map((r) => r.description);
+    expect(descriptions.some((d) => d.includes("Soft-deleted"))).toBe(true);
+    expect(descriptions.some((d) => d.includes("Permanently deleted"))).toBe(true);
+
+    // Clean up this test's own trail: the purge record legitimately outlives
+    // the document, but it described a fixture.
+    const del = supabase as unknown as {
+      from: (t: string) => { delete: () => { like: (c: string, v: string) => Promise<unknown> } };
+    };
+    await del.from("cerefox_audit_log").delete().like("description", "%[E2E iter34] purge%");
+    created.splice(created.indexOf(id), 1); // already gone
   });
 
   it("an edit that changes nothing is reported, not written", async () => {

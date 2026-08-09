@@ -494,3 +494,49 @@ describe("tool annotations (MCP 2025-03-26)", () => {
     }
   });
 });
+
+describe("purge is deliberately absent from the agent surface", () => {
+  // Soft delete exists to protect against BOTH user and agent mistakes, and
+  // purge is web-UI-only on purpose: an agent works far faster than a human,
+  // so an agent that could purge might soft-delete and permanently delete in
+  // the same breath — turning a recoverable mistake into an unrecoverable one
+  // before anybody could notice. The recovery window is the entire point, and
+  // it only exists if the fast actor cannot close it.
+  //
+  // These tests exist so that decision cannot be undone by accident. If a
+  // future change means to expose purge to agents, it has to delete a test
+  // that says why not.
+  test("no MCP tool is named for purging or permanent deletion", () => {
+    for (const t of ALL_TOOLS) {
+      expect(t.name).not.toMatch(/purge|permanent|hard[_-]?delete/i);
+    }
+  });
+
+  test("no MCP tool calls cerefox_purge_document", async () => {
+    // A tool could reach purge without being named for it.
+    const calls: string[] = [];
+    const spy = {
+      rpc: (name: string) => {
+        calls.push(name);
+        return { data: [], error: null };
+      },
+      from: () => ({
+        select: () => ({ data: [], error: null }),
+        delete: () => ({ eq: () => ({ data: null, error: null }) }),
+      }),
+    } as unknown as SupabaseClient;
+
+    for (const t of ALL_TOOLS) {
+      // Drive each tool with empty args: most reject in validation, which is
+      // fine — we only care that nothing reaches the purge RPC.
+      await t.handler(spy, {}, { accessPath: "local-mcp" } as never).catch(() => {});
+    }
+    expect(calls).not.toContain("cerefox_purge_document");
+  });
+
+  test("no MCP tool description advertises permanent deletion to an agent", () => {
+    for (const t of ALL_TOOLS) {
+      expect(t.description.toLowerCase()).not.toContain("permanently delete");
+    }
+  });
+});
