@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.10.5
+-- @version: 0.11.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -125,7 +125,11 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
         operation IN ('create', 'update-content', 'update-metadata', 'delete',
                       'status-change', 'archive', 'unarchive', 'restore',
                       -- iteration 29: graph edges are auditable writes too
-                      'relation-set', 'relation-delete')
+                      'relation-set', 'relation-delete',
+                      -- iteration 33: partial edits. Distinct from 'update-content'
+                      -- so the trail separates "added to" from "rewrote" from
+                      -- "removed" — one entry per operation in a cerefox_edit batch.
+                      'insert', 'replace-section', 'delete-section')
     ),
     CONSTRAINT cerefox_audit_log_author_type_check CHECK (author_type IN ('user', 'agent'))
 );

@@ -67,6 +67,44 @@ describe("config-backed RPC parameters default to NULL (#183)", () => {
     );
   });
 
+  test("p_operations defaults to NULL so pre-iter-33 callers keep today's audit", () => {
+    // A concrete default here would make every legacy caller write partial-edit
+    // audit entries it never asked for — the #183 shape, one table over.
+    expect(RPCS).toMatch(/p_operations\s+JSONB\s+DEFAULT NULL/);
+  });
+
+  test("the audit CHECK admits the partial-edit operations (iter-33)", () => {
+    // The constraint is the allow-list; a handler label outside it must abort
+    // the transaction rather than record an uninterpretable operation.
+    const schema = readFileSync(
+      join(import.meta.dir, "..", "..", "src", "cerefox", "db", "schema.sql"),
+      "utf8",
+    );
+    const start = schema.indexOf("cerefox_audit_log_operation_check");
+    const check = schema.slice(start, schema.indexOf("),", start));
+    for (const op of ["'insert'", "'replace-section'", "'delete-section'"]) {
+      expect(check).toContain(op);
+    }
+  });
+
+  test("ingest returns content_hash and size_warning (#189, iter-33)", () => {
+    const fn = RPCS.slice(RPCS.indexOf("CREATE FUNCTION cerefox_ingest_document"));
+    const returns = fn.slice(fn.indexOf("RETURNS TABLE"), fn.indexOf("LANGUAGE plpgsql"));
+    expect(returns).toContain("content_hash");
+    expect(returns).toContain("size_warning");
+  });
+
+  test("the bundled schema marker and the deployed literal agree", () => {
+    const schema = readFileSync(
+      join(import.meta.dir, "..", "..", "src", "cerefox", "db", "schema.sql"),
+      "utf8",
+    );
+    const marker = schema.match(/^-- @version:\s*([0-9.]+)/m)?.[1];
+    const deployed = RPCS.match(/SELECT '([0-9.]+)'::TEXT;/)?.[1];
+    expect(marker).toBeTruthy();
+    expect(deployed).toBe(marker!);
+  });
+
   test("cerefox_snapshot_version resolves retention through cerefox_config", () => {
     const body = RPCS.slice(RPCS.indexOf("CREATE FUNCTION cerefox_snapshot_version"));
     expect(body).toContain("cerefox_config_int('version_retention_hours'");
