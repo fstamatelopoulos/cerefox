@@ -8,7 +8,7 @@
  * Adding a new tool: write `<name>.ts` exporting a `ToolDefinition`, then
  * add it to `ALL_TOOLS` below. Both consumers pick it up automatically.
  *
- * Tool surface (v0.4.0): 10 tools.
+ * Tool surface: 16 tools (12 core + 4 dormant relation tools).
  */
 
 import { auditLogTool } from "./audit-log.ts";
@@ -26,6 +26,7 @@ import {
 import { getDocumentTool } from "./get-document.ts";
 import { getHelpTool } from "./get-help.ts";
 import { ingestTool } from "./ingest.ts";
+import { editTool, insertTool } from "./partial-edits.ts";
 import { listMetadataKeysTool } from "./list-metadata-keys.ts";
 import { listProjectsTool } from "./list-projects.ts";
 import { listVersionsTool } from "./list-versions.ts";
@@ -38,6 +39,11 @@ import { McpInvalidParams, type MCPSupabaseClient, type ToolDefinition } from ".
 export const ALL_TOOLS: ToolDefinition[] = [
   searchTool,
   ingestTool,
+  // Partial edits (iteration 34): add to / change parts of a document without
+  // resending it. Split by safety boundary — insert cannot destroy content, so
+  // a client can grant it freely; edit carries the destructive operations.
+  insertTool,
+  editTool,
   getDocumentTool,
   listVersionsTool,
   metadataSearchTool,

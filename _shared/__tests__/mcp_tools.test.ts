@@ -35,8 +35,31 @@ function noopClient(): SupabaseClient {
 }
 
 describe("ALL_TOOLS registration", () => {
-  test("contains exactly 14 tools (10 + the 4 relation tools)", () => {
-    expect(ALL_TOOLS.length).toBe(14);
+  test("contains exactly 16 tools (12 core + the 4 relation tools)", () => {
+    expect(ALL_TOOLS.length).toBe(16);
+  });
+
+  test("the partial-edit tools are split along the safety boundary (iter-34)", () => {
+    // The whole reason there are two tools rather than one: MCP annotations are
+    // declared per tool, so a combined edit tool would have to warn on every
+    // additive insert, and a tool that always warns gets blanket-approved.
+    const insert = TOOLS_BY_NAME["cerefox_insert"];
+    const edit = TOOLS_BY_NAME["cerefox_edit"];
+    expect(insert).toBeDefined();
+    expect(edit).toBeDefined();
+    expect(insert.annotations?.destructiveHint).toBe(false);
+    expect(insert.annotations?.readOnlyHint).toBe(false);
+    expect(edit.annotations?.destructiveHint).toBe(true);
+  });
+
+  test("both partial-edit tools require a concurrency token (no last-write-wins)", () => {
+    for (const name of ["cerefox_insert", "cerefox_edit"]) {
+      const t = TOOLS_BY_NAME[name];
+      expect(t.inputSchema.required).toContain("expected_content_hash");
+      // Spec §5: a conflict is information the agent needs. These tools
+      // deliberately offer no way to suppress it.
+      expect(JSON.stringify(t.inputSchema)).not.toContain("last_write_wins");
+    }
   });
 
   test("every tool name starts with cerefox_", () => {
