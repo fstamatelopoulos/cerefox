@@ -133,6 +133,12 @@ Appending is still real and still the right primitive for logs. It is just not t
 | token | `expected_content_hash`, required | `expected_content_hash`, required, one per call |
 | returns | new hash + size, no body | new hash + size, no body |
 
+Two supporting changes ride alongside, neither of them a new tool: `get_document`
+gains an **outline mode** (§3.7) so anchors can be learned without paying for the
+body, and create gains the **`content_hash`** it should always have returned
+(§3.8, [#189](https://github.com/fstamatelopoulos/cerefox/issues/189)) so a
+document is born holding its concurrency token.
+
 Everything else in this section is the precise semantics of those two rows:
 positions (§3.1), the operations (§3.3–§3.6), anchor rules (§3.7), responses
 (§3.8), and the one class of operation refused outright (§3.9).
@@ -288,9 +294,22 @@ common insert was a row at the end of a markdown table that sits mid-section wit
 prose after it. `end_of_section` lands after the prose; `before_heading` wants a
 heading that does not exist. The position vocabulary is heading-anchored, and table
 rows, list items and other intra-section structure are not addressable in it.
-Recorded (register row 22) rather than solved: element-level anchors are the first
-step down the slope §3.9 refuses, and the serviceable form today is a
-`replace_section` of the section holding the table.
+Recorded (register row 22) rather than solved, and deliberately so, for a second
+reason beyond the §3.9 slope: an element anchor would **tie the contract to one
+block syntax**. "The table" is a markdown-table concept; the moment the vocabulary
+knows what a table row is, it has opinions about pipe syntax, and documents using
+list-based logs, code blocks or any future block format get nothing. Heading
+anchors are format-blind — a heading is a heading whatever sits under it.
+
+**The serve that needs no contract at all: structure.** A table that gets appended
+to regularly deserves its own heading. Under one, `end_of_section` *is* the
+row-append — additive, anchored, and format-blind, because the contract still only
+knows about headings. This is the same lesson as §3.5's granularity guidance:
+under partial edits, how a document is sectioned is a cost-and-capability
+characteristic, and "give your append-heavy table a heading" belongs in the
+agent-facing guide next to "prefer smaller sections". The fallback for a table
+that cannot get its own heading remains a `replace_section` of the section holding
+it.
 
 ### 3.4 `cerefox_edit` — one write, one or many operations
 
@@ -461,14 +480,33 @@ to discover them. Two answers, and deliberately neither is a new tool:
 - The refusal errors above **teach structure lazily**, returning real candidates at
   exactly the moment they are needed. An agent that guesses a heading and misses is
   one round trip from the right one.
-- For the up-front case, an **outline mode on the existing `get_document`**:
-  headings with their paths and sizes, plus the current `content_hash`, no body.
-  A parameter on a read that already exists, not a fourth command (register
-  row 23) — and it doubles as the cheap hash-only lookup §5 gestures at.
+- For the up-front case, an **outline mode on the existing `get_document`** —
+  **committed for v1** (register row 23; promoted 2026-08-08). A parameter on a
+  read that already exists, not a fourth command:
+
+  ```jsonc
+  // cerefox_get_document { "document_id": "…", "outline": true }
+  { "content_hash": "…",
+    "total_chars": 38412,
+    "outline": [
+      { "path": "## Intake",             "level": 2, "chars": 2140 },
+      { "path": "## Intake > ### Notes", "level": 3, "chars": 480 },
+      { "path": "## Totals",             "level": 2, "chars": 610 }
+    ] }
+  ```
+
+  Each entry carries the **path in exactly the form the anchor vocabulary
+  accepts** (§3.7), so an outline entry can be pasted into an `anchor_heading`
+  verbatim — the read and the write share one addressing language. Per-section
+  sizes let an agent pick the cheapest enclosing section for a `replace_section`
+  (§3.5) and see how close the document is to its split threshold (§3.8), and the
+  `content_hash` is the concurrency token — the cheap hash-only lookup §5
+  gestures at, absorbed here rather than built separately.
 
 Session 4 proposed this as a new `cerefox_get_outline` tool. The need is real —
 without it, anchored editing quietly assumes the agent has recently read the
-document — but it does not need a new name in the tool list to be served.
+document — but it earns its place as a mode of the read that already exists, not a
+new name in the tool list.
 
 ### 3.8 What every operation returns
 
@@ -502,8 +540,12 @@ of least resistance. That bypasses §5 entirely, on the first edit of every new
 document, which is when a concurrent writer is least expected and a silent
 overwrite least suspected. §5's assumption that "an agent that read the document
 holds a hash" has a hole for the one agent that never needed to read it: the
-author. Returning the hash on create closes it, and is worth fixing ahead of this
-feature — it is a one-field change to an existing response.
+author. Returning the hash on create closes it — a response-shape change, not new
+computation, since the RPC already stores the hash. **Filed as
+[#189](https://github.com/fstamatelopoulos/cerefox/issues/189) and worth fixing
+ahead of this feature**: the defect stands on its own today, and this feature
+cannot function without it (every operation requires the token, so a document must
+be born holding one).
 
 **A size flag, so cheap writes cannot quietly defeat a split policy.** The size in
 the response is not decoration. An agent inserting repeatedly never assembles the
@@ -961,25 +1003,26 @@ Three statuses, and the middle one is the one that matters:
 | 17 | Apply a coordinated multi-location edit safely | **v1** | one `cerefox_edit` call (§3.4) |
 | 18 | Know a document is nearing its split point while merging | **v1** | size flag on the conflict path too (§3.8) |
 | 19 | Understand why one document edits cheaper than another | **v1**, as guidance | sectioning granularity is now a cost characteristic (§3.5) |
-| 20 | Hold a concurrency token for a document you just *created* | **v1**, prerequisite | create returns `content_hash` (§3.8) — a defect in today's API, worth fixing first |
+| 20 | Hold a concurrency token for a document you just *created* | **v1**, prerequisite | create returns `content_hash` (§3.8) — today-bug, filed as #189 |
 | 21 | Express additive intent so a replace-shaped call cannot destroy | **v1** | `cerefox_insert` is its own contract (§3.3, §1) |
-| 22 | Append a row to a table sitting mid-section | Open, not foreclosed | not addressable by heading vocabulary; `replace_section` serves it meanwhile (§3.3) |
-| 23 | Learn a document's structure without paying for its body | Open, not foreclosed | outline mode on `get_document` — a parameter, not a new tool (§3.7) |
+| 22 | Append a row to a table sitting mid-section | Open, not foreclosed | served without contract by structure — an append-heavy table gets its own heading, then `end_of_section` is the row-append (§3.3) |
+| 23 | Learn a document's structure without paying for its body | **v1** | outline mode on `get_document` — a parameter, not a new tool (§3.7) |
 
 **Row 14 is the register doing its job.** It was parked as *open, not foreclosed*
 in one revision and promoted to **v1** in the next, when session 4 showed the need
 was the common case rather than the tail — and the promotion was cheap precisely
-because the contract had been checked for it in advance. Rows 13, 22 and 23 now
-hold that status, waiting on the same kind of evidence. Row 15 is different in
+because the contract had been checked for it in advance. Row 23 followed the same
+path a revision later, promoted on maintainer decision. Rows 13 and 22 now hold
+the open status, waiting on evidence. Row 15 is different in
 kind: it is not waiting for evidence, it was refused with evidence.
 
 **For the technical design that follows this spec**, this table is the checklist.
 Every **v1** row needs a mechanism. Every *open, not foreclosed* row needs a
 demonstration that adding it later is additive: a `scope` parameter defaulting to
-today's behaviour (13), an intra-section anchor form that does not open
-arbitrary-text matching (22), and an outline mode sharing `get_document`'s access
-path (23). If any turns out to require a breaking change, that is a finding about
-§3 and belongs back here, not a footnote in the implementation.
+today's behaviour (13), and an intra-section anchor form that does not open
+arbitrary-text matching or bind the contract to one block syntax (22). If either
+turns out to require a breaking change, that is a finding about §3 and belongs
+back here, not a footnote in the implementation.
 
 ## 10. Related
 
