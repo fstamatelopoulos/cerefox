@@ -70,9 +70,18 @@ possible and legal at parse time; ambiguity is the *resolver's* problem.
 
 Implements spec §3.7 exactly:
 
-- Input containing ` > ` is a **path**: matched against `node.path` (exact,
-  trimmed segments).
-- Otherwise matched against `node.heading` (exact, trimmed).
+- The **literal heading** is tried first, always: matched against `node.heading`
+  (exact, trimmed), *including* when the anchor contains ` > `.
+- Only if no heading matches literally is the anchor read as a **path** against
+  `node.path` (exact, trimmed segments).
+
+  This ordering is a fix, not a preference. Reading any ` > `-containing anchor
+  as a path made headings that genuinely contain the separator — `## Draft >
+  Review`, `## A > B` — unaddressable by their own text: outline mode printed
+  the heading, the agent pasted it back verbatim, and the resolver replied
+  "anchor not found" while listing it in the same message. Literal-first also
+  preserves outline mode's promise that what it prints can be used as-is. Found
+  by adversarial testing against staging, not by review.
 - 0 matches → throw `AnchorNotFoundError` (never falls back to end-of-document).
 - 2+ matches → throw `AmbiguousAnchorError` carrying `candidates: string[]` (the
   qualifying paths, ready to paste back). A path that is itself ambiguous throws

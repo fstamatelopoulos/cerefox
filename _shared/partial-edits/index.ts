@@ -1,5 +1,5 @@
 /**
- * Partial document edits — pure string layer (iteration 33).
+ * Partial document edits — pure string layer (iteration 34).
  *
  * Implements the position/anchor semantics of
  * `docs/specs/partial-document-edits-design.md` §3 exactly. No I/O, no client,
@@ -227,19 +227,31 @@ export function parseOutline(content: string): OutlineNode[] {
  */
 export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): OutlineNode {
   const anchor = anchorHeading.trim();
-  const isPath = anchor.includes(" > ");
-  const normalizedPath = isPath
-    ? anchor.split(" > ").map((seg) => seg.trim()).join(" > ")
-    : anchor;
 
-  const matches = outline.filter((n) =>
-    isPath ? n.path === normalizedPath : n.heading === anchor,
-  );
-  if (matches.length === 0) throw new AnchorNotFoundError(anchor, outline);
-  if (matches.length > 1) {
-    throw new AmbiguousAnchorError(anchor, matches.map((n) => n.path));
+  // Try the LITERAL heading first, always — including when the anchor contains
+  // the path separator. Headings really do contain " > " (`## Draft > Review`,
+  // `## A > B`), and treating any such anchor as a path made those sections
+  // unaddressable by their own text: the agent would read `## A > B` from the
+  // outline, pass it back verbatim, and be told the anchor does not exist while
+  // the error listed it. Literal-first also keeps the outline's promise that
+  // what it prints can be pasted straight back.
+  const byHeading = outline.filter((n) => n.heading === anchor);
+  if (byHeading.length === 1) return byHeading[0];
+  if (byHeading.length > 1) {
+    throw new AmbiguousAnchorError(anchor, byHeading.map((n) => n.path));
   }
-  return matches[0];
+
+  // No heading matched literally: interpret it as a parent path.
+  if (anchor.includes(" > ")) {
+    const normalizedPath = anchor.split(" > ").map((seg) => seg.trim()).join(" > ");
+    const byPath = outline.filter((n) => n.path === normalizedPath);
+    if (byPath.length === 1) return byPath[0];
+    if (byPath.length > 1) {
+      throw new AmbiguousAnchorError(anchor, byPath.map((n) => n.path));
+    }
+  }
+
+  throw new AnchorNotFoundError(anchor, outline);
 }
 
 /** A section is position-ambiguous iff it has BOTH own body content and children. */

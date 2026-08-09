@@ -163,6 +163,26 @@ describe("resolveAnchor (§3.7)", () => {
     expect(DOC.slice(n.bodyStart, n.subtreeEnd)).toContain("Backlog notes");
   });
 
+  test("a heading containing the path separator is addressable by its own text", () => {
+    // Real documents have headings like `## Draft > Review`. Treating every
+    // anchor containing " > " as a path made these unaddressable: the outline
+    // printed the heading, and passing it back said "not found" while listing
+    // it. Found by adversarial testing against staging.
+    const doc = "# R\n\n## A > B\n\nbody\n\n## Plain\n\nplain\n";
+    const o = parseOutline(doc);
+    expect(resolveAnchor(o, "## A > B").heading).toBe("## A > B");
+    // The full path form still works for the same section.
+    expect(resolveAnchor(o, "# R > ## A > B").heading).toBe("## A > B");
+  });
+
+  test("a literal heading match wins over a path interpretation", () => {
+    const doc = "# R\n\n## A > B\n\nliteral\n\n## A\n\n### B\n\nnested\n";
+    const o = parseOutline(doc);
+    // "## A > B" is BOTH a literal heading and, read as a path, the nested
+    // "# R > ## A > ### B". The literal reading is the less surprising one.
+    expect(resolveAnchor(o, "## A > B").heading).toBe("## A > B");
+  });
+
   test("path segments are individually trimmed", () => {
     const n = resolveAnchor(o, "# Title >  ## Backlog  > ### Notes");
     expect(n.path).toBe("# Title > ## Backlog > ### Notes");
