@@ -59,14 +59,22 @@ async function handler(
       level: n.level,
       chars: n.chars,
     }));
+    // The RPC always returns the CURRENT hash, even when reconstructing an
+    // archived version. Handing that back alongside an archived structure would
+    // invite the one silent failure this design otherwise refuses: an anchor
+    // read from an old version, a token valid for the current one, and an edit
+    // that lands wherever that heading happens to sit today. Withhold the token
+    // instead — the archived outline is for reading.
+    const archived = version_id !== null;
     return JSON.stringify(
       {
         title: row.doc_title ?? "Untitled",
-        content_hash: row.content_hash ?? null,
+        content_hash: archived ? null : (row.content_hash ?? null),
         total_chars: row.total_chars ?? (row.full_content ?? "").length,
         outline: nodes,
-        note:
-          nodes.length === 0
+        note: archived
+          ? "This is an ARCHIVED version's structure, so no content_hash is returned: these anchors describe the old version and must not be used to edit the current one. Re-read without version_id to edit."
+          : nodes.length === 0
             ? "This document has no headings, so it has no anchors: only end_of_document inserts apply."
             : "Use a path as anchor_heading in cerefox_insert / cerefox_edit; content_hash is your expected_content_hash.",
       },

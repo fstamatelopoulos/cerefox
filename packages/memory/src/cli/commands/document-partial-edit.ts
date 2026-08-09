@@ -63,10 +63,11 @@ async function runTool(
 interface InsertOptions {
   text?: string;
   position?: string;
-  anchor?: string;
+  anchorHeading?: string;
   sectionPart?: string;
-  expectedHash?: string;
+  expectedContentHash?: string;
   requestor?: string;
+  authorType?: string;
 }
 
 export function registerDocumentInsert(program: Command): void {
@@ -82,30 +83,37 @@ export function registerDocumentInsert(program: Command): void {
       "end_of_document | end_of_section | after_heading | before_heading",
       "end_of_document",
     )
-    .option("-a, --anchor <heading>", "Heading line, or a ' > ' path. Required unless end_of_document.")
+    .option("-a, --anchor-heading <heading>", "Heading line, or a ' > ' path. Required unless end_of_document.")
     .option("--section-part <part>", "own_body | subtree — only when a section has both content and children")
     .requiredOption(
-      "--expected-hash <hash>",
+      "-e, --expected-content-hash <hash>",
       "content_hash you are basing this on (cerefox document get --outline shows it)",
     )
     .option("--requestor <name>", "Recorded in the usage log", "cli-user")
+    .option(
+      "--author-type <type>",
+      "user (default for the CLI) or agent, when scripting on an agent's behalf",
+      "user",
+    )
     .action(async (documentId: string, options: InsertOptions) => {
       await runTool("cerefox_insert", {
         document_id: documentId,
         text: resolveText(options.text, "--text"),
         position: options.position,
-        ...(options.anchor ? { anchor_heading: options.anchor } : {}),
+        ...(options.anchorHeading ? { anchor_heading: options.anchorHeading } : {}),
         ...(options.sectionPart ? { section_part: options.sectionPart } : {}),
-        expected_content_hash: options.expectedHash,
+        expected_content_hash: options.expectedContentHash,
         requestor: options.requestor,
+        ...(options.authorType ? { author_type: options.authorType } : {}),
       });
     });
 }
 
 interface EditPartsOptions {
   operations?: string;
-  expectedHash?: string;
+  expectedContentHash?: string;
   requestor?: string;
+  authorType?: string;
 }
 
 export function registerDocumentEditParts(program: Command): void {
@@ -116,8 +124,13 @@ export function registerDocumentEditParts(program: Command): void {
       "-o, --operations <json>",
       "JSON array of operations. Use '-' for stdin or '@path' for a file.",
     )
-    .requiredOption("--expected-hash <hash>", "content_hash you are basing these edits on")
+    .requiredOption("-e, --expected-content-hash <hash>", "content_hash you are basing these edits on")
     .option("--requestor <name>", "Recorded in the usage log", "cli-user")
+    .option(
+      "--author-type <type>",
+      "user (default for the CLI) or agent, when scripting on an agent's behalf",
+      "user",
+    )
     .action(async (documentId: string, options: EditPartsOptions) => {
       const raw = resolveText(options.operations, "--operations");
       let operations: unknown;
@@ -134,8 +147,9 @@ export function registerDocumentEditParts(program: Command): void {
       await runTool("cerefox_edit", {
         document_id: documentId,
         operations,
-        expected_content_hash: options.expectedHash,
+        expected_content_hash: options.expectedContentHash,
         requestor: options.requestor,
+        ...(options.authorType ? { author_type: options.authorType } : {}),
       });
     });
 }

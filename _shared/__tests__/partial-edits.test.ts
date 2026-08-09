@@ -433,3 +433,86 @@ describe("block separation normalization", () => {
     expect(content.endsWith("\n")).toBe(false);
   });
 });
+
+// ── Review findings (cloud code review, 2026-08-09) ────────────────────────
+
+describe("destructive ops never guess on a children-only section (bug_010)", () => {
+  // The earlier implementation reasoned that "children but no own body" was
+  // unambiguous because both readings coincide. True for insert; the exact
+  // opposite for delete/replace, where own_body targets an empty range and
+  // subtree removes every child.
+  const doc = "## Parent\n\n### A\n\na body\n\n### B\n\nb body\n";
+
+  test("delete_section on a grouping heading refuses instead of wiping children", () => {
+    expect(() => apply(doc, [{ op: "delete_section", anchor_heading: "## Parent" }])).toThrow(
+      /section_part/,
+    );
+  });
+
+  test("replace_section on a grouping heading refuses too", () => {
+    expect(() =>
+      apply(doc, [{ op: "replace_section", anchor_heading: "## Parent", text: "x" }]),
+    ).toThrow(/section_part/);
+  });
+
+  test("the refusal offers both readings", () => {
+    try {
+      apply(doc, [{ op: "delete_section", anchor_heading: "## Parent" }]);
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect((e as Error).message).toContain("own_body");
+      expect((e as Error).message).toContain("subtree");
+    }
+  });
+
+  test("own_body on a children-only section preserves every child", () => {
+    const { content } = apply(doc, [
+      { op: "delete_section", anchor_heading: "## Parent", section_part: "own_body" },
+    ]);
+    expect(content).toContain("### A");
+    expect(content).toContain("a body");
+    expect(content).toContain("### B");
+  });
+
+  test("subtree is still available for the destructive reading", () => {
+    const { content } = apply(doc, [
+      { op: "delete_section", anchor_heading: "## Parent", section_part: "subtree" },
+    ]);
+    expect(content).not.toContain("### A");
+    expect(content).not.toContain("b body");
+    expect(content).toContain("## Parent");
+  });
+
+  test("insert on the same shape stays unambiguous (the readings do coincide)", () => {
+    const { content } = apply(doc, [
+      { op: "insert", position: "end_of_section", anchor_heading: "## Parent", text: "tail" },
+    ]);
+    expect(content.indexOf("tail")).toBeGreaterThan(content.indexOf("b body"));
+  });
+});
+
+describe("ATX closing sequences (bug_011)", () => {
+  const doc = "# R\n\n## Closed ##\n\nbody\n\n## Plain\n\nplain\n";
+
+  test("a closed heading is addressable by its canonical text", () => {
+    expect(resolveAnchor(parseOutline(doc), "## Closed").heading).toBe("## Closed");
+  });
+
+  test("...and by the form written in the document", () => {
+    expect(resolveAnchor(parseOutline(doc), "## Closed ##").heading).toBe("## Closed");
+  });
+
+  test("the outline reports the canonical form", () => {
+    expect(parseOutline(doc).map((n) => n.heading)).toContain("## Closed");
+  });
+});
+
+describe("splice keeps trailing newlines singular (bug_009)", () => {
+  test("inserting before the first heading does not double the final newline", () => {
+    const { content } = apply("# H\n\nbody\n", [
+      { op: "insert", position: "before_heading", anchor_heading: "# H", text: "new" },
+    ]);
+    expect(content.endsWith("\n\n")).toBe(false);
+    expect(content.endsWith("\n")).toBe(true);
+  });
+});

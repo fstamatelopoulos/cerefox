@@ -289,7 +289,7 @@ async function handler(
     .limit(1);
 
   if (hashMatch?.length) {
-    return `Document already up-to-date: "${hashMatch[0].title}" (id: ${hashMatch[0].id}). Content hash unchanged.`;
+    return `Document already up-to-date: "${hashMatch[0].title}" (id: ${hashMatch[0].id}). Content hash unchanged (${contentHash}) — pass it as expected_content_hash to edit it.`;
   }
 
   const chunks = chunkMarkdown(content);

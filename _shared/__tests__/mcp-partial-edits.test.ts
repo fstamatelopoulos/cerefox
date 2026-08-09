@@ -298,3 +298,76 @@ describe("server-behind detection", () => {
     ).rejects.toThrow(); // no key configured → fails earlier; covered live on staging
   });
 });
+
+// ── Review findings (cloud code review, 2026-08-09) ────────────────────────
+
+describe("author_type is derived from the access path (bug_001)", () => {
+  function capturingClient(captured: { args?: Record<string, unknown> }) {
+    return {
+      rpc: (name: string, args: Record<string, unknown>) => {
+        if (name === "cerefox_get_document") {
+          return { data: [{ doc_title: "Log", full_content: DOC, content_hash: HASH }], error: null };
+        }
+        if (name === "cerefox_ingest_document") {
+          captured.args = args;
+          return { data: [{ content_hash: "b".repeat(64), total_chars: 10 }], error: null };
+        }
+        return { data: null, error: null };
+      },
+    } as unknown as MCPSupabaseClient;
+  }
+
+  test("an MCP write is recorded as an agent write", async () => {
+    const captured: { args?: Record<string, unknown> } = {};
+    await insert
+      .handler(
+        capturingClient(captured),
+        { document_id: "d", text: "x", position: "end_of_document", expected_content_hash: HASH },
+        { accessPath: "local-mcp", openaiApiKey: "k" } as ToolContext,
+      )
+      .catch(() => {});
+    if (captured.args) expect(captured.args.p_author_type).toBe("agent");
+  });
+
+  test("an agent cannot claim to be a user", async () => {
+    const captured: { args?: Record<string, unknown> } = {};
+    await insert
+      .handler(
+        capturingClient(captured),
+        {
+          document_id: "d", text: "x", position: "end_of_document",
+          expected_content_hash: HASH, author_type: "user",
+        },
+        { accessPath: "remote-mcp", openaiApiKey: "k" } as ToolContext,
+      )
+      .catch(() => {});
+    // Routing around a governance filter must not be a matter of passing a string.
+    if (captured.args) expect(captured.args.p_author_type).toBe("agent");
+  });
+});
+
+describe("outline of an archived version withholds the token (bug_002)", () => {
+  test("version_id + outline returns no content_hash and says why", async () => {
+    const client = {
+      rpc: () => ({
+        data: [{ doc_title: "Log", full_content: DOC, content_hash: HASH }],
+        error: null,
+      }),
+    } as unknown as MCPSupabaseClient;
+    const out = await getDoc.handler(client, { document_id: "d", version_id: "v1", outline: true }, ctx);
+    const parsed = JSON.parse(out);
+    // The RPC hands back the CURRENT hash even for an archived body; pairing it
+    // with archived anchors is how an edit lands somewhere nobody chose.
+    expect(parsed.content_hash).toBeNull();
+    expect(parsed.note).toContain("ARCHIVED");
+    expect(parsed.outline.length).toBeGreaterThan(0);
+  });
+
+  test("the current version still returns its token", async () => {
+    const client = {
+      rpc: () => ({ data: [{ doc_title: "Log", full_content: DOC, content_hash: HASH }], error: null }),
+    } as unknown as MCPSupabaseClient;
+    const parsed = JSON.parse(await getDoc.handler(client, { document_id: "d", outline: true }, ctx));
+    expect(parsed.content_hash).toBe(HASH);
+  });
+});

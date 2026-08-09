@@ -38,6 +38,21 @@ import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddin
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type MCPSupabaseClient, type ToolContext, type ToolDefinition } from "./types.ts";
 
+/**
+ * Who to record as the author. Derived from the access path rather than taken
+ * on trust: an agent calling over MCP must not be able to claim `author_type:
+ * "user"` and route its writes around a governance filter. Only the CLI, where
+ * a human ran the command, may state it — and only to say `user`.
+ */
+function resolveAuthorType(ctx: ToolContext, args: Record<string, unknown>): "user" | "agent" {
+  if (ctx.accessPath !== "cli") return "agent";
+  return args.author_type === "agent" ? "agent" : "user";
+}
+
+function defaultRequestor(ctx: ToolContext): string {
+  return ctx.accessPath === "cli" ? "cli-user" : "mcp-agent";
+}
+
 /** Audit `operation` values, matching the CHECK constraint widened by migration 0019. */
 const AUDIT_OP: Record<AppliedOperation["op"], string> = {
   insert: "insert",
@@ -105,9 +120,10 @@ async function applyAndWrite(
     expectedHash: string;
     requestor: string;
     toolLabel: string;
+    authorType: "user" | "agent";
   },
 ): Promise<string> {
-  const { documentId, operations, expectedHash, requestor, toolLabel } = args;
+  const { documentId, operations, expectedHash, requestor, toolLabel, authorType } = args;
 
   if (!ctx.openaiApiKey && resolveEmbedderKind() !== "local") {
     throw new Error(
@@ -174,11 +190,16 @@ async function applyAndWrite(
     p_source: "agent",
     p_content_hash: newHash,
     p_metadata: null, // null = keep existing metadata
-    p_review_status: "pending_review",
+    // Agent writes land in review; a human at the CLI is the reviewer.
+    p_review_status: authorType === "agent" ? "pending_review" : "approved",
     p_chunks: chunkData,
     p_author: requestor,
-    p_author_type: "agent",
-    p_source_label: "agent",
+    // Who actually made the write, not which module executed it. The CLI is a
+    // human at a shell (or their script); MCP is an agent. Recording everything
+    // as "agent" would mis-attribute every CLI edit in the audit trail, and
+    // governance filters keyed on author_type would silently miss them.
+    p_author_type: authorType,
+    p_source_label: authorType === "user" ? "manual" : "agent",
     p_expected_content_hash: expectedHash,
     p_last_write_wins: false,
     p_content_format: CONTENT_FORMAT_BLIND_STITCH,
@@ -277,8 +298,9 @@ async function insertHandler(
     documentId,
     operations,
     expectedHash,
-    requestor: (args.requestor as string | undefined) ?? "mcp-agent",
+    requestor: (args.requestor as string | undefined) ?? defaultRequestor(ctx),
     toolLabel: "insert",
+    authorType: resolveAuthorType(ctx, args),
   });
 }
 
@@ -333,6 +355,12 @@ export const insertTool: ToolDefinition = {
         type: "string",
         description: 'Agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent".',
       },
+      author_type: {
+        type: "string",
+        enum: ["user", "agent"],
+        description:
+          "Honoured on the CLI only, where a human ran the command; over MCP the write is always recorded as an agent write regardless of what is passed.",
+      },
     },
   },
   handler: insertHandler,
@@ -368,8 +396,9 @@ async function editHandler(
     documentId,
     operations,
     expectedHash,
-    requestor: (args.requestor as string | undefined) ?? "mcp-agent",
+    requestor: (args.requestor as string | undefined) ?? defaultRequestor(ctx),
     toolLabel: "edit",
+    authorType: resolveAuthorType(ctx, args),
   });
 }
 
@@ -440,6 +469,12 @@ export const editTool: ToolDefinition = {
       requestor: {
         type: "string",
         description: 'Agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent".',
+      },
+      author_type: {
+        type: "string",
+        enum: ["user", "agent"],
+        description:
+          "Honoured on the CLI only, where a human ran the command; over MCP the write is always recorded as an agent write regardless of what is passed.",
       },
     },
   },

@@ -197,7 +197,12 @@ export function parseOutline(content: string): OutlineNode[] {
       stack[stack.length - 1].ownBodyEnd = lineStart;
     }
 
-    const heading = line.trim();
+    // CommonMark treats a trailing run of #s as decoration, so `## Title ##`
+    // and `## Title` name the same section. Store the canonical form: an agent
+    // that read the rendered document addresses it as `## Title`, and one that
+    // pasted an outline path gets the same string back (resolveAnchor
+    // canonicalises the incoming anchor too).
+    const heading = `${m[1]} ${m[2].trim()}`.trim();
     const node: OutlineNode = {
       heading,
       level,
@@ -225,8 +230,14 @@ export function parseOutline(content: string): OutlineNode[] {
  * Resolve an anchor per spec §3.7: exact heading text, or a ` > ` parent path.
  * 0 matches → AnchorNotFoundError; 2+ → AmbiguousAnchorError with the paths.
  */
+/** `## Title ##` and `## Title` name the same section (CommonMark decoration). */
+function canonicalHeading(text: string): string {
+  const m = text.trim().match(/^(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$/);
+  return m ? `${m[1]} ${m[2].trim()}`.trim() : text.trim();
+}
+
 export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): OutlineNode {
-  const anchor = anchorHeading.trim();
+  const anchor = canonicalHeading(anchorHeading);
 
   // Try the LITERAL heading first, always — including when the anchor contains
   // the path separator. Headings really do contain " > " (`## Draft > Review`,
@@ -243,7 +254,7 @@ export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): Ou
 
   // No heading matched literally: interpret it as a parent path.
   if (anchor.includes(" > ")) {
-    const normalizedPath = anchor.split(" > ").map((seg) => seg.trim()).join(" > ");
+    const normalizedPath = anchor.split(" > ").map((seg) => canonicalHeading(seg)).join(" > ");
     const byPath = outline.filter((n) => n.path === normalizedPath);
     if (byPath.length === 1) return byPath[0];
     if (byPath.length > 1) {
@@ -277,12 +288,29 @@ function resolveSectionEnd(
   node: OutlineNode,
   sectionPart: SectionPart | undefined,
   opName: string,
+  destructive: boolean,
 ): number {
   const child = firstChild(outline, node);
   if (!child) return node.subtreeEnd; // leaf: unambiguous
-  if (!hasOwnBody(content, node)) return node.subtreeEnd; // children only: unambiguous
   if (sectionPart === "own_body") return node.ownBodyEnd;
   if (sectionPart === "subtree") return node.subtreeEnd;
+
+  // Children but no own body. For an INSERT the two readings genuinely
+  // coincide — both put the new text at the section's terminus — so there is
+  // nothing to ask about.
+  //
+  // For a DESTRUCTIVE operation they are opposites, and an earlier version of
+  // this function got that wrong: `own_body` targets an empty range and would
+  // preserve every child, while `subtree` removes all of them. Returning
+  // subtreeEnd here meant `delete_section` on a grouping heading silently
+  // deleted every sub-section under it — with `scope: "body_only"`, whose
+  // whole promise is to keep the structure. Guessing the maximally
+  // destructive reading is exactly what §3.6 says none of these operations may
+  // do. Found by review, not by the tests, which only covered the insert side.
+  if (!hasOwnBody(content, node)) {
+    if (!destructive) return node.subtreeEnd;
+    throw new AmbiguousPositionError(node, child.heading, opName);
+  }
   throw new AmbiguousPositionError(node, child.heading, opName);
 }
 
@@ -293,7 +321,7 @@ function resolveSectionEnd(
  */
 function spliceBlock(content: string, from: number, to: number, text: string): string {
   const before = content.slice(0, from).replace(/\n+$/, "");
-  const after = content.slice(to).replace(/^\n+/, "");
+  const after = content.slice(to).replace(/^\n+/, "").replace(/\n+$/, "");
   const block = text.replace(/^\n+/, "").replace(/\n+$/, "");
 
   const parts: string[] = [];
@@ -333,7 +361,7 @@ function applyOne(
       at = node.bodyStart;
       detail = "insert after_heading";
     } else {
-      at = resolveSectionEnd(content, outline, node, operation.section_part, "end_of_section insert");
+      at = resolveSectionEnd(content, outline, node, operation.section_part, "end_of_section insert", false);
       detail =
         `insert at end_of_section` +
         (operation.section_part ? ` (${operation.section_part})` : "");
@@ -346,7 +374,7 @@ function applyOne(
 
   if (operation.op === "replace_section") {
     const node = resolveAnchor(outline, operation.anchor_heading);
-    const to = resolveSectionEnd(content, outline, node, operation.section_part, "replace_section");
+    const to = resolveSectionEnd(content, outline, node, operation.section_part, "replace_section", true);
     return {
       content: spliceBlock(content, node.bodyStart, to, operation.text),
       applied: {
@@ -361,7 +389,7 @@ function applyOne(
   // delete_section
   const node = resolveAnchor(outline, operation.anchor_heading);
   const scope = operation.scope ?? "body_only";
-  const to = resolveSectionEnd(content, outline, node, operation.section_part, "delete_section");
+  const to = resolveSectionEnd(content, outline, node, operation.section_part, "delete_section", true);
   const from = scope === "heading_and_body" ? node.start : node.bodyStart;
   return {
     content: spliceBlock(content, from, to, ""),
