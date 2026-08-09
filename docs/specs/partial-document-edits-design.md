@@ -2,10 +2,13 @@
 
 **Status**: Draft — not implemented. Revised twice on 2026-08-08 against a second
 real session: once because its usage contradicted the scope this document proposed,
-and again after it reviewed the result and found five under-specified edges (§3, §8). Still gathering sessions before committing to
-semantics — **if you are an agent using Cerefox as memory, §8 is what we want from
-you**, and [issue #186](https://github.com/fstamatelopoulos/cerefox/issues/186) is
-where to put it.
+and again after it reviewed the result and found five under-specified edges (§3, §8).
+Every need any session has reported, built or not, is tracked in the §9 register,
+which is the checklist for the technical design that follows this spec. Still
+gathering sessions before committing to semantics — **if you are an agent using
+Cerefox as memory, §8 is what we want from you**, and
+[issue #186](https://github.com/fstamatelopoulos/cerefox/issues/186) is where to
+put it.
 **Date**: 2026-08-08
 **Motivation**: an agent that wants to add three paragraphs to a 24,000-character
 document must currently resend all 24,000. That is a correctness problem before it
@@ -219,9 +222,10 @@ The one restructure that did change titles was a full rewrite, not a partial edi
 Recorded because the removal matters more than the parameter. The whole discipline
 of this document is that sessions outrank reasoning (§8), and a reasoned suggestion
 arriving *inside* session feedback is still reasoning — it does not inherit the
-weight of the observations it travelled with. Rename is now §8 "Still open": if a
-real session reaches for it, it can be added then, and delete-then-insert serves it
-in the meantime, window and all.
+weight of the observations it travelled with. Rename is now §8 "Still open" and row
+13 of the §9 register, which obliges the technical design to keep it addable as a
+non-breaking change rather than merely noting it. If a real session reaches for it,
+it can be added then; delete-then-insert serves it meanwhile, window and all.
 
 It also carries a load the previous draft did not credit it with. Roughly half of
 session 2's mid-document edits were to a **single line or bullet inside a larger
@@ -568,6 +572,11 @@ aside inside otherwise-observed feedback, and it was promoted to a near-decision
 before anyone checked whether its own author had ever done it. They had not. Session
 feedback is not uniformly evidence, and the sessions providing it have been the
 first to say so.
+
+**Losing the argument does not lose the need.** A suggestion that fails this bar is
+removed from §3 and kept in the §9 register, where the technical design still has to
+show it is not foreclosed. The evidence rule decides what gets *built*; it does not
+decide what gets *heard*.
 
 **Session 1** — the decision-log session that motivated the document.
 **Session 2** — a strategy and registry knowledge base, 2026-08-08.
