@@ -64,6 +64,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ---
 
+## [v1.2.1] -- 2026-08-09
+
+### Fixed
+- **A content update without an explicit source silently overwrote the
+  document's provenance** (#191). `cerefox_ingest_document`'s UPDATE branch
+  assigned `source = p_source` unconditionally while the columns either side of
+  it coalesced (`source_path` and, since v0.11.1, `metadata`). With
+  `p_source TEXT DEFAULT 'agent'` in the signature, PostgreSQL substituted that
+  default on every omitted argument, so any partial update quietly relabelled the
+  document. `cerefox server migrate-format` hit this at corpus scale: it
+  hardcoded `source: "migrate-format"` for every document it converted, though it
+  reads each one first and `cerefox_get_document` returns `doc_source`. One
+  reported store had 1,317 documents relabelled in a single run, 201 of which
+  carried no `metadata.source_agent` and so had no other provenance field left.
+  Nothing surfaced it: the audit entry reads `update-content`, and version rows
+  carry their own label rather than the document's prior value.
+
+  `p_source` now defaults to NULL and the update coalesces, matching `metadata`
+  exactly; the create path keeps `'agent'` via `COALESCE(p_source, 'agent')`.
+  `migrate-format` passes the document's own source and labels the version it
+  archives `"migrate-format"`, so a conversion is still identifiable in history
+  without rewriting where the document came from. Schema `0.10.5` → `0.10.6`;
+  run `cerefox server deploy`. An explicit `p_source` still relabels, so
+  deliberate callers are unaffected.
+
+  Reported by @tdebasis.
+
+---
+
 ## [v1.2.0] -- 2026-08-08
 
 ### Added

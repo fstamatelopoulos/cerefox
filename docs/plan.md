@@ -28,11 +28,23 @@
 ---
 ## Current Focus
 
-**2026-08-09 — `main` at v1.2.0.** **Iteration 34 (Partial Document Edits) is
-ACTIVE** on `feat/partial-edits`: build complete and staging-validated (unit
-427, live 13/13, CLI contract 60/60 + adversarial 28/28, docs done — see the
-plan below for the full state). PR #190 is open as draft. Next: multi-agent
-code review, joint staging walkthrough, then `v1.3.0-beta.1`.
+**2026-08-10 — `main` at v1.2.1.** **Iteration 34 (Partial Document Edits) is
+ACTIVE** on `feat/partial-edits`: build complete, staging-validated, and
+cloud-reviewed (unit 442, live 13/13, CLI contract 60/60 + adversarial 28/28,
+all eight review findings fixed). PR #190 is open as draft. Next: joint staging
+walkthrough, then `v1.3.0-beta.1`.
+
+**v1.2.1 shipped (2026-08-10, on main and merged into this branch).** #191 — a
+content update without an explicit `source` silently overwrote a document's
+provenance, and `server migrate-format` hit it at corpus scale (one reported
+store: 1,317 documents relabelled in a single run). Reported, diagnosed and
+fixed by @tdebasis; same family as #183. Schema 0.10.6 there, superseded by
+0.11.0 here, and both migrations (0019, 0020) are in the sequence. The fix
+prevents further loss but does not repair damage already done — archived
+versions preserve the *content*, not the overwritten `source` value. The
+partial-edit handlers needed their own fix on top (they passed an explicit
+source, which #191 deliberately honours); follow-up on the CLI's own default is
+[#193](https://github.com/fstamatelopoulos/cerefox/issues/193).
 
 - **Plan**: [`plans/iteration-34-partial-edits.md`](plans/iteration-34-partial-edits.md)
 - **Spec (frozen, the success criterion)**:

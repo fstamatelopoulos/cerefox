@@ -89,6 +89,7 @@ export class IngestionPipeline {
       text,
       title,
       source = "paste",
+      sourceLabel,
       sourcePath: sourcePathOpt,
       projectName,
       projectId,
@@ -127,6 +128,7 @@ export class IngestionPipeline {
         text,
         title,
         source,
+        sourceLabel,
         projectIds: fullSetResolved,
         metadata,
         author,
@@ -174,6 +176,7 @@ export class IngestionPipeline {
           text,
           title,
           source,
+          sourceLabel,
           projectIds: fullSetResolved,
           metadata,
           author,
@@ -318,6 +321,7 @@ export class IngestionPipeline {
       text,
       title,
       source = "manual",
+      sourceLabel,
       projectId,
       projectIds,
       metadata,
@@ -506,7 +510,10 @@ export class IngestionPipeline {
       contentFormat: CONTENT_FORMAT_BLIND_STITCH,
       author,
       authorType,
-      sourceLabel: source,
+      // The document's origin and the reason for this particular write are the
+      // same thing for an ordinary save, and different for a maintenance pass
+      // that rewrites a document without changing where it came from (#191).
+      sourceLabel: sourceLabel ?? source,
       // Deliberately NOT passed: version retention is the store's policy, read
       // by the RPC from cerefox_config. Sending this client's env values here is
       // what made the surviving history depend on which client wrote last — an

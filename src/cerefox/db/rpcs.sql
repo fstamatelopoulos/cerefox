@@ -1258,7 +1258,12 @@ $$;
 --
 -- Parameters:
 --   p_document_id     : NULL for create, UUID for update
---   p_title, p_source, p_source_path, p_content_hash : document fields
+--   p_title, p_source_path, p_content_hash : document fields
+--   p_source          : origin label. NULL = "not provided" → create uses
+--                       'agent', update keeps the existing source (#191). Pass a
+--                       value explicitly to relabel. Distinct from
+--                       p_source_label, which records how THIS write was
+--                       triggered and is stored on the version row.
 --   p_metadata        : JSONB metadata. NULL = "not provided" → create uses '{}',
 --                       update keeps the existing metadata (v0.11.1). Pass '{}'
 --                       explicitly to clear all metadata.
@@ -1295,7 +1300,10 @@ DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JS
 CREATE FUNCTION cerefox_ingest_document(
     p_document_id       UUID        DEFAULT NULL,
     p_title             TEXT        DEFAULT 'Untitled',
-    p_source            TEXT        DEFAULT 'agent',
+    -- NULL = "not provided": create uses 'agent', update KEEPS the existing
+    -- source (#191 — a content update without a source used to overwrite the
+    -- document's provenance). Pass a value to relabel deliberately.
+    p_source            TEXT        DEFAULT NULL,
     p_source_path       TEXT        DEFAULT NULL,
     p_content_hash      TEXT        DEFAULT '',
     -- NULL = "not provided": create uses '{}', update KEEPS existing metadata
@@ -1468,9 +1476,11 @@ BEGIN
 
         -- Update document record. metadata: NULL = keep existing (v0.11.1 —
         -- a content update without metadata must not wipe the document's tags).
+        -- source: same rule, same reason (#191 — a content update without a
+        -- source must not wipe the document's provenance).
         UPDATE cerefox_documents SET
             title = p_title,
-            source = p_source,
+            source = COALESCE(p_source, source),
             source_path = COALESCE(p_source_path, source_path),
             content_hash = p_content_hash,
             metadata = COALESCE(p_metadata, metadata),
@@ -1488,7 +1498,7 @@ BEGIN
             title, source, source_path, content_hash, metadata,
             chunk_count, total_chars, review_status
         ) VALUES (
-            p_title, p_source, p_source_path, p_content_hash, COALESCE(p_metadata, '{}'::JSONB),
+            p_title, COALESCE(p_source, 'agent'), p_source_path, p_content_hash, COALESCE(p_metadata, '{}'::JSONB),
             v_chunk_count, v_total_chars, v_status
         )
         RETURNING id INTO v_doc_id;
@@ -2415,6 +2425,9 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
+    -- the partial-edit surface, and both migrations (0019, 0020) are in the
+    -- sequence, so a store deploying this gets everything from both lines.
     SELECT '0.11.0'::TEXT;
 $$;
 

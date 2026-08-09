@@ -1,8 +1,9 @@
 # Partial Document Edits
 
-**Status**: **FROZEN for v1 implementation, 2026-08-09.** The contract below is
-the build's success criterion; changes now require a session finding, not a review.
-Technical design: [`partial-edits-technical-design.md`](partial-edits-technical-design.md).
+**Status**: **FROZEN for v1 implementation, 2026-08-09; built and
+staging-validated.** The contract below is the build's success criterion; changes
+now require a session finding, not a review. Technical design:
+[`partial-edits-technical-design.md`](partial-edits-technical-design.md).
 Shaped by four real sessions (§8). Session 2
 reversed the original scope and found five under-specified edges in the result;
 session 3 supplied the first *observed* transcription corruption (§1) and reversed
