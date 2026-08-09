@@ -248,3 +248,40 @@ describe("cerefox CLI smoke (built bin)", () => {
     }
   });
 });
+
+// ── Partial edits (iteration 34) ───────────────────────────────────────────
+
+describe("document insert / edit-parts / get --outline", () => {
+  test("document insert is registered with its positions documented", () => {
+    const out = run(["document", "insert", "--help"]);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("end_of_section");
+    expect(out.stdout).toContain("--expected-hash");
+  });
+
+  test("document edit-parts is registered", () => {
+    const out = run(["document", "edit-parts", "--help"]);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("--operations");
+  });
+
+  test("document get advertises --outline", () => {
+    const out = run(["document", "get", "--help"]);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("--outline");
+  });
+
+  test("insert without the concurrency token fails rather than defaulting", () => {
+    const out = run(["document", "insert", "some-id", "-t", "x"]);
+    expect(out.status).not.toBe(0);
+    expect(out.stdout + out.stderr).toContain("expected-hash");
+  });
+
+  test("edit-parts rejects malformed JSON with an example", () => {
+    const out = run([
+      "document", "edit-parts", "some-id", "-o", "{not json", "--expected-hash", "x",
+    ]);
+    expect(out.status).not.toBe(0);
+    expect(out.stdout + out.stderr).toContain("not valid JSON");
+  });
+});

@@ -48,6 +48,10 @@ import {
 } from "./commands/relation.ts";
 import { registerGetDoc } from "./commands/get-doc.ts";
 import { registerIngest } from "./commands/ingest.ts";
+import {
+  registerDocumentEditParts,
+  registerDocumentInsert,
+} from "./commands/document-partial-edit.ts";
 import { registerIngestDir } from "./commands/ingest-dir.ts";
 import { registerInit } from "./commands/init.ts";
 import { registerListDocs } from "./commands/list-docs.ts";
@@ -193,6 +197,9 @@ export function buildProgram(): Command {
   registerDocumentEdit(document); // v0.9.1: non-destructive title/metadata patch
   registerDocumentSetProjects(document); // CLI parity with cerefox_set_document_projects
   moveInto(document, registerIngest, "ingest");
+  // Partial edits (iter-34): same shared handlers the MCP tools use.
+  registerDocumentInsert(document);
+  registerDocumentEditParts(document);
   moveInto(document, registerIngestDir, "ingest-dir");
 
   // v0.9.1: versions nested under `document` (Clio's shape — a version belongs
