@@ -1,8 +1,8 @@
 # Partial Document Edits
 
-**Status**: Draft — not implemented. Revised 2026-08-08 against feedback from a
-second real session, which contradicted the scope this document originally proposed
-and reshaped the contract (§3, §8). Still gathering sessions before committing to
+**Status**: Draft — not implemented. Revised twice on 2026-08-08 against a second
+real session: once because its usage contradicted the scope this document proposed,
+and again after it reviewed the result and found five under-specified edges (§3, §8). Still gathering sessions before committing to
 semantics — **if you are an agent using Cerefox as memory, §8 is what we want from
 you**, and [issue #186](https://github.com/fstamatelopoulos/cerefox/issues/186) is
 where to put it.
@@ -133,6 +133,26 @@ destructive-annotated `edit` is a legitimate alternative — it trades prompt
 fidelity for surface area, and the v1.2.0 annotation work is a starting point to
 revise, not a commitment to honour.
 
+**The larger cost is atomicity, and it is not specific to the split.** Restructuring
+a document is now a *sequence* — insert here, replace there, delete that — where a
+full re-ingest was one write. Each call carries its own token, so a concurrent
+writer can interleave between them, and the agent must be prepared to re-plan
+partway through a restructure rather than assuming its plan survives to the last
+call. A half-applied restructure is also a state no single re-ingest could produce.
+
+This is a genuine regression against re-ingest on one axis, and it is worth being
+straight about rather than filing under "safety wins". Three things bound it: each
+call returns the new hash, so an uncontended sequence chains without re-reading;
+every step is individually conflict-checked, so the failure is a stop rather than a
+silent overwrite; and the intermediate states are ones a *reader* can make sense of,
+unlike the transcription corruption in §1. It belongs in the agent-facing guide as a
+usage note: a large restructure is several operations with conflict checkpoints, not
+one atomic write.
+
+If it bites in practice, the answer is a batched form (§7), not merging the tools —
+the atomicity problem and the annotation problem have different solutions and
+should not be traded against each other.
+
 ### 3.3 `cerefox_insert` — additive, any position
 
 ```jsonc
@@ -157,15 +177,47 @@ than a section's interior, so anchor uniqueness matters more for them (§3.6). T
 are still additive: a mis-anchored insert puts text in the wrong place, which is
 visible and fixable, not lost.
 
+**Where `end_of_section` ends, when sections nest.** If `## Active decisions`
+contains `### Monday` and `### NOT doing`, "the end of the section" has two
+defensible readings: the end of the whole subtree, or the end of the parent's *own*
+body, before its first child heading. They are different places and the chunker will
+pick one whether or not this document says which.
+
+**Specified: `end_of_section` inserts immediately before the next heading of
+equal-or-higher level — the end of the entire subtree.** That is what "the section"
+colloquially means, and it is the less surprising of the two when an agent is adding
+a new subsection to a section that already has some.
+
+The other reading needs no second position, because the addressing model already
+expresses it: *end of the parent's own body* is `before_heading` anchored to the
+first child. Two positions, no overlap, and nothing ambiguous left in the enum. This
+is a second argument for keeping the seam positions in scope rather than deferring
+them (§3.1): without `before_heading`, one of the two natural insertion points in a
+nested document would have no vocabulary at all.
+
 ### 3.4 `cerefox_replace_section` — swap a section's body
 
 ```jsonc
 { "document_id": "…", "anchor_heading": "## Outcome", "text": "…",
-  "expected_content_hash": "…" }
+  "scope": "body_only", "expected_content_hash": "…" }
 ```
 
 Not additive, so it carries real risk, but bounded: a wrong anchor damages one
 section rather than a document.
+
+**It takes the same `scope` enum as `delete_section`, for the same reason.** With
+`body_only` (the default) the heading survives and only the body is swapped. With
+`heading_and_body` the supplied text replaces the heading too, which is how a
+section gets **renamed while its content changes** — `## Pending` becoming
+`## Resolved` with a new body.
+
+Leaving rename out would not remove the need, only the safe way to serve it: agents
+would express it as delete-then-insert, which is two destructive calls with a
+window in between where the document has no such section at all, and where a
+concurrent reader sees a hole that never existed in anyone's intent. One
+`heading_and_body` replace is a single write with a single token. The two
+destructive tools also become easier to reason about by sharing one parameter with
+one meaning.
 
 It also carries a load the previous draft did not credit it with. Roughly half of
 session 2's mid-document edits were to a **single line or bullet inside a larger
@@ -199,10 +251,36 @@ documents quietly. The rules:
 - **Absent anchor → error.** Never fall back to inserting at the end. An agent that
   mistyped a heading and got a silent `end_of_document` has content in the wrong
   place and a success response.
-- **Ambiguous anchor → error, naming the collisions.** Duplicate headings are common
-  in real documents (`### Notes` under three parents). Matching the first is a coin
-  flip that writes to the wrong section half the time. The error should report what
-  matched so the agent can disambiguate.
+- **Ambiguous anchor → error, returning paths that resolve it.** Duplicate headings
+  are common in real documents (`### Notes` under three parents). Matching the first
+  is a coin flip that writes to the wrong section half the time.
+
+  Erroring is only half an answer, and the earlier draft stopped there. If the
+  agent's *only* addressing vocabulary is the exact heading text, and that text is
+  what was ambiguous, then the error names a problem the agent has no way to fix:
+  it can see three collisions and cannot express which one it meant. That is an
+  unrecoverable surfaced error, which contradicts §5's own principle that a
+  surfaced problem must be recoverable.
+
+  **So `anchor_heading` also accepts a parent path**, and the ambiguity error
+  returns the qualifying paths so the retry needs no extra round trip:
+
+  ```jsonc
+  // error: 3 sections match "### Notes"
+  { "code": "CEREFOX_AMBIGUOUS_ANCHOR",
+    "candidates": ["## Monday > ### Notes",
+                   "## Tuesday > ### Notes",
+                   "## Backlog > ### Notes"] }
+  // retry
+  { "anchor_heading": "## Tuesday > ### Notes", … }
+  ```
+
+  **Path, not occurrence index.** An index (`{heading: "### Notes", occurrence: 2}`)
+  is positional: it silently retargets when sections are reordered or one is
+  inserted above. That is the same fragility §3.8 rejects line-anchoring for, and it
+  would be inconsistent to reject it there and adopt it here. A path is stable under
+  reordering and breaks loudly under renaming, which is the correct direction to
+  fail. A path that is still ambiguous is still an error.
 - **Matching is exact on heading text**, after trimming whitespace. Normalised or
   fuzzy matching buys convenience and pays for it in precisely the silent-wrong-
   location failures this design exists to avoid.
@@ -212,12 +290,39 @@ one that refuses.
 
 ### 3.7 What every operation returns
 
-**The new `content_hash` and the resulting size. Not the document body.**
+**On success: the new `content_hash` and the resulting size. Not the document
+body.**
 
 Requested explicitly, and it matters: agents chain edits, and each follow-up write
 needs a fresh token for its `expected_content_hash` (§5). Returning the full
 document would spend exactly the tokens the feature exists to save, on the response
 side, undoing the win.
+
+**On conflict: the current `content_hash`, and still not the body.** The choice is
+real, so it is stated rather than left to the implementation. Returning the body
+would save the agent a `cerefox_get_document` round trip at exactly the moment it
+wants to merge. It is still the wrong default: it makes the conflict path the most
+expensive response in the API, and it pays that cost unconditionally, including for
+the agents that will not merge at all — the ones that abandon the write, re-plan, or
+decide the other writer's version is the correct one. Those agents pay full document
+tokens for information they discard.
+
+Conflicts are rare, and a deliberate re-read is the honest way to see what changed.
+The agent that does want to merge spends one extra call; the agent that does not
+spends nothing.
+
+**A size flag, so cheap writes cannot quietly defeat a split policy.** The size in
+the response is not decoration. An agent inserting repeatedly never assembles the
+document, so it never sees it grow — and a workflow that made writes cheap could
+walk a document past the point where it should have been split, one small insert at
+a time, with every response reporting success. The maintainers' own decision-log
+practice is exactly this: append until ~50,000 characters, then start a new part.
+
+So when a document crosses a configured threshold, the response carries a flag
+saying so. It does **not** refuse: a size policy is not a correctness rule, and
+blocking a write on it would be a worse failure than the one it prevents. The flag
+puts the fact in front of the only party who can decide, at the moment it becomes
+true. (This implies a new config key for the threshold, dormant when unset.)
 
 ### 3.8 Deliberately excluded, and confirmed by usage
 
@@ -318,7 +423,8 @@ specific to what Cerefox is.
 memory; agents coordinate *through* the document. If another session appended
 while this one was composing, the agent may want to know before writing: its
 entry might duplicate the other, contradict it, or push the document past a size
-threshold that should have triggered a split instead of an append. Auto-retry
+threshold that should have triggered a split instead of an append (§3.7 carries
+that signal on the success path too). Auto-retry
 lands the text and reports success, having concealed exactly the fact the agent
 would have acted on.
 
@@ -422,6 +528,16 @@ Two constraints for whoever implements this, both learned the hard way in #183:
 
 ## 7. Explicitly deferred
 
+**A batched form: several operations, one transaction, one token.** The natural
+answer to the atomicity cost in §3.2 — a restructure applies wholly or not at all,
+against a single `expected_content_hash`, instead of as an interleavable sequence.
+Deliberately not in v1: it is only worth building once real restructures show the
+sequence actually breaking, and designing the batch semantics (ordering, anchor
+resolution against a document being mutated mid-batch, partial-failure reporting)
+is a larger problem than the operations themselves. Named here so the answer is on
+record when the question arrives.
+
+
 **Incremental chunking and embedding.** Version one should still re-chunk and
 re-embed the whole document server-side. The agent-side win (tokens, transcription
 safety) and the server-side win (embedding cost) are **separable**, and the second
@@ -436,6 +552,12 @@ Where a session contradicts an assumption in this document, the session wins.
 
 **Session 1** — the decision-log session that motivated the document.
 **Session 2** — a strategy and registry knowledge base, 2026-08-08.
+
+Session 2 also reviewed the revision its own feedback produced, which is where
+§3.3's nesting boundary, §3.6's path disambiguation, §3.4's `scope` symmetry,
+§3.7's conflict and size semantics, and §3.2's atomicity note come from. Every one
+of those is an edge the design would otherwise have left for the implementation to
+guess — which §3.6 exists to say we do not do.
 
 More are being gathered, including from another contributor's agents. **Add rows
 and answers here rather than rewriting the section**: the disagreement between
@@ -485,12 +607,14 @@ not.
   registries, and that stores drift toward section editing as they mature. Two
   data points cannot settle it, and the answer changes what gets built after the
   minimum set.
-- **Do the seam positions (`before_heading` / `after_heading`) get used?** They are
-  in scope rather than deferred, because collapsing `append` into a positional
-  `insert` (§3.1) made them two enum values rather than a separate feature. That is
-  cheap to build and still possible to over-serve: if real sessions only ever use
-  `end_of_document` and `end_of_section`, the seam positions are two more ways to
-  mis-anchor for little gain.
+- **How common are duplicate headings in real stores?** §3.6 answers ambiguity with
+  parent paths, which is the recoverable design, but it is untested against real
+  documents. If collisions turn out to be pervasive, agents will spend a round trip
+  on a large share of anchored writes and paths become the normal form rather than
+  the fallback.
+- **Does anyone reach for `heading_and_body` replace (rename)?** Added on a
+  reasoned case rather than an observed one — the only §3 decision so far without a
+  session behind it.
 - **Does an error on an ambiguous anchor (§3.6) annoy more than it protects?** The
   design deliberately refuses rather than guesses. Real duplicate-heading
   documents will tell us whether the refusal lands as safety or as friction.
