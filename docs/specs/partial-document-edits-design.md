@@ -199,25 +199,29 @@ nested document would have no vocabulary at all.
 
 ```jsonc
 { "document_id": "…", "anchor_heading": "## Outcome", "text": "…",
-  "scope": "body_only", "expected_content_hash": "…" }
+  "expected_content_hash": "…" }
 ```
 
 Not additive, so it carries real risk, but bounded: a wrong anchor damages one
 section rather than a document.
 
-**It takes the same `scope` enum as `delete_section`, for the same reason.** With
-`body_only` (the default) the heading survives and only the body is swapped. With
-`heading_and_body` the supplied text replaces the heading too, which is how a
-section gets **renamed while its content changes** — `## Pending` becoming
-`## Resolved` with a new body.
+**Body-only by design. The heading always survives; there is no `scope` parameter
+here**, unlike `delete_section` (§3.5).
 
-Leaving rename out would not remove the need, only the safe way to serve it: agents
-would express it as delete-then-insert, which is two destructive calls with a
-window in between where the document has no such section at all, and where a
-concurrent reader sees a hole that never existed in anyone's intent. One
-`heading_and_body` replace is a single write with a single token. The two
-destructive tools also become easier to reason about by sharing one parameter with
-one meaning.
+A draft of this section gave it one, so that a section could be renamed while its
+content changed (`## Pending` becoming `## Resolved`), on the argument that the
+alternative — delete then insert — is two destructive calls with a window where the
+section does not exist. **That was reasoning, not usage, and it was removed on those
+grounds.** Asked directly, the session that proposed it went back through its own
+edits and found no instance: headings stayed put while bodies changed, every time.
+The one restructure that did change titles was a full rewrite, not a partial edit.
+
+Recorded because the removal matters more than the parameter. The whole discipline
+of this document is that sessions outrank reasoning (§8), and a reasoned suggestion
+arriving *inside* session feedback is still reasoning — it does not inherit the
+weight of the observations it travelled with. Rename is now §8 "Still open": if a
+real session reaches for it, it can be added then, and delete-then-insert serves it
+in the meantime, window and all.
 
 It also carries a load the previous draft did not credit it with. Roughly half of
 session 2's mid-document edits were to a **single line or bullet inside a larger
@@ -237,6 +241,11 @@ answered: **a `scope` parameter defaulting to `body_only`**, because both are re
 Removing a subsection outright wants `heading_and_body`; clearing a section to
 refill it wants `body_only`. The default preserves the structural anchor and the
 document's outline.
+
+This parameter stays where the near-identical one on `replace_section` was removed
+(§3.4), and the difference is the point: here a session reported wanting **both**
+variants, having done both. There it was a case someone might want. Same shape of
+parameter, opposite evidence, opposite outcome.
 
 Deletion deserves particular care: it is the one operation where a wrong anchor
 destroys content the caller never saw and cannot diff, and where the agent's intent
@@ -550,14 +559,26 @@ prove it, then optimise.
 Answers below come from agents actually using Cerefox as memory, not from review.
 Where a session contradicts an assumption in this document, the session wins.
 
+**Mark each answer as observed or reasoned, and weight them differently.** "I did X
+in a session" is data. "Someone might want Y" is reasoning, and it does not become
+data by arriving in the same message as an observation — it faces the same
+wait-for-a-session bar as a suggestion from anyone who has not used the feature.
+This rule is here because it was needed: §3.4's rename parameter was a reasoned
+aside inside otherwise-observed feedback, and it was promoted to a near-decision
+before anyone checked whether its own author had ever done it. They had not. Session
+feedback is not uniformly evidence, and the sessions providing it have been the
+first to say so.
+
 **Session 1** — the decision-log session that motivated the document.
 **Session 2** — a strategy and registry knowledge base, 2026-08-08.
 
 Session 2 also reviewed the revision its own feedback produced, which is where
-§3.3's nesting boundary, §3.6's path disambiguation, §3.4's `scope` symmetry,
-§3.7's conflict and size semantics, and §3.2's atomicity note come from. Every one
-of those is an edge the design would otherwise have left for the implementation to
-guess — which §3.6 exists to say we do not do.
+§3.3's nesting boundary, §3.6's path disambiguation, §3.7's conflict and size
+semantics, and §3.2's atomicity note come from. Every one of those is an edge the
+design would otherwise have left for the implementation to guess — which §3.6 exists
+to say we do not do. A fifth suggestion from the same review, a rename parameter on
+`replace_section`, was reasoned rather than observed and did not survive the check
+(§3.4).
 
 More are being gathered, including from another contributor's agents. **Add rows
 and answers here rather than rewriting the section**: the disagreement between
@@ -612,9 +633,12 @@ not.
   documents. If collisions turn out to be pervasive, agents will spend a round trip
   on a large share of anchored writes and paths become the normal form rather than
   the fallback.
-- **Does anyone reach for `heading_and_body` replace (rename)?** Added on a
-  reasoned case rather than an observed one — the only §3 decision so far without a
-  session behind it.
+- **Does anyone reach for section rename?** Proposed as a `scope` parameter on
+  `replace_section`, then **removed** (§3.4): it was reasoning, and the session that
+  proposed it, asked to check, found no instance in its own edits. Watch for a real
+  one before building. Until then, delete-then-insert covers it, with the
+  no-such-section window that argued for the parameter in the first place — a known
+  cost, deliberately accepted rather than designed away on speculation.
 - **Does an error on an ambiguous anchor (§3.6) annoy more than it protects?** The
   design deliberately refuses rather than guesses. Real duplicate-heading
   documents will tell us whether the refusal lands as safety or as friction.
