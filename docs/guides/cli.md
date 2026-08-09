@@ -46,7 +46,7 @@ cerefox document ingest --paste --title "<title>" [OPTIONS]   # stdin
 | `--metadata` | `-m` | JSON | _not provided_ | Extra metadata as a JSON object, e.g. `'{"tags":["work"]}'`. **On update, omitting this keeps the document's existing metadata** (v0.11.1); pass `'{}'` to deliberately clear all metadata. |
 | `--update-if-exists` | `-u` | flag | off | Title/source-path-based fallback update. Mutually exclusive with `--document-id`. |
 | `--document-id` | `-i` | UUID | _none_ | Deterministic ID-based update. Errors if the document doesn't exist. |
-| `--expected-content-hash` | — | sha256 | _none_ | **Required on content updates** (v0.11 optimistic concurrency): the `content_hash` of the version this edit is based on, shown by `cerefox document get` / `cerefox search`. Stale → conflict error (re-read, merge, retry). |
+| `--expected-content-hash` | — | sha256 | _none_ | **Required on content updates** (v0.11 optimistic concurrency): the `content_hash` of the version this edit is based on, shown by `cerefox document get` / `cerefox search` — and printed by **every write, including create** (v1.3.0), so a script can chain edits without re-reading. Stale → conflict error (re-read, merge, retry). |
 | `--last-write-wins` | — | flag | off | Skip the concurrency check and overwrite regardless of concurrent changes. For re-sync flows where an external source of truth makes conflicts meaningless. Recorded in the audit log. |
 | `--source` | — | str | `paste` / `file` | Source label recorded on the document. |
 | `--author` | — | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Audit-log author identity. |

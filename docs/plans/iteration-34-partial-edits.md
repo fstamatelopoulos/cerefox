@@ -82,7 +82,29 @@ location. Plus `get_document` outline mode, and #189 (create returns
    unbounded reads, and the audit CHECK remains the allow-list. Regression pass:
    existing live write/read suites 26/26 against the new schema.
 
-**Remaining for tomorrow**: joint staging walkthrough, then PR → `v1.3.0-beta.1`.
+**Late-night additions (2026-08-09, post-build)**:
+- **CLI-driven contract matrix against staging: 60/60**, then an adversarial
+  round that found and fixed a real bug — a heading whose text contains ` > `
+  (e.g. `## Draft > Review`) was unaddressable by its own text because the
+  resolver read every separator-containing anchor as a path. Literal heading now
+  resolves first; 28/28 after the fix.
+- **Purge coverage + guards**: live test that purge refuses a non-soft-deleted
+  document and records both steps; three guard tests keep purge off the agent
+  surface (no tool named for it, no tool reaches the RPC — proven with a spying
+  client — none advertises it). Purge stays web-UI-only by design: soft delete
+  is the recovery window, and it only works if the fast actor cannot close it.
+- **Staging left legitimate**: 210 test-residue orphan audit rows removed
+  (211 → 1, the survivor a genuine web-UI purge); zero orphan chunks/versions/
+  memberships; 329 real documents and 10 real trash items untouched. The live
+  suite now cleans without creating orphans.
+- **Docs complete**: AGENT_GUIDE (12-tool reference + partial-edit lead
+  workflow), AGENT_QUICK_REFERENCE (+ re-bundled into `cerefox_get_help`), CLI
+  guide mapping, configuration guide (`document_size_warning_chars`), CHANGELOG,
+  GPT Actions OpenAPI 3.1.0, and every place that said "read to get the hash"
+  now says writes (including create) return it too.
+
+**Remaining**: multi-agent code review (`/code-review ultra` on the branch) →
+joint staging walkthrough → merge PR #190 → `v1.3.0-beta.1` → prod.
 
 ## Guardrails
 

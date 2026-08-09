@@ -29,7 +29,10 @@
 ## Current Focus
 
 **2026-08-09 — `main` at v1.2.0.** **Iteration 34 (Partial Document Edits) is
-ACTIVE** on `feat/partial-edits`, building toward a staging-validated beta.
+ACTIVE** on `feat/partial-edits`: build complete and staging-validated (unit
+427, live 13/13, CLI contract 60/60 + adversarial 28/28, docs done — see the
+plan below for the full state). PR #190 is open as draft. Next: multi-agent
+code review, joint staging walkthrough, then `v1.3.0-beta.1`.
 
 - **Plan**: [`plans/iteration-34-partial-edits.md`](plans/iteration-34-partial-edits.md)
 - **Spec (frozen, the success criterion)**:
