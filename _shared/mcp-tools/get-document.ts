@@ -113,7 +113,7 @@ export const getDocumentTool: ToolDefinition = {
       outline: {
         type: "boolean",
         description:
-          "Return the document's STRUCTURE instead of its content: heading paths, levels and per-section sizes, plus content_hash and total size. Far cheaper than a full read, and the paths are exactly what cerefox_insert / cerefox_edit take as anchor_heading. Use this before editing a document you have not read.",
+          "Return the document's STRUCTURE instead of its content: heading paths, levels and per-section sizes, plus content_hash and total size. Far cheaper than a full read. Every heading listed is addressable by cerefox_insert / cerefox_edit: pass the bare heading line (e.g. '## Daily Logs') when it occurs once in the document, and only the full ' > ' path shown here when the same heading text repeats. Use this before editing a document you have not read.",
       },
       requestor: {
         type: "string",

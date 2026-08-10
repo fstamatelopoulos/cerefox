@@ -9,6 +9,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Changed
+
+- **Tool descriptions steer partial edits toward the documents that need them
+  most.** `cerefox_ingest` now states that updating replaces the whole document
+  and points at `cerefox_insert` / `cerefox_edit`, calling out the case where the
+  untouched content cannot be verified by reading it: IDs, hashes, numeric
+  tables, indexes and registries. Drifting prose is caught on review; one wrong
+  character in a UUID is not, and it silently resolves to nothing.
+
+### Fixed
+
+- **`get_document(outline: true)` no longer implies that anchors must be full
+  paths.** Its description said the outline's paths "are exactly what
+  cerefox_insert / cerefox_edit take as anchor_heading", which read as a required
+  format; an agent used full ` > ` paths throughout believing bare headings would
+  not resolve. They always have — anchor resolution matches the literal heading
+  line first, and a path is only needed when the heading text repeats.
+  Description only; no behaviour change.
+
 Open roadmap.
 
 ---

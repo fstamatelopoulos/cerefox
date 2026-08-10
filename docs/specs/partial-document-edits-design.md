@@ -970,6 +970,47 @@ after confirming the beta.4 fixes.
   that would catch it at any size compares against the version the edit was based
   on, not a size ratio.
 
+### Session 7, marked observed or reasoned
+
+The same agent, on v1.3.0 as released, updating an index document that had gone
+nine entries stale. Two operations, one atomic call, ~1,700 characters sent
+against a 4,095-character document.
+
+**Observed:**
+
+- **`replace_section` is a blind overwrite, and the outline does not fix it.**
+  The outline gives a section's *size*, never its *text*. The agent was safe only
+  because it had written that document itself and remembered the contents; on a
+  document written by another session, the only way to see what `replace_section`
+  is about to destroy is a full `get_document` — the exact cost this feature
+  exists to remove. This is the hole in "nothing is ever guessed": `insert` is
+  guarded structurally, but the destructive operation's safe usage pattern was
+  never shipped. Register row 24; #198, for 1.4.0.
+- **Bare headings were believed not to work.** The agent used full ` > ` paths
+  throughout because the outline returns paths and `get_document`'s description
+  said they "are exactly what cerefox_insert / cerefox_edit take". Anchor
+  resolution matches the literal heading line first (§3.7) and a bare unique
+  heading has always resolved. A correct description was overridden by a
+  neighbouring one that implied a format. Fixed in the description, not the code.
+- **The echo-back of resolved anchors was load-bearing.** Naming each operation
+  and the anchor it resolved to is how the agent verified the second insert
+  landed in the intended section *without* a re-read. Recorded because this
+  response detail will eventually read as noise to someone trimming output; it
+  is not.
+
+**Reasoned:**
+
+- The risk class in §1 is sharper than "long documents": it is documents whose
+  untouched content **cannot be verified by reading it**. Indexes and registries
+  carrying UUIDs, hashes, or numeric tables are simultaneously the highest-risk
+  and highest-value case — drifting prose is caught on review, one wrong
+  character in an identifier is not, and it silently resolves to nothing. That is
+  precisely the corruption session 3 reported. Now stated in `cerefox_ingest`'s
+  own description, where an agent reads it while choosing how to update.
+- §3.5's granularity guidance gets more pointed, not different: a section holding
+  intro prose *and* a table is a section whose prose you retype to edit the
+  table. A section read (row 24) softens this without needing line anchors.
+
 ### Session 5, marked observed or reasoned
 
 A job-search agent updating two real documents on the v1.3.0 beta, via the remote
@@ -1097,6 +1138,7 @@ Three statuses, and the middle one is the one that matters:
 | 21 | Express additive intent so a replace-shaped call cannot destroy | **v1** | `cerefox_insert` is its own contract (§3.3, §1) |
 | 22 | Append a row to a table sitting mid-section | Open, not foreclosed | served without contract by structure — an append-heavy table gets its own heading, then `end_of_section` is the row-append (§3.3) |
 | 23 | Learn a document's structure without paying for its body | **v1** | outline mode on `get_document` — a parameter, not a new tool (§3.7) |
+| 24 | See what a section currently holds before replacing it | Open, **now observed** | §3.5 — the outline gives size, not text, so `replace_section` on a document you did not write needs a full read to be safe. Section read on `get_document`, mirroring `section_part`; #198, 1.4.0 |
 
 **Row 14 is the register doing its job.** It was parked as *open, not foreclosed*
 in one revision and promoted to **v1** in the next, when session 4 showed the need
