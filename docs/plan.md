@@ -28,43 +28,43 @@
 ---
 ## Current Focus
 
-**2026-08-10 — `main` at v1.2.1.** **Iteration 34 (Partial Document Edits) is
-ACTIVE** on `feat/partial-edits`: build complete, staging-validated, and
-cloud-reviewed (unit 442, live 13/13, CLI contract 60/60 + adversarial 28/28,
-all eight review findings fixed). PR #190 is open as draft. Next: joint staging
-walkthrough, then `v1.3.0-beta.1`.
+**2026-08-10 — `main` at v1.4.0-dev; v1.3.0 shipped and in production.**
+**Iteration 35 (Partial-edit follow-ups and guard debt) is ACTIVE** on
+`feat/1.4.0-section-read`, target **v1.4.0**.
 
-**v1.2.1 shipped (2026-08-09, on main and merged into this branch).** #191 — a
-content update without an explicit `source` silently overwrote a document's
-provenance, and `server migrate-format` hit it at corpus scale (one reported
-store: 1,317 documents relabelled in a single run). Reported, diagnosed and
-fixed by @tdebasis; same family as #183. Schema 0.10.6 there, superseded by
-0.11.0 here, and both migrations (0019, 0020) are in the sequence. The fix
-prevents further loss but does not repair damage already done — archived
-versions preserve the *content*, not the overwritten `source` value. The
-partial-edit handlers needed their own fix on top (they passed an explicit
-source, which #191 deliberately honours); follow-up on the CLI's own default is
-[#193](https://github.com/fstamatelopoulos/cerefox/issues/193).
+Eight tickets: the partial-edit feature completing itself under real usage
+(#198 section read, #197 `rename_section`), defects found by using it (#196
+shrink trigger, #193 CLI `--source`, #189 already fixed in v1.3.0), and guard
+debt this iteration is the right size to clear (#171 typecheck coverage, #194
+static guard, #168 environment-labelled MCP name). **#155 (UI e2e, 8/13
+failing) is explicitly out** — unknown cause, unbounded, and it needs a human to
+confirm intended UI.
 
-- **Plan**: [`plans/iteration-34-partial-edits.md`](plans/iteration-34-partial-edits.md)
-- **Spec (frozen, the success criterion)**:
+- **Plan**: [`plans/iteration-35-partial-edits-followups.md`](plans/iteration-35-partial-edits-followups.md)
+- **Spec** (§8 sessions 7–8, §9 register rows 13/24):
   [`specs/partial-document-edits-design.md`](specs/partial-document-edits-design.md)
-- **Technical design**:
-  [`specs/partial-edits-technical-design.md`](specs/partial-edits-technical-design.md)
-- **Staging** carries schema 0.11.0; **prod is untouched** until joint validation.
-- **Waiting on**: feedback from a further agent session on the spec — it slots
-  into §8/§9 without reopening the freeze unless a session finding demands it.
-- Ships #189 (create returns `content_hash`) inside this iteration.
+- **Staging** is dedicated to this iteration and may be changed freely;
+  **production is not touched** until the sub-agent review passes.
+
+**v1.3.0 shipped (2026-08-10)** — partial document edits, schema 0.11.0. Two
+agent sessions on the released build produced everything above: the outline →
+edit loop works as designed, and the gaps are the parts the design assumed
+someone would already have.
 
 ---
 
 ## Active iteration
 
+**[Iteration 35 — Partial-edit follow-ups and guard debt](plans/iteration-35-partial-edits-followups.md)**
+(2026-08-10 → , target **v1.4.0**, normal release preferred over a beta —
+several small fixes, no single risky change). Adds `rename_section` and a
+section read, fixes a warning that could not see its own motivating case, and
+clears three guard-debt tickets. Full phase list and status in the linked plan.
+
 **[Iteration 34 — Partial Document Edits](plans/iteration-34-partial-edits.md)**
-(2026-08-08 → , target **v1.3.0**, via a beta). Two MCP tools (`cerefox_insert`,
-`cerefox_edit`), `get_document` outline mode, schema 0.11.0. Spec-first: the
-contract was shaped by four real agent sessions and frozen before any code.
-Full step list and status in the linked plan.
+— ✅ **CLOSED, shipped v1.3.0** (2026-08-10). Two MCP tools, `get_document`
+outline mode, schema 0.11.0; contract shaped by four agent sessions and frozen
+before any code.
 
 ---
 

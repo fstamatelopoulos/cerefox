@@ -21,7 +21,8 @@
 
 | Iteration | Plan | Status |
 |---|---|---|
-| 34 — Partial Document Edits | [`iteration-34-partial-edits.md`](iteration-34-partial-edits.md) | active |
+| 34 — Partial Document Edits | [`iteration-34-partial-edits.md`](iteration-34-partial-edits.md) | ✅ shipped v1.3.0 (2026-08-10) |
+| 35 — Partial-edit follow-ups and guard debt | [`iteration-35-partial-edits-followups.md`](iteration-35-partial-edits-followups.md) | active |
 
 ---
 
