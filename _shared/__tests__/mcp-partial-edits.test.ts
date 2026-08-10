@@ -7,7 +7,31 @@
  * client throughout — no network, no database.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+
+// The write path calls embedBatch() before the RPC. Un-stubbed it makes a real
+// network call, throws, and every "what reached the RPC" assertion below turns
+// into a no-op that passes whatever the handler did.
+//
+// Stubbing global fetch rather than mock.module(): bun's module mocks are
+// process-wide, so mocking the embeddings module here broke six embedBatch
+// tests in another file. This is scoped to the assertions that need it and
+// restored afterwards.
+const realFetch = globalThis.fetch;
+function stubEmbeddings(): void {
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    if (String(url).includes("openai.com")) {
+      return new Response(
+        JSON.stringify({ data: [{ index: 0, embedding: new Array(768).fill(0.01) }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    return realFetch(url as never);
+  }) as typeof fetch;
+}
+function restoreFetch(): void {
+  globalThis.fetch = realFetch;
+}
 
 import { TOOLS_BY_NAME } from "../mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../mcp-tools/types.ts";
@@ -302,6 +326,9 @@ describe("server-behind detection", () => {
 // ── Review findings (cloud code review, 2026-08-09) ────────────────────────
 
 describe("author_type is derived from the access path (bug_001)", () => {
+  beforeAll(stubEmbeddings);
+  afterAll(restoreFetch);
+
   function capturingClient(captured: { args?: Record<string, unknown> }) {
     return {
       rpc: (name: string, args: Record<string, unknown>) => {
@@ -326,7 +353,27 @@ describe("author_type is derived from the access path (bug_001)", () => {
         { accessPath: "local-mcp", openaiApiKey: "k" } as ToolContext,
       )
       .catch(() => {});
-    if (captured.args) expect(captured.args.p_author_type).toBe("agent");
+    expect(captured.args).toBeDefined();
+    expect(captured.args!.p_author_type).toBe("agent");
+  });
+
+  test("a CLI write is recorded as a user write", async () => {
+    // The discriminating case. Both tests above expect "agent", which a
+    // hardcoded "agent" also satisfies — so neither would catch a regression to
+    // the pre-fix literal. This one fails unless the value is actually derived
+    // from the access path.
+    const captured: { args?: Record<string, unknown> } = {};
+    await insert
+      .handler(
+        capturingClient(captured),
+        { document_id: "d", text: "x", position: "end_of_document", expected_content_hash: HASH },
+        { accessPath: "cli", openaiApiKey: "k" } as ToolContext,
+      )
+      .catch(() => {});
+    expect(captured.args).toBeDefined();
+    expect(captured.args!.p_author_type).toBe("user");
+    // Agent writes land in review; a human at a shell is the reviewer.
+    expect(captured.args!.p_review_status).toBe("approved");
   });
 
   test("an agent cannot claim to be a user", async () => {
@@ -342,7 +389,8 @@ describe("author_type is derived from the access path (bug_001)", () => {
       )
       .catch(() => {});
     // Routing around a governance filter must not be a matter of passing a string.
-    if (captured.args) expect(captured.args.p_author_type).toBe("agent");
+    expect(captured.args).toBeDefined();
+    expect(captured.args!.p_author_type).toBe("agent");
   });
 });
 
@@ -373,6 +421,9 @@ describe("outline of an archived version withholds the token (bug_002)", () => {
 });
 
 describe("partial edits never change provenance (#191)", () => {
+  beforeAll(stubEmbeddings);
+  afterAll(restoreFetch);
+
   test("neither tool sends a source, so the document keeps its own", async () => {
     const captured: { args?: Record<string, unknown> } = {};
     const client = {
@@ -398,6 +449,7 @@ describe("partial edits never change provenance (#191)", () => {
     // An edit changes content, not origin. An explicit value here would relabel
     // the document even on a server carrying the #191 fix, since that fix only
     // rescues callers who OMIT the parameter.
-    if (captured.args) expect(captured.args.p_source).toBeNull();
+    expect(captured.args).toBeDefined();
+    expect(captured.args!.p_source).toBeNull();
   });
 });

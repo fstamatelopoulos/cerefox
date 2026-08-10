@@ -34,7 +34,7 @@ cloud-reviewed (unit 442, live 13/13, CLI contract 60/60 + adversarial 28/28,
 all eight review findings fixed). PR #190 is open as draft. Next: joint staging
 walkthrough, then `v1.3.0-beta.1`.
 
-**v1.2.1 shipped (2026-08-10, on main and merged into this branch).** #191 — a
+**v1.2.1 shipped (2026-08-09, on main and merged into this branch).** #191 — a
 content update without an explicit `source` silently overwrote a document's
 provenance, and `server migrate-format` hit it at corpus scale (one reported
 store: 1,317 documents relabelled in a single run). Reported, diagnosed and

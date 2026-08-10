@@ -191,7 +191,9 @@ async function applyAndWrite(
     // came from. Passing a literal here would relabel provenance on every edit
     // — the #191 defect, and an explicit value survives even that fix, so this
     // has to be omitted rather than corrected server-side. NULL = keep existing
-    // (and the RPC's own default is 'agent', so this must stay explicit-NULL).
+    // NULL = keep existing. The RPC's default is now also NULL (#191), but this
+    // stays explicit: it makes intent legible at the call site and remains
+    // correct if that default is ever restored.
     p_source: null,
     p_content_hash: newHash,
     p_metadata: null, // null = keep existing metadata

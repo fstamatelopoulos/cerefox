@@ -148,8 +148,8 @@ bun scripts/backup_create.ts [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--label LABEL` | Optional label appended to the filename (e.g. `pre-migration`) |
-| `--dir DIR` | Directory to write backup to (default: `./backup-data`) |
-| `--git-commit` | Stage and commit the backup file to git after writing |
+| `--dir DIR` | Directory to write backup to (default: `./backups`) |
+| `--git-commit` | Stage and commit the backup file to git after writing. Performed by this script after the snapshot is written — `cerefox backup create --git` is a documented no-op, so the flag is deliberately not forwarded. |
 
 Backup filename format: `cerefox-{YYYYMMDDTHHMMSSZ}[-{label}].json`
 
