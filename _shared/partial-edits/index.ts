@@ -62,11 +62,16 @@ export type EditOperation =
       anchor_heading: string;
       scope?: "body_only" | "heading_and_body";
       section_part?: SectionPart;
+    }
+  | {
+      op: "rename_section";
+      anchor_heading: string;
+      new_heading: string;
     };
 
 /** Echo of one applied operation, for audit labels and response text. */
 export interface AppliedOperation {
-  op: "insert" | "replace_section" | "delete_section";
+  op: "insert" | "replace_section" | "delete_section" | "rename_section";
   /** Resolved anchor path (or "(document)" for end_of_document). */
   path: string;
   /** Human summary: position / scope / section_part actually used. */
@@ -137,6 +142,30 @@ export class AmbiguousPositionError extends Error {
     );
     this.name = "AmbiguousPositionError";
     this.candidates = candidates;
+  }
+}
+
+/**
+ * A rename asked to change the heading's LEVEL, not just its text.
+ *
+ * `## Q3 plan` → `### Q3 plan` re-parents everything under it: the section
+ * stops being a sibling of its neighbours and becomes a child of whichever
+ * section precedes it. That is a restructure with a different blast radius
+ * from a rename, and doing it silently under the name "rename" is exactly the
+ * kind of surprise this contract refuses (#197).
+ */
+export class HeadingLevelChangeError extends Error {
+  constructor(fromHeading: string, toHeading: string) {
+    const from = (fromHeading.match(/^#+/) ?? [""])[0].length;
+    const to = (toHeading.match(/^#+/) ?? [""])[0].length;
+    super(
+      `rename_section changes heading TEXT, not depth: "${fromHeading}" is level ` +
+        `${from} and "${toHeading}" is level ${to}. No write was performed. ` +
+        `Changing the level would re-parent every section nested under it. ` +
+        `Pass a level-${from} heading (${"#".repeat(from)} ...), or restructure ` +
+        `explicitly with delete_section + insert if that is what you meant.`,
+    );
+    this.name = "HeadingLevelChangeError";
   }
 }
 
@@ -448,6 +477,33 @@ function applyOne(
     };
   }
 
+  if (operation.op === "rename_section") {
+    const node = resolveAnchor(outline, operation.anchor_heading);
+    const next = canonicalHeading(operation.new_heading);
+    const m = next.match(ATX_HEADING);
+    if (!m) {
+      throw new InvalidOperationError(
+        0,
+        `new_heading must be a markdown heading line like "## Title", got ${JSON.stringify(operation.new_heading)}`,
+      );
+    }
+    if (m[1].length !== node.level) throw new HeadingLevelChangeError(node.heading, next);
+
+    // Replace the heading LINE only. Not spliceBlock: that normalises
+    // surrounding blank lines, which is right for a block of body text and
+    // wrong for a single line whose neighbours are the section's own spacing.
+    const hadNewline = content[node.bodyStart - 1] === "\n";
+    const replacement = next + (hadNewline ? "\n" : "");
+    return {
+      content: content.slice(0, node.start) + replacement + content.slice(node.bodyStart),
+      applied: {
+        op: "rename_section",
+        path: node.path,
+        detail: `rename_section to ${next}`,
+      },
+    };
+  }
+
   // delete_section
   const node = resolveAnchor(outline, operation.anchor_heading);
   const scope = operation.scope ?? "body_only";
@@ -511,8 +567,33 @@ export function validateOperations(operations: unknown): EditOperation[] {
       if (o.scope !== undefined && o.scope !== "body_only" && o.scope !== "heading_and_body") {
         throw new InvalidOperationError(i, "scope must be body_only or heading_and_body");
       }
+    } else if (op === "rename_section") {
+      if (typeof o.anchor_heading !== "string" || o.anchor_heading.trim() === "") {
+        throw new InvalidOperationError(i, "rename_section requires anchor_heading");
+      }
+      if (typeof o.new_heading !== "string" || o.new_heading.trim() === "") {
+        throw new InvalidOperationError(i, "rename_section requires non-empty new_heading");
+      }
+      // A rename touches the heading line and nothing else, so a caller that
+      // also passed body text has misunderstood which operation they want.
+      // Silently ignoring it would lose the text without saying so.
+      if (o.text !== undefined) {
+        throw new InvalidOperationError(
+          i,
+          "rename_section changes only the heading and takes no text — use replace_section for the body, or both operations in one call",
+        );
+      }
+      if (o.section_part !== undefined) {
+        throw new InvalidOperationError(
+          i,
+          "rename_section takes no section_part: it replaces the heading line, so no extent is involved",
+        );
+      }
     } else {
-      throw new InvalidOperationError(i, "op must be insert | replace_section | delete_section");
+      throw new InvalidOperationError(
+        i,
+        "op must be insert | replace_section | delete_section | rename_section",
+      );
     }
     if (
       o.section_part !== undefined &&

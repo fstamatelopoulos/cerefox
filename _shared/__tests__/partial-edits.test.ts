@@ -528,3 +528,92 @@ describe("splice keeps trailing newlines singular (bug_009)", () => {
     expect(content.endsWith("\n")).toBe(true);
   });
 });
+
+describe("rename_section (#197)", () => {
+  const DOC = `# Root\n\n## OPEN TODOs (as of 2026-08-08)\n\nfirst item\nsecond item\n\n### Sub\n\nsub body\n\n## Other\n\nother body\n`;
+
+  test("changes the heading text and nothing else", () => {
+    // The motivating case: a dated heading gone stale. The body and the
+    // section's position must survive, since risking them to fix a date is the
+    // trade an agent correctly refused to make.
+    const { content } = applyOperations(DOC, [
+      {
+        op: "rename_section",
+        anchor_heading: "## OPEN TODOs (as of 2026-08-08)",
+        new_heading: "## OPEN TODOs (as of 2026-08-10)",
+      },
+    ]);
+    expect(content).toContain("## OPEN TODOs (as of 2026-08-10)");
+    expect(content).not.toContain("2026-08-08");
+    expect(content).toContain("first item\nsecond item");
+    expect(content).toContain("### Sub");
+    expect(content).toContain("sub body");
+    // Position preserved: still before ## Other.
+    expect(content.indexOf("OPEN TODOs")).toBeLessThan(content.indexOf("## Other"));
+    // Nothing else moved.
+    expect(content.replace("2026-08-10", "2026-08-08")).toBe(DOC);
+  });
+
+  test("refuses a level change, because that re-parents the subtree", () => {
+    expect(() =>
+      applyOperations(DOC, [
+        { op: "rename_section", anchor_heading: "## Other", new_heading: "### Other" },
+      ]),
+    ).toThrow(/level 2 and .* is level 3|re-parent/);
+  });
+
+  test("refuses text, rather than silently dropping it", () => {
+    expect(() =>
+      validateOperations([
+        {
+          op: "rename_section",
+          anchor_heading: "## Other",
+          new_heading: "## New",
+          text: "body I expected to be written",
+        },
+      ]),
+    ).toThrow(/takes no text/);
+  });
+
+  test("refuses a new_heading that is not a heading line", () => {
+    expect(() =>
+      applyOperations(DOC, [
+        { op: "rename_section", anchor_heading: "## Other", new_heading: "Just Words" },
+      ]),
+    ).toThrow(/must be a markdown heading line/);
+  });
+
+  test("renaming changes the anchor, so a later op in the batch must use the new one", () => {
+    // Called out in the tool description; asserted here so it stays true.
+    expect(() =>
+      applyOperations(DOC, [
+        { op: "rename_section", anchor_heading: "## Other", new_heading: "## Renamed" },
+        { op: "replace_section", anchor_heading: "## Other", text: "x" },
+      ]),
+    ).toThrow(/Anchor not found/);
+
+    const { content } = applyOperations(DOC, [
+      { op: "rename_section", anchor_heading: "## Other", new_heading: "## Renamed" },
+      { op: "replace_section", anchor_heading: "## Renamed", text: "new body" },
+    ]);
+    expect(content).toContain("## Renamed");
+    expect(content).toContain("new body");
+    expect(content).not.toContain("other body");
+  });
+
+  test("a rename at end-of-document keeps the file's shape", () => {
+    const tail = `# R\n\n## Last`;
+    const { content } = applyOperations(tail, [
+      { op: "rename_section", anchor_heading: "## Last", new_heading: "## Final" },
+    ]);
+    expect(content).toBe(`# R\n\n## Final`);
+  });
+
+  test("the applied echo names the rename and its target", () => {
+    const { applied } = applyOperations(DOC, [
+      { op: "rename_section", anchor_heading: "## Other", new_heading: "## Renamed" },
+    ]);
+    expect(applied[0].op).toBe("rename_section");
+    expect(applied[0].detail).toContain("## Renamed");
+  });
+});

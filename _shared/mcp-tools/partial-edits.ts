@@ -87,6 +87,7 @@ const AUDIT_OP: Record<AppliedOperation["op"], string> = {
   insert: "insert",
   replace_section: "replace-section",
   delete_section: "delete-section",
+  rename_section: "rename-section",
 };
 
 /**
@@ -445,7 +446,9 @@ export const editTool: ToolDefinition = {
     "Change parts of a document without resending the whole thing: one or many operations " +
     "applied ATOMICALLY in one write. Operations: insert (same positions as cerefox_insert), " +
     "replace_section (swap a section's body, heading kept), delete_section (remove a section, " +
-    "scope body_only or heading_and_body). Use one call for changes that belong together — a " +
+    "scope body_only or heading_and_body), rename_section (change a heading's text, leaving " +
+    "its body and position untouched — for headings that go stale, like a dated one). " +
+    "Use one call for changes that belong together — a " +
     "half-applied edit is impossible, so a row and the total it feeds cannot disagree. " +
     "Operations apply in order and each sees the previous one's result. To change a single " +
     "line, replace_section on its smallest enclosing heading. Requires expected_content_hash; " +
@@ -472,7 +475,10 @@ export const editTool: ToolDefinition = {
           type: "object",
           required: ["op"],
           properties: {
-            op: { type: "string", enum: ["insert", "replace_section", "delete_section"] },
+            op: {
+              type: "string",
+              enum: ["insert", "replace_section", "delete_section", "rename_section"],
+            },
             text: { type: "string", description: "Markdown. Required for insert and replace_section." },
             position: {
               type: "string",
@@ -494,6 +500,11 @@ export const editTool: ToolDefinition = {
               type: "string",
               enum: ["body_only", "heading_and_body"],
               description: "delete_section only. Defaults to body_only, which keeps the heading.",
+            },
+            new_heading: {
+              type: "string",
+              description:
+                "rename_section only: the replacement heading LINE, at the same level (## stays ##). Changes the heading text and nothing else — the body and the section's position are untouched, which is the point: renaming via delete + insert would risk both. Use it for headings that go stale, like '## OPEN TODOs (as of 2026-08-08)'. A rename changes the anchor, so a later operation in the same call must target the NEW heading.",
             },
           },
         },
