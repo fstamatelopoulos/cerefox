@@ -80,12 +80,13 @@ export interface AppliedOperation {
 
 /** Anchor matched nothing. The write must never fall back to appending. */
 export class AnchorNotFoundError extends Error {
-  constructor(anchor: string, outline: OutlineNode[]) {
+  /** `reads` — see AmbiguousPositionError: a read never attempted a write. */
+  constructor(anchor: string, outline: OutlineNode[], reads = false) {
     const known = outline.length
       ? ` Known headings:\n${outline.map((n) => `  ${n.path}`).join("\n")}`
       : " The document has no headings.";
     super(
-      `Anchor not found: "${anchor}". No write was performed.${known}\n` +
+      `Anchor not found: "${anchor}".${reads ? "" : " No write was performed."}${known}\n` +
         `Anchors match a heading line exactly ("## Title") or a parent path ` +
         `("## Parent > ### Child").`,
     );
@@ -96,10 +97,11 @@ export class AnchorNotFoundError extends Error {
 /** Anchor matched more than one section. Candidates resolve the retry. */
 export class AmbiguousAnchorError extends Error {
   readonly candidates: string[];
-  constructor(anchor: string, candidates: string[]) {
+  /** `reads` — see AmbiguousPositionError: a read never attempted a write. */
+  constructor(anchor: string, candidates: string[], reads = false) {
     super(
       `Ambiguous anchor: "${anchor}" matches ${candidates.length} sections. ` +
-        `No write was performed. Disambiguate by passing one of these paths as anchor_heading:\n` +
+        `${reads ? "" : "No write was performed. "}Disambiguate by passing one of these paths as anchor_heading:\n` +
         candidates.map((c) => `  ${c}`).join("\n"),
     );
     this.name = "AmbiguousAnchorError";
@@ -275,7 +277,11 @@ function canonicalHeading(text: string): string {
   return m ? `${m[1]} ${m[2].trim()}`.trim() : text.trim();
 }
 
-export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): OutlineNode {
+export function resolveAnchor(
+  outline: OutlineNode[],
+  anchorHeading: string,
+  reads = false,
+): OutlineNode {
   const anchor = canonicalHeading(anchorHeading);
 
   // Try the LITERAL heading first, always — including when the anchor contains
@@ -288,7 +294,7 @@ export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): Ou
   const byHeading = outline.filter((n) => n.heading === anchor);
   if (byHeading.length === 1) return byHeading[0];
   if (byHeading.length > 1) {
-    throw new AmbiguousAnchorError(anchor, byHeading.map((n) => n.path));
+    throw new AmbiguousAnchorError(anchor, byHeading.map((n) => n.path), reads);
   }
 
   // No heading matched literally: interpret it as a parent path.
@@ -297,11 +303,11 @@ export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): Ou
     const byPath = outline.filter((n) => n.path === normalizedPath);
     if (byPath.length === 1) return byPath[0];
     if (byPath.length > 1) {
-      throw new AmbiguousAnchorError(anchor, byPath.map((n) => n.path));
+      throw new AmbiguousAnchorError(anchor, byPath.map((n) => n.path), reads);
     }
   }
 
-  throw new AnchorNotFoundError(anchor, outline);
+  throw new AnchorNotFoundError(anchor, outline, reads);
 }
 
 /**
@@ -340,7 +346,7 @@ export function extractSection(
   section_part: SectionPart | null;
 } {
   const outline = parseOutline(content);
-  const node = resolveAnchor(outline, anchorHeading);
+  const node = resolveAnchor(outline, anchorHeading, true);
   // Same op label the write would raise under, so an ambiguity refusal reads
   // the same whether the caller was reading or replacing.
   const to = resolveSectionEnd(content, outline, node, sectionPart, "the section read", true);

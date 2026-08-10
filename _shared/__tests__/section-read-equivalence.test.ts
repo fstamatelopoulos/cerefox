@@ -163,6 +163,34 @@ describe("section read returns exactly what replace_section overwrites (#198)", 
     expect(r.chars).toBe(r.text.length);
   });
 
+  test("no read-path error claims a write was performed", () => {
+    // Found on staging: the ambiguity error had been fixed but the other two
+    // anchor errors still said "No write was performed" on a pure read, which
+    // implies an attempt that could never have happened.
+    for (const anchor of ["## Nope", "## Parent"]) {
+      try {
+        extractSection(DOCS.nested, anchor);
+      } catch (err) {
+        expect((err as Error).message).not.toContain("No write was performed");
+      }
+    }
+    // Ambiguous-anchor (a repeated heading) takes the third path.
+    const dupes = `# R\n\n## A\n\nx\n\n## B\n\n### A\n\ny\n`;
+    try {
+      extractSection(dupes, "## A");
+    } catch (err) {
+      expect((err as Error).message).not.toContain("No write was performed");
+    }
+    // The write path still says it, because there the reassurance is the point.
+    try {
+      applyOperations(DOCS.nested, [
+        { op: "replace_section", anchor_heading: "## Nope", text: "x" },
+      ]);
+    } catch (err) {
+      expect((err as Error).message).toContain("No write was performed");
+    }
+  });
+
   test("anchor rules match the write path: bare heading, then path", () => {
     const bare = extractSection(DOCS.flat, "## A").text;
     const viaPath = extractSection(DOCS.flat, "# Root > ## A").text;
