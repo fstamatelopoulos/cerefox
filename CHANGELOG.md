@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+- **`end_of_section` chose silently when a section had child headings.** The
+  rule was that a section holding *both* its own body and children is ambiguous,
+  so the write refuses and returns both `section_part` options. A section with
+  children and *no* body of its own was exempted, on the reasoning that both
+  readings coincide there. They do not: `own_body` lands before the first child,
+  `subtree` after the last one, and those can be pages apart. An agent editing a
+  real document during the beta had an insert land past three sub-sections and
+  only found out by re-reading — the cost the feature exists to remove. The
+  presence of children now makes a section ambiguous on its own, for every
+  operation.
+
 ### Added
 - **Partial edits report a large shrink.** The response now reads
   `Size: 81 chars (was 136)`, and a write that removes more than a quarter of a

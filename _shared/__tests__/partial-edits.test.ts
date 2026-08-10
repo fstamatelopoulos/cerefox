@@ -243,12 +243,25 @@ describe("insert positions (§3.1, §3.3)", () => {
     expect(content.indexOf("End of intake.")).toBeLessThan(content.indexOf("## Totals"));
   });
 
-  test("children-without-own-body is NOT ambiguous: goes to subtree end", () => {
+  test("children-without-own-body IS ambiguous for insert too", () => {
+    // This asserted the opposite until an agent editing a real document found
+    // the truth: with children and no own body, own_body lands BEFORE the first
+    // child and subtree lands AFTER the last one. Different places, sometimes
+    // pages apart, so there is nothing to coincide.
     const doc = "## Parent\n\n### A\n\na body\n\n### B\n\nb body\n";
-    const { content } = apply(doc, [
-      { op: "insert", position: "end_of_section", anchor_heading: "## Parent", text: "Tail." },
-    ]);
-    expect(content.indexOf("Tail.")).toBeGreaterThan(content.indexOf("b body"));
+    expect(() =>
+      apply(doc, [{ op: "insert", position: "end_of_section", anchor_heading: "## Parent", text: "Tail." }]),
+    ).toThrow(/section_part/);
+
+    const ownBody = apply(doc, [
+      { op: "insert", position: "end_of_section", anchor_heading: "## Parent", section_part: "own_body", text: "Tail." },
+    ]).content;
+    expect(ownBody.indexOf("Tail.")).toBeLessThan(ownBody.indexOf("### A"));
+
+    const subtree = apply(doc, [
+      { op: "insert", position: "end_of_section", anchor_heading: "## Parent", section_part: "subtree", text: "Tail." },
+    ]).content;
+    expect(subtree.indexOf("Tail.")).toBeGreaterThan(subtree.indexOf("b body"));
   });
 
   test("after_heading inserts between heading and body", () => {
@@ -483,11 +496,10 @@ describe("destructive ops never guess on a children-only section (bug_010)", () 
     expect(content).toContain("## Parent");
   });
 
-  test("insert on the same shape stays unambiguous (the readings do coincide)", () => {
-    const { content } = apply(doc, [
-      { op: "insert", position: "end_of_section", anchor_heading: "## Parent", text: "tail" },
-    ]);
-    expect(content.indexOf("tail")).toBeGreaterThan(content.indexOf("b body"));
+  test("insert on the same shape refuses too — no operation guesses", () => {
+    expect(() =>
+      apply(doc, [{ op: "insert", position: "end_of_section", anchor_heading: "## Parent", text: "tail" }]),
+    ).toThrow(/section_part/);
   });
 });
 

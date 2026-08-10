@@ -381,7 +381,7 @@ export const insertTool: ToolDefinition = {
         type: "string",
         enum: ["own_body", "subtree"],
         description:
-          "Only for end_of_section when the section has BOTH its own content and child sections: own_body = before the first child, subtree = after everything nested under it. Omit otherwise; you will be told (with both options) if it is needed.",
+          "Only for end_of_section when the target section HAS CHILD SECTIONS: own_body = before the first child, subtree = after everything nested under it. These can be far apart, so the tool refuses rather than choosing. Omit it otherwise; you will be told (with both options) whenever it is needed.",
       },
       expected_content_hash: {
         type: "string",
@@ -488,7 +488,7 @@ export const editTool: ToolDefinition = {
               type: "string",
               enum: ["own_body", "subtree"],
               description:
-                "Only when the target section has BOTH its own content and child sections. You will be told (with both options) if it is needed.",
+                "Only when the target section has child sections. You will be told (with both options) whenever it is needed.",
             },
             scope: {
               type: "string",

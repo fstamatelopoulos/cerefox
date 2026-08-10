@@ -269,8 +269,18 @@ the cost this feature exists to remove.
 
 - **A leaf section** (no child headings) is unambiguous. `end_of_section` inserts at
   the end of its body. This is the common case and needs nothing extra.
-- **A section with both its own body and child headings is ambiguous, so the write
-  errors** rather than choosing, and returns both concrete insertion points.
+- **A section with child headings is ambiguous** — whether or not it also has a
+  body of its own — **so the write errors** rather than choosing, and returns both
+  concrete insertion points.
+
+  This corrects an earlier version of this section, which exempted the
+  children-only shape on the reasoning that both readings coincide there. They do
+  not: with children and no own body, `own_body` lands *before the first child*
+  and `subtree` lands *after the last one*, which can be pages apart. A session
+  editing a real document hit exactly that — an insert landed at the end of a long
+  section, discoverable only by re-reading, which is the cost this feature exists
+  to remove. The presence of children is what makes "the end of the section"
+  ambiguous; the body has nothing to do with it.
 - The agent resolves it with `section_part`: `"own_body"` (end of the section's own
   content, before the first child) or `"subtree"` (after everything nested under it).
   Passing it up front skips the error.
@@ -923,6 +933,34 @@ rule existed.
 - `end_of_section`'s parent's-own-body reading would win more often than the subtree
   reading. §3.3 refuses to guess rather than adopting either, since sessions 2 and 3
   read it in opposite directions.
+
+### Session 5, marked observed or reasoned
+
+A job-search agent updating two real documents on the v1.3.0 beta, via the remote
+MCP.
+
+**Observed:**
+
+- **`end_of_section` on a section with children placed text without asking**, and
+  the placement surprised it: the insert landed past three sub-sections rather
+  than near the heading, and it took a re-read to find out. Reversed §3.3's
+  children-only exemption — see above. The single most valuable finding of the
+  beta, and reasoning had defended the wrong behaviour twice.
+- **The atomic two-operation edit is the headline win.** Two `replace_section`
+  ops in one call against a 9.8K document; verified afterwards that only the two
+  targeted sections changed size and every other section was byte-identical.
+- **Chained a second edit off the returned hash with no intervening read**, which
+  is the §3.8 response contract paying off in practice.
+- **Conflict and absent-anchor errors were both recoverable as designed** —
+  the stale-hash error carried both hashes and the recovery steps, and the bad
+  anchor listed every known heading rather than falling back to appending.
+- **Token cost was a fraction** of the same agent's previous full-re-ingest
+  updates, on documents of 9.8K and 29K.
+
+**Reasoned:**
+
+- If a default must exist for the ambiguous case, `own_body` would surprise less
+  than `subtree`. Now moot: there is no default.
 
 ### Session 4, marked observed or reasoned
 

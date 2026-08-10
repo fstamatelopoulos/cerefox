@@ -140,7 +140,7 @@ Add text to a document **without resending it**. Purely additive: this tool cann
 | `text` | Yes | Markdown to insert. Blank-line separation from surrounding content is handled for you. |
 | `position` | Yes | `end_of_document` (plain append) · `end_of_section` (add to a section's body — the most common mid-document add) · `after_heading` (lead-in text) · `before_heading` (a new block above a section). |
 | `anchor_heading` | Unless `end_of_document` | The exact heading line (`## Intake`) or a ` > ` parent path (`## Intake > ### Notes`) when a heading appears more than once. |
-| `section_part` | Sometimes | Only when the target section has BOTH its own content and child sections: `own_body` (before the first child) or `subtree` (after everything nested under it). If it is needed, the error tells you and lists both options. |
+| `section_part` | Sometimes | Required when the target section **has child sections** (whether or not it also has its own body): `own_body` (before the first child) or `subtree` (after everything nested under it). These can be far apart, so the tool refuses rather than choosing; the error lists both options. |
 | `expected_content_hash` | **Yes** | The hash of the version you are basing this on. There is **no `last_write_wins` on this tool**. |
 | `requestor` | No | Your agent name. |
 

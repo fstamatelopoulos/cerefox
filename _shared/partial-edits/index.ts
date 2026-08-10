@@ -112,17 +112,21 @@ export class AmbiguousPositionError extends Error {
     const candidates = [
       {
         section_part: "own_body" as const,
-        description: `the section's own content, before its first child (${firstChildHeading})`,
+        description:
+          `just this section's own content, stopping before its first child ` +
+          `(${firstChildHeading}) — often only a line or two below the heading`,
       },
       {
         section_part: "subtree" as const,
-        description: `the whole subtree, including everything nested under ${node.heading}`,
+        description:
+          `the whole subtree, past everything nested under ${node.heading} — ` +
+          `which can be a long way down`,
       },
     ];
     super(
-      `Ambiguous position: "${node.path}" has both its own content and child sections, ` +
-        `so ${opName} could target two different ranges. No write was performed. ` +
-        `Pass section_part to choose:\n` +
+      `Ambiguous position: "${node.path}" has child sections, so "the end of ` +
+        `the section" could mean two different places and ${opName} will not guess. ` +
+        `No write was performed. Pass section_part to choose:\n` +
         candidates.map((c) => `  section_part: "${c.section_part}" — ${c.description}`).join("\n"),
     );
     this.name = "AmbiguousPositionError";
@@ -265,10 +269,6 @@ export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): Ou
   throw new AnchorNotFoundError(anchor, outline);
 }
 
-/** A section is position-ambiguous iff it has BOTH own body content and children. */
-function hasOwnBody(content: string, node: OutlineNode): boolean {
-  return content.slice(node.bodyStart, node.ownBodyEnd).trim().length > 0;
-}
 function firstChild(outline: OutlineNode[], node: OutlineNode): OutlineNode | null {
   for (const n of outline) {
     if (n.start >= node.bodyStart && n.start < node.subtreeEnd) return n;
@@ -288,29 +288,33 @@ function resolveSectionEnd(
   node: OutlineNode,
   sectionPart: SectionPart | undefined,
   opName: string,
-  destructive: boolean,
 ): number {
   const child = firstChild(outline, node);
   if (!child) return node.subtreeEnd; // leaf: unambiguous
   if (sectionPart === "own_body") return node.ownBodyEnd;
   if (sectionPart === "subtree") return node.subtreeEnd;
 
-  // Children but no own body. For an INSERT the two readings genuinely
-  // coincide — both put the new text at the section's terminus — so there is
-  // nothing to ask about.
+  // A section with children is ambiguous, full stop — whether or not it has
+  // any body of its own, and whichever operation is asking.
   //
-  // For a DESTRUCTIVE operation they are opposites, and an earlier version of
-  // this function got that wrong: `own_body` targets an empty range and would
-  // preserve every child, while `subtree` removes all of them. Returning
-  // subtreeEnd here meant `delete_section` on a grouping heading silently
-  // deleted every sub-section under it — with `scope: "body_only"`, whose
-  // whole promise is to keep the structure. Guessing the maximally
-  // destructive reading is exactly what §3.6 says none of these operations may
-  // do. Found by review, not by the tests, which only covered the insert side.
-  if (!hasOwnBody(content, node)) {
-    if (!destructive) return node.subtreeEnd;
-    throw new AmbiguousPositionError(node, child.heading, opName);
-  }
+  // Two earlier versions of this function were wrong here, in opposite ways.
+  // The first returned subtreeEnd for every children-only section, so
+  // `delete_section` on a grouping heading silently removed every sub-section
+  // under it — with `scope: "body_only"`, whose whole promise is to keep the
+  // structure. A review caught that and the destructive path started refusing.
+  //
+  // The insert path kept the exemption, on the reasoning that "for an insert
+  // the two readings coincide, both landing at the section's terminus". That
+  // reasoning was simply false, and an agent editing a real document found it:
+  // for `## Parent` with children and no body of its own, `own_body` lands
+  // BEFORE the first child and `subtree` lands AFTER the last one. Those are
+  // different places — potentially pages apart — and the code was choosing
+  // silently. The agent's text went to the end of a long section, and it only
+  // discovered that by re-reading the document, which is the cost this feature
+  // exists to remove.
+  //
+  // So: no exemption. `hasOwnBody` no longer gates anything, because the
+  // presence of children is what makes "the end of this section" ambiguous.
   throw new AmbiguousPositionError(node, child.heading, opName);
 }
 
@@ -361,7 +365,7 @@ function applyOne(
       at = node.bodyStart;
       detail = "insert after_heading";
     } else {
-      at = resolveSectionEnd(content, outline, node, operation.section_part, "end_of_section insert", false);
+      at = resolveSectionEnd(content, outline, node, operation.section_part, "end_of_section insert");
       detail =
         `insert at end_of_section` +
         (operation.section_part ? ` (${operation.section_part})` : "");
@@ -374,7 +378,7 @@ function applyOne(
 
   if (operation.op === "replace_section") {
     const node = resolveAnchor(outline, operation.anchor_heading);
-    const to = resolveSectionEnd(content, outline, node, operation.section_part, "replace_section", true);
+    const to = resolveSectionEnd(content, outline, node, operation.section_part, "replace_section");
     return {
       content: spliceBlock(content, node.bodyStart, to, operation.text),
       applied: {
@@ -389,7 +393,7 @@ function applyOne(
   // delete_section
   const node = resolveAnchor(outline, operation.anchor_heading);
   const scope = operation.scope ?? "body_only";
-  const to = resolveSectionEnd(content, outline, node, operation.section_part, "delete_section", true);
+  const to = resolveSectionEnd(content, outline, node, operation.section_part, "delete_section");
   const from = scope === "heading_and_body" ? node.start : node.bodyStart;
   return {
     content: spliceBlock(content, from, to, ""),

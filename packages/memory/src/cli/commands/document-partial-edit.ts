@@ -84,7 +84,7 @@ export function registerDocumentInsert(program: Command): void {
       "end_of_document",
     )
     .option("-a, --anchor-heading <heading>", "Heading line, or a ' > ' path. Required unless end_of_document.")
-    .option("--section-part <part>", "own_body | subtree — only when a section has both content and children")
+    .option("--section-part <part>", "own_body | subtree — required when the target section has child sections")
     .requiredOption(
       "-e, --expected-content-hash <hash>",
       "content_hash you are basing this on (cerefox document get --outline shows it)",
