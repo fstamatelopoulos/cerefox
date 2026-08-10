@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.3.0-beta.3] -- 2026-08-10
+
 ### Fixed
 - **`end_of_section` chose silently when a section had child headings.** The
   rule was that a section holding *both* its own body and children is ambiguous,

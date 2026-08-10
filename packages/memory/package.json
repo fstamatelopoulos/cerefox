@@ -1,6 +1,6 @@
 {
   "name": "@cerefox/memory",
-  "version": "1.3.0-beta.2",
+  "version": "1.3.0-beta.3",
   "description": "Cerefox — user-owned shared memory for AI agents. CLI + stdio MCP server + web UI + ingestion for a knowledge base on your own Supabase project (or fully self-hosted with Cerefox Local).",
   "license": "Apache-2.0",
   "homepage": "https://github.com/fstamatelopoulos/cerefox",
