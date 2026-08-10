@@ -53,6 +53,35 @@ function defaultRequestor(ctx: ToolContext): string {
   return ctx.accessPath === "cli" ? "cli-user" : "mcp-agent";
 }
 
+
+/**
+ * Surface a large shrink in the response the agent already reads.
+ *
+ * A section extends to the next heading of equal-or-higher level **or to the
+ * end of the document**, so the last section owns everything appended after it.
+ * That means an `end_of_document` insert becomes part of the last section's
+ * body, and a later `replace_section` on that heading removes it — correctly by
+ * the addressing rules, and invisibly, because the response otherwise just says
+ * the operation applied. Observed on a real store during the v1.3.0 beta: an
+ * appended entry vanished under a routine-looking section replace.
+ *
+ * The full-document diff is deliberately not returned (§3.8), so the size delta
+ * is the cheapest honest signal available.
+ */
+function shrinkNote(before: number, after: number): string {
+  const lost = before - after;
+  if (lost <= 0) return "";
+  const pct = Math.round((lost / Math.max(before, 1)) * 100);
+  if (pct < 25) return "";
+  return (
+    `⚠ This edit removed ${lost} characters (${pct}% smaller). If you did not ` +
+    `intend that, note that a section runs to the next heading of the same or ` +
+    `higher level — or to the end of the document — so replacing or deleting ` +
+    `the LAST section also removes anything appended after it. ` +
+    `cerefox_list_versions has the previous content.\n`
+  );
+}
+
 /** Audit `operation` values, matching the CHECK constraint widened by migration 0019. */
 const AUDIT_OP: Record<AppliedOperation["op"], string> = {
   insert: "insert",
@@ -263,7 +292,8 @@ async function applyAndWrite(
   return (
     `Applied ${applied.length} operation(s) to "${doc.title}" (id: ${documentId}):\n${summary}\n\n` +
     `New content_hash: ${row?.content_hash ?? newHash}\n` +
-    `Size: ${row?.total_chars ?? totalChars} chars, ${chunks.length} chunk(s).\n` +
+    `Size: ${row?.total_chars ?? totalChars} chars (was ${doc.content.length}), ${chunks.length} chunk(s).\n` +
+    shrinkNote(doc.content.length, row?.total_chars ?? totalChars) +
     `Pass the new content_hash as expected_content_hash on your next edit.${warning}`
   );
 }

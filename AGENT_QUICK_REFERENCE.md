@@ -50,6 +50,11 @@ diff. Use the partial-edit tools instead:
    conflict means someone else changed the document; re-read and decide, do not
    force it.
 
+**A section runs to the next same-or-higher heading, or to the end of the
+document.** So `end_of_document` inserts land inside the *last* section, and
+replacing or deleting that section removes them too. A large shrink in the
+response is your warning; `cerefox_list_versions` has the previous content.
+
 **When an anchor is ambiguous the tool refuses and hands you the options** — a
 repeated heading returns the qualifying paths, and a section with both its own
 content and sub-sections returns both `section_part` choices. That is a

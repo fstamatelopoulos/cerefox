@@ -163,6 +163,15 @@ Change parts of a document: **one to many operations applied atomically in a sin
 
 **Put changes that belong together in ONE call.** Operations apply in order against the evolving document (op 2 sees op 1's result), and a half-applied state is impossible — so a table row and the running total it feeds cannot end up disagreeing. If any operation fails (bad anchor, ambiguity), nothing at all is written and the error names the failing operation.
 
+**One sharp edge worth knowing.** A section runs to the next heading of the same
+or higher level — **or to the end of the document**. So the last section owns
+everything appended after it: an `end_of_document` insert becomes part of that
+section's body, and a later `replace_section` or `delete_section` on that heading
+removes it along with the rest. This is correct addressing, not a bug, but it is
+silent. If a write reports a large shrink, that is the warning; the previous
+content is in `cerefox_list_versions`. To append somewhere a later section edit
+cannot swallow, give the appended material its own heading.
+
 **To change a single line**, `replace_section` on its smallest enclosing heading and resend just that section. That is the intended granularity — line-level anchors were deliberately excluded because they silently edit the wrong place.
 
 The audit trail records each operation distinctly (`insert` / `replace-section` / `delete-section`), so *added to*, *rewrote* and *removed* stay distinguishable from a full rewrite.

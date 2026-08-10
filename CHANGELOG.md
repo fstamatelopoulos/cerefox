@@ -9,7 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+- **Partial edits report a large shrink.** The response now reads
+  `Size: 81 chars (was 136)`, and a write that removes more than a quarter of a
+  document adds a warning naming the likely cause and pointing at
+  `cerefox_list_versions`. Found while exercising the beta against a real store:
+  a section runs to the next heading of the same or higher level **or to the end
+  of the document**, so the last section owns anything appended after it — an
+  `end_of_document` insert becomes part of that section's body, and a later
+  `replace_section` on that heading removes it. That is correct addressing, not
+  a defect, but it was invisible: the operation reported success and the
+  appended entry was simply gone. The full document is deliberately not returned
+  (it would spend the tokens the feature saves), so the size delta is the
+  cheapest honest signal. Documented in `AGENT_GUIDE.md` and the quick reference,
+  with the mitigation: give append-heavy material its own heading.
 
 ---
 
