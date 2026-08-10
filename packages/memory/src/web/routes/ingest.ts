@@ -64,7 +64,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     try {
       const pipeline = new IngestionPipeline({
         supabase: ctx.supabase,
-        openAiApiKey: ctx.openAiApiKey,
+        openAiApiKey: ctx.openAiApiKey ?? "",
       });
       const result = await pipeline.ingestText({
         text: content.trim(),
@@ -142,7 +142,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     try {
       const pipeline = new IngestionPipeline({
         supabase: ctx.supabase,
-        openAiApiKey: ctx.openAiApiKey,
+        openAiApiKey: ctx.openAiApiKey ?? "",
       });
       const result = await pipeline.ingestText({
         text,
@@ -217,7 +217,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     try {
       const pipeline = new IngestionPipeline({
         supabase: ctx.supabase,
-        openAiApiKey: ctx.openAiApiKey,
+        openAiApiKey: ctx.openAiApiKey ?? "",
       });
       const result = await pipeline.updateDocument({
         documentId,

@@ -13,6 +13,7 @@
 
 import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
@@ -75,7 +76,7 @@ async function listDocuments(
   const { data, error } = await q;
   if (error) throw error;
   // Strip the embedded junction rows — they exist only to drive the join.
-  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+  return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
     const { cerefox_document_projects: _j, ...doc } = row;
     return doc;
   });
@@ -353,7 +354,7 @@ async function runSearch(
   if (!ctx.openAiApiKey && resolveEmbedderKind() !== "local") {
     throw new HttpError(503, "Embedder not available");
   }
-  const embedding = await getEmbedding(query, ctx.openAiApiKey);
+  const embedding = await getEmbedding(query, ctx.openAiApiKey ?? "");
 
   if (mode === "semantic") {
     const params: Record<string, unknown> = {
@@ -406,7 +407,10 @@ async function runSearch(
 }
 
 class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: ContentfulStatusCode,
+    message: string,
+  ) {
     super(message);
   }
 }

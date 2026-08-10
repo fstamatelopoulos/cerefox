@@ -222,7 +222,7 @@ async function action(
     // matched" list (id, title, score, chunk_count, total_chars, is_partial).
     const jsonResults = options.onlyMetadata
       ? accepted.map((r) => {
-          const copy = { ...(r as Record<string, unknown>) };
+          const copy: Record<string, unknown> = { ...r };
           delete copy.full_content;
           delete copy.content;
           return copy;

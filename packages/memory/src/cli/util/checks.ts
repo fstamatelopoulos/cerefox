@@ -650,9 +650,12 @@ export async function checkPostgres(): Promise<CheckResult> {
       hint: "Required for schema deploy (`bun scripts/db_deploy.ts`) and migrations.",
     };
   }
-  let postgres: typeof import("postgres").default;
+  let postgres: typeof import("postgres");
   try {
-    postgres = (await import("postgres")).default;
+    // `postgres` is declared `export =`, so its types carry no `default` member;
+    // the ESM interop shape does. Assert that shape rather than widen the call site.
+    const mod = (await import("postgres")) as unknown as { default: typeof import("postgres") };
+    postgres = mod.default;
   } catch (err) {
     return {
       name: "postgres",

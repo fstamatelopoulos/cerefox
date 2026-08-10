@@ -15,7 +15,9 @@
   },
   "scripts": {
     "test": "cd _shared && bun test",
-    "typecheck": "cd _shared && npx tsc --noEmit",
+    "typecheck": "npm run typecheck:shared && npm run typecheck:memory",
+    "typecheck:shared": "cd _shared && npx tsc --noEmit",
+    "typecheck:memory": "cd packages/memory && npx tsc --noEmit",
     "bundle:help": "bun scripts/bundle_help.ts",
     "check:help": "bun scripts/check_help_bundle.ts",
     "build:memory": "cd packages/memory && bun run build"
