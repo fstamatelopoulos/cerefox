@@ -124,7 +124,7 @@ Retrieve the complete text of a document by its UUID.
 | `outline` | No | `true` returns the document's **structure instead of its content**: heading paths, levels, per-section sizes, plus `content_hash` and total size. Much cheaper than a full read. The paths are exactly what the edit tools take as `anchor_heading`. |
 | `requestor` | No | Your agent name. |
 
-Use this when search returns partial results, or to read a previous version before restoring it. The response header includes the document's current `content_hash` — pass it back as `expected_content_hash` when updating via `cerefox_ingest` or editing via `cerefox_insert` / `cerefox_edit`.
+Use this when search returns partial results, or to read a previous version before restoring it. Pass `outline: true` for the heading structure without the body, or `section: "## Heading"` for one section's text — which is exactly what a `replace_section` on that anchor would overwrite, so read it before replacing a section you did not write yourself. The response header includes the document's current `content_hash` — pass it back as `expected_content_hash` when updating via `cerefox_ingest` or editing via `cerefox_insert` / `cerefox_edit`.
 
 **Before editing a document you have not read this session, call it with `outline: true` first.** It answers the three questions an edit needs — what are the anchors, how big is each section, what is the current hash — without pulling the body into your context.
 
@@ -157,7 +157,7 @@ Change parts of a document: **one to many operations applied atomically in a sin
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `document_id` | Yes | UUID of the document. |
-| `operations` | Yes | Array of operations, applied **in order, all-or-nothing**. Each is `{op, ...}` with `op` one of `insert` (same fields as `cerefox_insert`), `replace_section` (`anchor_heading`, `text`; swaps the body, keeps the heading), `delete_section` (`anchor_heading`, optional `scope`: `body_only` default keeps the heading, `heading_and_body` removes it too). |
+| `operations` | Yes | Array of operations, applied **in order, all-or-nothing**. Each is `{op, ...}` with `op` one of `insert` (same fields as `cerefox_insert`), `replace_section` (`anchor_heading`, `text`; swaps the body, keeps the heading), `delete_section` (`anchor_heading`, optional `scope`: `body_only` default keeps the heading, `heading_and_body` removes it too), `rename_section` (`anchor_heading`, `new_heading`; changes the heading TEXT only — body and position untouched, and the level must stay the same, since changing it would re-parent everything nested underneath). |
 | `expected_content_hash` | **Yes** | One token for the whole call. No `last_write_wins`. |
 | `requestor` | No | Your agent name. |
 
@@ -169,22 +169,25 @@ heading, and the footer — that is a whole-document change wearing a local
 disguise, and `cerefox_ingest` is the right tool. Section-scoped edits would take
 several calls, each individually valid, with the document briefly inconsistent
 between them. An agent hit exactly this and correctly stopped rather than
-contorting the tools. Related: **a heading's own text cannot be changed** —
-`replace_section` preserves it by design — so a stale date inside a heading needs
-a re-ingest too.
+contorting the tools. (Related, and **fixed in v1.4.0**: a heading's own text
+used to be unchangeable, because `replace_section` preserves it by design, so a
+stale date inside a heading forced a re-ingest. `rename_section` now changes the
+heading and nothing else.)
 
 **One sharp edge worth knowing.** A section runs to the next heading of the same
 or higher level — **or to the end of the document**. So the last section owns
 everything appended after it: an `end_of_document` insert becomes part of that
 section's body, and a later `replace_section` or `delete_section` on that heading
 removes it along with the rest. This is correct addressing, not a bug, but it is
-silent. If a write reports a large shrink, that is the warning; the previous
-content is in `cerefox_list_versions`. To append somewhere a later section edit
+silent. Since v1.4.0 any edit that removes content says so with the amount, and
+a replace or delete on the LAST section gets the full explanation whatever the
+size — the loss that matters here is *small* precisely because it was just
+added. The previous content is in `cerefox_list_versions`. To append somewhere a later section edit
 cannot swallow, give the appended material its own heading.
 
 **To change a single line**, `replace_section` on its smallest enclosing heading and resend just that section. That is the intended granularity — line-level anchors were deliberately excluded because they silently edit the wrong place.
 
-The audit trail records each operation distinctly (`insert` / `replace-section` / `delete-section`), so *added to*, *rewrote* and *removed* stay distinguishable from a full rewrite.
+The audit trail records each operation distinctly (`insert` / `replace-section` / `delete-section` / `rename-section`), so *added to*, *rewrote* and *removed* stay distinguishable from a full rewrite.
 
 ---
 

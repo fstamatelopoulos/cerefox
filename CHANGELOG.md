@@ -9,26 +9,114 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Iteration 35 — the partial-edit feature completing itself under real usage, plus
+guard debt. Target **v1.4.0**.
+
+> ### Upgrading
+>
+> **`cerefox server deploy` is required.** Schema 0.11.0 → 0.11.1 (migration
+> 0021), and the Edge Functions changed, so deploy both — do not pass
+> `--schema-only`.
+>
+> **Then reconnect your MCP client.** Clients fetch the tool list once when they
+> connect and cache it, so an already-open session will not see `rename_section`
+> or the section read until it reconnects. This is not hypothetical: an agent on
+> v1.3.0 concluded the remote server was missing a tool and filed it as a
+> deployment gap, when the server had been correct all along and the client was
+> holding a pre-upgrade tool list. Restart the client, or toggle the connector.
+
+### Added
+
+- **`cerefox_get_document(section: "## Heading")` — read one section** (#198).
+  Returns exactly the text a `replace_section` on that anchor would overwrite,
+  plus the heading as separate context (the heading is kept by a replace, so it
+  is not part of what would be destroyed), the `content_hash` and the size.
+  Completes the loop: outline to find the anchor, section read to see what you
+  are replacing, edit to replace it.
+
+  v1.3.0 shipped `replace_section` with no way to see what it was about to
+  destroy — the outline reports a section's *size*, never its *text* — so the
+  only safe preparation was a full read, which is the cost partial edits exist
+  to remove. `cerefox_insert` is guarded structurally, since it cannot remove
+  anything; the destructive operation was guarded only by
+  `expected_content_hash`, which protects against a *concurrent* writer, not
+  against a writer who does not know what it is deleting.
+
+  The read resolves extent through the same functions as the write, takes the
+  same `section_part`, and refuses on the same ambiguity — asserted as a
+  property across every heading of six document shapes. A read that resolved
+  extent differently from the write it feeds would be worse than no read at
+  all: today a caller knows it is blind, whereas a subtly-wrong read looks like
+  knowledge.
+
+- **`rename_section` — change a heading's text without touching its body**
+  (#197). A fourth `cerefox_edit` operation: `{op, anchor_heading, new_heading}`.
+  Body and position untouched, which is the whole point — `replace_section`
+  preserves the heading by design, and delete-plus-reinsert risks the body and
+  the position to fix a heading. An agent hit this on a heading whose date had
+  gone stale, judged that trade wrong, and left the document stale.
+
+  A level change is refused: `##` → `###` re-parents everything nested under the
+  heading, which is a restructure with a different blast radius, and doing it
+  silently under the name "rename" is the kind of surprise this contract
+  refuses. Renaming changes the anchor, so a later operation in the same call
+  must target the new heading.
+
 ### Changed
 
-- **Tool descriptions steer partial edits toward the documents that need them
-  most.** `cerefox_ingest` now states that updating replaces the whole document
-  and points at `cerefox_insert` / `cerefox_edit`, calling out the case where the
-  untouched content cannot be verified by reading it: IDs, hashes, numeric
-  tables, indexes and registries. Drifting prose is caught on review; one wrong
-  character in a UUID is not, and it silently resolves to nothing.
+- **Content loss is reported by what was touched, not by what fraction** (#196).
+  The shrink warning gated on >25% and so was structurally blind to the case it
+  was built for: append a 400-character entry to an 11,000-character document,
+  replace the last section, and 4% silently takes the new entry with it. The
+  loss that matters is small *precisely because it was recently added*, so the
+  more established the document, the quieter the failure. A destructive
+  operation on a section that ran to the end of the document now gets the full
+  explanation at any size; the ratio only decides loudness.
+
+- **`configure-agent` names the MCP server after `CEREFOX_ENV_LABEL`** (#168).
+  A labelled environment registers as `cerefox-<label>` alongside your
+  production `cerefox` entry instead of replacing it, so an agent can hold both
+  and staging can finally be used to exercise MCP behaviour before release.
+  Unset is unchanged — still exactly `cerefox`, because that key is global and
+  changing it would orphan every existing install. The command now prints the
+  name it used.
+
+- Tool descriptions steer partial edits toward the documents that need them
+  most: `cerefox_ingest` states that updating replaces the whole document and
+  names the case where the untouched content cannot be verified by reading it —
+  IDs, hashes, numeric tables, indexes, registries. Drifting prose is caught on
+  review; one wrong character in a UUID is not.
 
 ### Fixed
 
-- **`get_document(outline: true)` no longer implies that anchors must be full
-  paths.** Its description said the outline's paths "are exactly what
-  cerefox_insert / cerefox_edit take as anchor_heading", which read as a required
-  format; an agent used full ` > ` paths throughout believing bare headings would
-  not resolve. They always have — anchor resolution matches the literal heading
-  line first, and a path is only needed when the heading text repeats.
-  Description only; no behaviour change.
+- **`document ingest` no longer relabels provenance when `--source` is omitted**
+  (#193). Commander defaulted it to `"cli"` and the CLI always sent it, so every
+  re-ingest silently overwrote the stored origin. #191 fixed the RPC for callers
+  that *omit* the parameter — which the CLI never did, so an RPC-level test
+  passed the whole time the bug was live. Omitting it now preserves the stored
+  value on update and records `cli` on create; passing it explicitly still
+  relabels, deliberately.
 
-Open roadmap.
+- **The CLI prints `content_hash` on create** (the CLI half of #189, which fixed
+  the MCP path in v1.3.0). A user who created a document had no token for its
+  first edit, leaving re-read or last-write-wins.
+
+- **`get_document(outline: true)` no longer implies anchors must be full paths.**
+  Its description said the outline's paths "are exactly what cerefox_insert /
+  cerefox_edit take as anchor_heading", which read as a required format; an
+  agent used full ` > ` paths throughout believing bare headings would not
+  resolve. They always have.
+
+- **`typecheck` covers `packages/memory`, and runs in CI** (#171). It was
+  `_shared` only and not wired into CI at all, so the CLI, the ingestion
+  pipeline and the web server were unchecked — nine errors were sitting there,
+  and a missing import had already reached a live run as a `ReferenceError`.
+  Every type change in this release's #193 work was surfaced by the new
+  coverage; on the old script all six sites were invisible.
+
+- **Contributor scripts cannot re-implement CLI logic** (#194). A static guard
+  for the class behind #166, where the backup scripts carried their own capture
+  and restore path and drifted for two releases while reporting success.
 
 ---
 

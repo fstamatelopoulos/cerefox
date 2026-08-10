@@ -56,6 +56,15 @@ export const COMPATIBILITY = {
    * 0.10.3 server behaves correctly, just with the older default when no config
    * row exists. That degrades gracefully, so it did not justify blocking anyone.
    * 0.10.5 is different in kind: below it, a configured policy is ignored.
+   *
+   * v1.4.0 reviewed and deliberately did NOT raise this to 0.11.1. That
+   * migration only widens an audit CHECK so `rename-section` can be recorded.
+   * Against a 0.11.0 server every other operation is correct, and a rename
+   * fails loudly at the constraint rather than doing something wrong — which
+   * is the distinction that matters here. Blocking `cerefox web` from starting
+   * over one operation a user may never call would be the more harmful
+   * failure. The schema-version bump already drives the "redeploy required"
+   * banner in `doctor`, which is the right-sized signal.
    */
   minSchema: "0.10.5",
   /** Minimum deployed Edge Function version this client requires. */
