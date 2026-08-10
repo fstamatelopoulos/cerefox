@@ -37,7 +37,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   last-write-wins** — on these tools a conflict is information you need, not an
   obstacle to route around.
 
-  The MCP tool surface goes from 10 to 12 (plus the 4 dormant relation tools).
+  The MCP tool surface goes from 10 to 12 core tools. The 4 document-relation
+  tools added in v1.1.0 remain dormant, hidden until `cerefox config set
+  relations_enabled true`.
   The contract was shaped by four real agent sessions before any code was
   written, and their usage reversed the design twice. Spec:
   [`docs/specs/partial-document-edits-design.md`](docs/specs/partial-document-edits-design.md).

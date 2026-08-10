@@ -1055,8 +1055,19 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_insert` | Write (additive) | Add text at `end_of_document` / `end_of_section` / `after_heading` / `before_heading` without resending the document. Structurally cannot remove content. |
 | `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section`) applied **atomically** in a single write. |
 | `cerefox_get_help` | Read | Return the bundled agent quick-reference (tools, rules, workflows). |
+| `cerefox_set_relation` ⚑ | Write | Link two documents (`source --rel_type--> target`). |
+| `cerefox_delete_relation` ⚑ | Write (destructive) | Remove a relation. |
+| `cerefox_get_relations` ⚑ | Read | All relations touching a document, both directions. |
+| `cerefox_get_neighbors` ⚑ | Read | Walk the graph along one relation type, cycle-safe. |
 
-This is the full set of **12 MCP tools** exposed identically over both transports
+⚑ **Dormant by default.** The four relation tools (iteration 29) are hidden from
+every agent until an operator opts in with `cerefox config set relations_enabled
+true`. A tool an agent can see is a tool an agent may use, so "dormant" has to
+mean invisible rather than merely unused — enabling and disabling change
+visibility only, never data.
+
+This is the full set of **12 core MCP tools, plus 4 dormant relation tools**,
+exposed identically over both transports
 (remote `cerefox-mcp` Edge Function and local `cerefox mcp`), via the shared
 `_shared/mcp-tools/` handlers. Note: document **delete** is *not* an MCP tool — it
 is available only via the CLI / web UI / REST.
