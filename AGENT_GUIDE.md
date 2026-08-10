@@ -163,6 +163,16 @@ Change parts of a document: **one to many operations applied atomically in a sin
 
 **Put changes that belong together in ONE call.** Operations apply in order against the evolving document (op 2 sees op 1's result), and a half-applied state is impossible — so a table row and the running total it feeds cannot end up disagreeing. If any operation fails (bad anchor, ambiguity), nothing at all is written and the error names the failing operation.
 
+**When NOT to use partial edits.** They are for localized changes. If what you
+are changing recurs across the document — a "last updated" date in the header, a
+heading, and the footer — that is a whole-document change wearing a local
+disguise, and `cerefox_ingest` is the right tool. Section-scoped edits would take
+several calls, each individually valid, with the document briefly inconsistent
+between them. An agent hit exactly this and correctly stopped rather than
+contorting the tools. Related: **a heading's own text cannot be changed** —
+`replace_section` preserves it by design — so a stale date inside a heading needs
+a re-ingest too.
+
 **One sharp edge worth knowing.** A section runs to the next heading of the same
 or higher level — **or to the end of the document**. So the last section owns
 everything appended after it: an `end_of_document` insert becomes part of that

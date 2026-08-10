@@ -934,6 +934,42 @@ rule existed.
   reading. §3.3 refuses to guess rather than adopting either, since sessions 2 and 3
   read it in opposite directions.
 
+### Session 6, marked observed or reasoned
+
+The same job-search agent, on v1.3.0-beta.4, doing real edits to a strategy index
+after confirming the beta.4 fixes.
+
+**Observed:**
+
+- **Section rename was reached for, on legitimate work, and could not be done.**
+  A heading read `## OPEN TODOs (as of 2026-08-08)` and the date was stale.
+  `replace_section` preserves the heading by design; delete-then-insert would risk
+  the body and the position to change a date. The agent judged that trade wrong
+  and left the heading stale. This answers §9 row 13 — the register's only
+  decision with no session behind it — and the shape is **dated headings in living
+  documents**, which is common.
+- **The shrink warning did not fire on the case that motivated it.** Removing a
+  ~430-character trailing paragraph from an 11,405-character section is ~4%, well
+  under the 25% trigger.
+- **Neither seam position was used, twice deliberately.** Once the agent talked
+  itself out of a manufactured `after_heading` lead-in as filler; once a
+  seam-shaped need turned out to be a content change, better served by
+  `replace_section`. Every real edit was `replace_section` or a table-row change.
+  Evidence toward cutting §3.7 — qualified as document-kind-specific: strategy
+  documents are semantic containers you edit *inside*, where a chronological log
+  might genuinely want "insert this entry before that dated heading".
+- **Document-level metadata is the anti-pattern.** A "last updated" date appeared
+  in the H1 body, a heading, and the footer. Updating it coherently spans the
+  whole document and one un-editable heading; the agent stopped and judged a full
+  re-ingest the right instrument.
+
+**Reasoned:**
+
+- A percentage threshold cannot see the insert-then-clobber sequence, because the
+  content lost is small *precisely because it was recently added*. The trigger
+  that would catch it at any size compares against the version the edit was based
+  on, not a size ratio.
+
 ### Session 5, marked observed or reasoned
 
 A job-search agent updating two real documents on the v1.3.0 beta, via the remote
@@ -1004,10 +1040,13 @@ MCP.
   documents. If collisions turn out to be pervasive, agents will spend a round trip
   on a large share of anchored writes and paths become the normal form rather than
   the fallback.
-- **Does anyone reach for section rename?** Proposed as a `scope` parameter on
-  `replace_section`, then **removed** (§3.5): it was reasoning, and the session that
-  proposed it, asked to check, found no instance in its own edits. Watch for a real
-  one before building. Until then, delete-then-insert covers it, with the
+- **Does anyone reach for section rename? — ANSWERED: yes.** Proposed as a `scope`
+  parameter on `replace_section`, then removed (§3.5) because it was reasoning and
+  the session that proposed it found no instance in its own edits. Session 6 found
+  one: `## OPEN TODOs (as of 2026-08-08)`, a heading whose date had gone stale,
+  with no tool able to change it. The shape is **dated headings in living
+  documents**. What remains is deciding the form, not whether the need is real.
+  Superseded reasoning follows, kept for the record. Until then, delete-then-insert covers it, with the
   no-such-section window that argued for the parameter in the first place — a known
   cost, deliberately accepted rather than designed away on speculation.
 - **Does an error on an ambiguous anchor (§3.7) annoy more than it protects?** The
@@ -1047,7 +1086,7 @@ Three statuses, and the middle one is the one that matters:
 | 10 | Get a fresh token without paying for the document | **v1** | hash + size, no body (§3.8) |
 | 11 | See a conflict rather than have it resolved silently | **v1** | §5 |
 | 12 | Know when a document is growing past its split point | **v1** | size flag (§3.8) |
-| 13 | Rename a section while replacing its content | Open, not foreclosed | §3.5 — reasoned, never observed; `scope` is addable |
+| 13 | Rename a section while replacing its content | Open, **now observed** | §3.5 — an agent reached for it on real work (a heading whose date went stale) and had no tool; `scope` is still addable |
 | 14 | Restructure atomically across several operations | **v1** | `cerefox_edit` (§3.4) — promoted from *open* when session 4 arrived |
 | 15 | Insert or edit anchored to arbitrary text | **Excluded by design** | §3.9 — declined by the session that would have gained most |
 | 16 | Add to a nested section without knowing its shape in advance | **v1** | `end_of_section` errors with both candidates (§3.3) |
