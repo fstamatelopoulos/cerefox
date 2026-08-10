@@ -42,6 +42,29 @@ const DB_SRC = join(REPO_ROOT, "src", "cerefox", "db");
 const FUNCTIONS_SRC = join(REPO_ROOT, "supabase", "functions");
 const SHARED_SRC = join(REPO_ROOT, "_shared");
 
+/**
+ * The `_shared/` subtrees the Edge Functions import, and therefore the ones the
+ * bundle must contain. This is an allow-list, which means adding a new shared
+ * module that an EF imports and forgetting this line ships a package whose
+ * `cerefox-mcp` deploy fails at bundle time with "Module not found".
+ *
+ * That happened once: `partial-edits` was added in iteration 34 and omitted
+ * here, so v1.3.0-beta.1 deployed 8 of 9 functions and failed the ninth.
+ * `_shared/__tests__/server-assets-bundle.test.ts` now walks the EF import
+ * graph and fails if this list is missing anything.
+ */
+export const SHARED_SUBTREES = [
+  "mcp-tools",
+  "embeddings",
+  "ef-meta",
+  "mcp-auth",
+  "ef-auth",
+  "ingest",
+  "partial-edits",
+  // iter-34: mcp-tools/{get-document,partial-edits}.ts import the pure
+  // outline/anchor/apply layer from here.
+] as const;
+
 /** Skip Python build artifacts when copying trees. */
 function notPythonCruft(src: string): boolean {
   return (
@@ -81,7 +104,7 @@ function main(): void {
   // removed in iter-28E; the Cloudflare Worker builds it independently.)
   // ingest (iter-28D): cerefox-ingest imports the consolidated exact-partition
   // chunker from `_shared/ingest/chunker.ts`.
-  for (const sub of ["mcp-tools", "embeddings", "ef-meta", "mcp-auth", "ef-auth", "ingest"]) {
+  for (const sub of SHARED_SUBTREES) {
     cpSync(join(SHARED_SRC, sub), join(OUT, "_shared", sub), {
       recursive: true,
       filter: notPythonCruft,
@@ -92,4 +115,4 @@ function main(): void {
   console.log(`✓  Bundled server assets → ${OUT}`);
 }
 
-main();
+if (import.meta.main) main();

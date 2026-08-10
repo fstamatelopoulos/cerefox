@@ -9,7 +9,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+- **`cerefox server deploy` could not deploy `cerefox-mcp` from the published
+  1.3.0-beta.1 package.** `scripts/bundle_server_assets.ts` copies an allow-list
+  of `_shared/` subtrees into the npm package, and the new `partial-edits`
+  module was not on it — so the package shipped without the file
+  `mcp-tools/get-document.ts` imports, and the one Edge Function that pulls it
+  in failed to bundle:
+
+  ```
+  Module not found "file:///…/source/_shared/partial-edits/index.ts"
+  ✗ 1 Edge Function(s) failed: cerefox-mcp
+  ```
+
+  Nothing caught it before publish because unit tests, typecheck, the local MCP
+  server and the CLI all resolve against the repo, where the file exists; only a
+  deploy *from an installed package* sees the gap. A deploy that hits this is
+  recoverable rather than destructive — the previously deployed function keeps
+  serving, so the other eight functions upgrade and the ninth stays behind.
+
+  The list now includes `partial-edits`, and a new test walks the Edge Function
+  import graph and fails if any reachable `_shared/` subtree is missing from it,
+  so the next shared module cannot be forgotten the same way.
 
 ---
 
