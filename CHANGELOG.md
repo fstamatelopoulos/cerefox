@@ -9,12 +9,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
-
----
-
-## [v1.3.0-beta.3] -- 2026-08-10
-
 ### Fixed
 - **A refused edit told the agent nothing.** Tool failures were returned as
   JSON-RPC protocol errors (`-32603`). The message survived on the wire, but a
@@ -32,6 +26,11 @@ Open roadmap.
   beta: the refusal logic was already correct — no bad writes, all-or-nothing
   intact — but as they put it, a refusal an agent cannot read is half a refusal.
 
+---
+
+## [v1.3.0-beta.3] -- 2026-08-10
+
+### Fixed
 - **`end_of_section` chose silently when a section had child headings.** The
   rule was that a section holding *both* its own body and children is ambiguous,
   so the write refuses and returns both `section_part` options. A section with
