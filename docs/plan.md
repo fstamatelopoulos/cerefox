@@ -28,38 +28,38 @@
 ---
 ## Current Focus
 
-**2026-08-10 — `main` at v1.4.0-dev; v1.3.0 shipped and in production.**
-**Iteration 35 (Partial-edit follow-ups and guard debt) is ACTIVE** on
-`feat/1.4.0-section-read`, target **v1.4.0**.
+**2026-08-10 — v1.3.0 in production; v1.4.0 built and staging-validated.**
+**Iteration 35 is BUILD COMPLETE** on `feat/1.4.0-section-read`, awaiting a
+sub-agent review, then a release.
 
-Eight tickets: the partial-edit feature completing itself under real usage
-(#198 section read, #197 `rename_section`), defects found by using it (#196
-shrink trigger, #193 CLI `--source`, #189 already fixed in v1.3.0), and guard
-debt this iteration is the right size to clear (#171 typecheck coverage, #194
-static guard, #168 environment-labelled MCP name). **#155 (UI e2e, 8/13
-failing) is explicitly out** — unknown cause, unbounded, and it needs a human to
-confirm intended UI.
+All eight tickets closed: #198 (section read), #197 (`rename_section`), #196
+(shrink trigger), #193 (CLI `--source` + the CLI half of #189), #189 (verified
+already fixed, closed), #171 (typecheck coverage), #194 (script guard), #168
+(environment-labelled MCP name). **#155 (UI e2e, 8/13 failing) stays out** — it
+needs its own session with a human to confirm intended UI.
 
-- **Plan**: [`plans/iteration-35-partial-edits-followups.md`](plans/iteration-35-partial-edits-followups.md)
-- **Spec** (§8 sessions 7–8, §9 register rows 13/24):
+Schema 0.11.0 → **0.11.1** (migration 0021, audit CHECK widened for
+`rename-section`). `minSchema` reviewed and deliberately left at 0.10.5.
+
+- **Plan + outcome**: [`plans/iteration-35-partial-edits-followups.md`](plans/iteration-35-partial-edits-followups.md)
+- **Spec** (§8 sessions 7–8, §9 register rows 13/24 now served):
   [`specs/partial-document-edits-design.md`](specs/partial-document-edits-design.md)
-- **Staging** is dedicated to this iteration and may be changed freely;
-  **production is not touched** until the sub-agent review passes.
-
-**v1.3.0 shipped (2026-08-10)** — partial document edits, schema 0.11.0. Two
-agent sessions on the released build produced everything above: the outline →
-edit loop works as designed, and the gaps are the parts the design assumed
-someone would already have.
+- Verified: typecheck 0, `_shared` 495 pass, package suite 190 pass, staging
+  acceptance 22/22, remote Edge Function end-to-end. **Production untouched.**
+- **Next**: sub-agent review → normal release (several small fixes, no single
+  risky change) → prod deploy → CLI validation here, MCP validation by the
+  user's agents over local and remote. Release notes must carry the
+  **reconnect your MCP client** instruction.
 
 ---
 
 ## Active iteration
 
 **[Iteration 35 — Partial-edit follow-ups and guard debt](plans/iteration-35-partial-edits-followups.md)**
-(2026-08-10 → , target **v1.4.0**, normal release preferred over a beta —
-several small fixes, no single risky change). Adds `rename_section` and a
-section read, fixes a warning that could not see its own motivating case, and
-clears three guard-debt tickets. Full phase list and status in the linked plan.
+(2026-08-10, target **v1.4.0**) — ✅ **build complete, staging-validated**.
+Adds `rename_section` and a section read, fixes a warning that could not see its
+own motivating case, and clears three guard-debt tickets. Outcome, verification
+table and open risk in the linked plan.
 
 **[Iteration 34 — Partial Document Edits](plans/iteration-34-partial-edits.md)**
 — ✅ **CLOSED, shipped v1.3.0** (2026-08-10). Two MCP tools, `get_document`
