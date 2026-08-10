@@ -124,6 +124,19 @@ bun scripts/backup_create.ts && bun scripts/db_migrate.ts
 
 ---
 
+## backup_create.ts / backup_restore.ts — thin shims over the CLI
+
+> **These delegate to `cerefox backup create` / `cerefox backup restore`.** They
+> used to carry their own capture and restore logic, which is how #166 half-
+> healed: the fixes that taught backups to capture project memberships (v1.0.7),
+> then relations and `lifecycle_status` (v1.1.0), landed in the CLI command and
+> never reached the scripts. Anyone following the pre-migration recipe below got
+> a snapshot missing all of them, silently.
+>
+> They now delegate, so there is one capture path, one restore path, and one
+> format. Prefer the CLI command directly; the scripts remain for the muscle
+> memory and for recipes that already reference them.
+
 ## backup_create.ts — Create a backup
 
 Exports all documents, chunks, and metadata to a JSON file in the backup directory. (End users use `cerefox backup create`.)
