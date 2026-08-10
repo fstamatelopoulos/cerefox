@@ -289,7 +289,7 @@ async function handler(
     .limit(1);
 
   if (hashMatch?.length) {
-    return `Document already up-to-date: "${hashMatch[0].title}" (id: ${hashMatch[0].id}). Content hash unchanged.`;
+    return `Document already up-to-date: "${hashMatch[0].title}" (id: ${hashMatch[0].id}). Content hash unchanged (${contentHash}) — pass it as expected_content_hash to edit it.`;
   }
 
   const chunks = chunkMarkdown(content);
@@ -344,7 +344,14 @@ async function handler(
   });
 
   const projectInfo = project_name ? `, project: "${project_name}"` : "";
-  return `Document saved: "${title}" (id: ${documentId}), ${chunks.length} chunk(s), ${totalChars} chars${projectInfo}.`;
+  // #189: surface the hash on CREATE too. Without it the author of a brand-new
+  // document had two options for its first edit — re-read a document it wrote
+  // and already knows, or pass last_write_wins — and agents picked the latter,
+  // bypassing concurrency control on the first edit of every new document.
+  return (
+    `Document saved: "${title}" (id: ${documentId}), ${chunks.length} chunk(s), ${totalChars} chars${projectInfo}. ` +
+    `content_hash: ${contentHash} — pass it as expected_content_hash on your next edit.`
+  );
 }
 
 export const ingestTool: ToolDefinition = {

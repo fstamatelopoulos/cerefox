@@ -1,28 +1,28 @@
 #!/usr/bin/env bun
 /**
- * backup_restore.ts — restore documents + chunks from a JSON backup
- * (iter-26 Part 26K). TS port of scripts/backup_restore.py.
+ * backup_restore.ts — restore a JSON snapshot into the knowledge base.
  *
- * Idempotent: documents whose content_hash already exists are skipped.
+ * **This is a thin shim over `cerefox backup restore`, deliberately** — see the
+ * note in `backup_create.ts`. It previously carried its own restore logic via
+ * `_shared/backup/`, which never learned to recreate project memberships,
+ * relations, `lifecycle_status`, or trash state (#166). Worse than the capture
+ * side: a restore is the moment you are already having a bad day, and a second
+ * implementation quietly recreating less than the snapshot holds is the wrong
+ * thing to discover then.
  *
- * Usage:
+ * Delegating keeps one restore path, which is also the one that gets exercised
+ * by the live suites.
+ *
+ * Usage (unchanged):
  *   bun scripts/backup_restore.ts <backup.json> [--dry-run]
  *
  * Requires CEREFOX_SUPABASE_URL + CEREFOX_SUPABASE_KEY in your .env.
  */
 
-import { loadSettings } from "../_shared/config/index.js";
-import { createClient } from "../_shared/db-client/index.js";
-import { restoreBackup } from "../_shared/backup/index.js";
-import { makeBackupDb } from "../_shared/backup/supabase-adapter.js";
-import {
-  EXIT_OK,
-  EXIT_USER_ERROR,
-  EXIT_SYSTEM_ERROR,
-  c,
-  println,
-  errorln,
-} from "../_shared/cli-core/index.js";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
+
+import { EXIT_OK, EXIT_USER_ERROR, c, errorln, println } from "../_shared/cli-core/index.js";
 
 interface Args {
   backupFile?: string;
@@ -35,47 +35,30 @@ function parseArgs(argv: string[]): Args {
     if (a === "--dry-run") out.dryRun = true;
     else if (a === "--help" || a === "-h") {
       println("Usage: bun scripts/backup_restore.ts <backup.json> [--dry-run]");
+      println("");
+      println(c.dim("Delegates to `cerefox backup restore`, which is the single restore"));
+      println(c.dim("implementation (memberships, relations, lifecycle_status, trash)."));
       process.exit(EXIT_OK);
     } else if (a.startsWith("-")) {
       errorln(`Unknown arg: ${a}`);
       process.exit(EXIT_USER_ERROR);
-    } else if (!out.backupFile) {
-      out.backupFile = a;
     } else {
-      errorln(`Unexpected argument: ${a}`);
-      process.exit(EXIT_USER_ERROR);
+      out.backupFile = a;
     }
   }
   return out;
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  if (!args.backupFile) {
-    errorln("A backup file path is required.");
-    errorln("Usage: bun scripts/backup_restore.ts <backup.json> [--dry-run]");
-    process.exit(EXIT_USER_ERROR);
-  }
-
-  const settings = loadSettings();
-  if (!settings.supabaseUrl || !settings.supabaseKey) {
-    errorln("❌  CEREFOX_SUPABASE_URL and CEREFOX_SUPABASE_KEY must be set.");
-    process.exit(EXIT_SYSTEM_ERROR);
-  }
-
-  const client = createClient(settings);
-  const db = makeBackupDb(client.raw as never);
-
-  println(c.bold(args.dryRun ? "Restoring (DRY RUN — no writes)…" : "Restoring backup…"));
-  const stats = await restoreBackup(db, args.backupFile, { dryRun: args.dryRun });
-  println(
-    `${args.dryRun ? c.yellow("ℹ") : c.green("✓")}  Restore complete: ` +
-      `${stats.restored} restored, ${stats.skipped} skipped, ${stats.errors} errors.`,
-  );
-  process.exit(stats.errors > 0 ? EXIT_SYSTEM_ERROR : EXIT_OK);
+const args = parseArgs(process.argv.slice(2));
+if (!args.backupFile) {
+  errorln("Missing backup file. Usage: bun scripts/backup_restore.ts <backup.json> [--dry-run]");
+  process.exit(EXIT_USER_ERROR);
 }
 
-main().catch((err) => {
-  errorln(err instanceof Error ? err.message : String(err));
-  process.exit(EXIT_SYSTEM_ERROR);
-});
+// Run the CLI from source, so a contributor in a clone needs no build step.
+const bin = join(import.meta.dir, "..", "packages", "memory", "src", "bin", "cerefox.ts");
+const cliArgs = ["backup", "restore", args.backupFile];
+if (args.dryRun) cliArgs.push("--dry-run");
+
+const result = spawnSync("bun", [bin, ...cliArgs], { stdio: "inherit" });
+process.exit(result.status ?? EXIT_USER_ERROR);

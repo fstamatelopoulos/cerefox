@@ -234,7 +234,7 @@ right config for Claude Code, Claude Desktop, Cursor, Codex, or Gemini. There
 are several ways an agent can reach Cerefox:
 
 **1 — Local stdio MCP (recommended for local agents).** `cerefox mcp` runs the
-same 10 tools in-process — lower latency, no per-call Edge Function billing, and
+same 12 core tools in-process (plus 4 document-relation tools, hidden until you enable them with `cerefox config set relations_enabled true`) — lower latency, no per-call Edge Function billing, and
 no Edge Function token needed (it reaches Supabase over the Data API with its own
 `.env` credential). `configure-agent` wires it up, or point your client at
 `command: "cerefox", args: ["mcp"]`.

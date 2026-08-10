@@ -1,6 +1,6 @@
 # Cerefox Knowledge Base -- Agent Quick Reference
 
-Cerefox is a persistent, shared knowledge base. You have **14 MCP tools** (13 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
+Cerefox is a persistent, shared knowledge base. You have **16 MCP tools** (15 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
 
 ## Tools
 
@@ -8,7 +8,9 @@ Cerefox is a persistent, shared knowledge base. You have **14 MCP tools** (13 of
 |------|---------|------------|
 | `cerefox_search` | Find documents (hybrid FTS + semantic) | `query` (required), `project_name`, `metadata_filter`, `requestor` |
 | `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `expected_content_hash` (**required on content updates** — see rule 9), `last_write_wins`, `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata` (omit on update to keep existing tags; `{}` clears), `author` |
-| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token) | `document_id` (required) |
+| `cerefox_insert` | **Add** to a document without resending it. Cannot destroy content. | `document_id`, `text`, `position` (`end_of_document`/`end_of_section`/`after_heading`/`before_heading`), `expected_content_hash` (required), `anchor_heading` (unless `end_of_document`), `section_part` |
+| `cerefox_edit` | **Change** parts of a document: 1..n operations applied atomically | `document_id`, `operations` (`insert`/`replace_section`/`delete_section`), `expected_content_hash` (required) |
+| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token), or with `outline: true` just its heading paths, sizes and hash | `document_id` (required), `outline` |
 | `cerefox_list_versions` | Version history of a document | `document_id` (required) |
 | `cerefox_set_relation` ⚑ | Link two documents (`source --rel_type--> target`) | `source_id`, `target_id`, `rel_type` (required), `metadata`, `author` |
 | `cerefox_delete_relation` ⚑ | Remove a relation | `source_id`, `target_id`, `rel_type` |
@@ -26,6 +28,33 @@ operator enables them (`relations_enabled`). **Trust your own tool list**: if
 they are not in it, the feature is switched off for this deployment. That is
 normal, not an error, and not something to work around.
 
+## Editing part of a document (prefer this over re-sending)
+
+**Re-sending a whole document to change part of it is the main way agents lose
+data.** You have to reproduce the untouched remainder verbatim, and any drift
+silently rewrites content nobody asked you to touch — which the caller cannot
+diff. Use the partial-edit tools instead:
+
+1. **Learn the anchors** — `cerefox_get_document(document_id, outline: true)`.
+   Returns heading paths, per-section sizes and the `content_hash`, without the
+   body. The paths it returns are exactly what `anchor_heading` accepts.
+2. **Add** → `cerefox_insert`. `end_of_document` is a plain append;
+   `end_of_section` adds inside a named section. It is structurally incapable of
+   removing anything, so "I meant to append" cannot become "I replaced the file".
+3. **Change or remove** → `cerefox_edit`. Put changes that belong together in
+   ONE call: they apply atomically, so a table row and the total it feeds cannot
+   end up disagreeing. To change a single line, `replace_section` on its
+   smallest enclosing heading — that is the intended granularity, not a
+   workaround.
+4. Both require `expected_content_hash` and **have no last-write-wins**. A
+   conflict means someone else changed the document; re-read and decide, do not
+   force it.
+
+**When an anchor is ambiguous the tool refuses and hands you the options** — a
+repeated heading returns the qualifying paths, and a section with both its own
+content and sub-sections returns both `section_part` choices. That is a
+recoverable answer, not a failure: retry with what it gave you.
+
 ## Essential Rules
 
 1. **Search before ingesting** -- check if the document exists first.
@@ -36,7 +65,7 @@ normal, not an error, and not something to work around.
 6. **Write structured Markdown** with H1/H2/H3 headings for good chunking and search.
 7. **Deletes are soft (recoverable); purge is web-UI-only.** If you decide to delete, surface it to the user (`I soft-deleted X — recoverable from the Cerefox web UI trash`). You cannot un-do your own delete from agent code by design.
 8. **Cross-doc links inside content**: **always use `[Text](document-uuid)`.** UUIDs are the only fully reliable link form — stable across title changes, never ambiguous, no encoding gotchas. Every `cerefox_search` result shows `[id: <uuid>]` after the title; grab it and use it. Title-based linking (`[Text](<Title With Spaces>)`) is fragile (breaks on colons, parens, ampersands, brackets — silently navigates to wrong page) — **don't write title-based links**; do an extra search to get the UUID instead. Repo-path forms (`[Text](docs/path.md)`) exist for repo-ingested files; don't construct manually. See `AGENT_GUIDE.md → Writing linkable content` for the full rule.
-9. **Concurrency: content updates require `expected_content_hash`.** Pass the `content_hash` you read (shown by `cerefox_get_document`, `cerefox_search`, and `cerefox_metadata_search`) when updating a document. If it's stale you get a **conflict** — re-read the document, merge your changes into the latest content, retry with the new hash. **Never resolve a conflict by overwriting blindly** — the current content includes another writer's work. `last_write_wins: true` skips the check; use it ONLY when an external source of truth makes conflicts meaningless (file re-sync), never to silence a conflict.
+9. **Concurrency: content updates require `expected_content_hash`.** Pass the `content_hash` you last saw — every read shows one (`cerefox_get_document` incl. outline mode, `cerefox_search`, `cerefox_metadata_search`) and **every write returns the new one, including create** (v1.3.0, #189), so after writing you already hold the token for your next edit; no re-read needed. If it's stale you get a **conflict** — re-read the document, merge your changes into the latest content, retry with the new hash. **Never resolve a conflict by overwriting blindly** — the current content includes another writer's work. `last_write_wins: true` skips the check; use it ONLY when an external source of truth makes conflicts meaningless (file re-sync), never to silence a conflict.
 10. **Search: prefer a few distinctive terms; heed `below confidence`.** When nothing clears the relevance threshold, `cerefox_search` returns the closest candidates prefixed with a `below confidence` warning instead of an empty set — that flag means **weak signal, not absent knowledge**: check the candidates' scores and titles before concluding the KB lacks the content. A truly empty response means nothing even weakly related exists.
 11. **Relations express how documents relate; lifecycle tells you if knowledge is still good.** Use `cerefox_set_relation` when one document supersedes, contradicts, references, or continues another. `supersedes` marks the target **superseded**; `contradicts` marks **both** stale; `related_to`/`duplicates`/`contradicts` are symmetric (both directions written). Any other type string is accepted without special behaviour. When a search result or `cerefox_get_relations` shows a neighbour marked `[superseded]` or `[stale]`, say so rather than presenting it as current.
 12. **Project memberships — non-destructive by default**: on `cerefox_ingest` updates, **`project_name` (singular) is a non-destructive add** (ensures membership, preserves others). Use **`project_names` (list)** when you want to set the doc's full project set in one call (destructive replace). For metadata-only project changes without writing content, use **`cerefox_set_document_projects(document_id, project_names)`** — that tool is the destructive-replace contract made explicit. Never call `cerefox_set_document_projects` with a single name when you mean "add" — that would REMOVE the doc from all other projects. When in doubt, use `cerefox_ingest` with singular `project_name`.

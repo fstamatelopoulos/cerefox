@@ -6,6 +6,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
+import { parseOutline } from "../partial-edits/index.ts";
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
@@ -16,6 +17,7 @@ async function handler(
 ): Promise<string> {
   const document_id = args.document_id as string | undefined;
   const version_id = (args.version_id as string | null | undefined) ?? null;
+  const outline = (args.outline as boolean | undefined) ?? false;
 
   if (!document_id) throw new McpInvalidParams("document_id is required");
 
@@ -46,6 +48,41 @@ async function handler(
     result_count: 1,
   });
 
+  // Outline mode (iteration 34): structure without the body. Anchored edits
+  // presuppose known headings, and without this an agent that has not read the
+  // document must pay a full read just to learn them — the cost partial edits
+  // exist to remove. Paths come back in exactly the form anchor_heading accepts,
+  // so an entry can be pasted into an edit verbatim.
+  if (outline) {
+    const nodes = parseOutline(row.full_content ?? "").map((n) => ({
+      path: n.path,
+      level: n.level,
+      chars: n.chars,
+    }));
+    // The RPC always returns the CURRENT hash, even when reconstructing an
+    // archived version. Handing that back alongside an archived structure would
+    // invite the one silent failure this design otherwise refuses: an anchor
+    // read from an old version, a token valid for the current one, and an edit
+    // that lands wherever that heading happens to sit today. Withhold the token
+    // instead — the archived outline is for reading.
+    const archived = version_id !== null;
+    return JSON.stringify(
+      {
+        title: row.doc_title ?? "Untitled",
+        content_hash: archived ? null : (row.content_hash ?? null),
+        total_chars: row.total_chars ?? (row.full_content ?? "").length,
+        outline: nodes,
+        note: archived
+          ? "This is an ARCHIVED version's structure, so no content_hash is returned: these anchors describe the old version and must not be used to edit the current one. Re-read without version_id to edit."
+          : nodes.length === 0
+            ? "This document has no headings, so it has no anchors: only end_of_document inserts apply."
+            : "Use a path as anchor_heading in cerefox_insert / cerefox_edit; content_hash is your expected_content_hash.",
+      },
+      null,
+      2,
+    );
+  }
+
   const label = version_id !== null ? " (archived version)" : " (current)";
   // content_hash is the optimistic-concurrency token: pass it back as
   // expected_content_hash when updating this document via cerefox_ingest.
@@ -56,7 +93,7 @@ async function handler(
 export const getDocumentTool: ToolDefinition = {
   name: "cerefox_get_document",
   description:
-    "Retrieve the full reconstructed content of a document. Pass version_id to retrieve an archived version; omit it (or pass null) for the current version. Version UUIDs are returned by cerefox_list_versions. The response header includes the document's current content_hash — pass it back as expected_content_hash when updating via cerefox_ingest (optimistic concurrency).",
+    "Retrieve the full reconstructed content of a document — or, with outline=true, just its heading structure, sizes and content_hash (much cheaper, and the paths are the anchors the edit tools take). Pass version_id to retrieve an archived version; omit it (or pass null) for the current version. Version UUIDs are returned by cerefox_list_versions. The response header includes the document's current content_hash — pass it back as expected_content_hash when updating via cerefox_ingest (optimistic concurrency).",
   // Read-only: touches nothing. Safe for a client to run without prompting.
   annotations: {
     title: "Read document",
@@ -72,6 +109,11 @@ export const getDocumentTool: ToolDefinition = {
       version_id: {
         type: "string",
         description: "UUID of a specific archived version to retrieve (optional)",
+      },
+      outline: {
+        type: "boolean",
+        description:
+          "Return the document's STRUCTURE instead of its content: heading paths, levels and per-section sizes, plus content_hash and total size. Far cheaper than a full read, and the paths are exactly what cerefox_insert / cerefox_edit take as anchor_heading. Use this before editing a document you have not read.",
       },
       requestor: {
         type: "string",

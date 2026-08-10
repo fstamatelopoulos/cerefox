@@ -122,6 +122,14 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 > **dormant**: the table stays empty, `lifecycle_status` defaults to `active`,
 > search is untouched, and the tools do not appear in any agent's tool list
 > until you opt in with `cerefox config set relations_enabled true`.
+>
+> **Size signal for partial edits.** `document_size_warning_chars` (default `0`
+> = off) makes every write report when a document has grown past the given
+> size. It exists because partial edits (v1.3.0) make writes cheap: an agent
+> that only ever inserts never assembles the document, so it never sees it
+> approach the point where it should be split. A signal only — writes are never
+> blocked. `cerefox config set document_size_warning_chars 50000` mirrors the
+> maintainers' own split-at-~50K practice.
 
 > **Deployment-wide defaults (v1.1.0+).** `min_search_score`,
 > `min_term_coverage`, and `search_alpha` can also be set **once, in the

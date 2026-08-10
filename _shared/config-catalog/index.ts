@@ -115,6 +115,15 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
       "Turning this OFF keeps every version of every document forever. Versions carry embeddings, so storage grows without bound — on a busy store that is the largest table. Turning it back ON prunes on the next save, which permanently deletes versions outside the window (the newest and any archived ones survive).",
   },
   {
+    key: "document_size_warning_chars",
+    description:
+      "Flag writes that push a document past this many characters (0 = off). Partial edits make writes cheap, so an agent that only ever inserts never assembles the document and never sees it grow; this puts the fact in the write's response. A signal only — writes are never blocked.",
+    kind: "number",
+    defaultValue: "0",
+    min: 0,
+    group: "Retention",
+  },
+  {
     key: "relations_enabled",
     description:
       "Expose the four document-relation tools to agents. The feature is dormant until enabled.",

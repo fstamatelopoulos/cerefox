@@ -296,6 +296,24 @@ plain text snapshots for recovery purposes only.
 
 ---
 
+### Partial document edits (iteration 34)
+
+- An agent MUST be able to add to, replace part of, or remove part of a document
+  **without resending the whole document**.
+- Additive and destructive edits MUST be separable, so a client can grant the
+  additive capability without granting the destructive one.
+- A set of related changes MUST be applicable **atomically**, so a document
+  cannot be left in a half-applied state where its parts contradict each other.
+- Every partial edit MUST carry an optimistic-concurrency token and MUST surface
+  a conflict rather than resolving it silently. There is deliberately **no
+  last-write-wins** on these operations.
+- An anchor that is absent or ambiguous MUST produce an error naming the
+  candidates that resolve it, never a best-guess write.
+- An agent MUST be able to discover a document's structure (headings, sizes and
+  concurrency token) without retrieving its content.
+- Partial edits MUST NOT change a document's provenance, title or metadata:
+  they change content only.
+
 ## 3. Non-Functional Requirements
 
 ### NFR-1: Cost

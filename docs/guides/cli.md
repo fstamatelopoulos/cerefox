@@ -46,7 +46,7 @@ cerefox document ingest --paste --title "<title>" [OPTIONS]   # stdin
 | `--metadata` | `-m` | JSON | _not provided_ | Extra metadata as a JSON object, e.g. `'{"tags":["work"]}'`. **On update, omitting this keeps the document's existing metadata** (v0.11.1); pass `'{}'` to deliberately clear all metadata. |
 | `--update-if-exists` | `-u` | flag | off | Title/source-path-based fallback update. Mutually exclusive with `--document-id`. |
 | `--document-id` | `-i` | UUID | _none_ | Deterministic ID-based update. Errors if the document doesn't exist. |
-| `--expected-content-hash` | — | sha256 | _none_ | **Required on content updates** (v0.11 optimistic concurrency): the `content_hash` of the version this edit is based on, shown by `cerefox document get` / `cerefox search`. Stale → conflict error (re-read, merge, retry). |
+| `--expected-content-hash` | — | sha256 | _none_ | **Required on content updates** (v0.11 optimistic concurrency): the `content_hash` of the version this edit is based on, shown by `cerefox document get` / `cerefox search` — and printed by **every write, including create** (v1.3.0), so a script can chain edits without re-reading. Stale → conflict error (re-read, merge, retry). |
 | `--last-write-wins` | — | flag | off | Skip the concurrency check and overwrite regardless of concurrent changes. For re-sync flows where an external source of truth makes conflicts meaningless. Recorded in the audit log. |
 | `--source` | — | str | `paste` / `file` | Source label recorded on the document. |
 | `--author` | — | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Audit-log author identity. |
@@ -611,7 +611,7 @@ cerefox config set relations_enabled true    # tools appear in every agent's lis
 cerefox config set relations_enabled false   # hidden again; no data removed
 ```
 
-Agents see 10 tools with the flag off and 14 with it on. See
+Agents see 12 tools with the flag off and 16 with it on. See
 [`configuration.md`](configuration.md) for the full runtime-config surface.
 
 ### `cerefox config list` / `cerefox config get` / `cerefox config set`
@@ -720,7 +720,9 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 | `cerefox_search(query, match_count, project_name, metadata_filter, requestor)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --requestor <name>` |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type <t>` |
 | `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>"` (same flags) |
-| `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <id> --version-id <vid> --requestor <name>` |
+| `cerefox_get_document(document_id, version_id, outline, requestor)` | `cerefox document get <id> --version-id <vid> --outline --requestor <name>` |
+| `cerefox_insert(document_id, text, position, anchor_heading, section_part, expected_content_hash, requestor)` | `cerefox document insert <id> -t <text\|-\|@file> -p <position> -a <anchor> --section-part <part> --expected-hash <hash> --requestor <name>` |
+| `cerefox_edit(document_id, operations, expected_content_hash, requestor)` | `cerefox document edit-parts <id> -o <json\|-\|@file> --expected-hash <hash> --requestor <name>` |
 | `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <id> --requestor <name>` |
 | `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
 | `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <id> <name...> --author <a> --author-type <t>` (or `--clear` to remove all) |

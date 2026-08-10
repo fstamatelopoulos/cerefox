@@ -24,7 +24,12 @@ versioning concept.
 
 **Writer contract (update paths only — `document_id` or `update_if_exists`):**
 
-1. Read the document; note its `content_hash` (now returned by every read surface).
+1. Read the document; note its `content_hash` (returned by every read surface —
+   and, since v1.3.0 / #189, by **every write including create**, so the author
+   of a new document holds its token without a read. Before that fix, creation
+   returned no hash and agents reached for `last_write_wins` on the first edit
+   of every new document, bypassing this design exactly where a concurrent
+   writer was least expected).
 2. Prepare the new content.
 3. Call ingest with `expected_content_hash=<the hash you read>`.
 4. The RPC, **atomically** (row locked with `SELECT … FOR UPDATE` inside the single

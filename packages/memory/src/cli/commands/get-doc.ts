@@ -16,6 +16,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { c } from "../../../../../_shared/cli-core/index.ts";
+import { parseOutline } from "../../../../../_shared/partial-edits/index.ts";
 import { getClient } from "../util/client.ts";
 
 interface DocPayload {
@@ -31,7 +32,7 @@ interface DocPayload {
 
 async function action(
   documentId: string,
-  options: { versionId?: string; requestor?: string; json?: boolean },
+  options: { versionId?: string; requestor?: string; json?: boolean; outline?: boolean },
 ): Promise<void> {
   const client = getClient();
 
@@ -67,6 +68,37 @@ async function action(
     })
     .then(() => {}, () => {});
 
+  // Outline mode (iter-34): structure, sizes and the concurrency token, no body.
+  // The paths printed here are exactly what `document insert --anchor` and the
+  // MCP edit tools accept, so this is the cheap first step before an edit.
+  if (options.outline) {
+    const nodes = parseOutline(doc.full_content ?? "");
+    if (options.json) {
+      printJson({
+        title: doc.doc_title,
+        content_hash: doc.content_hash,
+        total_chars: doc.total_chars,
+        outline: nodes.map((n) => ({ path: n.path, level: n.level, chars: n.chars })),
+      });
+      return;
+    }
+    println(c.bold(`# ${doc.doc_title}`));
+    println(c.dim(`[${doc.document_id}] · chars: ${doc.total_chars}`));
+    if (doc.content_hash) println(c.dim(`content_hash: ${doc.content_hash}`));
+    println("");
+    if (nodes.length === 0) {
+      println(c.dim("No headings: only --position end_of_document applies to this document."));
+      return;
+    }
+    for (const n of nodes) {
+      println(`${"  ".repeat(Math.max(0, n.level - 1))}${n.heading}  ${c.dim(`(${n.chars} chars)`)}`);
+    }
+    println("");
+    println(c.dim("Anchor with the full path when a heading repeats, e.g."));
+    println(c.dim(`  --anchor ${JSON.stringify(nodes[nodes.length - 1].path)}`));
+    return;
+  }
+
   if (options.json) {
     printJson(doc);
     return;
@@ -99,5 +131,9 @@ export function registerGetDoc(program: Command): void {
     .option("--version-id <uuid>", "Specific archived version (default: current).")
     .option("-r, --requestor <name>", "Agent / user name (usage log).")
     .option("--json", "Emit machine-readable JSON.")
+    .option(
+      "--outline",
+      "Show the heading structure, per-section sizes and content_hash instead of the content. Cheap, and the paths are the anchors the edit commands take.",
+    )
     .action(action);
 }

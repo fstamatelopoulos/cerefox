@@ -1293,6 +1293,10 @@ $$;
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN);
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN);
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN, SMALLINT);
+-- iter-33: return shape gains content_hash + size_warning, so the 16-arg form
+-- must be dropped before the 17-arg CREATE below (Postgres will not replace a
+-- function whose RETURNS TABLE changed).
+DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN, SMALLINT, JSONB);
 CREATE FUNCTION cerefox_ingest_document(
     p_document_id       UUID        DEFAULT NULL,
     p_title             TEXT        DEFAULT 'Untitled',
@@ -1324,14 +1328,30 @@ CREATE FUNCTION cerefox_ingest_document(
     -- content_format for the chunks being written (iter-28D). 2 = exact-partition
     -- (blind-stitch reconstruction); default 1 = legacy (E'\n\n'-join). Stamped on
     -- every chunk this call inserts.
-    p_content_format    SMALLINT    DEFAULT 1
+    p_content_format    SMALLINT    DEFAULT 1,
+    -- iter-33 (partial edits): when NULL, audit behaves exactly as before
+    -- ('create' / 'update-content'). When set, it is a JSONB array of
+    -- {"op": "...", "detail": "..."} and ONE audit entry is written per element,
+    -- so a cerefox_edit batch records what it actually did rather than
+    -- flattening to 'update-content'. NULL-means-today, per the #183 lesson:
+    -- a parameter that substitutes its own concrete default is how store policy
+    -- got silently overridden for a whole release.
+    p_operations        JSONB       DEFAULT NULL
 )
 RETURNS TABLE (
     document_id     UUID,
     chunk_count     INT,
     total_chars     INT,
     operation       TEXT,
-    version_id      UUID
+    version_id      UUID,
+    -- iter-33: the hash just written, on CREATE as well as update (#189). A
+    -- document is now born holding its own concurrency token, so the author
+    -- never has to re-read it or fall back to last_write_wins.
+    content_hash    TEXT,
+    -- iter-33: true when the new size crosses `document_size_warning_chars`
+    -- (dormant when that config is unset/0). A signal, never a refusal: an
+    -- insert-only workflow otherwise never sees a document grow.
+    size_warning    BOOLEAN
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -1348,6 +1368,9 @@ DECLARE
     v_chunk         JSONB;
     v_snap          RECORD;
     v_status        TEXT;
+    v_op            JSONB;      -- iter-33: per-operation audit element
+    v_size_warn_at  INT;
+    v_size_warning  BOOLEAN := FALSE;
 BEGIN
     -- ── Zero-chunk guard (v0.3.1) ────────────────────────────────────────
     -- Refuse to create or update a document with no chunks. Three reasons:
@@ -1506,21 +1529,68 @@ BEGIN
         setweight(to_tsvector('english', COALESCE(c->>'content', '')), 'B')
     FROM jsonb_array_elements(p_chunks) AS c;
 
-    -- ── Audit entry ──────────────────────────────────────────────────
-    PERFORM cerefox_create_audit_entry(
-        p_document_id := v_doc_id,
-        p_version_id := v_version_id,
-        p_operation := v_operation,
-        p_author := p_author,
-        p_author_type := p_author_type,
-        p_size_before := CASE WHEN v_operation = 'create' THEN NULL ELSE v_old_chars END,
-        p_size_after := v_total_chars,
-        p_description := v_operation || ': ' || p_title || ' (' || v_chunk_count || ' chunks, ' || v_total_chars || ' chars)'
-            || CASE WHEN p_last_write_wins AND v_operation = 'update-content'
-                    THEN ' [last-write-wins]' ELSE '' END
-    );
+    -- ── Audit entries ────────────────────────────────────────────────
+    -- p_operations NULL (every pre-iter-33 caller): one entry, exactly as before.
+    -- p_operations set (cerefox_insert / cerefox_edit): one entry per operation,
+    -- each under its own operation value, so the trail distinguishes "added to"
+    -- from "rewrote" from "removed" instead of flattening to 'update-content'.
+    -- The CHECK constraint on cerefox_audit_log.operation is the allow-list: a
+    -- handler label that drifts from it aborts this transaction rather than
+    -- silently recording something the readers of the trail cannot interpret.
+    IF p_operations IS NULL OR jsonb_array_length(p_operations) = 0 THEN
+        PERFORM cerefox_create_audit_entry(
+            p_document_id := v_doc_id,
+            p_version_id := v_version_id,
+            p_operation := v_operation,
+            p_author := p_author,
+            p_author_type := p_author_type,
+            p_size_before := CASE WHEN v_operation = 'create' THEN NULL ELSE v_old_chars END,
+            p_size_after := v_total_chars,
+            p_description := v_operation || ': ' || p_title || ' (' || v_chunk_count || ' chunks, ' || v_total_chars || ' chars)'
+                || CASE WHEN p_last_write_wins AND v_operation = 'update-content'
+                        THEN ' [last-write-wins]' ELSE '' END
+        );
+    ELSE
+        FOR v_op IN SELECT * FROM jsonb_array_elements(p_operations) LOOP
+            PERFORM cerefox_create_audit_entry(
+                p_document_id := v_doc_id,
+                p_version_id := v_version_id,
+                p_operation := v_op->>'op',
+                p_author := p_author,
+                p_author_type := p_author_type,
+                -- Sizes describe the whole write, so they go on the last entry
+                -- only; per-operation sizes would double-count a single write.
+                p_size_before := NULL,
+                p_size_after := NULL,
+                p_description := COALESCE(v_op->>'detail', v_op->>'op')
+            );
+        END LOOP;
+        -- One sizing entry for the write as a whole.
+        PERFORM cerefox_create_audit_entry(
+            p_document_id := v_doc_id,
+            p_version_id := v_version_id,
+            p_operation := v_operation,
+            p_author := p_author,
+            p_author_type := p_author_type,
+            p_size_before := CASE WHEN v_operation = 'create' THEN NULL ELSE v_old_chars END,
+            p_size_after := v_total_chars,
+            p_description := 'partial edit: ' || p_title || ' ('
+                || jsonb_array_length(p_operations) || ' operation(s), '
+                || v_chunk_count || ' chunks, ' || v_total_chars || ' chars)'
+        );
+    END IF;
 
-    RETURN QUERY SELECT v_doc_id, v_chunk_count, v_total_chars, v_operation, v_version_id;
+    -- ── Size signal (iter-33) ────────────────────────────────────────
+    -- Dormant unless an operator sets a threshold. Never blocks the write: a
+    -- size policy is not a correctness rule, and an agent that only ever
+    -- inserts otherwise never sees the document grow past its split point.
+    v_size_warn_at := cerefox_config_int('document_size_warning_chars', 0);
+    IF v_size_warn_at > 0 AND v_total_chars > v_size_warn_at THEN
+        v_size_warning := TRUE;
+    END IF;
+
+    RETURN QUERY SELECT v_doc_id, v_chunk_count, v_total_chars, v_operation,
+                        v_version_id, p_content_hash, v_size_warning;
 END;
 $$;
 
@@ -1584,12 +1654,19 @@ SET search_path = public, pg_catalog
 AS $$
     INSERT INTO cerefox_audit_log (
         document_id, version_id, operation, author, author_type,
-        size_before, size_after, description
+        size_before, size_after, description, created_at
     )
     VALUES (
         p_document_id, p_version_id, p_operation, p_author,
         CASE WHEN p_author_type IN ('user', 'agent') THEN p_author_type ELSE 'user' END,
-        p_size_before, p_size_after, p_description
+        p_size_before, p_size_after, p_description,
+        -- clock_timestamp(), not the NOW() default: NOW() is the TRANSACTION's
+        -- start time, so every audit entry written by one cerefox_edit batch
+        -- would share a timestamp and the order of operations inside the batch
+        -- would be unrecoverable from the trail (iter-33). clock_timestamp()
+        -- advances within a transaction, so entries stay orderable. Outside a
+        -- batch this is indistinguishable from the old behaviour.
+        clock_timestamp()
     )
     RETURNING id AS audit_id, cerefox_audit_log.created_at;
 $$;
@@ -2148,7 +2225,12 @@ DECLARE
         -- surviving history depended on who saved last.
         'version_retention_hours', 'version_cleanup_enabled',
         -- Optional features, off by default (iteration 29).
-        'relations_enabled'
+        'relations_enabled',
+        -- Iteration 33: flag writes that push a document past this many chars
+        -- (0 = off). Partial edits make writes cheap, so an insert-only agent
+        -- never assembles the document and never sees it grow past its split
+        -- point. A signal in the write's response, never a refusal.
+        'document_size_warning_chars'
     ];
 BEGIN
     IF NOT (p_key = ANY(v_allowed)) THEN
@@ -2343,7 +2425,10 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    SELECT '0.10.6'::TEXT;
+    -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
+    -- the partial-edit surface, and both migrations (0019, 0020) are in the
+    -- sequence, so a store deploying this gets everything from both lines.
+    SELECT '0.11.0'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

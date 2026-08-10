@@ -74,7 +74,7 @@ paths go through **Edge Functions**, which the free tier caps at 500,000/month:
 500K/month is generous for a single human-driven agent. But **automated or
 high-frequency agents on the remote path** can approach it. The lever: point those
 agents at the **local stdio MCP server** (`cerefox mcp`) instead of the remote Edge
-Function — it exposes the identical 10 tools, talks to the Data API directly, and
+Function — it exposes the identical 12 core tools (plus the 4 relation tools when enabled), talks to the Data API directly, and
 costs **zero** Edge Function invocations (bonus: lower latency, and it works offline
 against a reachable database). If you do exceed the free EF quota, Supabase's Pro
 plan ($25/mo, 2M invocations included) is the next step.

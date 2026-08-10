@@ -43,7 +43,7 @@ cerefox/
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
 │   ├── db-status/                 # Schema-version-mismatch banner, status checks
 │   ├── embeddings/                # OpenAI + local ONNX (nomic) embedding helpers
-│   ├── mcp-tools/                 # 10 MCP tool handlers shared by remote + local
+│   ├── mcp-tools/                 # 12 MCP tool handlers shared by remote + local
 │   └── cli-core/                  # CLI helpers (exit, output, argv, prompts)
 ├── packages/
 │   └── memory/                    # @cerefox/memory npm package — both bins (v0.5+)
@@ -315,7 +315,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
 | `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/`. Also an OAuth 2.1 protected resource (iter-28A, `--no-verify-jwt` + in-function auth) for cloud clients; the static path takes the **Cerefox access token** (iter-28E) | Claude Code, Cursor, Claude Desktop (remote, via the Cerefox token); **claude.ai web + mobile (via OAuth)**. Local agents prefer the local MCP. |
 
-The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 10 MCP tools** over stdio, importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md`.
+The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 12 MCP tools** over stdio (plus 4 dormant relation tools), importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md`.
 
 ### Deploying the server side: `cerefox server deploy`
 
@@ -422,14 +422,18 @@ Kept accurate and current at all times:
 |------|-------|-------------|
 | `docs/requirements-and-specs.md` | Requirements | A requirement changes or is added/removed |
 | `docs/solution-design.md` | Architecture | A design decision is made or revised |
-| `docs/plan.md` | Progress + **cross-session hand-off** | A task starts, completes, or is re-scoped |
+| `docs/plan.md` | Live status + active iteration (**cross-session hand-off**) | A task starts, completes, or is re-scoped |
+| `docs/plans/iteration-NN-*.md` | The active iteration's detailed plan | Any step in that iteration moves |
+| `docs/plans/history.md` | Closed iterations (master history log) | An iteration closes |
 | GitHub issues | Backlog | A new idea or future task surfaces (`docs/TODO.md` retired at v1.0.6) |
 | `docs/e2e-use-cases.md` | Testing | An e2e test is added, removed, or changes status |
 | `CLAUDE.md` | Conventions | Project conventions or structure changes |
 
 **Rule**: when implementing a feature, update the relevant docs in the same commit/session. Another developer or AI agent should be able to read these files at any point and have an accurate picture of what is built, what is planned, and why.
 
-**`docs/plan.md` is the primary cross-session hand-off artifact** — its main consumer is the *next* AI session continuing the work. Read its `## Current Focus` block (at the bottom) first to learn where the project is and what's next before touching code, and **keep it current as part of finishing any work** (update the relevant iteration entry + `Current Focus` in the same session). It tracks history/progress at a higher level than git; it is NOT a second changelog — release notes live in `CHANGELOG.md`, design rationale in `docs/specs/`. The doc's own header explains its structure and rules in full.
+**`docs/plan.md` is the primary cross-session hand-off artifact** — its main consumer is the *next* AI session continuing the work. It is deliberately short: `## Current Focus` is at the **top**, followed by the active iteration, whose detailed plan lives in its own file under `docs/plans/`. Closed iterations move to `docs/plans/history.md` (the master history log, which indexes the per-iteration plans). Read `Current Focus` first to learn where the project is and what's next before touching code, and **keep it current as part of finishing any work** (update the iteration's plan + `Current Focus` in the same session).
+
+*(Structure note: this was one 4,500-line file with the live status at the very bottom until 2026-08-09, when a scripted edit searching for the `## Current Focus` heading matched the cross-reference to it in the header instead and truncated the entire history. Restored from git. Anchor scripted edits to line-start patterns and assert the match is unique.)* It tracks history/progress at a higher level than git; it is NOT a second changelog — release notes live in `CHANGELOG.md`, design rationale in `docs/specs/`. The doc's own header explains its structure and rules in full.
 
 ### Cerefox Decision Log (lives in the Cerefox KB, NOT in the repo)
 
@@ -465,7 +469,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 ## Quick Reference
 
 - **Docs**: `docs/plan.md` for current status; GitHub issues for the backlog
-- **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 8 tools, key rules, workflows)
+- **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 12 core tools, key rules, workflows)
 - **Schema**: `src/cerefox/db/schema.sql`
 - **Config**: `.env` file or environment variables (see `_shared/config/`)
 - **Max response size**: defaults to 200000 bytes, configurable via `CEREFOX_MAX_RESPONSE_BYTES`. Enforced on the MCP / Edge Function paths **and the CLI** (the CLI also accepts a per-call `--max-bytes`). The **web UI is unlimited** (no byte budget).

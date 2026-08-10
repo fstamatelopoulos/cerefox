@@ -9,7 +9,73 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+- **Partial document edits — agents can change part of a document without
+  resending it** (#186). Two new MCP tools plus a CLI surface:
+  - **`cerefox_insert`** — add text at `end_of_document`, `end_of_section`,
+    `after_heading` or `before_heading`. Purely additive: it is structurally
+    incapable of removing content, which makes the "I meant to append" mistake
+    unable to destroy anything. Annotated **non-destructive**, so a client can
+    grant it without prompting.
+  - **`cerefox_edit`** — one to many operations (`insert`, `replace_section`,
+    `delete_section`) applied **atomically** in a single write. Changes that
+    belong together go in one call, so a table row and the total it feeds cannot
+    end up disagreeing. Annotated destructive.
+  - **`cerefox_get_document` outline mode** (`outline: true`) — heading paths,
+    per-section sizes and the `content_hash`, without the body. The paths come
+    back in exactly the form `anchor_heading` accepts, so discovery and editing
+    share one addressing language.
+  - **CLI**: `cerefox document insert`, `cerefox document edit-parts`,
+    `cerefox document get --outline`. Same shared handlers as the MCP tools, so
+    the two cannot diverge.
+
+  Anchors are an exact heading line or a ` > ` parent path. **Nothing is ever
+  guessed**: an absent anchor errors rather than falling back to appending, a
+  repeated heading errors with the paths that disambiguate it, and a section
+  holding both its own content and sub-sections errors with both `section_part`
+  options. Every edit requires `expected_content_hash` and there is **no
+  last-write-wins** — on these tools a conflict is information you need, not an
+  obstacle to route around.
+
+  The MCP tool surface goes from 10 to 12 core tools. The 4 document-relation
+  tools added in v1.1.0 remain dormant, hidden until `cerefox config set
+  relations_enabled true`.
+  The contract was shaped by four real agent sessions before any code was
+  written, and their usage reversed the design twice. Spec:
+  [`docs/specs/partial-document-edits-design.md`](docs/specs/partial-document-edits-design.md).
+
+### Fixed
+- **`cerefox_ingest` now returns `content_hash` when it creates a document**
+  (#189). It previously returned one only on updates, so the author of a new
+  document had two options for its first edit: re-read a document it had just
+  written and already knew, or pass `last_write_wins`. Agents took the second,
+  which bypassed concurrency control on the first edit of **every** new
+  document. A document is now born holding its own token.
+
+- **`cerefox backup create` and `bun scripts/backup_create.ts` were two
+  implementations, and only one got fixed** (#166). The script pair carried its
+  own capture and restore logic, so the fixes that taught backups to record
+  project memberships (v1.0.7) and then relations and `lifecycle_status`
+  (v1.1.0) never reached them: they stayed on backup format 1, silently. That
+  mattered most where the scripts are pointed — `docs/guides/ops-scripts.md`
+  documents `bun scripts/backup_create.ts && bun scripts/db_migrate.ts` as the
+  pre-migration safety step, so the snapshot taken to make a migration
+  reversible was the incomplete one. Both scripts now delegate to the CLI, and
+  `_shared/backup` is deleted: one capture path, one restore path, one format.
+  Their flags are unchanged.
+
+### Changed
+- **Schema 0.10.5 → 0.11.0**, migrations 0019 and 0020. The audit log records
+  `insert` / `replace-section` / `delete-section` as distinct operations, so the
+  trail separates *added to* from *rewrote* from *removed*; a batch writes one
+  entry per operation. Audit entries are stamped with `clock_timestamp()` rather
+  than the transaction's `NOW()`, so the order of operations inside one write is
+  recoverable. New optional `document_size_warning_chars` config: when set,
+  writes report when a document passes that size — a signal, never a refusal,
+  because an agent that only ever inserts never assembles the document and so
+  never sees it grow. **Requires `cerefox server deploy`**; `minSchema` is
+  unchanged, so an un-redeployed server keeps working and simply lacks the new
+  tools.
 
 ---
 

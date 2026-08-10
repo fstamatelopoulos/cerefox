@@ -753,6 +753,10 @@ Deno.serve(async (req: Request) => {
       title: title.trim(),
       chunk_count: chunks.length,
       total_chars: totalChars,
+      // #189: the concurrency token, on CREATE as well as update. Without it the
+      // author of a new document had to re-read it, or pass last_write_wins, to
+      // make its first edit — and callers took the second.
+      content_hash: ingestResult[0].content_hash ?? contentHash,
       project_id: projectId,
       project_name: project_name ?? null,
     }),
