@@ -9,19 +9,118 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-### Fixed
-- **The false `reindex` claim from #164 survived in a third file.** v1.0.6
-  corrected `content-format.md` and `doctor`; v1.1.0 caught a second copy. A
-  third sat in `docs/guides/migration-1.0.md` — the guide a user follows *while
-  upgrading to 1.0* — telling them to run `cerefox server reindex` to convert
-  chunk formats now. It cannot: reindex re-embeds chunks in place and never
-  re-chunks, so the stored format does not advance, and the command reports
-  success either way. Corrected to `cerefox server migrate-format`, with the
-  same "not reindex" note the content-format guide carries. The design doc's
-  quotation of doctor's original wording is annotated as superseded rather than
-  rewritten, since that section records what was specified at the time.
+Consolidated from `1.3.0-beta.1` … `beta.4`; the per-beta sections below remain
+as granular history.
 
----
+> ### Upgrading — read this first
+>
+> **`cerefox server deploy` is required.** Schema 0.10.5 → 0.11.0 (migrations
+> 0019 and 0020), and the Edge Functions changed too, so deploy both — a
+> `--schema-only` run leaves remote-MCP agents without the new tools. `minSchema`
+> is unchanged, so an un-redeployed server keeps working and simply lacks them;
+> a 1.3.0 client against a 0.10.x server was verified working.
+
+### Added
+- **Partial document edits — an agent can change part of a document without
+  resending it** (#186). The agent sends what changed; the server reconstructs,
+  applies, re-chunks, re-embeds and writes. Two MCP tools:
+  - **`cerefox_insert`** — add text at `end_of_document`, `end_of_section`,
+    `after_heading` or `before_heading`. Purely additive: it cannot remove or
+    overwrite anything, so a mistaken call cannot destroy content. Annotated
+    **non-destructive**, so a client can grant it without prompting.
+  - **`cerefox_edit`** — one to many operations (`insert`, `replace_section`,
+    `delete_section`) applied **atomically**. Changes that belong together go in
+    one call, so a table row and the total it feeds cannot end up disagreeing.
+    Annotated destructive.
+
+  Anchors are an exact heading line or a ` > ` parent path. **Nothing is ever
+  guessed**: an absent anchor errors rather than falling back to appending, a
+  repeated heading errors with the paths that disambiguate it, and a section with
+  child headings errors with both `section_part` options rather than choosing
+  where "the end of the section" is. Every write requires `expected_content_hash`
+  and there is **no last-write-wins** — on these tools a conflict is information
+  you need, not an obstacle.
+
+  Why it matters: re-sending a whole document to change three lines means
+  reproducing every untouched character verbatim, and any drift silently rewrites
+  content nobody asked to touch. One agent reported doing this repeatedly across
+  6,000–13,000 character documents; another destroyed a day's entries by sending
+  only a new section to a call whose contract is *replace*. The contract was
+  shaped by six real agent sessions before and during the beta, and their usage
+  reversed the design three times.
+
+- **`cerefox_get_document` outline mode** (`outline: true`) — heading paths,
+  per-section sizes and the `content_hash`, without the body. The paths come back
+  in exactly the form `anchor_heading` accepts, so discovery and editing share one
+  addressing language. This is what makes editing-without-reading actually viable.
+
+- **CLI**: `cerefox document insert`, `cerefox document edit-parts`,
+  `cerefox document get --outline`. Same shared handlers as the MCP tools, so the
+  two cannot diverge.
+
+- **Partial edits report what they removed.** The response carries the previous
+  size, and a write that removes more than a quarter of a document warns and
+  points at `cerefox_list_versions`. A section runs to the next same-or-higher
+  heading *or to the end of the document*, so the last section owns anything
+  appended after it — correct addressing, but silent until now.
+
+- **`document_size_warning_chars`** (default 0, off) — flags writes that push a
+  document past a configured size. Partial edits make writes cheap, so an agent
+  that only inserts never assembles the document and never sees it grow.
+
+### Fixed
+- **`cerefox_ingest` now returns `content_hash` when it creates a document**
+  (#189). It previously returned one only on updates, so the author of a new
+  document had two options for its first edit: re-read a document it had just
+  written, or pass `last_write_wins`. Agents took the second, bypassing
+  concurrency control on the first edit of **every** new document. A document is
+  now born holding its own token.
+
+- **A refused edit told the agent nothing.** Tool failures were returned as
+  JSON-RPC protocol errors, which at least one major client renders as a generic
+  dialog with the body discarded — so every carefully written refusal reached the
+  agent unreadable. MCP puts execution failures in the result with
+  `isError: true` precisely so the model can act on them; both transports now do
+  that. The candidate headings, the two `section_part` options, the conflict's
+  current hash and recovery steps now arrive where they are useful.
+
+- **`cerefox backup create` and `bun scripts/backup_create.ts` were two
+  implementations, and only one was ever fixed** (#166). The scripts kept their
+  own logic and never received the fixes that taught backups to capture project
+  memberships (v1.0.7), then relations and `lifecycle_status` (v1.1.0) — so they
+  sat on backup format 1. `ops-scripts.md` documents those scripts as the
+  *pre-migration safety step*, so the snapshot taken to make a migration
+  reversible was the incomplete one. Both now delegate to the CLI;
+  `_shared/backup` is deleted.
+
+- **`cerefox server deploy` could not deploy `cerefox-mcp` from the published
+  package.** The server-asset bundler copies an allow-list of `_shared` subtrees,
+  and the new module was not on it, so eight of nine functions deployed and the
+  ninth could not bundle. A test now walks the Edge Function import graph and
+  fails if the list is missing anything.
+
+- **The false `reindex` claim from #164 survived in a third file.** The guide a
+  user reads *while upgrading to 1.0* still told them to run
+  `cerefox server reindex` to convert chunk formats. It cannot — it re-embeds
+  chunks in place and never re-chunks — while reporting success either way. Use
+  `cerefox server migrate-format`.
+
+### Changed
+- **Schema 0.10.5 → 0.11.0**, migrations 0019 and 0020. The audit log records
+  `insert` / `replace-section` / `delete-section` distinctly, so the trail
+  separates *added to* from *rewrote* from *removed*; a batch writes one entry
+  per operation, stamped with `clock_timestamp()` so their order survives.
+  `cerefox_ingest_document` gained `p_operations`, and returns `content_hash` and
+  `size_warning`.
+
+- **The MCP tool surface is 12 core tools** (from 10). The four document-relation
+  tools added in v1.1.0 remain dormant, hidden until
+  `cerefox config set relations_enabled true`. Documented counts are now asserted
+  against the code, after 8, 10, 12 and 16 were all in circulation at once.
+
+- **CLI partial edits are recorded as user writes, MCP as agent writes.** The
+  author type is derived from the access path rather than taken on trust, so an
+  agent cannot claim to be a user by passing a string.
 
 ## [v1.3.0-beta.4] -- 2026-08-10
 
