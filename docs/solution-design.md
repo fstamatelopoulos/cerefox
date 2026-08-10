@@ -1029,7 +1029,7 @@ Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
 subprocess via npx (Node ≥20 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
-as the local server, so both expose the identical 12 tools. Path 3's primitive
+as the local server, so both expose the identical 12 core tools. Path 3's primitive
 Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers
 authenticate with a **Cerefox access token** (`cerefox token generate`),
 validated in-function; Edge Functions use the service-role key internally. The

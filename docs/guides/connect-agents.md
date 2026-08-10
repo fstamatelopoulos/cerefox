@@ -72,7 +72,7 @@ in the container.
 - **Easiest:** `cerefox-local configure-agent` wires it up (registers an MCP server named
   `cerefox-local` with Claude Code if the `claude` CLI is present, else prints the snippet).
 - **Manual:** point the client at `command: cerefox-local, args: ["mcp"]` (stdio). That proxies
-  to `cerefox mcp` in the container; the same 10 tools, identical behavior to every other path.
+  to `cerefox mcp` in the container; the same 12 core tools, identical behavior to every other path.
 - The cloud paths above (remote Edge Function, GPT Actions) **do not apply** to a local-only
   install — there are no Edge Functions.
 
@@ -131,7 +131,7 @@ in the container.
 
 ### What it is
 
-The local Cerefox MCP server runs on your machine and exposes the same 10 tools as the remote
+The local Cerefox MCP server runs on your machine and exposes the same 12 core tools as the remote
 Edge Function, communicating with clients over stdio.
 
 The local server ships as an npm package — **[`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)** — built with the official `@modelcontextprotocol/sdk`.
@@ -186,7 +186,7 @@ Once configured, every Path A client has these tools:
 | `cerefox_set_document_projects` | Set a document's project memberships to exactly the given list (destructive replace; metadata-only, no content change). Use `cerefox_ingest` with singular `project_name` for non-destructive "add". |
 | `cerefox_get_help` | Retrieve Cerefox conventions (the same content as `AGENT_QUICK_REFERENCE.md`) over MCP. Optional `topic` parameter does a case-insensitive H2 substring match. Call this whenever you are uncertain. |
 
-> All 10 tools are available on both Path A (local and remote MCP) and Path B (GPT Actions
+> All 12 core tools are available on both Path A (local and remote MCP) and Path B (GPT Actions
 > via dedicated Edge Functions, except `cerefox_get_help` which is MCP-only). MCP tools use
 > `project_name` (human-readable); primitive Edge Functions (Path B) use `project_id` (UUID).
 
@@ -212,7 +212,7 @@ For the full tool reference, search Cerefox for "How AI Agents Use Cerefox".
 After setup, ask your client:
 
 > "What tools do you have available?"
-> Expected: 10 tools listed (`cerefox_search`, `cerefox_ingest`, `cerefox_get_document`,
+> Expected: 12 tools listed (`cerefox_search`, `cerefox_ingest`, `cerefox_insert`, `cerefox_edit`, `cerefox_get_document`,
 > `cerefox_list_versions`, `cerefox_list_projects`, `cerefox_list_metadata_keys`,
 > `cerefox_metadata_search`, `cerefox_set_document_projects`, `cerefox_get_audit_log`,
 > `cerefox_get_help`).
@@ -306,7 +306,7 @@ pick it up automatically.
 to primitive Edge Functions. This means each MCP tool call costs a single Edge Function
 invocation.
 
-A single HTTPS URL gives any remote-capable MCP client all 10 tools with full hybrid
+A single HTTPS URL gives any remote-capable MCP client all 12 core tools with full hybrid
 search -- no Python, no `uv`, no local repository clone needed.
 
 **URL format:**
@@ -487,7 +487,7 @@ Replace `<your-project-ref>` with your Supabase project ref.
 **Step 3 — Verify:**
 
 Launch Codex and use the `/mcp` slash command to confirm the `cerefox` server is connected
-and all 10 tools are listed.
+and all 12 tools are listed.
 
 **Notes:**
 - `bearer_token_env_var` is the **name** of the env var (e.g. `"CEREFOX_ACCESS_TOKEN"`), not the
@@ -1136,7 +1136,7 @@ user + `CEREFOX_OAUTH_OWNER_ID` pin, and register the Claude OAuth App
    Client Secret from the pre-registered OAuth App (setup-supabase Step 7d).
 5. Save. Claude runs the OAuth flow → redirects you to the **Cerefox consent page** (sign
    in with the owner email/password from Step 7c, then **Allow**) → returns to Claude. The
-   connector shows as connected with **10 tools**. (If you've approved before, Supabase
+   connector shows as connected with **12 tools** (16 if you have enabled document relations). (If you've approved before, Supabase
    auto-consents and the page just flashes through — that's expected.)
 6. **Mobile**: connectors are account-level, so `CerefoxMCP` appears in the Claude mobile
    app automatically — run one search from your phone to confirm.

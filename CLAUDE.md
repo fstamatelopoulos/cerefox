@@ -43,7 +43,7 @@ cerefox/
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
 │   ├── db-status/                 # Schema-version-mismatch banner, status checks
 │   ├── embeddings/                # OpenAI + local ONNX (nomic) embedding helpers
-│   ├── mcp-tools/                 # 10 MCP tool handlers shared by remote + local
+│   ├── mcp-tools/                 # 12 MCP tool handlers shared by remote + local
 │   └── cli-core/                  # CLI helpers (exit, output, argv, prompts)
 ├── packages/
 │   └── memory/                    # @cerefox/memory npm package — both bins (v0.5+)
@@ -469,7 +469,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 ## Quick Reference
 
 - **Docs**: `docs/plan.md` for current status; GitHub issues for the backlog
-- **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 8 tools, key rules, workflows)
+- **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 12 core tools, key rules, workflows)
 - **Schema**: `src/cerefox/db/schema.sql`
 - **Config**: `.env` file or environment variables (see `_shared/config/`)
 - **Max response size**: defaults to 200000 bytes, configurable via `CEREFOX_MAX_RESPONSE_BYTES`. Enforced on the MCP / Edge Function paths **and the CLI** (the CLI also accepts a per-call `--max-bytes`). The **web UI is unlimited** (no byte budget).

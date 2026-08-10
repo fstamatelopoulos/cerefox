@@ -159,7 +159,7 @@ _shared/
   db-status/   reusable schema-introspection (used by db_status.ts; v0.5's
                `cerefox doctor` will import the same module)
   embeddings/  OpenAI + local ONNX (nomic) embedding helpers
-  mcp-tools/   the 10 MCP tool handlers, shared by the remote Edge Function
+  mcp-tools/   the 12 MCP tool handlers, shared by the remote Edge Function
                and the local @cerefox/memory server
   __tests__/   Bun tests — run `cd _shared && bun test`
 ```

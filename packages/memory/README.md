@@ -148,7 +148,7 @@ For manual configuration (any other MCP client), the canonical entry is:
 ```
 
 Once configured, any of these clients can search + write your Cerefox KB via
-the 12 MCP tools (`cerefox_search`, `cerefox_ingest`, `cerefox_insert`,
+the 12 core MCP tools (`cerefox_search`, `cerefox_ingest`, `cerefox_insert`,
 `cerefox_edit`, `cerefox_get_document`, `cerefox_list_versions`,
 `cerefox_list_projects`, `cerefox_list_metadata_keys`,
 `cerefox_metadata_search`, `cerefox_set_document_projects`,
