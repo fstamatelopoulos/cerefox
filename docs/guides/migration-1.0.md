@@ -61,7 +61,9 @@ The migration is **lazy and safe**:
 - Existing documents keep the legacy format and reconstruct **exactly as before** — nothing
   re-processes, nothing re-embeds.
 - A document moves to the new format automatically the next time it is edited/saved. To
-  convert everything now instead, run `cerefox server reindex`.
+  convert everything now instead, run `cerefox server migrate-format` (v1.1.0-beta.4 or
+  later). **Not `cerefox server reindex`** — reindex re-embeds chunks in place and never
+  re-chunks, so the stored format does not advance (#164).
 - `cerefox doctor` shows how many documents still use the legacy format.
 
 Details: `cerefox guides show content-format` (or [`content-format.md`](content-format.md)).

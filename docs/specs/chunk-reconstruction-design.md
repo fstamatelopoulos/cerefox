@@ -129,7 +129,14 @@ the archived copy.** The format belongs *with the chunks*, exactly like `version
 ### 4.5 Doctor check
 `cerefox doctor` reports migration progress:
 *"N of M documents use the legacy reconstruction format (auto-convert on next edit;
-run `cerefox server reindex` to convert now)."* Informational, not a gate. Needs the
+run `cerefox server reindex` to convert now)."* Informational, not a gate.
+
+> **Superseded (#164).** That wording shipped and was wrong: `reindex` re-embeds
+> chunks in place and never re-chunks, so the format never advanced. The command
+> that does the conversion is `cerefox server migrate-format`, added in v1.0.7
+> (and only working from v1.1.0-beta.4 — see the CHANGELOG). Doctor's text was
+> corrected in v1.0.6. Left here as written because this section records what was
+> specified at the time. Needs the
 `content_format` column, so it ships with Phase 1. A fresh install shows 0 legacy.
 
 ## 5. Acceptance tests
