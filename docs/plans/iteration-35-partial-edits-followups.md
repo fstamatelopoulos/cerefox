@@ -52,8 +52,9 @@ rather than expanding the iteration.
 - Confirm `feat/1.4.0-section-read` is current with `main`.
 - Bring **staging** to the tip of this branch (`server deploy`), confirm
   `doctor` prints `[STAGING]` before anything writes.
-- Close **#189** — already shipped in v1.3.0 (`ingest.ts` create path returns
-  `content_hash`); verify once against staging, then close with the evidence.
+- ✅ **#189 closed** — verified live over MCP stdio against staging: create
+  returns `content_hash: b7bb647a… — pass it as expected_content_hash`.
+  Surfaced that the **CLI** create path still omits it → folded into phase 6.
 
 ### Phase 1 — #171 typecheck coverage (first, deliberately)
 `bun run typecheck` is `cd _shared && tsc --noEmit`. `packages/memory` — the CLI,
@@ -112,6 +113,10 @@ RPC for callers that *omit* it; the CLI never omits.
 - Send `source` only when the user passed it.
 - Regression test at the CLI level, not just the RPC level — that is where the
   gap was.
+- **Also here: the CLI create path prints no `content_hash`.** Found in phase 0
+  while verifying #189, which fixed exactly this on the MCP path. Same defect,
+  different surface: a CLI user who creates a document has no token for its
+  first edit. Both are `document ingest`, so they land together.
 
 ### Phase 7 — #168 environment-labelled MCP server name
 `configure-agent` registers under the fixed name `cerefox`, and agent configs are
