@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.3.0-beta.1] -- 2026-08-10
+
 ### Added
 - **Partial document edits — agents can change part of a document without
   resending it** (#186). Two new MCP tools plus a CLI surface:
