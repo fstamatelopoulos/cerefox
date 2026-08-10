@@ -190,7 +190,8 @@ export class IngestionDbBridge {
   async ingestDocumentRpc(args: {
     documentId: string | null;
     title: string;
-    source: string;
+    /** null = "not provided": create uses the RPC default, update keeps the stored value (#191, #193). */
+    source: string | null;
     sourcePath: string | null;
     contentHash: string;
     metadata: Record<string, unknown>;
