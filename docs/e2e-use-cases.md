@@ -141,6 +141,19 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 
 | Suite | Test | Use Case | Status |
 |-------|------|----------|--------|
+| partial-edits (live) | #189 | Create returns a usable `content_hash`; edit immediately, no intervening read | Done |
+| partial-edits (live) | insert | `end_of_document` appends and preserves every line of the original | Done |
+| partial-edits (live) | insert | `end_of_section` lands inside the anchored section | Done |
+| partial-edits (live) | ambiguity | Nested section without `section_part` → refuses, names both options, document untouched | Done |
+| partial-edits (live) | `section_part` | `own_body` writes before the first child heading | Done |
+| partial-edits (live) | atomic batch | Three coordinated changes in ONE write; row and the total it feeds agree | Done |
+| partial-edits (live) | all-or-nothing | A failing operation mid-batch writes nothing; reports the failing index | Done |
+| partial-edits (live) | delete scopes | `body_only` keeps the heading; `heading_and_body` removes both | Done |
+| partial-edits (live) | concurrency | Stale token rejected by the RPC's CAS; the first writer's work survives | Done |
+| partial-edits (live) | outline | Structure + hash without the body; a returned path is usable as an anchor | Done |
+| partial-edits (live) | audit | One entry per operation, in order, with distinct operation values | Done |
+| partial-edits (live) | no-op | An edit producing identical content is reported, not written | Done |
+| partial-edits (live) | purge | Purge refuses a non-soft-deleted document; succeeds after; records both steps | Done |
 | write-commands (CLI) | update-flow | Changed content without `--expected-content-hash` → exit non-zero + `CEREFOX_TOKEN_REQUIRED` | Done |
 | write-commands (CLI) | update-flow | `document get --json` → grab `content_hash` → update with `--expected-content-hash` → updated | Done |
 | write-commands (CLI) | update-flow | Re-using the stale hash → exit non-zero + `CEREFOX_CONFLICT` | Done |

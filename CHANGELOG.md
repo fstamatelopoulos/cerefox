@@ -37,6 +37,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   last-write-wins** — on these tools a conflict is information you need, not an
   obstacle to route around.
 
+  The MCP tool surface goes from 10 to 12 (plus the 4 dormant relation tools).
   The contract was shaped by four real agent sessions before any code was
   written, and their usage reversed the design twice. Spec:
   [`docs/specs/partial-document-edits-design.md`](docs/specs/partial-document-edits-design.md).
@@ -49,8 +50,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   which bypassed concurrency control on the first edit of **every** new
   document. A document is now born holding its own token.
 
+- **`cerefox backup create` and `bun scripts/backup_create.ts` were two
+  implementations, and only one got fixed** (#166). The script pair carried its
+  own capture and restore logic, so the fixes that taught backups to record
+  project memberships (v1.0.7) and then relations and `lifecycle_status`
+  (v1.1.0) never reached them: they stayed on backup format 1, silently. That
+  mattered most where the scripts are pointed — `docs/guides/ops-scripts.md`
+  documents `bun scripts/backup_create.ts && bun scripts/db_migrate.ts` as the
+  pre-migration safety step, so the snapshot taken to make a migration
+  reversible was the incomplete one. Both scripts now delegate to the CLI, and
+  `_shared/backup` is deleted: one capture path, one restore path, one format.
+  Their flags are unchanged.
+
 ### Changed
-- **Schema 0.10.5 → 0.11.0**, migration 0019. The audit log records
+- **Schema 0.10.5 → 0.11.0**, migrations 0019 and 0020. The audit log records
   `insert` / `replace-section` / `delete-section` as distinct operations, so the
   trail separates *added to* from *rewrote* from *removed*; a batch writes one
   entry per operation. Audit entries are stamped with `clock_timestamp()` rather

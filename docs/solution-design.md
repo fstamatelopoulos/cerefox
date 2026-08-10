@@ -748,6 +748,38 @@ The version snapshot captures the state *before* the update: `content_hash`, `me
 
 **Title matching note**: there is no `UNIQUE` constraint on `title` in `cerefox_documents`. If multiple documents share the same title (e.g., different versions manually ingested), `update_if_exists` matches the first result (by `created_at` ascending). For reliable update behavior, prefer ID-based updates. When using title-based updates, titles should be treated as unique identifiers by the caller -- a convention, not a DB constraint.
 
+### Partial edits (iteration 34)
+
+An agent changing part of a document sends only the change; the server
+reconstructs the current text, applies the operation, re-chunks, re-embeds and
+writes. Re-sending a whole document to change part of it is the main way agents
+lose data — they must reproduce the untouched remainder verbatim, and any drift
+silently rewrites content nobody asked to touch.
+
+**Where the composition lives.** Not an RPC: chunking is the TypeScript chunker
+and embedding needs an external API key that has no business in Postgres. Not
+Edge-Function-only: the CLI never touches Edge Functions. So it sits in
+`_shared/mcp-tools/`, which the local MCP server, the remote `cerefox-mcp` Edge
+Function and the CLI all import. **The final write is still the single
+`cerefox_ingest_document` RPC** — the handler assembles the full new content and
+calls the same atomic write-version-audit transaction every other content write
+uses, so the single-implementation principle holds.
+
+**Two tools, not one.** MCP annotations are declared per tool, so a combined
+tool would have to advertise its worst case and every additive insert would
+prompt as though it might delete a section. `cerefox_insert` is structurally
+incapable of removing content and declares itself non-destructive;
+`cerefox_edit` carries `replace_section` / `delete_section` and applies one to
+many operations atomically, so coordinated changes cannot half-apply.
+
+**Anchors never guess.** A heading that is absent, or that matches more than one
+section, or a section whose "end" is ambiguous because it holds both its own
+content and sub-sections — each errors and returns the candidates that resolve
+it. A silent wrong-location write is strictly worse than a refusal.
+
+Design of record:
+[`specs/partial-document-edits-design.md`](specs/partial-document-edits-design.md).
+
 ## 7. Document Versioning Design
 
 ### 7.1 Architecture: Chunks-Anchored Versioning
@@ -997,7 +1029,7 @@ Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
 subprocess via npx (Node ≥20 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
-as the local server, so both expose the identical 10 tools. Path 3's primitive
+as the local server, so both expose the identical 12 tools. Path 3's primitive
 Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers
 authenticate with a **Cerefox access token** (`cerefox token generate`),
 validated in-function; Edge Functions use the service-role key internally. The
@@ -1020,9 +1052,11 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_list_projects` | Read | List all projects with names, IDs, and descriptions for agent discovery. |
 | `cerefox_metadata_search` | Read | Find documents by metadata key-value criteria without a text search term. |
 | `cerefox_set_document_projects` | Write | Set (replace) the set of projects a document belongs to. |
+| `cerefox_insert` | Write (additive) | Add text at `end_of_document` / `end_of_section` / `after_heading` / `before_heading` without resending the document. Structurally cannot remove content. |
+| `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section`) applied **atomically** in a single write. |
 | `cerefox_get_help` | Read | Return the bundled agent quick-reference (tools, rules, workflows). |
 
-This is the full set of **10 MCP tools** exposed identically over both transports
+This is the full set of **12 MCP tools** exposed identically over both transports
 (remote `cerefox-mcp` Edge Function and local `cerefox mcp`), via the shared
 `_shared/mcp-tools/` handlers. Note: document **delete** is *not* an MCP tool — it
 is available only via the CLI / web UI / REST.
