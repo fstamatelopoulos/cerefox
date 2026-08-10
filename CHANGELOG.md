@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.3.0-beta.4] -- 2026-08-10
+
 ### Fixed
 - **A refused edit told the agent nothing.** Tool failures were returned as
   JSON-RPC protocol errors (`-32603`). The message survived on the wire, but a
