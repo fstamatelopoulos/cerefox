@@ -559,3 +559,96 @@ describe("partial edits never change provenance (#191)", () => {
     expect(captured.args!.p_source).toBeNull();
   });
 });
+
+describe("shrink reporting sees the insert-then-clobber case (#196)", () => {
+  // A large document whose last section is the append target — the exact shape
+  // the first version of this warning could not see, because the content lost
+  // is small precisely because it was just added.
+  const BIG_TAIL = `# Big\n\n## Body\n\n${"filler line\n".repeat(400)}\n## Log\n\nexisting entry\n`;
+
+  function clientFor(content: string, captured?: Captured) {
+    return {
+      rpc: (name: string, args: Record<string, unknown>) => {
+        if (name === "cerefox_get_document") {
+          return {
+            data: [
+              { doc_title: "Big", full_content: content, content_hash: HASH, total_chars: content.length },
+            ],
+            error: null,
+          };
+        }
+        if (name === "cerefox_ingest_document") {
+          if (captured) captured.ingestArgs = args;
+          // Report the size the operations actually produced.
+          const chunks = (args.p_chunks as Array<{ content: string }>) ?? [];
+          const total = chunks.reduce((n, c) => n + c.content.length, 0);
+          return {
+            data: [{ document_id: "doc-1", content_hash: "new".repeat(21) + "a", total_chars: total, size_warning: false }],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => ({ data: null, error: null }) }) }) }),
+    } as unknown as MCPSupabaseClient;
+  }
+
+  test("a replace on the LAST section warns even when the loss is a tiny fraction", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG_TAIL),
+        {
+          document_id: "d",
+          operations: [{ op: "replace_section", anchor_heading: "## Log", text: "replacement" }],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      // Under the old >25% gate this said nothing at all: the loss here is ~0.3%.
+      expect(out).toMatch(/removed \d+ characters/);
+      expect(out).toContain("LAST section");
+      expect(out).toContain("cerefox_list_versions");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("a mid-document replace still reports the loss, without the trailing-section explanation", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG_TAIL),
+        {
+          document_id: "d",
+          operations: [{ op: "replace_section", anchor_heading: "## Body", text: "small" }],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("an edit that grows the document says nothing about shrinking", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG_TAIL),
+        {
+          document_id: "d",
+          operations: [
+            { op: "insert", position: "end_of_document", text: "a new entry worth keeping" },
+          ],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).not.toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+});

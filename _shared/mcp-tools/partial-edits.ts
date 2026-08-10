@@ -23,6 +23,7 @@
 
 import {
   applyOperations,
+  parseOutline,
   validateOperations,
   type AppliedOperation,
   type EditOperation,
@@ -68,18 +69,72 @@ function defaultRequestor(ctx: ToolContext): string {
  * The full-document diff is deliberately not returned (§3.8), so the size delta
  * is the cheapest honest signal available.
  */
-function shrinkNote(before: number, after: number): string {
-  const lost = before - after;
-  if (lost <= 0) return "";
-  const pct = Math.round((lost / Math.max(before, 1)) * 100);
-  if (pct < 25) return "";
-  return (
-    `⚠ This edit removed ${lost} characters (${pct}% smaller). If you did not ` +
-    `intend that, note that a section runs to the next heading of the same or ` +
-    `higher level — or to the end of the document — so replacing or deleting ` +
-    `the LAST section also removes anything appended after it. ` +
-    `cerefox_list_versions has the previous content.\n`
+/**
+ * Did any destructive operation target a section that ran to the END of the
+ * document?
+ *
+ * This is the shape behind the whole warning. A section extends to the next
+ * heading of equal-or-higher level **or to EOF**, so the last section owns
+ * everything appended after it. An `end_of_document` insert lands inside that
+ * section, and a later `replace_section` on its heading removes it — correctly
+ * by the addressing rules, and silently.
+ *
+ * The offsets come from the document as it was BEFORE the edit, which is the
+ * document the caller was reasoning about.
+ */
+function touchedTrailingSection(before: string, applied: AppliedOperation[]): boolean {
+  const destructive = applied.filter(
+    (a) => a.op === "replace_section" || a.op === "delete_section",
   );
+  if (destructive.length === 0) return false;
+  const outline = parseOutline(before);
+  const end = before.trimEnd().length;
+  return destructive.some((a) => {
+    const node = outline.find((n) => n.path === a.path);
+    return node !== undefined && node.subtreeEnd >= end;
+  });
+}
+
+/**
+ * Report content loss (#196).
+ *
+ * The first version gated on a >25% ratio and so could not see the case it was
+ * built for. The loss that matters most is small *precisely because it was
+ * recently added*: append a 400-character entry to an 11,000-character
+ * document, then replace the last section, and 4% of the document silently
+ * takes the new entry with it. A percentage threshold is structurally blind to
+ * that — the more established the document, the smaller the fraction, the
+ * quieter the failure.
+ *
+ * So the ratio is no longer a gate on whether to speak, only on how loudly:
+ *
+ * - Any net loss is stated with its size. Cheap, and a caller who meant it
+ *   reads one clause.
+ * - A destructive operation on a section that ran to EOF gets the full
+ *   explanation at any size, because that is the sequence that surprises.
+ * - A large proportional loss gets it too, since that is worth a second look
+ *   whichever section it hit.
+ */
+function shrinkNote(before: string, afterChars: number, applied: AppliedOperation[]): string {
+  const beforeChars = before.length;
+  const lost = beforeChars - afterChars;
+  if (lost <= 0) return "";
+  const pct = Math.round((lost / Math.max(beforeChars, 1)) * 100);
+  const trailing = touchedTrailingSection(before, applied);
+
+  if (pct < 25 && !trailing) {
+    return `This edit removed ${lost} characters. cerefox_list_versions has the previous content.\n`;
+  }
+
+  const why = trailing
+    ? `You replaced or deleted the LAST section, and a section runs to the next ` +
+      `heading of the same or higher level — or to the end of the document — so ` +
+      `anything appended after it was inside it. `
+    : `If you did not intend that, note that a section runs to the next heading ` +
+      `of the same or higher level — or to the end of the document — so replacing ` +
+      `or deleting the LAST section also removes anything appended after it. `;
+
+  return `⚠ This edit removed ${lost} characters (${pct}% smaller). ${why}cerefox_list_versions has the previous content.\n`;
 }
 
 /** Audit `operation` values, matching the CHECK constraint widened by migration 0019. */
@@ -294,7 +349,7 @@ async function applyAndWrite(
     `Applied ${applied.length} operation(s) to "${doc.title}" (id: ${documentId}):\n${summary}\n\n` +
     `New content_hash: ${row?.content_hash ?? newHash}\n` +
     `Size: ${row?.total_chars ?? totalChars} chars (was ${doc.content.length}), ${chunks.length} chunk(s).\n` +
-    shrinkNote(doc.content.length, row?.total_chars ?? totalChars) +
+    shrinkNote(doc.content, row?.total_chars ?? totalChars, applied) +
     `Pass the new content_hash as expected_content_hash on your next edit.${warning}`
   );
 }
