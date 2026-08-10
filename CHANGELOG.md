@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.3.0-beta.2] -- 2026-08-10
+
 ### Fixed
 - **`cerefox server deploy` could not deploy `cerefox-mcp` from the published
   1.3.0-beta.1 package.** `scripts/bundle_server_assets.ts` copies an allow-list
