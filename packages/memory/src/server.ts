@@ -107,11 +107,24 @@ export function buildServer(): ServerHandle {
       const text = await tool.handler(supabase, args, ctx);
       return { content: [{ type: "text", text }] };
     } catch (err) {
-      // Re-throw; the SDK turns McpInvalidParams into -32602 and other
-      // errors into -32603 via its default error handling.
-      if (err instanceof McpInvalidParams) throw err;
+      // Return the failure as a TOOL RESULT, not a JSON-RPC protocol error.
+      //
+      // The MCP spec reserves protocol errors for things the caller got wrong
+      // about the protocol itself — unknown tool, malformed request — and says
+      // execution failures belong in the result with `isError: true`, so the
+      // model can read them and act.
+      //
+      // We were throwing, which the SDK maps to -32603. The message survived
+      // intact, but a client is free to render a protocol error however it
+      // likes: Claude Desktop shows a generic "Tool execution failed" dialog
+      // and drops the body. An agent hit exactly that during the 1.3.0 beta —
+      // every refusal (bad anchor, stale hash, missing section_part) arrived
+      // as an unreadable failure, so the carefully written recovery guidance,
+      // the candidate headings, the two section_part options, all of it, never
+      // reached the one party that could act on it. A refusal an agent cannot
+      // read is half a refusal.
       const message = err instanceof Error ? err.message : String(err);
-      throw new Error(message);
+      return { content: [{ type: "text", text: message }], isError: true };
     }
   });
 

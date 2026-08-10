@@ -176,9 +176,18 @@ async function handleToolsCall(
       result: { content: [{ type: "text", text }] },
     });
   } catch (err) {
+    // Tool failures are RESULTS, not protocol errors — same rule as the local
+    // stdio server (packages/memory/src/server.ts), and for the same reason:
+    // a client may render a JSON-RPC error however it likes, and at least one
+    // major one replaces the body with a generic failure dialog. The message is
+    // the actionable part; it has to travel where the model can read it.
+    // Protocol errors above this point (unknown tool, bad JSON) are unchanged.
     const message = err instanceof Error ? err.message : String(err);
-    const code = err instanceof McpInvalidParams ? -32602 : -32603;
-    return errorResponse(id, code, message);
+    return jsonResponse({
+      jsonrpc: "2.0",
+      id,
+      result: { content: [{ type: "text", text: message }], isError: true },
+    });
   }
 }
 

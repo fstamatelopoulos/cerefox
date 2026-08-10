@@ -11,6 +11,8 @@
 
 import { describe, expect, mock, test } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   ALL_TOOLS,
@@ -538,5 +540,36 @@ describe("purge is deliberately absent from the agent surface", () => {
     for (const t of ALL_TOOLS) {
       expect(t.description.toLowerCase()).not.toContain("permanently delete");
     }
+  });
+});
+
+describe("tool failures are results, not protocol errors", () => {
+  // MCP reserves protocol errors for protocol-level problems (unknown tool,
+  // malformed request). An operation that ran and failed belongs in the result
+  // with isError: true, so the model can read it and retry.
+  //
+  // We threw instead, which the SDK mapped to -32603. The message survived on
+  // the wire, but clients render protocol errors as they please — one major one
+  // shows a generic failure dialog and drops the body. During the 1.3.0 beta an
+  // agent hit every refusal as an unreadable failure: the candidate headings,
+  // the recovery steps, the two section_part options, none of it arrived.
+  test("the local server returns tool failures as isError results", () => {
+    const src = readFileSync(
+      join(import.meta.dir, "..", "..", "packages", "memory", "src", "server.ts"),
+      "utf8",
+    );
+    expect(src).toContain("isError: true");
+    // The old shape: a bare re-throw of the handler's error.
+    expect(src).not.toMatch(/if \(err instanceof McpInvalidParams\) throw err;/);
+  });
+
+  test("the remote Edge Function does the same", () => {
+    const src = readFileSync(
+      join(import.meta.dir, "..", "..", "supabase", "functions", "cerefox-mcp", "index.ts"),
+      "utf8",
+    );
+    expect(src).toContain("isError: true");
+    // -32603 for a tool that ran and failed is exactly the shape being fixed.
+    expect(src).not.toMatch(/const code = err instanceof McpInvalidParams \? -32602 : -32603;/);
   });
 });

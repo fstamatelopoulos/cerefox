@@ -16,6 +16,22 @@ Open roadmap.
 ## [v1.3.0-beta.3] -- 2026-08-10
 
 ### Fixed
+- **A refused edit told the agent nothing.** Tool failures were returned as
+  JSON-RPC protocol errors (`-32603`). The message survived on the wire, but a
+  client may render a protocol error however it likes, and Claude Desktop
+  replaces it with a generic "Tool execution failed" dialog and drops the body —
+  so every carefully written refusal reached the agent as an unreadable failure.
+  The candidate headings for a mistyped anchor, the two `section_part` options,
+  the conflict's current hash and recovery steps: none of it arrived, and the
+  agent could not self-correct without another round trip.
+
+  MCP reserves protocol errors for protocol-level problems (unknown tool,
+  malformed request) and puts execution failures in the result with
+  `isError: true`, precisely so the model can read and act on them. Both
+  transports now do that. Reported by an agent editing real documents on the
+  beta: the refusal logic was already correct — no bad writes, all-or-nothing
+  intact — but as they put it, a refusal an agent cannot read is half a refusal.
+
 - **`end_of_section` chose silently when a section had child headings.** The
   rule was that a section holding *both* its own body and children is ambiguous,
   so the write refuses and returns both `section_part` options. A section with
