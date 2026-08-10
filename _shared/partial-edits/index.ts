@@ -108,7 +108,13 @@ export class AmbiguousAnchorError extends Error {
  */
 export class AmbiguousPositionError extends Error {
   readonly candidates: { section_part: SectionPart; description: string }[];
-  constructor(node: OutlineNode, firstChildHeading: string, opName: string) {
+  /**
+   * `reads` marks a caller that only inspects content (#198's section read).
+   * The reassurance "No write was performed" is meant to stop an agent
+   * retrying a half-applied batch — on a read it is noise at best, and at
+   * worst it implies a write was attempted when none ever could be.
+   */
+  constructor(node: OutlineNode, firstChildHeading: string, opName: string, reads = false) {
     const candidates = [
       {
         section_part: "own_body" as const,
@@ -126,7 +132,7 @@ export class AmbiguousPositionError extends Error {
     super(
       `Ambiguous position: "${node.path}" has child sections, so "the end of ` +
         `the section" could mean two different places and ${opName} will not guess. ` +
-        `No write was performed. Pass section_part to choose:\n` +
+        `${reads ? "" : "No write was performed. "}Pass section_part to choose:\n` +
         candidates.map((c) => `  section_part: "${c.section_part}" — ${c.description}`).join("\n"),
     );
     this.name = "AmbiguousPositionError";
@@ -269,6 +275,57 @@ export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): Ou
   throw new AnchorNotFoundError(anchor, outline);
 }
 
+/**
+ * The text a `replace_section` would overwrite — resolved through the SAME
+ * functions the write uses (#198).
+ *
+ * v1.3.0 shipped `replace_section` with no way to see what it was about to
+ * destroy: outline mode reports a section's *size*, never its *text*, so the
+ * only safe preparation was a full `get_document` — the cost partial edits
+ * exist to remove. `cerefox_insert` is guarded structurally (it cannot remove
+ * anything); the destructive operation was guarded only by
+ * `expected_content_hash`, which protects against a *concurrent* writer, not
+ * against a writer who does not know what it is deleting.
+ *
+ * The binding requirement is that `text` is EXACTLY the extent
+ * `replace_section` targets under the same `section_part`. If a read could
+ * differ from the write it feeds, the feature would be worse than its absence:
+ * absence at least announces itself. That is why this shares `resolveAnchor`
+ * and `resolveSectionEnd` rather than reproducing their rules — including the
+ * refusal on a section with children, which is the case most likely to diverge.
+ *
+ * `heading` is returned separately because it is context, not content:
+ * `replace_section` keeps the heading, so it is not part of what would be
+ * overwritten.
+ */
+export function extractSection(
+  content: string,
+  anchorHeading: string,
+  sectionPart?: SectionPart,
+): {
+  heading: string;
+  path: string;
+  level: number;
+  text: string;
+  chars: number;
+  section_part: SectionPart | null;
+} {
+  const outline = parseOutline(content);
+  const node = resolveAnchor(outline, anchorHeading);
+  // Same op label the write would raise under, so an ambiguity refusal reads
+  // the same whether the caller was reading or replacing.
+  const to = resolveSectionEnd(content, outline, node, sectionPart, "the section read", true);
+  const text = content.slice(node.bodyStart, to);
+  return {
+    heading: node.heading,
+    path: node.path,
+    level: node.level,
+    text,
+    chars: text.length,
+    section_part: sectionPart ?? null,
+  };
+}
+
 function firstChild(outline: OutlineNode[], node: OutlineNode): OutlineNode | null {
   for (const n of outline) {
     if (n.start >= node.bodyStart && n.start < node.subtreeEnd) return n;
@@ -288,6 +345,7 @@ function resolveSectionEnd(
   node: OutlineNode,
   sectionPart: SectionPart | undefined,
   opName: string,
+  reads = false,
 ): number {
   const child = firstChild(outline, node);
   if (!child) return node.subtreeEnd; // leaf: unambiguous
@@ -315,7 +373,7 @@ function resolveSectionEnd(
   //
   // So: no exemption. `hasOwnBody` no longer gates anything, because the
   // presence of children is what makes "the end of this section" ambiguous.
-  throw new AmbiguousPositionError(node, child.heading, opName);
+  throw new AmbiguousPositionError(node, child.heading, opName, reads);
 }
 
 /**

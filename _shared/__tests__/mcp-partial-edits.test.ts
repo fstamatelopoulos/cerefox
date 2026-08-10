@@ -259,6 +259,112 @@ describe("document lookup", () => {
   });
 });
 
+describe("section mode (#198)", () => {
+  test("returns one section's text, the hash, and the heading as context", async () => {
+    const out = JSON.parse(
+      await getDoc.handler(mockClient(), { document_id: "d", section: "## Totals" }, ctx),
+    );
+    expect(out.content_hash).toBe(HASH);
+    expect(out.heading).toBe("## Totals");
+    expect(out.text).toContain("Calories: 1200");
+    // The heading is kept by replace_section, so it is not part of what would
+    // be overwritten and must not be inside `text`.
+    expect(out.text).not.toContain("## Totals");
+    // And nothing from other sections leaks in.
+    expect(out.text).not.toContain("coffee");
+    expect(out.chars).toBe(out.text.length);
+  });
+
+  test("what it returns is what replace_section overwrites", async () => {
+    // The property in full, through the MCP layer: read a section, replace it,
+    // read it back, and the second read is what was written.
+    const captured: Captured = {};
+    const before = JSON.parse(
+      await getDoc.handler(mockClient(), { document_id: "d", section: "## Totals" }, ctx),
+    );
+    stubEmbeddings();
+    try {
+      await edit.handler(
+        mockClient({ captured }),
+        {
+          document_id: "d",
+          operations: [
+            { op: "replace_section", anchor_heading: "## Totals", text: "Calories: 1400" },
+          ],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+    } finally {
+      restoreFetch();
+    }
+    const written = captured.ingestArgs?.p_chunks as Array<{ content: string }> | undefined;
+    const body = (written ?? []).map((c) => c.content).join("\n");
+    expect(before.text).toContain("Calories: 1200");
+    expect(body).toContain("Calories: 1400");
+    expect(body).not.toContain("Calories: 1200");
+  });
+
+  test("refuses a section with children unless section_part says which", async () => {
+    // `## Intake` has `### Notes` under it — the ambiguity that makes a
+    // guessing read dangerous.
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Intake" }, ctx),
+    ).rejects.toThrow(/own_body[\s\S]*subtree|subtree[\s\S]*own_body/);
+
+    const own = JSON.parse(
+      await getDoc.handler(
+        mockClient(),
+        { document_id: "d", section: "## Intake", section_part: "own_body" },
+        ctx,
+      ),
+    );
+    const sub = JSON.parse(
+      await getDoc.handler(
+        mockClient(),
+        { document_id: "d", section: "## Intake", section_part: "subtree" },
+        ctx,
+      ),
+    );
+    expect(own.text).toContain("coffee");
+    expect(own.text).not.toContain("### Notes");
+    expect(sub.text).toContain("### Notes");
+  });
+
+  test("a missing anchor errors rather than returning nothing", async () => {
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Nope" }, ctx),
+    ).rejects.toThrow();
+  });
+
+  test("outline and section together are refused, not silently ranked", async () => {
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Totals", outline: true }, ctx),
+    ).rejects.toThrow(/not both/);
+  });
+
+  test("section_part without section is refused", async () => {
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section_part: "subtree" }, ctx),
+    ).rejects.toThrow(/only applies together with section/);
+  });
+
+  test("an archived section withholds the hash", async () => {
+    // Same trap as archived outline mode: the RPC returns the CURRENT hash even
+    // when reconstructing an old version, and pairing it with archived text
+    // would invite an edit based on content that is no longer there.
+    const out = JSON.parse(
+      await getDoc.handler(
+        mockClient(),
+        { document_id: "d", section: "## Totals", version_id: "v1" },
+        ctx,
+      ),
+    );
+    expect(out.content_hash).toBeNull();
+    expect(out.note).toContain("ARCHIVED");
+  });
+});
+
 describe("outline mode (§3.7)", () => {
   test("returns structure, hash and sizes — and no body", async () => {
     const out = await getDoc.handler(mockClient(), { document_id: "d", outline: true }, ctx);
