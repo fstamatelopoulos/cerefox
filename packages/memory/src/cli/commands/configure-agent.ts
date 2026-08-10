@@ -9,6 +9,7 @@ import {
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { localCerefoxEntry, WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
+import { mcpServerName } from "../util/mcp-config-writers.js";
 
 interface ConfigureAgentOptions {
   tool: string;
@@ -53,6 +54,10 @@ function action(options: ConfigureAgentOptions): void {
     println(c.dim(`  backup: ${result.backupPath}`));
   }
   println(c.dim(`  action: ${result.action}`));
+  // #168: name the entry, because it is no longer always "cerefox". A user
+  // configuring from a labelled environment needs to see that production
+  // was left alone — silence there is what made the old overwrite invisible.
+  println(c.dim(`  server name: ${mcpServerName()}`));
   if (result.delegatedCommand) {
     println(c.dim(`  invoked: ${result.delegatedCommand}`));
   }

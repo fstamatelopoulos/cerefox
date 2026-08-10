@@ -166,7 +166,13 @@ cerefox configure-agent --tool gemini           # ~/.gemini/settings.json
 Useful flags: `--dry-run` (print the planned write without touching any file), `--json`
 (machine-readable result), `--config-path <path>` (override the target file), `--no-backup`
 (skip the `.pre-cerefox.bak` backup). The command is idempotent and backs up any existing
-config before writing. The per-client sections below document the same entries for anyone
+config before writing.
+
+The entry is registered under the server name `cerefox`. If `CEREFOX_ENV_LABEL` is
+set — as it is for a [staging environment](staging-env.md) — the name becomes
+`cerefox-<label>` instead, so a second environment sits **alongside** your production
+entry rather than replacing it, and an agent can hold both at once (v1.4.0, #168).
+The command prints the name it used. The per-client sections below document the same entries for anyone
 who prefers to edit by hand or needs the remote (`Path A-Remote`) HTTP transport instead.
 
 ### Path A MCP tools

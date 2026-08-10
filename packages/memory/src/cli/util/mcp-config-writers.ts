@@ -138,7 +138,7 @@ function claudeCodeDelegated(entry: { command: string; args: string[] }): { cmd:
   // `claude mcp add <name> --scope user -- <cmd> [args...]`
   return {
     cmd: "claude",
-    args: ["mcp", "add", "cerefox", "--scope", "user", "--", entry.command, ...entry.args],
+    args: ["mcp", "add", mcpServerName(), "--scope", "user", "--", entry.command, ...entry.args],
   };
 }
 
@@ -274,7 +274,7 @@ function directWrite(
     (existing[serversKey] && typeof existing[serversKey] === "object"
       ? (existing[serversKey] as Record<string, unknown>)
       : {}) ?? {};
-  servers.cerefox = entry;
+  servers[mcpServerName()] = entry;
   existing[serversKey] = servers;
 
   if (!opts.dryRun) {
@@ -288,6 +288,37 @@ function directWrite(
   return { configPath, backupPath, action, serverEntry: entry };
 }
 
+/**
+ * The MCP server name to register under (#168).
+ *
+ * Agent config files are GLOBAL — `~/.claude.json`, `~/.codex/config.toml`,
+ * Claude Desktop's config — and every environment registered under the same
+ * fixed name `cerefox`. So running `configure-agent` from a staging checkout
+ * silently overwrote the production entry and repointed every agent at
+ * staging, with no indication that it had happened. It was documented as
+ * "don't run this against staging", which is a warning, not a guard.
+ *
+ * `CEREFOX_ENV_LABEL` already marks non-production environments everywhere
+ * else (the web banner, `doctor`'s title line, backup filenames), so it names
+ * the server too: `cerefox-staging` sits alongside `cerefox` instead of
+ * replacing it, and an agent can hold both at once — which is the point, since
+ * exercising MCP behaviour against a pre-release server is exactly why staging
+ * exists.
+ *
+ * Unset (the default, and every production install) → `cerefox`, unchanged.
+ */
+export function mcpServerName(): string {
+  const label = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
+  if (!label) return "cerefox";
+  // Config keys and CLI arguments both have to accept it, so keep it to the
+  // characters that are safe unquoted in a TOML bare key.
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug ? `cerefox-${slug}` : "cerefox";
+}
+
 function hasCerefoxEntry(
   existing: Record<string, unknown>,
   format: WriterFormat,
@@ -297,7 +328,7 @@ function hasCerefoxEntry(
   return (
     typeof servers === "object" &&
     servers !== null &&
-    (servers as Record<string, unknown>).cerefox !== undefined
+    (servers as Record<string, unknown>)[mcpServerName()] !== undefined
   );
 }
 

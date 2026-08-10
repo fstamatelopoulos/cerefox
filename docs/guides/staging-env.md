@@ -259,7 +259,7 @@ read but nothing acts on it.
 
 | Area | Problem |
 |---|---|
-| **Agent (MCP) config** | `configure-agent` registers the MCP server under the fixed name `cerefox`, so running it from staging **overwrites your production agent wiring**. Don't run it against staging yet — tracked in [#168](https://github.com/fstamatelopoulos/cerefox/issues/168). |
+| **Agent (MCP) config** | Safe since v1.4.0 ([#168](https://github.com/fstamatelopoulos/cerefox/issues/168)). `configure-agent` names the server after `CEREFOX_ENV_LABEL`, so a staging environment registers as **`cerefox-staging`** alongside your production `cerefox` entry rather than replacing it, and an agent can hold both. Before v1.4.0 it registered every environment as `cerefox` and running it from staging silently repointed all your agents. |
 | **`doctor`'s `mcp clients` line** | It inspects your global agent configs, which point at production, and reports them even in staging mode. Informative, but easy to misread as "staging is wired to my agents". |
 
 Everything else — config, database, backups, CLI version, web daemon — is
