@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+- **The false `reindex` claim from #164 survived in a third file.** v1.0.6
+  corrected `content-format.md` and `doctor`; v1.1.0 caught a second copy. A
+  third sat in `docs/guides/migration-1.0.md` — the guide a user follows *while
+  upgrading to 1.0* — telling them to run `cerefox server reindex` to convert
+  chunk formats now. It cannot: reindex re-embeds chunks in place and never
+  re-chunks, so the stored format does not advance, and the command reports
+  success either way. Corrected to `cerefox server migrate-format`, with the
+  same "not reindex" note the content-format guide carries. The design doc's
+  quotation of doctor's original wording is annotated as superseded rather than
+  rewritten, since that section records what was specified at the time.
 
 ---
 
