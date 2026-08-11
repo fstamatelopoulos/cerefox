@@ -28,43 +28,40 @@
 ---
 ## Current Focus
 
-**2026-08-10 — v1.3.0 in production; v1.4.0 built and staging-validated.**
-**Iteration 35 is BUILD COMPLETE** on `feat/1.4.0-section-read`, awaiting a
-sub-agent review, then a release.
+**2026-08-11 — v1.4.0 shipped and in production. Iteration 36 is BUILD
+COMPLETE** on `feat/1.4.1-observability`, target **v1.4.1**, awaiting joint
+review.
 
-All eight tickets closed: #198 (section read), #197 (`rename_section`), #196
-(shrink trigger), #193 (CLI `--source` + the CLI half of #189), #189 (verified
-already fixed, closed), #171 (typecheck coverage), #194 (script guard), #168
-(environment-labelled MCP name). **#155 (UI e2e, 8/13 failing) stays out** — it
-needs its own session with a human to confirm intended UI.
+Four tickets, all found by *using* the previous two releases: #201 (the section
+read shipped MCP-only), #195 (dashboard collapsed three access paths), #199
+(timestamps emitted UTC with the marker stripped), #202 (`configure-agent
+--json` omitted the now-variable server name). Plus a **committed acceptance
+harness** — every release so far was validated by a throwaway script with no
+teardown, which is why fixtures kept being left behind.
 
-Schema 0.11.0 → **0.11.1** (migration 0021, audit CHECK widened for
-`rename-section`). `minSchema` reviewed and deliberately left at 0.10.5.
+**No schema change**, so no `minSchema` movement and no OpenAPI sync.
 
-- **Plan + outcome**: [`plans/iteration-35-partial-edits-followups.md`](plans/iteration-35-partial-edits-followups.md)
-- **Spec** (§8 sessions 7–8, §9 register rows 13/24 now served):
-  [`specs/partial-document-edits-design.md`](specs/partial-document-edits-design.md)
-- Verified: typecheck 0, `_shared` 495 pass, package suite 190 pass, staging
-  acceptance 22/22, remote Edge Function end-to-end. **Production untouched.**
-- **Next**: sub-agent review → normal release (several small fixes, no single
-  risky change) → prod deploy → CLI validation here, MCP validation by the
-  user's agents over local and remote. Release notes must carry the
-  **reconnect your MCP client** instruction.
+- **Plan + outcome**: [`plans/iteration-36-observability-and-parity.md`](plans/iteration-36-observability-and-parity.md)
+- Verified: typecheck 0, `_shared` 500 pass, package 183 pass, acceptance 8/8
+  against staging over **both** CLI and MCP, no leftover fixtures across two
+  runs. **Production untouched.**
+- **Still open**: #155 (UI e2e 8/13 failing) — needs a human to confirm intended
+  UI. More agent feedback is held in the maintainer's notes and will slot in as
+  additional phases.
 
 ---
 
 ## Active iteration
 
+**[Iteration 36 — Observability, surface parity, and test hygiene](plans/iteration-36-observability-and-parity.md)**
+(2026-08-11, target **v1.4.1**) — ✅ **build complete, staging-validated**.
+
 **[Iteration 35 — Partial-edit follow-ups and guard debt](plans/iteration-35-partial-edits-followups.md)**
-(2026-08-10, target **v1.4.0**) — ✅ **build complete, staging-validated**.
-Adds `rename_section` and a section read, fixes a warning that could not see its
-own motivating case, and clears three guard-debt tickets. Outcome, verification
-table and open risk in the linked plan.
+— ✅ **CLOSED, shipped v1.4.0** (2026-08-11). Section read, `rename_section`,
+schema 0.11.1, plus three guard-debt tickets.
 
 **[Iteration 34 — Partial Document Edits](plans/iteration-34-partial-edits.md)**
-— ✅ **CLOSED, shipped v1.3.0** (2026-08-10). Two MCP tools, `get_document`
-outline mode, schema 0.11.0; contract shaped by four agent sessions and frozen
-before any code.
+— ✅ **CLOSED, shipped v1.3.0** (2026-08-10).
 
 ---
 

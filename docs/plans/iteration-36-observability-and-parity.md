@@ -1,6 +1,7 @@
 # Iteration 36 — Observability, surface parity, and test hygiene
 
-**Status**: ACTIVE — started 2026-08-11, branch `feat/1.4.1-observability`.
+**Status**: BUILD COMPLETE, staging-validated — 2026-08-11, branch
+`feat/1.4.1-observability`. Awaiting joint review.
 **Target**: **v1.4.1** (additive + fixes; no schema change expected).
 **Predecessor**: [iteration 35](iteration-35-partial-edits-followups.md) shipped v1.4.0.
 
@@ -72,7 +73,7 @@ Each phase ends green (typecheck + `bun test`) and commits on its own.
   - Only ids the run created. Not a title-prefix sweep, which would catch a
     concurrent run's fixtures or a similarly-titled human document.
 
-### Phase 1 — #201 CLI section read
+### Phase 1 — ✅ #201 CLI section read
 The larger half of the parity gap. `document edit-parts` takes an opaque JSON
 operations array, so `rename_section` reached the CLI for free; `document get`
 takes declared flags, so the section read did not.
@@ -85,7 +86,7 @@ takes declared flags, so the section read did not.
 - **Guard test**: assert CLI/MCP parameter parity for `get_document` explicitly,
   so the next read mode cannot ship on one surface only.
 
-### Phase 2 — #195 dashboard access paths
+### Phase 2 — ✅ #195 dashboard access paths
 - Show `local-mcp`, `remote-mcp` and `edge-function` separately rather than
   collapsing to "mcp · edge", and count `cli` usage by an agent requestor.
 - The tile currently reads 637 where the honest number is far higher, because
@@ -95,7 +96,7 @@ takes declared flags, so the section read did not.
   this lands without working e2e coverage. Keep the change display-only, and
   flag it for the maintainer to eyeball on staging.
 
-### Phase 3 — #199 timestamps
+### Phase 3 — ✅ #199 timestamps
 - Stop truncating the zone: full ISO 8601 with `Z` in `audit-log.ts`,
   `list-versions.ts` (which currently emits a bare date), and the CLI renderers.
 - **Do not** convert to local server-side — the reasoning is recorded in #199
@@ -109,11 +110,11 @@ takes declared flags, so the section read did not.
   that a date written into document *content* comes from the author's clock, not
   from a Cerefox timestamp. Re-run `bundle_help.ts`.
 
-### Phase 4 — #202 configure-agent JSON
+### Phase 4 — ✅ #202 configure-agent JSON
 - Add `serverName` to the `--json` payload from the same `mcpServerName()` the
   writer uses. One line plus a test; grouped last because it is the smallest.
 
-### Phase 5 — a reusable acceptance harness
+### Phase 5 — ✅ a reusable acceptance harness
 
 **The suites are not the problem.** All eight live suites already hard-purge in
 `afterAll`, via raw deletes in dependency order, and they have done so for
@@ -139,7 +140,7 @@ dropped.
 - Verify by running twice and confirming no growth in the active document count
   or the trash.
 
-### Phase 6 — docs and release prep
+### Phase 6 — ✅ docs and release prep
 - CHANGELOG `[Unreleased]`, anchored on the heading.
 - `staging-env.md`: document the **non-beta** install case — the guide only
   covers `@beta`, so for a normal release the documented command installs the
@@ -148,7 +149,7 @@ dropped.
   movement).
 - GPT Actions OpenAPI block only if an EF request/response shape moves.
 
-### Phase 7 — staging validation and report
+### Phase 7 — ✅ staging validation and report
 - Deploy to staging, run the acceptance pass over CLI **and** MCP — iteration 35
   proved a single-surface pass hides single-surface gaps.
 - Test fixtures purge themselves; report anything left behind rather than
@@ -164,3 +165,64 @@ dropped.
 - Every phase green before the next starts.
 - Anchor scripted edits to line-start patterns and assert the match is unique.
 - Private detail from agent reports does not enter the repo, specs, or issues.
+
+
+---
+
+## Outcome
+
+**All four tickets closed. No schema change, so no `minSchema` movement and no
+GPT Actions OpenAPI change.**
+
+| Verification | Result |
+|---|---|
+| `bun run typecheck` | 0 errors |
+| `_shared` unit tests | 500 pass |
+| `packages/memory` suite | 183 pass, 5 skip, 0 fail |
+| Release acceptance vs staging (CLI + MCP) | 8 / 8 |
+| Acceptance run twice | 0 leftover documents |
+| `doctor [STAGING]` | schema 0.11.1, EF v1.4.0, all pass |
+| Timestamps over local MCP + remote EF | `2026-08-11T07:46:31Z` |
+
+### What the work found about itself
+
+Three defects in this iteration's own new code, each caught by running it
+rather than reading it:
+
+1. **Fixtures collided.** Several shared a template, so identical content
+   produced an identical `content_hash` and Cerefox correctly refused the
+   duplicate — surfacing as feature failures several assertions later.
+2. **Teardown timed out** spawning a CLI per document. It now uses the same RPC
+   the CLI calls.
+3. **A shared `try`/`catch` abandoned the loop** on one error, leaving exactly
+   one document behind — the one nobody notices. Cleanup is now isolated per
+   fixture.
+
+And two in the guards themselves: the coverage test flagged the new harness
+(correctly — it could write without consulting the guard, so the harness now
+refuses by construction rather than being exempted), and flagged
+`cli-mcp-parity.test.ts` (a false positive — importing `TOOLS_BY_NAME` says
+nothing about reaching a database). A guard that cries wolf is one people
+suppress.
+
+### Deliberate non-changes
+
+- **CLI operations are not folded into the agent total** (#195). The usage log
+  records requestor and access path, but the summary endpoint does not
+  cross-tabulate them, so separating an agent's CLI use from a human's is not
+  possible at that layer. Reporting it separately says what is known; folding it
+  in would replace an undercount with a fabrication.
+- **No server-side local-time conversion** (#199). Reasoning recorded in the
+  issue, the CHANGELOG and the agent guides so it is not relitigated silently.
+- **The existing suites' raw four-table deletes were left alone.** The new
+  harness goes through the soft-delete → purge gate instead; aligning the older
+  suites is the maintainer's call, not a unilateral change.
+
+### For the review
+
+- **#195 is display-only and lands without e2e** — the Playwright suite is 8/13
+  failing (#155). It wants an eyeball on the staging dashboard.
+- **The two cleanup conventions now coexist** (raw deletes in the older suites,
+  gated purge in the harness). That is a deliberate flag, not an oversight.
+- One stray fixture from an earlier run is **soft-deleted in the staging trash**
+  and left there: purging by hand is the maintainer's, not mine.
