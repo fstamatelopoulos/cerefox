@@ -8,6 +8,19 @@ import type { MCPSupabaseClient } from "./types.ts";
 import { logUsage } from "./_utils.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
 
+/**
+ * A timestamp an agent cannot mistake for local time (#199).
+ *
+ * `created_at` arrives as an ISO 8601 string in UTC. Truncating it to 19
+ * characters dropped the `Z`, and an agent reading `2026-08-11T06:32:13` while
+ * its own clock said 2026-08-10 concluded the server was a day ahead and dated
+ * its log entries accordingly. The instant was right; the label was missing.
+ */
+function utcStamp(iso: string): string {
+  const trimmed = iso.slice(0, 19);
+  return trimmed.includes("T") ? `${trimmed}Z` : `${trimmed} UTC`;
+}
+
 async function handler(
   supabase: MCPSupabaseClient,
   args: Record<string, unknown>,
@@ -56,7 +69,7 @@ async function handler(
         : e.size_after != null
           ? ` | ${e.size_after} chars`
           : "";
-    return `${e.created_at.slice(0, 19)} | ${e.operation} | ${e.author} (${e.author_type}) | ${docLabel}${sizeInfo} | ${e.description}`;
+    return `${utcStamp(e.created_at)} | ${e.operation} | ${e.author} (${e.author_type}) | ${docLabel}${sizeInfo} | ${e.description}`;
   });
   return `Audit log (${entries.length} entries, newest first):\n\n${lines.join("\n")}`;
 }

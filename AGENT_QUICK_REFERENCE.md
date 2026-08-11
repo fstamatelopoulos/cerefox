@@ -135,3 +135,24 @@ Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/g
 - Reads: `--requestor "<your-name>"`
 
 Or have your user set `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` in their `.env` to apply defaults once.
+
+## Timestamps are UTC
+
+Every timestamp Cerefox returns — `created_at` on audit entries, version
+history, document metadata — is **UTC**, and now carries its `Z` marker so it
+cannot be mistaken for local time.
+
+**When you write a date into a document's CONTENT, use your own clock, not a
+Cerefox timestamp.** These are different things: a timestamp records when the
+server stored something; a date in a log entry or a heading is authored content
+and belongs to your timezone. An agent working a Pacific afternoon read
+`2026-08-11` from version history, wrote "8/11" into its entries, and put a
+day's work in the future — the timestamp was correct, and copying it into
+content was not.
+
+Cerefox deliberately does not convert to local time on the API or MCP paths.
+"Local" has no server-side meaning: the remote MCP server runs in a cloud
+function whose local time *is* UTC, while a local MCP server runs in yours, so
+the same document would report two different times depending on transport. The
+web UI converts because a browser knows the viewer's timezone; nothing
+server-side does.

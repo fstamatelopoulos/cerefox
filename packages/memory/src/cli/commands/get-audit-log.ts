@@ -81,7 +81,8 @@ async function action(options: {
 
   printTable(
     data.map((row) => ({
-      when: (row.created_at ?? "").slice(0, 19).replace("T", " "),
+      // Keep the zone: a bare "2026-08-11 06:32:13" reads as local (#199).
+      when: `${(row.created_at ?? "").slice(0, 19).replace("T", " ")}Z`,
       operation: row.operation,
       doc: ((row.doc_title ?? (row.document_id ?? "?").slice(0, 8) + "…") as string).slice(0, 40),
       author: (row.author ?? "") + (row.author_type ? `(${row.author_type})` : ""),
