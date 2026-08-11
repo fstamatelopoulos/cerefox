@@ -36,6 +36,30 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
 const liveProbe = run(["project", "list", "--json"]);
 const LIVE_OK = liveProbe.status === 0;
 
+/**
+ * The cerefox MCP entry these tests just wrote, whatever it is keyed under.
+ *
+ * #168 makes the entry NAME follow CEREFOX_ENV_LABEL, and the CLI resolves that
+ * from the config directory it is pointed at — which the parent process cannot
+ * override, because a named CEREFOX_CONFIG_DIR is deliberately authoritative
+ * over ambient values (`_shared/config/env.ts`). Hard-coding `cerefox` here
+ * made these assertions pass or fail on which environment the developer had
+ * exported, which is nothing to do with what they are testing.
+ *
+ * These tests are about the entry's SHAPE. The entry's NAME has its own test in
+ * `mcp-server-name.test.ts`, which controls the label explicitly.
+ */
+function cerefoxServerEntry(servers: Record<string, unknown>): { command: string; args: string[] } {
+  const names = Object.keys(servers).filter((n) => /^cerefox(-|$)/.test(n));
+  if (names.length !== 1) {
+    throw new Error(
+      `expected exactly one cerefox MCP entry, found: ${names.join(", ") || "(none)"} ` +
+        `(all keys: ${Object.keys(servers).join(", ") || "(none)"})`,
+    );
+  }
+  return servers[names[0]] as { command: string; args: string[] };
+}
+
 describe("configure-agent (local-only)", () => {
   const tmpConfig = join(tmpdir(), `cerefox-cfg-test-${Date.now()}.json`);
   const backupPath = `${tmpConfig}.pre-cerefox.bak`;
@@ -75,10 +99,21 @@ describe("configure-agent (local-only)", () => {
     expect(parsed.action).toBe("created");
     // v0.5.1: server entry invokes `cerefox mcp` (the canonical form
     // after the `cerefox-mcp` bin was dropped).
-    expect(parsed.serverEntry).toEqual({
-      command: "npx",
-      args: ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
-    });
+    expect(parsed.serverEntry.command).toBe("npx");
+    expect(parsed.serverEntry.args).toEqual(["-y", "--package=@cerefox/memory", "cerefox", "mcp"]);
+    // v1.4.0 (#168): a LABELLED environment additionally pins its config
+    // directory onto the entry, because MCP clients spawn the server with the
+    // client's environment — without it, an entry named `cerefox-staging`
+    // would resolve to production. A production entry carries no env at all,
+    // so this asserts both shapes rather than pinning the one that happens to
+    // match the developer's current environment.
+    const cfgEnv = parsed.serverEntry.env as Record<string, string> | undefined;
+    if (cfgEnv === undefined) {
+      expect(Object.keys(parsed.serverEntry).sort()).toEqual(["args", "command"]);
+    } else {
+      expect(cfgEnv.CEREFOX_CONFIG_DIR).toBeTruthy();
+      expect(cfgEnv.CEREFOX_ENV_LABEL).toBeTruthy();
+    }
   });
 
   test("--config-path direct-write creates the file with the cerefox entry", () => {
@@ -92,10 +127,10 @@ describe("configure-agent (local-only)", () => {
     expect(status).toBe(0);
     expect(existsSync(tmpConfig)).toBe(true);
     const parsed = JSON.parse(readFileSync(tmpConfig, "utf8")) as {
-      mcpServers: { cerefox: { command: string; args: string[] } };
+      mcpServers: Record<string, unknown>;
     };
-    expect(parsed.mcpServers.cerefox.command).toBe("npx");
-    expect(parsed.mcpServers.cerefox.args).toContain("--package=@cerefox/memory");
+    expect(cerefoxServerEntry(parsed.mcpServers).command).toBe("npx");
+    expect(cerefoxServerEntry(parsed.mcpServers).args).toContain("--package=@cerefox/memory");
   });
 
   test("second --config-path run preserves other servers and backs up the original", () => {
@@ -117,7 +152,7 @@ describe("configure-agent (local-only)", () => {
       mcpServers: Record<string, unknown>;
     };
     expect(parsed.mcpServers.other).toBeDefined();
-    expect(parsed.mcpServers.cerefox).toBeDefined();
+    expect(cerefoxServerEntry(parsed.mcpServers)).toBeDefined();
     expect(existsSync(backupPath)).toBe(true);
   });
 
@@ -185,10 +220,10 @@ describe("configure-agent (local-only)", () => {
     expect(status).toBe(0);
     expect(existsSync(cfg)).toBe(true);
     const parsed = JSON.parse(readFileSync(cfg, "utf8")) as {
-      mcpServers: { cerefox: { command: string; args: string[] } };
+      mcpServers: Record<string, unknown>;
     };
-    expect(parsed.mcpServers.cerefox.command).toBe("npx");
-    expect(parsed.mcpServers.cerefox.args).toContain("--package=@cerefox/memory");
+    expect(cerefoxServerEntry(parsed.mcpServers).command).toBe("npx");
+    expect(cerefoxServerEntry(parsed.mcpServers).args).toContain("--package=@cerefox/memory");
     rmSync(cfg, { force: true });
     rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
   });
@@ -205,9 +240,9 @@ describe("configure-agent (local-only)", () => {
     expect(status).toBe(0);
     expect(existsSync(cfg)).toBe(true);
     const parsed = JSON.parse(readFileSync(cfg, "utf8")) as {
-      mcpServers: { cerefox: { command: string; args: string[] } };
+      mcpServers: Record<string, unknown>;
     };
-    expect(parsed.mcpServers.cerefox.command).toBe("npx");
+    expect(cerefoxServerEntry(parsed.mcpServers).command).toBe("npx");
     rmSync(cfg, { force: true });
     rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
   });
@@ -226,17 +261,17 @@ describe("configure-agent (local-only)", () => {
     expect(status).toBe(0);
     expect(existsSync(cfg)).toBe(true);
     const raw = readFileSync(cfg, "utf8");
-    expect(raw).toContain("[mcp_servers.cerefox]");
+    expect(raw).toMatch(/\[mcp_servers\.cerefox(-[a-z0-9-]+)?\]/);
     expect(raw).toContain("command =");
     expect(raw).toContain("args =");
     // Re-import the parser dynamically so test isolation isn't broken.
     // Tests share the package's node_modules, so smol-toml is available.
     return import("smol-toml").then(({ parse }) => {
       const parsed = parse(raw) as {
-        mcp_servers?: { cerefox?: { command?: string; args?: string[] } };
+        mcp_servers?: Record<string, unknown>;
       };
-      expect(parsed.mcp_servers?.cerefox?.command).toBe("npx");
-      expect(parsed.mcp_servers?.cerefox?.args).toContain(
+      expect(cerefoxServerEntry(parsed.mcp_servers ?? {}).command).toBe("npx");
+      expect(cerefoxServerEntry(parsed.mcp_servers ?? {}).args).toContain(
         "--package=@cerefox/memory",
       );
       rmSync(cfg, { force: true });
@@ -276,7 +311,7 @@ describe("configure-agent (local-only)", () => {
       };
       expect(parsed.model).toBe("o4-mini");
       expect(parsed.mcp_servers?.other?.command).toBe("fake");
-      expect(parsed.mcp_servers?.cerefox?.command).toBe("npx");
+      expect(cerefoxServerEntry(parsed.mcp_servers ?? {}).command).toBe("npx");
       rmSync(cfg, { force: true });
       rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
     });

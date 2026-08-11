@@ -19,6 +19,7 @@ import {
   type SpawnedServer,
 } from "./_helpers.js";
 import { loadEnv } from "../../../../_shared/config/index.js";
+import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
 
 loadEnv();
 
@@ -28,10 +29,11 @@ const OPENAI_API_KEY =
   process.env.OPENAI_API_KEY || process.env.CEREFOX_OPENAI_API_KEY || "";
 
 const LIVE_OK =
-  probeSupabase() &&
+  mayWriteToLiveTarget() &&
+  (probeSupabase() &&
   SUPABASE_URL.length > 0 &&
   SUPABASE_KEY.length > 0 &&
-  OPENAI_API_KEY.length > 0;
+  OPENAI_API_KEY.length > 0);
 
 const TITLE_PREFIX = "[E2E web-ingest]";
 const RUN_TAG = String(Date.now());
