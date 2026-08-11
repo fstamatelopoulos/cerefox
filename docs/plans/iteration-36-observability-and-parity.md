@@ -53,12 +53,22 @@ Each phase ends green (typecheck + `bun test`) and commits on its own.
   myself, which is what happened in iteration 35: the CLI has no purge command
   by design, and reaching past that to `cerefox_purge_document` overrode a
   decision rather than respecting it.
-  - Follow the pattern the suites already use: **raw deletes in dependency
-    order** (`audit_log` → `document_versions` → `chunks` → `documents`), NOT
-    `cerefox_purge_document`. That RPC deliberately preserves the audit trail
-    — correct for a user purge, whose record should outlive the document, and
-    pure litter for a fixture that existed for four seconds. The reasoning is
-    already written down at `partial-edits-live.test.ts:143`.
+  - **Me, interactively: soft-delete only, never purge.** The CLI omits a purge
+    command as a *defence against an agent purging by mistake* — which is
+    exactly the mistake made in iteration 35, by reaching past it to the RPC.
+    The trash is the maintainer's to empty.
+  - **Automated tests may purge their own fixtures**, and should do it through
+    the gate rather than around it: soft-delete, then
+    `cerefox_purge_document`, which refuses anything not already soft-deleted
+    (`WHERE id = … AND deleted_at IS NOT NULL`). A mis-scoped id can then only
+    ever hit something already in the trash.
+  - Then delete the orphaned audit rows for those same ids. The RPC preserves
+    them by design — right for a real purge, whose record should outlive the
+    document, and litter for a fixture that lived four seconds.
+  - Note the existing teardowns do **raw 4-table deletes** instead, skipping
+    the gate. That is faster and removes audit rows in one pass, but nothing
+    stops a bad id list. Aligning them is proposed, not assumed — flagged for
+    the maintainer in the report.
   - Only ids the run created. Not a title-prefix sweep, which would catch a
     concurrent run's fixtures or a similarly-titled human document.
 
