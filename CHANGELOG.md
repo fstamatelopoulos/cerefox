@@ -58,6 +58,30 @@ Iteration 36 — observability, surface parity, and test hygiene. Target
   name was always `cerefox`; now it varies with `CEREFOX_ENV_LABEL`, which is
   exactly when a machine-readable consumer needs it.
 
+### Security
+
+- **RLS was disabled on `cerefox_document_relations`** — the one table of ten
+  that never reached `schema.sql`'s `ENABLE ROW LEVEL SECURITY` block, having
+  been added in iteration 29 without it. Cerefox's model is *RLS on with no
+  policies*: the service-role key bypasses RLS and everything else is denied by
+  having nothing to match. A table outside that block is reachable by any role
+  holding a grant on it — and on projects created before Supabase stopped
+  granting `anon` blanket privileges on `public`, `anon` holds all four verbs
+  there. The anon/publishable key is designed to be public, so that meant world
+  read and write on that table. Flagged by Supabase's advisor
+  (`rls_disabled_in_public`) on 2026-08-09.
+
+  **No document content was ever exposed.** Documents, chunks, versions, audit
+  log, config and projects were correctly protected throughout — an anon read
+  of any of them returns an empty set. Relations are opt-in
+  (`relations_enabled`, default false), so the affected table is empty on a
+  default install; the exposure was the ability to write to it.
+
+  Migration 0022 enables RLS and revokes the legacy `anon` grants. Schema
+  0.11.1 → **0.11.2**, so **`cerefox server deploy` is required**. A guard test
+  now compares the tables `schema.sql` creates against the tables it protects,
+  which is the check that was missing for a year.
+
 ### Added
 
 - **`cerefox_get_help(topic: "server")` reports the server's own version and the
