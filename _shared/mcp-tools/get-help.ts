@@ -17,6 +17,8 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
+import { EF_VERSION } from "../ef-meta/index.ts";
+import { editTool } from "./partial-edits.ts";
 import { logUsage } from "./_utils.ts";
 import {
   HELP_FULL,
@@ -24,6 +26,54 @@ import {
   HELP_SECTIONS,
 } from "./get-help-content.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
+
+/**
+ * The operations `cerefox_edit` actually registers, read from its own schema
+ * rather than restated — a hand-maintained list here would be the exact drift
+ * this block exists to expose.
+ *
+ * Imported from the tool module directly: `./index.ts` imports this file, so
+ * reading the registry would be a cycle.
+ */
+function editOperations(): string[] {
+  const schema = editTool.inputSchema as {
+    properties?: {
+      operations?: { items?: { properties?: { op?: { enum?: string[] } } } };
+    };
+  };
+  return schema.properties?.operations?.items?.properties?.op?.enum ?? [];
+}
+
+/**
+ * What an MCP-only agent needs to tell "the server lacks this" from "my client
+ * is stale" — the single most-repeated misdiagnosis in reported sessions.
+ *
+ * Three separate reports have claimed a capability was missing from one server
+ * when both were correct and the CLIENT was holding a tool list fetched before
+ * an upgrade (clients fetch it once at connect). The advice for a human is
+ * "check `cerefox --version`", which is useless to an agent with no shell — and
+ * most agents have no shell.
+ *
+ * So the server states its own version and the operations it actually
+ * registers. An agent whose tool list disagrees with this block now knows the
+ * disagreement is client-side, without leaving the protocol.
+ */
+function serverIdentity(): string {
+  return [
+    "## This server",
+    "",
+    `- **Version**: ${EF_VERSION}`,
+    `- **cerefox_edit operations**: ${editOperations().join(", ")}`,
+    "",
+    "**If your tool list disagrees with this block, your CLIENT is out of date, not the server.**",
+    "MCP clients fetch the tool list once when they connect and cache it, so a server",
+    "upgraded mid-session is invisible until the client reconnects. Ask the user to restart",
+    "the client — and if it stays missing after a restart, the client config may pin an old",
+    "version of the package. Do not record a capability difference between the local and",
+    "remote servers: they run the same code, and every such report so far has been a stale",
+    "client.",
+  ].join("\n");
+}
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -43,6 +93,8 @@ async function handler(
   if (!topic) {
     const idx = HELP_SECTION_HEADINGS.map((h) => `  - ${h}`).join("\n");
     return (
+      serverIdentity() +
+      "\n\n---\n\n" +
       HELP_FULL +
       "\n\n---\n\n" +
       "## Available topics\n\n" +
@@ -51,6 +103,10 @@ async function handler(
       "\n\n(Topic match is case-insensitive substring on the headings above.)"
     );
   }
+
+  // `topic: "server"` / `"version"` is the self-check, and must work even
+  // though this section is not part of the bundled markdown.
+  if (/^(server|version|stale|client)$/i.test(topic)) return serverIdentity();
 
   const t = topic.toLowerCase();
   const matched = HELP_SECTION_HEADINGS.filter((h) => h.toLowerCase().includes(t));

@@ -184,6 +184,31 @@ export class HeadingLevelChangeError extends Error {
   }
 }
 
+/**
+ * The supplied text begins with the very heading it is anchored to.
+ *
+ * `insert` splices text verbatim and `replace_section` preserves the heading,
+ * so a caller who includes the heading in their content gets two of them — and
+ * the tools said nothing. Two separate incidents in one agent's log came from
+ * this, the second while trying to repair the first, which is the shape that
+ * makes a silent trap expensive: the fix looks like more of the same call.
+ *
+ * There is no legitimate reading of "this section's body starts with this
+ * section's own heading", so this refuses rather than warns.
+ */
+export class DuplicateHeadingError extends Error {
+  constructor(heading: string, opName: string) {
+    super(
+      `The text you passed to ${opName} starts with the anchor heading itself ` +
+        `(${JSON.stringify(heading)}). No write was performed. The heading is kept ` +
+        `automatically — ${opName === "replace_section" ? "replace_section preserves it" : "insert places your text inside the section"}, ` +
+        `so including it would produce two. Send only the new content, without that ` +
+        `heading line. A DEEPER sub-heading inside your text is fine.`,
+    );
+    this.name = "DuplicateHeadingError";
+  }
+}
+
 /** Structural validation failure of an operations array (before any parsing). */
 export class InvalidOperationError extends Error {
   constructor(index: number, message: string) {
@@ -374,6 +399,23 @@ export function extractSection(
   };
 }
 
+/**
+ * First non-blank line of a block, trimmed — what a caller "starts with".
+ */
+function firstMeaningfulLine(text: string): string {
+  for (const line of text.split("\n")) {
+    if (line.trim() !== "") return canonicalHeading(line);
+  }
+  return "";
+}
+
+/** Refuse text that repeats the heading it is being placed under. */
+function assertNoDuplicateHeading(text: string, node: OutlineNode, opName: string): void {
+  if (firstMeaningfulLine(text) === node.heading) {
+    throw new DuplicateHeadingError(node.heading, opName);
+  }
+}
+
 function firstChild(outline: OutlineNode[], node: OutlineNode): OutlineNode | null {
   for (const n of outline) {
     if (n.start >= node.bodyStart && n.start < node.subtreeEnd) return n;
@@ -468,9 +510,15 @@ function applyOne(
       at = node.start;
       detail = "insert before_heading";
     } else if (position === "after_heading") {
+      // Lands INSIDE the section, immediately below its heading — the same
+      // duplication trap as end_of_section. `before_heading` is deliberately
+      // NOT guarded: text placed before a heading becomes a new sibling
+      // section, and one that repeats the name is a legitimate way to split.
+      assertNoDuplicateHeading(text, node, "insert");
       at = node.bodyStart;
       detail = "insert after_heading";
     } else {
+      assertNoDuplicateHeading(text, node, "insert");
       at = resolveSectionEnd(content, outline, node, operation.section_part, "end_of_section insert");
       detail =
         `insert at end_of_section` +
@@ -484,6 +532,7 @@ function applyOne(
 
   if (operation.op === "replace_section") {
     const node = resolveAnchor(outline, operation.anchor_heading);
+    assertNoDuplicateHeading(operation.text, node, "replace_section");
     const to = resolveSectionEnd(content, outline, node, operation.section_part, "replace_section");
     return {
       content: spliceBlock(content, node.bodyStart, to, operation.text),

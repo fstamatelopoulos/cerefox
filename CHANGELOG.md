@@ -58,6 +58,33 @@ Iteration 36 — observability, surface parity, and test hygiene. Target
   name was always `cerefox`; now it varies with `CEREFOX_ENV_LABEL`, which is
   exactly when a machine-readable consumer needs it.
 
+### Added
+
+- **`cerefox_get_help(topic: "server")` reports the server's own version and the
+  operations it registers.** Three separate reports have claimed a capability
+  was missing from one server when both were correct and the *client* was
+  holding a tool list fetched before an upgrade — clients fetch it once at
+  connect and cache it. The standing advice was "check `cerefox --version`",
+  which is useless to an agent with no shell, and most agents have no shell. Now
+  the answer is in-protocol: if your tool list disagrees with this block, the
+  client is stale, not the server.
+
+### Changed
+
+- **Text that repeats the anchor's own heading is refused.** `replace_section`
+  preserves the heading and `insert` places text inside the section, so
+  including the heading produced two of them — silently. One agent hit this
+  twice in a session, the second time while repairing the first, which is what
+  makes a silent trap expensive: the fix looks like more of the same call.
+  `before_heading` is deliberately not guarded, since a repeated name there is a
+  legitimate way to split a section.
+
+- Agent-facing guidance gains a **"Mistakes that have actually happened"**
+  section, drawn from real sessions: a section-sized edit sent as a full ingest
+  (which truncated a 13,000-character index to one word), repairing partial
+  edits with more partial edits, and mistaking a stale client for a missing
+  server capability.
+
 ### Internal
 
 - **A committed release-acceptance harness**, driving both the CLI and the local
