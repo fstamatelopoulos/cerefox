@@ -39,7 +39,10 @@ function action(options: ConfigureAgentOptions): void {
   });
 
   if (options.json) {
-    printJson(result);
+    // #202: the name is part of the result now that #168 makes it vary with
+    // CEREFOX_ENV_LABEL. Without it a script has to reimplement the slugging
+    // rules to work out which key was written — or diff the config file.
+    printJson({ ...result, serverName: mcpServerName() });
     return;
   }
 
