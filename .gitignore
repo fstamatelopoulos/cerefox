@@ -14,8 +14,14 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# `lib/` and `lib64/` were bare patterns from the Python template, matching a
+# directory named `lib` at ANY depth. Python was removed at v1.0.0, and the
+# rule outlived it long enough to silently swallow `frontend/src/lib/` — a
+# TypeScript source file was ignored by `git add -A`, merged missing, and broke
+# the frontend build on a clean checkout. Anchored to the repo root so they can
+# only ever match Python build output where it would actually appear.
+/lib/
+/lib64/
 parts/
 sdist/
 var/
