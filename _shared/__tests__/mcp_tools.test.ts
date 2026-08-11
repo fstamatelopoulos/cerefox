@@ -597,7 +597,7 @@ describe("timestamps carry their zone (#199)", () => {
         ],
         error: null,
       }),
-    } as unknown as MCPSupabaseClient;
+    } as unknown as SupabaseClient;
     const out = await tool.handler(client, {}, FAKE_CTX);
     expect(out).toContain("2026-08-11T06:32:13Z");
     // The failure mode is a truncated stamp that reads as local.
@@ -620,7 +620,7 @@ describe("timestamps carry their zone (#199)", () => {
         ],
         error: null,
       }),
-    } as unknown as MCPSupabaseClient;
+    } as unknown as SupabaseClient;
     const out = await tool.handler(client, { document_id: "d" }, FAKE_CTX);
     expect(out).toContain("2026-08-11T06:32:13Z");
   });
