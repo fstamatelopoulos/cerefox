@@ -87,6 +87,17 @@ guard debt. Target **v1.4.0**.
   IDs, hashes, numeric tables, indexes, registries. Drifting prose is caught on
   review; one wrong character in a UUID is not.
 
+### Internal
+
+- **The live test suites refuse to run against an unlabelled (production)
+  target.** `cd packages/memory && bun test` resolves credentials exactly as the
+  CLI does, so on a maintainer's machine it wrote real documents to production —
+  self-cleaning, but the audit log is append-only. They now gate on
+  `CEREFOX_ENV_LABEL`, with `CEREFOX_ALLOW_PROD_WRITE_TESTS=1` as a deliberate
+  override, and a coverage test *derives* the set of write-capable suites rather
+  than trusting a hand-maintained list — the first attempt at this guard missed
+  two suites and still wrote to production.
+
 ### Fixed
 
 - **`document ingest` no longer relabels provenance when `--source` is omitted**
@@ -117,6 +128,43 @@ guard debt. Target **v1.4.0**.
 - **Contributor scripts cannot re-implement CLI logic** (#194). A static guard
   for the class behind #166, where the backup scripts carried their own capture
   and restore path and drifted for two releases while reporting success.
+
+- **Loss reporting counted UTF-16 units against code points**, so any document
+  containing an emoji reported a phantom "removed N characters" on edits that
+  removed nothing — including `cerefox_insert`, which is annotated
+  `destructiveHint: false` precisely because it cannot lose content, and
+  `rename_section`, whose whole purpose is leaving the body alone. Latent since
+  v1.3.0, where the >25% gate hid it; the new reporting rule above would have
+  surfaced it on every emoji-bearing document.
+
+- **`configure-agent` pins the config directory onto a labelled entry.** Naming
+  the entry `cerefox-staging` was only half of #168: MCP clients spawn the
+  server with the *client's* environment, and a GUI client launched from the
+  dock has none — so `CEREFOX_CONFIG_DIR` was absent at spawn time and an entry
+  labelled `staging` quietly served **production**. Labelled entries now carry
+  their own `CEREFOX_CONFIG_DIR` and `CEREFOX_ENV_LABEL`; production entries are
+  byte-identical to before.
+
+- **`document ingest-dir` no longer relabels provenance either.** The #193 fix
+  landed only in `document ingest`, leaving the identical commander default in
+  the bulk command — where a single `--update-if-exists` run rewrites the
+  `source` of every matched document, the corpus-scale shape #191 reported. The
+  create-vs-update decision also moves into the ingestion pipeline, which is the
+  only layer that knows which branch ran: `--update-if-exists` against a
+  document that does not exist yet is an update *intent* that performs a create,
+  and the previous flag-based heuristic labelled that `agent`.
+
+- **Loss reporting no longer goes quiet when a batch renames before deleting.**
+  It matched the operation's path against the pre-batch outline, so a
+  `rename_section` earlier in the same call left the later op's path unfindable
+  — silencing the warning on exactly the batch shape `rename_section` was added
+  to enable.
+
+- **A failed section read reports invalid-params, not internal-error.** Anchor
+  failures surfaced as JSON-RPC `-32603` while the identical anchor through
+  `cerefox_edit` surfaced as `-32602`, so a client keying on the code would
+  classify the same caller mistake two ways depending on whether it read or
+  wrote.
 
 ---
 

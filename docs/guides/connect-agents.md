@@ -172,7 +172,14 @@ The entry is registered under the server name `cerefox`. If `CEREFOX_ENV_LABEL` 
 set — as it is for a [staging environment](staging-env.md) — the name becomes
 `cerefox-<label>` instead, so a second environment sits **alongside** your production
 entry rather than replacing it, and an agent can hold both at once (v1.4.0, #168).
-The command prints the name it used. The per-client sections below document the same entries for anyone
+The command prints the name it used.
+
+A labelled entry additionally carries `CEREFOX_CONFIG_DIR` and `CEREFOX_ENV_LABEL`
+in its `env` block. That is what makes it actually reach the environment it is named
+after: MCP clients spawn a stdio server with the **client's** environment, not the
+shell you ran `configure-agent` in, and a desktop client launched from the dock has
+no shell environment at all. A production entry carries no `env` — unchanged from
+earlier releases. The per-client sections below document the same entries for anyone
 who prefers to edit by hand or needs the remote (`Path A-Remote`) HTTP transport instead.
 
 ### Path A MCP tools
