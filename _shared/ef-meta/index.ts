@@ -21,6 +21,24 @@
 export const EF_VERSION = "1.4.0";
 
 /**
+ * The Cerefox RELEASE version — what `cerefox --version` reports and what npm
+ * published — bumped by `cut_release.ts` on every cut, pre-releases included.
+ *
+ * Distinct from `EF_VERSION`, which describes the deployed Edge Functions and
+ * bumps unconditionally only at *stable* cuts. The two are equal on a stable
+ * release and diverge during a beta, so reporting `EF_VERSION` to an agent
+ * would have told a beta tester the last stable number. Since the whole point
+ * of surfacing a version to agents (`cerefox_get_help(topic: "server")`) is
+ * letting them tell a stale client from a real capability gap, the number has
+ * to be the one the user would recognise.
+ *
+ * Lives here rather than in `packages/memory/src/meta.ts` because `_shared/`
+ * is imported by the Deno Edge Functions, which cannot reach into the npm
+ * package.
+ */
+export const CEREFOX_VERSION = "1.4.0";
+
+/**
  * The most recent version whose EF-side SOURCE actually changed (#127).
  * `EF_VERSION` bumps unconditionally at stable cuts (so stable deployments
  * never display a pre-release label), which means a version delta no longer

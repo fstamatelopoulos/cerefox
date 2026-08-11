@@ -17,7 +17,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { EF_VERSION } from "../ef-meta/index.ts";
+import { CEREFOX_VERSION } from "../ef-meta/index.ts";
 import { editTool } from "./partial-edits.ts";
 import { logUsage } from "./_utils.ts";
 import {
@@ -62,7 +62,7 @@ function serverIdentity(): string {
   return [
     "## This server",
     "",
-    `- **Version**: ${EF_VERSION}`,
+    `- **Version**: ${CEREFOX_VERSION}`,
     `- **cerefox_edit operations**: ${editOperations().join(", ")}`,
     "",
     "**If your tool list disagrees with this block, your CLIENT is out of date, not the server.**",
