@@ -36,6 +36,7 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join } from "node:path";
 
+import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
 import { createClient } from "../../../../_shared/db-client/index.ts";
 import { loadSettings } from "../../../../_shared/config/index.ts";
 
@@ -66,8 +67,27 @@ export class Acceptance {
     return { out: (r.stdout ?? "") + (r.stderr ?? ""), code: r.status ?? 1 };
   }
 
+  /**
+   * Refuse to touch an unlabelled target.
+   *
+   * The suite that drives this harness already checks, but a harness that can
+   * create documents should not depend on every caller remembering to. Guarded
+   * by construction is the whole point — the coverage test flagged this file
+   * for exactly that reason, and exempting it would have been the wrong fix.
+   */
+  private assertSafeTarget(): void {
+    if (!mayWriteToLiveTarget()) {
+      throw new Error(
+        "Acceptance harness refuses an unlabelled (production) target. " +
+          "Set CEREFOX_CONFIG_DIR to a labelled environment, or " +
+          "CEREFOX_ALLOW_PROD_WRITE_TESTS=1 if you truly mean production.",
+      );
+    }
+  }
+
   /** Start the local MCP stdio server this package ships. */
   async startMcp(): Promise<void> {
+    this.assertSafeTarget();
     this.mcpProc = spawn("node", [BIN, "mcp"], { stdio: ["pipe", "pipe", "ignore"] });
     this.mcpProc.stdout.on("data", (d: Buffer) => {
       this.buf += d.toString();
@@ -124,6 +144,7 @@ export class Acceptance {
    * fixture distinct content is the harness's.
    */
   async seed(name: string, content: string): Promise<{ id: string; hash: string }> {
+    this.assertSafeTarget();
     this.seq += 1;
     const unique = `${content}\n<!-- acceptance fixture ${name} #${this.seq} ${this.runId} -->\n`;
     const r = await this.mcp("cerefox_ingest", {
