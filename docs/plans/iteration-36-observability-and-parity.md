@@ -53,11 +53,14 @@ Each phase ends green (typecheck + `bun test`) and commits on its own.
   myself, which is what happened in iteration 35: the CLI has no purge command
   by design, and reaching past that to `cerefox_purge_document` overrode a
   decision rather than respecting it.
-  - Purge through **`cerefox_purge_document`**, the RPC the web UI's endpoint
-    calls. Not direct table deletes — the RPC removes chunks, versions and
-    project memberships together, and raw deletes would leave orphans.
-  - Only documents the run created, matched by its own prefix. Never a sweep
-    over everything that looks like test data.
+  - Follow the pattern the suites already use: **raw deletes in dependency
+    order** (`audit_log` → `document_versions` → `chunks` → `documents`), NOT
+    `cerefox_purge_document`. That RPC deliberately preserves the audit trail
+    — correct for a user purge, whose record should outlive the document, and
+    pure litter for a fixture that existed for four seconds. The reasoning is
+    already written down at `partial-edits-live.test.ts:143`.
+  - Only ids the run created. Not a title-prefix sweep, which would catch a
+    concurrent run's fixtures or a similarly-titled human document.
 
 ### Phase 1 — #201 CLI section read
 The larger half of the parity gap. `document edit-parts` takes an opaque JSON
@@ -100,18 +103,31 @@ takes declared flags, so the section read did not.
 - Add `serverName` to the `--json` payload from the same `mcpServerName()` the
   writer uses. One line plus a test; grouped last because it is the smallest.
 
-### Phase 5 — test hygiene
-Iteration 35 left four documents on staging and needed the maintainer to point
-it out. Soft-delete alone is not enough: it moves residue into a trash someone
-still has to empty by hand.
-- Live suites register every document they create and **purge** it via
-  `cerefox_purge_document` in a teardown that runs on failure as well as
-  success — so a crashed run cleans up too, which is when residue accrues.
-- Scope the purge to the ids the run itself created. A prefix sweep is
-  tempting and wrong: it would delete a concurrent run's fixtures, or anything
-  a human happened to title similarly.
-- Verify by running the suites twice and confirming no growth in **either** the
-  active document count or the trash.
+### Phase 5 — a reusable acceptance harness
+
+**The suites are not the problem.** All eight live suites already hard-purge in
+`afterAll`, via raw deletes in dependency order, and they have done so for
+several iterations. Checking this before writing the phase inverted it.
+
+What littered staging (and production, twice) is the **ad-hoc acceptance
+harness** each session writes from scratch — `stg140.js`, `cli140.sh`,
+`prod-round2.ts` — none of which had teardown, because each was meant to be
+throwaway and then wasn't. The recurring cost is not a missing feature; it is
+that the harness gets re-invented per session and the cleanup is what gets
+dropped.
+
+- A committed acceptance harness under `packages/memory/test/acceptance/`,
+  driving both the CLI and the local MCP stdio server, with id-tracked teardown
+  in a `finally` so a crashed run still cleans up.
+- Reuses the existing four-table delete helper rather than adding a second
+  cleanup convention.
+- Two alignments to the existing suites while in there:
+  - `search-recall` purges by **title prefix** (`LIKE '[E2E …]%'`) instead of by
+    created ids — a sweep that would catch a concurrent run's fixtures.
+  - It deletes only `cerefox_documents`, leaving audit rows behind, unlike the
+    four-table pattern everything else uses.
+- Verify by running twice and confirming no growth in the active document count
+  or the trash.
 
 ### Phase 6 — docs and release prep
 - CHANGELOG `[Unreleased]`, anchored on the heading.
