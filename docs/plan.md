@@ -29,7 +29,7 @@
 ## Current Focus
 
 **2026-08-11 — v1.4.0 shipped and in production. Iteration 36 is BUILD
-COMPLETE** on `feat/1.4.1-observability`, target **v1.4.1**, awaiting joint
+COMPLETE** on `feat/1.4.1-observability`, target **v1.5.0**, awaiting joint
 review.
 
 Four tickets, all found by *using* the previous two releases: #201 (the section
@@ -39,7 +39,14 @@ read shipped MCP-only), #195 (dashboard collapsed three access paths), #199
 harness** — every release so far was validated by a throwaway script with no
 teardown, which is why fixtures kept being left behind.
 
-**No schema change**, so no `minSchema` movement and no OpenAPI sync.
+**Schema 0.11.1 → 0.11.2** — a security fix arrived mid-iteration: RLS was
+disabled on `cerefox_document_relations`, the one table of ten missing from
+`schema.sql`'s RLS block since iteration 29 (Supabase advisor, 2026-08-09). No
+document content was exposed; the table is empty and relations are opt-in.
+Staging is migrated; **production is not** and still needs it.
+
+Versioned **1.5.0, not 1.4.1**: the iteration adds CLI flags, a JSON field and
+a new refusal on previously-accepted input.
 
 - **Plan + outcome**: [`plans/iteration-36-observability-and-parity.md`](plans/iteration-36-observability-and-parity.md)
 - Verified: typecheck 0, `_shared` 500 pass, package 183 pass, acceptance 8/8

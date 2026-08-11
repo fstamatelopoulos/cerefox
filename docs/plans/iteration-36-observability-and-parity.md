@@ -2,7 +2,8 @@
 
 **Status**: BUILD COMPLETE, staging-validated — 2026-08-11, branch
 `feat/1.4.1-observability`. Awaiting joint review.
-**Target**: **v1.4.1** (additive + fixes; no schema change expected).
+**Target**: **v1.5.0** — a minor, not a patch: the iteration adds CLI flags,
+a JSON field and a new refusal, and carries a schema change (0.11.1 → 0.11.2).
 **Predecessor**: [iteration 35](iteration-35-partial-edits-followups.md) shipped v1.4.0.
 
 Four tickets, all found by *using* v1.3.0/v1.4.0 rather than by reading it, plus
@@ -226,3 +227,40 @@ suppress.
   gated purge in the harness). That is a deliberate flag, not an oversight.
 - One stray fixture from an earlier run is **soft-deleted in the staging trash**
   and left there: purging by hand is the maintainer's, not mine.
+
+
+---
+
+## Phase 9 — ✅ Security: RLS on `cerefox_document_relations`
+
+Unplanned, arriving mid-iteration from a Supabase advisor email
+(`rls_disabled_in_public`, 2026-08-09) on the production project.
+
+**Finding.** `schema.sql` enables RLS on nine tables and omits
+`cerefox_document_relations`, added in iteration 29 without being added to the
+list. The model is *RLS on with no policies* — service-role bypasses RLS,
+everything else is denied by having nothing to match — so a table outside the
+block is reachable by any role holding a grant. On projects predating
+Supabase's change to `anon` defaults, `anon` holds all four verbs there, and
+the anon key is public by design.
+
+**Scope, established by probing rather than assuming.** No document content was
+ever exposed: an anon read of documents, chunks, versions, audit log or config
+returns an empty set. Relations are opt-in and the table holds **zero rows** on
+production, so what was open was the ability to *write* to an empty table.
+Staging showed no anon grants at all — a newer project — which is why only
+production was flagged.
+
+**Fix.** Migration 0022 enables RLS and revokes the legacy grants; schema
+0.11.1 → 0.11.2. Applied to staging and verified. **Production untouched** —
+that deploy is the maintainer's.
+
+**The durable part** is the guard test: nothing in the repo could have caught
+this, because the schema applied cleanly and the two lists are comparable only
+by eye. They are now compared by machine, with a check that neither matcher has
+silently stopped matching.
+
+### Consequence for the release
+
+1.5.0 now **requires `cerefox server deploy`** (not `--schema-only`, since the
+Edge Functions also changed). Previously this iteration had no schema change.
