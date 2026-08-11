@@ -77,9 +77,21 @@ export function DashboardPage() {
   });
   const pathOps = (p: string) =>
     usage?.ops_by_access_path.find((x) => x.access_path === p)?.count ?? 0;
-  const mcpOps = pathOps("remote-mcp") + pathOps("local-mcp");
+  // #195: show the access paths separately rather than collapsing them. The
+  // previous "N mcp · N edge" hid which MCP transport was in use, and a bare
+  // "0 edge" read as "broken" when it means "the ChatGPT Actions path was not
+  // used in this window".
+  const localMcpOps = pathOps("local-mcp");
+  const remoteMcpOps = pathOps("remote-mcp");
   const efOps = pathOps("edge-function");
-  const agentOps = mcpOps + efOps;
+  const agentOps = localMcpOps + remoteMcpOps + efOps;
+  // CLI is deliberately NOT folded into the agent total. The usage log records
+  // requestor and access_path, but the summary endpoint does not cross-tabulate
+  // them, so there is no honest way here to split agent CLI use from the
+  // maintainer's own. Showing it separately says what is known without
+  // implying what is not.
+  const cliOps = pathOps("cli");
+  const webOps = pathOps("webapp");
 
   const projectMap = new Map((data?.projects ?? []).map((p) => [p.id, p.name]));
   const colorMap = new Map(
@@ -180,8 +192,9 @@ export function DashboardPage() {
               <IconSparkles size={18} />
             </span>
             {agentOps > 0 ? (
-              <span className={`${ui.badge} ${ui.bGreen}`}>
-                {mcpOps.toLocaleString()} mcp · {efOps.toLocaleString()} edge
+              <span className={`${ui.badge} ${ui.bGreen}`} title="Agent operations by access path, last 30 days">
+                {localMcpOps.toLocaleString()} local · {remoteMcpOps.toLocaleString()} remote ·{" "}
+                {efOps.toLocaleString()} edge
               </span>
             ) : (
               <Popover width={260} position="bottom-end" withArrow shadow="md">
@@ -192,8 +205,11 @@ export function DashboardPage() {
                 </Popover.Target>
                 <Popover.Dropdown>
                   <Text size="xs" c="dimmed">
-                    No agent activity (MCP or Edge Function) in the last 30 days. Agent ops are
-                    recorded in the usage log, which is <b>opt-in</b> — enable it with{" "}
+                    No agent activity on the MCP or Edge Function paths in the last 30 days.
+                    That is not the same as "no agents" — CLI and web operations are counted
+                    separately below, and the Edge Function path is only used by ChatGPT
+                    Actions, so a zero there is normal unless you run a Custom GPT. Agent ops
+                    are recorded in the usage log, which is <b>opt-in</b> — enable it with{" "}
                     <code>cerefox config set usage_tracking_enabled true</code> if it's off.
                   </Text>
                 </Popover.Dropdown>
@@ -204,6 +220,14 @@ export function DashboardPage() {
             {agentOps > 0 ? agentOps.toLocaleString() : "—"}
           </div>
           <div className={styles.statLabel}>Agent operations · 30d</div>
+          {/* #195: the tile counted transports, not actors, and said nothing
+              about the two busiest paths. CLI is shown separately because the
+              summary cannot tell an agent's CLI use from a human's. */}
+          {(cliOps > 0 || webOps > 0) && (
+            <div className={styles.statLabel} title="Not counted above: the CLI is used by both agents and people, and the usage summary does not separate them.">
+              {cliOps.toLocaleString()} cli · {webOps.toLocaleString()} web
+            </div>
+          )}
         </div>
       </div>
 
