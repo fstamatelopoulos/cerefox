@@ -2,31 +2,21 @@
  * The dashboard's access-path arithmetic (#195), tested without a browser.
  *
  * The Playwright suite is 8/13 failing on main (#155), so a UI change lands
- * there with no working coverage. The *computation* is the part that was wrong
- * — the rendering is a badge — so it is extracted and asserted directly. This
- * is not a substitute for the e2e suite; it is what can be verified while that
- * suite is broken.
+ * there with no working coverage. The computation is the part that was wrong —
+ * the rendering is a badge — so it lives in its own module and is asserted
+ * directly against the code the page actually calls. Not a substitute for the
+ * e2e suite; what is verifiable while that suite is broken.
+ *
+ * Lives beside the module rather than under `tests/`, because `bun test` in
+ * `frontend/` also collects the Playwright specs and cannot run them.
  */
 
 import { describe, expect, test } from "bun:test";
 
-type PathCount = { access_path: string; count: number };
+import { deriveAccessPathStats, type AccessPathRow } from "./access-path-stats";
 
-/** Mirrors DashboardPage's derivation. Kept in sync by the assertions below. */
-function derive(rows: PathCount[]) {
-  const pathOps = (p: string) => rows.find((x) => x.access_path === p)?.count ?? 0;
-  const localMcpOps = pathOps("local-mcp");
-  const remoteMcpOps = pathOps("remote-mcp");
-  const efOps = pathOps("edge-function");
-  return {
-    localMcpOps,
-    remoteMcpOps,
-    efOps,
-    agentOps: localMcpOps + remoteMcpOps + efOps,
-    cliOps: pathOps("cli"),
-    webOps: pathOps("webapp"),
-  };
-}
+const derive = deriveAccessPathStats;
+type PathCount = AccessPathRow;
 
 describe("dashboard access-path split (#195)", () => {
   // The maintainer's real 30-day numbers, which prompted the ticket.

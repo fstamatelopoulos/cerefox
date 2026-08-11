@@ -28,5 +28,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Test files are run by `bun test`, not built by Vite, and they import
+  // `bun:test`, whose types this project does not carry. Excluding them keeps
+  // the build honest without pulling Bun types into the app config.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

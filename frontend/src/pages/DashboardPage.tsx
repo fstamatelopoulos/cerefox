@@ -20,6 +20,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { fetchUsageSummary } from "../api/analytics";
+import { deriveAccessPathStats } from "../lib/access-path-stats";
 import { CliCard } from "../components/CliCard";
 import { fetchDashboard } from "../api/dashboard";
 import type { DashboardDoc } from "../api/types";
@@ -75,23 +76,14 @@ export function DashboardPage() {
     queryFn: () => fetchUsageSummary({ start: since }),
     staleTime: 60_000,
   });
-  const pathOps = (p: string) =>
-    usage?.ops_by_access_path.find((x) => x.access_path === p)?.count ?? 0;
-  // #195: show the access paths separately rather than collapsing them. The
-  // previous "N mcp · N edge" hid which MCP transport was in use, and a bare
-  // "0 edge" read as "broken" when it means "the ChatGPT Actions path was not
-  // used in this window".
-  const localMcpOps = pathOps("local-mcp");
-  const remoteMcpOps = pathOps("remote-mcp");
-  const efOps = pathOps("edge-function");
-  const agentOps = localMcpOps + remoteMcpOps + efOps;
-  // CLI is deliberately NOT folded into the agent total. The usage log records
-  // requestor and access_path, but the summary endpoint does not cross-tabulate
-  // them, so there is no honest way here to split agent CLI use from the
-  // maintainer's own. Showing it separately says what is known without
-  // implying what is not.
-  const cliOps = pathOps("cli");
-  const webOps = pathOps("webapp");
+  const {
+    localMcpOps,
+    remoteMcpOps,
+    efOps,
+    agentOps,
+    cliOps,
+    webOps,
+  } = deriveAccessPathStats(usage?.ops_by_access_path);
 
   const projectMap = new Map((data?.projects ?? []).map((p) => [p.id, p.name]));
   const colorMap = new Map(
