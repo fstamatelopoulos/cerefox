@@ -114,7 +114,15 @@ Give staging its own install tree. npm's `--prefix` keeps it entirely separate
 from the global one, so production's binary is never touched:
 
 ```bash
+# Rehearsing a pre-release (the usual case):
 npm install -g --prefix ~/.cerefox/staging/cli @cerefox/memory@beta
+
+# Rehearsing a NORMAL release, where no beta was cut: pin the version
+# explicitly. A bare `@cerefox/memory` resolves `latest` at install time, so
+# staging silently records nothing about what it is running — and running it
+# before the publish completes would install the PREVIOUS version, which is the
+# one thing staging exists to avoid.
+npm install -g --prefix ~/.cerefox/staging/cli @cerefox/memory@1.4.0
 ```
 
 Then bind **both axes — version and environment — in a single alias**, so they

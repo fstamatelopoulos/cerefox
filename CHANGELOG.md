@@ -9,7 +9,65 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+Iteration 36 — observability, surface parity, and test hygiene. Target
+**v1.4.1**. No schema change.
+
+### Added
+
+- **`cerefox document get --section "## Heading"`** (#201). The section read
+  shipped in v1.4.0 on the MCP path only, so for a release it was unreachable
+  from a terminal. `--section-part own_body|subtree` comes with it, and both
+  resolve extent through the same `extractSection` as the MCP tool and the write
+  path — so the equivalence #198 rests on holds across surfaces rather than
+  being reimplemented per surface.
+
+  Worth knowing for future additions: `document edit-parts` takes an opaque JSON
+  operations array, so a new *operation* reaches the CLI for free — which is why
+  `rename_section` worked from the terminal the day it landed. `document get`
+  takes declared flags, so a new *read mode* does not.
+
+### Changed
+
+- **The dashboard shows agent access paths separately** (#195). `local-mcp`,
+  `remote-mcp` and `edge-function` were collapsed into "N mcp · N edge", which
+  hid which transport was in use and made a bare "0 edge" read as broken when it
+  means the ChatGPT Actions path was simply unused in the window.
+
+  CLI operations are now shown as their own figure rather than folded into the
+  agent total. The usage log records both requestor and access path, but the
+  summary endpoint does not cross-tabulate them, so there is no honest way at
+  this layer to separate an agent's CLI use from a human's — reporting it
+  separately says what is known without implying what is not.
+
+- **Timestamps carry their UTC marker** (#199). `audit-log` truncated to 19
+  characters and dropped the `Z`; `list_versions` emitted a bare *date*, which
+  is indistinguishable from a local one. An agent working a Pacific afternoon
+  read `2026-08-11` from version history and dated a day of log entries into the
+  future. The instant was always correct; only the label was missing.
+
+  Cerefox deliberately does **not** convert to local time on the API or MCP
+  paths — "local" has no server-side meaning (the remote MCP runs where local
+  *is* UTC), it would make the same document report different times per
+  transport, and naked local times are not comparable between agents. The web UI
+  converts because a browser knows the viewer's timezone. The agent guides now
+  say so, and add the rule that actually prevents recurrence: **a date written
+  into document *content* comes from your own clock, not from a Cerefox
+  timestamp.**
+
+- **`configure-agent --json` includes `serverName`** (#202). Before #168 the
+  name was always `cerefox`; now it varies with `CEREFOX_ENV_LABEL`, which is
+  exactly when a machine-readable consumer needs it.
+
+### Internal
+
+- **A committed release-acceptance harness**, driving both the CLI and the local
+  MCP server and comparing them against each other. Every release so far was
+  validated by a throwaway script with no teardown, which is why fixtures kept
+  being left behind. Cleanup goes through the safety gate — soft delete, then
+  `cerefox_purge_document`, which refuses anything not already soft-deleted — so
+  a mis-scoped id can only ever reach the trash.
+
+---
 
 ---
 
