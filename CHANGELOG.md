@@ -109,6 +109,14 @@ refuses input that was previously accepted.
   name was always `cerefox`; now it varies with `CEREFOX_ENV_LABEL`, which is
   exactly when a machine-readable consumer needs it.
 
+- Agent-facing guidance now states that **content between sections belongs to
+  the section above it** — a `---` rule or note sitting just above the next
+  heading is part of the section before it, and replacing that section takes it
+  too. An agent lost a separator exactly this way. The write was correct by the
+  addressing rules; the surprise is that "the end of this section" is further
+  down the page than it looks, and the loss warning does not catch it when the
+  replacement text is longer than what it replaced.
+
 - Agent-facing guidance gains a **"Mistakes that have actually happened"**
   section, drawn from real sessions: a section-sized edit sent as a full ingest
   (which truncated a 13,000-character index to one word), repairing partial

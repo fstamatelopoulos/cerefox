@@ -175,6 +175,17 @@ Each of these comes from a real agent session, and each is easy to make.
   time while trying to repair the first. A *deeper* sub-heading inside your text
   is fine.
 
+- **Content between sections belongs to the section ABOVE it.** A section runs
+  to the next heading of the same or higher level, so a `---` rule, a note, or
+  any trailing text sitting just above the next heading is part of the section
+  before it — even when it visually reads as belonging below. Replacing that
+  section takes it too. An agent hit exactly this: a `---` that separated two
+  major sections disappeared when the section above it was replaced. The write
+  was correct by the addressing rules; the surprise is that "the end of this
+  section" is further down the page than it looks. Note the loss warning will
+  not catch it if your replacement text is longer than what it replaced, since
+  there is then no net loss to report.
+
 - **Never partial-edit to fix a partial edit.** If a write leaves unexpected
   structure, stop. Use `cerefox_list_versions`, retrieve the last good version,
   and re-ingest cleanly. Repairing edits with more edits compounds the damage.

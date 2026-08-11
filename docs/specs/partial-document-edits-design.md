@@ -1176,7 +1176,7 @@ Three statuses, and the middle one is the one that matters:
 | 19 | Understand why one document edits cheaper than another | **v1**, as guidance | sectioning granularity is now a cost characteristic (§3.5) |
 | 20 | Hold a concurrency token for a document you just *created* | **v1**, prerequisite | create returns `content_hash` (§3.8) — today-bug, filed as #189 |
 | 21 | Express additive intent so a replace-shaped call cannot destroy | **v1** | `cerefox_insert` is its own contract (§3.3, §1) |
-| 22 | Append a row to a table sitting mid-section | Open, not foreclosed | served without contract by structure — an append-heavy table gets its own heading, then `end_of_section` is the row-append (§3.3) |
+| 22 | Append a row to a table sitting mid-section | Open, **now observed** | §3.3 — still served without contract by structure (give an append-heavy table its own heading; `end_of_section` is then the row-append). Re-reported with numbers on v1.4.0: **1,100 characters to add one row** to a 4,164-character section, because the section also holds ~20 UUIDs and intro prose. The workaround costs a restructure the author may not want, so this is the one deferred need with a measured price |
 | 23 | Learn a document's structure without paying for its body | **v1** | outline mode on `get_document` — a parameter, not a new tool (§3.7) |
 | 24 | See what a section currently holds before replacing it | Open, **now observed** | §3.5 — the outline gives size, not text, so `replace_section` on a document you did not write needs a full read to be safe. Section read on `get_document`, mirroring `section_part`; #198, 1.4.0 |
 
