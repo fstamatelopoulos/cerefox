@@ -135,3 +135,82 @@ Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/g
 - Reads: `--requestor "<your-name>"`
 
 Or have your user set `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` in their `.env` to apply defaults once.
+
+## Timestamps are UTC
+
+Every timestamp Cerefox returns — `created_at` on audit entries, version
+history, document metadata — is **UTC**, and now carries its `Z` marker so it
+cannot be mistaken for local time.
+
+**When you write a date into a document's CONTENT, use your own clock, not a
+Cerefox timestamp.** These are different things: a timestamp records when the
+server stored something; a date in a log entry or a heading is authored content
+and belongs to your timezone. An agent working a Pacific afternoon read
+`2026-08-11` from version history, wrote "8/11" into its entries, and put a
+day's work in the future — the timestamp was correct, and copying it into
+content was not.
+
+Cerefox deliberately does not convert to local time on the API or MCP paths.
+"Local" has no server-side meaning: the remote MCP server runs in a cloud
+function whose local time *is* UTC, while a local MCP server runs in yours, so
+the same document would report two different times depending on transport. The
+web UI converts because a browser knows the viewer's timezone; nothing
+server-side does.
+
+## Mistakes that have actually happened
+
+Each of these comes from a real agent session, and each is easy to make.
+
+- **`cerefox_ingest` always replaces the ENTIRE document.** Never a section.
+  Before sending, check that the tool name matches the intent: if the intent is
+  "change one section", the call is `cerefox_edit` with `replace_section`. A
+  section-sized edit sent as a full ingest truncated a 13,000-character index to
+  a single word. It was recovered from version history within the minute, but
+  only because it was noticed immediately.
+
+- **Do not include the anchor's own heading in your text.** `replace_section`
+  keeps the heading and `insert` places your text inside the section, so
+  including it produces two. This is now refused rather than silently applied,
+  but the shape is worth knowing: it happened twice in one session, the second
+  time while trying to repair the first. A *deeper* sub-heading inside your text
+  is fine.
+
+- **Content between sections belongs to the section ABOVE it.** A section runs
+  to the next heading of the same or higher level, so a `---` rule, a note, or
+  any trailing text sitting just above the next heading is part of the section
+  before it — even when it visually reads as belonging below. Replacing that
+  section takes it too. An agent hit exactly this: a `---` that separated two
+  major sections disappeared when the section above it was replaced. The write
+  was correct by the addressing rules; the surprise is that "the end of this
+  section" is further down the page than it looks. Note the loss warning will
+  not catch it if your replacement text is longer than what it replaced, since
+  there is then no net loss to report.
+
+- **Never partial-edit to fix a partial edit.** If a write leaves unexpected
+  structure, stop. Use `cerefox_list_versions`, retrieve the last good version,
+  and re-ingest cleanly. Repairing edits with more edits compounds the damage.
+
+- **A rejected batch is safe.** Operations in one `cerefox_edit` are
+  all-or-nothing: if any is invalid, nothing is written. A refusal costs you a
+  retry, not data — so prefer one call for changes that belong together, and do
+  not split a batch to "make it more likely to succeed".
+
+- **Read before replacing.** `cerefox_get_document(section: "## Heading")`
+  returns exactly what a `replace_section` on that anchor would overwrite. Use it
+  for any section you did not write in this session. The outline gives a
+  section's *size*, never its *text*.
+
+- **Verify after writing** — read the result back before reporting success, and
+  report what the read actually shows.
+
+- **Partial edits cannot change a document's stored TITLE.** `rename_section`
+  changes a heading inside the content; the title is a separate field and still
+  needs `cerefox_ingest`.
+
+- **If a capability seems missing from one server, suspect your client first.**
+  Local and remote run the same code. Call `cerefox_get_help(topic: "server")`:
+  it reports the server's own version and the operations it registers. If that
+  disagrees with your tool list, the client is holding a list it fetched before
+  an upgrade — clients cache it at connect time. Ask the user to restart the
+  client. Do not record a capability difference between servers as a fact; every
+  such report so far has been a stale client.

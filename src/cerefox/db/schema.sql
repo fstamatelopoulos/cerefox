@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.11.1
+-- @version: 0.11.2
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -431,6 +431,13 @@ ALTER TABLE cerefox_audit_log              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cerefox_migrations            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cerefox_config                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cerefox_usage_log             ENABLE ROW LEVEL SECURITY;
+-- iteration 29 added this table and did not add it here, so it stayed
+-- world-accessible on any project whose `anon` role holds the legacy
+-- GRANT ... ON ALL TABLES IN SCHEMA public. Supabase's linter flagged it as
+-- `rls_disabled_in_public` (2026-08-09). Every other table on this list denies
+-- anon by having RLS on with NO policies; this one did not, so the model had a
+-- hole exactly one table wide. See the guard test in _shared/__tests__.
+ALTER TABLE cerefox_document_relations    ENABLE ROW LEVEL SECURITY;
 
 -- ── Explicit Data API grants (issue #26; schema 0.8.2) ─────────────────────────
 -- Supabase is removing the implicit privileges the Data API roles get on

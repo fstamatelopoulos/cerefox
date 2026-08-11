@@ -26,12 +26,22 @@ import { join, relative } from "node:path";
 
 const TEST_ROOT = join(import.meta.dir);
 
-/** Constructs that give a test file the ability to write to a real store. */
+/**
+ * Constructs that give a test file the ability to write to a real store.
+ *
+ * `TOOLS_BY_NAME` was on this list and had to come off: importing the tool
+ * registry says nothing about reaching a database — `cli-mcp-parity.test.ts`
+ * uses it to read an input schema as text. Reaching a store requires a client,
+ * a pipeline, or the built CLI, and every live suite that uses TOOLS_BY_NAME
+ * also constructs one of those, so nothing is lost by narrowing.
+ *
+ * The narrowing matters: a guard that cries wolf is one people suppress, and a
+ * suppressed guard protects nothing.
+ */
 const LIVE_CAPABLE = [
   /\bnew IngestionPipeline\b/,
   /\bcreateClient\s*\(/,
   /\bloadSettings\s*\(/,
-  /\bTOOLS_BY_NAME\b/,
 ];
 
 /** Files that are allowed to look live-capable without the guard. */

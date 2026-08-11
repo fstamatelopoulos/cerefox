@@ -11,6 +11,8 @@
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { mcpServerName, WRITERS } from "../src/cli/util/mcp-config-writers.ts";
 
@@ -90,5 +92,18 @@ describe("a labelled entry pins its own config directory (review bug_010)", () =
     expect(envAt).toBeGreaterThan(-1);
     expect(envAt).toBeLessThan(sep);
     expect(argv.args[envAt + 1]).toMatch(/^CEREFOX_CONFIG_DIR=/);
+  });
+});
+
+describe("configure-agent --json carries the server name (#202)", () => {
+  test("the command emits serverName alongside the entry", () => {
+    // Before #168 the name was always `cerefox`, so omitting it cost nothing.
+    // Now it varies with the environment, which is exactly when a
+    // machine-readable consumer needs it.
+    const src = readFileSync(
+      join(import.meta.dir, "..", "src", "cli", "commands", "configure-agent.ts"),
+      "utf8",
+    );
+    expect(src).toContain("serverName: mcpServerName()");
   });
 });

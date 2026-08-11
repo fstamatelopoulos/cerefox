@@ -573,3 +573,55 @@ describe("tool failures are results, not protocol errors", () => {
     expect(src).not.toMatch(/const code = err instanceof McpInvalidParams \? -32602 : -32603;/);
   });
 });
+
+describe("timestamps carry their zone (#199)", () => {
+  // An agent read a bare `2026-08-11` from version history while its own clock
+  // said 2026-08-10, concluded the server was a day ahead, and dated a day of
+  // log entries into the future. The instant was right; the label was missing.
+  const ISO = "2026-08-11T06:32:13.494525+00:00";
+
+  test("audit entries keep the UTC marker", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_get_audit_log"];
+    const client = {
+      rpc: () => ({
+        data: [
+          {
+            created_at: ISO,
+            operation: "rename-section",
+            author: "a",
+            author_type: "agent",
+            doc_title: "d",
+            document_id: "id",
+            description: "x",
+          },
+        ],
+        error: null,
+      }),
+    } as unknown as SupabaseClient;
+    const out = await tool.handler(client, {}, FAKE_CTX);
+    expect(out).toContain("2026-08-11T06:32:13Z");
+    // The failure mode is a truncated stamp that reads as local.
+    expect(out).not.toMatch(/2026-08-11T06:32:13(?!Z)/);
+  });
+
+  test("version history reports an instant, not a bare date", async () => {
+    const tool = TOOLS_BY_NAME["cerefox_list_versions"];
+    const client = {
+      rpc: () => ({
+        data: [
+          {
+            version_id: "v",
+            version_number: 1,
+            source: "agent",
+            chunk_count: 1,
+            total_chars: 10,
+            created_at: ISO,
+          },
+        ],
+        error: null,
+      }),
+    } as unknown as SupabaseClient;
+    const out = await tool.handler(client, { document_id: "d" }, FAKE_CTX);
+    expect(out).toContain("2026-08-11T06:32:13Z");
+  });
+});

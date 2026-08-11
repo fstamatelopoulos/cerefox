@@ -2425,11 +2425,13 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.11.2 (iteration 36): RLS enabled on cerefox_document_relations,
+    -- which iteration 29 left off the list (Supabase rls_disabled_in_public).
     -- 0.11.1 (iteration 35, #197): audit CHECK accepts 'rename-section'.
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.11.1'::TEXT;
+    SELECT '0.11.2'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

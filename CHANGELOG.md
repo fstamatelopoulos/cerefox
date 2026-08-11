@@ -9,9 +9,141 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+Iteration 36 — observability, surface parity, test hygiene, and a security fix
+that arrived mid-iteration. Target **v1.5.0**.
 
----
+Versioned as a **minor, not a patch**: it adds CLI flags and a JSON field, and
+refuses input that was previously accepted.
+
+> ### Upgrading
+>
+> **`cerefox server deploy` is required** — schema 0.11.1 → **0.11.2**
+> (migration 0022), and the Edge Functions changed too, so deploy both. Do not
+> pass `--schema-only`.
+>
+> **Then reconnect your MCP client.** Clients fetch the tool list once at
+> connect and cache it, so a running session will not see the new behaviour
+> until it reconnects.
+
+### Security
+
+- **RLS was disabled on `cerefox_document_relations`** — the one table of ten
+  that never reached `schema.sql`'s `ENABLE ROW LEVEL SECURITY` block, having
+  been added in iteration 29 without it. Cerefox's model is *RLS on with no
+  policies*: the service-role key bypasses RLS and everything else is denied by
+  having nothing to match. A table outside that block is reachable by any role
+  holding a grant on it — and on projects created before Supabase stopped
+  granting `anon` blanket privileges on `public`, `anon` holds all four verbs
+  there. The anon/publishable key is designed to be public, so that meant world
+  read and write on that table. Flagged by Supabase's advisor
+  (`rls_disabled_in_public`) on 2026-08-09.
+
+  **No document content was ever exposed.** Documents, chunks, versions, audit
+  log, config and projects were correctly protected throughout — an anon read of
+  any of them returns an empty set. Relations are opt-in (`relations_enabled`,
+  default false), so the affected table is empty on a default install; what was
+  open was the ability to *write* to it.
+
+  Migration 0022 enables RLS and revokes the legacy `anon` grants. A guard test
+  now compares the tables `schema.sql` creates against the tables it protects —
+  the check that was missing for a year, since the schema applied cleanly and
+  the two lists were comparable only by eye.
+
+### Added
+
+- **`cerefox document get --section "## Heading"`** (#201), with
+  `--section-part own_body|subtree`. The section read shipped in v1.4.0 on the
+  MCP path only, so for a release it was unreachable from a terminal. Both
+  resolve extent through the same `extractSection` as the MCP tool and the write
+  path, so the equivalence #198 rests on holds across surfaces rather than being
+  reimplemented per surface.
+
+  Worth knowing for future additions: `document edit-parts` takes an opaque JSON
+  operations array, so a new *operation* reaches the CLI for free — which is why
+  `rename_section` worked from the terminal the day it landed. `document get`
+  takes declared flags, so a new *read mode* does not.
+
+- **`cerefox_get_help(topic: "server")` reports the server's own version and the
+  operations it registers.** Three separate reports have claimed a capability
+  was missing from one server when both were correct and the *client* held a
+  tool list fetched before an upgrade. The standing advice was to check
+  `cerefox --version`, which is useless to an agent with no shell — and most
+  agents have no shell. The answer is now in-protocol.
+
+### Changed
+
+- **Text that repeats the anchor's own heading is refused.** `replace_section`
+  preserves the heading and `insert` places text inside the section, so
+  including it produced two of them, silently. One agent hit this twice in a
+  session, the second time while repairing the first — the shape that makes a
+  silent trap expensive, because the fix looks like more of the same call.
+  `before_heading` is deliberately not guarded: text placed before a heading
+  becomes a sibling section, and repeating the name there is a reasonable way to
+  split one. **This rejects calls that previously succeeded**, which is the main
+  reason this release is a minor.
+
+- **The dashboard shows agent access paths separately** (#195). `local-mcp`,
+  `remote-mcp` and `edge-function` were collapsed into "N mcp · N edge", which
+  hid which transport was in use and made a bare "0 edge" read as broken when it
+  means the ChatGPT Actions path was simply unused in the window. CLI operations
+  are now shown as their own figure rather than folded into the agent total: the
+  usage log records both requestor and access path, but the summary endpoint
+  does not cross-tabulate them, so separating an agent's CLI use from a human's
+  is not possible at that layer.
+
+- **Timestamps carry their UTC marker** (#199). `audit-log` truncated to 19
+  characters and dropped the `Z`; `list_versions` emitted a bare *date*, which
+  is indistinguishable from a local one. An agent working a Pacific afternoon
+  read `2026-08-11` from version history and dated a day of log entries into the
+  future. The instant was always correct; only the label was missing.
+
+  Cerefox deliberately does **not** convert to local time on the API or MCP
+  paths — "local" has no server-side meaning (the remote MCP runs where local
+  *is* UTC), it would make the same document report different times per
+  transport, and naked local times are not comparable between agents. The web UI
+  converts because a browser knows the viewer's timezone. The agent guides now
+  say so, and add the rule that prevents recurrence: **a date written into
+  document *content* comes from your own clock, not from a Cerefox timestamp.**
+
+- **`configure-agent --json` includes `serverName`** (#202). Before #168 the
+  name was always `cerefox`; now it varies with `CEREFOX_ENV_LABEL`, which is
+  exactly when a machine-readable consumer needs it.
+
+- Agent-facing guidance now states that **content between sections belongs to
+  the section above it** — a `---` rule or note sitting just above the next
+  heading is part of the section before it, and replacing that section takes it
+  too. An agent lost a separator exactly this way. The write was correct by the
+  addressing rules; the surprise is that "the end of this section" is further
+  down the page than it looks, and the loss warning does not catch it when the
+  replacement text is longer than what it replaced.
+
+- Agent-facing guidance gains a **"Mistakes that have actually happened"**
+  section, drawn from real sessions: a section-sized edit sent as a full ingest
+  (which truncated a 13,000-character index to one word), repairing partial
+  edits with more partial edits, and mistaking a stale client for a missing
+  server capability.
+
+### Internal
+
+- **A committed release-acceptance harness**, driving both the CLI and the local
+  MCP server and comparing them against each other rather than against
+  hand-written expectations. Every release so far was validated by a throwaway
+  script with no teardown, which is why fixtures kept being left behind. Cleanup
+  goes through the safety gate — soft delete, then `cerefox_purge_document`,
+  which refuses anything not already soft-deleted — so a mis-scoped id can only
+  ever reach the trash.
+
+- **`CEREFOX_VERSION`** is now the release version `_shared/` reports, bumped on
+  every cut including pre-releases. `EF_VERSION` bumps unconditionally only at
+  stable cuts, so it would have told a beta tester the last stable number.
+
+- **`search-recall` cleans up by created id** rather than by title prefix, which
+  deleted whatever matched and would have had two concurrent runs deleting each
+  other's fixtures. It now clears the orphaned audit rows too.
+
+- The dashboard's access-path arithmetic is extracted into its own module with
+  browser-free tests, since the Playwright suite is 8/13 failing (#155) and the
+  computation was the part that was wrong.
 
 ## [v1.4.0] -- 2026-08-11
 

@@ -617,3 +617,58 @@ describe("rename_section (#197)", () => {
     expect(applied[0].detail).toContain("## Renamed");
   });
 });
+
+describe("text may not repeat the heading it is anchored to", () => {
+  // Two incidents in one agent's log came from this, the second while trying to
+  // repair the first — the shape that makes a silent trap expensive, because
+  // the fix looks like more of the same call.
+  const DOC = `# R\n\n## Log\n\nold entry\n\n## Other\n\nother\n`;
+
+  test("end_of_section insert repeating the heading is refused", () => {
+    expect(() =>
+      applyOperations(DOC, [
+        { op: "insert", position: "end_of_section", anchor_heading: "## Log", text: "## Log\n\nnew" },
+      ]),
+    ).toThrow(/starts with the anchor heading itself/);
+  });
+
+  test("after_heading insert repeating the heading is refused", () => {
+    expect(() =>
+      applyOperations(DOC, [
+        { op: "insert", position: "after_heading", anchor_heading: "## Log", text: "## Log\n\nlead-in" },
+      ]),
+    ).toThrow(/starts with the anchor heading itself/);
+  });
+
+  test("replace_section repeating the heading is refused", () => {
+    expect(() =>
+      applyOperations(DOC, [
+        { op: "replace_section", anchor_heading: "## Log", text: "## Log\n\nrewritten" },
+      ]),
+    ).toThrow(/starts with the anchor heading itself/);
+  });
+
+  test("a DEEPER sub-heading in the text is fine", () => {
+    // The rule is about repeating the anchor, not about headings in general.
+    const { content } = applyOperations(DOC, [
+      { op: "insert", position: "end_of_section", anchor_heading: "## Log", text: "### Sub\n\nbody" },
+    ]);
+    expect(content).toContain("### Sub");
+    expect((content.match(/## Log/g) ?? []).length).toBe(1);
+  });
+
+  test("leading blank lines do not hide the repetition", () => {
+    expect(() =>
+      applyOperations(DOC, [
+        { op: "replace_section", anchor_heading: "## Log", text: "\n\n## Log\n\nrewritten" },
+      ]),
+    ).toThrow(/starts with the anchor heading itself/);
+  });
+
+  test("before_heading is NOT guarded — a repeated name there splits a section", () => {
+    const { content } = applyOperations(DOC, [
+      { op: "insert", position: "before_heading", anchor_heading: "## Log", text: "## Log\n\nearlier part" },
+    ]);
+    expect((content.match(/## Log/g) ?? []).length).toBe(2);
+  });
+});

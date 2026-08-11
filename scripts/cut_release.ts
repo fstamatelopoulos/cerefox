@@ -79,6 +79,14 @@ const VERSION_LITERAL_FILES: VersionLiteralFile[] = [
     prefix: 'const PKG_VERSION = "',
     suffix: '";',
   },
+  // The release version as `_shared/` sees it — reported to agents by
+  // `cerefox_get_help(topic: "server")`. Bumped on EVERY cut, including
+  // pre-releases, which is what distinguishes it from EF_VERSION below.
+  {
+    path: join(REPO_ROOT, "_shared", "ef-meta", "index.ts"),
+    prefix: 'export const CEREFOX_VERSION = "',
+    suffix: '";',
+  },
 ];
 
 /**

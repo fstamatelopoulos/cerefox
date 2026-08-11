@@ -9,6 +9,17 @@ import type { MCPSupabaseClient } from "./types.ts";
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
+/**
+ * Version timestamps carried only a DATE (`slice(0, 10)`), which is
+ * indistinguishable from a local date — and this is the tool an agent was
+ * reading when it dated a day's entries into the future (#199). Emit the
+ * instant with its zone.
+ */
+function utcStamp(iso: string): string {
+  const trimmed = iso.slice(0, 19);
+  return trimmed.includes("T") ? `${trimmed}Z` : `${trimmed} UTC`;
+}
+
 async function handler(
   supabase: MCPSupabaseClient,
   args: Record<string, unknown>,
@@ -44,7 +55,7 @@ async function handler(
 
   const lines = versions.map(
     (v) =>
-      `v${v.version_number} | ${v.created_at.slice(0, 10)} | ${v.source} | ${v.chunk_count} chunks / ${v.total_chars.toLocaleString()} chars | id: ${v.version_id}`,
+      `v${v.version_number} | ${utcStamp(v.created_at)} | ${v.source} | ${v.chunk_count} chunks / ${v.total_chars.toLocaleString()} chars | id: ${v.version_id}`,
   );
   return `Archived versions (newest first):\n\n${lines.join("\n")}`;
 }

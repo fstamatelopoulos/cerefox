@@ -66,12 +66,35 @@ const SCHEMA_OK = await (async () => {
   }
 })();
 
+/** Ids this run created, so teardown removes those and only those. */
+const createdIds: string[] = [];
+
+/**
+ * Remove this run's fixtures.
+ *
+ * Previously a title-prefix sweep (`LIKE '[E2E …]%'`), which deletes whatever
+ * matches rather than what this run made — so two concurrent runs (a developer
+ * and CI, or two developers) would delete each other's seed mid-test and fail
+ * for reasons unrelated to the code. Scoping to created ids removes that
+ * coupling.
+ *
+ * Also clears the audit rows. `cerefox_audit_log.document_id` is
+ * `ON DELETE SET NULL`, so deleting a document leaves its audit entries behind
+ * pointing at nothing — right for a real deletion, whose record should outlive
+ * the document, and litter for a fixture that existed for seconds. Chunks and
+ * project memberships cascade, so they need no help.
+ */
 async function hardPurgeE2eDocs(): Promise<void> {
+  if (createdIds.length === 0) return;
   try {
     const settings = loadSettings();
     if (!settings.supabaseUrl || !settings.supabaseKey) return;
     const client = createClient(settings);
-    await client.raw.from("cerefox_documents").delete().like("title", `${E2E_TITLE_PREFIX}%`);
+    const raw = client.raw as unknown as {
+      from: (t: string) => { delete: () => { in: (c: string, v: string[]) => Promise<unknown> } };
+    };
+    await raw.from("cerefox_audit_log").delete().in("document_id", createdIds);
+    await raw.from("cerefox_documents").delete().in("id", createdIds);
   } catch {
     // best-effort
   }
@@ -108,6 +131,9 @@ describe("search recall refinement (28I, live)", () => {
     );
     const ingest = run(["document", "ingest", file, "--title", `${E2E_TITLE_PREFIX} Recall Seed`, "--author", "e2e-test"]);
     rmSync(dir, { recursive: true, force: true });
+    // Register before asserting, so a failure still cleans up.
+    const seeded = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.exec(ingest.stdout);
+    if (seeded) createdIds.push(seeded[1]);
     expect(ingest.status).toBe(0);
 
     // Pre-28I: plainto AND-semantics — the absent 4th term returned nothing.
