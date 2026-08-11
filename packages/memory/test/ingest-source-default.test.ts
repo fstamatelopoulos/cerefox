@@ -17,10 +17,11 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const SRC = readFileSync(
-  join(import.meta.dir, "..", "src", "cli", "commands", "ingest.ts"),
-  "utf8",
-);
+const cmd = (name: string) =>
+  readFileSync(join(import.meta.dir, "..", "src", "cli", "commands", name), "utf8");
+
+const SRC = cmd("ingest.ts");
+const DIR_SRC = cmd("ingest-dir.ts");
 
 describe("--source default (#193)", () => {
   test("commander declares no default value for --source", () => {
@@ -32,12 +33,26 @@ describe("--source default (#193)", () => {
     expect(call).not.toContain('"cli"');
   });
 
-  test("the handler distinguishes update intent from create", () => {
-    // On update, omitting --source must send null so the RPC keeps the stored
-    // value. On create there is nothing to keep, and "cli" is the honest label
-    // — null would fall through to the RPC's 'agent' default and mislabel it.
-    expect(SRC).toContain("isUpdateIntent");
-    expect(SRC).toMatch(/options\.source \?\? \(isUpdateIntent \? null : "cli"\)/);
+  test("the handler defers create-vs-update to the pipeline", () => {
+    // Omitting --source sends the null sentinel and a sourceOnCreate label; the
+    // pipeline resolves it, because only that layer knows which branch ran.
+    // A flag-based heuristic here got --update-if-exists-against-a-missing-doc
+    // wrong, labelling a fresh CLI document 'agent' (review bug_005).
+    expect(SRC).toMatch(/options\.source \?\? null/);
+    expect(SRC).toContain('sourceOnCreate: "cli"');
+    expect(SRC).not.toContain("isUpdateIntent");
+  });
+
+  test("ingest-dir has the same contract, not a second implementation", () => {
+    // The #193 fix originally landed only in `document ingest`, leaving the
+    // identical commander default live in the bulk command — where one run
+    // relabels every matched document. This test read only ingest.ts and so
+    // passed vacuously for ingest-dir the whole time (review bug_008).
+    const decl = DIR_SRC.slice(DIR_SRC.indexOf('"--source <label>"'));
+    expect(decl.slice(0, decl.indexOf(")"))).not.toContain('"cli"');
+    expect(DIR_SRC).toMatch(/options\.source \?\? null/);
+    expect(DIR_SRC).toContain('sourceOnCreate: "cli"');
+    expect(DIR_SRC).not.toMatch(/source:\s*options\.source\s*\?\?\s*"cli"/);
   });
 
   test("no call site re-introduces a fallback that erases the null", () => {

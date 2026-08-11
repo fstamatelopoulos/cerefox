@@ -60,6 +60,14 @@ export interface IngestTextOptions {
   title: string;
   source?: string | null;     // default "paste"; null = keep stored (#193)
   /**
+   * Origin label to use if this call turns out to be a CREATE while `source`
+   * is null. Only this layer knows which branch was taken: `--update-if-exists`
+   * against a document that does not exist yet is an update *intent* that
+   * performs a create, and resolving in the caller labelled it 'agent' via the
+   * RPC default (review bug_005).
+   */
+  sourceOnCreate?: string;
+  /**
    * Version-row label recording how THIS write was triggered, as distinct from
    * `source`, which is the document's own origin. Defaults to `source`, which
    * is right for ordinary saves where the two coincide.
@@ -107,6 +115,8 @@ export interface UpdateDocumentOptions {
   text: string;
   title: string;
   source?: string | null;      // default "manual"; null = keep stored (#193)
+  /** See IngestTextOptions.sourceOnCreate. */
+  sourceOnCreate?: string;
   /** Version-row label — see IngestTextOptions.sourceLabel. Defaults to `source`. */
   sourceLabel?: string;
   projectId?: string | null;

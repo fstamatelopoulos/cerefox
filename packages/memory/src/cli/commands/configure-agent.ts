@@ -8,8 +8,7 @@ import {
   printJson,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { localCerefoxEntry, WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
-import { mcpServerName } from "../util/mcp-config-writers.js";
+import { localCerefoxEntry, mcpServerName, WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
 
 interface ConfigureAgentOptions {
   tool: string;

@@ -23,7 +23,6 @@
 
 import {
   applyOperations,
-  parseOutline,
   validateOperations,
   type AppliedOperation,
   type EditOperation,
@@ -79,20 +78,16 @@ function defaultRequestor(ctx: ToolContext): string {
  * section, and a later `replace_section` on its heading removes it — correctly
  * by the addressing rules, and silently.
  *
- * The offsets come from the document as it was BEFORE the edit, which is the
- * document the caller was reasoning about.
+ * The answer is recorded by `applyOne` when the operation resolves, not
+ * recomputed here. The first version re-parsed the PRE-batch document and
+ * matched on `applied.path`, which breaks the moment a batch renames a heading
+ * before touching it: the later op's path names a heading the pre-batch
+ * outline has never seen, the lookup finds nothing, and the warning goes quiet
+ * on exactly the batch shape `rename_section` exists to enable. It also cost a
+ * second parse per destructive edit.
  */
-function touchedTrailingSection(before: string, applied: AppliedOperation[]): boolean {
-  const destructive = applied.filter(
-    (a) => a.op === "replace_section" || a.op === "delete_section",
-  );
-  if (destructive.length === 0) return false;
-  const outline = parseOutline(before);
-  const end = before.trimEnd().length;
-  return destructive.some((a) => {
-    const node = outline.find((n) => n.path === a.path);
-    return node !== undefined && node.subtreeEnd >= end;
-  });
+function touchedTrailingSection(applied: AppliedOperation[]): boolean {
+  return applied.some((a) => a.reachedEnd === true);
 }
 
 /**
@@ -116,11 +111,18 @@ function touchedTrailingSection(before: string, applied: AppliedOperation[]): bo
  *   whichever section it hit.
  */
 function shrinkNote(before: string, afterChars: number, applied: AppliedOperation[]): string {
-  const beforeChars = before.length;
+  // Code points, NOT UTF-16 code units. `afterChars` comes from the RPC's
+  // SUM(char_count), and the chunker counts code points — so `before.length`
+  // over-counts by one per non-BMP character (emoji, most non-BMP CJK) and
+  // manufactures a phantom loss. Latent since v1.3.0, where the >25% gate hid
+  // it; removing that gate for #196 would have surfaced it on every edit to a
+  // document containing an emoji — including cerefox_insert, which is
+  // annotated destructiveHint: false precisely because it cannot lose content.
+  const beforeChars = [...before].length;
   const lost = beforeChars - afterChars;
   if (lost <= 0) return "";
   const pct = Math.round((lost / Math.max(beforeChars, 1)) * 100);
-  const trailing = touchedTrailingSection(before, applied);
+  const trailing = touchedTrailingSection(applied);
 
   if (pct < 25 && !trailing) {
     return `This edit removed ${lost} characters. cerefox_list_versions has the previous content.\n`;

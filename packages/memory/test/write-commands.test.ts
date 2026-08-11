@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 
 import { loadSettings } from "../../../_shared/config/index.ts";
 import { createClient } from "../../../_shared/db-client/index.ts";
+import { liveWriteSkipReason, mayWriteToLiveTarget } from "./_live-target-guard.ts";
 
 const E2E_TITLE_PREFIX = "[E2E v0.5-test]";
 
@@ -79,7 +80,10 @@ async function hardPurgeE2eDocs(): Promise<void> {
 
 // Probe whether Supabase is reachable.
 const probe = run(["project", "list", "--json"]);
-const LIVE_OK = probe.status === 0;
+const LIVE_REACHABLE = probe.status === 0;
+// Reachability is the wrong question — production is the most reachable
+// target there is. Gate on the environment LABEL instead.
+const LIVE_OK = LIVE_REACHABLE && mayWriteToLiveTarget();
 
 // iter-32 gate: content updates require the v0.5.0 schema
 // (p_expected_content_hash / p_last_write_wins on cerefox_ingest_document).
@@ -104,7 +108,10 @@ const createdIds: string[] = [];
 
 describe("cerefox write commands (live)", () => {
   if (!LIVE_OK) {
-    test.skip(`Supabase not reachable (probe exit ${probe.status}); skipping live tests`, () => {
+    test.skip(
+      LIVE_REACHABLE
+        ? liveWriteSkipReason()
+        : `Supabase not reachable (probe exit ${probe.status}); skipping live tests`, () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       LIVE_OK;
     });

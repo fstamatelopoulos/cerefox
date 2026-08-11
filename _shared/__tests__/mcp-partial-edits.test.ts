@@ -34,6 +34,7 @@ function restoreFetch(): void {
 }
 
 import { TOOLS_BY_NAME } from "../mcp-tools/index.ts";
+import { McpInvalidParams } from "../mcp-tools/types.ts";
 import type { MCPSupabaseClient, ToolContext } from "../mcp-tools/types.ts";
 
 const DOC = `# Log
@@ -331,10 +332,18 @@ describe("section mode (#198)", () => {
     expect(sub.text).toContain("### Notes");
   });
 
-  test("a missing anchor errors rather than returning nothing", async () => {
+  test("a missing anchor errors as INVALID PARAMS, like the write path", async () => {
+    // Not merely "throws": an unwrapped anchor error surfaces as JSON-RPC
+    // -32603 internal error, while the identical anchor through cerefox_edit
+    // surfaces as -32602 invalid params — so a client keying on the code would
+    // classify the same caller mistake two ways depending on read vs write.
+    // The equivalence this feature promises has to cover refusals too.
     await expect(
       getDoc.handler(mockClient(), { document_id: "d", section: "## Nope" }, ctx),
-    ).rejects.toThrow();
+    ).rejects.toThrow(McpInvalidParams);
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Intake" }, ctx),
+    ).rejects.toThrow(McpInvalidParams);
   });
 
   test("outline and section together are refused, not silently ranked", async () => {
@@ -647,6 +656,98 @@ describe("shrink reporting sees the insert-then-clobber case (#196)", () => {
         ctx,
       );
       expect(out).not.toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+});
+
+describe("shrink reporting counts code points, not UTF-16 units (review bug_009)", () => {
+  // Every fixture above is ASCII, which is why this went unnoticed: the RPC's
+  // total_chars is a SUM of the chunker's code-point counts, while
+  // `before.length` counts UTF-16 units, so a document containing emoji
+  // manufactured a phantom loss on edits that removed nothing.
+  const EMOJI = `# Log\n\n## Body\n\nDeployed 🎉 successfully, shipped 📝 too\n\n## Tail\n\ntail\n`;
+
+  function clientFor(content: string) {
+    return {
+      rpc: (name: string, args: Record<string, unknown>) => {
+        if (name === "cerefox_get_document") {
+          return {
+            data: [{ doc_title: "Log", full_content: content, content_hash: HASH, total_chars: content.length }],
+            error: null,
+          };
+        }
+        if (name === "cerefox_ingest_document") {
+          const chunks = (args.p_chunks as Array<{ char_count: number }>) ?? [];
+          // Mirror the RPC: SUM(char_count), which the chunker counts in code points.
+          const total = chunks.reduce((n, c) => n + c.char_count, 0);
+          return {
+            data: [{ document_id: "doc-1", content_hash: "c".repeat(64), total_chars: total, size_warning: false }],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+      from: () => ({ select: () => ({ data: null, error: null }) }),
+    } as unknown as MCPSupabaseClient;
+  }
+
+  test("a purely additive insert on an emoji document reports no loss", async () => {
+    // cerefox_insert is annotated destructiveHint: false — it is structurally
+    // incapable of removing content, so a loss warning here contradicts the
+    // tool's own contract.
+    stubEmbeddings();
+    try {
+      const out = await insert.handler(
+        clientFor(EMOJI),
+        { document_id: "d", text: "a new line", position: "end_of_document", expected_content_hash: HASH },
+        ctx,
+      );
+      expect(out).not.toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("a rename on an emoji document reports no loss", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(EMOJI),
+        {
+          document_id: "d",
+          operations: [{ op: "rename_section", anchor_heading: "## Tail", new_heading: "## Tailed" }],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).not.toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("rename-then-replace on the LAST section still gets the loud warning (review bug_001)", async () => {
+    // The path-lookup version went quiet here: after the rename, the second
+    // op's path names a heading the pre-batch outline never had.
+    const BIG = `# Big\n\n## Body\n\n${"filler line\n".repeat(300)}\n## LastLog\n\nexisting entry\n`;
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG),
+        {
+          document_id: "d",
+          operations: [
+            { op: "rename_section", anchor_heading: "## LastLog", new_heading: "## Log" },
+            { op: "replace_section", anchor_heading: "## Log", text: "tiny" },
+          ],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).toMatch(/removed \d+ characters/);
+      expect(out).toContain("LAST section");
     } finally {
       restoreFetch();
     }

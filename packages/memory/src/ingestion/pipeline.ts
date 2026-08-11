@@ -89,6 +89,7 @@ export class IngestionPipeline {
       text,
       title,
       source = "paste",
+      sourceOnCreate,
       sourceLabel,
       sourcePath: sourcePathOpt,
       projectName,
@@ -263,7 +264,12 @@ export class IngestionPipeline {
     const rpcResult = await this.db.ingestDocumentRpc({
       documentId: null,
       title,
-      source,
+      // `null` means "caller omitted source, keep what is stored" — but on a
+      // create there is nothing stored to keep, and letting null through lands
+      // on the RPC's 'agent' default, mislabelling a document a CLI user just
+      // made (review bug_005). This branch is where create-vs-update is finally
+      // known, so it is where the sentinel resolves.
+      source: source ?? sourceOnCreate ?? null,
       sourcePath,
       contentHash: hash,
       metadata: validatedMeta,
@@ -586,6 +592,7 @@ export class IngestionPipeline {
       // `?? "file"` would turn an explicit null — "caller omitted source, keep
       // what is stored" (#193) — into a relabel. Only undefined defaults.
       source: opts.source === undefined ? "file" : opts.source,
+      sourceOnCreate: opts.sourceOnCreate ?? "file",
       sourcePath: absPath,
     });
   }

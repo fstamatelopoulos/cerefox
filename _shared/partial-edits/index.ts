@@ -76,6 +76,19 @@ export interface AppliedOperation {
   path: string;
   /** Human summary: position / scope / section_part actually used. */
   detail: string;
+  /**
+   * For destructive ops: did the targeted section run to the END of the
+   * document it was applied to? (#196 — the last section owns anything
+   * appended after it, which is the loss that surprises people.)
+   *
+   * Decided HERE, at resolution time, rather than by re-parsing the pre-batch
+   * document later. In a batch, each operation resolves against the content
+   * left by the previous one, so a `rename_section` earlier in the same call
+   * means a later op's `path` names a heading the pre-batch outline has never
+   * heard of — and a path lookup against that outline silently finds nothing.
+   * That is precisely the batch shape `rename_section` was added to enable.
+   */
+  reachedEnd?: boolean;
 }
 
 /** Anchor matched nothing. The write must never fall back to appending. */
@@ -479,6 +492,7 @@ function applyOne(
         path: node.path,
         detail:
           "replace_section body" + (operation.section_part ? ` (${operation.section_part})` : ""),
+        reachedEnd: to >= content.trimEnd().length,
       },
     };
   }
@@ -522,6 +536,7 @@ function applyOne(
       path: node.path,
       detail:
         `delete_section (${scope})` + (operation.section_part ? ` (${operation.section_part})` : ""),
+      reachedEnd: to >= content.trimEnd().length,
     },
   };
 }

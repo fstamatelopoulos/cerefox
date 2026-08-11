@@ -44,6 +44,8 @@ import { spawnSync } from "node:child_process";
 
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 
+import { resolveConfigDir } from "../../../../../_shared/config/index.ts";
+
 export type WriterKind = "direct-write" | "delegated";
 export type WriterFormat = "json" | "toml";
 
@@ -74,7 +76,7 @@ export interface ConfigWriter {
    * The MCP server JSON entry — `{ command, args }`. Same shape for both
    * kinds; the dispatcher decides how to install it.
    */
-  buildServerEntry: () => { command: string; args: string[] };
+  buildServerEntry: () => McpServerEntry;
   /**
    * For delegated writers: the external command + args used to register
    * the server. The first element is the executable; remaining elements
@@ -94,10 +96,45 @@ export interface ConfigWriter {
  * doesn't need cerefox on its launch PATH — npx resolves from the npm
  * cache regardless of shell PATH augmentations.
  */
-function defaultCerefoxEntry(): { command: string; args: string[] } {
+/** An MCP stdio server entry as written into a client's config file. */
+export interface McpServerEntry {
+  command: string;
+  args: string[];
+  /** Only present for a labelled (non-production) environment — see envForEntry. */
+  env?: Record<string, string>;
+}
+
+/**
+ * Environment to pin onto a LABELLED entry (#168 follow-up).
+ *
+ * Naming the entry `cerefox-staging` is only half the job. MCP clients spawn a
+ * stdio server with the CLIENT's environment, not the shell where
+ * `configure-agent` ran — and for a GUI client launched from the dock there is
+ * no shell environment at all. `CEREFOX_CONFIG_DIR` would therefore be absent,
+ * `resolveConfigDir()` would fall back to `~/.cerefox/`, and the entry labelled
+ * `cerefox-staging` would quietly serve PRODUCTION.
+ *
+ * That is worse than the bug #168 fixed. The old behaviour clobbered the
+ * production entry visibly — the user noticed it was gone. This would leave
+ * both entries in place, both apparently working, both writing to production,
+ * with nothing at the agent layer to reveal it.
+ *
+ * So a labelled entry carries its own config directory. Production entries get
+ * no `env` at all, keeping the default form byte-identical to what every
+ * existing install already has.
+ */
+function envForEntry(): Record<string, string> | undefined {
+  const label = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
+  if (!label || mcpServerName() === "cerefox") return undefined;
+  return { CEREFOX_CONFIG_DIR: resolveConfigDir(), CEREFOX_ENV_LABEL: label };
+}
+
+function defaultCerefoxEntry(): McpServerEntry {
+  const env = envForEntry();
   return {
     command: "npx",
     args: ["-y", "--package=@cerefox/memory", "cerefox", "mcp"],
+    ...(env ? { env } : {}),
   };
 }
 
@@ -108,10 +145,12 @@ function defaultCerefoxEntry(): { command: string; args: string[] } {
  * `cerefox-local configure-agent` host path passes the resolved absolute path so
  * MCP clients with a minimal PATH still find it). Used when `--local` is passed.
  */
-export function localCerefoxEntry(): { command: string; args: string[] } {
+export function localCerefoxEntry(): McpServerEntry {
+  const env = envForEntry();
   return {
     command: process.env.CEREFOX_LOCAL_CMD || "cerefox-local",
     args: ["mcp"],
+    ...(env ? { env } : {}),
   };
 }
 
@@ -134,11 +173,26 @@ function claudeDesktopConfigPath(): string {
 }
 
 /** Build the `claude mcp add ...` argv for the Claude Code delegation. */
-function claudeCodeDelegated(entry: { command: string; args: string[] }): { cmd: string; args: string[] } {
+function claudeCodeDelegated(entry: McpServerEntry): { cmd: string; args: string[] } {
   // `claude mcp add <name> --scope user -- <cmd> [args...]`
+  // `--env` must precede the `--` separator, or it is parsed as an argument to
+  // the spawned command rather than by `claude mcp add`. Without it the JSON
+  // writers would pin the config directory and this path would not, so a
+  // Claude Code user would be the one person still silently on production.
+  const envFlags = Object.entries(entry.env ?? {}).flatMap(([k, v]) => ["--env", `${k}=${v}`]);
   return {
     cmd: "claude",
-    args: ["mcp", "add", mcpServerName(), "--scope", "user", "--", entry.command, ...entry.args],
+    args: [
+      "mcp",
+      "add",
+      mcpServerName(),
+      "--scope",
+      "user",
+      ...envFlags,
+      "--",
+      entry.command,
+      ...entry.args,
+    ],
   };
 }
 

@@ -169,11 +169,14 @@ async function action(
   // #193: commander defaulted --source to "cli" and the CLI always sent it, so
   // re-ingesting an existing document without --source silently relabelled its
   // provenance. #191 made the RPC preserve the stored value when the parameter
-  // is OMITTED — which the CLI never did. Send a value only when the user chose
-  // one, or when this is unambiguously a create, where "cli" is the honest
-  // label and NULL would fall through to the RPC's 'agent' default.
-  const isUpdateIntent = Boolean(options.documentId) || Boolean(options.updateIfExists);
-  const resolvedSource = options.source ?? (isUpdateIntent ? null : "cli");
+  // is OMITTED — which the CLI never did.
+  //
+  // `null` is the "user omitted it" sentinel; `sourceOnCreate` says what to use
+  // if the write turns out to be a create. The CLI deliberately does NOT decide
+  // that here: `--update-if-exists` against a document that does not exist yet
+  // is an update intent that performs a create, and an earlier heuristic based
+  // on the flags labelled exactly that case 'agent' (review bug_005).
+  const resolvedSource = options.source ?? null;
 
   const pipeline = new IngestionPipeline({
     supabase,
@@ -186,6 +189,7 @@ async function action(
         ? await pipeline.ingestFile(path, {
             title,
             source: resolvedSource,
+            sourceOnCreate: "cli",
             projectName: options.projectName ?? null,
             projectNames: projectNames ?? null,
             metadata: metadata ?? null,
@@ -200,6 +204,7 @@ async function action(
             text: content,
             title,
             source: resolvedSource,
+            sourceOnCreate: "cli",
             projectName: options.projectName ?? null,
             projectNames: projectNames ?? null,
             metadata: metadata ?? null,

@@ -100,7 +100,19 @@ async function handler(
   // blind overwrite. The extent comes from the same resolver the write uses —
   // what this returns is exactly what replace_section would destroy.
   if (section) {
-    const extracted = extractSection(row.full_content ?? "", section, section_part);
+    // Anchor failures are caller-recoverable, exactly as they are on the write
+    // path (`applyAndWrite` wraps the same three errors). Left unwrapped they
+    // surface as JSON-RPC -32603 "internal error" while the identical anchor
+    // through cerefox_edit surfaces as -32602 "invalid params", so a client
+    // keying on the code would classify the same mistake two ways depending on
+    // whether it read or wrote. The equivalence this feature promises has to
+    // cover refusals too, not just extents.
+    let extracted;
+    try {
+      extracted = extractSection(row.full_content ?? "", section, section_part);
+    } catch (err) {
+      throw new McpInvalidParams(err instanceof Error ? err.message : String(err));
+    }
     // Same reasoning as outline mode: the RPC returns the CURRENT hash even when
     // reconstructing an archived version, and pairing it with archived text
     // would invite an edit based on content that is no longer there.
