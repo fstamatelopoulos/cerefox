@@ -18,7 +18,7 @@
  * doesn't touch `supabase/functions/` leaves it alone).
  */
 
-export const EF_VERSION = "1.3.0";
+export const EF_VERSION = "1.4.0";
 
 /**
  * The most recent version whose EF-side SOURCE actually changed (#127).
@@ -28,7 +28,7 @@ export const EF_VERSION = "1.3.0";
  * `cut_release.ts` ONLY when EF source changed since the last tag; doctor
  * uses it to stay silent on label-only drift.
  */
-export const EF_LAST_CHANGED = "1.3.0-beta.4";
+export const EF_LAST_CHANGED = "1.4.0";
 
 /**
  * The 8 peer EFs the cerefox-mcp aggregator probes (excludes cerefox-mcp

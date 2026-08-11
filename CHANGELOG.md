@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.4.0] -- 2026-08-11
+
 Iteration 35 — the partial-edit feature completing itself under real usage, plus
 guard debt. Target **v1.4.0**.
 
