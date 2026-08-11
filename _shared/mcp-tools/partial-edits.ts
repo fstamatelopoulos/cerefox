@@ -68,18 +68,75 @@ function defaultRequestor(ctx: ToolContext): string {
  * The full-document diff is deliberately not returned (§3.8), so the size delta
  * is the cheapest honest signal available.
  */
-function shrinkNote(before: number, after: number): string {
-  const lost = before - after;
+/**
+ * Did any destructive operation target a section that ran to the END of the
+ * document?
+ *
+ * This is the shape behind the whole warning. A section extends to the next
+ * heading of equal-or-higher level **or to EOF**, so the last section owns
+ * everything appended after it. An `end_of_document` insert lands inside that
+ * section, and a later `replace_section` on its heading removes it — correctly
+ * by the addressing rules, and silently.
+ *
+ * The answer is recorded by `applyOne` when the operation resolves, not
+ * recomputed here. The first version re-parsed the PRE-batch document and
+ * matched on `applied.path`, which breaks the moment a batch renames a heading
+ * before touching it: the later op's path names a heading the pre-batch
+ * outline has never seen, the lookup finds nothing, and the warning goes quiet
+ * on exactly the batch shape `rename_section` exists to enable. It also cost a
+ * second parse per destructive edit.
+ */
+function touchedTrailingSection(applied: AppliedOperation[]): boolean {
+  return applied.some((a) => a.reachedEnd === true);
+}
+
+/**
+ * Report content loss (#196).
+ *
+ * The first version gated on a >25% ratio and so could not see the case it was
+ * built for. The loss that matters most is small *precisely because it was
+ * recently added*: append a 400-character entry to an 11,000-character
+ * document, then replace the last section, and 4% of the document silently
+ * takes the new entry with it. A percentage threshold is structurally blind to
+ * that — the more established the document, the smaller the fraction, the
+ * quieter the failure.
+ *
+ * So the ratio is no longer a gate on whether to speak, only on how loudly:
+ *
+ * - Any net loss is stated with its size. Cheap, and a caller who meant it
+ *   reads one clause.
+ * - A destructive operation on a section that ran to EOF gets the full
+ *   explanation at any size, because that is the sequence that surprises.
+ * - A large proportional loss gets it too, since that is worth a second look
+ *   whichever section it hit.
+ */
+function shrinkNote(before: string, afterChars: number, applied: AppliedOperation[]): string {
+  // Code points, NOT UTF-16 code units. `afterChars` comes from the RPC's
+  // SUM(char_count), and the chunker counts code points — so `before.length`
+  // over-counts by one per non-BMP character (emoji, most non-BMP CJK) and
+  // manufactures a phantom loss. Latent since v1.3.0, where the >25% gate hid
+  // it; removing that gate for #196 would have surfaced it on every edit to a
+  // document containing an emoji — including cerefox_insert, which is
+  // annotated destructiveHint: false precisely because it cannot lose content.
+  const beforeChars = [...before].length;
+  const lost = beforeChars - afterChars;
   if (lost <= 0) return "";
-  const pct = Math.round((lost / Math.max(before, 1)) * 100);
-  if (pct < 25) return "";
-  return (
-    `⚠ This edit removed ${lost} characters (${pct}% smaller). If you did not ` +
-    `intend that, note that a section runs to the next heading of the same or ` +
-    `higher level — or to the end of the document — so replacing or deleting ` +
-    `the LAST section also removes anything appended after it. ` +
-    `cerefox_list_versions has the previous content.\n`
-  );
+  const pct = Math.round((lost / Math.max(beforeChars, 1)) * 100);
+  const trailing = touchedTrailingSection(applied);
+
+  if (pct < 25 && !trailing) {
+    return `This edit removed ${lost} characters. cerefox_list_versions has the previous content.\n`;
+  }
+
+  const why = trailing
+    ? `You replaced or deleted the LAST section, and a section runs to the next ` +
+      `heading of the same or higher level — or to the end of the document — so ` +
+      `anything appended after it was inside it. `
+    : `If you did not intend that, note that a section runs to the next heading ` +
+      `of the same or higher level — or to the end of the document — so replacing ` +
+      `or deleting the LAST section also removes anything appended after it. `;
+
+  return `⚠ This edit removed ${lost} characters (${pct}% smaller). ${why}cerefox_list_versions has the previous content.\n`;
 }
 
 /** Audit `operation` values, matching the CHECK constraint widened by migration 0019. */
@@ -87,6 +144,7 @@ const AUDIT_OP: Record<AppliedOperation["op"], string> = {
   insert: "insert",
   replace_section: "replace-section",
   delete_section: "delete-section",
+  rename_section: "rename-section",
 };
 
 /**
@@ -293,7 +351,7 @@ async function applyAndWrite(
     `Applied ${applied.length} operation(s) to "${doc.title}" (id: ${documentId}):\n${summary}\n\n` +
     `New content_hash: ${row?.content_hash ?? newHash}\n` +
     `Size: ${row?.total_chars ?? totalChars} chars (was ${doc.content.length}), ${chunks.length} chunk(s).\n` +
-    shrinkNote(doc.content.length, row?.total_chars ?? totalChars) +
+    shrinkNote(doc.content, row?.total_chars ?? totalChars, applied) +
     `Pass the new content_hash as expected_content_hash on your next edit.${warning}`
   );
 }
@@ -445,7 +503,9 @@ export const editTool: ToolDefinition = {
     "Change parts of a document without resending the whole thing: one or many operations " +
     "applied ATOMICALLY in one write. Operations: insert (same positions as cerefox_insert), " +
     "replace_section (swap a section's body, heading kept), delete_section (remove a section, " +
-    "scope body_only or heading_and_body). Use one call for changes that belong together — a " +
+    "scope body_only or heading_and_body), rename_section (change a heading's text, leaving " +
+    "its body and position untouched — for headings that go stale, like a dated one). " +
+    "Use one call for changes that belong together — a " +
     "half-applied edit is impossible, so a row and the total it feeds cannot disagree. " +
     "Operations apply in order and each sees the previous one's result. To change a single " +
     "line, replace_section on its smallest enclosing heading. Requires expected_content_hash; " +
@@ -472,7 +532,10 @@ export const editTool: ToolDefinition = {
           type: "object",
           required: ["op"],
           properties: {
-            op: { type: "string", enum: ["insert", "replace_section", "delete_section"] },
+            op: {
+              type: "string",
+              enum: ["insert", "replace_section", "delete_section", "rename_section"],
+            },
             text: { type: "string", description: "Markdown. Required for insert and replace_section." },
             position: {
               type: "string",
@@ -494,6 +557,11 @@ export const editTool: ToolDefinition = {
               type: "string",
               enum: ["body_only", "heading_and_body"],
               description: "delete_section only. Defaults to body_only, which keeps the heading.",
+            },
+            new_heading: {
+              type: "string",
+              description:
+                "rename_section only: the replacement heading LINE, at the same level (## stays ##). Changes the heading text and nothing else — the body and the section's position are untouched, which is the point: renaming via delete + insert would risk both. Use it for headings that go stale, like '## OPEN TODOs (as of 2026-08-08)'. A rename changes the anchor, so a later operation in the same call must target the NEW heading.",
             },
           },
         },

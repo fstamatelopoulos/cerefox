@@ -67,6 +67,12 @@ bun install
 # Run tests (`bun test` is the only runner)
 cd _shared && bun test                                  # TS unit tests (mocked)
 cd packages/memory && bun run build && bun test         # CLI/MCP smokes + live read/write
+
+# The live suites WRITE real documents, and resolve credentials exactly as the
+# CLI does — so a bare `bun test` targets whatever your default config points
+# at. Since v1.4.0 they skip unless the target is labelled; run them against a
+# scratch environment:
+CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test
 cd frontend && bun run test:e2e                         # UI e2e (Playwright)
 CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote  # live EF e2e (opt-in)
 

@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 
 import { loadSettings } from "../../../_shared/config/index.ts";
 import { createClient } from "../../../_shared/db-client/index.ts";
+import { liveWriteSkipReason, mayWriteToLiveTarget } from "./_live-target-guard.ts";
 
 const E2E_TITLE_PREFIX = "[E2E v1.0.3-recall]";
 
@@ -45,7 +46,10 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
 }
 
 const probe = run(["project", "list", "--json"]);
-const LIVE_OK = probe.status === 0;
+const LIVE_REACHABLE = probe.status === 0;
+// Reachability is the wrong question — production is the most reachable
+// target there is. Gate on the environment LABEL instead.
+const LIVE_OK = LIVE_REACHABLE && mayWriteToLiveTarget();
 
 // below_confidence ships with schema 0.9.0; the term-coverage gate with
 // 0.9.1 — gate on 0.9.1 so the whole file tests the current contract.

@@ -62,25 +62,44 @@ export type EditOperation =
       anchor_heading: string;
       scope?: "body_only" | "heading_and_body";
       section_part?: SectionPart;
+    }
+  | {
+      op: "rename_section";
+      anchor_heading: string;
+      new_heading: string;
     };
 
 /** Echo of one applied operation, for audit labels and response text. */
 export interface AppliedOperation {
-  op: "insert" | "replace_section" | "delete_section";
+  op: "insert" | "replace_section" | "delete_section" | "rename_section";
   /** Resolved anchor path (or "(document)" for end_of_document). */
   path: string;
   /** Human summary: position / scope / section_part actually used. */
   detail: string;
+  /**
+   * For destructive ops: did the targeted section run to the END of the
+   * document it was applied to? (#196 — the last section owns anything
+   * appended after it, which is the loss that surprises people.)
+   *
+   * Decided HERE, at resolution time, rather than by re-parsing the pre-batch
+   * document later. In a batch, each operation resolves against the content
+   * left by the previous one, so a `rename_section` earlier in the same call
+   * means a later op's `path` names a heading the pre-batch outline has never
+   * heard of — and a path lookup against that outline silently finds nothing.
+   * That is precisely the batch shape `rename_section` was added to enable.
+   */
+  reachedEnd?: boolean;
 }
 
 /** Anchor matched nothing. The write must never fall back to appending. */
 export class AnchorNotFoundError extends Error {
-  constructor(anchor: string, outline: OutlineNode[]) {
+  /** `reads` — see AmbiguousPositionError: a read never attempted a write. */
+  constructor(anchor: string, outline: OutlineNode[], reads = false) {
     const known = outline.length
       ? ` Known headings:\n${outline.map((n) => `  ${n.path}`).join("\n")}`
       : " The document has no headings.";
     super(
-      `Anchor not found: "${anchor}". No write was performed.${known}\n` +
+      `Anchor not found: "${anchor}".${reads ? "" : " No write was performed."}${known}\n` +
         `Anchors match a heading line exactly ("## Title") or a parent path ` +
         `("## Parent > ### Child").`,
     );
@@ -91,10 +110,11 @@ export class AnchorNotFoundError extends Error {
 /** Anchor matched more than one section. Candidates resolve the retry. */
 export class AmbiguousAnchorError extends Error {
   readonly candidates: string[];
-  constructor(anchor: string, candidates: string[]) {
+  /** `reads` — see AmbiguousPositionError: a read never attempted a write. */
+  constructor(anchor: string, candidates: string[], reads = false) {
     super(
       `Ambiguous anchor: "${anchor}" matches ${candidates.length} sections. ` +
-        `No write was performed. Disambiguate by passing one of these paths as anchor_heading:\n` +
+        `${reads ? "" : "No write was performed. "}Disambiguate by passing one of these paths as anchor_heading:\n` +
         candidates.map((c) => `  ${c}`).join("\n"),
     );
     this.name = "AmbiguousAnchorError";
@@ -108,7 +128,13 @@ export class AmbiguousAnchorError extends Error {
  */
 export class AmbiguousPositionError extends Error {
   readonly candidates: { section_part: SectionPart; description: string }[];
-  constructor(node: OutlineNode, firstChildHeading: string, opName: string) {
+  /**
+   * `reads` marks a caller that only inspects content (#198's section read).
+   * The reassurance "No write was performed" is meant to stop an agent
+   * retrying a half-applied batch — on a read it is noise at best, and at
+   * worst it implies a write was attempted when none ever could be.
+   */
+  constructor(node: OutlineNode, firstChildHeading: string, opName: string, reads = false) {
     const candidates = [
       {
         section_part: "own_body" as const,
@@ -126,11 +152,35 @@ export class AmbiguousPositionError extends Error {
     super(
       `Ambiguous position: "${node.path}" has child sections, so "the end of ` +
         `the section" could mean two different places and ${opName} will not guess. ` +
-        `No write was performed. Pass section_part to choose:\n` +
+        `${reads ? "" : "No write was performed. "}Pass section_part to choose:\n` +
         candidates.map((c) => `  section_part: "${c.section_part}" — ${c.description}`).join("\n"),
     );
     this.name = "AmbiguousPositionError";
     this.candidates = candidates;
+  }
+}
+
+/**
+ * A rename asked to change the heading's LEVEL, not just its text.
+ *
+ * `## Q3 plan` → `### Q3 plan` re-parents everything under it: the section
+ * stops being a sibling of its neighbours and becomes a child of whichever
+ * section precedes it. That is a restructure with a different blast radius
+ * from a rename, and doing it silently under the name "rename" is exactly the
+ * kind of surprise this contract refuses (#197).
+ */
+export class HeadingLevelChangeError extends Error {
+  constructor(fromHeading: string, toHeading: string) {
+    const from = (fromHeading.match(/^#+/) ?? [""])[0].length;
+    const to = (toHeading.match(/^#+/) ?? [""])[0].length;
+    super(
+      `rename_section changes heading TEXT, not depth: "${fromHeading}" is level ` +
+        `${from} and "${toHeading}" is level ${to}. No write was performed. ` +
+        `Changing the level would re-parent every section nested under it. ` +
+        `Pass a level-${from} heading (${"#".repeat(from)} ...), or restructure ` +
+        `explicitly with delete_section + insert if that is what you meant.`,
+    );
+    this.name = "HeadingLevelChangeError";
   }
 }
 
@@ -240,7 +290,11 @@ function canonicalHeading(text: string): string {
   return m ? `${m[1]} ${m[2].trim()}`.trim() : text.trim();
 }
 
-export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): OutlineNode {
+export function resolveAnchor(
+  outline: OutlineNode[],
+  anchorHeading: string,
+  reads = false,
+): OutlineNode {
   const anchor = canonicalHeading(anchorHeading);
 
   // Try the LITERAL heading first, always — including when the anchor contains
@@ -253,7 +307,7 @@ export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): Ou
   const byHeading = outline.filter((n) => n.heading === anchor);
   if (byHeading.length === 1) return byHeading[0];
   if (byHeading.length > 1) {
-    throw new AmbiguousAnchorError(anchor, byHeading.map((n) => n.path));
+    throw new AmbiguousAnchorError(anchor, byHeading.map((n) => n.path), reads);
   }
 
   // No heading matched literally: interpret it as a parent path.
@@ -262,11 +316,62 @@ export function resolveAnchor(outline: OutlineNode[], anchorHeading: string): Ou
     const byPath = outline.filter((n) => n.path === normalizedPath);
     if (byPath.length === 1) return byPath[0];
     if (byPath.length > 1) {
-      throw new AmbiguousAnchorError(anchor, byPath.map((n) => n.path));
+      throw new AmbiguousAnchorError(anchor, byPath.map((n) => n.path), reads);
     }
   }
 
-  throw new AnchorNotFoundError(anchor, outline);
+  throw new AnchorNotFoundError(anchor, outline, reads);
+}
+
+/**
+ * The text a `replace_section` would overwrite — resolved through the SAME
+ * functions the write uses (#198).
+ *
+ * v1.3.0 shipped `replace_section` with no way to see what it was about to
+ * destroy: outline mode reports a section's *size*, never its *text*, so the
+ * only safe preparation was a full `get_document` — the cost partial edits
+ * exist to remove. `cerefox_insert` is guarded structurally (it cannot remove
+ * anything); the destructive operation was guarded only by
+ * `expected_content_hash`, which protects against a *concurrent* writer, not
+ * against a writer who does not know what it is deleting.
+ *
+ * The binding requirement is that `text` is EXACTLY the extent
+ * `replace_section` targets under the same `section_part`. If a read could
+ * differ from the write it feeds, the feature would be worse than its absence:
+ * absence at least announces itself. That is why this shares `resolveAnchor`
+ * and `resolveSectionEnd` rather than reproducing their rules — including the
+ * refusal on a section with children, which is the case most likely to diverge.
+ *
+ * `heading` is returned separately because it is context, not content:
+ * `replace_section` keeps the heading, so it is not part of what would be
+ * overwritten.
+ */
+export function extractSection(
+  content: string,
+  anchorHeading: string,
+  sectionPart?: SectionPart,
+): {
+  heading: string;
+  path: string;
+  level: number;
+  text: string;
+  chars: number;
+  section_part: SectionPart | null;
+} {
+  const outline = parseOutline(content);
+  const node = resolveAnchor(outline, anchorHeading, true);
+  // Same op label the write would raise under, so an ambiguity refusal reads
+  // the same whether the caller was reading or replacing.
+  const to = resolveSectionEnd(content, outline, node, sectionPart, "the section read", true);
+  const text = content.slice(node.bodyStart, to);
+  return {
+    heading: node.heading,
+    path: node.path,
+    level: node.level,
+    text,
+    chars: text.length,
+    section_part: sectionPart ?? null,
+  };
 }
 
 function firstChild(outline: OutlineNode[], node: OutlineNode): OutlineNode | null {
@@ -288,6 +393,7 @@ function resolveSectionEnd(
   node: OutlineNode,
   sectionPart: SectionPart | undefined,
   opName: string,
+  reads = false,
 ): number {
   const child = firstChild(outline, node);
   if (!child) return node.subtreeEnd; // leaf: unambiguous
@@ -315,7 +421,7 @@ function resolveSectionEnd(
   //
   // So: no exemption. `hasOwnBody` no longer gates anything, because the
   // presence of children is what makes "the end of this section" ambiguous.
-  throw new AmbiguousPositionError(node, child.heading, opName);
+  throw new AmbiguousPositionError(node, child.heading, opName, reads);
 }
 
 /**
@@ -386,6 +492,34 @@ function applyOne(
         path: node.path,
         detail:
           "replace_section body" + (operation.section_part ? ` (${operation.section_part})` : ""),
+        reachedEnd: to >= content.trimEnd().length,
+      },
+    };
+  }
+
+  if (operation.op === "rename_section") {
+    const node = resolveAnchor(outline, operation.anchor_heading);
+    const next = canonicalHeading(operation.new_heading);
+    const m = next.match(ATX_HEADING);
+    if (!m) {
+      throw new InvalidOperationError(
+        0,
+        `new_heading must be a markdown heading line like "## Title", got ${JSON.stringify(operation.new_heading)}`,
+      );
+    }
+    if (m[1].length !== node.level) throw new HeadingLevelChangeError(node.heading, next);
+
+    // Replace the heading LINE only. Not spliceBlock: that normalises
+    // surrounding blank lines, which is right for a block of body text and
+    // wrong for a single line whose neighbours are the section's own spacing.
+    const hadNewline = content[node.bodyStart - 1] === "\n";
+    const replacement = next + (hadNewline ? "\n" : "");
+    return {
+      content: content.slice(0, node.start) + replacement + content.slice(node.bodyStart),
+      applied: {
+        op: "rename_section",
+        path: node.path,
+        detail: `rename_section to ${next}`,
       },
     };
   }
@@ -402,6 +536,7 @@ function applyOne(
       path: node.path,
       detail:
         `delete_section (${scope})` + (operation.section_part ? ` (${operation.section_part})` : ""),
+      reachedEnd: to >= content.trimEnd().length,
     },
   };
 }
@@ -453,8 +588,33 @@ export function validateOperations(operations: unknown): EditOperation[] {
       if (o.scope !== undefined && o.scope !== "body_only" && o.scope !== "heading_and_body") {
         throw new InvalidOperationError(i, "scope must be body_only or heading_and_body");
       }
+    } else if (op === "rename_section") {
+      if (typeof o.anchor_heading !== "string" || o.anchor_heading.trim() === "") {
+        throw new InvalidOperationError(i, "rename_section requires anchor_heading");
+      }
+      if (typeof o.new_heading !== "string" || o.new_heading.trim() === "") {
+        throw new InvalidOperationError(i, "rename_section requires non-empty new_heading");
+      }
+      // A rename touches the heading line and nothing else, so a caller that
+      // also passed body text has misunderstood which operation they want.
+      // Silently ignoring it would lose the text without saying so.
+      if (o.text !== undefined) {
+        throw new InvalidOperationError(
+          i,
+          "rename_section changes only the heading and takes no text — use replace_section for the body, or both operations in one call",
+        );
+      }
+      if (o.section_part !== undefined) {
+        throw new InvalidOperationError(
+          i,
+          "rename_section takes no section_part: it replaces the heading line, so no extent is involved",
+        );
+      }
     } else {
-      throw new InvalidOperationError(i, "op must be insert | replace_section | delete_section");
+      throw new InvalidOperationError(
+        i,
+        "op must be insert | replace_section | delete_section | rename_section",
+      );
     }
     if (
       o.section_part !== undefined &&

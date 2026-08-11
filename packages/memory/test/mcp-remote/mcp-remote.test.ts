@@ -12,6 +12,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { loadSettings } from "../../../../_shared/config/index.ts";
 import { createClient } from "../../../../_shared/db-client/index.ts";
+import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
 
 const E2E_PREFIX = "[E2E-MCP]";
 const SAMPLE_CONTENT = `# The Sunken Archives
@@ -75,7 +76,8 @@ function extractId(text: string): string | null {
 // quota). Skipped unless CEREFOX_LIVE_E2E=1, checked BEFORE the probe so a
 // default `bun test` makes ZERO Edge Function calls. See the EF e2e suite for
 // the rationale; run both with the same flag.
-const E2E_ENABLED = process.env.CEREFOX_LIVE_E2E === "1";
+const E2E_ENABLED =
+  process.env.CEREFOX_LIVE_E2E === "1" && mayWriteToLiveTarget();
 
 // Probe: a tools/list handshake confirms the EF is reachable.
 let LIVE_OK = false;

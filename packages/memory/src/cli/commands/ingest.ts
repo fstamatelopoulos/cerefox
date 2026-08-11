@@ -166,6 +166,18 @@ async function action(
     title = data.title as string;
     println(c.dim(`  (keeping existing title: ${JSON.stringify(title)})`));
   }
+  // #193: commander defaulted --source to "cli" and the CLI always sent it, so
+  // re-ingesting an existing document without --source silently relabelled its
+  // provenance. #191 made the RPC preserve the stored value when the parameter
+  // is OMITTED — which the CLI never did.
+  //
+  // `null` is the "user omitted it" sentinel; `sourceOnCreate` says what to use
+  // if the write turns out to be a create. The CLI deliberately does NOT decide
+  // that here: `--update-if-exists` against a document that does not exist yet
+  // is an update intent that performs a create, and an earlier heuristic based
+  // on the flags labelled exactly that case 'agent' (review bug_005).
+  const resolvedSource = options.source ?? null;
+
   const pipeline = new IngestionPipeline({
     supabase,
     openAiApiKey: settings.openaiApiKey,
@@ -176,7 +188,8 @@ async function action(
       path && !options.paste
         ? await pipeline.ingestFile(path, {
             title,
-            source: options.source ?? "cli",
+            source: resolvedSource,
+            sourceOnCreate: "cli",
             projectName: options.projectName ?? null,
             projectNames: projectNames ?? null,
             metadata: metadata ?? null,
@@ -190,7 +203,8 @@ async function action(
         : await pipeline.ingestText({
             text: content,
             title,
-            source: options.source ?? "cli",
+            source: resolvedSource,
+            sourceOnCreate: "cli",
             projectName: options.projectName ?? null,
             projectNames: projectNames ?? null,
             metadata: metadata ?? null,
@@ -230,6 +244,11 @@ async function action(
         `${verb}: ${JSON.stringify(result.title)} (id: ${result.documentId}), ` +
         `${result.chunkCount} chunk(s), ${result.totalChars} chars.${projects}${note}`,
     );
+    // The concurrency token, on create as well as update (#189). Without it a
+    // user who just created a document had to re-read it before editing.
+    if (result.contentHash) {
+      println(c.dim(`  content_hash: ${result.contentHash}`));
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw systemError(`Ingest failed: ${msg}`);
@@ -255,7 +274,10 @@ export function registerIngest(program: Command): void {
       "Comma-separated full project membership set (destructive replace on update).",
     )
     .option("-m, --metadata <json>", "JSON metadata object.")
-    .option("--source <label>", "Origin label (default: cli).", "cli")
+    .option(
+      "--source <label>",
+      "Origin label. Omit it on an update and the document keeps the source it already has (#193); omit it on a create and it is recorded as \"cli\".",
+    )
     .option("-u, --update-if-exists", "Update an existing doc with the same title.")
     .option(
       "-i, --document-id <uuid>",

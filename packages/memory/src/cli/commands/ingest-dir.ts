@@ -142,7 +142,11 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
     try {
       const result = await pipeline.ingestFile(file, {
         title: basename(file, extname(file)),
-        source: options.source ?? "cli",
+        // The same defect #193 fixed in `document ingest`, and worse here: this
+        // is a bulk re-sync, so a default would relabel every matched document
+        // in one run — the corpus-scale shape #191 reported (1,317 documents).
+        source: options.source ?? null,
+        sourceOnCreate: "cli",
         projectName: options.projectName ?? null,
         metadata: metadata ?? null,
         updateExisting: Boolean(options.updateIfExists),
@@ -190,7 +194,10 @@ export function registerIngestDir(program: Command): void {
     .argument("<dir>", "Root directory to walk.")
     .option("-p, --project-name <name>", "Project membership for all ingested docs.")
     .option("-m, --metadata <json>", "JSON metadata applied to every doc.")
-    .option("--source <label>", "Origin label (default: cli).", "cli")
+    .option(
+      "--source <label>",
+      "Origin label. Omit it and each matched document keeps the source it already has (#193); newly created ones are recorded as \"cli\".",
+    )
     .option("-u, --update-if-exists", "Update an existing doc with the same title.")
     .option("-a, --author <name>", "Caller identity (audit log).")
     .option("--author-type <type>", "'user' or 'agent' (default: user).", "user")

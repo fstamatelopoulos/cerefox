@@ -89,6 +89,7 @@ export class IngestionPipeline {
       text,
       title,
       source = "paste",
+      sourceOnCreate,
       sourceLabel,
       sourcePath: sourcePathOpt,
       projectName,
@@ -225,6 +226,7 @@ export class IngestionPipeline {
         reindexed: false,
         projectIds: existingProjectIds,
         note: "",
+        contentHash: existingByHash.content_hash ?? hash,
       };
     }
 
@@ -262,7 +264,12 @@ export class IngestionPipeline {
     const rpcResult = await this.db.ingestDocumentRpc({
       documentId: null,
       title,
-      source,
+      // `null` means "caller omitted source, keep what is stored" — but on a
+      // create there is nothing stored to keep, and letting null through lands
+      // on the RPC's 'agent' default, mislabelling a document a CLI user just
+      // made (review bug_005). This branch is where create-vs-update is finally
+      // known, so it is where the sentinel resolves.
+      source: source ?? sourceOnCreate ?? null,
       sourcePath,
       contentHash: hash,
       metadata: validatedMeta,
@@ -288,6 +295,7 @@ export class IngestionPipeline {
       reindexed: false,
       projectIds: resolvedIds,
       note: "",
+      contentHash: hash,
     };
   }
 
@@ -462,6 +470,7 @@ export class IngestionPipeline {
         reindexed: false,
         projectIds: finalProjectIds,
         note: "",
+        contentHash: existing.content_hash ?? newHash,
       };
     }
 
@@ -513,7 +522,10 @@ export class IngestionPipeline {
       // The document's origin and the reason for this particular write are the
       // same thing for an ordinary save, and different for a maintenance pass
       // that rewrites a document without changing where it came from (#191).
-      sourceLabel: sourceLabel ?? source,
+      // source may now be null — "caller omitted it, keep the stored value"
+      // (#193). The version label still has to say how THIS write happened, so
+      // it falls through to the update path's own default rather than to null.
+      sourceLabel: sourceLabel ?? source ?? "manual",
       // Deliberately NOT passed: version retention is the store's policy, read
       // by the RPC from cerefox_config. Sending this client's env values here is
       // what made the surviving history depend on which client wrote last — an
@@ -551,6 +563,7 @@ export class IngestionPipeline {
       reindexed: true,
       projectIds: finalProjectIds,
       note: "",
+      contentHash: newHash,
     };
   }
 
@@ -566,7 +579,7 @@ export class IngestionPipeline {
     path: string,
     opts: Omit<IngestTextOptions, "text" | "title" | "sourcePath" | "source"> & {
       title?: string;
-      source?: string;
+      source?: string | null;
     } = {},
   ): Promise<IngestResult> {
     const text = await fileToMarkdown(path, readFileSync(path));
@@ -576,7 +589,10 @@ export class IngestionPipeline {
       ...opts,
       text,
       title: opts.title ?? stem,
-      source: opts.source ?? "file",
+      // `?? "file"` would turn an explicit null — "caller omitted source, keep
+      // what is stored" (#193) — into a relabel. Only undefined defaults.
+      source: opts.source === undefined ? "file" : opts.source,
+      sourceOnCreate: opts.sourceOnCreate ?? "file",
       sourcePath: absPath,
     });
   }

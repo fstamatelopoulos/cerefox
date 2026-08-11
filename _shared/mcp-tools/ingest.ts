@@ -356,7 +356,8 @@ async function handler(
 
 export const ingestTool: ToolDefinition = {
   name: "cerefox_ingest",
-  description: "Save a note or document to the Cerefox knowledge base.",
+  description:
+    "Save a note or document to the Cerefox knowledge base. Updating an existing document REPLACES its whole content, so every unchanged character has to be reproduced exactly. Prefer cerefox_insert / cerefox_edit for any change to part of a document, and especially where the untouched content cannot be checked by reading it — document IDs, hashes, numeric tables, indexes and registries. Drifting prose is obvious on review; one wrong character in a UUID is not, and it silently breaks the reference.",
   /** Destructive: `project_names` REPLACES the document's project memberships, and
  *  memberships have no version history — a partial list silently drops the rest.
  *  Content itself is version-snapshotted and guarded by expected_content_hash, so

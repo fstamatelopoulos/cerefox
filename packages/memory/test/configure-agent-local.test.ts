@@ -3,7 +3,7 @@
  * (World-B) instead of the npx `cerefox mcp` default, honoring CEREFOX_LOCAL_CMD.
  */
 
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +13,19 @@ import {
   WRITERS,
   writeMcpConfig,
 } from "../src/cli/util/mcp-config-writers.ts";
+
+// #168 makes the MCP entry name follow CEREFOX_ENV_LABEL, so these assertions
+// — which pin the PRODUCTION name `cerefox` — depend on the ambient
+// environment. A maintainer with a staging label exported would otherwise see
+// seven failures that say nothing about the code under test.
+const savedEnvLabel = process.env.CEREFOX_ENV_LABEL;
+beforeEach(() => {
+  delete process.env.CEREFOX_ENV_LABEL;
+});
+afterEach(() => {
+  if (savedEnvLabel === undefined) delete process.env.CEREFOX_ENV_LABEL;
+  else process.env.CEREFOX_ENV_LABEL = savedEnvLabel;
+});
 
 describe("localCerefoxEntry", () => {
   afterEach(() => {

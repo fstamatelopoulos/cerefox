@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { loadSettings } from "../../../../_shared/config/index.ts";
 import { createClient } from "../../../../_shared/db-client/index.ts";
+import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
 
 const E2E_PREFIX = "[E2E-EF]";
 
@@ -97,7 +98,8 @@ async function invokeOk(fn: string, body: Record<string, unknown> = {}): Promise
 // probe so a default `bun test` makes ZERO Edge Function calls. Run them only
 // when changing EF code or for pre-release validation:
 //   CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts
-const E2E_ENABLED = process.env.CEREFOX_LIVE_E2E === "1";
+const E2E_ENABLED =
+  process.env.CEREFOX_LIVE_E2E === "1" && mayWriteToLiveTarget();
 
 // Probe reachability once (only when enabled). The deployed EFs answer POST; a
 // network/credential failure or missing access token skips the whole suite.

@@ -27,6 +27,7 @@ import { loadSettings } from "../../../_shared/config/index.ts";
 import { createClient } from "../../../_shared/db-client/index.ts";
 import { TOOLS_BY_NAME } from "../../../_shared/mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../../../_shared/mcp-tools/types.ts";
+import { mayWriteToLiveTarget } from "./_live-target-guard.ts";
 
 const settings = loadSettings();
 let supabase: MCPSupabaseClient;
@@ -124,7 +125,9 @@ beforeAll(async () => {
       );
       return;
     }
-    reachable = true;
+    // Reachability is not permission: production is the most reachable
+    // target there is. Writing suites gate on the environment LABEL.
+    reachable = mayWriteToLiveTarget();
   } catch {
     reachable = false;
   }

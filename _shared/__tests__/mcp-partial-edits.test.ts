@@ -34,6 +34,7 @@ function restoreFetch(): void {
 }
 
 import { TOOLS_BY_NAME } from "../mcp-tools/index.ts";
+import { McpInvalidParams } from "../mcp-tools/types.ts";
 import type { MCPSupabaseClient, ToolContext } from "../mcp-tools/types.ts";
 
 const DOC = `# Log
@@ -259,6 +260,120 @@ describe("document lookup", () => {
   });
 });
 
+describe("section mode (#198)", () => {
+  test("returns one section's text, the hash, and the heading as context", async () => {
+    const out = JSON.parse(
+      await getDoc.handler(mockClient(), { document_id: "d", section: "## Totals" }, ctx),
+    );
+    expect(out.content_hash).toBe(HASH);
+    expect(out.heading).toBe("## Totals");
+    expect(out.text).toContain("Calories: 1200");
+    // The heading is kept by replace_section, so it is not part of what would
+    // be overwritten and must not be inside `text`.
+    expect(out.text).not.toContain("## Totals");
+    // And nothing from other sections leaks in.
+    expect(out.text).not.toContain("coffee");
+    expect(out.chars).toBe(out.text.length);
+  });
+
+  test("what it returns is what replace_section overwrites", async () => {
+    // The property in full, through the MCP layer: read a section, replace it,
+    // read it back, and the second read is what was written.
+    const captured: Captured = {};
+    const before = JSON.parse(
+      await getDoc.handler(mockClient(), { document_id: "d", section: "## Totals" }, ctx),
+    );
+    stubEmbeddings();
+    try {
+      await edit.handler(
+        mockClient({ captured }),
+        {
+          document_id: "d",
+          operations: [
+            { op: "replace_section", anchor_heading: "## Totals", text: "Calories: 1400" },
+          ],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+    } finally {
+      restoreFetch();
+    }
+    const written = captured.ingestArgs?.p_chunks as Array<{ content: string }> | undefined;
+    const body = (written ?? []).map((c) => c.content).join("\n");
+    expect(before.text).toContain("Calories: 1200");
+    expect(body).toContain("Calories: 1400");
+    expect(body).not.toContain("Calories: 1200");
+  });
+
+  test("refuses a section with children unless section_part says which", async () => {
+    // `## Intake` has `### Notes` under it — the ambiguity that makes a
+    // guessing read dangerous.
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Intake" }, ctx),
+    ).rejects.toThrow(/own_body[\s\S]*subtree|subtree[\s\S]*own_body/);
+
+    const own = JSON.parse(
+      await getDoc.handler(
+        mockClient(),
+        { document_id: "d", section: "## Intake", section_part: "own_body" },
+        ctx,
+      ),
+    );
+    const sub = JSON.parse(
+      await getDoc.handler(
+        mockClient(),
+        { document_id: "d", section: "## Intake", section_part: "subtree" },
+        ctx,
+      ),
+    );
+    expect(own.text).toContain("coffee");
+    expect(own.text).not.toContain("### Notes");
+    expect(sub.text).toContain("### Notes");
+  });
+
+  test("a missing anchor errors as INVALID PARAMS, like the write path", async () => {
+    // Not merely "throws": an unwrapped anchor error surfaces as JSON-RPC
+    // -32603 internal error, while the identical anchor through cerefox_edit
+    // surfaces as -32602 invalid params — so a client keying on the code would
+    // classify the same caller mistake two ways depending on read vs write.
+    // The equivalence this feature promises has to cover refusals too.
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Nope" }, ctx),
+    ).rejects.toThrow(McpInvalidParams);
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Intake" }, ctx),
+    ).rejects.toThrow(McpInvalidParams);
+  });
+
+  test("outline and section together are refused, not silently ranked", async () => {
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section: "## Totals", outline: true }, ctx),
+    ).rejects.toThrow(/not both/);
+  });
+
+  test("section_part without section is refused", async () => {
+    await expect(
+      getDoc.handler(mockClient(), { document_id: "d", section_part: "subtree" }, ctx),
+    ).rejects.toThrow(/only applies together with section/);
+  });
+
+  test("an archived section withholds the hash", async () => {
+    // Same trap as archived outline mode: the RPC returns the CURRENT hash even
+    // when reconstructing an old version, and pairing it with archived text
+    // would invite an edit based on content that is no longer there.
+    const out = JSON.parse(
+      await getDoc.handler(
+        mockClient(),
+        { document_id: "d", section: "## Totals", version_id: "v1" },
+        ctx,
+      ),
+    );
+    expect(out.content_hash).toBeNull();
+    expect(out.note).toContain("ARCHIVED");
+  });
+});
+
 describe("outline mode (§3.7)", () => {
   test("returns structure, hash and sizes — and no body", async () => {
     const out = await getDoc.handler(mockClient(), { document_id: "d", outline: true }, ctx);
@@ -451,5 +566,190 @@ describe("partial edits never change provenance (#191)", () => {
     // rescues callers who OMIT the parameter.
     expect(captured.args).toBeDefined();
     expect(captured.args!.p_source).toBeNull();
+  });
+});
+
+describe("shrink reporting sees the insert-then-clobber case (#196)", () => {
+  // A large document whose last section is the append target — the exact shape
+  // the first version of this warning could not see, because the content lost
+  // is small precisely because it was just added.
+  const BIG_TAIL = `# Big\n\n## Body\n\n${"filler line\n".repeat(400)}\n## Log\n\nexisting entry\n`;
+
+  function clientFor(content: string, captured?: Captured) {
+    return {
+      rpc: (name: string, args: Record<string, unknown>) => {
+        if (name === "cerefox_get_document") {
+          return {
+            data: [
+              { doc_title: "Big", full_content: content, content_hash: HASH, total_chars: content.length },
+            ],
+            error: null,
+          };
+        }
+        if (name === "cerefox_ingest_document") {
+          if (captured) captured.ingestArgs = args;
+          // Report the size the operations actually produced.
+          const chunks = (args.p_chunks as Array<{ content: string }>) ?? [];
+          const total = chunks.reduce((n, c) => n + c.content.length, 0);
+          return {
+            data: [{ document_id: "doc-1", content_hash: "new".repeat(21) + "a", total_chars: total, size_warning: false }],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => ({ data: null, error: null }) }) }) }),
+    } as unknown as MCPSupabaseClient;
+  }
+
+  test("a replace on the LAST section warns even when the loss is a tiny fraction", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG_TAIL),
+        {
+          document_id: "d",
+          operations: [{ op: "replace_section", anchor_heading: "## Log", text: "replacement" }],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      // Under the old >25% gate this said nothing at all: the loss here is ~0.3%.
+      expect(out).toMatch(/removed \d+ characters/);
+      expect(out).toContain("LAST section");
+      expect(out).toContain("cerefox_list_versions");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("a mid-document replace still reports the loss, without the trailing-section explanation", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG_TAIL),
+        {
+          document_id: "d",
+          operations: [{ op: "replace_section", anchor_heading: "## Body", text: "small" }],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("an edit that grows the document says nothing about shrinking", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG_TAIL),
+        {
+          document_id: "d",
+          operations: [
+            { op: "insert", position: "end_of_document", text: "a new entry worth keeping" },
+          ],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).not.toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+});
+
+describe("shrink reporting counts code points, not UTF-16 units (review bug_009)", () => {
+  // Every fixture above is ASCII, which is why this went unnoticed: the RPC's
+  // total_chars is a SUM of the chunker's code-point counts, while
+  // `before.length` counts UTF-16 units, so a document containing emoji
+  // manufactured a phantom loss on edits that removed nothing.
+  const EMOJI = `# Log\n\n## Body\n\nDeployed 🎉 successfully, shipped 📝 too\n\n## Tail\n\ntail\n`;
+
+  function clientFor(content: string) {
+    return {
+      rpc: (name: string, args: Record<string, unknown>) => {
+        if (name === "cerefox_get_document") {
+          return {
+            data: [{ doc_title: "Log", full_content: content, content_hash: HASH, total_chars: content.length }],
+            error: null,
+          };
+        }
+        if (name === "cerefox_ingest_document") {
+          const chunks = (args.p_chunks as Array<{ char_count: number }>) ?? [];
+          // Mirror the RPC: SUM(char_count), which the chunker counts in code points.
+          const total = chunks.reduce((n, c) => n + c.char_count, 0);
+          return {
+            data: [{ document_id: "doc-1", content_hash: "c".repeat(64), total_chars: total, size_warning: false }],
+            error: null,
+          };
+        }
+        return { data: [], error: null };
+      },
+      from: () => ({ select: () => ({ data: null, error: null }) }),
+    } as unknown as MCPSupabaseClient;
+  }
+
+  test("a purely additive insert on an emoji document reports no loss", async () => {
+    // cerefox_insert is annotated destructiveHint: false — it is structurally
+    // incapable of removing content, so a loss warning here contradicts the
+    // tool's own contract.
+    stubEmbeddings();
+    try {
+      const out = await insert.handler(
+        clientFor(EMOJI),
+        { document_id: "d", text: "a new line", position: "end_of_document", expected_content_hash: HASH },
+        ctx,
+      );
+      expect(out).not.toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("a rename on an emoji document reports no loss", async () => {
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(EMOJI),
+        {
+          document_id: "d",
+          operations: [{ op: "rename_section", anchor_heading: "## Tail", new_heading: "## Tailed" }],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).not.toMatch(/removed \d+ characters/);
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  test("rename-then-replace on the LAST section still gets the loud warning (review bug_001)", async () => {
+    // The path-lookup version went quiet here: after the rename, the second
+    // op's path names a heading the pre-batch outline never had.
+    const BIG = `# Big\n\n## Body\n\n${"filler line\n".repeat(300)}\n## LastLog\n\nexisting entry\n`;
+    stubEmbeddings();
+    try {
+      const out = await edit.handler(
+        clientFor(BIG),
+        {
+          document_id: "d",
+          operations: [
+            { op: "rename_section", anchor_heading: "## LastLog", new_heading: "## Log" },
+            { op: "replace_section", anchor_heading: "## Log", text: "tiny" },
+          ],
+          expected_content_hash: HASH,
+        },
+        ctx,
+      );
+      expect(out).toMatch(/removed \d+ characters/);
+      expect(out).toContain("LAST section");
+    } finally {
+      restoreFetch();
+    }
   });
 });

@@ -9,8 +9,8 @@ Cerefox is a persistent, shared knowledge base. You have **16 MCP tools** (15 of
 | `cerefox_search` | Find documents (hybrid FTS + semantic) | `query` (required), `project_name`, `metadata_filter`, `requestor` |
 | `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `expected_content_hash` (**required on content updates** — see rule 9), `last_write_wins`, `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata` (omit on update to keep existing tags; `{}` clears), `author` |
 | `cerefox_insert` | **Add** to a document without resending it. Cannot destroy content. | `document_id`, `text`, `position` (`end_of_document`/`end_of_section`/`after_heading`/`before_heading`), `expected_content_hash` (required), `anchor_heading` (unless `end_of_document`), `section_part` |
-| `cerefox_edit` | **Change** parts of a document: 1..n operations applied atomically | `document_id`, `operations` (`insert`/`replace_section`/`delete_section`), `expected_content_hash` (required) |
-| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token), or with `outline: true` just its heading paths, sizes and hash | `document_id` (required), `outline` |
+| `cerefox_edit` | **Change** parts of a document: 1..n operations applied atomically | `document_id`, `operations` (`insert`/`replace_section`/`delete_section`/`rename_section`), `expected_content_hash` (required) |
+| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token), or with `outline: true` just its heading paths, sizes and hash, or with `section: "## Heading"` one section's text | `document_id` (required), `outline`, `section`, `section_part` |
 | `cerefox_list_versions` | Version history of a document | `document_id` (required) |
 | `cerefox_set_relation` ⚑ | Link two documents (`source --rel_type--> target`) | `source_id`, `target_id`, `rel_type` (required), `metadata`, `author` |
 | `cerefox_delete_relation` ⚑ | Remove a relation | `source_id`, `target_id`, `rel_type` |
@@ -41,12 +41,19 @@ diff. Use the partial-edit tools instead:
 2. **Add** → `cerefox_insert`. `end_of_document` is a plain append;
    `end_of_section` adds inside a named section. It is structurally incapable of
    removing anything, so "I meant to append" cannot become "I replaced the file".
-3. **Change or remove** → `cerefox_edit`. Put changes that belong together in
+3. **Look before you overwrite** — `cerefox_get_document(document_id,
+   section: "## Heading")` returns exactly the text a `replace_section` on that
+   anchor would destroy. The outline gives you a section's *size*, never its
+   *text*, so on a document you did not write yourself this is the difference
+   between a replace and a blind overwrite.
+4. **Change or remove** → `cerefox_edit`. Put changes that belong together in
    ONE call: they apply atomically, so a table row and the total it feeds cannot
    end up disagreeing. To change a single line, `replace_section` on its
    smallest enclosing heading — that is the intended granularity, not a
-   workaround.
-4. Both require `expected_content_hash` and **have no last-write-wins**. A
+   workaround. To fix a stale heading (`## OPEN TODOs (as of ...)`), use
+   `rename_section`: it changes the heading text and leaves the body and
+   position alone.
+5. All of them require `expected_content_hash` and **have no last-write-wins**. A
    conflict means someone else changed the document; re-read and decide, do not
    force it.
 

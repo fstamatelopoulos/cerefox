@@ -60,6 +60,13 @@ jobs:
         # `workspaces` declaration in the root package.json.
         run: bun install --frozen-lockfile
 
+      # #171: typecheck covers BOTH projects. It was _shared-only and never in
+      # CI, so a missing import in packages/memory (the CLI, the ingestion
+      # pipeline, the web server) reached runtime — `bun run typecheck` passed
+      # clean while `reindex.ts` threw ReferenceError on a live call.
+      - name: Typecheck (_shared + packages/memory)
+        run: bun run typecheck
+
       - name: Bun tests in _shared/
         working-directory: _shared
         run: bun test

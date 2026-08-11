@@ -180,10 +180,19 @@ Setup and the parallel-environment convention: [`docs/guides/staging-env.md`](do
 | Suite | Command | What it does |
 |-------|---------|-------------|
 | TS unit tests (`_shared/`) | `cd _shared && bun test` | Fast, mocked, no network |
-| Package suite (built bin) | `cd packages/memory && bun run build && bun test` | CLI smoke, MCP stdio handshake, + live read/write commands (probe-and-skip when Supabase isn't reachable); needs `.env` for the live ones |
+| Package suite (built bin) | `cd packages/memory && bun run build && bun test` | CLI smoke, MCP stdio handshake, + live read/write commands (probe-and-skip when Supabase isn't reachable); needs `.env` for the live ones. **The write-bearing suites refuse to run against an unlabelled (production) target** — prefix with `CEREFOX_CONFIG_DIR=~/.cerefox/staging` to actually exercise them. |
 | UI e2e (Playwright) | `cd frontend && bun run test:e2e` | Browser tests against a local `cerefox web`; needs `bunx playwright install chromium` |
 | Live EF e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts` | Hits the deployed Edge Functions. Skipped by default. |
 | Live remote-MCP e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts` | Hits the deployed `cerefox-mcp` EF over JSON-RPC. Skipped by default. |
+
+> **Never point the write suites at production.** `cd packages/memory && bun test`
+> resolves credentials exactly as the CLI does, so on a maintainer's machine it
+> targets **production** unless told otherwise — the fixtures self-clean, but the
+> audit log is append-only and the entries are permanent. Since v1.4.0 those
+> suites skip unless `CEREFOX_ENV_LABEL` is set on the target (i.e. a staging
+> environment), with `CEREFOX_ALLOW_PROD_WRITE_TESTS=1` as a deliberate
+> override. Pointing every *command* at staging is not enough; the test runner
+> is a separate process with its own resolution.
 
 > **Conserve free-tier Edge Function quota.** The two live TS suites
 > (`packages/memory/test/edge-functions/`, `.../mcp-remote/`) make real Edge
