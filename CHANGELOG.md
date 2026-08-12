@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.5.0] -- 2026-08-12
+
 Iteration 36 — observability, surface parity, test hygiene, and a security fix
 that arrived mid-iteration. Target **v1.5.0**.
 
