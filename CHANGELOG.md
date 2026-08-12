@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.6.0] -- 2026-08-12
+
 Target **v1.6.0** — a minor, because it adds an MCP tool and a CLI command.
 
 > ### Upgrading
