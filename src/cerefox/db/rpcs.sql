@@ -2416,6 +2416,120 @@ $$;
 -- redeploy. The web UI's /api/v1/schema-version endpoint compares the bundled
 -- and deployed values and surfaces a 'redeploy needed' banner on mismatch.
 
+-- ── cerefox_set_document_metadata ────────────────────────────────────────────
+-- Change a document's metadata WITHOUT touching its content (#204).
+--
+-- Until this existed, `cerefox_ingest` was the only way to set a tag, and it
+-- requires title + content — so changing one key meant resending the whole
+-- document, reproducing every untouched character. That is the transcription
+-- risk the partial-edit tools were built to remove, and it was still fully
+-- present for metadata. Project membership had a metadata-only writer
+-- (`cerefox_set_document_projects`) all along; tags simply never got one.
+--
+-- MERGE is the default, not replace. Several agent roles write to the same
+-- documents, so a destructive default would let a caller setting `status`
+-- silently drop `type`, `seq` and `agent_role` written by someone else — a
+-- default shadowing stored state, which is the defect class behind #183 and
+-- #191. It would also force a read-modify-write, which is the cost this
+-- function exists to remove.
+--
+-- REMOVAL uses a JSON null, following RFC 7386 (JSON Merge Patch):
+--     {"status": "active", "stale_key": null}  -- sets status, deletes stale_key
+-- Unambiguous because Cerefox metadata values are JSON strings by convention,
+-- so a null can never be a legitimate value. Same spirit as `cerefox_ingest`,
+-- where NULL means "not provided, keep existing" and '{}' means "clear all".
+--
+-- The merge happens inside one UPDATE against a locked row, so two agents
+-- setting different keys concurrently cannot clobber each other. Doing this
+-- client-side would reintroduce exactly that race.
+--
+-- Metadata-only: no re-chunk, no re-embed, no content version snapshot. The
+-- audit trail records it as 'update-metadata', which the CHECK already allows.
+DROP FUNCTION IF EXISTS cerefox_set_document_metadata(UUID, JSONB, BOOLEAN, TEXT, TEXT);
+CREATE FUNCTION cerefox_set_document_metadata(
+    p_document_id   UUID,
+    p_metadata      JSONB,
+    p_replace       BOOLEAN DEFAULT FALSE,
+    p_author        TEXT    DEFAULT 'unknown',
+    p_author_type   TEXT    DEFAULT 'user'
+)
+RETURNS TABLE (
+    document_id     UUID,
+    metadata        JSONB,
+    keys_set        INT,
+    keys_removed    INT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_before      JSONB;
+    v_after       JSONB;
+    v_null_keys   TEXT[];
+    v_title       TEXT;
+    v_removed     INT;
+    v_set         INT;
+BEGIN
+    IF p_metadata IS NULL OR jsonb_typeof(p_metadata) <> 'object' THEN
+        RAISE EXCEPTION 'metadata must be a JSON object'
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- Lock the row so a concurrent metadata write cannot interleave between
+    -- the read and the merge.
+    SELECT d.metadata, d.title INTO v_before, v_title
+    FROM cerefox_documents d
+    WHERE d.id = p_document_id AND d.deleted_at IS NULL
+    FOR UPDATE;
+
+    IF v_title IS NULL THEN
+        RAISE EXCEPTION 'Document % not found (or is deleted)', p_document_id
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    -- Keys explicitly set to null are removals, never stored values.
+    SELECT COALESCE(array_agg(key), ARRAY[]::TEXT[]) INTO v_null_keys
+    FROM jsonb_each(p_metadata)
+    WHERE value = 'null'::jsonb;
+
+    IF p_replace THEN
+        v_after := p_metadata - v_null_keys;
+    ELSE
+        v_after := (COALESCE(v_before, '{}'::jsonb) || p_metadata) - v_null_keys;
+    END IF;
+
+    UPDATE cerefox_documents
+    SET metadata = v_after, updated_at = NOW()
+    WHERE id = p_document_id;
+
+    -- Report what actually changed, not what was asked for: a caller that sets
+    -- a key to the value it already had should see 0, so "nothing happened" is
+    -- distinguishable from "it worked".
+    SELECT count(*)::INT INTO v_removed
+    FROM jsonb_object_keys(COALESCE(v_before, '{}'::jsonb)) k
+    WHERE NOT v_after ? k;
+
+    SELECT count(*)::INT INTO v_set
+    FROM jsonb_each(v_after) e
+    WHERE COALESCE(v_before, '{}'::jsonb) -> e.key IS DISTINCT FROM e.value;
+
+    PERFORM cerefox_create_audit_entry(
+        p_document_id := p_document_id,
+        p_operation   := 'update-metadata',
+        p_author      := p_author,
+        p_author_type := p_author_type,
+        p_description := format(
+            'Metadata %s on "%s": %s key(s) set, %s removed',
+            CASE WHEN p_replace THEN 'replaced' ELSE 'merged' END,
+            v_title, v_set, v_removed
+        )
+    );
+
+    RETURN QUERY SELECT p_document_id, v_after, v_set, v_removed;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION cerefox_schema_version()
 RETURNS TEXT
 LANGUAGE sql
@@ -2425,13 +2539,14 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.11.3 (#204): cerefox_set_document_metadata — metadata-only writes.
     -- 0.11.2 (iteration 36): RLS enabled on cerefox_document_relations,
     -- which iteration 29 left off the list (Supabase rls_disabled_in_public).
     -- 0.11.1 (iteration 35, #197): audit CHECK accepts 'rename-section'.
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.11.2'::TEXT;
+    SELECT '0.11.3'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

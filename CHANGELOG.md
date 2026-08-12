@@ -9,20 +9,89 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-### Fixed
+Target **v1.6.0** — a minor, because it adds an MCP tool and a CLI command.
+
+> ### Upgrading
+>
+> **`cerefox server deploy` is required** — schema 0.11.2 → **0.11.3**
+> (migration 0023). Then **reconnect your MCP client**: clients fetch the tool
+> list once at connect, so the new tool stays invisible until they do.
+
+### Added
+
+- **`cerefox_set_document_metadata` — change a document's tags without
+  resending its content** (#204). Until now `cerefox_ingest` was the only write
+  path for metadata and it requires title + content, so setting one key meant
+  re-sending the whole document, reproducing every untouched character. That is
+  the transcription risk the partial-edit tools were built to remove, still
+  fully present for metadata. Project membership had a metadata-only writer
+  (`cerefox_set_document_projects`) all along; tags never got one.
+
+  **Merges by default**: the keys you pass are set, every other key is left
+  alone — so you need not read the document first, and cannot drop a tag another
+  agent set. A destructive default was rejected deliberately: several agent
+  roles write to the same documents, and silently dropping their keys is the
+  same defect class as #183 and #191.
+
+  **A `null` value removes a key**, following RFC 7386 (JSON Merge Patch) —
+  unambiguous because Cerefox metadata values are JSON strings by convention.
+  `replace: true` sets the metadata to exactly the object given, matching
+  `set_document_projects`' destructive contract for callers who mean it.
+
+  The merge happens inside one `UPDATE` against a locked row, so two agents
+  setting *different* keys concurrently both succeed; a client-side
+  read-modify-write would have let one silently overwrite the other.
+
+  Ships with its CLI counterpart in the same change —
+  `cerefox document set-metadata <id> --set key=value` / `--remove key` /
+  `--json '{...}'` / `--replace` — because #201 is the standing lesson that a
+  tool on one surface is a tool half-shipped.
+
+### Changed
+
+- **The dashboard's agent-operations tile no longer overflows its header row**
+  (#205). Three access paths in the badge plus two below split the information
+  with no visible logic, and the badge outgrew the row the other three tiles
+  share. The badge now carries the two MCP transports — the agent paths behind
+  the headline count — and everything else sits beneath it, where `edge`
+  belongs anyway since it is normally zero unless you run a Custom GPT.
+
+- **The dashboard's lower panels line up with the stat tiles again** (#206).
+  `grid-template-columns: 1fr 360px` was the cause: `1fr` is `minmax(auto, 1fr)`
+  and its `auto` minimum is *min-content*, so a table wider than its share
+  expanded the track and overflowed the page container — which is what happened
+  once agent author names grew from `user` to `Claude|Financial-Planner`. Now
+  `minmax(0, 1fr)`, with the author column capped and ellipsised (full value in
+  the cell's title) and `table-layout: fixed` so one long value can never size
+  the table again. Measured on the rendered page: 64px out before, 0px now.
 
 - **`cerefox_get_help()` states the server version on every response**, not only
-  under `topic: "server"`. Hiding it behind a topic name had a bootstrap problem
-  an agent found within hours: the remedy for a stale server required a server
-  new enough to contain the remedy. Asked for "server" on a pre-1.5.0
-  deployment, they got "no such topic" and reasonably concluded the documented
-  check did not exist — inside the very section warning against unverified
-  infrastructure claims.
+  under `topic: "server"`. Hiding it behind a topic had a bootstrap problem an
+  agent found within hours: the remedy for a stale server required a server new
+  enough to contain the remedy. The **absence** of that block is now diagnostic
+  too — a server that does not print it predates v1.5.0.
 
-  Nothing can retrofit older servers. What this removes is the need to know a
-  magic word: any `get_help()` call now shows the version, an unmatched topic
-  shows it too, and the **absence** of that block is itself diagnostic — a
-  server that does not print it predates v1.5.0.
+### Fixed
+
+- **The UI e2e suite was testing the wrong server** (#155). It defaulted to port
+  8000 and derived `reuseExistingServer` from whether a port had been passed, so
+  a plain `bun run test:e2e` silently tested a developer's own `cerefox web`
+  daemon — a different build against different data. That is why it read as "8
+  of 13 tests broken" when the tests were fine: they pass 18/18 against the
+  build in the repo. Port and reuse are now separate settings, the default
+  starts its own server on 8123, and `CEREFOX_E2E_REUSE=1` opts in to testing
+  something already running.
+
+- **The UI e2e suite was also serving a stale SPA.** `cerefox web` serves
+  `packages/memory/dist/frontend`, populated by `bundle-frontend` — which only
+  ran at publish time, so a plain `bun run build` left the served UI as of
+  whenever someone last published. The suite now rebuilds and re-bundles the
+  frontend before starting the server, so it tests the code you changed.
+
+- **The UI e2e suite refuses an unlabelled (production) target.** It creates
+  real documents and projects, and it was the last live suite without that
+  guard — missed because it runs under Playwright rather than `bun test`, so the
+  coverage guard that enumerates live-capable suites never saw it.
 
 ---
 

@@ -15,7 +15,7 @@ It is not a message bus -- it is curated, versioned, searchable memory backed by
 
 You'll be using **one** of these — whichever your user (or the harness) has configured:
 
-1. **MCP tools (default)** — 12 named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, run as `cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 12 Tools** below. This is the recommended path for purpose-built agent clients.
+1. **MCP tools (default)** — 12 named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, run as `cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 13 Tools** below. This is the recommended path for purpose-built agent clients.
 2. **Shell CLI (Bash tool)** — the same operations exposed as a local `cerefox …` command (the TypeScript CLI from `@cerefox/memory`, resource-verb shape — e.g. `cerefox document get`, `cerefox project list`), invoked via your Bash tool. Used when your user prefers not to install/configure an MCP server. The semantics are identical; only the surface differs. See **Using Cerefox via the CLI** near the bottom of this guide for the MCP-tool → CLI-command mapping and the small list of behavioural differences.
 
 If you're not sure which mode you're in: check whether `cerefox_search` shows up in your tool list. If yes, use MCP. If no, ask your user where the Cerefox checkout lives — they'll have told you, typically in `CLAUDE.md`, `AGENTS.md`, or an equivalent project memory file.
@@ -34,7 +34,7 @@ The tool is intentionally MCP-only so an agent that has been dropped into Cerefo
 
 ---
 
-## The 12 Tools
+## The 13 Tools
 
 ### cerefox_search
 
@@ -653,6 +653,13 @@ Each of these comes from a real agent session, and each is easy to make.
   section" is further down the page than it looks. Note the loss warning will
   not catch it if your replacement text is longer than what it replaced, since
   there is then no net loss to report.
+
+- **To change only tags, use `cerefox_set_document_metadata`, never `cerefox_ingest`.**
+  Ingest replaces the whole document, so re-sending it to set one tag carries the
+  full transcription risk for no reason. The metadata tool merges: the keys you
+  pass are set, everything else is left alone, so you do not need to read the
+  document first and cannot drop a tag another agent set. Pass `null` as a value
+  to remove a key.
 
 - **Never partial-edit to fix a partial edit.** If a write leaves unexpected
   structure, stop. Use `cerefox_list_versions`, retrieve the last good version,

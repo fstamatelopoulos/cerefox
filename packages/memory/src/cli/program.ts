@@ -33,6 +33,7 @@ import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
 import { registerDocumentEdit } from "./commands/document-edit.ts";
 import { registerDocumentRestore } from "./commands/document-restore.ts";
+import { registerDocumentSetMetadata } from "./commands/document-set-metadata.ts";
 import { registerDocumentSetProjects } from "./commands/document-set-projects.ts";
 import { registerGuides } from "./commands/guides.ts";
 import { registerProjectCreate } from "./commands/project-create.ts";
@@ -196,6 +197,7 @@ export function buildProgram(): Command {
   registerDocumentRestore(document); // v0.9.0: new command (no old flat verb)
   registerDocumentEdit(document); // v0.9.1: non-destructive title/metadata patch
   registerDocumentSetProjects(document); // CLI parity with cerefox_set_document_projects
+  registerDocumentSetMetadata(document); // CLI parity with cerefox_set_document_metadata (#204)
   moveInto(document, registerIngest, "ingest");
   // Partial edits (iter-34): same shared handlers the MCP tools use.
   registerDocumentInsert(document);

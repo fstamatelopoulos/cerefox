@@ -50,9 +50,18 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `node ../packages/memory/dist/bin/cerefox.js web --port ${E2E_PORT}`,
+    // Rebuild the SPA and refresh the copy the server actually serves.
+    // `cerefox web` serves packages/memory/dist/frontend, which is populated
+    // by `bundle-frontend` — and that only ran at publish time. So a plain
+    // `bun run build` left the served UI stale, and this suite would pass
+    // against a frontend from whenever someone last published. Same shape as
+    // #155: the suite testing something other than what you changed.
+    command:
+      `cd ../packages/memory && bun run build-frontend && bun run bundle-frontend && ` +
+      `node dist/bin/cerefox.js web --port ${E2E_PORT}`,
     url: `http://127.0.0.1:${E2E_PORT}/api/v1/version`,
     reuseExistingServer: E2E_REUSE,
-    timeout: 30_000,
+    // The rebuild runs inside this timeout.
+    timeout: 120_000,
   },
 });

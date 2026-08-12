@@ -100,6 +100,15 @@
   font-size: 13px;
   color: var(--text-dim);
 }
+/* #205: the secondary breakdown under a stat's label. Smaller and fainter
+   than .statLabel so the tile reads as one number plus a caption rather
+   than three competing lines. */
+.statSub {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 2px;
+  white-space: nowrap;
+}
 .emptyVal {
   font-family: var(--font-display);
   font-size: 32px;
@@ -111,7 +120,13 @@
 /* ---- main split ---- */
 .dashSplit {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  /* #206: minmax(0, 1fr), NOT 1fr. `1fr` is minmax(auto, 1fr) and its auto
+     minimum is min-content, so a table wider than its share expands the
+     track and the whole panel overflows the 1120px container — which is
+     why these panels stopped lining up with the stat tiles above once
+     agent author names got long (`Claude|Financial-Planner`). A zero
+     minimum lets the track hold its share and the content adapt. */
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 26px;
   align-items: start;
 }
@@ -125,6 +140,19 @@
 .tbl {
   width: 100%;
   border-collapse: collapse;
+  /* With a fixed layout the columns share the available width instead of being
+     sized by their widest cell, so adding a longer author name never widens the
+     table again (#206). */
+  table-layout: fixed;
+}
+/* The author column carries `<technology>|<Role>` identities, which are three
+   times the width of the old plain names. Cap it and ellipsize; the full value
+   stays available via the cell's title attribute. */
+.authorCell {
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tbl th {
   text-align: left;

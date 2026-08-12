@@ -32,6 +32,7 @@ import { listProjectsTool } from "./list-projects.ts";
 import { listVersionsTool } from "./list-versions.ts";
 import { metadataSearchTool } from "./metadata-search.ts";
 import { searchTool } from "./search.ts";
+import { setDocumentMetadataTool } from "./set-document-metadata.ts";
 import { setDocumentProjectsTool } from "./set-document-projects.ts";
 import { McpInvalidParams, type MCPSupabaseClient, type ToolDefinition } from "./types.ts";
 
@@ -49,6 +50,7 @@ export const ALL_TOOLS: ToolDefinition[] = [
   metadataSearchTool,
   listMetadataKeysTool,
   listProjectsTool,
+  setDocumentMetadataTool,
   setDocumentProjectsTool,
   auditLogTool,
   // Document relations (iteration 29): the graph surface.
@@ -110,5 +112,6 @@ export {
   listVersionsTool,
   metadataSearchTool,
   searchTool,
+  setDocumentMetadataTool,
   setDocumentProjectsTool,
 };

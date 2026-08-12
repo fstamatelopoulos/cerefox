@@ -46,6 +46,53 @@ const NOT_FLAGS = new Set([
 /** `section_part` → `--section-part` */
 const toFlag = (param: string) => `--${param.replace(/_/g, "-")}`;
 
+describe("metadata writes reach both surfaces (#204)", () => {
+  // #201's lesson applied prospectively: the section read shipped on MCP alone
+  // and was unreachable from a terminal for a whole release, because nothing
+  // compared the two surfaces. This pair went out together; this keeps them
+  // together.
+  const CLI_META = readFileSync(
+    join(import.meta.dir, "..", "src", "cli", "commands", "document-set-metadata.ts"),
+    "utf8",
+  );
+
+  test("the CLI command exists and calls the same RPC", () => {
+    expect(CLI_META).toContain("cerefox_set_document_metadata");
+    expect(CLI_META).toContain('.command("set-metadata")');
+  });
+
+  test("the CLI offers merge, removal, and explicit replace", () => {
+    expect(CLI_META).toContain("--set");
+    expect(CLI_META).toContain("--remove");
+    expect(CLI_META).toContain("--replace");
+  });
+
+  test("removal sends a null, matching RFC 7386 and the MCP contract", () => {
+    // If the CLI stripped nulls or used a separate parameter, the two surfaces
+    // would diverge on the one semantic that is easy to get wrong.
+    expect(CLI_META).toMatch(/patch\[key\] = null/);
+  });
+
+  test("merge is the default on BOTH surfaces", () => {
+    const schema = TOOLS_BY_NAME["cerefox_set_document_metadata"].inputSchema as {
+      required?: string[];
+      properties: Record<string, unknown>;
+    };
+    expect(schema.required).toEqual(["document_id", "metadata"]);
+    // `replace` is optional, so omitting it merges.
+    expect(schema.required).not.toContain("replace");
+    expect(CLI_META).toContain("Boolean(options.replace)");
+  });
+
+  test("the command is registered under the document group", () => {
+    const program = readFileSync(
+      join(import.meta.dir, "..", "src", "cli", "program.ts"),
+      "utf8",
+    );
+    expect(program).toContain("registerDocumentSetMetadata(document)");
+  });
+});
+
 describe("get_document read modes reach both surfaces (#201)", () => {
   const schema = TOOLS_BY_NAME["cerefox_get_document"].inputSchema as {
     properties: Record<string, unknown>;

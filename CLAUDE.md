@@ -43,7 +43,7 @@ cerefox/
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
 │   ├── db-status/                 # Schema-version-mismatch banner, status checks
 │   ├── embeddings/                # OpenAI + local ONNX (nomic) embedding helpers
-│   ├── mcp-tools/                 # 12 MCP tool handlers shared by remote + local
+│   ├── mcp-tools/                 # 13 MCP tool handlers shared by remote + local
 │   └── cli-core/                  # CLI helpers (exit, output, argv, prompts)
 ├── packages/
 │   └── memory/                    # @cerefox/memory npm package — both bins (v0.5+)
@@ -324,7 +324,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 | `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
 | `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/`. Also an OAuth 2.1 protected resource (iter-28A, `--no-verify-jwt` + in-function auth) for cloud clients; the static path takes the **Cerefox access token** (iter-28E) | Claude Code, Cursor, Claude Desktop (remote, via the Cerefox token); **claude.ai web + mobile (via OAuth)**. Local agents prefer the local MCP. |
 
-The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 12 MCP tools** over stdio (plus 4 dormant relation tools), importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md`.
+The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 13 MCP tools** over stdio (plus 4 dormant relation tools), importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md`.
 
 ### Deploying the server side: `cerefox server deploy`
 
@@ -478,7 +478,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 ## Quick Reference
 
 - **Docs**: `docs/plan.md` for current status; GitHub issues for the backlog
-- **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 12 core tools, key rules, workflows)
+- **Agent guides**: `AGENT_GUIDE.md` (comprehensive reference for AI agents using Cerefox tools), `AGENT_QUICK_REFERENCE.md` (minimal quick reference card -- 13 core tools, key rules, workflows)
 - **Schema**: `src/cerefox/db/schema.sql`
 - **Config**: `.env` file or environment variables (see `_shared/config/`)
 - **Max response size**: defaults to 200000 bytes, configurable via `CEREFOX_MAX_RESPONSE_BYTES`. Enforced on the MCP / Edge Function paths **and the CLI** (the CLI also accepts a per-call `--max-bytes`). The **web UI is unlimited** (no byte budget).
