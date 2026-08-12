@@ -257,11 +257,11 @@ export function DashboardPage() {
             <table className={styles.tbl}>
               <thead>
                 <tr>
-                  <th>Document</th>
-                  <th className={styles.authorCell}>Author</th>
-                  <th className={styles.alignRight}>Chunks</th>
-                  <th className={styles.alignRight}>Size</th>
-                  <th className={styles.alignRight}>Updated</th>
+                  <th className={styles.colDoc}>Document</th>
+                  <th className={`${styles.colAuthor} ${styles.authorCell}`}>Author</th>
+                  <th className={`${styles.colChunks} ${styles.alignRight}`}>Chunks</th>
+                  <th className={`${styles.colSize} ${styles.alignRight}`}>Size</th>
+                  <th className={`${styles.colUpdated} ${styles.alignRight}`}>Updated</th>
                 </tr>
               </thead>
               <tbody>
@@ -292,7 +292,7 @@ export function DashboardPage() {
                             >
                               {doc.title || "Untitled"}
                             </Link>
-                            <div className={ui.row} style={{ gap: 6 }}>
+                            <div className={styles.docBadges}>
                               {doc.project_ids
                                 .filter((pid) => projectMap.has(pid))
                                 .slice(0, 1)

@@ -148,8 +148,19 @@
 /* The author column carries `<technology>|<Role>` identities, which are three
    times the width of the old plain names. Cap it and ellipsize; the full value
    stays available via the cell's title attribute. */
+/* With table-layout: fixed the browser shares width evenly unless told
+   otherwise, which left Document truncating at ~90px while Chunks held a
+   three-digit number in a column twice as wide. These are the real content
+   sizes: counts are 1-3 digits, sizes are 5-6 with a separator, timestamps wrap
+   to two lines by design. Document takes whatever is left, which is the column
+   people actually read. */
+.colDoc { width: auto; }
+.colAuthor { width: 168px; }
+.colChunks { width: 64px; }
+.colSize { width: 86px; }
+.colUpdated { width: 108px; }
+
 .authorCell {
-  max-width: 168px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -192,11 +203,28 @@
 }
 .docTitle {
   display: block;
-  max-width: 340px;
+  /* No max-width: the column now bounds it, and a second cap only made the
+     title shorter than the space available. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 13.5px;
+}
+
+/* The project and review-status badges under the title. Without a bound they
+   overflowed the cell and printed over the Author column. */
+.docBadges {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.docBadges > * {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- projects rail ---- */

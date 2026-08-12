@@ -9,7 +9,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Dashboard table columns are sized to their content.** `table-layout: fixed`
+  went in to stop long agent names widening the panel, but without explicit
+  widths the browser shares the space evenly — so Document truncated titles at a
+  dozen characters while Chunks held a three-digit number in a column twice as
+  wide. Counts, sizes and timestamps now get the width they actually need and
+  Document takes the rest, going from roughly 90px to 258px.
+
+- **The project and review-status badges no longer print over the Author
+  column.** They had no bound, so a long project name plus "pending review"
+  overflowed the document cell. Measured on the rendered page: badges overflowed
+  on every visible row before, none after.
 
 ---
 
