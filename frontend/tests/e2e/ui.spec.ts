@@ -13,11 +13,51 @@
 
 import { expect, test } from "@playwright/test";
 
-import { loadSettings } from "../../../_shared/config/index.ts";
+import { loadEnv, loadSettings } from "../../../_shared/config/index.ts";
 import { createClient } from "../../../_shared/db-client/index.ts";
 
 const APP = "/app";
 const E2E_PREFIX = "[E2E-UI]";
+
+/**
+ * Refuse to run against an unlabelled (production) target.
+ *
+ * This suite creates documents and projects through the real UI, so it writes
+ * to whatever store the server it is talking to is pointed at. It is the last
+ * live suite without this check — the others gained it after a `bun test` run
+ * wrote to the production store — and it was missed because it runs under
+ * Playwright rather than `bun test`, so the coverage guard that enumerates
+ * live-capable suites never looked at it.
+ *
+ * Mirrors `packages/memory/test/_live-target-guard.ts`. Kept as a local copy
+ * rather than an import because Playwright and Bun resolve modules differently
+ * here, and a guard that fails to load is a guard that does not run.
+ */
+function mayWriteToLiveTarget(): boolean {
+  if (process.env.CEREFOX_ALLOW_PROD_WRITE_TESTS === "1") return true;
+  if ((process.env.CEREFOX_ENV_LABEL ?? "").trim()) return true;
+  try {
+    // The label usually lives in the resolved config FILE, not the ambient
+    // environment — `CEREFOX_CONFIG_DIR=~/.cerefox/staging` sets none here — so
+    // load that file the way the CLI does and re-read. `Settings` carries no
+    // envLabel field, so reading process.env after loadEnv() is the only route.
+    loadEnv();
+    return Boolean((process.env.CEREFOX_ENV_LABEL ?? "").trim());
+  } catch {
+    return false;
+  }
+}
+
+test.beforeAll(() => {
+  if (!mayWriteToLiveTarget()) {
+    throw new Error(
+      "Refusing to run UI e2e against an unlabelled (production) target. " +
+        "These tests create real documents and projects. Point them at a labelled " +
+        "environment — CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e — " +
+        "or set CEREFOX_ALLOW_PROD_WRITE_TESTS=1 if you truly mean production.",
+    );
+  }
+});
 
 function uniqueTitle(label: string): string {
   return `${E2E_PREFIX} ${label} ${crypto.randomUUID().slice(0, 8)}`;
