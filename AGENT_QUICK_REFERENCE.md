@@ -208,8 +208,10 @@ Each of these comes from a real agent session, and each is easy to make.
   needs `cerefox_ingest`.
 
 - **If a capability seems missing from one server, suspect your client first.**
-  Local and remote run the same code. Call `cerefox_get_help(topic: "server")`:
-  it reports the server's own version and the operations it registers. If that
+  Local and remote run the same code. **Every `cerefox_get_help()` response
+  begins with the server's version and the operations it registers** — you do
+  not need a special topic, and the *absence* of that block is itself an answer:
+  a server that does not print it predates v1.5.0. If that
   disagrees with your tool list, the client is holding a list it fetched before
   an upgrade — clients cache it at connect time. Ask the user to restart the
   client. Do not record a capability difference between servers as a fact; every

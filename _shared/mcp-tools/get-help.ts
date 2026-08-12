@@ -90,6 +90,18 @@ async function handler(
     result_count: 1,
   });
 
+  // The identity block leads EVERY response, not just `topic: "server"`.
+  //
+  // Behind a topic name it had a bootstrap problem an agent caught immediately:
+  // the remedy for a stale server requires a server new enough to contain the
+  // remedy. Asked for "server" on a pre-1.5.0 deployment, they got "no such
+  // topic" and reasonably concluded the documented check did not exist — inside
+  // the very section warning against unverified infrastructure claims.
+  //
+  // Nothing can retrofit old servers. What this fixes is the need to know a
+  // magic word: any `cerefox_get_help()` call now shows the version, and the
+  // ABSENCE of this block is itself diagnostic — a server that does not print
+  // it predates 1.5.0.
   if (!topic) {
     const idx = HELP_SECTION_HEADINGS.map((h) => `  - ${h}`).join("\n");
     return (
@@ -113,6 +125,8 @@ async function handler(
 
   if (matched.length === 0) {
     return (
+      serverIdentity() +
+      "\n\n---\n\n" +
       `No help topic matched "${topic}".\n\n` +
       `Available topics:\n` +
       HELP_SECTION_HEADINGS.map((h) => `  - ${h}`).join("\n") +
@@ -120,7 +134,7 @@ async function handler(
     );
   }
 
-  return matched.map((h) => HELP_SECTIONS[h]).join("\n\n---\n\n");
+  return serverIdentity() + "\n\n---\n\n" + matched.map((h) => HELP_SECTIONS[h]).join("\n\n---\n\n");
 }
 
 export const getHelpTool: ToolDefinition = {

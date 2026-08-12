@@ -625,3 +625,36 @@ describe("timestamps carry their zone (#199)", () => {
     expect(out).toContain("2026-08-11T06:32:13Z");
   });
 });
+
+describe("get_help states the server version on every response", () => {
+  // An agent on a pre-1.5.0 server asked for `topic: "server"`, got "no such
+  // topic", and concluded the documented self-check did not exist — inside the
+  // section warning against unverified infrastructure claims. The check was
+  // real; their server predated it. Hiding it behind a topic name meant the
+  // remedy for a stale server required a server new enough to have the remedy.
+  const help = TOOLS_BY_NAME["cerefox_get_help"];
+  const client = { rpc: () => ({ data: null, error: null }) } as unknown as SupabaseClient;
+
+  test("no topic — the common call", async () => {
+    const out = await help.handler(client, {}, FAKE_CTX);
+    expect(out).toContain("## This server");
+    expect(out).toMatch(/\*\*Version\*\*: \d+\.\d+\.\d+/);
+  });
+
+  test("a matched topic still carries it", async () => {
+    const out = await help.handler(client, { topic: "Tools" }, FAKE_CTX);
+    expect(out).toContain("## This server");
+  });
+
+  test("an UNMATCHED topic carries it — the case that was reported", async () => {
+    const out = await help.handler(client, { topic: "no-such-topic-xyz" }, FAKE_CTX);
+    expect(out).toContain("## This server");
+    expect(out).toContain("No help topic matched");
+  });
+
+  test("the explicit server topic still works", async () => {
+    const out = await help.handler(client, { topic: "server" }, FAKE_CTX);
+    expect(out).toContain("## This server");
+    expect(out).toContain("cerefox_edit operations");
+  });
+});

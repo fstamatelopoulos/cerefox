@@ -9,7 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`cerefox_get_help()` states the server version on every response**, not only
+  under `topic: "server"`. Hiding it behind a topic name had a bootstrap problem
+  an agent found within hours: the remedy for a stale server required a server
+  new enough to contain the remedy. Asked for "server" on a pre-1.5.0
+  deployment, they got "no such topic" and reasonably concluded the documented
+  check did not exist — inside the very section warning against unverified
+  infrastructure claims.
+
+  Nothing can retrofit older servers. What this removes is the need to know a
+  magic word: any `get_help()` call now shows the version, an unmatched topic
+  shows it too, and the **absence** of that block is itself diagnostic — a
+  server that does not print it predates v1.5.0.
 
 ---
 
