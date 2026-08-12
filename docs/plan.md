@@ -131,6 +131,13 @@ one:
    table is empty on most deployments, and why the RLS gap fixed in v1.5.0
    exposed no content.
 
+   **How it got here matters for that decision.** It was not a deliberate
+   roadmap commitment. The item moved into an iteration plan during a TODO
+   cleanup while several things were in flight, the maintainer did not catch it,
+   and phase 1 of the original design was implemented on that basis. So there is
+   no prior investment to protect: finishing it and removing it are both open,
+   and should be judged on merit rather than on sunk cost.
+
    **Before building on it**, decide whether the dormant half ships or is
    removed. A feature that is reachable by agents but invisible to the human
    contradicts the human-on-the-loop governance model the rest of the product

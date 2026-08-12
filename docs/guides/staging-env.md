@@ -292,6 +292,21 @@ Pause the staging project in the Supabase dashboard between test rounds — a
 paused project keeps its data without consuming free-tier compute. Check your
 plan's limit on simultaneously active projects before creating the second one.
 
+## Pause it when you are not using it
+
+A Supabase project on the free tier costs nothing while paused, and leaving a
+staging environment running between bursts of work is pure waste. Pause it from
+the Supabase dashboard when you finish, and unpause it when you start.
+
+Two things follow from that:
+
+- **Give it a minute after unpausing.** The first queries against a
+  just-resumed project are slow while the instance wakes.
+- **A paused project does not announce itself.** Commands hang or fail with
+  connection and timeout errors, and `cerefox doctor` reports the Data API as
+  unreachable. That looks identical to a broken deployment or a bad credential.
+  Check whether the project is paused before diagnosing anything else.
+
 ## Running the test suites against staging
 
 The package suite's live tests write real documents. They resolve credentials
