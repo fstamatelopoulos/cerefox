@@ -73,6 +73,19 @@ cd packages/memory && bun run build && bun test         # CLI/MCP smokes + live 
 # at. Since v1.4.0 they skip unless the target is labelled; run them against a
 # scratch environment:
 CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test
+
+# UI end-to-end (Playwright). Deliberately NOT in CI: it needs live Supabase and
+# OpenAI credentials plus a labelled target, and putting those in repository
+# secrets is a bigger exposure than the coverage is worth. So it is a local step
+# — run it before pushing anything that touches `frontend/`:
+cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e
+
+# Playwright starts its OWN `cerefox web` on port 8123 from packages/memory/dist,
+# so a run always tests the build in this repo. `CEREFOX_E2E_PORT` picks the
+# port; `CEREFOX_E2E_REUSE=1` tests a server already running there instead of
+# starting one — a post-deploy smoke test, never a regression run. Those were one
+# setting until v1.5.0, and the coupling is what made #155 look like eight broken
+# tests when the suite was simply pointed at a developer's own daemon.
 cd frontend && bun run test:e2e                         # UI e2e (Playwright)
 CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote  # live EF e2e (opt-in)
 
