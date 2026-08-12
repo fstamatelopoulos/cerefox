@@ -68,6 +68,9 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Markdown-first ingest** | `.md` / `.txt` / `.docx` (Markdown is the storage format; `.docx` is converted via `mammoth` on ingest, fidelity varies. PDF is not supported — convert upstream) |
 | **Batch ingest** | `cerefox document ingest-dir` recurses directories |
 | **Deduplication** | SHA-256 content hash; re-ingesting the same file is a no-op |
+| **Partial document edits** | `cerefox_insert` / `cerefox_edit` change part of a document without resending it — append, replace a section, delete one, or rename a heading. Anchors are heading paths; an ambiguous anchor is refused with the options rather than guessed. Multiple operations apply atomically. |
+| **Read one section** | `cerefox_get_document(section: "## Heading")` returns exactly the text a `replace_section` would overwrite, resolved by the same code as the write — so an edit need not start with a full read. |
+| **Metadata writes** | `cerefox_set_document_metadata` changes tags without touching content. Merges by default (a `null` value removes a key), so concurrent agents setting different keys do not clobber each other. No re-chunk, no re-embed, no new version. |
 | **Concurrency-safe updates** | Optimistic locking on content updates (v0.11+): writers pass the `content_hash` they read; a concurrent change fails with a conflict (re-read → merge → retry) instead of silently overwriting another agent's work. Explicit `last_write_wins` opt-out for file re-sync flows |
 | **Backup and restore** | JSON snapshots, optional git commit |
 | **Small-to-big retrieval** | `cerefox_context_expand` RPC returns chunk neighbours for richer context |

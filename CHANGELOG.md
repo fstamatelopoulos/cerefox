@@ -49,6 +49,11 @@ Target **v1.6.0** — a minor, because it adds an MCP tool and a CLI command.
 
 ### Changed
 
+- **The README finally lists partial document edits.** `cerefox_insert` /
+  `cerefox_edit`, the section read, and metadata writes — the headline features
+  of the last three releases — were absent from the project's front page
+  entirely.
+
 - **The dashboard's agent-operations tile no longer overflows its header row**
   (#205). Three access paths in the badge plus two below split the information
   with no visible logic, and the badge outgrew the row the other three tiles
@@ -72,6 +77,24 @@ Target **v1.6.0** — a minor, because it adds an MCP tool and a CLI command.
   too — a server that does not print it predates v1.5.0.
 
 ### Fixed
+
+- **`--set key=null` on the CLI is refused rather than guessed.** Over MCP a
+  JSON null *removes* a key (RFC 7386), while `--set key=null` stored the
+  literal string `"null"` — a silent divergence on the one semantic most likely
+  to be misread. On a command line the same text could genuinely mean the word,
+  so the command now points at `--remove key` or `--json '{"key":"null"}'`.
+  Found reviewing the PR; the parity test that should have caught it was
+  asserting that a line of source exists rather than what the command does.
+
+- **The `self-update --check` tests skip when the npm registry is unreachable.**
+  They fetch `registry.npmjs.org` directly, so they failed a CI run and a local
+  run on the same day for reasons unrelated to any change — and a job that fails
+  like that is one people learn to re-run rather than read. A reachable registry
+  still asserts the full contract.
+
+- **The UI e2e suite no longer installs dependencies on every run.** Its server
+  command called `build-frontend`, which runs `bun install`; a test command
+  should not mutate the lockfile or pay an install each time.
 
 - **The UI e2e suite was testing the wrong server** (#155). It defaulted to port
   8000 and derived `reuseExistingServer` from whether a port had been passed, so
