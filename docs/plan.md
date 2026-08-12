@@ -111,10 +111,31 @@ one:
    28B/28C trigger: ~2–3 months of v0.10/v0.11 in the wild + an outside user
    installing unaided.
 4. **Iteration 29 — Document Relations & Semantic Graph** (post-v1.0, target **v1.1+**),
-   pending — design only. Design of record:
+   **partially implemented and dormant, NOT design-only** (corrected 2026-08-12;
+   this entry previously said "implementation is future work", which was wrong
+   and would have had someone rebuild what already ships). Design of record:
    [`docs/research/document-relations-and-semantic-graph.md`](research/document-relations-and-semantic-graph.md).
-   (The early semantic-graph exploration branch was already merged to main;
-   implementation is future work.)
+
+   **What exists**: the `cerefox_document_relations` table; four RPCs
+   (`cerefox_set_relation`, `cerefox_delete_relation`, `cerefox_get_relations`,
+   `cerefox_get_neighbors`); four MCP tools wrapping them; and the traversal
+   semantics documented in `AGENT_GUIDE.md` (`supersedes` marks the target
+   superseded, `contradicts` marks both stale, and several types are symmetric).
+
+   **What does not**: any web-UI surface beyond the Settings toggle, so a human
+   cannot see or curate a graph the agents can write. There is no CLI parity for
+   the four tools either.
+
+   **Status**: gated behind `relations_enabled`, which defaults to **false**, so
+   the tools are hidden from `tools/list` on a default install. That is why the
+   table is empty on most deployments, and why the RLS gap fixed in v1.5.0
+   exposed no content.
+
+   **Before building on it**, decide whether the dormant half ships or is
+   removed. A feature that is reachable by agents but invisible to the human
+   contradicts the human-on-the-loop governance model the rest of the product
+   follows, and it has already cost one security incident by being the one table
+   nobody was looking at.
 
 Release history lives in [`CHANGELOG.md`](../CHANGELOG.md); the design-of-record
 for the polish arc is [`docs/specs/polish-and-distribution-design.md`](specs/polish-and-distribution-design.md).
