@@ -121,6 +121,41 @@ jobs:
         working-directory: packages/memory
         run: bun test
 
+  frontend:
+    name: Frontend — build + unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Install workspace deps
+        run: bun install --frozen-lockfile
+
+      # The frontend had NO CI coverage at all, so a frontend that did not
+      # compile could merge with every signal green — and did. A source file
+      # under `frontend/src/lib/` was silently skipped by `git add -A`, because
+      # .gitignore still carried a bare `lib/` from the Python template that was
+      # retired at v1.0.0. `main` shipped importing a module that was not in the
+      # repo.
+      #
+      # `vite build` is what catches that class: CI checks out a clean tree, so
+      # an ignored-and-therefore-absent file fails the build in seconds. It also
+      # covers type errors and broken imports across the whole SPA.
+      - name: Build the frontend
+        working-directory: frontend
+        run: bun run build
+
+      # The non-browser tests only. `frontend/tests/e2e/` is Playwright and is
+      # deliberately NOT wired in: that suite is 8/13 failing (#155), and gating
+      # on a red suite teaches everyone to ignore red.
+      - name: Frontend unit tests
+        working-directory: frontend
+        run: bun test src/
+
   audit:
     name: Dependency audit (bun audit)
     runs-on: ubuntu-24.04
