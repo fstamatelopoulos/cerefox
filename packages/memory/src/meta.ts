@@ -10,6 +10,6 @@
  * **Do not edit this constant by hand.** Run `bun scripts/cut_release.ts
  * <new-version>` and let the script bump it.
  */
-const PKG_VERSION = "1.6.0";
+const PKG_VERSION = "1.6.1";
 
 export { PKG_VERSION };

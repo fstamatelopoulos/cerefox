@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.6.1] -- 2026-08-12
+
 ### Fixed
 
 - **Dashboard table columns are sized to their content.** `table-layout: fixed`
