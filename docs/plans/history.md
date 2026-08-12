@@ -23,7 +23,7 @@
 |---|---|---|
 | 34 — Partial Document Edits | [`iteration-34-partial-edits.md`](iteration-34-partial-edits.md) | ✅ shipped v1.3.0 (2026-08-10) |
 | 35 — Partial-edit follow-ups and guard debt | [`iteration-35-partial-edits-followups.md`](iteration-35-partial-edits-followups.md) | ✅ shipped v1.4.0 (2026-08-11) |
-| 36 — Observability, surface parity, test hygiene | [`iteration-36-observability-and-parity.md`](iteration-36-observability-and-parity.md) | active |
+| 36 — Observability, surface parity, test hygiene | [`iteration-36-observability-and-parity.md`](iteration-36-observability-and-parity.md) | ✅ shipped v1.5.0 (2026-08-11), with v1.6.x follow-ons |
 
 ---
 
