@@ -1029,7 +1029,7 @@ Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
 subprocess via npx (Node ≥20 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
-as the local server, so both expose the identical 12 core tools. Path 3's primitive
+as the local server, so both expose the identical 13 core tools. Path 3's primitive
 Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers
 authenticate with a **Cerefox access token** (`cerefox token generate`),
 validated in-function; Edge Functions use the service-role key internally. The
@@ -1052,6 +1052,7 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_list_projects` | Read | List all projects with names, IDs, and descriptions for agent discovery. |
 | `cerefox_metadata_search` | Read | Find documents by metadata key-value criteria without a text search term. |
 | `cerefox_set_document_projects` | Write | Set (replace) the set of projects a document belongs to. |
+| `cerefox_set_document_metadata` | Write | Change a document's metadata without touching content. Merges by default; a JSON null removes a key. Metadata-only: no re-chunk, no re-embed, no version snapshot. |
 | `cerefox_insert` | Write (additive) | Add text at `end_of_document` / `end_of_section` / `after_heading` / `before_heading` without resending the document. Structurally cannot remove content. |
 | `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section`) applied **atomically** in a single write. |
 | `cerefox_get_help` | Read | Return the bundled agent quick-reference (tools, rules, workflows). |
@@ -1066,7 +1067,7 @@ true`. A tool an agent can see is a tool an agent may use, so "dormant" has to
 mean invisible rather than merely unused — enabling and disabling change
 visibility only, never data.
 
-This is the full set of **12 core MCP tools, plus 4 dormant relation tools**,
+This is the full set of **13 core MCP tools, plus 4 dormant relation tools**,
 exposed identically over both transports
 (remote `cerefox-mcp` Edge Function and local `cerefox mcp`), via the shared
 `_shared/mcp-tools/` handlers. Note: document **delete** is *not* an MCP tool — it

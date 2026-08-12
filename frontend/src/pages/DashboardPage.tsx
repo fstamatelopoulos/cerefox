@@ -184,9 +184,11 @@ export function DashboardPage() {
               <IconSparkles size={18} />
             </span>
             {agentOps > 0 ? (
-              <span className={`${ui.badge} ${ui.bGreen}`} title="Agent operations by access path, last 30 days">
-                {localMcpOps.toLocaleString()} local · {remoteMcpOps.toLocaleString()} remote ·{" "}
-                {efOps.toLocaleString()} edge
+              <span
+                className={`${ui.badge} ${ui.bGreen}`}
+                title="MCP transports, last 30 days. Other paths are listed below the count."
+              >
+                {localMcpOps.toLocaleString()} local · {remoteMcpOps.toLocaleString()} remote
               </span>
             ) : (
               <Popover width={260} position="bottom-end" withArrow shadow="md">
@@ -215,9 +217,20 @@ export function DashboardPage() {
           {/* #195: the tile counted transports, not actors, and said nothing
               about the two busiest paths. CLI is shown separately because the
               summary cannot tell an agent's CLI use from a human's. */}
-          {(cliOps > 0 || webOps > 0) && (
-            <div className={styles.statLabel} title="Not counted above: the CLI is used by both agents and people, and the usage summary does not separate them.">
-              {cliOps.toLocaleString()} cli · {webOps.toLocaleString()} web
+          {/* #205: the pill holds the two MCP transports — the agent paths that
+              make up the headline count — and everything else lives here. The
+              earlier split put three paths above and two below with no visible
+              logic, and the pill outgrew the header row the other tiles share.
+              `edge` moves down because it is an agent path that is normally
+              zero (ChatGPT Actions only), so it reads as noise in the badge and
+              as information here. */}
+          {(efOps > 0 || cliOps > 0 || webOps > 0) && (
+            <div
+              className={styles.statSub}
+              title="edge = ChatGPT Actions (counted in the total above). cli and web are NOT counted as agent operations: the usage summary cannot separate an agent's CLI use from a person's."
+            >
+              {efOps.toLocaleString()} edge · {cliOps.toLocaleString()} cli ·{" "}
+              {webOps.toLocaleString()} web
             </div>
           )}
         </div>
@@ -245,7 +258,7 @@ export function DashboardPage() {
               <thead>
                 <tr>
                   <th>Document</th>
-                  <th>Author</th>
+                  <th className={styles.authorCell}>Author</th>
                   <th className={styles.alignRight}>Chunks</th>
                   <th className={styles.alignRight}>Size</th>
                   <th className={styles.alignRight}>Updated</th>
@@ -305,7 +318,9 @@ export function DashboardPage() {
                           </div>
                         </div>
                       </td>
-                      <td>
+                      {/* #206: the full identity stays in the title, so capping the
+                          column costs nothing. */}
+                      <td className={styles.authorCell} title={chip.label}>
                         <span className={`${ui.srcChip} ${chip.agent ? ui.srcChipAgent : ""}`}>
                           <ChipIcon size={12} />
                           {chip.label}

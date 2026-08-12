@@ -251,6 +251,59 @@ cerefox document edit <doc-id> --set-meta status=archived --unset-meta draft
 
 ---
 
+### `cerefox document set-metadata`
+
+**Purpose**: change a document's metadata **without resending its content**. Before this existed, `cerefox document ingest` was the only way to set a tag, and it needs the whole document — so changing one key meant reproducing every untouched character, which is the transcription risk the partial-edit commands exist to remove.
+
+**Merges by default.** The keys you pass are set; every other key is left alone. That means you do not need to read the document first, and you cannot accidentally drop a tag someone else set. Content, chunks and embeddings are untouched and no new version is created; the change is logged as an `update-metadata` audit entry.
+
+CLI equivalent of the `cerefox_set_document_metadata` MCP tool. Both call the same RPC, so the semantics cannot drift between them.
+
+**Synopsis**:
+
+```
+cerefox document set-metadata [OPTIONS] DOCUMENT_ID
+```
+
+**Options**:
+
+| Flag | Meaning |
+|---|---|
+| `-s, --set <key=value...>` | Set a key. Repeatable. |
+| `-r, --remove <key...>` | Remove a key. Repeatable. |
+| `--json <object>` | A JSON object of keys to set; a `null` value removes that key. |
+| `--replace` | Set the metadata to **exactly** what was given, discarding every key not listed. |
+| `-a, --author <name>` | Caller identity (audit log). |
+| `--author-type <type>` | `user` (default) or `agent`. |
+| `--json-out` | Emit the result as JSON. |
+
+**Examples**:
+
+```bash
+# Add or update one tag; everything else is preserved
+cerefox document set-metadata <id> --set status=active
+
+# Several at once
+cerefox document set-metadata <id> --set type=decision-log --set seq=8
+
+# Remove a key
+cerefox document set-metadata <id> --remove stale_key
+
+# Set and remove in one call, from a script that already holds an object
+cerefox document set-metadata <id> --json '{"status":"active","stale_key":null}'
+
+# Reset a document's tags wholesale (rare)
+cerefox document set-metadata <id> --replace --json '{"type":"note"}'
+```
+
+**Values are stored as JSON strings**, matching the convention elsewhere: a `metadata_filter` matches JSONB as strings, so a stored boolean `true` would never match a filter looking for `"true"`.
+
+**`--set key=null` is refused.** Over MCP a JSON null *removes* a key (RFC 7386), but on a command line the same text could equally mean the literal word "null" — so rather than guess, the command points you at `--remove key` (to delete) or `--json '{"key":"null"}'` (to store the word).
+
+**Output**: reports what actually changed, not what was asked for. Setting a key to the value it already holds reports no change, so re-running a script is distinguishable from doing work.
+
+---
+
 ### `cerefox document set-projects`
 
 **Purpose**: replace a document's project memberships with **exactly** the given set (full-set replace — any project not listed is removed). This is the CLI equivalent of the `cerefox_set_document_projects` MCP tool; both share one membership-replace core, so they behave identically. Content is untouched; the change is logged as an `update-metadata` audit entry.
@@ -611,7 +664,7 @@ cerefox config set relations_enabled true    # tools appear in every agent's lis
 cerefox config set relations_enabled false   # hidden again; no data removed
 ```
 
-Agents see 12 tools with the flag off and 16 with it on. See
+Agents see 13 tools with the flag off and 16 with it on. See
 [`configuration.md`](configuration.md) for the full runtime-config surface.
 
 ### `cerefox config list` / `cerefox config get` / `cerefox config set`

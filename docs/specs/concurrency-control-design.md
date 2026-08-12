@@ -148,3 +148,40 @@ matching — cleverness there buys little and complicates the RPC contract).
   (serialization precision, equality semantics). Rejected.
 - **Config-gated enforcement** (`require_concurrency_token`): more machinery for a
   policy the flag already expresses per call. Rejected.
+
+---
+
+## Metadata writes take no token, deliberately (#204, v1.6.0)
+
+`cerefox_set_document_metadata` is the one write path that does **not** require
+`expected_content_hash`. That is a decision, not an omission.
+
+**The token exists to stop a writer discarding work it never saw.** For content
+that is exactly right: a document is one string, so any write replaces the whole
+of it, and a writer who has not read the current version is guaranteed to
+destroy whatever arrived since.
+
+Metadata is not one string. It is a bag of independent keys, usually written by
+different agents at different times — `type` by whoever created the document,
+`seq` by the log maintainer, `agent_role` by the role that owns it. The tool
+merges, so a caller setting `status` cannot touch `type`, and two agents setting
+*different* keys concurrently both succeed. There is nothing for a token to
+protect: the operation is not read-modify-write, so there is no read to go stale.
+
+Requiring a hash would in fact make things worse. It would force a read before
+every tag change — reintroducing the read-modify-write this tool exists to
+remove, and turning a race-free operation into a racy one that a token then has
+to guard.
+
+**The exception is `replace: true`**, which does discard keys the caller did not
+name and therefore *can* lose another agent's work. It is not the default, it is
+annotated destructive, and it is the reason the tool declares
+`destructiveHint: true` even though the merge path cannot lose anything. A
+caller reaching for `replace` is asserting they know the full intended set — the
+same assertion `cerefox_set_document_projects` has always required, and which
+has never carried a token either.
+
+The atomicity that does matter is handled in the RPC: the merge happens inside a
+single `UPDATE` against a row locked `FOR UPDATE`, so concurrent writers of
+different keys serialise rather than interleave. A client-side read-then-merge
+would have needed a token precisely because it would have had a read to go stale.

@@ -1,6 +1,6 @@
 # Cerefox Knowledge Base -- Agent Quick Reference
 
-Cerefox is a persistent, shared knowledge base. You have **16 MCP tools** (15 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
+Cerefox is a persistent, shared knowledge base. You have **17 MCP tools** (16 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
 
 ## Tools
 
@@ -19,6 +19,7 @@ Cerefox is a persistent, shared knowledge base. You have **16 MCP tools** (15 of
 | `cerefox_metadata_search` | Find or list docs by metadata, project, or time (no text query) | `metadata_filter`, `project_name` (list a project's docs), `updated_since`, `include_content` — **at least one** of metadata_filter/project_name/updated_since/created_since |
 | `cerefox_list_metadata_keys` | Discover available metadata keys | (none required) |
 | `cerefox_list_projects` | List all projects | (none required) |
+| `cerefox_set_document_metadata` | Change tags WITHOUT resending content. **Merges** by default; a `null` value removes a key | `document_id`, `metadata` (required), `replace` (rare: set exactly this object), `author` |
 | `cerefox_set_document_projects` | Set doc's project memberships to exactly the given list (destructive replace; metadata-only, no content change) | `document_id`, `project_names` (required) |
 | `cerefox_get_audit_log` | Query write operation history | `document_id`, `author`, `operation`, `since` |
 | `cerefox_get_help` | Retrieve Cerefox conventions (this reference) over MCP. **Call this whenever uncertain.** | `topic` (optional, case-insensitive H2 substring match) |
@@ -126,6 +127,7 @@ Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/g
 | `cerefox_get_relations` ⚑ | All relations touching a document, both directions | `document_id` |
 | `cerefox_get_neighbors` ⚑ | Walk the graph along ONE relation type | `document_id`, `rel_type` (required), `depth`, `from_time`, `to_time`, `limit` |
 | `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --requestor "<your-name>"` (list a project: `cerefox document list --project <name>`) |
+| `cerefox_set_document_metadata` | `cerefox document set-metadata <id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects` | `cerefox document set-projects <id> <name...> --author "<your-name>" --author-type agent` (or `--clear` to remove all) |
 | `cerefox_get_audit_log` | `cerefox audit list --requestor "<your-name>"` (add `--json` for scripted access) |
 | `cerefox_get_help` | `cerefox guides show agent-quick-reference` (or `cerefox guides list` for the full bundled-docs index) |
@@ -185,6 +187,13 @@ Each of these comes from a real agent session, and each is easy to make.
   section" is further down the page than it looks. Note the loss warning will
   not catch it if your replacement text is longer than what it replaced, since
   there is then no net loss to report.
+
+- **To change only tags, use `cerefox_set_document_metadata`, never `cerefox_ingest`.**
+  Ingest replaces the whole document, so re-sending it to set one tag carries the
+  full transcription risk for no reason. The metadata tool merges: the keys you
+  pass are set, everything else is left alone, so you do not need to read the
+  document first and cannot drop a tag another agent set. Pass `null` as a value
+  to remove a key.
 
 - **Never partial-edit to fix a partial edit.** If a write leaves unexpected
   structure, stop. Use `cerefox_list_versions`, retrieve the last good version,
