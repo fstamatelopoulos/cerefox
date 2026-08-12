@@ -93,7 +93,7 @@ cerefox/
 
 ### CLI verb conventions (v0.9.0+)
 The CLI uses a **resource-verb** shape: `cerefox <resource> <verb> [args]`.
-Resource groups: `document` (get/list/edit/delete/restore/ingest/ingest-dir),
+Resource groups: `document` (get/list/edit/delete/restore/ingest/ingest-dir/set-projects/set-metadata),
 `document version` (list/archive/unarchive), `project`
 (list/create/edit/delete), `metadata` (keys/search), `audit` (list),
 `config` (list/get/set), `backup` (create/restore), `server` (deploy/reindex),

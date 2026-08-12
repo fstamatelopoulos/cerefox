@@ -152,6 +152,7 @@ the 13 core MCP tools (`cerefox_search`, `cerefox_ingest`, `cerefox_insert`,
 `cerefox_edit`, `cerefox_get_document`, `cerefox_list_versions`,
 `cerefox_list_projects`, `cerefox_list_metadata_keys`,
 `cerefox_metadata_search`, `cerefox_set_document_projects`,
+`cerefox_set_document_metadata`,
 `cerefox_get_audit_log`, `cerefox_get_help`).
 
 `cerefox_insert` and `cerefox_edit` change part of a document without resending

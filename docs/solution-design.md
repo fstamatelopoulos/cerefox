@@ -1052,6 +1052,7 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_list_projects` | Read | List all projects with names, IDs, and descriptions for agent discovery. |
 | `cerefox_metadata_search` | Read | Find documents by metadata key-value criteria without a text search term. |
 | `cerefox_set_document_projects` | Write | Set (replace) the set of projects a document belongs to. |
+| `cerefox_set_document_metadata` | Write | Change a document's metadata without touching content. Merges by default; a JSON null removes a key. Metadata-only: no re-chunk, no re-embed, no version snapshot. |
 | `cerefox_insert` | Write (additive) | Add text at `end_of_document` / `end_of_section` / `after_heading` / `before_heading` without resending the document. Structurally cannot remove content. |
 | `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section`) applied **atomically** in a single write. |
 | `cerefox_get_help` | Read | Return the bundled agent quick-reference (tools, rules, workflows). |

@@ -196,6 +196,7 @@ Once configured, every Path A client has these tools:
 | `cerefox_get_audit_log` | Query audit log entries with filters (document, author, operation, time range) |
 | `cerefox_list_projects` | List all projects with names and IDs. Use for discovering available projects. |
 | `cerefox_metadata_search` | Find documents by metadata key-value criteria without a text search term. Supports project, date, and content filters. |
+| `cerefox_set_document_metadata` | Change a document's metadata without resending its content. **Merges** by default (keys you pass are set, others left alone); a `null` value removes a key (RFC 7386); `replace: true` sets exactly the object given. No re-chunk, no re-embed, no new version. |
 | `cerefox_set_document_projects` | Set a document's project memberships to exactly the given list (destructive replace; metadata-only, no content change). Use `cerefox_ingest` with singular `project_name` for non-destructive "add". |
 | `cerefox_get_help` | Retrieve Cerefox conventions (the same content as `AGENT_QUICK_REFERENCE.md`) over MCP. Optional `topic` parameter does a case-insensitive H2 substring match. Call this whenever you are uncertain. |
 
@@ -227,7 +228,8 @@ After setup, ask your client:
 > "What tools do you have available?"
 > Expected: 13 tools listed (`cerefox_search`, `cerefox_ingest`, `cerefox_insert`, `cerefox_edit`, `cerefox_get_document`,
 > `cerefox_list_versions`, `cerefox_list_projects`, `cerefox_list_metadata_keys`,
-> `cerefox_metadata_search`, `cerefox_set_document_projects`, `cerefox_get_audit_log`,
+> `cerefox_metadata_search`, `cerefox_set_document_projects`,
+> `cerefox_set_document_metadata`, `cerefox_get_audit_log`,
 > `cerefox_get_help`).
 
 > "Use cerefox_search with query='second brain' and match_count=3. What did you find?"
@@ -1245,6 +1247,7 @@ The agent docs are written around MCP tool names. **CLI flag names match MCP par
 | `cerefox_get_document` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions` | `cerefox document version list <document-id> --requestor <name>` |
 | `cerefox_list_projects` | `cerefox project list --requestor <name>` |
+| `cerefox_set_document_metadata` | `cerefox document set-metadata <document-id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear`) |
 | `cerefox_list_metadata_keys` | `cerefox metadata keys` |
 | `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
