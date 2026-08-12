@@ -73,6 +73,18 @@ async function action(
     // Values are JSON strings by convention — a metadata_filter matches JSONB as
     // strings, so a bare `true` would never match a stored "true". Accept JSON
     // when it parses to a string, otherwise treat the value as literal text.
+    // `--set k=null` is refused rather than guessed. Over MCP a null REMOVES the
+    // key (RFC 7386), so a caller who knows that contract would expect removal
+    // here — but on a command line the same text could equally mean the literal
+    // string "null", and storing that silently is the worse of the two wrong
+    // answers. `--remove` says it unambiguously.
+    if (raw === "null") {
+      throw userError(
+        `--set ${key}=null is ambiguous: over MCP a null REMOVES the key, but on the ` +
+          `command line it could mean the literal text "null". ` +
+          `Use --remove ${key} to delete it, or --json '{"${key}":"null"}' to store the word.`,
+      );
+    }
     let value: unknown = raw;
     if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
       try {

@@ -57,7 +57,10 @@ export default defineConfig({
     // against a frontend from whenever someone last published. Same shape as
     // #155: the suite testing something other than what you changed.
     command:
-      `cd ../packages/memory && bun run build-frontend && bun run bundle-frontend && ` +
+      // `bun run build` in frontend, NOT packages/memory's `build-frontend`,
+      // which also runs `bun install` — a test command should not mutate
+      // dependencies or pay an install on every run.
+      `bun run build && cd ../packages/memory && bun run bundle-frontend && ` +
       `node dist/bin/cerefox.js web --port ${E2E_PORT}`,
     url: `http://127.0.0.1:${E2E_PORT}/api/v1/version`,
     reuseExistingServer: E2E_REUSE,

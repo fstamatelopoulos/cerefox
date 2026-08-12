@@ -73,6 +73,18 @@ describe("metadata writes reach both surfaces (#204)", () => {
     expect(CLI_META).toMatch(/patch\[key\] = null/);
   });
 
+  test("--set key=null is refused rather than silently storing the word", () => {
+    // Found in review, and it is the exact divergence this file exists to
+    // prevent: over MCP `{k: null}` REMOVES the key, while `--set k=null` stored
+    // the literal string "null". The earlier assertion above passed throughout,
+    // because it checked that a line of code EXISTS rather than what the command
+    // does — a guard testing its own source instead of its behaviour.
+    expect(CLI_META).toMatch(/raw === "null"/);
+    expect(CLI_META).toContain("--remove");
+    // The message has to name the alternative, or the refusal is just a wall.
+    expect(CLI_META).toMatch(/is ambiguous/);
+  });
+
   test("merge is the default on BOTH surfaces", () => {
     const schema = TOOLS_BY_NAME["cerefox_set_document_metadata"].inputSchema as {
       required?: string[];
