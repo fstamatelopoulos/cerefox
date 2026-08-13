@@ -9,7 +9,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **`cerefox_delete_document` MCP tool — agents can now soft-delete (#208).**
+  Closes a parity gap, not a policy: the trust model always sanctioned agent
+  soft-delete (audited, recoverable from the web-UI trash), but the tool was
+  never built, so agents had no path where the CLI had `document delete`. The
+  tool requires `expected_content_hash` — the MCP analogue of the CLI's y/N
+  prompt: a delete must follow a read, and a stale hash fails with a conflict
+  (re-read, reconsider, retry). An optional `reason` is recorded in the audit
+  entry for the human reviewing the trash. Deliberately still absent: restore
+  and purge, which remain web-UI-only (an agent must not be able to silently
+  undo its own delete, let alone escalate to permanent removal). Tool surface:
+  14 core + 4 dormant relation tools.
+- **`cerefox document delete --reason` is now recorded** in the audit-log entry
+  (it was previously printed but not stored).
+
+### Changed
+
+- **`cerefox_delete_document` RPC** (schema 0.11.3 → 0.12.0): optional CAS via
+  `p_expected_content_hash` (`CEREFOX_CONFLICT`/PT409 on mismatch, same
+  pattern as the ingest CAS), `p_reason` appended to the audit description,
+  JSONB return instead of VOID, and idempotent re-delete (original
+  `deleted_at` preserved, no duplicate audit entry). Re-run
+  `cerefox server deploy` to pick it up; reconnect MCP clients to see the new
+  tool.
+
+### Fixed
+
+- **Stale docs**: the Path A tool table in `connect-agents.md` was missing the
+  v1.4.0 partial-edit tools, its "all core tools on Path B" claim predated the
+  MCP-only tools (GPT Actions exposes 8 primitive operations), and two
+  relation-count arithmetic leftovers said 16 where the total is 18. The
+  doc-count guard now also catches "N named tools" phrasing.
 
 ---
 

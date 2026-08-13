@@ -396,7 +396,7 @@ explicit audit items for the v1.0 security audit (`docs/specs/security-model.md`
   needs an interactive consent; cover it manually in Phase 4.) Keep EF-quota discipline:
   narrowest file, `requestor: "e2e-test"`.
 - **Manual acceptance (Phase 4/5)**: claude.ai connector end-to-end (discovery → DCR →
-  consent → tokens → all 13 core tools); same connector on Claude mobile; regression matrix
+  consent → tokens → all 14 core tools); same connector on Claude mobile; regression matrix
   for Claude Code / Cursor / Claude Desktop (supergateway) / Codex on static Bearer;
   GPT Actions untouched-but-verified; watch EF logs for the full handshake.
 

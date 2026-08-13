@@ -69,21 +69,22 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
     }
   }
 
-  // Call the soft-delete RPC. Note: cerefox_delete_document doesn't
-  // take a `p_reason` argument — `--reason` is captured here for the
-  // audit-log description only (passed via a separate audit entry
-  // would require an extra round trip; for now we just print it).
+  // p_reason lands in the audit description (schema 0.12.0, #208). Only pass
+  // it when given: the bare 3-arg call still matches the old function
+  // signature, so plain `document delete` keeps working against pre-0.12.0
+  // servers — `--reason` is the only part that needs the newer schema.
   await client.rpc("cerefox_delete_document", {
     p_document_id: documentId,
     p_author: author,
     p_author_type: authorType,
+    ...(options.reason ? { p_reason: options.reason } : {}),
   });
 
   println(
     c.green(`✓ Soft-deleted "${doc.title}" (id: ${documentId}). Recoverable from the Cerefox web UI trash.`),
   );
   if (options.reason) {
-    println(c.dim(`  Reason (informational only): ${options.reason}`));
+    println(c.dim(`  Reason (recorded in the audit log): ${options.reason}`));
   }
 }
 

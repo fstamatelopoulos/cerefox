@@ -664,7 +664,7 @@ cerefox config set relations_enabled true    # tools appear in every agent's lis
 cerefox config set relations_enabled false   # hidden again; no data removed
 ```
 
-Agents see 13 tools with the flag off and 16 with it on. See
+Agents see 14 tools with the flag off and 18 with it on. See
 [`configuration.md`](configuration.md) for the full runtime-config surface.
 
 ### `cerefox config list` / `cerefox config get` / `cerefox config set`
