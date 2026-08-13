@@ -121,11 +121,13 @@ async function handler(
 
   // ── ID-based update path ─────────────────────────────────────────────────
   if (document_id) {
+    // No deleted_at filter: a trashed document must be DISTINGUISHABLE from a
+    // missing one — "not found" for a doc sitting in the trash sends the
+    // agent hunting for a typo instead of at the actual remedy.
     const { data: existing } = await supabase
       .from("cerefox_documents")
-      .select("id, title, content_hash")
+      .select("id, title, content_hash, deleted_at")
       .eq("id", document_id)
-      .is("deleted_at", null)
       .limit(1);
 
     if (!existing?.length) {
@@ -133,6 +135,16 @@ async function handler(
     }
 
     const existingDoc = existing[0];
+
+    if (existingDoc.deleted_at) {
+      // Fast-fail before the embedding spend; the authoritative guard is in
+      // the RPC (0.12.0).
+      throw new McpInvalidParams(
+        `Document ${document_id} ("${existingDoc.title}") is soft-deleted (in the trash). ` +
+          `A trashed document cannot be updated — restore it first with ` +
+          `cerefox_restore_document, then retry, or create a new document instead.`,
+      );
+    }
 
     if (existingDoc.content_hash === contentHash) {
       const note = update_if_exists
@@ -207,13 +219,27 @@ async function handler(
   if (update_if_exists) {
     const { data: existing } = await supabase
       .from("cerefox_documents")
-      .select("id, title, content_hash")
+      .select("id, title, content_hash, deleted_at")
       .eq("title", title)
       .order("updated_at", { ascending: false })
       .limit(1);
 
     if (existing?.length) {
       const existingDoc = existing[0];
+
+      if (existingDoc.deleted_at) {
+        // The title matched a TRASHED document (re-ingest after a delete —
+        // the "I forgot I deleted fotis.md" workflow). Refuse with the
+        // remedy, before the embedding spend: updating it would write into
+        // a search-excluded document, and creating a twin would confuse
+        // every later title match.
+        throw new McpInvalidParams(
+          `A document titled "${existingDoc.title}" is in the trash (soft-deleted, ` +
+            `id: ${existingDoc.id}). Restore it first with cerefox_restore_document ` +
+            `and re-ingest to update it — or have your user purge it from the web UI ` +
+            `Trash to start fresh.`,
+        );
+      }
 
       if (existingDoc.content_hash === contentHash) {
         return `Document already up-to-date: "${existingDoc.title}" (id: ${existingDoc.id}). Content hash unchanged (${contentHash}).`;
@@ -281,13 +307,25 @@ async function handler(
   }
 
   // ── Hash deduplication (create path) ─────────────────────────────────────
+  // content_hash is unique STORE-WIDE, trashed documents included, so this
+  // check deliberately sees them: an insert would collide either way.
   const { data: hashMatch } = await supabase
     .from("cerefox_documents")
-    .select("id, title")
+    .select("id, title, deleted_at")
     .eq("content_hash", contentHash)
     .limit(1);
 
   if (hashMatch?.length) {
+    if (hashMatch[0].deleted_at) {
+      // "Already up-to-date" while search shows nothing is the classic
+      // re-upload-after-delete confusion. Say where the content actually is.
+      return (
+        `This exact content is already in the TRASH as "${hashMatch[0].title}" ` +
+        `(soft-deleted, id: ${hashMatch[0].id}). Restore it with ` +
+        `cerefox_restore_document instead of re-ingesting — or have your user ` +
+        `purge it from the web UI Trash to start fresh.`
+      );
+    }
     return `Document already up-to-date: "${hashMatch[0].title}" (id: ${hashMatch[0].id}). Content hash unchanged (${contentHash}) — pass it as expected_content_hash to edit it.`;
   }
 

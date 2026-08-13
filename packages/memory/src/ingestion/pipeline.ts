@@ -225,7 +225,15 @@ export class IngestionPipeline {
         action: "skipped",
         reindexed: false,
         projectIds: existingProjectIds,
-        note: "",
+        // A hash match on a TRASHED document reads as "already up-to-date"
+        // while search shows nothing — the classic re-upload-after-delete
+        // confusion (#211 round 3). Say where the content actually is.
+        note: existingByHash.deleted_at
+          ? `Identical content is in the TRASH as "${existingByHash.title}" ` +
+            `(soft-deleted ${existingByHash.deleted_at.slice(0, 10)}). Restore it ` +
+            `(\`cerefox document restore ${existingByHash.id}\` or the web UI Trash page) ` +
+            `instead of re-ingesting, or purge it first to start fresh.`
+          : "",
         contentHash: existingByHash.content_hash ?? hash,
       };
     }
@@ -344,6 +352,17 @@ export class IngestionPipeline {
     const existing = await this.db.getDocumentById(documentId);
     if (!existing) {
       throw new Error(`Document ${JSON.stringify(documentId)} not found`);
+    }
+    // Fast-fail BEFORE the embedding spend; the authoritative guard is in
+    // the cerefox_ingest_document RPC (0.12.0). "soft-deleted" in the
+    // message is load-bearing: the web edit route maps it to a 409.
+    if (existing.deleted_at) {
+      throw new Error(
+        `Document ${documentId} ("${existing.title}") is soft-deleted (in the trash). ` +
+          `A trashed document cannot be updated — restore it first ` +
+          `(\`cerefox document restore ${documentId}\`, the web UI Trash page, or ` +
+          `cerefox_restore_document over MCP), then re-ingest.`,
+      );
     }
 
     // ── (2) Hash + collision check ───────────────────────────────────────

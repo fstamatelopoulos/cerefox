@@ -115,10 +115,11 @@ export class IngestionDbBridge {
   }
 
   async getDocumentByHash(contentHash: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter — matches Python's `get_document_by_hash`.
-    // Soft-deleted docs still occupy the unique constraint on
-    // `content_hash`; finding them lets us return action=skipped
-    // instead of crashing on insert.
+    // No `deleted_at` filter, deliberately: soft-deleted docs still occupy
+    // the store-wide unique constraint on `content_hash`, so a create with
+    // identical content WILL collide with a trashed doc. Finding it lets the
+    // pipeline return action=skipped with a note saying the content is in
+    // the trash, instead of crashing on insert.
     const { data } = await this.supabase
       .from("cerefox_documents")
       .select("*")
@@ -129,9 +130,13 @@ export class IngestionDbBridge {
   }
 
   async findDocumentByTitle(title: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter — matches Python's `find_document_by_title`.
-    // Soft-deleted docs MUST be findable so that --update-if-exists can
-    // either resurrect them OR fail the dedup-skip check downstream.
+    // No `deleted_at` filter, deliberately — but NOT so updates can land on
+    // trashed docs (that was this comment's old "resurrect" claim, and it was
+    // never true: nothing cleared deleted_at, so the content just vanished
+    // into the trash). Trashed docs must be FINDABLE so the update path can
+    // refuse with "restore first" BEFORE the embedding spend, rather than
+    // silently creating a same-title twin or failing later on the hash
+    // constraint.
     const { data } = await this.supabase
       .from("cerefox_documents")
       .select("*")
