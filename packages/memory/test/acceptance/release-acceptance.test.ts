@@ -193,4 +193,67 @@ describe("release acceptance (live)", () => {
       expect(versions).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/);
     }
   });
+
+  test("delete requires the read-hash and a stale one is a conflict, not a delete (#208)", async () => {
+    const { id, hash } = await A.seed("delete-guard", DOC);
+
+    const noHash = await A.mcp("cerefox_delete_document", { document_id: id });
+    expect(noHash.isError).toBe(true);
+    expect(noHash.text).toContain("expected_content_hash");
+
+    const stale = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: "0".repeat(64),
+    });
+    expect(stale.isError).toBe(true);
+    expect(stale.text).toContain("changed since you read it");
+
+    // Neither attempt deleted anything: the document still reads back whole.
+    const read = await A.mcp("cerefox_get_document", { document_id: id });
+    expect(read.isError).toBe(false);
+    expect(read.text).toContain(hash);
+  });
+
+  test("delete with the read-hash soft-deletes, records the reason, and re-delete is a no-op (#208)", async () => {
+    const { id, hash } = await A.seed("delete-happy", DOC);
+
+    const del = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: hash,
+      reason: "acceptance fixture — should be visible in audit",
+      author: "acceptance",
+    });
+    expect(del.isError).toBe(false);
+    expect(del.text).toContain("Soft-deleted");
+    expect(del.text).toContain("recoverable");
+
+    // The reason is what the human reviewing the trash goes on.
+    const audit = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "delete" })).text;
+    expect(audit).toContain("should be visible in audit");
+
+    // Idempotent: the original deletion stands, no second audit entry.
+    const again = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: hash,
+    });
+    expect(again.isError).toBe(false);
+    expect(again.text).toContain("ALREADY soft-deleted");
+    const auditAfter = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "delete" })).text;
+    expect((auditAfter.match(/Soft-deleted document/g) ?? []).length).toBe(1);
+
+    // The human path back: CLI restore (the agent surface has no undo).
+    const restored = A.cli(["document", "restore", id, "--author", "acceptance"]);
+    expect(restored.code).toBe(0);
+    const back = await A.mcp("cerefox_get_document", { document_id: id });
+    expect(back.isError).toBe(false);
+
+    // CLI delete with --reason: same RPC, reason recorded, exit clean.
+    const cliDel = A.cli([
+      "document", "delete", id, "--yes",
+      "--reason", "acceptance cleanup",
+      "--author", "acceptance", "--author-type", "agent",
+    ]);
+    expect(cliDel.code).toBe(0);
+    expect(cliDel.out).toContain("recorded in the audit log");
+  });
 });
