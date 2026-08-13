@@ -51,9 +51,15 @@ MCP tool was simply never built.
       Also fixed pre-existing drift: Path A table missing insert/edit, stale
       "all core tools on Path B" claim, two 16-vs-18 arithmetic leftovers,
       "N named tools" now caught by the doc-count guard.
-- [ ] Live verification on staging: deploy 0.12.0, exercise the tool over MCP
-      stdio (happy path, stale-hash conflict, already-deleted no-op, reason in
-      audit entry, search exclusion), CLI restore roundtrip, write suites.
+- [ ] Live verification — **retargeted to production** (2026-08-13): staging got
+      stuck in Supabase "Restoration in progress" for over an hour after
+      unpause (dashboard: "taking longer than usual, contact support"), and the
+      maintainer chose careful prod verification over waiting. Risk accepted as
+      small: additive tool, reversible soft-delete, notice-stub migration,
+      PT409 pattern proven in prod by the ingest CAS, self-cleaning harness.
+      Sequence: high-effort review of PR #211 first, then merge + cut (the
+      maintainer's), then deploy 0.12.0 to prod and run the acceptance suite
+      with the deliberate prod override.
 - [ ] PR, review, merge; release v1.7.0 (maintainer cuts).
 - [ ] Post-release: production `server deploy`, reconnect MCP clients, rubric
       update, Decision Log entry, announcement draft (on request).
