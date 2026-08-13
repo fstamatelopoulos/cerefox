@@ -1029,7 +1029,7 @@ Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
 subprocess via npx (Node ≥20 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
-as the local server, so both expose the identical 14 core tools. Path 3's primitive
+as the local server, so both expose the identical 15 core tools. Path 3's primitive
 Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers
 authenticate with a **Cerefox access token** (`cerefox token generate`),
 validated in-function; Edge Functions use the service-role key internally. The
@@ -1055,7 +1055,8 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_set_document_metadata` | Write | Change a document's metadata without touching content. Merges by default; a JSON null removes a key. Metadata-only: no re-chunk, no re-embed, no version snapshot. |
 | `cerefox_insert` | Write (additive) | Add text at `end_of_document` / `end_of_section` / `after_heading` / `before_heading` without resending the document. Structurally cannot remove content. |
 | `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section`) applied **atomically** in a single write. |
-| `cerefox_delete_document` | Write (destructive) | Soft-delete to the web-UI trash. Requires the caller's read-hash (`expected_content_hash`); optional `reason` recorded in the audit entry. Restore and purge remain web-UI-only. |
+| `cerefox_delete_document` | Write (destructive) | Soft-delete to the trash. Requires the caller's read-hash (`expected_content_hash`); optional `reason` recorded in the audit entry. Permanent purge remains web-UI-only. |
+| `cerefox_restore_document` | Write (recovery) | Restore a soft-deleted document from the trash — the audited inverse of delete. Optional `reason`; no-op if the document is not deleted. |
 | `cerefox_get_help` | Read | Return the bundled agent quick-reference (tools, rules, workflows). |
 | `cerefox_set_relation` ⚑ | Write | Link two documents (`source --rel_type--> target`). |
 | `cerefox_delete_relation` ⚑ | Write (destructive) | Remove a relation. |
@@ -1068,11 +1069,12 @@ true`. A tool an agent can see is a tool an agent may use, so "dormant" has to
 mean invisible rather than merely unused — enabling and disabling change
 visibility only, never data.
 
-This is the full set of **14 core MCP tools, plus 4 dormant relation tools**,
+This is the full set of **15 core MCP tools, plus 4 dormant relation tools**,
 exposed identically over both transports
 (remote `cerefox-mcp` Edge Function and local `cerefox mcp`), via the shared
 `_shared/mcp-tools/` handlers. Note: document delete on MCP is **soft-only**
-(v1.7.0, #208) — restore and permanent purge stay web-UI-only by design (see
+(v1.7.0, #208) with `cerefox_restore_document` as its audited inverse (#210) —
+permanent purge stays web-UI-only by design (see
 `docs/guides/access-paths.md` → Destructive operations and the trust model).
 
 All read tools accept an optional `requestor` parameter for usage log attribution.

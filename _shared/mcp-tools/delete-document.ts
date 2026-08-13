@@ -13,9 +13,9 @@
  * here, because it is an MCP-surface contract, not a data-integrity one
  * (the CLI legitimately deletes without a hash).
  *
- * Deliberately absent, and to stay that way: restore and purge. Tier 3 is
- * human-only — an agent that soft-deletes must not be able to silently undo
- * it (covering its tracks), let alone escalate to permanent deletion.
+ * Its inverse is `cerefox_restore_document` (#210, same release). What has no
+ * agent surface is **permanent purge** — the one action that destroys data
+ * keeps its web-UI human-in-the-loop confirmation.
  */
 
 import type { MCPSupabaseClient } from "./types.ts";
@@ -129,16 +129,16 @@ async function handler(
     `Soft-deleted "${row.title ?? "untitled"}" (id: ${document_id}, ` +
     `${row.total_chars ?? "?"} chars) at ${row.deleted_at}.\n` +
     `The document is excluded from search but fully recoverable: it sits in the ` +
-    `Cerefox web UI trash until a human restores or purges it. There is no undo ` +
-    `on the MCP surface — restoring is your user's decision, not yours.\n` +
-    `Tell your user what you deleted and why, so they can review or restore it.`
+    `trash until restored or purged. cerefox_restore_document undoes this if it ` +
+    `was a mistake; permanent purge is human-only (web UI).\n` +
+    `Tell your user what you deleted and why, so they can review it.`
   );
 }
 
 export const deleteDocumentTool: ToolDefinition = {
   name: "cerefox_delete_document",
   description:
-    "SOFT-delete a document: it leaves search results and lands in the web-UI trash, recoverable until a human purges it. Requires expected_content_hash — the content_hash of the document AS YOU READ IT — so a delete always follows a read; if the document changed in between, the call fails with a conflict and you should re-read before deciding again. There is no undo on the agent surface: restore and permanent purge are human-only (web UI), so ALWAYS tell your user what you deleted and why. Pass a short reason — it is recorded in the audit log for the human reviewing the trash. Prefer this over ingesting empty/placeholder content when a document should go away.",
+    "SOFT-delete a document: it leaves search results and lands in the trash, recoverable until a human purges it. Requires expected_content_hash — the content_hash of the document AS YOU READ IT — so a delete always follows a read; if the document changed in between, the call fails with a conflict and you should re-read before deciding again. A mistaken delete can be undone with cerefox_restore_document; permanent purge is human-only (web UI). ALWAYS tell your user what you deleted and why. Pass a short reason — it is recorded in the audit log for the human reviewing the trash. Prefer this over ingesting empty/placeholder content when a document should go away.",
   annotations: {
     title: "Delete document (soft, recoverable)",
     readOnlyHint: false,

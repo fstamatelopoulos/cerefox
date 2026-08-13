@@ -68,8 +68,8 @@ describe("documented tool counts match ALL_TOOLS", () => {
   test("the split is what the docs describe", () => {
     // If this fails, the docs are not wrong — the shape of the tool surface
     // changed, and the numbers below need rethinking rather than bumping.
-    expect(ALL_COUNT).toBe(18);
-    expect(CORE_COUNT).toBe(14);
+    expect(ALL_COUNT).toBe(19);
+    expect(CORE_COUNT).toBe(15);
     expect(RELATION_TOOL_NAMES.size).toBe(4);
   });
 

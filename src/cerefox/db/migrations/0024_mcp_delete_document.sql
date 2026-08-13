@@ -15,7 +15,8 @@
 DO $$
 BEGIN
     RAISE NOTICE
-        'Migration 0024: cerefox_delete_document rework arrives with rpcs.sql '
-        'on this deploy — CAS, p_reason, JSONB return, idempotent re-delete. '
-        'Backs the new cerefox_delete_document MCP tool. Schema version 0.12.0.';
+        'Migration 0024: cerefox_delete_document + cerefox_restore_document '
+        'rework arrives with rpcs.sql on this deploy — CAS on delete, p_reason, '
+        'JSONB returns, honest no-ops. Backs the new cerefox_delete_document '
+        'and cerefox_restore_document MCP tools (#208, #210). Schema 0.12.0.';
 END $$;

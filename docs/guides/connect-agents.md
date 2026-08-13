@@ -72,7 +72,7 @@ in the container.
 - **Easiest:** `cerefox-local configure-agent` wires it up (registers an MCP server named
   `cerefox-local` with Claude Code if the `claude` CLI is present, else prints the snippet).
 - **Manual:** point the client at `command: cerefox-local, args: ["mcp"]` (stdio). That proxies
-  to `cerefox mcp` in the container; the same 14 core tools, identical behavior to every other path.
+  to `cerefox mcp` in the container; the same 15 core tools, identical behavior to every other path.
 - The cloud paths above (remote Edge Function, GPT Actions) **do not apply** to a local-only
   install — there are no Edge Functions.
 
@@ -131,7 +131,7 @@ in the container.
 
 ### What it is
 
-The local Cerefox MCP server runs on your machine and exposes the same 14 core tools as the remote
+The local Cerefox MCP server runs on your machine and exposes the same 15 core tools as the remote
 Edge Function, communicating with clients over stdio.
 
 The local server ships as an npm package — **[`@cerefox/memory`](https://www.npmjs.com/package/@cerefox/memory)** — built with the official `@modelcontextprotocol/sdk`.
@@ -192,7 +192,8 @@ Once configured, every Path A client has these tools:
 | `cerefox_ingest` | Save a note or document to the knowledge base. Pass `document_id` to update by ID (deterministic); or `update_if_exists: true` to update by title match. Accepts optional `author` and `project_name`. |
 | `cerefox_insert` | Add text to a document without resending it (additive only — structurally cannot remove content) |
 | `cerefox_edit` | Change parts of a document: 1..n operations (`insert`/`replace_section`/`delete_section`/`rename_section`) applied atomically |
-| `cerefox_delete_document` | Soft-delete a document to the web-UI trash (requires the caller's read-hash; restore and purge are web-UI-only) |
+| `cerefox_delete_document` | Soft-delete a document to the trash (requires the caller's read-hash; permanent purge is web-UI-only) |
+| `cerefox_restore_document` | Restore a soft-deleted document from the trash (audited inverse of delete) |
 | `cerefox_list_metadata_keys` | List all metadata keys in use across documents |
 | `cerefox_get_document` | Retrieve the full content of a document (current or archived version) |
 | `cerefox_list_versions` | List all archived versions of a document |
@@ -203,12 +204,13 @@ Once configured, every Path A client has these tools:
 | `cerefox_set_document_projects` | Set a document's project memberships to exactly the given list (destructive replace; metadata-only, no content change). Use `cerefox_ingest` with singular `project_name` for non-destructive "add". |
 | `cerefox_get_help` | Retrieve Cerefox conventions (the same content as `AGENT_QUICK_REFERENCE.md`) over MCP. Optional `topic` parameter does a case-insensitive H2 substring match. Call this whenever you are uncertain. |
 
-> All 14 core tools are available on Path A (local and remote MCP). Path B (GPT Actions via
+> All 15 core tools are available on Path A (local and remote MCP). Path B (GPT Actions via
 > dedicated Edge Functions) exposes the 8 primitive operations: search, ingest, metadata keys,
 > get-document, list-versions, audit log, metadata-search, and list-projects. The rest are
-> MCP-only: the partial-edit tools (`cerefox_insert`/`cerefox_edit`), `cerefox_delete_document`,
-> the metadata/project setters, and `cerefox_get_help`. MCP tools use `project_name`
-> (human-readable); primitive Edge Functions (Path B) use `project_id` (UUID).
+> MCP-only: the partial-edit tools (`cerefox_insert`/`cerefox_edit`),
+> `cerefox_delete_document`/`cerefox_restore_document`, the metadata/project setters, and
+> `cerefox_get_help`. MCP tools use `project_name` (human-readable); primitive Edge
+> Functions (Path B) use `project_id` (UUID).
 
 ### Path A system prompt
 
@@ -232,8 +234,8 @@ For the full tool reference, search Cerefox for "How AI Agents Use Cerefox".
 After setup, ask your client:
 
 > "What tools do you have available?"
-> Expected: 14 tools listed (`cerefox_search`, `cerefox_ingest`, `cerefox_insert`, `cerefox_edit`,
-> `cerefox_delete_document`, `cerefox_get_document`,
+> Expected: 15 tools listed (`cerefox_search`, `cerefox_ingest`, `cerefox_insert`, `cerefox_edit`,
+> `cerefox_delete_document`, `cerefox_restore_document`, `cerefox_get_document`,
 > `cerefox_list_versions`, `cerefox_list_projects`, `cerefox_list_metadata_keys`,
 > `cerefox_metadata_search`, `cerefox_set_document_projects`,
 > `cerefox_set_document_metadata`, `cerefox_get_audit_log`,
@@ -328,7 +330,7 @@ pick it up automatically.
 to primitive Edge Functions. This means each MCP tool call costs a single Edge Function
 invocation.
 
-A single HTTPS URL gives any remote-capable MCP client all 14 core tools with full hybrid
+A single HTTPS URL gives any remote-capable MCP client all 15 core tools with full hybrid
 search -- no Python, no `uv`, no local repository clone needed.
 
 **URL format:**
@@ -509,7 +511,7 @@ Replace `<your-project-ref>` with your Supabase project ref.
 **Step 3 — Verify:**
 
 Launch Codex and use the `/mcp` slash command to confirm the `cerefox` server is connected
-and all 14 tools are listed.
+and all 15 tools are listed.
 
 **Notes:**
 - `bearer_token_env_var` is the **name** of the env var (e.g. `"CEREFOX_ACCESS_TOKEN"`), not the
@@ -1158,7 +1160,7 @@ user + `CEREFOX_OAUTH_OWNER_ID` pin, and register the Claude OAuth App
    Client Secret from the pre-registered OAuth App (setup-supabase Step 7d).
 5. Save. Claude runs the OAuth flow → redirects you to the **Cerefox consent page** (sign
    in with the owner email/password from Step 7c, then **Allow**) → returns to Claude. The
-   connector shows as connected with **14 tools** (18 if you have enabled document relations). (If you've approved before, Supabase
+   connector shows as connected with **15 tools** (19 if you have enabled document relations). (If you've approved before, Supabase
    auto-consents and the page just flashes through — that's expected.)
 6. **Mobile**: connectors are account-level, so `CerefoxMCP` appears in the Claude mobile
    app automatically — run one search from your phone to confirm.
@@ -1279,7 +1281,7 @@ After pointing your agent at the repo, ask it:
 
 - **Privilege level**: the CLI uses the **service-role key** (`CEREFOX_SUPABASE_KEY`), which bypasses Row Level Security. An agent with Bash access has the same full read/write power you do. Only enable Path C for agents you trust to act on your behalf — the same trust level you'd grant Cursor/Claude Code for editing your source code.
 - **Audit attribution**: Path C records `access_path = "cli"` in usage logs, distinct from `"local-mcp"` / `"remote-mcp"`. **Agents must set `--author <name> --author-type agent` on writes and `--requestor <name>` on reads** (or rely on `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` env vars). Without these flags, writes attribute to `"unknown"` / `"user"`, which under-reports agent activity. See the 2026-05-18 Decision Log Q2 entry for the design rationale (`author_type` is caller-declared on ambiguous channels — CLI and Edge Functions — but `access_path` is always derived from the code layer).
-- **Soft-delete is reachable; purge and restore are not** — by design. `cerefox document delete` is exposed on the CLI (and `cerefox_delete_document` over MCP since v1.7.0) and sends documents to trash with an audit entry. **Permanent purge** (irreversible) and **restore from trash** (un-doing a destructive action) are intentionally web-UI-only and require human-in-the-loop confirmation. If an agent decides to delete content, it should surface that to the user explicitly so they can review and either restore or commit. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
+- **Soft-delete and restore are reachable; permanent purge is not** — by design. `cerefox document delete` / `cerefox document restore` on the CLI, `cerefox_delete_document` / `cerefox_restore_document` over MCP (v1.7.0, #208/#210): both audited with author attribution. **Permanent purge** (irreversible) stays web-UI-only with human-in-the-loop confirmation. If an agent deletes or restores content, it should surface that to the user explicitly so they can follow it in the audit trail. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
 - **Cross-doc links in content you ingest** become clickable when the user views them in the Cerefox web UI. Author them as `[Text](uuid)` (most stable), `[Text](docs/path.md)` (repo files), or `[Text](<Title With Spaces>)` (angle-bracket form — bare spaces break markdown). See [`AGENT_GUIDE.md` → "Writing linkable content"](../../AGENT_GUIDE.md#writing-linkable-content) for the full set of rules.
 - **CLI install per machine**: the agent needs the `cerefox` binary installed (`npm install -g @cerefox/memory`) with a resolvable `.env`. If you skip the local install entirely, Path A-Remote or Path B is the only option.
 - **No sandboxing beyond the agent's existing Bash sandbox**: the CLI is just shell. If your agent's tool framework restricts which commands run, allowlist `cerefox …` explicitly.

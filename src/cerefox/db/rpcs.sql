@@ -1127,9 +1127,9 @@ $$;
 -- Soft-deletes a document by setting deleted_at = NOW(). The document, its
 -- chunks, and versions remain in the database but are excluded from search.
 -- Use cerefox_purge_document for permanent deletion.
--- Use cerefox_restore_document to undo a soft delete. Both are web-UI-only
--- surfaces by design (access-paths.md → "Destructive operations and the
--- trust model") — an agent can soft-delete, only a human can restore or purge.
+-- Use cerefox_restore_document to undo a soft delete (agent-reachable since
+-- 0.12.0, #210). Permanent purge is web-UI-only by design (access-paths.md →
+-- "Destructive operations and the trust model").
 --
 -- p_expected_content_hash (0.12.0, #208): optional CAS. When provided, the
 -- delete proceeds only if it matches the document's current content_hash —
@@ -1231,26 +1231,53 @@ $$;
 
 -- ── cerefox_restore_document ─────────────────────────────────────────────────
 -- Restores a soft-deleted document by clearing deleted_at.
+--
+-- 0.12.0 (#210): agent-reachable — exposed over MCP as cerefox_restore_document
+-- alongside the CLI verb, by maintainer decision (2026-08-13): everything is
+-- audited, restore cannot destroy content, and CLI/MCP parity outweighs the
+-- earlier "an agent must not undo its own delete" posture, which predated the
+-- audit surface. Permanent purge remains web-UI-only.
+-- Same honesty contract as the reworked delete: JSONB return; restoring a
+-- document that is not deleted is a reported no-op (no audit entry); a missing
+-- document raises rather than silently returning. p_reason lands in the audit
+-- description.
 
-CREATE OR REPLACE FUNCTION cerefox_restore_document(
+DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT);
+CREATE FUNCTION cerefox_restore_document(
     p_document_id   UUID,
     p_author        TEXT    DEFAULT 'unknown',
-    p_author_type   TEXT    DEFAULT 'user'
+    p_author_type   TEXT    DEFAULT 'user',
+    p_reason        TEXT    DEFAULT NULL
 )
-RETURNS VOID
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    v_title      TEXT;
+    v_title       TEXT;
     v_total_chars INT;
+    v_deleted_at  TIMESTAMPTZ;
 BEGIN
-    SELECT title, total_chars INTO v_title, v_total_chars
-    FROM cerefox_documents WHERE id = p_document_id AND deleted_at IS NOT NULL;
+    SELECT title, total_chars, deleted_at
+    INTO v_title, v_total_chars, v_deleted_at
+    FROM cerefox_documents WHERE id = p_document_id
+    FOR UPDATE;
 
-    IF v_title IS NULL THEN
-        RETURN;  -- Not found or not deleted
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Document % not found', p_document_id
+            USING ERRCODE = '22023';  -- invalid_parameter_value
+    END IF;
+
+    IF v_deleted_at IS NULL THEN
+        RETURN jsonb_build_object(
+            'document_id', p_document_id,
+            'title', v_title,
+            'total_chars', v_total_chars,
+            'restored', FALSE,
+            'was_deleted', FALSE
+        );
     END IF;
 
     UPDATE cerefox_documents SET deleted_at = NULL WHERE id = p_document_id;
@@ -1262,7 +1289,16 @@ BEGIN
         p_author_type := p_author_type,
         p_size_before := 0,
         p_size_after := v_total_chars,
-        p_description := 'Restored document: ' || COALESCE(v_title, '(untitled)')
+        p_description := 'Restored document: ' || COALESCE(v_title, '(untitled)') ||
+                         COALESCE('; reason: ' || NULLIF(BTRIM(p_reason), ''), '')
+    );
+
+    RETURN jsonb_build_object(
+        'document_id', p_document_id,
+        'title', v_title,
+        'total_chars', v_total_chars,
+        'restored', TRUE,
+        'was_deleted', TRUE
     );
 END;
 $$;
@@ -2603,9 +2639,12 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
-    -- 0.12.0 (#208): cerefox_delete_document — CAS (p_expected_content_hash),
-    -- p_reason in audit description, JSONB return, idempotent re-delete.
-    -- Backs the new cerefox_delete_document MCP tool (soft-delete parity).
+    -- 0.12.0 (#208, #210): cerefox_delete_document — CAS
+    -- (p_expected_content_hash), p_reason in audit description, JSONB return,
+    -- idempotent re-delete; cerefox_restore_document — same rework (JSONB,
+    -- p_reason, honest no-op). Back the new cerefox_delete_document and
+    -- cerefox_restore_document MCP tools (CLI parity). Ingest CAS compares
+    -- trimmed.
     -- 0.11.3 (#204): cerefox_set_document_metadata — metadata-only writes.
     -- 0.11.2 (iteration 36): RLS enabled on cerefox_document_relations,
     -- which iteration 29 left off the list (Supabase rls_disabled_in_public).

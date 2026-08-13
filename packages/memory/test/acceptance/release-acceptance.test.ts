@@ -241,11 +241,24 @@ describe("release acceptance (live)", () => {
     const auditAfter = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "delete" })).text;
     expect((auditAfter.match(/Soft-deleted document/g) ?? []).length).toBe(1);
 
-    // The human path back: CLI restore (the agent surface has no undo).
-    const restored = A.cli(["document", "restore", id, "--author", "acceptance"]);
-    expect(restored.code).toBe(0);
+    // The path back (#210): MCP restore, the delete's audited inverse.
+    const restored = await A.mcp("cerefox_restore_document", {
+      document_id: id,
+      reason: "acceptance roundtrip",
+      author: "acceptance",
+    });
+    expect(restored.isError).toBe(false);
+    expect(restored.text).toContain("Restored");
     const back = await A.mcp("cerefox_get_document", { document_id: id });
     expect(back.isError).toBe(false);
+
+    // Restoring a live document is a reported no-op, and the CLI verb still
+    // works as the human-surface equivalent.
+    const again2 = await A.mcp("cerefox_restore_document", { document_id: id });
+    expect(again2.isError).toBe(false);
+    expect(again2.text).toContain("NOT deleted");
+    const cliRestore = A.cli(["document", "restore", id, "--author", "acceptance"]);
+    expect(cliRestore.code).toBe(0);
 
     // CLI delete with --reason: same RPC, reason recorded, exit clean.
     const cliDel = A.cli([

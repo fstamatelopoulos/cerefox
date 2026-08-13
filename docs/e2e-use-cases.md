@@ -185,7 +185,8 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 | 8.4 | MCP `cerefox_get_document` tool -- end-to-end via stdio transport | TODO |
 | 8.5 | MCP `cerefox_list_versions` tool -- end-to-end via stdio transport | TODO |
 | 8.6 | MCP `cerefox_get_audit_log` tool -- end-to-end via stdio transport | TODO |
-| 8.7 | MCP `cerefox_delete_document` tool -- read-hash guard, stale-hash conflict deletes nothing, reason in audit, idempotent re-delete, CLI restore roundtrip | DONE -- `release-acceptance.test.ts` (live, staging-gated) |
+| 8.7 | MCP `cerefox_delete_document` tool -- read-hash guard, stale-hash conflict deletes nothing, reason in audit, idempotent re-delete | DONE -- `release-acceptance.test.ts` (live, staging-gated) |
+| 8.8 | MCP `cerefox_restore_document` tool -- delete/restore roundtrip, not-deleted no-op, CLI restore parity | DONE -- `release-acceptance.test.ts` (live, staging-gated) |
 
 ---
 

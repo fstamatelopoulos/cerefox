@@ -8,11 +8,12 @@
  * Adding a new tool: write `<name>.ts` exporting a `ToolDefinition`, then
  * add it to `ALL_TOOLS` below. Both consumers pick it up automatically.
  *
- * Tool surface: 18 tools (14 core + 4 dormant relation tools).
+ * Tool surface: 19 tools (15 core + 4 dormant relation tools).
  */
 
 import { auditLogTool } from "./audit-log.ts";
 import { deleteDocumentTool } from "./delete-document.ts";
+import { restoreDocumentTool } from "./restore-document.ts";
 import {
   disabledToolMessage,
   relationsEnabled,
@@ -46,9 +47,11 @@ export const ALL_TOOLS: ToolDefinition[] = [
   // a client can grant it freely; edit carries the destructive operations.
   insertTool,
   editTool,
-  // Soft delete (#208): the last content-lifecycle writer. Requires the
-  // caller's read-hash; restore and purge stay web-UI-only (trust model).
+  // Soft delete + restore (#208, #210): the content-lifecycle pair. Delete
+  // requires the caller's read-hash; restore is its audited inverse. Only
+  // permanent purge stays web-UI-only (trust model).
   deleteDocumentTool,
+  restoreDocumentTool,
   getDocumentTool,
   listVersionsTool,
   metadataSearchTool,

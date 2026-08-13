@@ -22,8 +22,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   and purge, which remain web-UI-only (an agent must not be able to silently
   undo its own delete, let alone escalate to permanent removal). Tool surface:
   14 core + 4 dormant relation tools.
-- **`cerefox document delete --reason` is now recorded** in the audit-log entry
-  (it was previously printed but not stored).
+- **`cerefox_restore_document` MCP tool — the delete's audited inverse (#210).**
+  By maintainer decision, restore moves out of the human-only tier: every
+  restore is audited with author attribution, restoring cannot destroy
+  content, and the CLI had `document restore` all along. Restoring a
+  non-deleted document is a reported no-op. **Permanent purge remains
+  web-UI-only** — the one action that destroys data keeps its
+  human-in-the-loop confirmation. Tool surface: 15 core + 4 dormant.
+- **`cerefox document delete --reason` / `document restore --reason` are now
+  recorded** in the audit-log entry (delete's was previously printed but not
+  stored; restore had no reason flag).
 
 ### Changed
 

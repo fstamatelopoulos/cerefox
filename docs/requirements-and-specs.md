@@ -325,10 +325,12 @@ plain text snapshots for recovery purposes only.
   `content_hash` as the caller read it, and a stale hash MUST surface as a
   conflict (re-read, reconsider, retry). There is deliberately **no
   last-write-wins** on deletion.
-- Restore and permanent purge MUST NOT be exposed on the agent (MCP) surface:
-  an agent must not be able to silently undo its own delete, nor escalate a
-  soft delete to permanent removal. (Human surfaces: web UI; see also #210 on
-  the CLI's `document restore`.)
+- An agent MUST be able to **restore** a soft-deleted document
+  (`cerefox_restore_document`, #210 — reversing the earlier restore-is-human-only
+  posture by maintainer decision: restores are audited and cannot destroy
+  content). Restoring a non-deleted document is a reported no-op.
+- Permanent purge MUST NOT be exposed on any agent surface: destroying data
+  outright keeps its human-in-the-loop confirmation (web UI only).
 - Deleting an already-deleted document MUST be a reported no-op: the original
   deletion time is preserved and no duplicate audit or usage entries are
   written.
