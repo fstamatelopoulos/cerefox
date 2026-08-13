@@ -1,6 +1,7 @@
 import { Popover, Text } from "@mantine/core";
 import {
   IconArrowRight,
+  IconChevronDown,
   IconChevronRight,
   IconClock,
   IconDatabase,
@@ -15,7 +16,7 @@ import {
   IconTerminal2,
   IconTrash,
 } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -68,7 +69,16 @@ const SINCE_30D = new Date(Date.now() - 30 * 864e5).toISOString();
 export function DashboardPage() {
   const navigate = useNavigate();
   const [quick, setQuick] = useState("");
-  const { data } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
+  // Scopes the recently-changed tile only; "" = all projects. The corpus
+  // tiles and project list in the response are global either way, so one
+  // query serves the whole page. keepPreviousData stops the tiles flashing
+  // empty while a newly selected project's rows load.
+  const [recentProject, setRecentProject] = useState("");
+  const { data } = useQuery({
+    queryKey: ["dashboard", recentProject],
+    queryFn: () => fetchDashboard(recentProject || undefined),
+    placeholderData: keepPreviousData,
+  });
 
   const since = SINCE_30D;
   const { data: usage } = useQuery({
@@ -244,14 +254,25 @@ export function DashboardPage() {
               <IconClock size={16} />
               Recently changed documents
             </h2>
-            <button
-              type="button"
-              className={`${ui.btn} ${ui.btnSubtle}`}
-              onClick={() => navigate("/search")}
-            >
-              View all
-              <IconArrowRight size={14} />
-            </button>
+            {/* Same control as the search page's project scope. Filters this
+                tile only — the point is "what did agents change in X lately". */}
+            <span className={ui.selectWrap} title="Scope recent documents to a project">
+              <IconFolder size={14} />
+              <select
+                className={ui.selectEl}
+                value={recentProject}
+                data-testid="recent-project-select"
+                onChange={(e) => setRecentProject(e.currentTarget.value)}
+              >
+                <option value="">All projects</option>
+                {(data?.projects ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <IconChevronDown size={14} />
+            </span>
           </div>
           <div className={ui.card} style={{ overflow: "hidden" }}>
             <table className={styles.tbl}>

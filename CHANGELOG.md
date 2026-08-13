@@ -33,6 +33,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   recorded** in the audit-log entry (delete's was previously printed but not
   stored; restore had no reason flag).
 
+- **Dashboard: the recently-changed tile can be scoped to a project.** A
+  selector next to the tile (default "All projects", the previous behavior)
+  refetches the top-10 recently changed documents within the chosen project —
+  the "what did agents change in X lately" view. The tile's "View all" link,
+  which just opened search and did not do what it promised, is removed.
+
 ### Changed
 
 - **`cerefox_delete_document` RPC** (schema 0.11.3 → 0.12.0): optional CAS via
@@ -45,6 +51,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Review-status pills no longer go stale after a toggle.** Flipping
+  pending-review → approved on a document invalidated only that document's
+  query, so navigating back to the dashboard, search results, or a project
+  list showed the old status until a manual refresh. The toggle now
+  invalidates the same set of views a delete or restore does (and that set
+  now includes project document lists, which all four mutations had missed).
 - **Whitespace around a concurrency token no longer fakes a conflict.** Both
   the delete CAS and the ingest CAS trimmed the hash for the presence check
   but compared it raw, so a correct hash with a stray trailing newline was

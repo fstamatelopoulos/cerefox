@@ -140,6 +140,7 @@ export function DocumentPage() {
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     queryClient.invalidateQueries({ queryKey: ["search"] });
     queryClient.invalidateQueries({ queryKey: ["trash"] });
+    queryClient.invalidateQueries({ queryKey: ["project-documents"] });
   };
 
   const deleteMutation = useMutation({
@@ -171,7 +172,10 @@ export function DocumentPage() {
   const reviewMutation = useMutation({
     mutationFn: (status: string) => setReviewStatus(id!, status),
     onSuccess: (_, status) => {
-      queryClient.invalidateQueries({ queryKey: ["document", id] });
+      // Same blast radius as delete/restore: the pill also renders in the
+      // dashboard, search and project lists, and only invalidating this
+      // document left those showing the old status on back-navigation.
+      invalidateDoc();
       showSuccess("Review status updated", status === "approved" ? "Approved" : "Pending review");
     },
     onError: (err) => showError("Status update failed", String(err)),

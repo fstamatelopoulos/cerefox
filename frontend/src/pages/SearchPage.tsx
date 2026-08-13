@@ -15,7 +15,7 @@ export function SearchPage() {
   const [, setSearchParams] = useSearchParams();
   const state = useSearchState();
   const { data, isLoading, error } = useSearchQuery(state);
-  const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
+  const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDashboard() });
 
   const handleSearch = useCallback(
     (params: {

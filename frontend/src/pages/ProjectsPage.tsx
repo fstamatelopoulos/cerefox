@@ -19,7 +19,7 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: projects, isLoading } = useProjects();
-  const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
+  const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDashboard() });
 
   const docCounts = dash?.project_doc_counts ?? {};
   const trashCounts = dash?.project_deleted_doc_counts ?? {};

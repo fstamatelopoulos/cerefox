@@ -595,8 +595,12 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
 
   // ── /dashboard ─────────────────────────────────────────────────────────────
   app.get("/api/v1/dashboard", async (c) => {
+    // Optional project scope for recent_docs ONLY (the recently-changed tile's
+    // selector). The corpus totals and project list stay global regardless —
+    // the selector narrows one tile, not the page.
+    const recentProjectId = c.req.query("project_id") || null;
     const [recentDocs, projects, docCount, totals] = await Promise.all([
-      listDocuments(ctx, { limit: 10 }),
+      listDocuments(ctx, { projectId: recentProjectId, limit: 10 }),
       listAllProjects(ctx),
       countActiveDocuments(ctx),
       getCorpusTotals(ctx),

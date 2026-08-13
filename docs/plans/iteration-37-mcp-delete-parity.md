@@ -1,6 +1,13 @@
-# Iteration 37 — MCP delete parity (`cerefox_delete_document`)
+# Iteration 37 — MCP delete/restore parity + dashboard UX
 
-**Status: IN PROGRESS (2026-08-13). Target: v1.7.0. Issue: #208. Branch: `feat/mcp-delete-document`.**
+**Status: IN PROGRESS (2026-08-13). Target: v1.7.0. Issues: #208, #210. Branch: `feat/mcp-delete-document`. PR: #211.**
+
+Scope grew mid-iteration by maintainer direction: (1) `cerefox_restore_document`
+(#210 — restore moves out of the human-only tier; purge stays web-UI-only),
+(2) dashboard recent-docs project selector + removal of the misleading
+"View all" link, (3) stale review-status pills fixed via shared query
+invalidation. A first high-effort review round produced 10 findings, 9 fixed
+(the 10th became the #210 reversal); a second round runs after this scope.
 
 ## Why
 
@@ -51,6 +58,17 @@ MCP tool was simply never built.
       Also fixed pre-existing drift: Path A table missing insert/edit, stale
       "all core tools on Path B" claim, two 16-vs-18 arithmetic leftovers,
       "N named tools" now caught by the doc-count guard.
+- [x] `cerefox_restore_document` (#210): RPC rework (JSONB, no-op honesty,
+      p_reason), tool + tests, CLI `restore --reason` + honesty, trust-model
+      docs rewritten (single guarded property: no agent path to purge),
+      15 core / 19 total sweeps, acceptance roundtrip via MCP restore.
+- [x] Dashboard: `/dashboard?project_id=` scopes `recent_docs` server-side;
+      selector on the tile (SearchControls idiom, keepPreviousData); "View
+      all" removed. Playwright specs added (unrun — staging down).
+- [x] Review-status pill staleness: `reviewMutation` now uses the shared
+      invalidation set; `project-documents` added to that set for all
+      lifecycle mutations.
+- [ ] Review round 2 (after this scope), then maintainer merge + cut.
 - [ ] Live verification — **retargeted to production** (2026-08-13): staging got
       stuck in Supabase "Restoration in progress" for over an hour after
       unpause (dashboard: "taking longer than usual, contact support"), and the
