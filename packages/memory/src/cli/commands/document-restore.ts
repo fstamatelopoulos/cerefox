@@ -19,6 +19,7 @@ import {
   systemError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
+import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface RestoreOptions {
@@ -62,13 +63,33 @@ async function action(documentId: string, options: RestoreOptions): Promise<void
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    if (message.includes("Could not find the function")) {
+    if (isMissingFunctionError(message, "cerefox_restore_document")) {
       throw systemError(
-        `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
-          `Run \`cerefox server deploy\` and retry, or retry without --reason.`,
+        options.reason
+          ? `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
+              `Run \`cerefox server deploy\` and retry, or retry without --reason.`
+          : `The restore did not run: the server has no matching cerefox_restore_document ` +
+              `(mid-deploy window, or an old schema). Run \`cerefox server deploy\` and retry.`,
       );
     }
     throw e;
+  }
+
+  if (result === null) {
+    // Same ambiguity as delete: the rpc() wrapper maps 42883 to null, and a
+    // pre-0.12.0 VOID restore also returns null. Verify before claiming.
+    const { data: check } = await client.raw
+      .from("cerefox_documents")
+      .select("deleted_at")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (check?.deleted_at) {
+      throw systemError(
+        `The restore did not take effect — the server has no matching ` +
+          `cerefox_restore_document (mid-deploy window, or an old schema). ` +
+          `Run \`cerefox server deploy\` and retry.`,
+      );
+    }
   }
 
   // The 0.12.0 RPC reports what happened; pre-0.12.0 returns void (null) and

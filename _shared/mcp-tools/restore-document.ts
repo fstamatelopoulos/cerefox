@@ -12,12 +12,14 @@
  * human-in-the-loop confirmation.
  *
  * No `expected_content_hash`, matching the CLI contract: a trashed document
- * cannot be concurrently edited, so there is no read-freshness to prove.
+ * cannot be rewritten while in the trash (cerefox_ingest_document refuses
+ * updates to soft-deleted documents as of 0.12.0), so what was reviewed in
+ * the trash is what comes back — there is no read-freshness to prove.
  */
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.ts";
+import { isMissingFunctionError, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
@@ -44,10 +46,7 @@ async function handler(
 
   if (error) {
     const message = error.message ?? String(error);
-    if (
-      message.includes("Could not find the function") ||
-      (message.includes("does not exist") && message.includes("cerefox_restore_document"))
-    ) {
+    if (isMissingFunctionError(message, "cerefox_restore_document")) {
       throw new Error(
         `This server is behind: cerefox_restore_document needs schema 0.12.0 or newer. ` +
           `Run \`cerefox server deploy\`, then retry. (${message})`,

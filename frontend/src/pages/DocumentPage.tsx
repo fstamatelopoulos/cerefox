@@ -137,6 +137,9 @@ export function DocumentPage() {
 
   const invalidateDoc = () => {
     queryClient.invalidateQueries({ queryKey: ["document", id] });
+    // The audit-trail card on THIS page: every mutation routed through here
+    // just wrote an entry it should show without a manual reload.
+    queryClient.invalidateQueries({ queryKey: ["document-audit", id] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     queryClient.invalidateQueries({ queryKey: ["search"] });
     queryClient.invalidateQueries({ queryKey: ["trash"] });

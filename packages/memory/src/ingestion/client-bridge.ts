@@ -29,6 +29,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
+import { extractConflictHashes } from "../../../../_shared/mcp-tools/_utils.ts";
 
 import {
   ConcurrencyConflictError,
@@ -239,8 +240,12 @@ export class IngestionDbBridge {
     if (error) {
       const msg = error.message ?? JSON.stringify(error);
       if (msg.includes("CEREFOX_CONFLICT")) {
-        const current = msg.match(/current hash ([0-9a-f]{64})/)?.[1] ?? null;
-        throw new ConcurrencyConflictError(args.documentId ?? "", current, msg);
+        const { current } = extractConflictHashes(msg);
+        throw new ConcurrencyConflictError(
+          args.documentId ?? "",
+          current === "unknown" ? null : current,
+          msg,
+        );
       }
       if (msg.includes("CEREFOX_TOKEN_REQUIRED")) {
         throw new ConcurrencyTokenRequiredError(msg);

@@ -195,6 +195,22 @@ export function extractConflictHashes(message: string): { expected: string; curr
   };
 }
 
+/** Does this RPC error mean the function (or this signature of it) is not on
+ *  the server — i.e. the client is newer than the deployed schema?
+ *
+ *  The ONE site coupled to how that condition surfaces: PostgREST's PGRST202
+ *  ("Could not find the function … in the schema cache") and Postgres' 42883
+ *  ("function … does not exist", seen through connections that bypass
+ *  PostgREST or during a deploy's DROP/CREATE window). Five call sites
+ *  (delete/restore MCP handlers, delete/restore CLI verbs, partial edits)
+ *  each carried a hand-rolled subset of these predicates before this helper. */
+export function isMissingFunctionError(message: string, fnName: string): boolean {
+  return (
+    (message.includes("Could not find the function") && message.includes(fnName)) ||
+    (message.includes("does not exist") && message.includes(fnName))
+  );
+}
+
 export function logUsage(supabase: MCPSupabaseClient, params: LogUsageParams): void {
   Promise.resolve(
     supabase.rpc("cerefox_log_usage", {

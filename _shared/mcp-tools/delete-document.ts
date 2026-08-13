@@ -20,7 +20,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { extractConflictHashes, logUsage } from "./_utils.ts";
+import { extractConflictHashes, isMissingFunctionError, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 /** Agent-first instructions for a stale-hash conflict on delete. */
@@ -79,10 +79,7 @@ async function handler(
       const { expected, current } = extractConflictHashes(message);
       throw conflictError(document_id, expected === "unknown" ? expected_content_hash : expected, current);
     }
-    if (
-      message.includes("Could not find the function") ||
-      (message.includes("does not exist") && message.includes("cerefox_delete_document"))
-    ) {
+    if (isMissingFunctionError(message, "cerefox_delete_document")) {
       throw new Error(
         `This server is behind: cerefox_delete_document needs schema 0.12.0 or newer. ` +
           `Run \`cerefox server deploy\`, then retry. (${message})`,
@@ -142,8 +139,9 @@ export const deleteDocumentTool: ToolDefinition = {
   annotations: {
     title: "Delete document (soft, recoverable)",
     readOnlyHint: false,
-    // Reversible in the system (web-UI trash) but NOT by the caller: the agent
-    // surface has no restore, so from where this tool is called, it destroys.
+    // Static per tool (spec): a tool that can remove content from search is
+    // destructive even though cerefox_restore_document can bring it back —
+    // and once a human purges the trash, the removal is final.
     destructiveHint: true,
     // Re-deleting an already-deleted document changes nothing and says so.
     idempotentHint: true,

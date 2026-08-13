@@ -38,6 +38,10 @@ export function TrashPage() {
     queryClient.invalidateQueries({ queryKey: ["trash"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     queryClient.invalidateQueries({ queryKey: ["search"] });
+    // Same set as DocumentPage's invalidateDoc: a restore/purge from here
+    // changes project lists and the document's audit trail too.
+    queryClient.invalidateQueries({ queryKey: ["project-documents"] });
+    queryClient.invalidateQueries({ queryKey: ["document-audit"] });
   };
   const restoreMut = useMutation({
     mutationFn: restoreDocument,

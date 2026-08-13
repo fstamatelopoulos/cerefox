@@ -249,25 +249,41 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
   // ── DELETE /documents/{id} ─────────────────────────────────────────────────
   app.delete("/api/v1/documents/:document_id", async (c) => {
     const documentId = c.req.param("document_id");
-    const { error } = await ctx.supabase.rpc("cerefox_delete_document", {
+    const { data, error } = await ctx.supabase.rpc("cerefox_delete_document", {
       p_document_id: documentId,
       p_author: "web-ui",
       p_author_type: "user",
     });
-    if (error) return c.json({ detail: error.message }, 500);
-    return c.json({ success: true });
+    if (error) {
+      // 0.12.0: a missing document RAISEs instead of silently no-opping. A
+      // client-state race (deleted in another tab) is a 404, not a 500.
+      if (error.message?.includes("not found")) {
+        return c.json({ detail: `Document ${documentId} not found` }, 404);
+      }
+      return c.json({ detail: error.message }, 500);
+    }
+    const row = (data ?? {}) as { already_deleted?: boolean };
+    return c.json({ success: true, already_deleted: row.already_deleted ?? false });
   });
 
   // ── POST /documents/{id}/restore ───────────────────────────────────────────
   app.post("/api/v1/documents/:document_id/restore", async (c) => {
     const documentId = c.req.param("document_id");
-    const { error } = await ctx.supabase.rpc("cerefox_restore_document", {
+    const { data, error } = await ctx.supabase.rpc("cerefox_restore_document", {
       p_document_id: documentId,
       p_author: "web-ui",
       p_author_type: "user",
     });
-    if (error) return c.json({ detail: error.message }, 500);
-    return c.json({ success: true });
+    if (error) {
+      // Two-tab race: A purges, B restores. 404 keeps the wrong-state class
+      // out of the 5xx monitoring bucket and off the raw-RPC-text toast.
+      if (error.message?.includes("not found")) {
+        return c.json({ detail: `Document ${documentId} not found` }, 404);
+      }
+      return c.json({ detail: error.message }, 500);
+    }
+    const row = (data ?? {}) as { restored?: boolean };
+    return c.json({ success: true, restored: row.restored ?? true });
   });
 
   // ── DELETE /documents/{id}/purge ───────────────────────────────────────────

@@ -204,7 +204,7 @@ The audit trail records each operation distinctly (`insert` / `replace-section` 
 
 **The hash requirement is the point, not a formality.** The CLI's delete asks a human "Continue? y/N"; an agent has no prompt, so its proof-of-intent is evidence that it read what it is deleting. If the document changed between your read and your delete, the conflict is information: someone wrote to a document you were about to discard — look before deciding again.
 
-**A mistaken delete can be undone with `cerefox_restore_document`** (below). Permanent purge is web-UI-only (human-in-the-loop, see **Governance**). Deleting an already-deleted document is a reported no-op: the original deletion time stands and no duplicate audit entry is written.
+**A mistaken delete can be undone with `cerefox_restore_document`** (below). Permanent purge is web-UI-only (human-in-the-loop, see **Governance**). Deleting an already-deleted document is a reported no-op — the original deletion time stands and no duplicate audit entry is written — but the hash is still validated first: the read-proof holds in the trash too. A trashed document also refuses content updates (`cerefox_ingest` errors; restore first), so what you review in the trash is what a restore brings back.
 
 **Always tell your user what you deleted and why.** They review the trash; your `reason` and your report are what make that review possible.
 

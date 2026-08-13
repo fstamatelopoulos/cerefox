@@ -35,7 +35,7 @@ import {
   sha256hex,
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
-import { extractConflictHashes, logUsage } from "./_utils.ts";
+import { extractConflictHashes, isMissingFunctionError, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type MCPSupabaseClient, type ToolContext, type ToolDefinition } from "./types.ts";
 
 /**
@@ -317,7 +317,7 @@ async function applyAndWrite(
           `cerefox_search for the resulting content to find it.`,
       );
     }
-    if (message.includes("does not exist") && message.includes("cerefox_ingest_document")) {
+    if (isMissingFunctionError(message, "cerefox_ingest_document")) {
       throw new Error(
         `This server is behind: partial edits need schema 0.11.0 or newer. ` +
           `Run \`cerefox server deploy\`, then retry. (${message})`,

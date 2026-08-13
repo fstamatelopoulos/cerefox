@@ -9,8 +9,12 @@
 -- schema version advances in step, which is what tells an existing deployment
 -- it needs that redeploy.
 --
--- Schema version 0.11.3 → 0.12.0. Purely additive; restore and purge remain
--- web-UI-only (the trust-model tier 3 is unchanged).
+-- Schema version 0.11.3 → 0.12.0. Restore moves OUT of the web-UI-only tier
+-- (#210, maintainer decision): both delete and restore are agent-reachable
+-- and audited; permanent purge is now the single web-UI-only action.
+-- cerefox_ingest_document additionally refuses to rewrite a soft-deleted
+-- document (restore first), which is what makes restore safe without a
+-- freshness token.
 
 DO $$
 BEGIN

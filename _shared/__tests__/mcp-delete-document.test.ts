@@ -63,7 +63,7 @@ describe("cerefox_delete_document — registration", () => {
   test("is registered with honest annotations", () => {
     expect(del).toBeDefined();
     expect(del.annotations?.readOnlyHint).toBe(false);
-    // The caller cannot reverse it (restore is human-only), so it destroys.
+    // Removes content from search; final once a human purges. Static per tool.
     expect(del.annotations?.destructiveHint).toBe(true);
     expect(del.annotations?.idempotentHint).toBe(true);
   });

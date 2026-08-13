@@ -1177,6 +1177,25 @@ BEGIN
             USING ERRCODE = '22023';  -- invalid_parameter_value
     END IF;
 
+    -- Optimistic concurrency: blank is ABSENT, not stale (same rule and same
+    -- reason as cerefox_ingest_document — '' can never equal a real hash, so
+    -- classifying it as a conflict would be a permanent failure reported as a
+    -- resolvable one).
+    -- Compare TRIMMED, matching the presence check: a correct hash with a
+    -- stray trailing newline must not be misreported as a stale-hash
+    -- conflict — that reads as "changed since it was read" with two hashes
+    -- that look identical, and re-reading can never fix it.
+    -- Validated BEFORE the already-deleted no-op: "a delete proves a read"
+    -- has to hold for trashed documents too, or a garbage hash gets reported
+    -- as a successful no-op and the caller learns nothing.
+    IF NULLIF(BTRIM(p_expected_content_hash), '') IS NOT NULL
+       AND BTRIM(p_expected_content_hash) <> v_current_hash THEN
+        RAISE EXCEPTION
+            'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, check it still warrants deletion, and retry with the new hash.',
+            p_document_id, p_expected_content_hash, v_current_hash
+            USING ERRCODE = 'PT409';  -- deterministic conflict; see ingest CAS
+    END IF;
+
     IF v_deleted_at IS NOT NULL THEN
         RETURN jsonb_build_object(
             'document_id', p_document_id,
@@ -1185,22 +1204,6 @@ BEGIN
             'deleted_at', v_deleted_at,
             'already_deleted', TRUE
         );
-    END IF;
-
-    -- Optimistic concurrency: blank is ABSENT, not stale (same rule and same
-    -- reason as cerefox_ingest_document — '' can never equal a real hash, so
-    -- classifying it as a conflict would be a permanent failure reported as a
-    -- resolvable one).
-    -- Compare TRIMMED, matching the presence check above: a correct hash with
-    -- a stray trailing newline must not be misreported as a stale-hash
-    -- conflict — that reads as "changed since it was read" with two hashes
-    -- that look identical, and re-reading can never fix it.
-    IF NULLIF(BTRIM(p_expected_content_hash), '') IS NOT NULL
-       AND BTRIM(p_expected_content_hash) <> v_current_hash THEN
-        RAISE EXCEPTION
-            'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, check it still warrants deletion, and retry with the new hash.',
-            p_document_id, p_expected_content_hash, v_current_hash
-            USING ERRCODE = 'PT409';  -- deterministic conflict; see ingest CAS
     END IF;
 
     UPDATE cerefox_documents SET deleted_at = NOW()
@@ -1468,6 +1471,7 @@ DECLARE
     v_op            JSONB;      -- iter-33: per-operation audit element
     v_size_warn_at  INT;
     v_size_warning  BOOLEAN := FALSE;
+    v_doc_deleted   TIMESTAMPTZ;
 BEGIN
     -- ── Zero-chunk guard (v0.3.1) ────────────────────────────────────────
     -- Refuse to create or update a document with no chunks. Three reasons:
@@ -1509,13 +1513,25 @@ BEGIN
         -- updaters serialize here, and the second one sees the first one's
         -- hash — the race window (chunk + embed latency) is closed at the
         -- only place all transports share (iter-32).
-        SELECT COALESCE(d.total_chars, 0), d.content_hash
-        INTO v_old_chars, v_current_hash
+        SELECT COALESCE(d.total_chars, 0), d.content_hash, d.deleted_at
+        INTO v_old_chars, v_current_hash, v_doc_deleted
         FROM cerefox_documents d WHERE d.id = v_doc_id
         FOR UPDATE;
 
         IF NOT FOUND THEN
             RAISE EXCEPTION 'cerefox_ingest_document: document not found: %', v_doc_id
+                USING ERRCODE = '22023';  -- invalid_parameter_value
+        END IF;
+
+        -- Refuse to rewrite a trashed document (0.12.0, #211 review). Before
+        -- this guard an update by document_id landed content in a document
+        -- excluded from search — a write into a black hole — and it silently
+        -- broke the restore contract: restore takes no freshness token on the
+        -- premise that what was reviewed in the trash is what comes back.
+        IF v_doc_deleted IS NOT NULL THEN
+            RAISE EXCEPTION
+                'cerefox_ingest_document: document % is soft-deleted; restore it first (cerefox_restore_document / cerefox document restore) or create a new document.',
+                v_doc_id
                 USING ERRCODE = '22023';  -- invalid_parameter_value
         END IF;
 

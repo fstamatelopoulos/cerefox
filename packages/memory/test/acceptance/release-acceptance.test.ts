@@ -238,6 +238,15 @@ describe("release acceptance (live)", () => {
     });
     expect(again.isError).toBe(false);
     expect(again.text).toContain("ALREADY soft-deleted");
+
+    // The read-proof holds in the trash too: a garbage hash on an
+    // already-deleted document is a conflict, not a comfortable no-op.
+    const garbage = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: "0".repeat(64),
+    });
+    expect(garbage.isError).toBe(true);
+    expect(garbage.text).toContain("changed since you read it");
     const auditAfter = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "delete" })).text;
     expect((auditAfter.match(/Soft-deleted document/g) ?? []).length).toBe(1);
 

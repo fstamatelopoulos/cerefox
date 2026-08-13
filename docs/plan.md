@@ -31,11 +31,15 @@
 **2026-08-13 — Iteration 37 in progress: MCP delete parity (#208), target v1.7.0.**
 
 An agent's question ("why is there no delete in MCP?") exposed a parity gap the
-trust model had always sanctioned closing: soft-delete existed on the CLI and
-web UI but not for agents. `cerefox_delete_document` is implemented on
-`feat/mcp-delete-document` (soft only; requires the caller's read-hash; reason
-recorded in audit; restore/purge stay web-UI-only). Schema 0.11.3 → 0.12.0.
-Code, tests and docs are done; staging verification is next, then PR.
+trust model had always sanctioned closing. On `feat/mcp-delete-document`
+(PR #211): `cerefox_delete_document` (requires the caller's read-hash, reason
+recorded in audit) and `cerefox_restore_document` (#210 — the maintainer moved
+restore out of the human-only tier; **permanent purge is now the single
+web-UI-only action**), plus the dashboard recent-docs project selector and the
+review-status-pill staleness fix. Schema 0.11.3 → 0.12.0; ingest now refuses
+to rewrite trashed documents. Two high-effort review rounds applied. Staging
+is stuck in Supabase restoration (ticket filed), so verification runs
+carefully on prod after merge + cut.
 Details: [iteration 37](plans/iteration-37-mcp-delete-parity.md).
 
 Previous state (v1.6.1, for context):

@@ -18,10 +18,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   tool requires `expected_content_hash` — the MCP analogue of the CLI's y/N
   prompt: a delete must follow a read, and a stale hash fails with a conflict
   (re-read, reconsider, retry). An optional `reason` is recorded in the audit
-  entry for the human reviewing the trash. Deliberately still absent: restore
-  and purge, which remain web-UI-only (an agent must not be able to silently
-  undo its own delete, let alone escalate to permanent removal). Tool surface:
-  14 core + 4 dormant relation tools.
+  entry for the human reviewing the trash. Its inverse ships alongside it
+  (below); permanent purge remains web-UI-only.
 - **`cerefox_restore_document` MCP tool — the delete's audited inverse (#210).**
   By maintainer decision, restore moves out of the human-only tier: every
   restore is audited with author attribution, restoring cannot destroy
@@ -41,6 +39,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Changed
 
+- **`cerefox_ingest` now refuses to rewrite a soft-deleted document.** Before,
+  an update by `document_id` on a trashed document silently landed content in
+  a document excluded from search — a write into a black hole — and it broke
+  restore's contract that what was reviewed in the trash is what comes back.
+  The error says to restore first or create a new document.
+- **A delete on an already-trashed document validates the read-hash first.**
+  "A delete proves a read" now holds for trashed documents too: a stale or
+  garbage hash is a conflict, not a reported no-op.
 - **`cerefox_delete_document` RPC** (schema 0.11.3 → 0.12.0): optional CAS via
   `p_expected_content_hash` (`CEREFOX_CONFLICT`/PT409 on mismatch, same
   pattern as the ingest CAS), `p_reason` appended to the audit description,
@@ -55,8 +61,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   pending-review → approved on a document invalidated only that document's
   query, so navigating back to the dashboard, search results, or a project
   list showed the old status until a manual refresh. The toggle now
-  invalidates the same set of views a delete or restore does (and that set
-  now includes project document lists, which all four mutations had missed).
+  invalidates the same set of views a delete or restore does; that set gains
+  project document lists and the document's own audit-trail card, and the
+  Trash page's mutations get the same completion.
+- **Web lifecycle routes report client-state races as 404, not 500.** Deleting
+  or restoring a document that another tab already purged used to surface the
+  raw RPC error as a server error; both routes now return 404 and pass
+  through the RPC's `already_deleted` / `restored` honesty signals. A
+  malformed `project_id` on `/api/v1/dashboard` is a 400 naming the
+  parameter instead of failing the whole dashboard with a 500.
+- **CLI delete/restore verify before claiming.** The shared RPC wrapper maps
+  "function does not exist" to a null result — indistinguishable from a
+  pre-0.12.0 server's void success — so both verbs now confirm the document's
+  actual state before printing ✓, and a mid-deploy missing-function error
+  gets redeploy guidance that only mentions `--reason` when it was passed
+  (detection single-sited in `isMissingFunctionError`, five hand-rolled
+  copies before).
 - **Whitespace around a concurrency token no longer fakes a conflict.** Both
   the delete CAS and the ingest CAS trimmed the hash for the presence check
   but compared it raw, so a correct hash with a stray trailing newline was

@@ -599,6 +599,12 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     // selector). The corpus totals and project list stay global regardless —
     // the selector narrows one tile, not the page.
     const recentProjectId = c.req.query("project_id") || null;
+    // Validated here because it feeds a uuid-typed PostgREST filter inside a
+    // Promise.all: a malformed value would 22P02 and take the WHOLE dashboard
+    // down as a 500. A bad bookmark deserves a 400 naming the parameter.
+    if (recentProjectId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recentProjectId)) {
+      return c.json({ detail: "project_id must be a UUID" }, 400);
+    }
     const [recentDocs, projects, docCount, totals] = await Promise.all([
       listDocuments(ctx, { projectId: recentProjectId, limit: 10 }),
       listAllProjects(ctx),

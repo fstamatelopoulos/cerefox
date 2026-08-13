@@ -20,6 +20,7 @@ import {
   systemError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
+import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface DeleteOptions {
@@ -83,13 +84,37 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    if (message.includes("Could not find the function")) {
+    if (isMissingFunctionError(message, "cerefox_delete_document")) {
+      // Only blame --reason when it was actually passed — a bare delete can
+      // hit the same window during a deploy's DROP/CREATE.
       throw systemError(
-        `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
-          `Run \`cerefox server deploy\` and retry, or retry without --reason.`,
+        options.reason
+          ? `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
+              `Run \`cerefox server deploy\` and retry, or retry without --reason.`
+          : `The delete did not run: the server has no matching cerefox_delete_document ` +
+              `(mid-deploy window, or an old schema). Run \`cerefox server deploy\` and retry.`,
       );
     }
     throw e;
+  }
+
+  if (result === null) {
+    // The shared rpc() wrapper maps Postgres 42883 ("function does not
+    // exist") to a null return — and a pre-0.12.0 server's VOID delete ALSO
+    // comes back null, so success and swallowed-failure are indistinguishable
+    // here. One cheap read settles which one happened before claiming either.
+    const { data: check } = await client.raw
+      .from("cerefox_documents")
+      .select("deleted_at")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (!check?.deleted_at) {
+      throw systemError(
+        `The delete did not take effect — the server has no matching ` +
+          `cerefox_delete_document (mid-deploy window, or an old schema). ` +
+          `Run \`cerefox server deploy\` and retry.`,
+      );
+    }
   }
 
   // The 0.12.0 RPC reports what actually happened; report the same. The y/N

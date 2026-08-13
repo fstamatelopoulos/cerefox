@@ -331,9 +331,14 @@ plain text snapshots for recovery purposes only.
   content). Restoring a non-deleted document is a reported no-op.
 - Permanent purge MUST NOT be exposed on any agent surface: destroying data
   outright keeps its human-in-the-loop confirmation (web UI only).
-- Deleting an already-deleted document MUST be a reported no-op: the original
+- Deleting an already-deleted document MUST be a reported no-op — the original
   deletion time is preserved and no duplicate audit or usage entries are
-  written.
+  written — but the read-hash is validated first: a stale or garbage hash is a
+  conflict even in the trash, so "a delete proves a read" holds everywhere.
+- A soft-deleted document MUST NOT accept content updates
+  (`cerefox_ingest_document` refuses; restore first). This is what makes
+  restore safe without a freshness token: what was reviewed in the trash is
+  what comes back.
 - A delete SHOULD carry a `reason`, recorded in the audit entry, for the human
   reviewing the trash.
 
