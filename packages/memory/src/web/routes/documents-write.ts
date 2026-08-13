@@ -198,13 +198,24 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
             400,
           );
         }
-        return c.json(
-          {
-            success: false,
-            error: err instanceof Error ? err.message : String(err),
-          },
-          500,
-        );
+        const msg = err instanceof Error ? err.message : String(err);
+        // 0.12.0: the ingest RPC refuses to rewrite a trashed document. The
+        // only web path here is a stale edit tab (the UI hides Edit on
+        // deleted docs), so phrase it for a human and class it as a
+        // conflict-with-current-state, not a server fault.
+        if (msg.includes("soft-deleted")) {
+          return c.json(
+            {
+              success: false,
+              error: "document is in the trash",
+              message:
+                "This document was moved to the trash while you were editing. " +
+                "Restore it from the Trash page first, then save again.",
+            },
+            409,
+          );
+        }
+        return c.json({ success: false, error: msg }, 500);
       }
     }
 

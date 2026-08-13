@@ -351,10 +351,13 @@ cerefox document set-projects <doc-id> --clear
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--reason <text>` | str | _none_ | Optional reason recorded on the restore audit entry (v1.7.0; needs schema 0.12.0). |
 | `--author TEXT` | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Identity recorded in the audit log. |
 | `--author-type [user\|agent]` | choice | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. |
 
-Clears `deleted_at`, returning the document to search and `cerefox document list`, and writes a `restore` audit entry.
+Clears `deleted_at`, returning the document to search and `cerefox document list`, and writes a `restore` audit entry. Restoring a document that is not deleted (or was already restored by a concurrent writer) is a reported no-op.
+
+**MCP equivalent**: `cerefox_restore_document` (v1.7.0).
 
 ---
 
@@ -544,7 +547,7 @@ cerefox audit list --json --limit 1000 | jq 'select(.author_type == "agent")'
 - Does NOT free database storage.
 - Versions, chunks, and audit entries remain intact under the trash.
 
-**Recovery**: a soft-deleted document can be restored OR permanently purged **only from the Cerefox web UI** (Trash view). These destructive / restorative actions are intentionally web-UI-only to require human-in-the-loop confirmation. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model).
+**Recovery**: restore with `cerefox document restore`, the web UI Trash view, or `cerefox_restore_document` over MCP (v1.7.0). Permanent purge is **web-UI-only** — the one action requiring human-in-the-loop confirmation. A trashed document also refuses content updates (restore first). See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model).
 
 **Agent usage**:
 ```bash
@@ -800,8 +803,8 @@ surface).
 | `document get` | `cerefox_get_document` | ✅ |
 | `document list` | `cerefox_metadata_search` (scope by `project_name` / metadata / time) | ✅ as of this change. Unscoped whole-KB listing has no MCP path by design (scope it) |
 | `document edit` (title / metadata in place) | — | 🔒 intentional: a human/web-parity convenience. Agents update title+metadata deterministically via `cerefox_ingest` (with `document_id`); a metadata-only edit isn't a needed agent primitive |
-| `document delete` (soft-delete) | — | 🔒 destructive; trust model keeps delete/restore on CLI + web only |
-| `document restore` | — | 🔒 trust model (CLI + web only) |
+| `document delete` (soft-delete) | `cerefox_delete_document` | ✅ v1.7.0 (#208). MCP requires the caller's read-hash; the CLI confirms interactively instead |
+| `document restore` | `cerefox_restore_document` | ✅ v1.7.0 (#210). Permanent purge remains web-UI-only |
 | `document version list` | `cerefox_list_versions` | ✅ |
 | `document version archive` / `unarchive` | — | 🔒 intentional: version-retention protection is exposed only to CLI + web (a maintenance concern, not an agent primitive) |
 | `document set-projects` | `cerefox_set_document_projects` | ✅ full-set replace of a document's project memberships (shared core; `--clear` to remove all) |
