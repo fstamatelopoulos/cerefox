@@ -1391,6 +1391,27 @@ BEGIN
             USING ERRCODE = '22023';  -- invalid_parameter_value
     END IF;
 
+    -- ── Metadata shape guard ─────────────────────────────────────────────
+    -- `metadata` is JSONB, so the column itself accepts any JSON value, but
+    -- every reader treats it as an object: `document edit` rebuilds it with a
+    -- spread (which decomposes a stored string into one key per character),
+    -- the listing query filters on jsonb_typeof because a scalar row poisoned
+    -- it (#89), and cerefox_set_document_metadata refuses a non-object patch.
+    -- The MCP handler has always validated this. This RPC did not, and it is
+    -- reachable from the CLI, contributor scripts, PostgREST and psql — so the
+    -- invalid state was creatable by every caller that did not go through MCP,
+    -- and was then silently destroyed by the next metadata edit. Validating on
+    -- one path only is the shape #194 was opened against; this makes the two
+    -- write paths agree.
+    -- NULL stays legal: it means "not provided", and the branches below
+    -- coalesce it to the stored value (update) or '{}' (create).
+    IF p_metadata IS NOT NULL AND jsonb_typeof(p_metadata) <> 'object' THEN
+        RAISE EXCEPTION
+            'cerefox_ingest_document: metadata must be a JSON object, got % (title=%). A JSON string, array or scalar cannot survive a metadata edit.',
+            jsonb_typeof(p_metadata), p_title
+            USING ERRCODE = '22023';  -- invalid_parameter_value
+    END IF;
+
     -- Validate review_status
     v_status := CASE WHEN p_review_status IN ('approved', 'pending_review')
                      THEN p_review_status ELSE 'approved' END;
@@ -2539,6 +2560,9 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.11.4: cerefox_ingest_document refuses non-object metadata, matching
+    -- the MCP handler. Closes the path that created the rows `document edit`
+    -- then destroyed by spreading them.
     -- 0.11.3 (#204): cerefox_set_document_metadata — metadata-only writes.
     -- 0.11.2 (iteration 36): RLS enabled on cerefox_document_relations,
     -- which iteration 29 left off the list (Supabase rls_disabled_in_public).
@@ -2546,7 +2570,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.11.3'::TEXT;
+    SELECT '0.11.4'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

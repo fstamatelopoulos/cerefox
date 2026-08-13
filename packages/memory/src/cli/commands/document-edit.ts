@@ -7,6 +7,12 @@
  * metadata and PATCHES it: `--set-meta` adds/overwrites individual keys,
  * `--unset-meta` removes them, everything else is preserved.
  *
+ * Two properties this command has to hold, both learned the hard way: it only
+ * writes `metadata` when a metadata flag was passed (so `--title` alone cannot
+ * touch tags), and it refuses a document whose stored metadata is not an object
+ * rather than spreading it, since a spread decomposes such a value instead of
+ * copying it. `cerefox document set-metadata --replace` is the repair path.
+ *
  * Content edits stay on `cerefox document ingest --document-id <id> --update`
  * (re-chunk + re-embed). A `--title` change here refreshes the FTS index
  * (title boosting); the semantic embeddings pick up the new title on the next
@@ -72,8 +78,27 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
     throw userError(`Document ${documentId} is soft-deleted — restore it first (cerefox document restore).`);
   }
 
+  // Refuse to patch metadata that is not an object. The spread below does not
+  // copy a non-object value, it decomposes it: a stored JSON string becomes one
+  // key per character, an array becomes integer-indexed keys, a number or
+  // boolean becomes {}. That write is unconditional and reports success, and
+  // there is no metadata version history to roll back to. Failing loudly leaves
+  // the value recoverable; patching it does not.
+  const stored = doc.metadata;
+  if (stored !== null && stored !== undefined
+      && (typeof stored !== "object" || Array.isArray(stored))) {
+    throw userError(
+      `Document ${documentId} has non-object metadata (${Array.isArray(stored) ? "array" : typeof stored}); refusing to patch it, ` +
+        `because doing so would decompose the stored value rather than copy it.\n` +
+        `Repair it without resending the content:\n` +
+        `  cerefox document set-metadata ${documentId} --replace --json '<the intended object>'\n` +
+        `--replace is required: the default merge is stored || patch, and Postgres treats a ` +
+        `non-object left side as an array, so merging onto this row would produce another non-object.`,
+    );
+  }
+
   // Patch metadata: start from existing, apply sets, then unsets.
-  const metadata: Record<string, unknown> = { ...(doc.metadata ?? {}) };
+  const metadata: Record<string, unknown> = { ...(stored ?? {}) };
   for (const pair of sets) {
     const [k, v] = parseMetaPair(pair);
     metadata[k] = v;
@@ -83,9 +108,18 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
   const newTitle = hasTitle ? options.title!.trim() : (doc.title as string);
   const titleChanged = newTitle !== doc.title;
 
+  // Only write `metadata` when a metadata flag was actually passed. Writing it
+  // unconditionally meant `document edit <id> --title "..."` rewrote metadata
+  // too, so a title-only edit could destroy tags the caller never mentioned.
+  const update: Record<string, unknown> = {
+    title: newTitle,
+    updated_at: new Date().toISOString(),
+  };
+  if (sets.length || unsets.length) update.metadata = metadata;
+
   const { error: updErr } = await client.raw
     .from("cerefox_documents")
-    .update({ title: newTitle, metadata, updated_at: new Date().toISOString() })
+    .update(update)
     .eq("id", documentId);
   if (updErr) throw systemError(`Update failed: ${updErr.message}`);
 
