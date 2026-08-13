@@ -314,6 +314,27 @@ plain text snapshots for recovery purposes only.
 - Partial edits MUST NOT change a document's provenance, title or metadata:
   they change content only.
 
+---
+
+### Agent-surface document deletion (iteration 37, #208)
+
+- An agent MUST be able to **soft-delete** a document over MCP
+  (`cerefox_delete_document`): the document leaves search and lands in the
+  web-UI trash, recoverable until a human purges it.
+- A delete MUST prove a preceding read: the call REQUIRES the document's
+  `content_hash` as the caller read it, and a stale hash MUST surface as a
+  conflict (re-read, reconsider, retry). There is deliberately **no
+  last-write-wins** on deletion.
+- Restore and permanent purge MUST NOT be exposed on the agent (MCP) surface:
+  an agent must not be able to silently undo its own delete, nor escalate a
+  soft delete to permanent removal. (Human surfaces: web UI; see also #210 on
+  the CLI's `document restore`.)
+- Deleting an already-deleted document MUST be a reported no-op: the original
+  deletion time is preserved and no duplicate audit or usage entries are
+  written.
+- A delete SHOULD carry a `reason`, recorded in the audit entry, for the human
+  reviewing the trash.
+
 ## 3. Non-Functional Requirements
 
 ### NFR-1: Cost

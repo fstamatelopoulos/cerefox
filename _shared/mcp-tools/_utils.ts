@@ -181,6 +181,20 @@ export interface LogUsageParams {
  *  Differs from the EF's `logUsage` only in that `accessPath` is a required
  *  parameter (was hardcoded to `"remote-mcp"` in the EF) so the local TS
  *  MCP server can pass `"local-mcp"` for the same call site. */
+/** Pull the two hashes out of an RPC `CEREFOX_CONFLICT` message.
+ *
+ *  The ONE site coupled to the SQL `RAISE` wording ("expected hash %, current
+ *  hash %"). Three tools (ingest, edit, delete) rephrase conflicts for agents;
+ *  before this helper each carried its own copy of these regexes, and a
+ *  wording change in rpcs.sql would have had to be mirrored three times, with
+ *  a missed one silently degrading that tool's conflict output to "unknown". */
+export function extractConflictHashes(message: string): { expected: string; current: string } {
+  return {
+    expected: message.match(/expected hash ([0-9a-f]{64})/)?.[1] ?? "unknown",
+    current: message.match(/current hash ([0-9a-f]{64})/)?.[1] ?? "unknown",
+  };
+}
+
 export function logUsage(supabase: MCPSupabaseClient, params: LogUsageParams): void {
   Promise.resolve(
     supabase.rpc("cerefox_log_usage", {

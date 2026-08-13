@@ -26,7 +26,7 @@ import {
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
-import { logUsage } from "./_utils.ts";
+import { extractConflictHashes, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 /**
@@ -48,8 +48,7 @@ function conflictError(documentId: string, expectedHash: string, currentHash: st
 /** Map RPC-side CEREFOX_CONFLICT / CEREFOX_TOKEN_REQUIRED errors to agent-first text. */
 function mapIngestRpcError(message: string, documentId: string): Error {
   if (message.includes("CEREFOX_CONFLICT")) {
-    const current = message.match(/current hash ([0-9a-f]{64})/)?.[1] ?? "unknown";
-    const expected = message.match(/expected hash ([0-9a-f]{64})/)?.[1] ?? "unknown";
+    const { expected, current } = extractConflictHashes(message);
     return conflictError(documentId, expected, current);
   }
   if (message.includes("CEREFOX_TOKEN_REQUIRED")) {

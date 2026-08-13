@@ -37,6 +37,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Whitespace around a concurrency token no longer fakes a conflict.** Both
+  the delete CAS and the ingest CAS trimmed the hash for the presence check
+  but compared it raw, so a correct hash with a stray trailing newline was
+  reported as "changed since it was read" — with two hashes that look
+  identical and a re-read that can never fix it. Both now compare trimmed
+  (the MCP delete handler also trims before sending). Found by review on
+  #208; the ingest side had carried the flaw since iter-32.
+- **`cerefox document delete` reports what actually happened.** If another
+  writer deleted the document while the confirmation prompt sat open, the CLI
+  used to claim success (and a recorded reason) for a delete that was a no-op;
+  it now reads the RPC's `already_deleted` return and says so.
+- **A v1.7.0 client against a pre-0.12.0 server gets actionable guidance**
+  ("run `cerefox server deploy`") from both the MCP delete tool and
+  `document delete --reason`, instead of a raw schema-cache error.
+- **The stdio smoke test derives its expected tool list from the registry**
+  instead of a hardcoded 10-name list that had been stale since v1.4.0
+  (invisible because the test probe-and-skips without live credentials).
+- **The quick-reference CLI mapping table** gained the missing
+  `cerefox_insert` / `cerefox_edit` / `cerefox_delete_document` rows and lost
+  four relation-tool rows that had been pasted in with the wrong columns; the
+  bundled `cerefox_get_help` content is regenerated to match.
 - **Stale docs**: the Path A tool table in `connect-agents.md` was missing the
   v1.4.0 partial-edit tools, its "all core tools on Path B" claim predated the
   MCP-only tools (GPT Actions exposes 8 primitive operations), and two

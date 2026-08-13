@@ -20,7 +20,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.ts";
+import { extractConflictHashes, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 /** Agent-first instructions for a stale-hash conflict on delete. */
@@ -42,11 +42,13 @@ async function handler(
   ctx: ToolContext,
 ): Promise<string> {
   const document_id = args.document_id as string | undefined;
-  const expected_content_hash = args.expected_content_hash as string | undefined;
+  // Trimmed: a correct hash with a stray newline is not a stale one. The RPC
+  // trims too; doing it here keeps the fast-fail message honest as well.
+  const expected_content_hash = (args.expected_content_hash as string | undefined)?.trim();
   const reason = args.reason as string | undefined;
 
   if (!document_id) throw new McpInvalidParams("document_id is required");
-  if (!expected_content_hash || expected_content_hash.trim() === "") {
+  if (!expected_content_hash) {
     // The MCP analogue of the CLI's confirmation prompt: prove you read what
     // you are deleting. There is no last_write_wins here on purpose — a
     // delete with no evidence of a read has no legitimate agent use case.
@@ -74,9 +76,17 @@ async function handler(
   if (error) {
     const message = error.message ?? String(error);
     if (message.includes("CEREFOX_CONFLICT")) {
-      const current = message.match(/current hash ([0-9a-f]{64})/)?.[1] ?? "unknown";
-      const expected = message.match(/expected hash ([0-9a-f]{64})/)?.[1] ?? expected_content_hash;
-      throw conflictError(document_id, expected, current);
+      const { expected, current } = extractConflictHashes(message);
+      throw conflictError(document_id, expected === "unknown" ? expected_content_hash : expected, current);
+    }
+    if (
+      message.includes("Could not find the function") ||
+      (message.includes("does not exist") && message.includes("cerefox_delete_document"))
+    ) {
+      throw new Error(
+        `This server is behind: cerefox_delete_document needs schema 0.12.0 or newer. ` +
+          `Run \`cerefox server deploy\`, then retry. (${message})`,
+      );
     }
     if (message.includes("not found")) {
       throw new McpInvalidParams(`Document ${document_id} not found.`);
@@ -95,6 +105,18 @@ async function handler(
     | undefined;
   if (!row) throw new Error("cerefox_delete_document returned no data");
 
+  if (row.already_deleted) {
+    // Report what happened, not what was asked for: nothing was changed, the
+    // original deletion time stands, and no new audit entry was written. No
+    // usage-log entry either — the RPC's no-op design exists so counters and
+    // the audit log cannot disagree, and logging "delete" here would recreate
+    // exactly that disagreement in the analytics.
+    return (
+      `Document ${document_id} ("${row.title ?? "untitled"}") was ALREADY soft-deleted ` +
+      `at ${row.deleted_at}. No change was made and no audit entry was written.`
+    );
+  }
+
   logUsage(supabase, {
     operation: "delete",
     accessPath: ctx.accessPath,
@@ -103,21 +125,12 @@ async function handler(
     result_count: 1,
   });
 
-  if (row.already_deleted) {
-    // Report what happened, not what was asked for: nothing was changed, the
-    // original deletion time stands, and no new audit entry was written.
-    return (
-      `Document ${document_id} ("${row.title ?? "untitled"}") was ALREADY soft-deleted ` +
-      `at ${row.deleted_at}. No change was made and no audit entry was written.`
-    );
-  }
-
   return (
     `Soft-deleted "${row.title ?? "untitled"}" (id: ${document_id}, ` +
     `${row.total_chars ?? "?"} chars) at ${row.deleted_at}.\n` +
     `The document is excluded from search but fully recoverable: it sits in the ` +
-    `Cerefox web UI trash until a human restores or purges it. You cannot undo ` +
-    `this yourself — restore is deliberately human-only.\n` +
+    `Cerefox web UI trash until a human restores or purges it. There is no undo ` +
+    `on the MCP surface — restoring is your user's decision, not yours.\n` +
     `Tell your user what you deleted and why, so they can review or restore it.`
   );
 }

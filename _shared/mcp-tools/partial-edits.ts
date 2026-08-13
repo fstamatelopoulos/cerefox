@@ -35,7 +35,7 @@ import {
   sha256hex,
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
-import { logUsage } from "./_utils.ts";
+import { extractConflictHashes, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type MCPSupabaseClient, type ToolContext, type ToolDefinition } from "./types.ts";
 
 /**
@@ -303,8 +303,7 @@ async function applyAndWrite(
   if (error) {
     const message = error.message ?? "";
     if (message.includes("CEREFOX_CONFLICT")) {
-      const current = message.match(/current hash ([0-9a-f]{64})/)?.[1] ?? "unknown";
-      throw conflictError(documentId, expectedHash, current);
+      throw conflictError(documentId, expectedHash, extractConflictHashes(message).current);
     }
     if (message.includes("cerefox_documents_hash_unique")) {
       // content_hash is UNIQUE store-wide, so an edit whose result matches

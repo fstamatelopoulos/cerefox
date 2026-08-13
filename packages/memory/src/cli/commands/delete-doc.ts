@@ -73,12 +73,38 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
   // it when given: the bare 3-arg call still matches the old function
   // signature, so plain `document delete` keeps working against pre-0.12.0
   // servers — `--reason` is the only part that needs the newer schema.
-  await client.rpc("cerefox_delete_document", {
-    p_document_id: documentId,
-    p_author: author,
-    p_author_type: authorType,
-    ...(options.reason ? { p_reason: options.reason } : {}),
-  });
+  let result: { already_deleted?: boolean; deleted_at?: string } | null;
+  try {
+    result = await client.rpc("cerefox_delete_document", {
+      p_document_id: documentId,
+      p_author: author,
+      p_author_type: authorType,
+      ...(options.reason ? { p_reason: options.reason } : {}),
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (message.includes("Could not find the function")) {
+      throw systemError(
+        `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
+          `Run \`cerefox server deploy\` and retry, or retry without --reason.`,
+      );
+    }
+    throw e;
+  }
+
+  // The 0.12.0 RPC reports what actually happened; report the same. The y/N
+  // prompt can sit open long enough for another writer to delete this document
+  // first — claiming success (and a recorded reason) then would be false.
+  // Pre-0.12.0 servers return void; treat that as the old unconditional path.
+  if (result?.already_deleted) {
+    println(
+      c.dim(
+        `Document ${documentId} ("${doc.title}") was already soft-deleted at ${result.deleted_at} ` +
+          `by the time the delete ran. No change was made and no reason was recorded.`,
+      ),
+    );
+    return;
+  }
 
   println(
     c.green(`✓ Soft-deleted "${doc.title}" (id: ${documentId}). Recoverable from the Cerefox web UI trash.`),

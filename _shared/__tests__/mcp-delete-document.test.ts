@@ -20,6 +20,7 @@ const DOC_ID = "11111111-2222-3333-4444-555555555555";
 
 interface Captured {
   deleteArgs?: Record<string, unknown>;
+  usageLogged?: number;
 }
 
 function mockClient(
@@ -45,7 +46,10 @@ function mockClient(
           error: null,
         };
       }
-      if (name === "cerefox_log_usage") return { data: null, error: null };
+      if (name === "cerefox_log_usage") {
+        if (opts.captured) opts.captured.usageLogged = (opts.captured.usageLogged ?? 0) + 1;
+        return { data: null, error: null };
+      }
       return { data: null, error: null };
     },
     from: () => ({ select: () => ({ data: null, error: null }) }),
@@ -113,6 +117,17 @@ describe("cerefox_delete_document — what reaches the RPC", () => {
     expect(captured.deleteArgs?.p_reason).toBe("superseded by v2 doc");
   });
 
+  test("a hash with stray whitespace is trimmed, not sent raw", async () => {
+    // A trailing newline from copy-paste must not become a phantom conflict.
+    const captured: Captured = {};
+    await del.handler(
+      mockClient({ captured }),
+      { document_id: DOC_ID, expected_content_hash: `  ${HASH}\n` },
+      ctx,
+    );
+    expect(captured.deleteArgs?.p_expected_content_hash).toBe(HASH);
+  });
+
   test("cli transport records a user", async () => {
     const captured: Captured = {};
     await del.handler(
@@ -144,6 +159,21 @@ describe("cerefox_delete_document — RPC error mapping", () => {
     expect((err as Error).message).toContain("still warranted");
   });
 
+  test("a pre-0.12.0 server maps to actionable redeploy guidance", async () => {
+    const err = await del
+      .handler(
+        mockClient({
+          rpcError:
+            "Could not find the function public.cerefox_delete_document(p_author, p_author_type, p_document_id, p_expected_content_hash, p_reason) in the schema cache",
+        }),
+        { document_id: DOC_ID, expected_content_hash: HASH },
+        ctx,
+      )
+      .catch((e: Error) => e);
+    expect((err as Error).message).toContain("server is behind");
+    expect((err as Error).message).toContain("cerefox server deploy");
+  });
+
   test("not-found maps to invalid params", async () => {
     await expect(
       del.handler(
@@ -167,9 +197,11 @@ describe("cerefox_delete_document — responses", () => {
     expect(out).toContain("Tell your user");
   });
 
-  test("already-deleted is a reported no-op", async () => {
+  test("already-deleted is a reported no-op and logs no usage entry", async () => {
+    const captured: Captured = {};
     const out = await del.handler(
       mockClient({
+        captured,
         row: {
           document_id: DOC_ID,
           title: "Doomed Doc",
@@ -184,5 +216,8 @@ describe("cerefox_delete_document — responses", () => {
     expect(out).toContain("ALREADY soft-deleted");
     expect(out).toContain("No change");
     expect(out).toContain("2026-08-01");
+    // The RPC wrote no audit entry; a usage-log "delete" row here would make
+    // the analytics disagree with the audit log.
+    expect(captured.usageLogged ?? 0).toBe(0);
   });
 });

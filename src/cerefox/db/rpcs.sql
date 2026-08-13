@@ -1191,8 +1191,12 @@ BEGIN
     -- reason as cerefox_ingest_document — '' can never equal a real hash, so
     -- classifying it as a conflict would be a permanent failure reported as a
     -- resolvable one).
+    -- Compare TRIMMED, matching the presence check above: a correct hash with
+    -- a stray trailing newline must not be misreported as a stale-hash
+    -- conflict — that reads as "changed since it was read" with two hashes
+    -- that look identical, and re-reading can never fix it.
     IF NULLIF(BTRIM(p_expected_content_hash), '') IS NOT NULL
-       AND p_expected_content_hash <> v_current_hash THEN
+       AND BTRIM(p_expected_content_hash) <> v_current_hash THEN
         RAISE EXCEPTION
             'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, check it still warrants deletion, and retry with the new hash.',
             p_document_id, p_expected_content_hash, v_current_hash
@@ -1499,7 +1503,10 @@ BEGIN
                     'CEREFOX_TOKEN_REQUIRED: content updates require expected_content_hash (the content_hash you read) or last_write_wins=true. Current hash: %',
                     v_current_hash
                     USING ERRCODE = '22023';  -- invalid_parameter_value
-            ELSIF p_expected_content_hash <> v_current_hash THEN
+            -- Trimmed comparison, matching the presence check above: a correct
+            -- hash with stray whitespace is not a stale one (found via the
+            -- delete CAS review, #208 — same flaw existed here since iter-32).
+            ELSIF BTRIM(p_expected_content_hash) <> v_current_hash THEN
                 RAISE EXCEPTION
                     'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, merge your changes, and retry with the new hash.',
                     v_doc_id, p_expected_content_hash, v_current_hash

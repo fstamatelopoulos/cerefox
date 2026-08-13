@@ -123,10 +123,9 @@ Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/g
 | `cerefox_list_versions` | `cerefox document version list <id> --requestor "<your-name>"` |
 | `cerefox_list_projects` | `cerefox project list --requestor "<your-name>"` |
 | `cerefox_list_metadata_keys` | `cerefox metadata keys` |
-| `cerefox_set_relation` ⚑ | Link two documents (`source --rel_type--> target`) | `source_id`, `target_id`, `rel_type` (required), `metadata`, `author` |
-| `cerefox_delete_relation` ⚑ | Remove a relation | `source_id`, `target_id`, `rel_type` |
-| `cerefox_get_relations` ⚑ | All relations touching a document, both directions | `document_id` |
-| `cerefox_get_neighbors` ⚑ | Walk the graph along ONE relation type | `document_id`, `rel_type` (required), `depth`, `from_time`, `to_time`, `limit` |
+| `cerefox_insert` | `cerefox document insert <id> -t "<text>" -p <position> -a "<anchor-heading>" -e "<hash>" --requestor "<your-name>" --author-type agent` |
+| `cerefox_edit` | `cerefox document edit-parts <id> --operations '<json>' -e "<hash>" --requestor "<your-name>" --author-type agent` |
+| `cerefox_delete_document` | `cerefox document delete <id> --reason "<why>" --author "<your-name>" --author-type agent --yes` (confirms interactively instead of requiring the hash) |
 | `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --requestor "<your-name>"` (list a project: `cerefox document list --project <name>`) |
 | `cerefox_set_document_metadata` | `cerefox document set-metadata <id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects` | `cerefox document set-projects <id> <name...> --author "<your-name>" --author-type agent` (or `--clear` to remove all) |
