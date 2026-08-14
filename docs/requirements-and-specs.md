@@ -342,6 +342,20 @@ plain text snapshots for recovery purposes only.
 - A delete SHOULD carry a `reason`, recorded in the audit entry, for the human
   reviewing the trash.
 
+---
+
+### Link integrity (iteration 37, #214)
+
+- A write whose content contains a `[Text](uuid)` link to a document id that
+  does not exist MUST be rejected, listing every unresolvable id, under a
+  deterministic (non-retryable) error. Trashed targets resolve.
+- Content inside fenced code blocks or inline code spans MUST NOT be
+  validated (examples), and `[[wikilinks]]` MUST NOT be validated (the
+  sanctioned dangling/forward-reference form).
+- The check MUST run in the shared RPC so every surface is covered
+  identically, and MUST add negligible latency relative to embedding.
+  Design: `docs/specs/link-integrity-design.md`.
+
 ## 3. Non-Functional Requirements
 
 ### NFR-1: Cost

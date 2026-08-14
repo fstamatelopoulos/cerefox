@@ -473,6 +473,26 @@ Documents you ingest may contain markdown links to other Cerefox documents. The 
 [Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d)
 ```
 
+**The server validates these links on every write (v1.7.0, #214).** A write
+whose content contains a `[Text](uuid)` link to a document id that does not
+exist is **rejected**, listing the offending id(s). This exists because
+long random ids are a worst-case input for regenerating text — a mangled
+UUID silently becomes a dead link, and the guard turns that into a loud,
+same-turn-fixable error. Three things to know:
+
+- **Do not retry unchanged.** Re-read the source you copied each link from,
+  correct the id(s), and resend. The error is deterministic.
+- **Examples go in code formatting.** A backticked `` `[Text](uuid)` `` or a
+  fenced block is not a link and is not validated — that is the escape
+  mechanism, and it is just correct markdown authoring.
+- **A dead link already in the document blocks your edit too** (partial
+  edits resend full content). That is deliberate — the target was probably
+  purged after linking, and this is the moment it gets flagged. Fix or
+  remove the stale link in the same call.
+
+`[[Wikilinks]]` are NOT validated — they remain the sanctioned form for
+"flag a document to create later."
+
 UUIDs are the only link form that is fully reliable:
 
 - **Stable**: survives title changes. If the target gets renamed, the link still resolves.

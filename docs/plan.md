@@ -36,7 +36,9 @@ trust model had always sanctioned closing. On `feat/mcp-delete-document`
 recorded in audit) and `cerefox_restore_document` (#210 — the maintainer moved
 restore out of the human-only tier; **permanent purge is now the single
 web-UI-only action**), plus the dashboard recent-docs project selector and the
-review-status-pill staleness fix. Schema 0.11.3 → 0.12.0; ingest now refuses
+review-status-pill staleness fix, and referential integrity for `](uuid)`
+document links (#214 — mangled-UUID protection, validated in the ingest RPC
+on every write). Schema 0.11.3 → 0.12.0; ingest now refuses
 to rewrite trashed documents. Two high-effort review rounds applied. Staging
 is stuck in Supabase restoration (ticket filed), so verification runs
 carefully on prod after merge + cut.

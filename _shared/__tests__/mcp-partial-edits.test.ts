@@ -53,6 +53,7 @@ Calories: 1200
 `;
 
 const HASH = "a".repeat(64);
+const BOGUS_LINK_ID = "00000000-dead-beef-0000-000000000000";
 
 interface Captured {
   ingestArgs?: Record<string, unknown>;
@@ -435,6 +436,38 @@ describe("server-behind detection", () => {
         openaiApiKey: "",
       } as ToolContext),
     ).rejects.toThrow(); // no key configured → fails earlier; covered live on staging
+  });
+});
+
+describe("link integrity mapping (#214)", () => {
+  test("CEREFOX_UNRESOLVED_LINKS maps to self-correction instructions naming the ids", async () => {
+    stubEmbeddings();
+    try {
+      const client = mockClient({
+        ingestError:
+          `CEREFOX_UNRESOLVED_LINKS: 1 linked document id(s) do not exist: ${BOGUS_LINK_ID}. ` +
+          `If these were meant to link existing documents, the ids are mangled — re-read the ` +
+          `source and correct them. If they are examples, put them in code formatting (backticks or a fence).`,
+      });
+      const err = await edit
+        .handler(
+          client,
+          {
+            document_id: "d",
+            expected_content_hash: HASH,
+            operations: [{ op: "replace_section", anchor_heading: "## Totals", text: "x" }],
+          },
+          ctx,
+        )
+        .catch((e: Error) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain(BOGUS_LINK_ID);
+      expect((err as Error).message).toContain("mangled");
+      // Distinguishes introduced-by-this-edit from already-carried dead links.
+      expect((err as Error).message).toContain("did NOT touch");
+    } finally {
+      restoreFetch();
+    }
   });
 });
 

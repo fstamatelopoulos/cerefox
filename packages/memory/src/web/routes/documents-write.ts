@@ -215,6 +215,22 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           );
         }
         const msg = err instanceof Error ? err.message : String(err);
+        // Link integrity (#214): unresolvable [Text](uuid) links reject the
+        // write. 422 — the request is well-formed but the content fails a
+        // semantic check the editor can fix.
+        if (msg.includes("CEREFOX_UNRESOLVED_LINKS")) {
+          const ids = msg.match(/do not exist: ([^.]+)\./)?.[1] ?? "";
+          return c.json(
+            {
+              success: false,
+              error: "unresolved document links",
+              message:
+                `This content links document id(s) that don't exist${ids ? `: ${ids}` : ""}. ` +
+                `Fix or remove the broken link(s), or wrap example ids in backticks.`,
+            },
+            422,
+          );
+        }
         // 0.12.0: the ingest RPC refuses to rewrite a trashed document. The
         // only web path here is a stale edit tab (the UI hides Edit on
         // deleted docs), so phrase it for a human and class it as a

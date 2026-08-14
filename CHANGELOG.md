@@ -31,6 +31,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   recorded** in the audit-log entry (delete's was previously printed but not
   stored; restore had no reason flag).
 
+- **Referential integrity for UUID document links (#214).** Every write now
+  validates `[Text](uuid)` links against the store and rejects the write if
+  any target id does not exist, listing the offenders. Agents mangle long
+  random ids when regenerating text; this turns a silent dead link into a
+  loud, same-turn-fixable error (~1–2ms per write — one regex pass and one
+  indexed lookup). Fenced code and inline code spans are not validated —
+  code formatting is the markdown-native way to write an example link — and
+  `[[wikilinks]]` remain the sanctioned dangling form. Deliberate
+  consequence: editing a document that already carries a dead link (target
+  purged after linking) is blocked until the link is fixed. Design:
+  `docs/specs/link-integrity-design.md`.
 - **Dashboard: the recently-changed tile can be scoped to a project.** A
   selector next to the tile (default "All projects", the previous behavior)
   refetches the top-10 recently changed documents within the chosen project —

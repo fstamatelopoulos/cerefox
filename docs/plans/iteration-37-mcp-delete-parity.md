@@ -74,6 +74,13 @@ MCP tool was simply never built.
       sync-flow convergence via skip-with-note, prefer-live title resolution,
       stale web-integration assertions, shared invalidation helper, precise
       not-found classification, dashboard split onto a light endpoint).
+- [x] Link integrity (#214, maintainer-directed into v1.7.0): the ingest RPC
+      validates `](uuid)` links on every write; code formatting is the
+      markdown-native escape (no bypass flag); agent-first error mapping on
+      all surfaces; acceptance + unit coverage; spec in
+      docs/specs/link-integrity-design.md. Phase-2 dead-link sweep stays on
+      the ticket.
+- [ ] Review round 4 on the final state.
 - [ ] Maintainer merge + cut.
 - [ ] Live verification — **retargeted to production** (2026-08-13): staging got
       stuck in Supabase "Restoration in progress" for over an hour after

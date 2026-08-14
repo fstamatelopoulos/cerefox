@@ -317,6 +317,16 @@ async function applyAndWrite(
           `cerefox_search for the resulting content to find it.`,
       );
     }
+    if (message.includes("CEREFOX_UNRESOLVED_LINKS")) {
+      const ids = message.match(/do not exist: ([^.]+)\./)?.[1] ?? "(unparsed)";
+      throw new Error(
+        `Edit rejected — the resulting content links document id(s) that do not exist: ${ids}. ` +
+          `If your edit introduced these links, the UUIDs are almost certainly mangled — ` +
+          `re-read the source and correct them (or backtick deliberate examples). If the ` +
+          `dead link is in a section you did NOT touch, this document already carried it ` +
+          `(its target may have been purged): fix or remove that link in the same call.`,
+      );
+    }
     if (isMissingFunctionError(message, "cerefox_ingest_document")) {
       throw new Error(
         `This server is behind: partial edits need schema 0.11.0 or newer. ` +

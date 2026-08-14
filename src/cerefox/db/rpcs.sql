@@ -1472,6 +1472,8 @@ DECLARE
     v_size_warn_at  INT;
     v_size_warning  BOOLEAN := FALSE;
     v_doc_deleted   TIMESTAMPTZ;
+    v_scannable     TEXT;
+    v_missing       TEXT[];
 BEGIN
     -- ── Zero-chunk guard (v0.3.1) ────────────────────────────────────────
     -- Refuse to create or update a document with no chunks. Three reasons:
@@ -1490,6 +1492,35 @@ BEGIN
             'cerefox_ingest_document: refusing to write a document with zero chunks (title=%, source=%). Supply at least one chunk, or use cerefox_delete_document to clear content.',
             p_title, p_source
             USING ERRCODE = '22023';  -- invalid_parameter_value
+    END IF;
+
+    -- ── Link integrity (#214, 0.12.0) ────────────────────────────────────
+    -- Validate [Text](uuid) document links against the store: agents mangle
+    -- long random ids when regenerating text, and a mangled id silently
+    -- becomes a dead link. Fenced code blocks and inline code spans are
+    -- stripped first — code formatting is the markdown-native way to write
+    -- an EXAMPLE link, and the escape mechanism here (no bypass flag, by
+    -- design). Trashed targets resolve: the id denotes a document. One PK
+    -- lookup for all candidates; ~1-2ms. Runs on create AND update, so a
+    -- link whose target was later purged surfaces on the next edit.
+    -- See docs/specs/link-integrity-design.md.
+    SELECT string_agg(c->>'content', E'\n') INTO v_scannable
+    FROM jsonb_array_elements(p_chunks) c;
+    v_scannable := regexp_replace(COALESCE(v_scannable, ''), '```.*?```', ' ', 'g');
+    v_scannable := regexp_replace(v_scannable, '`[^`]*`', ' ', 'g');
+
+    SELECT array_agg(DISTINCT m[1]) INTO v_missing
+    FROM regexp_matches(
+        v_scannable,
+        '\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)',
+        'g') m
+    WHERE NOT EXISTS (SELECT 1 FROM cerefox_documents d WHERE d.id = m[1]::uuid);
+
+    IF v_missing IS NOT NULL THEN
+        RAISE EXCEPTION
+            'CEREFOX_UNRESOLVED_LINKS: % linked document id(s) do not exist: %. If these were meant to link existing documents, the ids are mangled — re-read the source and correct them. If they are examples, put them in code formatting (backticks or a fence).',
+            array_length(v_missing, 1), array_to_string(v_missing, ', ')
+            USING ERRCODE = '22023';  -- deterministic; never a retryable SQLSTATE
     END IF;
 
     -- Validate review_status

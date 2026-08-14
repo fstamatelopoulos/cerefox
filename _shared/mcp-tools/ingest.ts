@@ -51,6 +51,16 @@ function mapIngestRpcError(message: string, documentId: string): Error {
     const { expected, current } = extractConflictHashes(message);
     return conflictError(documentId, expected, current);
   }
+  if (message.includes("CEREFOX_UNRESOLVED_LINKS")) {
+    const ids = message.match(/do not exist: ([^.]+)\./)?.[1] ?? "(unparsed)";
+    return new Error(
+      `Write rejected — the content links document id(s) that do not exist: ${ids}. ` +
+        `These are almost certainly mangled UUIDs (long random ids corrupt easily when ` +
+        `regenerated). Do NOT retry unchanged: re-read the SOURCE you copied each link ` +
+        `from, correct the id(s), and resend. If an id is a deliberate example rather ` +
+        `than a real link, put it in code formatting (backticks or a fence).`,
+    );
+  }
   if (message.includes("CEREFOX_DELETED")) {
     const id = message.match(/document ([0-9a-f-]{36})/)?.[1] ?? documentId;
     return new Error(

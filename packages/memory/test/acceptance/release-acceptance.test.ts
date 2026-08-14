@@ -277,5 +277,72 @@ describe("release acceptance (live)", () => {
     ]);
     expect(cliDel.code).toBe(0);
     expect(cliDel.out).toContain("recorded in the audit log");
+
+    // Trashed documents refuse content updates on every resolution path —
+    // this is what makes restore safe without a freshness token.
+    const byId = await A.mcp("cerefox_ingest", {
+      document_id: id,
+      title: "whatever",
+      content: "# New\n\nrewrite attempt",
+      author: "acceptance",
+    });
+    expect(byId.isError).toBe(true);
+    expect(byId.text).toContain("soft-deleted");
+    expect(byId.text).toContain("restore");
+  });
+
+  test("unresolvable ](uuid) links reject the write; code formatting escapes (#214)", async () => {
+    const { id: realId } = await A.seed("link-target", DOC);
+    const bogus = "00000000-dead-beef-0000-000000000000";
+
+    // A link to a REAL document passes.
+    const ok = await A.mcp("cerefox_ingest", {
+      title: `[E2E acceptance] linker ${Date.now() % 1e6}`,
+      content: `# Linker\n\nSee [the target](${realId}) for details.\n`,
+      author: "acceptance",
+    });
+    expect(ok.isError).toBe(false);
+    const okId = ok.text.match(/id: ([0-9a-f-]{36})/)?.[1];
+    if (okId) A.track(okId);
+
+    // A mangled id is rejected, naming the offender — the agent can
+    // self-correct in the same turn.
+    const bad = await A.mcp("cerefox_ingest", {
+      title: `[E2E acceptance] bad linker ${Date.now() % 1e6}`,
+      content: `# Bad\n\nSee [broken](${bogus}).\n`,
+      author: "acceptance",
+    });
+    expect(bad.isError).toBe(true);
+    expect(bad.text).toContain(bogus);
+    expect(bad.text).toContain("mangled");
+
+    // Code formatting is the escape: the same bogus id inside a fence and
+    // inline code is an EXAMPLE, not a link, and passes.
+    const escaped = await A.mcp("cerefox_ingest", {
+      title: `[E2E acceptance] escaped linker ${Date.now() % 1e6}`,
+      content:
+        `# Escaped\n\nExample syntax: \`[Text](${bogus})\`.\n\n` +
+        "```\n" + `[Also fine](${bogus})\n` + "```\n",
+      author: "acceptance",
+    });
+    expect(escaped.isError).toBe(false);
+    const escId = escaped.text.match(/id: ([0-9a-f-]{36})/)?.[1];
+    if (escId) A.track(escId);
+
+    // Partial edits go through the same guard: an edit that introduces a
+    // dead link is rejected with the same self-correction loop.
+    if (okId) {
+      const read = await A.mcp("cerefox_get_document", { document_id: okId, outline: true });
+      const hash = read.text.match(/content_hash: ([0-9a-f]{64})/)?.[1];
+      const edit = await A.mcp("cerefox_insert", {
+        document_id: okId,
+        position: "end_of_document",
+        text: `\nAnd [a mangled one](${bogus}).\n`,
+        expected_content_hash: hash,
+        author: "acceptance",
+      });
+      expect(edit.isError).toBe(true);
+      expect(edit.text).toContain(bogus);
+    }
   });
 });
