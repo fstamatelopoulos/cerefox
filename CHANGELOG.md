@@ -66,8 +66,8 @@ Open roadmap.
   dropped** (schema 0.12.0 → 0.12.1, migration 0025). `CREATE OR REPLACE`
   never removed the pre-author-era signatures when the functions grew, so
   long-lived databases carried both overloads and a named 1-arg call was
-  ambiguous (PostgREST PGRST203) — found live when the first production
-  acceptance run failed to purge its fixtures. Fresh databases were never
+  ambiguous (PostgREST PGRST203) — found by a live acceptance run against a
+  long-lived database. Fresh databases were never
   affected. The acceptance harness now passes all three purge args, checks
   the soft-delete's error before purging, and sweeps the audit rows the
   purge cascade orphans (document_id nulled), which the id-based cleanup

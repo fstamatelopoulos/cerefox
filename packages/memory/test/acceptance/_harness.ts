@@ -245,8 +245,8 @@ export class Acceptance {
           //    ALL THREE args, always: long-lived databases carry an orphaned
           //    1-arg overload of this RPC from the pre-author era (CREATE OR
           //    REPLACE never dropped it), and a 1-arg call is ambiguous there
-          //    (PGRST203) — which is how the first prod run left 13 fixtures
-          //    behind. The named 3-arg call resolves uniquely everywhere.
+          //    (PGRST203) — which is how a live run against a long-lived
+          //    database left its fixtures behind. The named 3-arg call resolves uniquely everywhere.
           const { error } = await raw.rpc("cerefox_purge_document", {
             p_document_id: id,
             p_author: "acceptance",
@@ -262,8 +262,8 @@ export class Acceptance {
       //    Attempted regardless of individual purge failures. TWO passes: the
       //    purge CASCADE nulls audit.document_id (ON DELETE SET NULL), so the
       //    id-based delete misses rows for already-purged docs — the orphaned
-      //    acceptance-authored rows are swept separately (64 accumulated in
-      //    prod before this second pass existed).
+      //    acceptance-authored rows are swept separately (they accumulated in
+      //    long-lived databases before this second pass existed).
       try {
         await raw.from("cerefox_audit_log").delete().in("document_id", this.created);
         await (raw.from("cerefox_audit_log").delete() as unknown as {

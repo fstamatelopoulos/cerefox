@@ -5,7 +5,8 @@
 -- replaces the SAME signature), leaving long-lived databases with BOTH
 -- overloads. A named 1-arg call is then ambiguous — PostgREST PGRST203
 -- ("could not choose the best candidate") — which is how the first
--- production acceptance run failed to purge its fixtures (v1.7.0).
+-- acceptance run against a long-lived database failed to purge its
+-- fixtures (v1.7.0).
 -- Fresh databases never had the old signatures and are unaffected.
 --
 -- Schema version 0.12.0 → 0.12.1. The DROPs also run from rpcs.sql on every

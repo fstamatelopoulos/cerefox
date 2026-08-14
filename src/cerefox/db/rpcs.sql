@@ -1248,7 +1248,7 @@ $$;
 DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT);
 -- 0.12.1: the pre-author 1-arg overload survived every CREATE OR REPLACE
--- since the signature grew (same orphan class as purge; found live on prod).
+-- since the signature grew (same orphan class as purge; found live on a long-lived database).
 DROP FUNCTION IF EXISTS cerefox_restore_document(UUID);
 CREATE FUNCTION cerefox_restore_document(
     p_document_id   UUID,

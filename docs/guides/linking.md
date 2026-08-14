@@ -48,8 +48,8 @@ Now compound that. A document with a table of 25–30 links makes an agent
 regenerate 25–30 UUIDs *every time it rewrites that table*. Even an
 excellent per-character accuracy, multiplied across hundreds of characters
 of pure entropy, several times per session, makes occasional corruption
-**expected, not unlucky**. This happened repeatedly in real use — three
-corrupted links in one afternoon — and each corrupted id silently becomes a
+**expected, not unlucky** — and observed repeatedly in real use. Each
+corrupted id silently becomes a
 dead link that read-back review may or may not catch.
 
 Two defenses exist, and they compose:
