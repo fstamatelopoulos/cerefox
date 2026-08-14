@@ -187,8 +187,9 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 | 8.4 | MCP `cerefox_get_document` tool -- end-to-end via stdio transport | TODO |
 | 8.5 | MCP `cerefox_list_versions` tool -- end-to-end via stdio transport | TODO |
 | 8.6 | MCP `cerefox_get_audit_log` tool -- end-to-end via stdio transport | TODO |
-| 8.7 | MCP `cerefox_delete_document` tool -- read-hash guard, stale-hash conflict deletes nothing, reason in audit, idempotent re-delete | Added -- `release-acceptance.test.ts` (live, staging-gated; not yet run — staging down) |
-| 8.8 | MCP `cerefox_restore_document` tool -- delete/restore roundtrip, not-deleted no-op, CLI restore parity | Added -- `release-acceptance.test.ts` (live, staging-gated; not yet run — staging down) |
+| 8.7 | MCP `cerefox_delete_document` tool -- read-hash guard, stale-hash conflict deletes nothing, reason in audit, idempotent re-delete | DONE -- `release-acceptance.test.ts`, verified live on production (v1.7.0, 2026-08-13) |
+| 8.8 | MCP `cerefox_restore_document` tool -- delete/restore roundtrip, not-deleted no-op, CLI restore parity | DONE -- `release-acceptance.test.ts`, verified live on production (v1.7.0, 2026-08-13) |
+| 8.9 | Dead-link sweep (#214 phase 2) -- purged target found by `document dead-links`, pre-existing dead link does not block edits; skips gracefully pre-0.12.2 | Added -- `release-acceptance.test.ts` (runs after the v1.7.1 deploy) |
 
 ---
 

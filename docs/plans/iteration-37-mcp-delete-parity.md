@@ -82,7 +82,16 @@ MCP tool was simply never built.
       docs/specs/link-integrity-design.md. Phase-2 dead-link sweep stays on
       the ticket.
 - [ ] Review round 4 on the final state.
-- [ ] Maintainer merge + cut.
+- [x] **v1.7.1 follow-up batch** (branch `fix/v1.7.1-metadata-and-dead-links`):
+      #212 (document edit destroyed non-object metadata via JS spread; wrote
+      metadata on title-only edits) fixed at three layers — ingest RPC input
+      guard, set_document_metadata stored-state merge guard, CLI patch guard +
+      conditional write — plus `cerefox_metadata_health` in doctor and a
+      reporting migration (0026). #214 phase 2 shipped:
+      `cerefox_find_dead_links` + `cerefox document dead-links`, closing the
+      ticket. Also 0.12.1's orphan-overload drops ride this release. Schema
+      0.12.0 → 0.12.2.
+- [ ] Maintainer merge + cut v1.7.1.
 - [ ] Live verification — **retargeted to production** (2026-08-13): staging got
       stuck in Supabase "Restoration in progress" for over an hour after
       unpause (dashboard: "taking longer than usual, contact support"), and the

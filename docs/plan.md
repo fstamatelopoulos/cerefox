@@ -28,7 +28,7 @@
 ---
 ## Current Focus
 
-**2026-08-13 — Iteration 37 in progress: MCP delete parity (#208), target v1.7.0.**
+**2026-08-14 — v1.7.0 shipped and verified on prod; v1.7.1 follow-up batch in review (#212, #214 phase 2, 0.12.1 orphan drops).**
 
 An agent's question ("why is there no delete in MCP?") exposed a parity gap the
 trust model had always sanctioned closing. On `feat/mcp-delete-document`

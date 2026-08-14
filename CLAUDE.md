@@ -468,6 +468,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `access-paths.md` | All access layers, credentials, and integration paths |
 | `connect-agents.md` | MCP setup for Claude, Cursor, and generic clients |
 | `configuration.md` | All `CEREFOX_` environment variables with defaults |
+| `linking.md` | Document links: forms, the write-time validation guardrail (why LLMs corrupt long ids), the dead-link sweep |
 | `ops-scripts.md` | All `scripts/` — deploy, migrate, backup, restore |
 | `staging-env.md` | Running a staging environment alongside production (opt-in; `CEREFOX_CONFIG_DIR`) |
 | `operational-cost.md` | Embedding and hosting cost estimates |

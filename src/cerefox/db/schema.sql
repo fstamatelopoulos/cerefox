@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.12.1
+-- @version: 0.12.2
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -42,7 +42,15 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     source_path     TEXT,
     -- SHA-256 of raw markdown content; used for deduplication
     content_hash    TEXT        NOT NULL,
-    metadata        JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    -- #212 (0.12.2): must be a JSON OBJECT — jsonb accepts any JSON value,
+    -- but every reader assumes an object, and non-object values were silently
+    -- destroyed by read-modify-write paths. The table-level CHECK closes all
+    -- current AND future direct writers at once; existing databases get it as
+    -- NOT VALID via migration 0026 (legacy rows survive until repaired with
+    -- `document set-metadata --replace`, which the constraint then validates).
+    metadata        JSONB       NOT NULL DEFAULT '{}'::jsonb
+                    CONSTRAINT cerefox_documents_metadata_object
+                    CHECK (jsonb_typeof(metadata) = 'object'),
     chunk_count     INT         NOT NULL DEFAULT 0,
     total_chars     INT         NOT NULL DEFAULT 0,
     -- review_status: human governance flag. 'approved' = validated by human,

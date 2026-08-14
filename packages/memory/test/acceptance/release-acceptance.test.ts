@@ -346,4 +346,48 @@ describe("release acceptance (live)", () => {
     expect(edit.isError).toBe(true);
     expect(edit.text).toContain(bogus);
   });
+
+  test("dead-link sweep finds purged targets; pre-existing dead links do not block edits (#214 phase 2)", async () => {
+    const { id: targetId } = await A.seed("sweep-target", DOC);
+    const linker = await A.mcp("cerefox_ingest", {
+      title: `[E2E acceptance] sweeper ${Date.now() % 1e6}`,
+      content: `# Sweeper\n\nSee [target](${targetId}).\n`,
+      author: "acceptance",
+    });
+    expect(linker.isError).toBe(false);
+    const linkerId = linker.text.match(/id: ([0-9a-f-]{36})/)?.[1];
+    const linkerHash = linker.text.match(/([0-9a-f]{64})/)?.[1];
+    expect(linkerId).toBeDefined();
+    A.track(linkerId!);
+
+    // Purge the target: the link is now genuinely dead (a trashed target
+    // would NOT count — it still exists).
+    await A.purgeNow(targetId);
+
+    const sweep = A.cli(["document", "dead-links", "--json"]);
+    if (sweep.code !== 0 && /needs schema 0\.12\.2|Could not find the function|does not exist/.test(sweep.out)) {
+      // Pre-0.12.2 server: the sweep RPC is not deployed yet. bun's
+      // test.skip cannot skip from INSIDE a running body (it is a
+      // collection-time API), so warn and return — the write-guard cases
+      // above still validated; this case validates after the upgrade.
+      console.warn("[acceptance] dead-link sweep skipped: server pre-0.12.2 (cerefox_find_dead_links not deployed)");
+      return;
+    }
+    expect(sweep.code).toBe(0);
+    // stdout ONLY: stderr may carry a version-skew banner in exactly the
+    // client-newer-than-server window this release creates.
+    const rows = JSON.parse(sweep.stdout) as Array<{ document_id: string; dead_link_id: string }>;
+    expect(rows.some((r) => r.document_id === linkerId && r.dead_link_id === targetId)).toBe(true);
+
+    // The write-time guard tolerates the PRE-EXISTING dead link: an unrelated
+    // edit of the linking document must succeed (this is why phase 2 exists).
+    const unrelated = await A.mcp("cerefox_insert", {
+      document_id: linkerId!,
+      position: "end_of_document",
+      text: "\nUnrelated addition.\n",
+      expected_content_hash: linkerHash!,
+      author: "acceptance",
+    });
+    expect(unrelated.isError).toBe(false);
+  });
 });

@@ -497,6 +497,40 @@ export async function checkEmbedderMismatch(): Promise<CheckResult> {
   }
 }
 
+/**
+ * Probe one PostgREST-exposed RPC and parse its JSON (round-5 review: this
+ * scaffold existed as four hand-rolled copies, and their `!resp.ok` branches
+ * told operators to redeploy schema on a 401 — only ABSENT means the RPC is
+ * not deployed; every other failure is its own diagnosis).
+ */
+type RpcProbe<T> =
+  | { kind: "ok"; rows: T }
+  | { kind: "absent" } // 404 / PGRST202 — the function is not on this server
+  | { kind: "error"; detail: string };
+
+async function probeRpcJson<T>(
+  settings: { supabaseUrl: string; supabaseKey: string },
+  fn: string,
+): Promise<RpcProbe<T>> {
+  try {
+    const url = `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/${fn}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: settings.supabaseKey,
+        Authorization: `Bearer ${settings.supabaseKey}`,
+      },
+      body: "{}",
+    });
+    if (resp.status === 404) return { kind: "absent" };
+    if (!resp.ok) return { kind: "error", detail: `HTTP ${resp.status}` };
+    return { kind: "ok", rows: (await resp.json()) as T };
+  } catch (err) {
+    return { kind: "error", detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 const CONTENT_FORMAT_CHECK_NAME = "content format";
 
 /**
@@ -509,26 +543,27 @@ export async function checkContentFormat(): Promise<CheckResult> {
   if (!settings.supabaseUrl || !settings.supabaseKey) {
     return { name: CONTENT_FORMAT_CHECK_NAME, status: "skipped", detail: "Supabase config missing; skipped." };
   }
-  try {
-    const url = `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/cerefox_content_format_stats`;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: settings.supabaseKey,
-        Authorization: `Bearer ${settings.supabaseKey}`,
-      },
-      body: "{}",
-    });
-    if (!resp.ok) {
+  {
+    const probe = await probeRpcJson<Array<{ legacy_docs: number; total_docs: number }>>(
+      settings,
+      "cerefox_content_format_stats",
+    );
+    if (probe.kind === "absent") {
       // RPC absent → server not yet on schema 0.8.0. Informational skip, not an error.
       return {
         name: CONTENT_FORMAT_CHECK_NAME,
         status: "skipped",
-        detail: `format stats unavailable (${resp.status}); deploy schema 0.8.0 to enable.`,
+        detail: "format stats unavailable; deploy schema 0.8.0 to enable.",
       };
     }
-    const rows = (await resp.json()) as Array<{ legacy_docs: number; total_docs: number }>;
+    if (probe.kind === "error") {
+      return {
+        name: CONTENT_FORMAT_CHECK_NAME,
+        status: "skipped",
+        detail: `content-format check skipped (${probe.detail}).`,
+      };
+    }
+    const rows = probe.rows;
     const legacy = rows[0]?.legacy_docs ?? 0;
     const total = rows[0]?.total_docs ?? 0;
     if (legacy === 0) {
@@ -544,13 +579,57 @@ export async function checkContentFormat(): Promise<CheckResult> {
       detail: `${legacy} of ${total} document(s) use the legacy reconstruction format (format 1).`,
       hint: "Harmless — they auto-convert on next edit. To convert them all now: `cerefox server migrate-format` (re-embeds, so try `--dry-run` first). To read what chunk formats are: `cerefox guides show content-format`.",
     };
-  } catch (err) {
+  }
+}
+
+const METADATA_HEALTH_CHECK_NAME = "metadata health";
+
+/**
+ * Informational (#212, 0.12.2): rows whose stored metadata is not a JSON
+ * object — a legacy state the write guards now prevent, but which silently
+ * broke `document edit` (a JS spread decomposed a stored string into
+ * per-character keys). Never a failure: `ok` when clean, `skipped` (ℹ) with
+ * the repair command when rows exist, `skipped` when the RPC is absent
+ * (pre-0.12.2 server).
+ */
+export async function checkMetadataHealth(): Promise<CheckResult> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    return { name: METADATA_HEALTH_CHECK_NAME, status: "skipped", detail: "Supabase config missing; skipped." };
+  }
+  const probe = await probeRpcJson<Array<{ document_id: string; document_title: string; metadata_type: string }>>(
+    settings,
+    "cerefox_metadata_health",
+  );
+  if (probe.kind === "absent") {
     return {
-      name: CONTENT_FORMAT_CHECK_NAME,
+      name: METADATA_HEALTH_CHECK_NAME,
       status: "skipped",
-      detail: `content-format check skipped: ${err instanceof Error ? err.message : String(err)}`,
+      detail: "metadata-health RPC not deployed; deploy schema 0.12.2 to enable.",
     };
   }
+  if (probe.kind === "error") {
+    // NOT a version-skew diagnosis: a 401 or a transient 500 is its own
+    // problem, and "redeploy schema" would send the operator the wrong way.
+    return {
+      name: METADATA_HEALTH_CHECK_NAME,
+      status: "skipped",
+      detail: `metadata-health check skipped (${probe.detail}).`,
+    };
+  }
+  if (probe.rows.length === 0) {
+    return { name: METADATA_HEALTH_CHECK_NAME, status: "ok", detail: "all document metadata is well-formed" };
+  }
+  const sample = probe.rows
+    .slice(0, 3)
+    .map((r) => `"${r.document_title}" (${r.metadata_type})`)
+    .join(", ");
+  return {
+    name: METADATA_HEALTH_CHECK_NAME,
+    status: "skipped", // informational (ℹ), never a gate
+    detail: `${probe.rows.length} document(s) hold non-object metadata: ${sample}${probe.rows.length > 3 ? ", …" : ""}.`,
+    hint: "Writes that would merge onto these rows are refused (#212). Repair each with `cerefox document set-metadata <id> --replace --json '<the intended object>'`.",
+  };
 }
 
 /**
@@ -870,6 +949,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
     { name: "embedder", phase: "Checking embedder consistency", run: () => checkEmbedderMismatch() },
     { name: "content format", phase: "Checking chunk reconstruction format", run: () => checkContentFormat() },
+    { name: "metadata health", phase: "Checking metadata well-formedness", run: () => checkMetadataHealth() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
     { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },

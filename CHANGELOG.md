@@ -9,8 +9,53 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **Dead-link sweep — phase 2 of link integrity (#214).**
+  `cerefox document dead-links` (backed by the read-only
+  `cerefox_find_dead_links` RPC) scans the whole KB for `[Text](uuid)` links
+  whose target document no longer exists — the case the write-time guard
+  deliberately tolerates on unrelated edits so a purged target cannot make
+  its linkers unwritable. Same scanning rules as the guard (code formatting
+  escapes; a trashed target still exists and is not dead). On demand, not in
+  doctor — it is a full chunk scan.
+- **`cerefox doctor` checks metadata well-formedness** (informational):
+  documents whose stored metadata is not a JSON object are listed with the
+  repair command (`cerefox_metadata_health` RPC). Schema 0.12.1 → 0.12.2,
+  migration 0026 — which also reports any such rows at upgrade time.
+
 ### Fixed
 
+- **`cerefox document edit` no longer destroys non-object metadata (#212,
+  reported by @tdebasis).** `metadata` is jsonb and can legitimately hold a
+  non-object value; the command's JS spread *decomposed* those (a stored
+  string became one key per character, a number became `{}`) and wrote the
+  result back with "✓ Edited" — even on a title-only edit, which never
+  mentioned metadata. Fixed at every layer: the ingest RPC rejects
+  non-object `p_metadata` (the MCP layer always did; now every write path
+  agrees), `cerefox_set_document_metadata` refuses to *merge* onto a
+  non-object stored value (Postgres `||` would produce an array; only
+  `--replace` repairs, and the error says so) **while the `--replace` repair
+  itself now works on corrupt rows** (its change-reporting called
+  `jsonb_object_keys` on the scalar and rolled the repair back), the web
+  edit route validates metadata at runtime (a cast is compile-time only),
+  a table-level `CHECK (jsonb_typeof(metadata) = 'object')` closes every
+  current and future direct writer (added `NOT VALID` on existing databases
+  so legacy rows survive until repaired), and `document edit` now delegates
+  its metadata patch to the guarded, audited `cerefox_set_document_metadata`
+  RPC instead of merging client-side — title-only edits do not touch
+  metadata at all.
+- **The `](uuid)` link scan no longer goes blind after a code fence.**
+  Postgres regexes give a whole pattern the greediness of its *first*
+  quantifier, so the v1.7.0 fence-stripping regex consumed from the first
+  fence to end-of-content — silently skipping validation of every link
+  after any code block. The scan now splits on line-anchored fence markers
+  (no pairing regex at all) and lives in ONE shared function
+  (`cerefox_extract_doc_link_ids`) used by both the write guard and the
+  dead-link sweep, so the two can never disagree.
+- **`cerefox document dead-links` refuses to report a clean sweep it never
+  ran**: against a pre-0.12.2 server it says "run `cerefox server deploy`"
+  instead of printing a false all-clear.
 - **Orphaned 1-arg overloads of `cerefox_purge_document` / `cerefox_restore_document`
   dropped** (schema 0.12.0 → 0.12.1, migration 0025). `CREATE OR REPLACE`
   never removed the pre-author-era signatures when the functions grew, so
@@ -22,7 +67,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   purge cascade orphans (document_id nulled), which the id-based cleanup
   missed.
 
-Open roadmap.
+### Docs
+
+- **New guide: [`docs/guides/linking.md`](docs/guides/linking.md)** — the
+  consolidated linking story: link forms, why LLMs corrupt long ids when a
+  document carries many (token-by-token regeneration, zero redundancy,
+  compounding), the write-time guard, update semantics, escaping, and the
+  dead-link sweep.
 
 ---
 

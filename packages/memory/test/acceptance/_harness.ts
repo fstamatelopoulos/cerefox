@@ -47,7 +47,12 @@ export const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
 export const PREFIX = "[E2E acceptance]";
 
 export interface CliResult {
+  /** stdout + stderr combined — for substring assertions. */
   out: string;
+  /** stdout ALONE — parse machine output (--json) from this, never from
+   *  `out`: a stderr line (version-skew banner, runtime warning) would break
+   *  JSON.parse for a passing feature. */
+  stdout: string;
   code: number;
 }
 
@@ -64,7 +69,7 @@ export class Acceptance {
   /** Run the built CLI. */
   cli(args: string[]): CliResult {
     const r = spawnSync("node", [BIN, ...args], { encoding: "utf8", maxBuffer: 40e6 });
-    return { out: (r.stdout ?? "") + (r.stderr ?? ""), code: r.status ?? 1 };
+    return { out: (r.stdout ?? "") + (r.stderr ?? ""), stdout: r.stdout ?? "", code: r.status ?? 1 };
   }
 
   /**
@@ -164,6 +169,35 @@ export class Acceptance {
    *  cerefox_ingest in a test) for the same teardown. */
   track(id: string): void {
     this.created.push(id);
+  }
+
+  /**
+   * Purge one of THIS RUN's fixtures immediately (soft delete → gate-guarded
+   * purge), for tests that need a genuinely absent target — e.g. creating a
+   * dead link (#214 phase 2). Refuses ids the run did not create.
+   */
+  async purgeNow(id: string): Promise<void> {
+    this.assertSafeTarget();
+    if (!this.created.includes(id)) {
+      throw new Error(`purgeNow refused: ${id} was not created by this run.`);
+    }
+    const client = createClient(loadSettings());
+    const raw = client.raw as unknown as {
+      rpc: (n: string, a: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+    };
+    const del = await raw.rpc("cerefox_delete_document", {
+      p_document_id: id,
+      p_author: "acceptance",
+      p_author_type: "agent",
+    });
+    if (del.error) throw new Error(`purgeNow soft-delete failed: ${del.error.message}`);
+    const purge = await raw.rpc("cerefox_purge_document", {
+      p_document_id: id,
+      p_author: "acceptance",
+      p_author_type: "agent",
+    });
+    if (purge.error) throw new Error(`purgeNow purge failed: ${purge.error.message}`);
+    this.created.splice(this.created.indexOf(id), 1);
   }
 
   /** Ids this run created, for assertions about cleanup. */

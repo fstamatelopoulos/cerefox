@@ -1,6 +1,7 @@
 # Referential integrity for UUID document links (#214)
 
-**Ships in v1.7.0. Status: implemented alongside this spec.**
+**Ships in v1.7.0 (guard) / v1.7.1 (sweep). Status: implemented alongside this spec.
+User-facing guide: [`docs/guides/linking.md`](../guides/linking.md).**
 
 ## Problem
 
@@ -33,11 +34,16 @@ atomically with the write it guards.
    belong in code formatting — which is both correct markdown authoring and
    the escape mechanism. The originally considered `skip_link_validation`
    parameter is deliberately absent: flags weaken guards, and there is no
-   legitimate case left for one. Fence pairing is **line-anchored**
-   (markdown semantics: only a line-starting ` ``` ` opens or closes a
-   block), so a stray backtick run mid-prose cannot mis-pair fences and
-   un-escape a later real code block; an unterminated fence strips to
-   end-of-content, which under-validates but never false-rejects.
+   legitimate case left for one. Fences are **line-anchored** (markdown
+   semantics: only a line-starting ` ``` ` opens or closes a block) and
+   handled by **splitting on fence lines, not by a paired-fence regex** —
+   Postgres AREs give a whole RE the greediness of its first quantified
+   atom, which silently overrode a `.*?` and made a closed fence strip
+   everything to end-of-string, blinding the scan to every link after any
+   code block (found by review, verified live, fixed in 0.12.2). An
+   unterminated fence drops its tail (under-validates, never
+   false-rejects). The scanning rules live in ONE function,
+   `cerefox_extract_doc_link_ids`, shared by the write guard and the sweep.
 3. **Resolution**: all distinct candidate ids resolve in one
    `WHERE id = ANY(...)` primary-key lookup. A **trashed** document counts as
    resolving — the check asks "does this id denote a document," not "is it
@@ -77,9 +83,13 @@ One regex pass over the content (linear, in C) plus one indexed lookup for
 all candidates together: **~1–2ms** per write, against an embedding call of
 hundreds of milliseconds. Latency was evaluated and dismissed as a concern.
 
-## Phase 2 (not in v1.7.0)
+## Phase 2 — the dead-link sweep (shipped v1.7.1)
 
-The write-time guard protects new writes only. A read-only whole-KB sweep —
-`cerefox_find_dead_links()` + a `cerefox doctor` line or CLI verb — finds
-dangling `](uuid)` links retroactively (e.g. targets purged after linking).
-Tracked in #214.
+The write-time guard protects new writes only. The read-only
+`cerefox_find_dead_links()` RPC + `cerefox document dead-links` (CLI) find
+dangling `](uuid)` links retroactively — targets purged after linking, and
+links that predate the guard. Same scanning rules as the guard (enforced by
+the shared extractor); a trashed target still exists and is not reported.
+**Trashed LINKER documents are excluded**, deliberately: they are inert
+until restored, and a restore re-enters them into the next sweep. On
+demand, not in `doctor` (full chunk scan). Closed #214.

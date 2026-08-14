@@ -478,7 +478,7 @@ Call `cerefox_list_metadata_keys` for the current list -- conventions evolve.
 
 ## Writing linkable content
 
-Documents you ingest may contain markdown links to other Cerefox documents. The Cerefox web UI intercepts these links at click time and resolves them to the target document. The resolution happens entirely in the browser; the stored markdown is untouched.
+Documents you ingest may contain markdown links to other Cerefox documents. The Cerefox web UI intercepts these links at click time and resolves them to the target document. The resolution happens entirely in the browser; the stored markdown is untouched. (User-facing overview of the whole linking system, including *why* long ids corrupt during regeneration: [`docs/guides/linking.md`](docs/guides/linking.md).)
 
 ### The rule for agents: use document UUIDs
 
@@ -502,9 +502,9 @@ same-turn-fixable error. Three things to know:
   mechanism, and it is just correct markdown authoring.
 - **Only links your write introduces are validated on updates.** A dead
   link the document already carried (its target purged after linking) does
-  not block your unrelated edit — legacy dead links are found by the
-  dead-link sweep (#214 phase 2), not by holding your edit hostage. New
-  documents validate every link.
+  not block your unrelated edit — legacy dead links are found on demand by
+  the sweep (`cerefox document dead-links`, CLI), not by holding your edit
+  hostage. New documents validate every link.
 
 `[[Wikilinks]]` are NOT validated — they remain the sanctioned form for
 "flag a document to create later."

@@ -124,6 +124,20 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     const projectIds = Array.isArray(body.project_ids)
       ? (body.project_ids as string[])
       : [];
+    // Runtime-validated, not just cast (#212 round 5): body.metadata reaches a
+    // jsonb column via a direct table update below, and a string here would
+    // recreate exactly the corrupt state the 0.12.2 guards exist to prevent
+    // (Object.keys("abc") is [0,1,2] — the cast is compile-time only).
+    if (
+      body.metadata !== undefined &&
+      body.metadata !== null &&
+      (typeof body.metadata !== "object" || Array.isArray(body.metadata))
+    ) {
+      return c.json(
+        { success: false, error: "metadata must be a JSON object of key/value pairs" },
+        400,
+      );
+    }
     const metadata = (body.metadata as Record<string, string> | undefined) ?? {};
 
     const doc = await getCurrentDoc(ctx, documentId);
