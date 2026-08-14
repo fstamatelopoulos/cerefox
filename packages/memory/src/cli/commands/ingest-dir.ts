@@ -159,7 +159,9 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
       outcomes.push({
         file,
         status: "ok",
-        detail: `${result.action}: ${result.chunkCount} chunks`,
+        // The note carries the WHY on a skip (e.g. "in the trash — restore
+        // to resume syncing"); dropping it made skips look like clean syncs.
+        detail: `${result.action}: ${result.chunkCount} chunks${result.note ? ` (${result.note})` : ""}`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

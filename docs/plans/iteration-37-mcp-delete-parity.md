@@ -62,7 +62,8 @@ MCP tool was simply never built.
       p_reason), tool + tests, CLI `restore --reason` + honesty, trust-model
       docs rewritten (single guarded property: no agent path to purge),
       15 core / 19 total sweeps, acceptance roundtrip via MCP restore.
-- [x] Dashboard: `/dashboard?project_id=` scopes `recent_docs` server-side;
+- [x] Dashboard: `GET /api/v1/dashboard/recent-docs?project_id=` serves the
+      scoped tile (moved off the aggregate endpoint in review round 3);
       selector on the tile (SearchControls idiom, keepPreviousData); "View
       all" removed. Playwright specs added (unrun — staging down).
 - [x] Review-status pill staleness: `reviewMutation` now uses the shared

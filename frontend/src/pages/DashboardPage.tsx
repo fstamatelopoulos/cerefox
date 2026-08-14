@@ -288,7 +288,11 @@ export function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {(recent?.recent_docs ?? data?.recent_docs ?? []).map((doc) => {
+                {/* Scoped view NEVER falls back to the unscoped aggregate:
+                    if the scoped fetch fails, showing all-project rows under
+                    a project label misattributes documents. Unscoped may use
+                    the aggregate as a warm-start. */}
+                {(recentProject ? recent?.recent_docs ?? [] : recent?.recent_docs ?? data?.recent_docs ?? []).map((doc) => {
                   const chip = doc.author
                     ? {
                         icon: doc.author_type === "agent" ? IconSparkles : IconMapPin,

@@ -286,6 +286,21 @@ Call once per session to discover available projects before filtering search res
 
 ---
 
+### cerefox_set_document_metadata
+
+Change a document's metadata (tags) **without resending its content** (v1.6.0, #204). Merges by default, so concurrent agents setting different keys cannot clobber each other.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `document_id` | Yes | UUID of the document to tag. |
+| `metadata` | Yes | Keys to set. Values are JSON strings by convention (a `metadata_filter` matches JSONB as strings). A `null` value REMOVES that key. Keys you do not mention are left alone unless `replace` is true. |
+| `replace` | No | Set the metadata to EXACTLY this object, discarding any key not listed. Rare — the same destructive contract as `cerefox_set_document_projects`. |
+| `author` / `requestor` | No | Your agent name (audit / usage log). |
+
+Content, chunks and embeddings are untouched; no new version is created. The response reports what *changed* (keys set / removed), not what was asked for. Use this instead of `cerefox_ingest` whenever only the tags are changing.
+
+---
+
 ### cerefox_set_document_projects
 
 Set the document's project memberships to EXACTLY the given list. **Destructive replace.** Any existing memberships not in the list are removed. Content is untouched. Logged as `update-metadata` in the audit log.
@@ -485,10 +500,11 @@ same-turn-fixable error. Three things to know:
 - **Examples go in code formatting.** A backticked `` `[Text](uuid)` `` or a
   fenced block is not a link and is not validated — that is the escape
   mechanism, and it is just correct markdown authoring.
-- **A dead link already in the document blocks your edit too** (partial
-  edits resend full content). That is deliberate — the target was probably
-  purged after linking, and this is the moment it gets flagged. Fix or
-  remove the stale link in the same call.
+- **Only links your write introduces are validated on updates.** A dead
+  link the document already carried (its target purged after linking) does
+  not block your unrelated edit — legacy dead links are found by the
+  dead-link sweep (#214 phase 2), not by holding your edit hostage. New
+  documents validate every link.
 
 `[[Wikilinks]]` are NOT validated — they remain the sanctioned form for
 "flag a document to create later."
@@ -579,6 +595,7 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 | `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <document-id> --requestor <name>` |
 | `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
+| `cerefox_set_document_metadata(document_id, metadata, replace, author)` | `cerefox document set-metadata <document-id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
 | `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |

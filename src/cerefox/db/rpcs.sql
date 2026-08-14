@@ -1506,7 +1506,15 @@ BEGIN
     -- See docs/specs/link-integrity-design.md.
     SELECT string_agg(c->>'content', E'\n') INTO v_scannable
     FROM jsonb_array_elements(p_chunks) c;
-    v_scannable := regexp_replace(COALESCE(v_scannable, ''), '```.*?```', ' ', 'g');
+    -- Fences are LINE-ANCHORED, matching markdown semantics: only ``` at a
+    -- line start opens/closes a block, so a stray backtick run mid-prose
+    -- cannot mis-pair the fences and un-escape a later real code block. An
+    -- unterminated fence strips to end-of-content (under-validates, never
+    -- false-rejects). Inline code is stripped after, so fence markers are
+    -- intact when pairing runs.
+    v_scannable := regexp_replace(
+        COALESCE(v_scannable, ''),
+        E'(^|\\n)[ \\t]*```.*?(\\n[ \\t]*```[^\\n]*|$)', ' ', 'g');
     v_scannable := regexp_replace(v_scannable, '`[^`]*`', ' ', 'g');
 
     SELECT array_agg(DISTINCT m[1]) INTO v_missing
@@ -1515,6 +1523,23 @@ BEGIN
         '\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)',
         'g') m
     WHERE NOT EXISTS (SELECT 1 FROM cerefox_documents d WHERE d.id = m[1]::uuid);
+
+    -- On UPDATE, tolerate dead links the document ALREADY carries: a target
+    -- purged after linking must not make the document unwritable — sync
+    -- flows re-send content verbatim from disk and could never converge, and
+    -- an unrelated partial edit re-sends the untouched section holding the
+    -- link. Only NEWLY-INTRODUCED unresolvable ids reject; legacy dead links
+    -- are the phase-2 sweep's job (#214). Creates validate everything.
+    IF v_missing IS NOT NULL AND p_document_id IS NOT NULL THEN
+        SELECT array_agg(x) INTO v_missing
+        FROM unnest(v_missing) x
+        WHERE strpos(
+            lower(COALESCE((SELECT string_agg(ch.content, E'\n')
+                            FROM cerefox_chunks ch
+                            WHERE ch.document_id = p_document_id
+                              AND ch.version_id IS NULL), '')),
+            lower(x)) = 0;
+    END IF;
 
     IF v_missing IS NOT NULL THEN
         RAISE EXCEPTION

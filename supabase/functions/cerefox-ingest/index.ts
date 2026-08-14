@@ -88,6 +88,32 @@ function concurrencyErrorResponse(
       { status: 409, headers },
     );
   }
+  if (message.includes("CEREFOX_UNRESOLVED_LINKS")) {
+    // Link integrity (#214): the content links document id(s) that do not
+    // exist — almost always a mangled UUID. 422: well-formed request whose
+    // content fails a semantic check the caller can fix.
+    return new Response(
+      JSON.stringify({
+        error: "unresolved_links",
+        message:
+          "The content links document id(s) that do not exist. Re-read the source each link was copied from and correct the id(s) — do not retry unchanged. Wrap deliberate example ids in code formatting (backticks).",
+        detail: message,
+      }),
+      { status: 422, headers },
+    );
+  }
+  if (message.includes("CEREFOX_DELETED")) {
+    // 0.12.0: a trashed document refuses content updates until restored.
+    return new Response(
+      JSON.stringify({
+        error: "document_deleted",
+        message:
+          "This document is soft-deleted (in the trash). Restore it first, then retry the update — or create a new document.",
+        detail: message,
+      }),
+      { status: 409, headers },
+    );
+  }
   if (message.includes("CEREFOX_TOKEN_REQUIRED")) {
     return new Response(
       JSON.stringify({

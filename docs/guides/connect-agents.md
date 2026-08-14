@@ -597,7 +597,11 @@ When UPDATING an existing document, first call getDocument and note its
 content_hash, then pass it as expected_content_hash on ingestNote. If you get a
 409 conflict, the document changed underneath you: call getDocument again, merge
 your changes into the latest content, and retry with the new hash — never
-overwrite blindly.
+overwrite blindly. A 409 with error "document_deleted" means the target is in
+the trash: it must be restored by the user before updating. A 422 with error
+"unresolved_links" means the content links document id(s) that do not exist —
+you mangled a UUID; re-check each [Text](uuid) link against its source and
+resend, or wrap example ids in backticks. Do not retry either unchanged.
 ```
 
 ### Path B verification
@@ -634,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 3.1.0
+  version: 3.2.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -816,9 +820,20 @@ paths:
             with its content_hash.
         '409':
           description: >
-            Conflict — the document changed since it was read. Call getDocument
-            for the latest content + content_hash, merge your changes, and
-            retry with the new hash. Do not overwrite blindly.
+            Conflict. Either the document changed since it was read (call
+            getDocument for the latest content + content_hash, merge your
+            changes, and retry with the new hash — do not overwrite blindly),
+            or the target document is soft-deleted (error
+            "document_deleted") — restore it first, then retry, or create a
+            new document.
+        '422':
+          description: >
+            Unresolved document links (error "unresolved_links") — the content
+            contains [Text](uuid) links to document ids that do not exist,
+            almost always mangled UUIDs. Re-read the source each link was
+            copied from, correct the id(s), and resend; do not retry
+            unchanged. Deliberate example ids belong in code formatting
+            (backticks), which is not validated.
   /cerefox-metadata:
     post:
       operationId: listMetadataKeys
@@ -1262,7 +1277,7 @@ The agent docs are written around MCP tool names. **CLI flag names match MCP par
 | `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
 | `cerefox_get_audit_log` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
 
-> CLI verbs with no MCP equivalent: `cerefox document edit`, `cerefox document restore`, `cerefox project create` / `cerefox project edit`, `cerefox config list`.
+> CLI verbs with no MCP equivalent: `cerefox document edit`, `cerefox project create` / `cerefox project edit`, `cerefox config list`.
 
 ### Path C verification prompts
 
@@ -1282,7 +1297,7 @@ After pointing your agent at the repo, ask it:
 - **Privilege level**: the CLI uses the **service-role key** (`CEREFOX_SUPABASE_KEY`), which bypasses Row Level Security. An agent with Bash access has the same full read/write power you do. Only enable Path C for agents you trust to act on your behalf — the same trust level you'd grant Cursor/Claude Code for editing your source code.
 - **Audit attribution**: Path C records `access_path = "cli"` in usage logs, distinct from `"local-mcp"` / `"remote-mcp"`. **Agents must set `--author <name> --author-type agent` on writes and `--requestor <name>` on reads** (or rely on `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` env vars). Without these flags, writes attribute to `"unknown"` / `"user"`, which under-reports agent activity. See the 2026-05-18 Decision Log Q2 entry for the design rationale (`author_type` is caller-declared on ambiguous channels — CLI and Edge Functions — but `access_path` is always derived from the code layer).
 - **Soft-delete and restore are reachable; permanent purge is not** — by design. `cerefox document delete` / `cerefox document restore` on the CLI, `cerefox_delete_document` / `cerefox_restore_document` over MCP (v1.7.0, #208/#210): both audited with author attribution. **Permanent purge** (irreversible) stays web-UI-only with human-in-the-loop confirmation. If an agent deletes or restores content, it should surface that to the user explicitly so they can follow it in the audit trail. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
-- **Cross-doc links in content you ingest** become clickable when the user views them in the Cerefox web UI. Author them as `[Text](uuid)` (most stable), `[Text](docs/path.md)` (repo files), or `[Text](<Title With Spaces>)` (angle-bracket form — bare spaces break markdown). See [`AGENT_GUIDE.md` → "Writing linkable content"](../../AGENT_GUIDE.md#writing-linkable-content) for the full set of rules.
+- **Cross-doc links in content you ingest** become clickable when the user views them in the Cerefox web UI. **Always author them as `[Text](uuid)`** — the server validates these on every write (v1.7.0) and rejects links to nonexistent ids, which catches mangled UUIDs at write time. `[Text](docs/path.md)` exists for repo-ingested files; do not write title-based links (fragile, and `AGENT_GUIDE.md` says never in agent-authored content). See [`AGENT_GUIDE.md` → "Writing linkable content"](../../AGENT_GUIDE.md#writing-linkable-content) for the full set of rules.
 - **CLI install per machine**: the agent needs the `cerefox` binary installed (`npm install -g @cerefox/memory`) with a resolvable `.env`. If you skip the local install entirely, Path A-Remote or Path B is the only option.
 - **No sandboxing beyond the agent's existing Bash sandbox**: the CLI is just shell. If your agent's tool framework restricts which commands run, allowlist `cerefox …` explicitly.
 

@@ -6,7 +6,7 @@ Cerefox is a **user-owned knowledge memory layer**: a persistent, curated knowle
 
 The primary use case is **shared memory across AI agents**: knowledge written by one tool becomes immediately available to all others, preventing context fragmentation across sessions and AI tools.
 
-> For the full project vision, core principles, and future direction, see [`docs/research/vision.md`](../research/vision.md).
+> For the full project vision, core principles, and future direction, see [`docs/research/vision.md`](research/vision.md).
 
 **Layer model:**
 ```
@@ -715,6 +715,21 @@ Ingestion is designed to be non-blocking where the caller allows it:
 - Content hash (SHA-256) computed on raw markdown
 - If hash exists in `cerefox_documents.content_hash`, ingestion is skipped (or optionally updates metadata if `update_if_exists=True` and content is identical — skip re-chunking, skip version snapshot since content unchanged)
 - This prevents accidental double-ingestion of the same file
+- The hash constraint is store-wide including trashed documents, so a hash
+  match on a soft-deleted document reports "identical content is in the
+  TRASH — restore it" rather than a bare skip (v1.7.0)
+
+### 6.3b Write-time guards in `cerefox_ingest_document` (v1.7.0)
+
+- **Trashed documents refuse content updates** — restore first
+  (`CEREFOX_DELETED`); title/source-path resolution prefers a live match over
+  a trashed twin, and filesystem-sync flows skip trashed matches with a note
+  instead of erroring forever.
+- **Link integrity (#214)** — `[Text](uuid)` links are validated against the
+  store; unresolvable ids reject the write (`CEREFOX_UNRESOLVED_LINKS`,
+  listing the offenders). Code fences / inline code escape; on updates only
+  newly-introduced ids are validated. Design:
+  [`docs/specs/link-integrity-design.md`](specs/link-integrity-design.md).
 
 ### 6.4 Update vs. Create
 
@@ -992,7 +1007,7 @@ for the SPA migration design document.
 
 ### 9.2 Pages/Features
 
-1. **Dashboard** (`/app/`): stat cards, recent documents table, projects table with doc counts, quick search
+1. **Dashboard** (`/app/`): stat cards, recent documents table (scopable to a project via its selector, backed by `GET /api/v1/dashboard/recent-docs`), projects table with doc counts, quick search
 2. **Search** (`/app/search`): 4 search modes (docs, hybrid, FTS, semantic), project and metadata filters, Markdown content accordion with Full/Excerpt badges
 3. **Document Detail** (`/app/document/:id`): Markdown viewer with Rendered/Raw toggle, collapsible version history, metadata accordion, chunks view, edit/download/delete actions
 4. **Document Edit** (`/app/document/:id/edit`): Edit/Preview content toggle, multi-select projects, dynamic metadata key/value editor

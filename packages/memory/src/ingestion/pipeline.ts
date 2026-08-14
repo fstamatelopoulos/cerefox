@@ -158,35 +158,53 @@ export class IngestionPipeline {
     // ── (2) update-existing shortcut ────────────────────────────────────
     if (updateExisting) {
       let existingDoc = null;
+      let matchedBySourcePath = false;
       if (sourcePathOpt) {
         existingDoc = await this.db.findDocumentBySourcePath(sourcePathOpt);
+        matchedBySourcePath = existingDoc !== null;
       }
       if (!existingDoc) {
         existingDoc = await this.db.findDocumentByTitle(title);
       }
-      if (existingDoc?.deleted_at && lastWriteWins) {
-        // Filesystem-sync flows (ingest-dir --update-if-exists, guides
-        // ingest) pass last_write_wins and re-run forever: a hard error here
-        // would make every sync fail on this file until a human intervenes,
-        // and updating would resurrect what a human deliberately trashed.
-        // Skipping respects the deletion AND converges — the note says how
-        // to resume syncing this file.
-        const projIds = await this.db.getDocumentProjectIds(existingDoc.id);
-        return {
-          documentId: existingDoc.id,
-          title: existingDoc.title ?? title,
-          chunkCount: existingDoc.chunk_count ?? 0,
-          totalChars: existingDoc.total_chars ?? 0,
-          action: "skipped",
-          reindexed: false,
-          projectIds: projIds,
-          note:
-            `"${existingDoc.title}" is in the trash (soft-deleted ` +
-            `${existingDoc.deleted_at.slice(0, 10)}) — skipped, deletion respected. ` +
-            `To resume syncing this file, restore the document ` +
-            `(\`cerefox document restore ${existingDoc.id}\`) or purge it from the web UI Trash.`,
-          contentHash: existingDoc.content_hash ?? "",
-        };
+      if (existingDoc?.deleted_at) {
+        if (matchedBySourcePath && lastWriteWins) {
+          // Filesystem-sync flows (ingest-dir --update-if-exists, guides
+          // ingest) pass last_write_wins and re-run forever: a hard error
+          // here would make every sync fail on this file until a human
+          // intervenes, and updating would resurrect what a human
+          // deliberately trashed. Skipping respects the deletion AND
+          // converges. Gated on SOURCE-PATH identity: the path proves this
+          // is the same file whose document was trashed.
+          const projIds = await this.db.getDocumentProjectIds(existingDoc.id);
+          return {
+            documentId: existingDoc.id,
+            title: existingDoc.title ?? title,
+            chunkCount: existingDoc.chunk_count ?? 0,
+            totalChars: existingDoc.total_chars ?? 0,
+            action: "skipped",
+            reindexed: false,
+            projectIds: projIds,
+            note:
+              `"${existingDoc.title}" is in the trash (soft-deleted ` +
+              `${existingDoc.deleted_at.slice(0, 10)}) — skipped, deletion respected. ` +
+              `To resume syncing this file, restore the document ` +
+              `(\`cerefox document restore ${existingDoc.id}\`) or purge it from the web UI Trash.`,
+            contentHash: existingDoc.content_hash ?? "",
+          };
+        }
+        if (!matchedBySourcePath) {
+          // A TITLE-only match on a trashed document is weak identity: this
+          // may be a genuinely NEW file that happens to share a title with
+          // something in the trash, and skipping would silently drop its
+          // content (round-4 review). Fall through to CREATE — identical
+          // content gets the trash-aware hash-dedup message; different
+          // content becomes a new document, the trashed twin untouched.
+          existingDoc = null;
+        }
+        // else: source-path match without last_write_wins — a deliberate
+        // one-shot update of a trashed file's document. Fall through to
+        // updateDocument, whose "soft-deleted; restore first" error names
+        // the remedy.
       }
       if (existingDoc) {
         let fullSetResolved: string[] | null = null;

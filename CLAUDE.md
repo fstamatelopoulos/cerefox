@@ -43,7 +43,7 @@ cerefox/
 │   ├── db-client/                 # Supabase client, RPC wrapper, introspection helpers
 │   ├── db-status/                 # Schema-version-mismatch banner, status checks
 │   ├── embeddings/                # OpenAI + local ONNX (nomic) embedding helpers
-│   ├── mcp-tools/                 # 15 MCP tool handlers shared by remote + local
+│   ├── mcp-tools/                 # 15 core (+4 dormant relation) MCP tool handlers shared by remote + local
 │   └── cli-core/                  # CLI helpers (exit, output, argv, prompts)
 ├── packages/
 │   └── memory/                    # @cerefox/memory npm package — both bins (v0.5+)

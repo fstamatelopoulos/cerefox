@@ -92,7 +92,13 @@ function mockClient(opts: { hash?: string; captured?: Captured; ingestError?: st
       if (name === "cerefox_log_usage") return { data: null, error: null };
       return { data: null, error: null };
     },
-    from: () => ({ select: () => ({ data: null, error: null }) }),
+    // readDocument's trashed-doc pre-check chains
+    // .from().select().eq().maybeSingle(); a null row means "not trashed".
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: () => ({ data: null, error: null }) }),
+      }),
+    }),
   } as unknown as MCPSupabaseClient;
 }
 
@@ -463,8 +469,9 @@ describe("link integrity mapping (#214)", () => {
       expect(err).toBeInstanceOf(Error);
       expect((err as Error).message).toContain(BOGUS_LINK_ID);
       expect((err as Error).message).toContain("mangled");
-      // Distinguishes introduced-by-this-edit from already-carried dead links.
-      expect((err as Error).message).toContain("did NOT touch");
+      // Specific diagnosis: only ids INTRODUCED by this write reject (the
+      // RPC tolerates dead links the document already carried).
+      expect((err as Error).message).toContain("introduces");
     } finally {
       restoreFetch();
     }
@@ -722,7 +729,11 @@ describe("shrink reporting counts code points, not UTF-16 units (review bug_009)
         }
         return { data: [], error: null };
       },
-      from: () => ({ select: () => ({ data: null, error: null }) }),
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: () => ({ data: null, error: null }) }),
+        }),
+      }),
     } as unknown as MCPSupabaseClient;
   }
 

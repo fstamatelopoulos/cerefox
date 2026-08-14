@@ -303,9 +303,11 @@ If you're building tooling that uses the CLI (Path C) or any MCP/Edge Function p
 - **Surface the soft-delete to the user.** When your agent decides to delete something,
   tell the user explicitly: "I soft-deleted X (recoverable from the Cerefox trash in
   the web UI)." This gives them the visibility to review and either restore or commit.
-- **Do not attempt to purge or restore from agent code.** There is intentionally no
-  programmatic path. If your workflow needs purge / restore, that workflow needs human
-  intervention — the design is correct, not incomplete.
+- **Do not attempt to purge from agent code.** There is intentionally no programmatic
+  path to permanent deletion — if your workflow needs purge, that workflow needs human
+  intervention. Restore, by contrast, is freely available since v1.7.0
+  (`cerefox_restore_document` over MCP, `cerefox document restore` on the CLI), audited
+  like every other write.
 
 ### CLI delete-doc — interactive vs scripted
 

@@ -175,6 +175,28 @@ async function readDocument(
   supabase: MCPSupabaseClient,
   documentId: string,
 ): Promise<{ title: string; content: string; hash: string }> {
+  // Trashed check BEFORE anything else: a partial edit of a trashed document
+  // would otherwise pay for embeddings and then hit the RPC's CEREFOX_DELETED
+  // refusal as an unshaped error, on every retry (round-4 review). ADVISORY
+  // only — the RPC guard is authoritative — so a client without the .from()
+  // surface (test doubles) skips it rather than failing.
+  try {
+    const { data: lifecycle } = await supabase
+      .from("cerefox_documents")
+      .select("deleted_at")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (lifecycle?.deleted_at) {
+      throw new McpInvalidParams(
+        `Document ${documentId} is soft-deleted (in the trash). A trashed document ` +
+          `cannot be edited — restore it first with cerefox_restore_document, then retry.`,
+      );
+    }
+  } catch (e) {
+    if (e instanceof McpInvalidParams) throw e;
+    // fall through — the RPC's CEREFOX_DELETED guard still refuses the write
+  }
+
   const { data, error } = await supabase.rpc("cerefox_get_document", {
     p_document_id: documentId,
     p_version_id: null,
@@ -318,13 +340,21 @@ async function applyAndWrite(
       );
     }
     if (message.includes("CEREFOX_UNRESOLVED_LINKS")) {
+      // Only ids INTRODUCED by this write reject (the RPC tolerates dead
+      // links the document already carried), so the diagnosis is specific.
       const ids = message.match(/do not exist: ([^.]+)\./)?.[1] ?? "(unparsed)";
       throw new Error(
-        `Edit rejected — the resulting content links document id(s) that do not exist: ${ids}. ` +
-          `If your edit introduced these links, the UUIDs are almost certainly mangled — ` +
-          `re-read the source and correct them (or backtick deliberate examples). If the ` +
-          `dead link is in a section you did NOT touch, this document already carried it ` +
-          `(its target may have been purged): fix or remove that link in the same call.`,
+        `Edit rejected — this edit introduces link(s) to document id(s) that do not ` +
+          `exist: ${ids}. The UUIDs are almost certainly mangled — re-read the source ` +
+          `you copied each link from, correct the id(s), and retry. Do not retry ` +
+          `unchanged. Deliberate examples belong in code formatting (backticks).`,
+      );
+    }
+    if (message.includes("CEREFOX_DELETED")) {
+      // Race backstop: the doc was trashed between our read and the write.
+      throw new Error(
+        `Document ${documentId} was soft-deleted while this edit was in flight. ` +
+          `Restore it first with cerefox_restore_document, then retry.`,
       );
     }
     if (isMissingFunctionError(message, "cerefox_ingest_document")) {

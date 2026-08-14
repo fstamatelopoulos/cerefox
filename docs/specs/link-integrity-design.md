@@ -27,13 +27,17 @@ atomically with the write it guards.
 1. **Scope: the `](uuid)` markdown-link form only.** Those links are always
    meant to resolve — that is why agents use them. `[[wikilinks]]` remain
    unvalidated: they are the sanctioned dangling/"file it later" form.
-2. **Markdown-native escaping — no API flag.** Fenced code blocks
-   (``` ``` ```) and inline code spans (`` ` ``) are stripped before
-   scanning. A literal example of link syntax outside code would render as a
-   real link anyway, so examples belong in code formatting — which is both
-   correct markdown authoring and the escape mechanism. The originally
-   considered `skip_link_validation` parameter is deliberately absent: flags
-   weaken guards, and there is no legitimate case left for one.
+2. **Markdown-native escaping — no API flag.** Fenced code blocks and
+   inline code spans are stripped before scanning. A literal example of
+   link syntax outside code would render as a real link anyway, so examples
+   belong in code formatting — which is both correct markdown authoring and
+   the escape mechanism. The originally considered `skip_link_validation`
+   parameter is deliberately absent: flags weaken guards, and there is no
+   legitimate case left for one. Fence pairing is **line-anchored**
+   (markdown semantics: only a line-starting ` ``` ` opens or closes a
+   block), so a stray backtick run mid-prose cannot mis-pair fences and
+   un-escape a later real code block; an unterminated fence strips to
+   end-of-content, which under-validates but never false-rejects.
 3. **Resolution**: all distinct candidate ids resolve in one
    `WHERE id = ANY(...)` primary-key lookup. A **trashed** document counts as
    resolving — the check asks "does this id denote a document," not "is it
@@ -48,12 +52,15 @@ atomically with the write it guards.
 
 ## Consequences accepted deliberately
 
-- **Editing a document that already contains a dead link fails until the
-  link is fixed.** Partial edits resend full content, so a link whose target
-  was purged after linking surfaces on the *next* edit of the linking
-  document — "silent dead link" becomes "flagged on next edit." The remedy
-  is always cheap: correct the id, remove the link, or backtick it as an
-  example.
+- **On updates, only newly-introduced links are validated.** A dead link
+  the document already carries (target purged after linking) does not block
+  an unrelated edit: partial edits resend full content and sync flows
+  re-send files verbatim from disk, so whole-document validation on update
+  would make such a document permanently unwritable through every automated
+  path (round-4 review). Creates validate everything; legacy dead links are
+  phase 2's job. The implementation is a substring check of each
+  unresolvable id against the document's current chunk content — an id
+  present in the old content is "already carried," not introduced.
 - **No forward references by UUID — by construction, not by rule.** A UUID
   exists only after its document does, so an author cannot legitimately link
   a not-yet-created document by id. (`[[wikilinks]]` cover that need.)

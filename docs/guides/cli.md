@@ -524,7 +524,7 @@ cerefox audit list --json --limit 1000 | jq 'select(.author_type == "agent")'
 
 ### `cerefox document delete`
 
-**Purpose**: **soft-delete** a document — moves it to trash, recoverable. The CLI cannot permanently delete or restore; see [Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the rationale.
+**Purpose**: **soft-delete** a document — moves it to trash, recoverable with `cerefox document restore`. The CLI cannot permanently purge; see [Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the rationale.
 
 **Synopsis**: `cerefox document delete [OPTIONS] DOCUMENT_ID`
 
@@ -533,7 +533,7 @@ cerefox audit list --json --limit 1000 | jq 'select(.author_type == "agent")'
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--yes` | flag | off | Skip confirmation prompt. Required for non-interactive use (agents, scripts). |
-| `--reason <text>` | str | _none_ | Optional reason recorded on the delete audit entry. |
+| `--reason <text>` | str | _none_ | Optional reason recorded on the delete audit entry (v1.7.0; needs schema 0.12.0). |
 | `--author <name>` (`-a`) | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Identity recorded in the audit log. |
 | `--author-type <type>` | `user`\|`agent` | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type, recorded in the audit log. |
 
@@ -785,6 +785,9 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
 | `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
 | `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --requestor <name>` |
+| `cerefox_set_document_metadata(document_id, metadata, replace, author)` | `cerefox document set-metadata <id> --set key=value` (also `--remove key`, `--json '<json>'`, `--replace`) |
+| `cerefox_delete_document(document_id, expected_content_hash, reason, author, requestor)` | `cerefox document delete <id> --reason <text> --author <a> --author-type <t> --yes` (confirms interactively instead of requiring the hash) |
+| `cerefox_restore_document(document_id, reason, author, requestor)` | `cerefox document restore <id> --reason <text> --author <a> --author-type <t>` |
 
 ## CLI ↔ MCP parity matrix
 

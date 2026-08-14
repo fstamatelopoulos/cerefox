@@ -348,7 +348,10 @@ plain text snapshots for recovery purposes only.
 
 - A write whose content contains a `[Text](uuid)` link to a document id that
   does not exist MUST be rejected, listing every unresolvable id, under a
-  deterministic (non-retryable) error. Trashed targets resolve.
+  deterministic (non-retryable) error. Trashed targets resolve. On updates,
+  only newly-introduced unresolvable ids reject — a dead link the document
+  already carried must not make it unwritable (legacy dead links belong to
+  the phase-2 sweep).
 - Content inside fenced code blocks or inline code spans MUST NOT be
   validated (examples), and `[[wikilinks]]` MUST NOT be validated (the
   sanctioned dangling/forward-reference form).

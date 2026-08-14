@@ -164,6 +164,10 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
           title: result.title,
           skipped,
           updated: result.reindexed,
+          // The WHY on a skip (e.g. "identical content is in the TRASH —
+          // restore it"). The paste branch always forwarded it; dropping it
+          // here left file re-uploads with a bare unexplained "skipped".
+          ...(result.note ? { note: result.note } : {}),
         },
         200,
       );

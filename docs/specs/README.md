@@ -17,10 +17,18 @@ Current contents:
 - `ui-redesign-spa-python-api.md` — the Iteration 14 web-app SPA refactor design
   (shipped). Superseded in one respect: the API backend it targeted is now Hono
   on Bun/Node, not the FastAPI named in the doc.
-- `partial-document-edits-design.md` - **DRAFT, not implemented** (2026-08-08):
-  let agents send only what changed (`append`, later `replace_section`) instead of
-  resending a whole document to edit part of it. Open for feedback from real agent
-  sessions before the semantics are fixed. Tracked in #186.
+- `partial-document-edits-design.md` — early draft (2026-08-08) of what became
+  the iteration-34 partial-edit tools; **shipped in v1.3.0** (#186), with the
+  executed semantics in `partial-edits-technical-design.md`.
+- `partial-edits-technical-design.md` — Iteration 34 technical design of record
+  for `cerefox_insert` / `cerefox_edit` (shipped v1.3.0).
+- `search-recall-refinement-design.md` — search recall / OR-fallback
+  confidence-bar design (shipped; see `min_term_coverage`).
+- `security-audit-1.0.md` — the v1.0 security audit record (Iteration 28B).
+- `link-integrity-design.md` — v1.7.0 (#214): write-time referential integrity
+  for `[Text](uuid)` document links (mangled-UUID protection), markdown-native
+  escaping via code formatting, update-tolerance for pre-existing dead links.
+  Phase-2 dead-link sweep tracked on #214.
 - `concurrency-control-design.md` — Iteration 32 design: optimistic concurrency on
   content updates (`expected_content_hash` / `last_write_wins`). Shipped in v0.11.0.
 - `chunk-reconstruction-design.md` — Iteration 28D design (2026-07-09): fix the
