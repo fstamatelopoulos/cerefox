@@ -56,7 +56,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - **`cerefox document dead-links` refuses to report a clean sweep it never
   ran**: against a pre-0.12.2 server it says "run `cerefox server deploy`"
   instead of printing a false all-clear.
-
 - **Orphaned 1-arg overloads of `cerefox_purge_document` / `cerefox_restore_document`
   dropped** (schema 0.12.0 → 0.12.1, migration 0025). `CREATE OR REPLACE`
   never removed the pre-author-era signatures when the functions grew, so
@@ -68,7 +67,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   purge cascade orphans (document_id nulled), which the id-based cleanup
   missed.
 
-Open roadmap.
+### Docs
+
+- **New guide: [`docs/guides/linking.md`](docs/guides/linking.md)** — the
+  consolidated linking story: link forms, why LLMs corrupt long ids when a
+  document carries many (token-by-token regeneration, zero redundancy,
+  compounding), the write-time guard, update semantics, escaping, and the
+  dead-link sweep.
 
 ---
 
