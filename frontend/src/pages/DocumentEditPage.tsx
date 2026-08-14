@@ -20,6 +20,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { editDocument, fetchDocument } from "../api/documents";
 import { MarkdownViewer } from "../components/MarkdownViewer";
+import { invalidateDocumentViews } from "../lib/invalidate";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import { showSuccess, showError, showV07DeferredToast } from "../utils/notifications";
 
@@ -80,8 +81,7 @@ export function DocumentEditPage() {
     },
     onSuccess: (result) => {
       if (result.success) {
-        queryClient.invalidateQueries({ queryKey: ["document", id] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        invalidateDocumentViews(queryClient, id);
         showSuccess("Document saved", result.reindexed ? "Content re-indexed" : "Metadata updated");
         navigate(`/document/${id}`);
       } else if (result.error) {

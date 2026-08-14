@@ -204,6 +204,17 @@ export function extractConflictHashes(message: string): { expected: string; curr
  *  PostgREST or during a deploy's DROP/CREATE window). Five call sites
  *  (delete/restore MCP handlers, delete/restore CLI verbs, partial edits)
  *  each carried a hand-rolled subset of these predicates before this helper. */
+/** Is this RPC error the delete/restore RPCs' "Document % not found"?
+ *
+ *  Anchored on the SQLSTATE (22023, invalid_parameter_value — PostgREST
+ *  passes it through as `error.code`) AND the prose, because 22023 alone is
+ *  shared with other validation raises (zero chunks, token required) and the
+ *  prose alone would match any gateway error containing "not found". One
+ *  site instead of four hand-rolled substring checks. */
+export function isDocumentNotFoundError(error: { code?: string; message?: string }): boolean {
+  return error.code === "22023" && /not found/i.test(error.message ?? "");
+}
+
 export function isMissingFunctionError(message: string, fnName: string): boolean {
   return (
     (message.includes("Could not find the function") && message.includes(fnName)) ||

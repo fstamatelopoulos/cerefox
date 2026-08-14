@@ -593,20 +593,44 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     );
   });
 
-  // ── /dashboard ─────────────────────────────────────────────────────────────
-  app.get("/api/v1/dashboard", async (c) => {
-    // Optional project scope for recent_docs ONLY (the recently-changed tile's
-    // selector). The corpus totals and project list stay global regardless —
-    // the selector narrows one tile, not the page.
-    const recentProjectId = c.req.query("project_id") || null;
-    // Validated here because it feeds a uuid-typed PostgREST filter inside a
-    // Promise.all: a malformed value would 22P02 and take the WHOLE dashboard
-    // down as a 500. A bad bookmark deserves a 400 naming the parameter.
-    if (recentProjectId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recentProjectId)) {
+  // ── /dashboard/recent-docs ─────────────────────────────────────────────────
+  // The recently-changed tile's data, standalone: scoping the tile to a
+  // project must not re-run the aggregate /dashboard queries (corpus totals,
+  // per-project counts — several full-table walks) just to change 10 rows.
+  app.get("/api/v1/dashboard/recent-docs", async (c) => {
+    const projectId = c.req.query("project_id") || null;
+    // Validated: it feeds a uuid-typed PostgREST filter, and a malformed
+    // value would 22P02 into a 500. A bad bookmark deserves a 400.
+    if (projectId && !UUID_RE.test(projectId)) {
       return c.json({ detail: "project_id must be a UUID" }, 400);
     }
+    const [recentDocs, projects] = await Promise.all([
+      listDocuments(ctx, { projectId, limit: 10 }),
+      listAllProjects(ctx),
+    ]);
+    const docIds = recentDocs.map((d) => String(d.id));
+    const [docProjectsMap, authors] = await Promise.all([
+      getProjectsForDocuments(ctx, docIds, projects),
+      getRecentDocAuthors(ctx, docIds),
+    ]);
+    return c.json({
+      recent_docs: recentDocs.map((d) => {
+        const id = String(d.id);
+        const pids = (docProjectsMap[id] ?? []).map((p) => String(p.id));
+        const a = authors[id];
+        return {
+          ...dashboardDocFromRow(d, pids),
+          author: a?.author ?? null,
+          author_type: a?.author_type ?? null,
+        };
+      }),
+    });
+  });
+
+  // ── /dashboard ─────────────────────────────────────────────────────────────
+  app.get("/api/v1/dashboard", async (c) => {
     const [recentDocs, projects, docCount, totals] = await Promise.all([
-      listDocuments(ctx, { projectId: recentProjectId, limit: 10 }),
+      listDocuments(ctx, { limit: 10 }),
       listAllProjects(ctx),
       countActiveDocuments(ctx),
       getCorpusTotals(ctx),

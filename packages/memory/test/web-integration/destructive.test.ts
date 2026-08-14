@@ -117,7 +117,8 @@ describe("destructive web endpoints (HTTP boundary)", () => {
       method: "DELETE",
     });
     expect(del.ok).toBe(true);
-    expect(await del.json()).toEqual({ success: true });
+    // 0.12.0: the route passes through the RPC's honesty signal.
+    expect(await del.json()).toEqual({ success: true, already_deleted: false });
 
     const trashed = (await (
       await fetch(`${server.base}/api/v1/documents/trash?limit=20`)
@@ -136,7 +137,8 @@ describe("destructive web endpoints (HTTP boundary)", () => {
       { method: "POST" },
     );
     expect(restore.ok).toBe(true);
-    expect(await restore.json()).toEqual({ success: true });
+    // 0.12.0: the route passes through the RPC's honesty signal.
+    expect(await restore.json()).toEqual({ success: true, restored: true });
 
     const trashedAfter = (await (
       await fetch(`${server.base}/api/v1/documents/trash?limit=20`)

@@ -1529,8 +1529,10 @@ BEGIN
         -- broke the restore contract: restore takes no freshness token on the
         -- premise that what was reviewed in the trash is what comes back.
         IF v_doc_deleted IS NOT NULL THEN
+            -- CEREFOX_ prefix per the convention below: transport handlers
+            -- detect it and rephrase for their caller.
             RAISE EXCEPTION
-                'cerefox_ingest_document: document % is soft-deleted; restore it first (cerefox_restore_document / cerefox document restore) or create a new document.',
+                'CEREFOX_DELETED: document % is soft-deleted; restore it first (cerefox_restore_document / cerefox document restore) or create a new document.',
                 v_doc_id
                 USING ERRCODE = '22023';  -- invalid_parameter_value
         END IF;

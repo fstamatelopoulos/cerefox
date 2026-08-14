@@ -20,13 +20,20 @@ interface Captured {
 }
 
 function mockClient(
-  opts: { captured?: Captured; rpcError?: string; row?: Record<string, unknown> } = {},
+  opts: {
+    captured?: Captured;
+    rpcError?: string;
+    rpcErrorCode?: string;
+    row?: Record<string, unknown>;
+  } = {},
 ) {
   return {
     rpc: (name: string, args: Record<string, unknown>) => {
       if (name === "cerefox_restore_document") {
         if (opts.captured) opts.captured.restoreArgs = args;
-        if (opts.rpcError) return { data: null, error: { message: opts.rpcError } };
+        if (opts.rpcError) {
+          return { data: null, error: { message: opts.rpcError, code: opts.rpcErrorCode } };
+        }
         return {
           data: opts.row ?? {
             document_id: DOC_ID,
@@ -104,7 +111,7 @@ describe("cerefox_restore_document — error mapping and responses", () => {
   test("not-found maps to invalid params", async () => {
     await expect(
       restore.handler(
-        mockClient({ rpcError: `Document ${DOC_ID} not found` }),
+        mockClient({ rpcError: `Document ${DOC_ID} not found`, rpcErrorCode: "22023" }),
         { document_id: DOC_ID },
         ctx,
       ),

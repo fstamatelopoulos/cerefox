@@ -110,7 +110,7 @@ frontend built (`cd frontend && bun run build`). Tests target the React SPA at
 | `TestProjects` | `test_project_crud` | Create project via UI form, verify it appears, cleanup | Done |
 | `TestDocumentView` | `test_document_page_loads` | Navigate from dashboard to document detail, verify Edit/Download buttons | Done |
 | `TestDocumentView` | `test_review_status_toggle_visible` | Document detail shows review status (Approved badge) | Done |
-| `Dashboard recent docs` | `project selector scopes the tile and refetches` | Recent-docs tile scoped by project via server refetch (`/dashboard?project_id=`), "All projects" default | Added (unrun — staging down; runs with the next e2e pass) |
+| `Dashboard recent docs` | `project selector scopes the tile and refetches` | Recent-docs tile scoped by project via server refetch (`/dashboard/recent-docs?project_id=`), "All projects" default | Added (unrun — staging down; runs with the next e2e pass) |
 | `Dashboard recent docs` | `the misleading View all link is gone` | "View all" (which just opened search) removed from the recent-docs tile | Added (unrun — staging down; runs with the next e2e pass) |
 | `TestAuditLog` | `test_audit_log_page_loads` | Audit log page renders with heading | Done |
 
@@ -187,8 +187,8 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 | 8.4 | MCP `cerefox_get_document` tool -- end-to-end via stdio transport | TODO |
 | 8.5 | MCP `cerefox_list_versions` tool -- end-to-end via stdio transport | TODO |
 | 8.6 | MCP `cerefox_get_audit_log` tool -- end-to-end via stdio transport | TODO |
-| 8.7 | MCP `cerefox_delete_document` tool -- read-hash guard, stale-hash conflict deletes nothing, reason in audit, idempotent re-delete | DONE -- `release-acceptance.test.ts` (live, staging-gated) |
-| 8.8 | MCP `cerefox_restore_document` tool -- delete/restore roundtrip, not-deleted no-op, CLI restore parity | DONE -- `release-acceptance.test.ts` (live, staging-gated) |
+| 8.7 | MCP `cerefox_delete_document` tool -- read-hash guard, stale-hash conflict deletes nothing, reason in audit, idempotent re-delete | Added -- `release-acceptance.test.ts` (live, staging-gated; not yet run — staging down) |
+| 8.8 | MCP `cerefox_restore_document` tool -- delete/restore roundtrip, not-deleted no-op, CLI restore parity | Added -- `release-acceptance.test.ts` (live, staging-gated; not yet run — staging down) |
 
 ---
 

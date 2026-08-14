@@ -51,6 +51,14 @@ function mapIngestRpcError(message: string, documentId: string): Error {
     const { expected, current } = extractConflictHashes(message);
     return conflictError(documentId, expected, current);
   }
+  if (message.includes("CEREFOX_DELETED")) {
+    const id = message.match(/document ([0-9a-f-]{36})/)?.[1] ?? documentId;
+    return new Error(
+      `Document ${id} is soft-deleted (in the trash). A trashed document cannot be ` +
+        `updated — restore it first with cerefox_restore_document, then retry, or ` +
+        `create a new document instead.`,
+    );
+  }
   if (message.includes("CEREFOX_TOKEN_REQUIRED")) {
     const current = message.match(/Current hash: ([0-9a-f]{64})/)?.[1];
     return new Error(
@@ -217,12 +225,24 @@ async function handler(
 
   // ── Update-existing path ─────────────────────────────────────────────────
   if (update_if_exists) {
-    const { data: existing } = await supabase
+    // Prefer-live: a live title match always wins over a trashed twin.
+    // Recency alone would pick a freshly-trashed doc (soft delete bumps
+    // updated_at) and make the live document unreachable via update_if_exists.
+    let { data: existing } = await supabase
       .from("cerefox_documents")
       .select("id, title, content_hash, deleted_at")
       .eq("title", title)
+      .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(1);
+    if (!existing?.length) {
+      ({ data: existing } = await supabase
+        .from("cerefox_documents")
+        .select("id, title, content_hash, deleted_at")
+        .eq("title", title)
+        .order("updated_at", { ascending: false })
+        .limit(1));
+    }
 
     if (existing?.length) {
       const existingDoc = existing[0];

@@ -171,7 +171,7 @@ test.describe("Dashboard recent docs", () => {
     // Selecting a project must hit the server with the scope, not filter
     // client-side: the tile's rows are a fresh top-10 within the project.
     await Promise.all([
-      page.waitForResponse((r) => r.url().includes("/dashboard?project_id=")),
+      page.waitForResponse((r) => r.url().includes("/dashboard/recent-docs?project_id=")),
       select.selectOption(value!),
     ]);
     await expect(select).toHaveValue(value!);

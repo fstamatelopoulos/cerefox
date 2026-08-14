@@ -20,7 +20,12 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { extractConflictHashes, isMissingFunctionError, logUsage } from "./_utils.ts";
+import {
+  extractConflictHashes,
+  isDocumentNotFoundError,
+  isMissingFunctionError,
+  logUsage,
+} from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 /** Agent-first instructions for a stale-hash conflict on delete. */
@@ -85,7 +90,7 @@ async function handler(
           `Run \`cerefox server deploy\`, then retry. (${message})`,
       );
     }
-    if (message.includes("not found")) {
+    if (isDocumentNotFoundError(error)) {
       throw new McpInvalidParams(`Document ${document_id} not found.`);
     }
     throw new Error(`RPC error: ${message}`);

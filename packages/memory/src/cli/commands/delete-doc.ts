@@ -103,11 +103,20 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
     // exist") to a null return — and a pre-0.12.0 server's VOID delete ALSO
     // comes back null, so success and swallowed-failure are indistinguishable
     // here. One cheap read settles which one happened before claiming either.
-    const { data: check } = await client.raw
+    // If the verify read itself fails, say we DON'T KNOW — a transient read
+    // error must not turn a delete that worked into a reported failure.
+    const { data: check, error: checkError } = await client.raw
       .from("cerefox_documents")
       .select("deleted_at")
       .eq("id", documentId)
       .maybeSingle();
+    if (checkError) {
+      warn(
+        `Delete submitted, but the follow-up verification read failed (${checkError.message}). ` +
+          `Confirm with: cerefox document get ${documentId}`,
+      );
+      return;
+    }
     if (!check?.deleted_at) {
       throw systemError(
         `The delete did not take effect — the server has no matching ` +

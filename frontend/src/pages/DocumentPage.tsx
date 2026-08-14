@@ -35,6 +35,7 @@ import { DiffViewer } from "../components/DiffViewer";
 import { MarkdownLink } from "../components/MarkdownLink";
 import { useProjects } from "../hooks/useProjects";
 import { formatDateTime } from "../utils/dates";
+import { invalidateDocumentViews } from "../lib/invalidate";
 import { showError, showSuccess } from "../utils/notifications";
 import md from "../components/MarkdownViewer.module.css";
 import ui from "../styles/redesign.module.css";
@@ -135,16 +136,7 @@ export function DocumentPage() {
   const { data: projects } = useProjects();
   const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
 
-  const invalidateDoc = () => {
-    queryClient.invalidateQueries({ queryKey: ["document", id] });
-    // The audit-trail card on THIS page: every mutation routed through here
-    // just wrote an entry it should show without a manual reload.
-    queryClient.invalidateQueries({ queryKey: ["document-audit", id] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    queryClient.invalidateQueries({ queryKey: ["search"] });
-    queryClient.invalidateQueries({ queryKey: ["trash"] });
-    queryClient.invalidateQueries({ queryKey: ["project-documents"] });
-  };
+  const invalidateDoc = () => invalidateDocumentViews(queryClient, id);
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteDocument(id!),

@@ -164,6 +164,30 @@ export class IngestionPipeline {
       if (!existingDoc) {
         existingDoc = await this.db.findDocumentByTitle(title);
       }
+      if (existingDoc?.deleted_at && lastWriteWins) {
+        // Filesystem-sync flows (ingest-dir --update-if-exists, guides
+        // ingest) pass last_write_wins and re-run forever: a hard error here
+        // would make every sync fail on this file until a human intervenes,
+        // and updating would resurrect what a human deliberately trashed.
+        // Skipping respects the deletion AND converges — the note says how
+        // to resume syncing this file.
+        const projIds = await this.db.getDocumentProjectIds(existingDoc.id);
+        return {
+          documentId: existingDoc.id,
+          title: existingDoc.title ?? title,
+          chunkCount: existingDoc.chunk_count ?? 0,
+          totalChars: existingDoc.total_chars ?? 0,
+          action: "skipped",
+          reindexed: false,
+          projectIds: projIds,
+          note:
+            `"${existingDoc.title}" is in the trash (soft-deleted ` +
+            `${existingDoc.deleted_at.slice(0, 10)}) — skipped, deletion respected. ` +
+            `To resume syncing this file, restore the document ` +
+            `(\`cerefox document restore ${existingDoc.id}\`) or purge it from the web UI Trash.`,
+          contentHash: existingDoc.content_hash ?? "",
+        };
+      }
       if (existingDoc) {
         let fullSetResolved: string[] | null = null;
         if (listFormProvided) {
@@ -369,6 +393,12 @@ export class IngestionPipeline {
     const newHash = contentHash(text);
     const contentUnchanged = newHash === existing.content_hash;
 
+    // Trimmed once here: this is the CLI/web entry point, and a token read
+    // from a file (`--expected-content-hash "$(cat hash.txt)"`) arrives with
+    // a trailing newline. The RPC compares trimmed (0.12.0); an untrimmed
+    // advisory check here would fake the exact conflict the RPC fix removed.
+    const expectedHashTrimmed = expectedContentHash?.trim() || null;
+
     if (!contentUnchanged) {
       // Optimistic-concurrency fast-fail (iter-32): a stale token fails here,
       // BEFORE the embedding spend. Advisory only — the authoritative,
@@ -377,14 +407,14 @@ export class IngestionPipeline {
       // content cannot lose data.
       if (
         !lastWriteWins &&
-        expectedContentHash &&
-        expectedContentHash !== existing.content_hash
+        expectedHashTrimmed &&
+        expectedHashTrimmed !== existing.content_hash
       ) {
         throw new ConcurrencyConflictError(
           documentId,
           existing.content_hash,
           `CEREFOX_CONFLICT: document ${documentId} changed since it was read ` +
-            `(expected hash ${expectedContentHash}, current hash ${existing.content_hash}). ` +
+            `(expected hash ${expectedHashTrimmed}, current hash ${existing.content_hash}). ` +
             `Re-read the document, merge your changes, and retry with the new hash.`,
         );
       }
@@ -559,7 +589,7 @@ export class IngestionPipeline {
       // against, so `forceRechunk` works standalone instead of forcing every
       // caller to thread a token through for a no-op-equivalent write.
       expectedContentHash:
-        expectedContentHash ??
+        expectedHashTrimmed ??
         (forceRechunk && contentUnchanged ? existing.content_hash : null),
       lastWriteWins,
     });

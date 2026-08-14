@@ -68,7 +68,13 @@ MCP tool was simply never built.
 - [x] Review-status pill staleness: `reviewMutation` now uses the shared
       invalidation set; `project-documents` added to that set for all
       lifecycle mutations.
-- [ ] Review round 2 (after this scope), then maintainer merge + cut.
+- [x] Review round 2 (10 findings, all addressed) and round 3 on the final
+      state (10 more: pipeline-side trim gap, CLI verify error-handling,
+      web honesty defaults, trashed-doc guards on the metadata/review paths,
+      sync-flow convergence via skip-with-note, prefer-live title resolution,
+      stale web-integration assertions, shared invalidation helper, precise
+      not-found classification, dashboard split onto a light endpoint).
+- [ ] Maintainer merge + cut.
 - [ ] Live verification — **retargeted to production** (2026-08-13): staging got
       stuck in Supabase "Restoration in progress" for over an hour after
       unpause (dashboard: "taking longer than usual, contact support"), and the

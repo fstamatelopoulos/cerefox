@@ -77,13 +77,28 @@ async function action(documentId: string, options: RestoreOptions): Promise<void
 
   if (result === null) {
     // Same ambiguity as delete: the rpc() wrapper maps 42883 to null, and a
-    // pre-0.12.0 VOID restore also returns null. Verify before claiming.
-    const { data: check } = await client.raw
+    // pre-0.12.0 VOID restore also returns null. Verify before claiming —
+    // and only claim success on POSITIVE evidence (a row with deleted_at
+    // cleared). Failing open here printed "✓ Restored" for a restore that
+    // never ran whenever the verify read errored or the doc was purged.
+    const { data: check, error: checkError } = await client.raw
       .from("cerefox_documents")
       .select("deleted_at")
       .eq("id", documentId)
       .maybeSingle();
-    if (check?.deleted_at) {
+    if (checkError) {
+      warn(
+        `Restore submitted, but the follow-up verification read failed (${checkError.message}). ` +
+          `Confirm with: cerefox document get ${documentId}`,
+      );
+      return;
+    }
+    if (!check) {
+      throw systemError(
+        `Document ${documentId} no longer exists — it may have been purged concurrently. Nothing was restored.`,
+      );
+    }
+    if (check.deleted_at) {
       throw systemError(
         `The restore did not take effect — the server has no matching ` +
           `cerefox_restore_document (mid-deploy window, or an old schema). ` +

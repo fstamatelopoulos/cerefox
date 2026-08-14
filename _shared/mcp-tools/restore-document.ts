@@ -19,7 +19,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { isMissingFunctionError, logUsage } from "./_utils.ts";
+import { isDocumentNotFoundError, isMissingFunctionError, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
@@ -52,7 +52,7 @@ async function handler(
           `Run \`cerefox server deploy\`, then retry. (${message})`,
       );
     }
-    if (message.includes("not found")) {
+    if (isDocumentNotFoundError(error)) {
       throw new McpInvalidParams(`Document ${document_id} not found.`);
     }
     throw new Error(`RPC error: ${message}`);

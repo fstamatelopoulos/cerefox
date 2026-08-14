@@ -23,7 +23,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { fetchUsageSummary } from "../api/analytics";
 import { deriveAccessPathStats } from "../lib/access-path-stats";
 import { CliCard } from "../components/CliCard";
-import { fetchDashboard } from "../api/dashboard";
+import { fetchDashboard, fetchDashboardRecent } from "../api/dashboard";
 import type { DashboardDoc } from "../api/types";
 import ui from "../styles/redesign.module.css";
 import { formatDateTime } from "../utils/dates";
@@ -69,14 +69,16 @@ const SINCE_30D = new Date(Date.now() - 30 * 864e5).toISOString();
 export function DashboardPage() {
   const navigate = useNavigate();
   const [quick, setQuick] = useState("");
-  // Scopes the recently-changed tile only; "" = all projects. The corpus
-  // tiles and project list in the response are global either way, so one
-  // query serves the whole page. keepPreviousData stops the tiles flashing
-  // empty while a newly selected project's rows load.
+  // The aggregate dashboard keeps its plain (shared) cache key — SearchPage
+  // and ProjectsPage read the same entry. The recently-changed tile has its
+  // own scoped query against the light /dashboard/recent-docs route, so
+  // flipping the selector refetches 10 rows, not seven aggregate query
+  // groups. keepPreviousData stops the tile flashing during the swap.
   const [recentProject, setRecentProject] = useState("");
-  const { data } = useQuery({
-    queryKey: ["dashboard", recentProject],
-    queryFn: () => fetchDashboard(recentProject || undefined),
+  const { data } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
+  const { data: recent } = useQuery({
+    queryKey: ["dashboard-recent", recentProject],
+    queryFn: () => fetchDashboardRecent(recentProject || undefined),
     placeholderData: keepPreviousData,
   });
 
@@ -286,7 +288,7 @@ export function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {(data?.recent_docs ?? []).map((doc) => {
+                {(recent?.recent_docs ?? data?.recent_docs ?? []).map((doc) => {
                   const chip = doc.author
                     ? {
                         icon: doc.author_type === "agent" ? IconSparkles : IconMapPin,

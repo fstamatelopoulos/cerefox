@@ -27,6 +27,7 @@ function mockClient(
   opts: {
     captured?: Captured;
     rpcError?: string;
+    rpcErrorCode?: string;
     row?: Record<string, unknown>;
   } = {},
 ) {
@@ -34,7 +35,9 @@ function mockClient(
     rpc: (name: string, args: Record<string, unknown>) => {
       if (name === "cerefox_delete_document") {
         if (opts.captured) opts.captured.deleteArgs = args;
-        if (opts.rpcError) return { data: null, error: { message: opts.rpcError } };
+        if (opts.rpcError) {
+          return { data: null, error: { message: opts.rpcError, code: opts.rpcErrorCode } };
+        }
         return {
           data: opts.row ?? {
             document_id: DOC_ID,
@@ -175,13 +178,28 @@ describe("cerefox_delete_document — RPC error mapping", () => {
   });
 
   test("not-found maps to invalid params", async () => {
+    // code + prose together: classification is anchored on SQLSTATE 22023,
+    // not on prose alone (a gateway error containing "not found" must NOT
+    // be misreported as a missing document).
     await expect(
       del.handler(
-        mockClient({ rpcError: `Document ${DOC_ID} not found` }),
+        mockClient({ rpcError: `Document ${DOC_ID} not found`, rpcErrorCode: "22023" }),
         { document_id: DOC_ID, expected_content_hash: HASH },
         ctx,
       ),
     ).rejects.toThrow(McpInvalidParams);
+  });
+
+  test("a gateway 'not found' without the SQLSTATE stays a generic error", async () => {
+    const err = await del
+      .handler(
+        mockClient({ rpcError: "upstream host not found" }),
+        { document_id: DOC_ID, expected_content_hash: HASH },
+        ctx,
+      )
+      .catch((e: Error) => e);
+    expect(err).not.toBeInstanceOf(McpInvalidParams);
+    expect((err as Error).message).toContain("RPC error");
   });
 });
 

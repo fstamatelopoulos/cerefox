@@ -129,34 +129,42 @@ export class IngestionDbBridge {
     return rows.length > 0 ? rows[0] : null;
   }
 
-  async findDocumentByTitle(title: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter, deliberately — but NOT so updates can land on
-    // trashed docs (that was this comment's old "resurrect" claim, and it was
-    // never true: nothing cleared deleted_at, so the content just vanished
-    // into the trash). Trashed docs must be FINDABLE so the update path can
-    // refuse with "restore first" BEFORE the embedding spend, rather than
-    // silently creating a same-title twin or failing later on the hash
-    // constraint.
-    const { data } = await this.supabase
+  /** Prefer-live resolution: a LIVE match always wins over a trashed one.
+   *
+   *  Nothing enforces title uniqueness, and soft delete bumps updated_at, so
+   *  a recency-ordered lookup that sees the trash would resolve a
+   *  freshly-trashed twin over the live document — making the live one
+   *  unreachable via update-if-exists. Trashed docs are still returned when
+   *  they are the ONLY match, so the update path can refuse with "restore
+   *  first" BEFORE the embedding spend (the old comment here claimed the
+   *  no-filter lookup let updates "resurrect" trashed docs — never true;
+   *  nothing cleared deleted_at, content just vanished into the trash). */
+  private async findPreferLive(column: string, value: string): Promise<DocumentRow | null> {
+    const live = await this.supabase
       .from("cerefox_documents")
       .select("*")
-      .eq("title", title)
+      .eq(column, value)
+      .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(1);
-    const rows = (data ?? []) as DocumentRow[];
-    return rows.length > 0 ? rows[0] : null;
+    const liveRows = (live.data ?? []) as DocumentRow[];
+    if (liveRows.length > 0) return liveRows[0];
+    const any = await this.supabase
+      .from("cerefox_documents")
+      .select("*")
+      .eq(column, value)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    const anyRows = (any.data ?? []) as DocumentRow[];
+    return anyRows.length > 0 ? anyRows[0] : null;
+  }
+
+  async findDocumentByTitle(title: string): Promise<DocumentRow | null> {
+    return this.findPreferLive("title", title);
   }
 
   async findDocumentBySourcePath(sourcePath: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter — matches Python.
-    const { data } = await this.supabase
-      .from("cerefox_documents")
-      .select("*")
-      .eq("source_path", sourcePath)
-      .order("updated_at", { ascending: false })
-      .limit(1);
-    const rows = (data ?? []) as DocumentRow[];
-    return rows.length > 0 ? rows[0] : null;
+    return this.findPreferLive("source_path", sourcePath);
   }
 
   async listChunksForDocument(documentId: string): Promise<ChunkRowForUpdate[]> {

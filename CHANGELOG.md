@@ -34,8 +34,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - **Dashboard: the recently-changed tile can be scoped to a project.** A
   selector next to the tile (default "All projects", the previous behavior)
   refetches the top-10 recently changed documents within the chosen project —
-  the "what did agents change in X lately" view. The tile's "View all" link,
-  which just opened search and did not do what it promised, is removed.
+  the "what did agents change in X lately" view — via a dedicated light
+  endpoint (`/api/v1/dashboard/recent-docs`), so flipping projects moves 10
+  rows, not the whole dashboard aggregate. The tile's "View all" link, which
+  just opened search and did not do what it promised, is removed.
 
 ### Changed
 
@@ -43,7 +45,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   an update by `document_id` on a trashed document silently landed content in
   a document excluded from search — a write into a black hole — and it broke
   restore's contract that what was reviewed in the trash is what comes back.
-  The error says to restore first or create a new document.
+  The error says to restore first or create a new document. Three companions
+  make the whole re-ingest-after-delete story coherent: title/source-path
+  resolution **prefers a live match over a trashed twin** (recency alone
+  resolved a freshly-trashed doc and made the live one unreachable);
+  filesystem-sync flows (`ingest-dir`, `guides ingest`) **skip** trashed
+  matches with a note instead of erroring forever — the deletion is
+  respected and the sync converges; and an identical-content re-upload says
+  the content **is in the trash** instead of "already up-to-date" about a
+  document search cannot find. The web edit and review-status routes refuse
+  writes to trashed documents with a 409 (metadata-only saves previously
+  slipped through).
 - **A delete on an already-trashed document validates the read-hash first.**
   "A delete proves a read" now holds for trashed documents too: a stale or
   garbage hash is a conflict, not a reported no-op.
@@ -81,9 +93,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the delete CAS and the ingest CAS trimmed the hash for the presence check
   but compared it raw, so a correct hash with a stray trailing newline was
   reported as "changed since it was read" — with two hashes that look
-  identical and a re-read that can never fix it. Both now compare trimmed
-  (the MCP delete handler also trims before sending). Found by review on
-  #208; the ingest side had carried the flaw since iter-32.
+  identical and a re-read that can never fix it. All comparison sites now
+  trim: both RPCs, the MCP handlers, and the CLI/web pipeline's advisory
+  fast-fail (which otherwise faked the same conflict before the fixed RPC
+  was ever reached). Found by review on #208; the ingest side had carried
+  the flaw since iter-32.
 - **`cerefox document delete` reports what actually happened.** If another
   writer deleted the document while the confirmation prompt sat open, the CLI
   used to claim success (and a recorded reason) for a delete that was a no-op;

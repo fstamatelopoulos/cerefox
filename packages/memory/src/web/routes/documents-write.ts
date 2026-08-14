@@ -36,6 +36,7 @@ import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts"
 import { Hono } from "hono";
 
 import { contentHash } from "../../../../../_shared/ingest/index.ts";
+import { isDocumentNotFoundError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import {
   ConcurrencyConflictError,
   ConcurrencyTokenRequiredError,
@@ -128,6 +129,21 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     const doc = await getCurrentDoc(ctx, documentId);
     if (!doc) {
       return c.json({ success: false, error: "Document not found" }, 404);
+    }
+    if (doc.deleted_at) {
+      // Covers BOTH branches below (content-changed and metadata-only): the
+      // pipeline/RPC only guard the content path, and a metadata-only save
+      // from a stale tab was silently mutating a trashed document.
+      return c.json(
+        {
+          success: false,
+          error: "document is in the trash",
+          message:
+            "This document was moved to the trash while you were editing. " +
+            "Restore it from the Trash page first, then save again.",
+        },
+        409,
+      );
     }
 
     const currentHash = doc.content_hash as string | null;
@@ -268,13 +284,16 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     if (error) {
       // 0.12.0: a missing document RAISEs instead of silently no-opping. A
       // client-state race (deleted in another tab) is a 404, not a 500.
-      if (error.message?.includes("not found")) {
+      if (isDocumentNotFoundError(error)) {
         return c.json({ detail: `Document ${documentId} not found` }, 404);
       }
       return c.json({ detail: error.message }, 500);
     }
-    const row = (data ?? {}) as { already_deleted?: boolean };
-    return c.json({ success: true, already_deleted: row.already_deleted ?? false });
+    // A pre-0.12.0 VOID RPC returns null — its outcome is UNKNOWN, so no
+    // fabricated honesty field: only report already_deleted when the server
+    // actually said so.
+    const row = data as { already_deleted?: boolean } | null;
+    return c.json({ success: true, ...(row ? { already_deleted: row.already_deleted ?? false } : {}) });
   });
 
   // ── POST /documents/{id}/restore ───────────────────────────────────────────
@@ -288,13 +307,17 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     if (error) {
       // Two-tab race: A purges, B restores. 404 keeps the wrong-state class
       // out of the 5xx monitoring bucket and off the raw-RPC-text toast.
-      if (error.message?.includes("not found")) {
+      if (isDocumentNotFoundError(error)) {
         return c.json({ detail: `Document ${documentId} not found` }, 404);
       }
       return c.json({ detail: error.message }, 500);
     }
-    const row = (data ?? {}) as { restored?: boolean };
-    return c.json({ success: true, restored: row.restored ?? true });
+    // Never fabricate the honesty signal: a pre-0.12.0 VOID RPC (standard
+    // upgrade order runs the client update before `server deploy`) returns
+    // null and may have silently no-opped — claiming restored:true there
+    // reported success for a possibly-purged document.
+    const row = data as { restored?: boolean } | null;
+    return c.json({ success: true, ...(row ? { restored: row.restored ?? false } : {}) });
   });
 
   // ── DELETE /documents/{id}/purge ───────────────────────────────────────────
@@ -327,6 +350,15 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     }
 
     const old = await getCurrentDoc(ctx, documentId);
+    if (old?.deleted_at) {
+      // Same invariant as content updates: a trashed document is immutable
+      // until restored (0.12.0). A stale tab's toggle gets a 409, not a
+      // silent write into the trash.
+      return c.json(
+        { detail: "This document is in the trash — restore it before changing its review status." },
+        409,
+      );
+    }
     const oldStatus = (old?.review_status as string | undefined) ?? "unknown";
 
     const { error } = await ctx.supabase
