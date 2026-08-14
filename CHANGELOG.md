@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.7.0] -- 2026-08-14
+
 ### Added
 
 - **`cerefox_delete_document` MCP tool — agents can now soft-delete (#208).**
