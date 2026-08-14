@@ -9,6 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **`cerefox doctor` remediation commands are environment-aware.** In a
+  parallel-environment setup (`CEREFOX_CONFIG_DIR`, see `staging-env.md`),
+  doctor's copy-pasteable remediation printed a bare `cerefox …`, which acts
+  on the DEFAULT environment — not the one just diagnosed. When a config dir
+  is set, the remediation now says to prefix the command the same way (or
+  use the environment alias). Observed live: a staging doctor's suggestion
+  ran against production.
+
 Open roadmap.
 
 ---

@@ -104,6 +104,20 @@ async function action(options: { json?: boolean; strict?: boolean }): Promise<vo
     }
     if (remediation) {
       println(cErr.yellow("→ " + remediation));
+      // Parallel environments (staging-env.md): remediation is copy-pasteable,
+      // and a bare `cerefox` resolves to the DEFAULT config — running this
+      // doctor's suggestion verbatim would act on a DIFFERENT environment
+      // than the one just diagnosed. Say so where the command is printed.
+      const configDir = (process.env.CEREFOX_CONFIG_DIR ?? "").trim();
+      if (configDir) {
+        println(
+          cErr.dim(
+            `  (this doctor ran against CEREFOX_CONFIG_DIR=${configDir} — ` +
+              `prefix the command above the same way, or use your environment alias, ` +
+              `or a bare \`cerefox\` will act on your DEFAULT environment instead)`,
+          ),
+        );
+      }
       println("");
     }
   }
