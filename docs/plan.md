@@ -28,21 +28,29 @@
 ---
 ## Current Focus
 
-**2026-08-14 — v1.7.0 shipped and verified on prod; v1.7.1 follow-up batch in review (#212, #214 phase 2, 0.12.1 orphan drops).**
+**2026-08-14 — Iteration 37 CLOSED. v1.7.0 and v1.7.1 shipped, deployed, verified live, and announced. No work in flight.**
 
-An agent's question ("why is there no delete in MCP?") exposed a parity gap the
-trust model had always sanctioned closing. On `feat/mcp-delete-document`
-(PR #211): `cerefox_delete_document` (requires the caller's read-hash, reason
-recorded in audit) and `cerefox_restore_document` (#210 — the maintainer moved
-restore out of the human-only tier; **permanent purge is now the single
-web-UI-only action**), plus the dashboard recent-docs project selector and the
-review-status-pill staleness fix, and referential integrity for `](uuid)`
-document links (#214 — mangled-UUID protection, validated in the ingest RPC
-on every write). Schema 0.11.3 → 0.12.0; ingest now refuses
-to rewrite trashed documents. Two high-effort review rounds applied. Staging
-is stuck in Supabase restoration (ticket filed), so verification runs
-carefully on prod after merge + cut.
+Schema is at 0.12.2; `minSchema` stays 0.10.5 (reviewed each release,
+deliberately not raised). The tool surface is 15 core + 4 dormant relation
+tools (delete/restore joined in v1.7.0).
+
+**What shipped** — an agent's question ("why is there no delete in MCP?")
+grew into the release pair: `cerefox_delete_document` (requires the caller's
+read-hash; reason in audit) and `cerefox_restore_document` (#210 — restore
+moved out of the human-only tier; **permanent purge is the single
+web-UI-only action**); referential integrity for `](uuid)` links (#214, both
+phases: write-time guard + `document dead-links` sweep — mangled-UUID
+protection, LLMs corrupt long ids structurally, see
+`docs/guides/linking.md`); the #212 metadata-destruction fix (community
+report, guarded at every write path + table CHECK); trashed documents refuse
+content updates; dashboard recent-docs project selector; review-status-pill
+staleness fix. Five review rounds, 54 findings addressed.
 Details: [iteration 37](plans/iteration-37-mcp-delete-parity.md).
+
+**Open threads for a next session**: staging is still stuck in Supabase
+"Restoration in progress" (support ticket filed — nothing on our side; use
+careful prod verification via the self-cleaning acceptance suite until it
+returns); the deferred-by-decision items below still stand.
 
 Previous state (v1.6.1, for context):
 
@@ -89,8 +97,10 @@ one:
 
 ## Active iteration
 
-**[Iteration 37 — MCP delete parity](plans/iteration-37-mcp-delete-parity.md)**
-— in progress (2026-08-13), target v1.7.0, issue #208.
+**None.** The most recent:
+
+**[Iteration 37 — MCP delete/restore parity, link integrity, dashboard UX](plans/iteration-37-mcp-delete-parity.md)**
+— ✅ **CLOSED, shipped v1.7.0 + v1.7.1** (2026-08-14), verified live, announced.
 
 The three before it closed in sequence:
 

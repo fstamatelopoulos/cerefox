@@ -1,6 +1,12 @@
 # Iteration 37 — MCP delete/restore parity + dashboard UX
 
-**Status: IN PROGRESS (2026-08-13). Target: v1.7.0. Issues: #208, #210. Branch: `feat/mcp-delete-document`. PR: #211.**
+**Status: ✅ CLOSED (2026-08-14) — shipped as v1.7.0 (PR #211: #208, #210, #214 phase 1)
+and v1.7.1 (PR #215: #212, #214 phase 2). Both deployed to the maintainer cloud,
+verified live (acceptance 12/12 incl. the dead-link sweep), and announced.
+Five review rounds across the two PRs surfaced 54 findings, all addressed;
+one review finding became the #210 policy reversal. The v1.7.0 prod
+verification itself found the orphaned-overload class (0.12.1) — an artifact
+only long-lived databases carry, unreachable from any fresh staging.**
 
 Scope grew mid-iteration by maintainer direction: (1) `cerefox_restore_document`
 (#210 — restore moves out of the human-only tier; purge stays web-UI-only),

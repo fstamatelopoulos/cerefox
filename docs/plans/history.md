@@ -24,6 +24,7 @@
 | 34 — Partial Document Edits | [`iteration-34-partial-edits.md`](iteration-34-partial-edits.md) | ✅ shipped v1.3.0 (2026-08-10) |
 | 35 — Partial-edit follow-ups and guard debt | [`iteration-35-partial-edits-followups.md`](iteration-35-partial-edits-followups.md) | ✅ shipped v1.4.0 (2026-08-11) |
 | 36 — Observability, surface parity, test hygiene | [`iteration-36-observability-and-parity.md`](iteration-36-observability-and-parity.md) | ✅ shipped v1.5.0 (2026-08-11), with v1.6.x follow-ons |
+| 37 — MCP delete/restore parity, link integrity, dashboard UX | [`iteration-37-mcp-delete-parity.md`](iteration-37-mcp-delete-parity.md) | ✅ shipped v1.7.0 + v1.7.1 (2026-08-14), verified live, announced |
 
 ---
 
