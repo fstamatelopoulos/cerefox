@@ -357,7 +357,25 @@ plain text snapshots for recovery purposes only.
   sanctioned dangling/forward-reference form).
 - The check MUST run in the shared RPC so every surface is covered
   identically, and MUST add negligible latency relative to embedding.
+- A read-only whole-KB sweep MUST exist to find legacy dead links the
+  write-time guard tolerates (`cerefox_find_dead_links` /
+  `cerefox document dead-links`, v1.7.1).
   Design: `docs/specs/link-integrity-design.md`.
+
+---
+
+### Metadata well-formedness (v1.7.1, #212)
+
+- Document metadata MUST be a JSON object on every write path (RPC-enforced;
+  the MCP layer's long-standing validation is now matched server-side).
+- A read-modify-write of stored metadata MUST refuse a non-object stored
+  value rather than transform it (a JS spread decomposes it; a jsonb `||`
+  merge arrays it); the refusal names the repair
+  (`document set-metadata --replace`).
+- A metadata-only CLI edit MUST NOT write `metadata` unless a metadata flag
+  was passed.
+- `cerefox doctor` SHOULD surface rows already in the non-object state
+  (`cerefox_metadata_health`).
 
 ## 3. Non-Functional Requirements
 

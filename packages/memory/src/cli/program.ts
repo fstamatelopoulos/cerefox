@@ -29,6 +29,7 @@ import { registerConfigList } from "./commands/config-list.ts";
 import { registerConfigSet } from "./commands/config-set.ts";
 import { registerConfigureAgent } from "./commands/configure-agent.ts";
 import { registerDeleteDoc } from "./commands/delete-doc.ts";
+import { registerDocumentDeadLinks } from "./commands/document-dead-links.ts";
 import { registerDeleteProject } from "./commands/delete-project.ts";
 import { registerDeployServer } from "./commands/deploy-server.ts";
 import { registerDocumentEdit } from "./commands/document-edit.ts";
@@ -194,6 +195,7 @@ export function buildProgram(): Command {
   moveInto(document, registerGetDoc, "get");
   moveInto(document, registerListDocs, "list");
   moveInto(document, registerDeleteDoc, "delete");
+  moveInto(document, registerDocumentDeadLinks, "dead-links");
   registerDocumentRestore(document); // v0.9.0: new command (no old flat verb)
   registerDocumentEdit(document); // v0.9.1: non-destructive title/metadata patch
   registerDocumentSetProjects(document); // CLI parity with cerefox_set_document_projects

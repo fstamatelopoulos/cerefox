@@ -77,9 +77,11 @@ One regex pass over the content (linear, in C) plus one indexed lookup for
 all candidates together: **~1–2ms** per write, against an embedding call of
 hundreds of milliseconds. Latency was evaluated and dismissed as a concern.
 
-## Phase 2 (not in v1.7.0)
+## Phase 2 — the dead-link sweep (shipped v1.7.1)
 
-The write-time guard protects new writes only. A read-only whole-KB sweep —
-`cerefox_find_dead_links()` + a `cerefox doctor` line or CLI verb — finds
-dangling `](uuid)` links retroactively (e.g. targets purged after linking).
-Tracked in #214.
+The write-time guard protects new writes only. The read-only
+`cerefox_find_dead_links()` RPC + `cerefox document dead-links` (CLI) find
+dangling `](uuid)` links retroactively — targets purged after linking, and
+links that predate the guard. Same scanning rules as the guard; a trashed
+target still exists and is not reported. On demand, not in `doctor` (full
+chunk scan). Closed #214.

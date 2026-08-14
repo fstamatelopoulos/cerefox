@@ -166,6 +166,35 @@ export class Acceptance {
     this.created.push(id);
   }
 
+  /**
+   * Purge one of THIS RUN's fixtures immediately (soft delete → gate-guarded
+   * purge), for tests that need a genuinely absent target — e.g. creating a
+   * dead link (#214 phase 2). Refuses ids the run did not create.
+   */
+  async purgeNow(id: string): Promise<void> {
+    this.assertSafeTarget();
+    if (!this.created.includes(id)) {
+      throw new Error(`purgeNow refused: ${id} was not created by this run.`);
+    }
+    const client = createClient(loadSettings());
+    const raw = client.raw as unknown as {
+      rpc: (n: string, a: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+    };
+    const del = await raw.rpc("cerefox_delete_document", {
+      p_document_id: id,
+      p_author: "acceptance",
+      p_author_type: "agent",
+    });
+    if (del.error) throw new Error(`purgeNow soft-delete failed: ${del.error.message}`);
+    const purge = await raw.rpc("cerefox_purge_document", {
+      p_document_id: id,
+      p_author: "acceptance",
+      p_author_type: "agent",
+    });
+    if (purge.error) throw new Error(`purgeNow purge failed: ${purge.error.message}`);
+    this.created.splice(this.created.indexOf(id), 1);
+  }
+
   /** Ids this run created, for assertions about cleanup. */
   get ids(): readonly string[] {
     return this.created;

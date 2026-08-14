@@ -1504,6 +1504,19 @@ BEGIN
             USING ERRCODE = '22023';  -- invalid_parameter_value
     END IF;
 
+    -- ── Metadata type guard (#212, 0.12.2) ───────────────────────────────
+    -- metadata is jsonb and accepts ANY JSON value, but every reader assumes
+    -- an object — and `document edit`'s JS spread DECOMPOSED a stored string
+    -- into per-character keys (13 real documents were in the vulnerable
+    -- state). The MCP layer always validated this; the RPC now does too, so
+    -- every write path agrees (CLI, scripts, direct PostgREST included).
+    IF p_metadata IS NOT NULL AND jsonb_typeof(p_metadata) <> 'object' THEN
+        RAISE EXCEPTION
+            'cerefox_ingest_document: metadata must be a JSON object, got %. Wrap scalar values in a key ({"value": ...}).',
+            jsonb_typeof(p_metadata)
+            USING ERRCODE = '22023';  -- invalid_parameter_value
+    END IF;
+
     -- ── Link integrity (#214, 0.12.0) ────────────────────────────────────
     -- Validate [Text](uuid) document links against the store: agents mangle
     -- long random ids when regenerating text, and a mangled id silently
@@ -2672,6 +2685,18 @@ BEGIN
             USING ERRCODE = 'P0002';
     END IF;
 
+    -- #212: a legacy row can hold NON-OBJECT metadata (the ingest RPC did not
+    -- validate its input until 0.12.2). Merging onto it with || would produce
+    -- an ARRAY — Postgres treats both sides as arrays — burying the stored
+    -- value one level deeper and leaving the row still corrupt. Only
+    -- replace=true actually repairs such a row, so refuse the merge and say so.
+    IF NOT p_replace AND v_before IS NOT NULL AND jsonb_typeof(v_before) <> 'object' THEN
+        RAISE EXCEPTION
+            'CEREFOX_BAD_METADATA: stored metadata on document % is not an object (%). A merge cannot repair it — retry with replace=true, passing the full intended object.',
+            p_document_id, jsonb_typeof(v_before)
+            USING ERRCODE = '22023';
+    END IF;
+
     -- Keys explicitly set to null are removals, never stored values.
     SELECT COALESCE(array_agg(key), ARRAY[]::TEXT[]) INTO v_null_keys
     FROM jsonb_each(p_metadata)
@@ -2723,6 +2748,9 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.12.2 (#212, #214): metadata must be a JSON object (ingest input guard
+    -- + set_document_metadata stored-state merge guard); cerefox_find_dead_links
+    -- (link-integrity phase-2 sweep); cerefox_metadata_health (doctor check).
     -- 0.12.1: drop orphaned 1-arg overloads of purge/restore (pre-author era;
     -- CREATE OR REPLACE never removed them; ambiguous PGRST203 on 1-arg calls).
     -- 0.12.0 (#208, #210): cerefox_delete_document — CAS
@@ -2738,7 +2766,81 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.12.1'::TEXT;
+    SELECT '0.12.2'::TEXT;
+$$;
+
+-- ── cerefox_find_dead_links ──────────────────────────────────────────────────
+-- Phase 2 of link integrity (#214): a read-only whole-KB sweep for
+-- [Text](uuid) links whose target document no longer EXISTS (purged after
+-- linking). Complements the write-time guard, which validates only
+-- newly-introduced links on updates. Same scanning rules as the guard:
+-- line-anchored fences and inline code spans are stripped (examples are not
+-- links); a trashed target still exists and is NOT a dead link.
+-- Full chunk scan — run on demand (CLI `cerefox document dead-links`), not on
+-- every doctor.
+
+CREATE OR REPLACE FUNCTION cerefox_find_dead_links()
+RETURNS TABLE (
+    document_id     UUID,
+    document_title  TEXT,
+    dead_link_id    UUID,
+    occurrences     BIGINT
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+    WITH doc_content AS (
+        SELECT d.id, d.title, string_agg(c.content, E'\n' ORDER BY c.chunk_index) AS content
+        FROM cerefox_documents d
+        JOIN cerefox_chunks c ON c.document_id = d.id AND c.version_id IS NULL
+        WHERE d.deleted_at IS NULL
+        GROUP BY d.id, d.title
+    ),
+    scannable AS (
+        SELECT id, title,
+               regexp_replace(
+                   regexp_replace(content, E'(^|\\n)[ \\t]*```.*?(\\n[ \\t]*```[^\\n]*|$)', ' ', 'g'),
+                   '`[^`]*`', ' ', 'g') AS s
+        FROM doc_content
+    ),
+    links AS (
+        SELECT sc.id, sc.title, lower(m.captured[1]) AS target
+        FROM scannable sc,
+        LATERAL regexp_matches(
+            sc.s,
+            '\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)',
+            'g') AS m(captured)
+    )
+    SELECT l.id, l.title, l.target::uuid, count(*)
+    FROM links l
+    WHERE NOT EXISTS (SELECT 1 FROM cerefox_documents t WHERE t.id = l.target::uuid)
+    GROUP BY l.id, l.title, l.target
+    ORDER BY l.title, l.target;
+$$;
+
+-- ── cerefox_metadata_health ──────────────────────────────────────────────────
+-- #212: rows whose stored metadata is not a JSON object — the state the
+-- 0.12.2 write guards now prevent, but which legacy rows may still be in.
+-- Cheap (documents table only); surfaced by `cerefox doctor`. Repair:
+-- `cerefox document set-metadata <id> --replace --json '<object>'`.
+
+CREATE OR REPLACE FUNCTION cerefox_metadata_health()
+RETURNS TABLE (
+    document_id     UUID,
+    document_title  TEXT,
+    metadata_type   TEXT
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+    SELECT d.id, d.title, jsonb_typeof(d.metadata)
+    FROM cerefox_documents d
+    WHERE d.metadata IS NOT NULL AND jsonb_typeof(d.metadata) <> 'object'
+    ORDER BY d.title;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

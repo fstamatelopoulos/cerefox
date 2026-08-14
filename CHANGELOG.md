@@ -9,7 +9,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **Dead-link sweep — phase 2 of link integrity (#214).**
+  `cerefox document dead-links` (backed by the read-only
+  `cerefox_find_dead_links` RPC) scans the whole KB for `[Text](uuid)` links
+  whose target document no longer exists — the case the write-time guard
+  deliberately tolerates on unrelated edits so a purged target cannot make
+  its linkers unwritable. Same scanning rules as the guard (code formatting
+  escapes; a trashed target still exists and is not dead). On demand, not in
+  doctor — it is a full chunk scan.
+- **`cerefox doctor` checks metadata well-formedness** (informational):
+  documents whose stored metadata is not a JSON object are listed with the
+  repair command (`cerefox_metadata_health` RPC). Schema 0.12.1 → 0.12.2,
+  migration 0026 — which also reports any such rows at upgrade time.
+
 ### Fixed
+
+- **`cerefox document edit` no longer destroys non-object metadata (#212,
+  reported by @tdebasis).** `metadata` is jsonb and can legitimately hold a
+  non-object value; the command's JS spread *decomposed* those (a stored
+  string became one key per character, a number became `{}`) and wrote the
+  result back with "✓ Edited" — even on a title-only edit, which never
+  mentioned metadata. Three-layer fix: the ingest RPC now rejects non-object
+  `p_metadata` (the MCP layer always did; now every write path agrees),
+  `cerefox_set_document_metadata` refuses to *merge* onto a non-object stored
+  value (Postgres `||` would produce an array; only `--replace` repairs, and
+  the error says so), and `document edit` refuses to patch a corrupt row
+  (naming the repair command) and only writes `metadata` at all when a
+  metadata flag was passed.
 
 - **Orphaned 1-arg overloads of `cerefox_purge_document` / `cerefox_restore_document`
   dropped** (schema 0.12.0 → 0.12.1, migration 0025). `CREATE OR REPLACE`

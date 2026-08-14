@@ -226,6 +226,12 @@ cerefox document list [OPTIONS]
 
 **Purpose**: update a document's title and/or metadata in place, without re-ingesting content.
 
+> **v1.7.1 (#212)**: a title-only edit no longer writes `metadata` at all, and
+> the command refuses to patch a document whose stored metadata is not a JSON
+> object (a legacy state older writes could create) instead of destroying it —
+> repair such a row with `cerefox document set-metadata <id> --replace --json
+> '<object>'`. `cerefox doctor` lists any rows in that state.
+
 **Synopsis**:
 ```
 cerefox document edit [OPTIONS] DOCUMENT_ID
@@ -338,6 +344,20 @@ cerefox document set-projects <doc-id> --clear
 **Exit codes**: `0` on success; `1` on validation error (no names and no `--clear`, or both) or if the document is missing / soft-deleted.
 
 **MCP equivalent**: [`cerefox_set_document_projects`](../../AGENT_GUIDE.md).
+
+---
+
+### `cerefox document dead-links`
+
+**Purpose**: whole-KB sweep for `[Text](uuid)` links whose target document no longer exists (phase 2 of link integrity, #214; v1.7.1, needs schema 0.12.2).
+
+**Synopsis**: `cerefox document dead-links [--json]`
+
+The write-time guard (v1.7.0) validates only links a write *introduces* — deliberately, so a target purged after linking cannot make its linkers unwritable. This command finds those legacy dead links on demand. A trashed target still exists and is **not** reported. Full chunk scan server-side (one RPC call); run on demand, not part of `doctor`.
+
+**Fix each hit** by editing the linking document: correct the id, remove the link, or backtick it as an example.
+
+**MCP equivalent**: none (maintenance verb).
 
 ---
 
@@ -806,6 +826,7 @@ surface).
 | `document get` | `cerefox_get_document` | ✅ |
 | `document list` | `cerefox_metadata_search` (scope by `project_name` / metadata / time) | ✅ as of this change. Unscoped whole-KB listing has no MCP path by design (scope it) |
 | `document edit` (title / metadata in place) | — | 🔒 intentional: a human/web-parity convenience. Agents update title+metadata deterministically via `cerefox_ingest` (with `document_id`); a metadata-only edit isn't a needed agent primitive |
+| `document dead-links` | — | 🔒 intentional: a maintenance sweep for the operator (v1.7.1, #214 phase 2); agents encounter dead links through the write-time guard instead |
 | `document delete` (soft-delete) | `cerefox_delete_document` | ✅ v1.7.0 (#208). MCP requires the caller's read-hash; the CLI confirms interactively instead |
 | `document restore` | `cerefox_restore_document` | ✅ v1.7.0 (#210). Permanent purge remains web-UI-only |
 | `document version list` | `cerefox_list_versions` | ✅ |

@@ -553,6 +553,62 @@ export async function checkContentFormat(): Promise<CheckResult> {
   }
 }
 
+const METADATA_HEALTH_CHECK_NAME = "metadata health";
+
+/**
+ * Informational (#212, 0.12.2): rows whose stored metadata is not a JSON
+ * object — a legacy state the write guards now prevent, but which silently
+ * broke `document edit` (a JS spread decomposed a stored string into
+ * per-character keys). Never a failure: `ok` when clean, `skipped` (ℹ) with
+ * the repair command when rows exist, `skipped` when the RPC is absent
+ * (pre-0.12.2 server).
+ */
+export async function checkMetadataHealth(): Promise<CheckResult> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    return { name: METADATA_HEALTH_CHECK_NAME, status: "skipped", detail: "Supabase config missing; skipped." };
+  }
+  try {
+    const url = `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/cerefox_metadata_health`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: settings.supabaseKey,
+        Authorization: `Bearer ${settings.supabaseKey}`,
+      },
+      body: "{}",
+    });
+    if (!resp.ok) {
+      return {
+        name: METADATA_HEALTH_CHECK_NAME,
+        status: "skipped",
+        detail: `metadata health unavailable (${resp.status}); deploy schema 0.12.2 to enable.`,
+      };
+    }
+    const rows = (await resp.json()) as Array<{ document_id: string; document_title: string; metadata_type: string }>;
+    if (rows.length === 0) {
+      return { name: METADATA_HEALTH_CHECK_NAME, status: "ok", detail: "all document metadata is well-formed" };
+    }
+    const sample = rows
+      .slice(0, 3)
+      .map((r) => `"${r.document_title}" (${r.metadata_type})`)
+      .join(", ");
+    return {
+      name: METADATA_HEALTH_CHECK_NAME,
+      status: "skipped", // informational (ℹ), never a gate
+      detail: `${rows.length} document(s) hold non-object metadata: ${sample}${rows.length > 3 ? ", …" : ""}.`,
+      hint: "Writes that would merge onto these rows are refused (#212). Repair each with `cerefox document set-metadata <id> --replace --json '<the intended object>'`.",
+    };
+  } catch (err) {
+    return {
+      name: METADATA_HEALTH_CHECK_NAME,
+      status: "skipped",
+      detail: `metadata-health check skipped: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 /**
  * Read `mcpServers.cerefox` from a JSON file, if present. Returns null
  * when the file is missing, malformed, or doesn't have a cerefox entry.
@@ -870,6 +926,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
     { name: "embedder", phase: "Checking embedder consistency", run: () => checkEmbedderMismatch() },
     { name: "content format", phase: "Checking chunk reconstruction format", run: () => checkContentFormat() },
+    { name: "metadata health", phase: "Checking metadata well-formedness", run: () => checkMetadataHealth() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
     { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },

@@ -35,6 +35,35 @@ interface EditOptions {
   authorType?: string;
 }
 
+/**
+ * Patch stored metadata with sets/unsets — the pure core of `document edit`,
+ * exported for unit tests (#212).
+ *
+ * REFUSES non-object stored metadata instead of spreading it: `metadata` is
+ * jsonb and can legitimately hold a string / array / number, and a JS spread
+ * does not copy those — it DECOMPOSES them (a stored string becomes one key
+ * per character, a number becomes {}), after which the write destroys the
+ * original with a "✓ Edited" on top. Found on 13 real documents (#212).
+ */
+export function patchMetadata(
+  stored: unknown,
+  sets: Array<[string, unknown]>,
+  unsets: string[],
+  documentId: string,
+): Record<string, unknown> {
+  if (stored !== null && stored !== undefined && (typeof stored !== "object" || Array.isArray(stored))) {
+    throw userError(
+      `Document ${documentId} has non-object metadata (${Array.isArray(stored) ? "array" : typeof stored}); ` +
+        `refusing to patch it — a patch would destroy the stored value. Repair it first with: ` +
+        `cerefox document set-metadata ${documentId} --replace --json '<the intended object>'`,
+    );
+  }
+  const metadata: Record<string, unknown> = { ...((stored as Record<string, unknown>) ?? {}) };
+  for (const [k, v] of sets) metadata[k] = v;
+  for (const k of unsets) delete metadata[k.trim()];
+  return metadata;
+}
+
 /** Parse a `key=value` pair; value is JSON-parsed when possible (numbers,
  *  booleans, arrays/objects), else kept as a raw string. */
 function parseMetaPair(pair: string): [string, unknown] {
@@ -72,20 +101,20 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
     throw userError(`Document ${documentId} is soft-deleted — restore it first (cerefox document restore).`);
   }
 
-  // Patch metadata: start from existing, apply sets, then unsets.
-  const metadata: Record<string, unknown> = { ...(doc.metadata ?? {}) };
-  for (const pair of sets) {
-    const [k, v] = parseMetaPair(pair);
-    metadata[k] = v;
-  }
-  for (const k of unsets) delete metadata[k.trim()];
-
+  const metaTouched = sets.length > 0 || unsets.length > 0;
   const newTitle = hasTitle ? options.title!.trim() : (doc.title as string);
   const titleChanged = newTitle !== doc.title;
 
+  // Only include metadata in the write when a metadata flag was passed: a
+  // title-only edit must not touch (let alone destroy) the stored value (#212).
+  const update: Record<string, unknown> = { title: newTitle, updated_at: new Date().toISOString() };
+  if (metaTouched) {
+    update.metadata = patchMetadata(doc.metadata, sets.map(parseMetaPair), unsets, documentId);
+  }
+
   const { error: updErr } = await client.raw
     .from("cerefox_documents")
-    .update({ title: newTitle, metadata, updated_at: new Date().toISOString() })
+    .update(update)
     .eq("id", documentId);
   if (updErr) throw systemError(`Update failed: ${updErr.message}`);
 

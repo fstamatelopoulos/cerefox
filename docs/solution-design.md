@@ -728,8 +728,13 @@ Ingestion is designed to be non-blocking where the caller allows it:
 - **Link integrity (#214)** — `[Text](uuid)` links are validated against the
   store; unresolvable ids reject the write (`CEREFOX_UNRESOLVED_LINKS`,
   listing the offenders). Code fences / inline code escape; on updates only
-  newly-introduced ids are validated. Design:
-  [`docs/specs/link-integrity-design.md`](specs/link-integrity-design.md).
+  newly-introduced ids are validated. Legacy dead links are found on demand
+  by `cerefox_find_dead_links` / `cerefox document dead-links` (v1.7.1).
+  Design: [`docs/specs/link-integrity-design.md`](specs/link-integrity-design.md).
+- **Metadata type guards (#212, v1.7.1)** — `p_metadata` must be a JSON
+  object (RPC-enforced on every path); `cerefox_set_document_metadata`
+  refuses to merge onto a non-object stored value (only `replace` repairs);
+  `cerefox_metadata_health` lists legacy corrupt rows for `doctor`.
 
 ### 6.4 Update vs. Create
 
