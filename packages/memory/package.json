@@ -65,7 +65,7 @@
     "typescript": "^6.0.3"
   },
   "scripts": {
-    "build": "bun build src/bin/cerefox.ts --outdir dist/bin --target node --format esm --external @huggingface/transformers --external onnxruntime-node",
+    "build": "bun run bundle-server-assets && bun build src/bin/cerefox.ts --outdir dist/bin --target node --format esm --external @huggingface/transformers --external onnxruntime-node",
     "clean": "rm -rf dist docs AGENT_GUIDE.md AGENT_QUICK_REFERENCE.md",
     "bundle-docs": "bun run ../../scripts/bundle_package_docs.ts",
     "bundle-server-assets": "bun run ../../scripts/bundle_server_assets.ts",
