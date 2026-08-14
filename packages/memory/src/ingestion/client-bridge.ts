@@ -29,6 +29,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
+import { extractConflictHashes } from "../../../../_shared/mcp-tools/_utils.ts";
 
 import {
   ConcurrencyConflictError,
@@ -114,10 +115,11 @@ export class IngestionDbBridge {
   }
 
   async getDocumentByHash(contentHash: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter — matches Python's `get_document_by_hash`.
-    // Soft-deleted docs still occupy the unique constraint on
-    // `content_hash`; finding them lets us return action=skipped
-    // instead of crashing on insert.
+    // No `deleted_at` filter, deliberately: soft-deleted docs still occupy
+    // the store-wide unique constraint on `content_hash`, so a create with
+    // identical content WILL collide with a trashed doc. Finding it lets the
+    // pipeline return action=skipped with a note saying the content is in
+    // the trash, instead of crashing on insert.
     const { data } = await this.supabase
       .from("cerefox_documents")
       .select("*")
@@ -127,30 +129,42 @@ export class IngestionDbBridge {
     return rows.length > 0 ? rows[0] : null;
   }
 
-  async findDocumentByTitle(title: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter — matches Python's `find_document_by_title`.
-    // Soft-deleted docs MUST be findable so that --update-if-exists can
-    // either resurrect them OR fail the dedup-skip check downstream.
-    const { data } = await this.supabase
+  /** Prefer-live resolution: a LIVE match always wins over a trashed one.
+   *
+   *  Nothing enforces title uniqueness, and soft delete bumps updated_at, so
+   *  a recency-ordered lookup that sees the trash would resolve a
+   *  freshly-trashed twin over the live document — making the live one
+   *  unreachable via update-if-exists. Trashed docs are still returned when
+   *  they are the ONLY match, so the update path can refuse with "restore
+   *  first" BEFORE the embedding spend (the old comment here claimed the
+   *  no-filter lookup let updates "resurrect" trashed docs — never true;
+   *  nothing cleared deleted_at, content just vanished into the trash). */
+  private async findPreferLive(column: string, value: string): Promise<DocumentRow | null> {
+    const live = await this.supabase
       .from("cerefox_documents")
       .select("*")
-      .eq("title", title)
+      .eq(column, value)
+      .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(1);
-    const rows = (data ?? []) as DocumentRow[];
-    return rows.length > 0 ? rows[0] : null;
+    const liveRows = (live.data ?? []) as DocumentRow[];
+    if (liveRows.length > 0) return liveRows[0];
+    const any = await this.supabase
+      .from("cerefox_documents")
+      .select("*")
+      .eq(column, value)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    const anyRows = (any.data ?? []) as DocumentRow[];
+    return anyRows.length > 0 ? anyRows[0] : null;
+  }
+
+  async findDocumentByTitle(title: string): Promise<DocumentRow | null> {
+    return this.findPreferLive("title", title);
   }
 
   async findDocumentBySourcePath(sourcePath: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter — matches Python.
-    const { data } = await this.supabase
-      .from("cerefox_documents")
-      .select("*")
-      .eq("source_path", sourcePath)
-      .order("updated_at", { ascending: false })
-      .limit(1);
-    const rows = (data ?? []) as DocumentRow[];
-    return rows.length > 0 ? rows[0] : null;
+    return this.findPreferLive("source_path", sourcePath);
   }
 
   async listChunksForDocument(documentId: string): Promise<ChunkRowForUpdate[]> {
@@ -239,8 +253,12 @@ export class IngestionDbBridge {
     if (error) {
       const msg = error.message ?? JSON.stringify(error);
       if (msg.includes("CEREFOX_CONFLICT")) {
-        const current = msg.match(/current hash ([0-9a-f]{64})/)?.[1] ?? null;
-        throw new ConcurrencyConflictError(args.documentId ?? "", current, msg);
+        const { current } = extractConflictHashes(msg);
+        throw new ConcurrencyConflictError(
+          args.documentId ?? "",
+          current === "unknown" ? null : current,
+          msg,
+        );
       }
       if (msg.includes("CEREFOX_TOKEN_REQUIRED")) {
         throw new ConcurrencyTokenRequiredError(msg);

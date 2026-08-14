@@ -1,6 +1,7 @@
 import { Popover, Text } from "@mantine/core";
 import {
   IconArrowRight,
+  IconChevronDown,
   IconChevronRight,
   IconClock,
   IconDatabase,
@@ -15,14 +16,14 @@ import {
   IconTerminal2,
   IconTrash,
 } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { fetchUsageSummary } from "../api/analytics";
 import { deriveAccessPathStats } from "../lib/access-path-stats";
 import { CliCard } from "../components/CliCard";
-import { fetchDashboard } from "../api/dashboard";
+import { fetchDashboard, fetchDashboardRecent } from "../api/dashboard";
 import type { DashboardDoc } from "../api/types";
 import ui from "../styles/redesign.module.css";
 import { formatDateTime } from "../utils/dates";
@@ -68,7 +69,18 @@ const SINCE_30D = new Date(Date.now() - 30 * 864e5).toISOString();
 export function DashboardPage() {
   const navigate = useNavigate();
   const [quick, setQuick] = useState("");
+  // The aggregate dashboard keeps its plain (shared) cache key — SearchPage
+  // and ProjectsPage read the same entry. The recently-changed tile has its
+  // own scoped query against the light /dashboard/recent-docs route, so
+  // flipping the selector refetches 10 rows, not seven aggregate query
+  // groups. keepPreviousData stops the tile flashing during the swap.
+  const [recentProject, setRecentProject] = useState("");
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
+  const { data: recent } = useQuery({
+    queryKey: ["dashboard-recent", recentProject],
+    queryFn: () => fetchDashboardRecent(recentProject || undefined),
+    placeholderData: keepPreviousData,
+  });
 
   const since = SINCE_30D;
   const { data: usage } = useQuery({
@@ -244,14 +256,25 @@ export function DashboardPage() {
               <IconClock size={16} />
               Recently changed documents
             </h2>
-            <button
-              type="button"
-              className={`${ui.btn} ${ui.btnSubtle}`}
-              onClick={() => navigate("/search")}
-            >
-              View all
-              <IconArrowRight size={14} />
-            </button>
+            {/* Same control as the search page's project scope. Filters this
+                tile only — the point is "what did agents change in X lately". */}
+            <span className={ui.selectWrap} title="Scope recent documents to a project">
+              <IconFolder size={14} />
+              <select
+                className={ui.selectEl}
+                value={recentProject}
+                data-testid="recent-project-select"
+                onChange={(e) => setRecentProject(e.currentTarget.value)}
+              >
+                <option value="">All projects</option>
+                {(data?.projects ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <IconChevronDown size={14} />
+            </span>
           </div>
           <div className={ui.card} style={{ overflow: "hidden" }}>
             <table className={styles.tbl}>
@@ -265,7 +288,11 @@ export function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {(data?.recent_docs ?? []).map((doc) => {
+                {/* Scoped view NEVER falls back to the unscoped aggregate:
+                    if the scoped fetch fails, showing all-project rows under
+                    a project label misattributes documents. Unscoped may use
+                    the aggregate as a warm-start. */}
+                {(recentProject ? recent?.recent_docs ?? [] : recent?.recent_docs ?? data?.recent_docs ?? []).map((doc) => {
                   const chip = doc.author
                     ? {
                         icon: doc.author_type === "agent" ? IconSparkles : IconMapPin,

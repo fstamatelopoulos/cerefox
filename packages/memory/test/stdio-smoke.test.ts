@@ -20,6 +20,15 @@ import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ALL_TOOLS } from "../../../_shared/mcp-tools/index.ts";
+import { RELATION_TOOL_NAMES } from "../../../_shared/mcp-tools/feature-flags.ts";
+
+// Derived, not hardcoded: a literal list here sat at 10 names while the
+// surface grew to 13 — invisible because this test probe-and-skips without
+// live credentials. The claim is "the built bundle serves exactly the core
+// registry", so assert against the registry.
+const CORE_TOOL_NAMES = ALL_TOOLS.map((t) => t.name).filter((n) => !RELATION_TOOL_NAMES.has(n));
+
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = join(PKG_ROOT, "..", "..");
 const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
@@ -152,21 +161,8 @@ describe("stdio MCP server smoke", () => {
       result?: { tools?: Array<{ name: string }> };
     };
     expect(Array.isArray(tools.result?.tools)).toBe(true);
-    expect(tools.result?.tools?.length).toBe(10);
+    expect(tools.result?.tools?.length).toBe(CORE_TOOL_NAMES.length);
     const names = tools.result?.tools?.map((t) => t.name).sort();
-    expect(names).toEqual(
-      [
-        "cerefox_search",
-        "cerefox_ingest",
-        "cerefox_get_document",
-        "cerefox_list_versions",
-        "cerefox_metadata_search",
-        "cerefox_list_metadata_keys",
-        "cerefox_list_projects",
-        "cerefox_set_document_projects",
-        "cerefox_get_audit_log",
-        "cerefox_get_help",
-      ].sort(),
-    );
+    expect(names).toEqual([...CORE_TOOL_NAMES].sort());
   });
 });

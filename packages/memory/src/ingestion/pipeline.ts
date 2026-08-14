@@ -158,11 +158,53 @@ export class IngestionPipeline {
     // ── (2) update-existing shortcut ────────────────────────────────────
     if (updateExisting) {
       let existingDoc = null;
+      let matchedBySourcePath = false;
       if (sourcePathOpt) {
         existingDoc = await this.db.findDocumentBySourcePath(sourcePathOpt);
+        matchedBySourcePath = existingDoc !== null;
       }
       if (!existingDoc) {
         existingDoc = await this.db.findDocumentByTitle(title);
+      }
+      if (existingDoc?.deleted_at) {
+        if (matchedBySourcePath && lastWriteWins) {
+          // Filesystem-sync flows (ingest-dir --update-if-exists, guides
+          // ingest) pass last_write_wins and re-run forever: a hard error
+          // here would make every sync fail on this file until a human
+          // intervenes, and updating would resurrect what a human
+          // deliberately trashed. Skipping respects the deletion AND
+          // converges. Gated on SOURCE-PATH identity: the path proves this
+          // is the same file whose document was trashed.
+          const projIds = await this.db.getDocumentProjectIds(existingDoc.id);
+          return {
+            documentId: existingDoc.id,
+            title: existingDoc.title ?? title,
+            chunkCount: existingDoc.chunk_count ?? 0,
+            totalChars: existingDoc.total_chars ?? 0,
+            action: "skipped",
+            reindexed: false,
+            projectIds: projIds,
+            note:
+              `"${existingDoc.title}" is in the trash (soft-deleted ` +
+              `${existingDoc.deleted_at.slice(0, 10)}) — skipped, deletion respected. ` +
+              `To resume syncing this file, restore the document ` +
+              `(\`cerefox document restore ${existingDoc.id}\`) or purge it from the web UI Trash.`,
+            contentHash: existingDoc.content_hash ?? "",
+          };
+        }
+        if (!matchedBySourcePath) {
+          // A TITLE-only match on a trashed document is weak identity: this
+          // may be a genuinely NEW file that happens to share a title with
+          // something in the trash, and skipping would silently drop its
+          // content (round-4 review). Fall through to CREATE — identical
+          // content gets the trash-aware hash-dedup message; different
+          // content becomes a new document, the trashed twin untouched.
+          existingDoc = null;
+        }
+        // else: source-path match without last_write_wins — a deliberate
+        // one-shot update of a trashed file's document. Fall through to
+        // updateDocument, whose "soft-deleted; restore first" error names
+        // the remedy.
       }
       if (existingDoc) {
         let fullSetResolved: string[] | null = null;
@@ -225,7 +267,15 @@ export class IngestionPipeline {
         action: "skipped",
         reindexed: false,
         projectIds: existingProjectIds,
-        note: "",
+        // A hash match on a TRASHED document reads as "already up-to-date"
+        // while search shows nothing — the classic re-upload-after-delete
+        // confusion (#211 round 3). Say where the content actually is.
+        note: existingByHash.deleted_at
+          ? `Identical content is in the TRASH as "${existingByHash.title}" ` +
+            `(soft-deleted ${existingByHash.deleted_at.slice(0, 10)}). Restore it ` +
+            `(\`cerefox document restore ${existingByHash.id}\` or the web UI Trash page) ` +
+            `instead of re-ingesting, or purge it first to start fresh.`
+          : "",
         contentHash: existingByHash.content_hash ?? hash,
       };
     }
@@ -345,10 +395,27 @@ export class IngestionPipeline {
     if (!existing) {
       throw new Error(`Document ${JSON.stringify(documentId)} not found`);
     }
+    // Fast-fail BEFORE the embedding spend; the authoritative guard is in
+    // the cerefox_ingest_document RPC (0.12.0). "soft-deleted" in the
+    // message is load-bearing: the web edit route maps it to a 409.
+    if (existing.deleted_at) {
+      throw new Error(
+        `Document ${documentId} ("${existing.title}") is soft-deleted (in the trash). ` +
+          `A trashed document cannot be updated — restore it first ` +
+          `(\`cerefox document restore ${documentId}\`, the web UI Trash page, or ` +
+          `cerefox_restore_document over MCP), then re-ingest.`,
+      );
+    }
 
     // ── (2) Hash + collision check ───────────────────────────────────────
     const newHash = contentHash(text);
     const contentUnchanged = newHash === existing.content_hash;
+
+    // Trimmed once here: this is the CLI/web entry point, and a token read
+    // from a file (`--expected-content-hash "$(cat hash.txt)"`) arrives with
+    // a trailing newline. The RPC compares trimmed (0.12.0); an untrimmed
+    // advisory check here would fake the exact conflict the RPC fix removed.
+    const expectedHashTrimmed = expectedContentHash?.trim() || null;
 
     if (!contentUnchanged) {
       // Optimistic-concurrency fast-fail (iter-32): a stale token fails here,
@@ -358,14 +425,14 @@ export class IngestionPipeline {
       // content cannot lose data.
       if (
         !lastWriteWins &&
-        expectedContentHash &&
-        expectedContentHash !== existing.content_hash
+        expectedHashTrimmed &&
+        expectedHashTrimmed !== existing.content_hash
       ) {
         throw new ConcurrencyConflictError(
           documentId,
           existing.content_hash,
           `CEREFOX_CONFLICT: document ${documentId} changed since it was read ` +
-            `(expected hash ${expectedContentHash}, current hash ${existing.content_hash}). ` +
+            `(expected hash ${expectedHashTrimmed}, current hash ${existing.content_hash}). ` +
             `Re-read the document, merge your changes, and retry with the new hash.`,
         );
       }
@@ -540,7 +607,7 @@ export class IngestionPipeline {
       // against, so `forceRechunk` works standalone instead of forcing every
       // caller to thread a token through for a no-op-equivalent write.
       expectedContentHash:
-        expectedContentHash ??
+        expectedHashTrimmed ??
         (forceRechunk && contentUnchanged ? existing.content_hash : null),
       lastWriteWins,
     });

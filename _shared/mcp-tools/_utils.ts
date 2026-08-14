@@ -181,6 +181,47 @@ export interface LogUsageParams {
  *  Differs from the EF's `logUsage` only in that `accessPath` is a required
  *  parameter (was hardcoded to `"remote-mcp"` in the EF) so the local TS
  *  MCP server can pass `"local-mcp"` for the same call site. */
+/** Pull the two hashes out of an RPC `CEREFOX_CONFLICT` message.
+ *
+ *  The ONE site coupled to the SQL `RAISE` wording ("expected hash %, current
+ *  hash %"). Three tools (ingest, edit, delete) rephrase conflicts for agents;
+ *  before this helper each carried its own copy of these regexes, and a
+ *  wording change in rpcs.sql would have had to be mirrored three times, with
+ *  a missed one silently degrading that tool's conflict output to "unknown". */
+export function extractConflictHashes(message: string): { expected: string; current: string } {
+  return {
+    expected: message.match(/expected hash ([0-9a-f]{64})/)?.[1] ?? "unknown",
+    current: message.match(/current hash ([0-9a-f]{64})/)?.[1] ?? "unknown",
+  };
+}
+
+/** Does this RPC error mean the function (or this signature of it) is not on
+ *  the server — i.e. the client is newer than the deployed schema?
+ *
+ *  The ONE site coupled to how that condition surfaces: PostgREST's PGRST202
+ *  ("Could not find the function … in the schema cache") and Postgres' 42883
+ *  ("function … does not exist", seen through connections that bypass
+ *  PostgREST or during a deploy's DROP/CREATE window). Five call sites
+ *  (delete/restore MCP handlers, delete/restore CLI verbs, partial edits)
+ *  each carried a hand-rolled subset of these predicates before this helper. */
+/** Is this RPC error the delete/restore RPCs' "Document % not found"?
+ *
+ *  Anchored on the SQLSTATE (22023, invalid_parameter_value — PostgREST
+ *  passes it through as `error.code`) AND the prose, because 22023 alone is
+ *  shared with other validation raises (zero chunks, token required) and the
+ *  prose alone would match any gateway error containing "not found". One
+ *  site instead of four hand-rolled substring checks. */
+export function isDocumentNotFoundError(error: { code?: string; message?: string }): boolean {
+  return error.code === "22023" && /not found/i.test(error.message ?? "");
+}
+
+export function isMissingFunctionError(message: string, fnName: string): boolean {
+  return (
+    (message.includes("Could not find the function") && message.includes(fnName)) ||
+    (message.includes("does not exist") && message.includes(fnName))
+  );
+}
+
 export function logUsage(supabase: MCPSupabaseClient, params: LogUsageParams): void {
   Promise.resolve(
     supabase.rpc("cerefox_log_usage", {

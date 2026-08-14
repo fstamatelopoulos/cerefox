@@ -314,6 +314,51 @@ plain text snapshots for recovery purposes only.
 - Partial edits MUST NOT change a document's provenance, title or metadata:
   they change content only.
 
+---
+
+### Agent-surface document deletion (iteration 37, #208)
+
+- An agent MUST be able to **soft-delete** a document over MCP
+  (`cerefox_delete_document`): the document leaves search and lands in the
+  web-UI trash, recoverable until a human purges it.
+- A delete MUST prove a preceding read: the call REQUIRES the document's
+  `content_hash` as the caller read it, and a stale hash MUST surface as a
+  conflict (re-read, reconsider, retry). There is deliberately **no
+  last-write-wins** on deletion.
+- An agent MUST be able to **restore** a soft-deleted document
+  (`cerefox_restore_document`, #210 — reversing the earlier restore-is-human-only
+  posture by maintainer decision: restores are audited and cannot destroy
+  content). Restoring a non-deleted document is a reported no-op.
+- Permanent purge MUST NOT be exposed on any agent surface: destroying data
+  outright keeps its human-in-the-loop confirmation (web UI only).
+- Deleting an already-deleted document MUST be a reported no-op — the original
+  deletion time is preserved and no duplicate audit or usage entries are
+  written — but the read-hash is validated first: a stale or garbage hash is a
+  conflict even in the trash, so "a delete proves a read" holds everywhere.
+- A soft-deleted document MUST NOT accept content updates
+  (`cerefox_ingest_document` refuses; restore first). This is what makes
+  restore safe without a freshness token: what was reviewed in the trash is
+  what comes back.
+- A delete SHOULD carry a `reason`, recorded in the audit entry, for the human
+  reviewing the trash.
+
+---
+
+### Link integrity (iteration 37, #214)
+
+- A write whose content contains a `[Text](uuid)` link to a document id that
+  does not exist MUST be rejected, listing every unresolvable id, under a
+  deterministic (non-retryable) error. Trashed targets resolve. On updates,
+  only newly-introduced unresolvable ids reject — a dead link the document
+  already carried must not make it unwritable (legacy dead links belong to
+  the phase-2 sweep).
+- Content inside fenced code blocks or inline code spans MUST NOT be
+  validated (examples), and `[[wikilinks]]` MUST NOT be validated (the
+  sanctioned dangling/forward-reference form).
+- The check MUST run in the shared RPC so every surface is covered
+  identically, and MUST add negligible latency relative to embedding.
+  Design: `docs/specs/link-integrity-design.md`.
+
 ## 3. Non-Functional Requirements
 
 ### NFR-1: Cost

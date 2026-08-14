@@ -53,6 +53,7 @@ Calories: 1200
 `;
 
 const HASH = "a".repeat(64);
+const BOGUS_LINK_ID = "00000000-dead-beef-0000-000000000000";
 
 interface Captured {
   ingestArgs?: Record<string, unknown>;
@@ -91,7 +92,13 @@ function mockClient(opts: { hash?: string; captured?: Captured; ingestError?: st
       if (name === "cerefox_log_usage") return { data: null, error: null };
       return { data: null, error: null };
     },
-    from: () => ({ select: () => ({ data: null, error: null }) }),
+    // readDocument's trashed-doc pre-check chains
+    // .from().select().eq().maybeSingle(); a null row means "not trashed".
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: () => ({ data: null, error: null }) }),
+      }),
+    }),
   } as unknown as MCPSupabaseClient;
 }
 
@@ -438,6 +445,39 @@ describe("server-behind detection", () => {
   });
 });
 
+describe("link integrity mapping (#214)", () => {
+  test("CEREFOX_UNRESOLVED_LINKS maps to self-correction instructions naming the ids", async () => {
+    stubEmbeddings();
+    try {
+      const client = mockClient({
+        ingestError:
+          `CEREFOX_UNRESOLVED_LINKS: 1 linked document id(s) do not exist: ${BOGUS_LINK_ID}. ` +
+          `If these were meant to link existing documents, the ids are mangled — re-read the ` +
+          `source and correct them. If they are examples, put them in code formatting (backticks or a fence).`,
+      });
+      const err = await edit
+        .handler(
+          client,
+          {
+            document_id: "d",
+            expected_content_hash: HASH,
+            operations: [{ op: "replace_section", anchor_heading: "## Totals", text: "x" }],
+          },
+          ctx,
+        )
+        .catch((e: Error) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain(BOGUS_LINK_ID);
+      expect((err as Error).message).toContain("mangled");
+      // Specific diagnosis: only ids INTRODUCED by this write reject (the
+      // RPC tolerates dead links the document already carried).
+      expect((err as Error).message).toContain("introduces");
+    } finally {
+      restoreFetch();
+    }
+  });
+});
+
 // ── Review findings (cloud code review, 2026-08-09) ────────────────────────
 
 describe("author_type is derived from the access path (bug_001)", () => {
@@ -689,7 +729,11 @@ describe("shrink reporting counts code points, not UTF-16 units (review bug_009)
         }
         return { data: [], error: null };
       },
-      from: () => ({ select: () => ({ data: null, error: null }) }),
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: () => ({ data: null, error: null }) }),
+        }),
+      }),
     } as unknown as MCPSupabaseClient;
   }
 

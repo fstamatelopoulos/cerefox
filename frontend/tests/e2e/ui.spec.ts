@@ -154,6 +154,36 @@ test.describe("Projects", () => {
   });
 });
 
+// ── Dashboard recent-docs project scope ────────────────────────────────────
+test.describe("Dashboard recent docs", () => {
+  test("project selector scopes the tile and refetches", async ({ page }) => {
+    await page.goto(APP);
+    const select = page.getByTestId("recent-project-select");
+    await expect(select).toBeVisible();
+    await expect(select).toHaveValue(""); // "All projects" default
+
+    const options = select.locator("option");
+    if ((await options.count()) < 2) {
+      test.skip(true, "No projects to scope by");
+      return;
+    }
+    const value = await options.nth(1).getAttribute("value");
+    // Selecting a project must hit the server with the scope, not filter
+    // client-side: the tile's rows are a fresh top-10 within the project.
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/dashboard/recent-docs?project_id=")),
+      select.selectOption(value!),
+    ]);
+    await expect(select).toHaveValue(value!);
+  });
+
+  test("the misleading View all link is gone", async ({ page }) => {
+    await page.goto(APP);
+    await expect(page.getByTestId("recent-project-select")).toBeVisible();
+    await expect(page.getByRole("button", { name: "View all" })).toHaveCount(0);
+  });
+});
+
 // ── Document detail ────────────────────────────────────────────────────────
 test.describe("Document detail", () => {
   test("document page loads with action buttons", async ({ page }) => {

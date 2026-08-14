@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { detectV07FromResponse } from "../api/client";
 import { checkFilename, ingestPaste } from "../api/documents";
 import type { FilenameCheckResponse, IngestResponse } from "../api/types";
+import { invalidateDocumentViews } from "../lib/invalidate";
 import { CliCard } from "../components/CliCard";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
@@ -48,7 +49,13 @@ export function IngestPage() {
 
   const onIngestSuccess = (res: IngestResponse) => {
     setResult(res);
-    if (res.success) queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    // Full set, not just ["dashboard"]: the recent-docs tile now reads its
+    // own ["dashboard-recent"] query, and search/project lists show the new
+    // document too.
+    if (res.success) invalidateDocumentViews(queryClient);
+    // A skip is not an error, but its WHY matters — especially "identical
+    // content is in the trash", the re-upload-after-delete case.
+    if (res.skipped && res.note) showError("Ingest skipped", res.note);
   };
   const onIngestError = (err: unknown) => {
     if (!showV07DeferredToast(err)) {

@@ -37,8 +37,8 @@ function noopClient(): SupabaseClient {
 }
 
 describe("ALL_TOOLS registration", () => {
-  test("contains exactly 17 tools (13 core + the 4 relation tools)", () => {
-    expect(ALL_TOOLS.length).toBe(17);
+  test("contains exactly 19 tools (15 core + the 4 relation tools)", () => {
+    expect(ALL_TOOLS.length).toBe(19);
   });
 
   test("the partial-edit tools are split along the safety boundary (iter-34)", () => {

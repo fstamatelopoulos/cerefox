@@ -31,7 +31,7 @@ OAuth remains the robust, generally-available path this design targets.
 
 **Goal**: make `cerefox-mcp` a spec-compliant OAuth 2.1 **protected resource server** so
 any OAuth-discovering MCP client — claude.ai, Claude mobile, and potentially ChatGPT
-connectors and others — can connect with the **full 10-tool surface** (hybrid search,
+connectors and others — can connect with the **full tool surface (ten tools at the time of this design; 15 core today)** (hybrid search,
 document reconstruction, ingest, the works). Explicitly rejected: keyword-only access via
 Supabase's hosted MCP (`mcp.supabase.com` + PAT) — raw table access without semantic
 search or Cerefox tool ergonomics is not worth having.
@@ -256,7 +256,7 @@ until tried.
 
 If the maintainer's account has it, pointing a connector at `cerefox-mcp` with the
 legacy anon JWT should work **today with zero code changes** (the EF gateway already
-accepts it) — full 10-tool surface on claude.ai web and mobile. Phase 0 tests this
+accepts it) — full tool surface (ten tools at the time of this design; 15 core today) on claude.ai web and mobile. Phase 0 tests this
 first. It does **not** replace the OAuth work: it's a beta under slow rollout with a
 shared-credential model, it does nothing for other OAuth-discovering clients, and the
 product story ("any MCP client can connect") still needs the standard flow. But it can
@@ -396,7 +396,7 @@ explicit audit items for the v1.0 security audit (`docs/specs/security-model.md`
   needs an interactive consent; cover it manually in Phase 4.) Keep EF-quota discipline:
   narrowest file, `requestor: "e2e-test"`.
 - **Manual acceptance (Phase 4/5)**: claude.ai connector end-to-end (discovery → DCR →
-  consent → tokens → all 13 core tools); same connector on Claude mobile; regression matrix
+  consent → tokens → all 15 core tools); same connector on Claude mobile; regression matrix
   for Claude Code / Cursor / Claude Desktop (supergateway) / Codex on static Bearer;
   GPT Actions untouched-but-verified; watch EF logs for the full handshake.
 

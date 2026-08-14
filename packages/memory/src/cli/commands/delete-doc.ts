@@ -20,6 +20,7 @@ import {
   systemError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
+import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface DeleteOptions {
@@ -69,21 +70,81 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
     }
   }
 
-  // Call the soft-delete RPC. Note: cerefox_delete_document doesn't
-  // take a `p_reason` argument — `--reason` is captured here for the
-  // audit-log description only (passed via a separate audit entry
-  // would require an extra round trip; for now we just print it).
-  await client.rpc("cerefox_delete_document", {
-    p_document_id: documentId,
-    p_author: author,
-    p_author_type: authorType,
-  });
+  // p_reason lands in the audit description (schema 0.12.0, #208). Only pass
+  // it when given: the bare 3-arg call still matches the old function
+  // signature, so plain `document delete` keeps working against pre-0.12.0
+  // servers — `--reason` is the only part that needs the newer schema.
+  let result: { already_deleted?: boolean; deleted_at?: string } | null;
+  try {
+    result = await client.rpc("cerefox_delete_document", {
+      p_document_id: documentId,
+      p_author: author,
+      p_author_type: authorType,
+      ...(options.reason ? { p_reason: options.reason } : {}),
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (isMissingFunctionError(message, "cerefox_delete_document")) {
+      // Only blame --reason when it was actually passed — a bare delete can
+      // hit the same window during a deploy's DROP/CREATE.
+      throw systemError(
+        options.reason
+          ? `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
+              `Run \`cerefox server deploy\` and retry, or retry without --reason.`
+          : `The delete did not run: the server has no matching cerefox_delete_document ` +
+              `(mid-deploy window, or an old schema). Run \`cerefox server deploy\` and retry.`,
+      );
+    }
+    throw e;
+  }
+
+  if (result === null) {
+    // The shared rpc() wrapper maps Postgres 42883 ("function does not
+    // exist") to a null return — and a pre-0.12.0 server's VOID delete ALSO
+    // comes back null, so success and swallowed-failure are indistinguishable
+    // here. One cheap read settles which one happened before claiming either.
+    // If the verify read itself fails, say we DON'T KNOW — a transient read
+    // error must not turn a delete that worked into a reported failure.
+    const { data: check, error: checkError } = await client.raw
+      .from("cerefox_documents")
+      .select("deleted_at")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (checkError) {
+      warn(
+        `Delete submitted, but the follow-up verification read failed (${checkError.message}). ` +
+          `Confirm with: cerefox document get ${documentId}`,
+      );
+      return;
+    }
+    if (!check?.deleted_at) {
+      throw systemError(
+        `The delete did not take effect — the server has no matching ` +
+          `cerefox_delete_document (mid-deploy window, or an old schema). ` +
+          `Run \`cerefox server deploy\` and retry.`,
+      );
+    }
+  }
+
+  // The 0.12.0 RPC reports what actually happened; report the same. The y/N
+  // prompt can sit open long enough for another writer to delete this document
+  // first — claiming success (and a recorded reason) then would be false.
+  // Pre-0.12.0 servers return void; treat that as the old unconditional path.
+  if (result?.already_deleted) {
+    println(
+      c.dim(
+        `Document ${documentId} ("${doc.title}") was already soft-deleted at ${result.deleted_at} ` +
+          `by the time the delete ran. No change was made and no reason was recorded.`,
+      ),
+    );
+    return;
+  }
 
   println(
     c.green(`✓ Soft-deleted "${doc.title}" (id: ${documentId}). Recoverable from the Cerefox web UI trash.`),
   );
   if (options.reason) {
-    println(c.dim(`  Reason (informational only): ${options.reason}`));
+    println(c.dim(`  Reason (recorded in the audit log): ${options.reason}`));
   }
 }
 

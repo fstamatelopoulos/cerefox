@@ -593,6 +593,40 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     );
   });
 
+  // ── /dashboard/recent-docs ─────────────────────────────────────────────────
+  // The recently-changed tile's data, standalone: scoping the tile to a
+  // project must not re-run the aggregate /dashboard queries (corpus totals,
+  // per-project counts — several full-table walks) just to change 10 rows.
+  app.get("/api/v1/dashboard/recent-docs", async (c) => {
+    const projectId = c.req.query("project_id") || null;
+    // Validated: it feeds a uuid-typed PostgREST filter, and a malformed
+    // value would 22P02 into a 500. A bad bookmark deserves a 400.
+    if (projectId && !UUID_RE.test(projectId)) {
+      return c.json({ detail: "project_id must be a UUID" }, 400);
+    }
+    const [recentDocs, projects] = await Promise.all([
+      listDocuments(ctx, { projectId, limit: 10 }),
+      listAllProjects(ctx),
+    ]);
+    const docIds = recentDocs.map((d) => String(d.id));
+    const [docProjectsMap, authors] = await Promise.all([
+      getProjectsForDocuments(ctx, docIds, projects),
+      getRecentDocAuthors(ctx, docIds),
+    ]);
+    return c.json({
+      recent_docs: recentDocs.map((d) => {
+        const id = String(d.id);
+        const pids = (docProjectsMap[id] ?? []).map((p) => String(p.id));
+        const a = authors[id];
+        return {
+          ...dashboardDocFromRow(d, pids),
+          author: a?.author ?? null,
+          author_type: a?.author_type ?? null,
+        };
+      }),
+    });
+  });
+
   // ── /dashboard ─────────────────────────────────────────────────────────────
   app.get("/api/v1/dashboard", async (c) => {
     const [recentDocs, projects, docCount, totals] = await Promise.all([

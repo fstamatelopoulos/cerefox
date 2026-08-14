@@ -8,6 +8,7 @@ import { fetchTrash, purgeDocument, restoreDocument, type DeletedDocument } from
 import { CliCard } from "../components/CliCard";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { useProjects } from "../hooks/useProjects";
+import { invalidateDocumentViews } from "../lib/invalidate";
 import { showError, showSuccess } from "../utils/notifications";
 import ui from "../styles/redesign.module.css";
 
@@ -34,11 +35,7 @@ export function TrashPage() {
     staleTime: 10_000,
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["trash"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    queryClient.invalidateQueries({ queryKey: ["search"] });
-  };
+  const invalidate = () => invalidateDocumentViews(queryClient);
   const restoreMut = useMutation({
     mutationFn: restoreDocument,
     onSuccess: () => {

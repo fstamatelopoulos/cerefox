@@ -20,6 +20,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { editDocument, fetchDocument } from "../api/documents";
 import { MarkdownViewer } from "../components/MarkdownViewer";
+import { invalidateDocumentViews } from "../lib/invalidate";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import { showSuccess, showError, showV07DeferredToast } from "../utils/notifications";
 
@@ -80,8 +81,7 @@ export function DocumentEditPage() {
     },
     onSuccess: (result) => {
       if (result.success) {
-        queryClient.invalidateQueries({ queryKey: ["document", id] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        invalidateDocumentViews(queryClient, id);
         showSuccess("Document saved", result.reindexed ? "Content re-indexed" : "Metadata updated");
         navigate(`/document/${id}`);
       } else if (result.error) {
@@ -89,12 +89,32 @@ export function DocumentEditPage() {
       }
     },
     onError: (err) => {
-      if (err instanceof ApiError && err.status === 409) {
-        showError(
-          "Edit conflict",
-          "This document changed while you were editing it (another writer saved a newer version). Open the document in a new tab, merge your changes, then save again.",
-        );
-        return;
+      if (err instanceof ApiError) {
+        // The server's body carries the specific remedy — 409 is no longer
+        // only the concurrency conflict (a trashed document is also 409, with
+        // a different fix), and 422 (unresolved links) names the broken ids.
+        // Showing a generic message for those sent users down the wrong path.
+        let body: { error?: string; message?: string } = {};
+        try {
+          body = JSON.parse(err.body) as { error?: string; message?: string };
+        } catch {
+          // non-JSON body; fall through to the generic branches below
+        }
+        if (err.status === 409 && body.error === "document is in the trash") {
+          showError("Document is in the trash", body.message ?? "Restore it from the Trash page first, then save again.");
+          return;
+        }
+        if (err.status === 422) {
+          showError("Broken document links", body.message ?? "The content links document id(s) that don't exist — fix or remove them.");
+          return;
+        }
+        if (err.status === 409) {
+          showError(
+            "Edit conflict",
+            "This document changed while you were editing it (another writer saved a newer version). Open the document in a new tab, merge your changes, then save again.",
+          );
+          return;
+        }
       }
       if (!showV07DeferredToast(err)) {
         showError("Save failed", err instanceof Error ? err.message : String(err));

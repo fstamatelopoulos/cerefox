@@ -15,7 +15,7 @@ It is not a message bus -- it is curated, versioned, searchable memory backed by
 
 You'll be using **one** of these — whichever your user (or the harness) has configured:
 
-1. **MCP tools (default)** — 12 named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, run as `cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 13 Tools** below. This is the recommended path for purpose-built agent clients.
+1. **MCP tools (default)** — 15 named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, run as `cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 15 Tools** below. This is the recommended path for purpose-built agent clients.
 2. **Shell CLI (Bash tool)** — the same operations exposed as a local `cerefox …` command (the TypeScript CLI from `@cerefox/memory`, resource-verb shape — e.g. `cerefox document get`, `cerefox project list`), invoked via your Bash tool. Used when your user prefers not to install/configure an MCP server. The semantics are identical; only the surface differs. See **Using Cerefox via the CLI** near the bottom of this guide for the MCP-tool → CLI-command mapping and the small list of behavioural differences.
 
 If you're not sure which mode you're in: check whether `cerefox_search` shows up in your tool list. If yes, use MCP. If no, ask your user where the Cerefox checkout lives — they'll have told you, typically in `CLAUDE.md`, `AGENTS.md`, or an equivalent project memory file.
@@ -34,7 +34,7 @@ The tool is intentionally MCP-only so an agent that has been dropped into Cerefo
 
 ---
 
-## The 13 Tools
+## The 15 Tools
 
 ### cerefox_search
 
@@ -191,6 +191,41 @@ The audit trail records each operation distinctly (`insert` / `replace-section` 
 
 ---
 
+### cerefox_delete_document
+
+**Soft**-delete a document: it leaves search results and lands in the web-UI trash, recoverable until a human purges it. New in v1.7.0 (#208) — before that, deletion was CLI/web-UI-only and agents had to ask their user.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `document_id` | Yes | UUID of the document to soft-delete. |
+| `expected_content_hash` | **Yes** | The `content_hash` of the document **as you read it**. A delete must follow a read: if you have not read the document, read it first. A stale hash fails with a conflict — re-read, reconsider, retry. There is deliberately no `last_write_wins`. |
+| `reason` | No | Why the document is being deleted. Recorded in the audit-log entry — it is the main thing the human reviewing the trash has to go on. Short and specific. |
+| `author` / `requestor` | No | Your agent name (audit / usage log). |
+
+**The hash requirement is the point, not a formality.** The CLI's delete asks a human "Continue? y/N"; an agent has no prompt, so its proof-of-intent is evidence that it read what it is deleting. If the document changed between your read and your delete, the conflict is information: someone wrote to a document you were about to discard — look before deciding again.
+
+**A mistaken delete can be undone with `cerefox_restore_document`** (below). Permanent purge is web-UI-only (human-in-the-loop, see **Governance**). Deleting an already-deleted document is a reported no-op — the original deletion time stands and no duplicate audit entry is written — but the hash is still validated first: the read-proof holds in the trash too. A trashed document also refuses content updates (`cerefox_ingest` errors; restore first), so what you review in the trash is what a restore brings back.
+
+**Always tell your user what you deleted and why.** They review the trash; your `reason` and your report are what make that review possible.
+
+---
+
+### cerefox_restore_document
+
+Restore a soft-deleted document from the trash — the audited inverse of `cerefox_delete_document`. New in v1.7.0 (#210), by maintainer decision: every restore carries author attribution in the audit log, restoring cannot destroy content, and it keeps parity with the CLI's `document restore`.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `document_id` | Yes | UUID of the soft-deleted document. |
+| `reason` | No | Why it is being restored. Recorded in the audit-log entry. |
+| `author` / `requestor` | No | Your agent name (audit / usage log). |
+
+No `expected_content_hash`: a trashed document cannot be concurrently edited, so there is no read-freshness to prove. Restoring a document that is not deleted is a reported no-op. **Purge remains the one action with no agent surface** — once a human purges from the web UI, the document is gone and cannot be restored.
+
+**Tell your user about restores just as you do deletes** — both are lifecycle changes they should be able to follow in the audit trail and in your report.
+
+---
+
 ### cerefox_list_versions
 
 Show version history of a document.
@@ -248,6 +283,21 @@ List all projects with names, IDs, and descriptions.
 | `requestor` | No | Your agent name. |
 
 Call once per session to discover available projects before filtering search results by `project_name`.
+
+---
+
+### cerefox_set_document_metadata
+
+Change a document's metadata (tags) **without resending its content** (v1.6.0, #204). Merges by default, so concurrent agents setting different keys cannot clobber each other.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `document_id` | Yes | UUID of the document to tag. |
+| `metadata` | Yes | Keys to set. Values are JSON strings by convention (a `metadata_filter` matches JSONB as strings). A `null` value REMOVES that key. Keys you do not mention are left alone unless `replace` is true. |
+| `replace` | No | Set the metadata to EXACTLY this object, discarding any key not listed. Rare — the same destructive contract as `cerefox_set_document_projects`. |
+| `author` / `requestor` | No | Your agent name (audit / usage log). |
+
+Content, chunks and embeddings are untouched; no new version is created. The response reports what *changed* (keys set / removed), not what was asked for. Use this instead of `cerefox_ingest` whenever only the tags are changing.
 
 ---
 
@@ -438,6 +488,27 @@ Documents you ingest may contain markdown links to other Cerefox documents. The 
 [Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d)
 ```
 
+**The server validates these links on every write (v1.7.0, #214).** A write
+whose content contains a `[Text](uuid)` link to a document id that does not
+exist is **rejected**, listing the offending id(s). This exists because
+long random ids are a worst-case input for regenerating text — a mangled
+UUID silently becomes a dead link, and the guard turns that into a loud,
+same-turn-fixable error. Three things to know:
+
+- **Do not retry unchanged.** Re-read the source you copied each link from,
+  correct the id(s), and resend. The error is deterministic.
+- **Examples go in code formatting.** A backticked `` `[Text](uuid)` `` or a
+  fenced block is not a link and is not validated — that is the escape
+  mechanism, and it is just correct markdown authoring.
+- **Only links your write introduces are validated on updates.** A dead
+  link the document already carried (its target purged after linking) does
+  not block your unrelated edit — legacy dead links are found by the
+  dead-link sweep (#214 phase 2), not by holding your edit hostage. New
+  documents validate every link.
+
+`[[Wikilinks]]` are NOT validated — they remain the sanctioned form for
+"flag a document to create later."
+
 UUIDs are the only link form that is fully reliable:
 
 - **Stable**: survives title changes. If the target gets renamed, the link still resolves.
@@ -493,8 +564,8 @@ If you're using Cerefox via the local CLI (Path C from `connect-agents.md`), the
 ## Governance
 
 - **Review status**: agent writes set `pending_review`; human edits set `approved`. Both are searchable.
-- **Soft delete**: deleted documents go to trash (recoverable). They are excluded from search. There is no delete MCP tool — soft-delete is done via the CLI (`cerefox document delete --yes --author <you> --author-type agent`) or the web UI.
-- **Permanent purge and restore-from-trash are web-UI-only**, by design. If you decide to delete something, **tell the user explicitly** that you soft-deleted it and that they can review or restore it via the Cerefox web UI. You cannot un-do your own soft-delete from agent code; only the human can. See [`docs/guides/access-paths.md` → Destructive operations and the trust model](docs/guides/access-paths.md#destructive-operations-and-the-trust-model).
+- **Soft delete**: deleted documents go to trash (recoverable). They are excluded from search. Delete via `cerefox_delete_document` (MCP, v1.7.0+ — requires the document's `content_hash` as you read it), the CLI (`cerefox document delete --yes --author <you> --author-type agent`), or the web UI.
+- **Restore is agent-reachable; permanent purge is web-UI-only.** A mistaken soft-delete can be undone with `cerefox_restore_document` (or `cerefox document restore`), fully audited (#210, v1.7.0). Purge — the only action that actually destroys data — keeps its human-in-the-loop confirmation in the web UI. If you delete or restore something, **tell the user explicitly** so they can follow it in the audit trail. See [`docs/guides/access-paths.md` → Destructive operations and the trust model](docs/guides/access-paths.md#destructive-operations-and-the-trust-model).
 - **Versioning**: every update via `update_if_exists` creates an archived version. Old content is always recoverable.
 - **Audit log**: all write operations are recorded with author, timestamp, and size changes.
 
@@ -524,12 +595,15 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 | `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
 | `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <document-id> --requestor <name>` |
 | `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
+| `cerefox_set_document_metadata(document_id, metadata, replace, author)` | `cerefox document set-metadata <document-id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
 | `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
 | `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
+| `cerefox_delete_document(document_id, expected_content_hash, reason, author, requestor)` | `cerefox document delete <document-id> --reason <text> --author <a> --author-type user\|agent --yes` (the CLI confirms interactively instead of requiring the hash) |
+| `cerefox_restore_document(document_id, reason, author, requestor)` | `cerefox document restore <document-id> --reason <text> --author <a> --author-type user\|agent` |
 
-> Other CLI verbs with no MCP equivalent: `cerefox document edit` (title/metadata patch), `cerefox document delete` / `cerefox document restore`, `cerefox project create` / `cerefox project edit`, `cerefox config list/get/set`, `cerefox server reindex`, `cerefox guides list/show`.
+> Other CLI verbs with no MCP equivalent: `cerefox document edit` (title/metadata patch), `cerefox project create` / `cerefox project edit`, `cerefox config list/get/set`, `cerefox server reindex`, `cerefox guides list/show`.
 
 ### Caller-identity flags (set these the same way you would on MCP)
 

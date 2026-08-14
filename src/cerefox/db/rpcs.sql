@@ -1127,33 +1127,88 @@ $$;
 -- Soft-deletes a document by setting deleted_at = NOW(). The document, its
 -- chunks, and versions remain in the database but are excluded from search.
 -- Use cerefox_purge_document for permanent deletion.
--- Use cerefox_restore_document to undo a soft delete.
+-- Use cerefox_restore_document to undo a soft delete (agent-reachable since
+-- 0.12.0, #210). Permanent purge is web-UI-only by design (access-paths.md →
+-- "Destructive operations and the trust model").
+--
+-- p_expected_content_hash (0.12.0, #208): optional CAS. When provided, the
+-- delete proceeds only if it matches the document's current content_hash —
+-- proof the caller read what it is deleting. Checked under the same FOR UPDATE
+-- lock as the ingest CAS (iter-32); mismatch → CEREFOX_CONFLICT under PT409,
+-- never a retryable SQLSTATE. NULL/blank skips the check: the CLI confirms
+-- interactively instead, and the MCP tool makes the parameter required at the
+-- transport layer (its callers have no interactive prompt).
+-- p_reason (0.12.0, #208): optional, appended to the audit description — for
+-- the human reviewing the trash, who otherwise sees only what was deleted.
+--
+-- Deleting an already-deleted document is a reported no-op: the original
+-- deleted_at is preserved and no duplicate audit entry is written.
 
+DROP FUNCTION IF EXISTS cerefox_delete_document(UUID, TEXT, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS cerefox_delete_document(UUID, TEXT, TEXT);
 DROP FUNCTION IF EXISTS cerefox_delete_document(UUID);
 CREATE FUNCTION cerefox_delete_document(
-    p_document_id   UUID,
-    p_author        TEXT    DEFAULT 'unknown',
-    p_author_type   TEXT    DEFAULT 'user'
+    p_document_id           UUID,
+    p_author                TEXT    DEFAULT 'unknown',
+    p_author_type           TEXT    DEFAULT 'user',
+    p_expected_content_hash TEXT    DEFAULT NULL,
+    p_reason                TEXT    DEFAULT NULL
 )
-RETURNS VOID
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    v_title      TEXT;
-    v_total_chars INT;
+    v_title        TEXT;
+    v_total_chars  INT;
+    v_current_hash TEXT;
+    v_deleted_at   TIMESTAMPTZ;
 BEGIN
-    SELECT title, total_chars INTO v_title, v_total_chars
-    FROM cerefox_documents WHERE id = p_document_id;
+    -- FOR UPDATE: makes the hash check atomic with the delete — a concurrent
+    -- content update serializes here, and a stale deleter sees its hash.
+    SELECT title, total_chars, content_hash, deleted_at
+    INTO v_title, v_total_chars, v_current_hash, v_deleted_at
+    FROM cerefox_documents WHERE id = p_document_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Document % not found', p_document_id;
+        RAISE EXCEPTION 'Document % not found', p_document_id
+            USING ERRCODE = '22023';  -- invalid_parameter_value
     END IF;
 
-    -- Soft delete: set deleted_at timestamp
-    UPDATE cerefox_documents SET deleted_at = NOW() WHERE id = p_document_id;
+    -- Optimistic concurrency: blank is ABSENT, not stale (same rule and same
+    -- reason as cerefox_ingest_document — '' can never equal a real hash, so
+    -- classifying it as a conflict would be a permanent failure reported as a
+    -- resolvable one).
+    -- Compare TRIMMED, matching the presence check: a correct hash with a
+    -- stray trailing newline must not be misreported as a stale-hash
+    -- conflict — that reads as "changed since it was read" with two hashes
+    -- that look identical, and re-reading can never fix it.
+    -- Validated BEFORE the already-deleted no-op: "a delete proves a read"
+    -- has to hold for trashed documents too, or a garbage hash gets reported
+    -- as a successful no-op and the caller learns nothing.
+    IF NULLIF(BTRIM(p_expected_content_hash), '') IS NOT NULL
+       AND BTRIM(p_expected_content_hash) <> v_current_hash THEN
+        RAISE EXCEPTION
+            'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, check it still warrants deletion, and retry with the new hash.',
+            p_document_id, p_expected_content_hash, v_current_hash
+            USING ERRCODE = 'PT409';  -- deterministic conflict; see ingest CAS
+    END IF;
+
+    IF v_deleted_at IS NOT NULL THEN
+        RETURN jsonb_build_object(
+            'document_id', p_document_id,
+            'title', v_title,
+            'total_chars', v_total_chars,
+            'deleted_at', v_deleted_at,
+            'already_deleted', TRUE
+        );
+    END IF;
+
+    UPDATE cerefox_documents SET deleted_at = NOW()
+    WHERE id = p_document_id
+    RETURNING deleted_at INTO v_deleted_at;
 
     PERFORM cerefox_create_audit_entry(
         p_document_id := p_document_id,
@@ -1163,33 +1218,69 @@ BEGIN
         p_size_before := v_total_chars,
         p_size_after := 0,
         p_description := 'Soft-deleted document: ' || COALESCE(v_title, '(untitled)') ||
-                         ' (' || COALESCE(v_total_chars, 0) || ' chars)'
+                         ' (' || COALESCE(v_total_chars, 0) || ' chars)' ||
+                         COALESCE('; reason: ' || NULLIF(BTRIM(p_reason), ''), '')
+    );
+
+    RETURN jsonb_build_object(
+        'document_id', p_document_id,
+        'title', v_title,
+        'total_chars', v_total_chars,
+        'deleted_at', v_deleted_at,
+        'already_deleted', FALSE
     );
 END;
 $$;
 
 -- ── cerefox_restore_document ─────────────────────────────────────────────────
 -- Restores a soft-deleted document by clearing deleted_at.
+--
+-- 0.12.0 (#210): agent-reachable — exposed over MCP as cerefox_restore_document
+-- alongside the CLI verb, by maintainer decision (2026-08-13): everything is
+-- audited, restore cannot destroy content, and CLI/MCP parity outweighs the
+-- earlier "an agent must not undo its own delete" posture, which predated the
+-- audit surface. Permanent purge remains web-UI-only.
+-- Same honesty contract as the reworked delete: JSONB return; restoring a
+-- document that is not deleted is a reported no-op (no audit entry); a missing
+-- document raises rather than silently returning. p_reason lands in the audit
+-- description.
 
-CREATE OR REPLACE FUNCTION cerefox_restore_document(
+DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT);
+CREATE FUNCTION cerefox_restore_document(
     p_document_id   UUID,
     p_author        TEXT    DEFAULT 'unknown',
-    p_author_type   TEXT    DEFAULT 'user'
+    p_author_type   TEXT    DEFAULT 'user',
+    p_reason        TEXT    DEFAULT NULL
 )
-RETURNS VOID
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    v_title      TEXT;
+    v_title       TEXT;
     v_total_chars INT;
+    v_deleted_at  TIMESTAMPTZ;
 BEGIN
-    SELECT title, total_chars INTO v_title, v_total_chars
-    FROM cerefox_documents WHERE id = p_document_id AND deleted_at IS NOT NULL;
+    SELECT title, total_chars, deleted_at
+    INTO v_title, v_total_chars, v_deleted_at
+    FROM cerefox_documents WHERE id = p_document_id
+    FOR UPDATE;
 
-    IF v_title IS NULL THEN
-        RETURN;  -- Not found or not deleted
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Document % not found', p_document_id
+            USING ERRCODE = '22023';  -- invalid_parameter_value
+    END IF;
+
+    IF v_deleted_at IS NULL THEN
+        RETURN jsonb_build_object(
+            'document_id', p_document_id,
+            'title', v_title,
+            'total_chars', v_total_chars,
+            'restored', FALSE,
+            'was_deleted', FALSE
+        );
     END IF;
 
     UPDATE cerefox_documents SET deleted_at = NULL WHERE id = p_document_id;
@@ -1201,7 +1292,16 @@ BEGIN
         p_author_type := p_author_type,
         p_size_before := 0,
         p_size_after := v_total_chars,
-        p_description := 'Restored document: ' || COALESCE(v_title, '(untitled)')
+        p_description := 'Restored document: ' || COALESCE(v_title, '(untitled)') ||
+                         COALESCE('; reason: ' || NULLIF(BTRIM(p_reason), ''), '')
+    );
+
+    RETURN jsonb_build_object(
+        'document_id', p_document_id,
+        'title', v_title,
+        'total_chars', v_total_chars,
+        'restored', TRUE,
+        'was_deleted', TRUE
     );
 END;
 $$;
@@ -1371,6 +1471,9 @@ DECLARE
     v_op            JSONB;      -- iter-33: per-operation audit element
     v_size_warn_at  INT;
     v_size_warning  BOOLEAN := FALSE;
+    v_doc_deleted   TIMESTAMPTZ;
+    v_scannable     TEXT;
+    v_missing       TEXT[];
 BEGIN
     -- ── Zero-chunk guard (v0.3.1) ────────────────────────────────────────
     -- Refuse to create or update a document with no chunks. Three reasons:
@@ -1389,6 +1492,60 @@ BEGIN
             'cerefox_ingest_document: refusing to write a document with zero chunks (title=%, source=%). Supply at least one chunk, or use cerefox_delete_document to clear content.',
             p_title, p_source
             USING ERRCODE = '22023';  -- invalid_parameter_value
+    END IF;
+
+    -- ── Link integrity (#214, 0.12.0) ────────────────────────────────────
+    -- Validate [Text](uuid) document links against the store: agents mangle
+    -- long random ids when regenerating text, and a mangled id silently
+    -- becomes a dead link. Fenced code blocks and inline code spans are
+    -- stripped first — code formatting is the markdown-native way to write
+    -- an EXAMPLE link, and the escape mechanism here (no bypass flag, by
+    -- design). Trashed targets resolve: the id denotes a document. One PK
+    -- lookup for all candidates; ~1-2ms. Runs on create AND update, so a
+    -- link whose target was later purged surfaces on the next edit.
+    -- See docs/specs/link-integrity-design.md.
+    SELECT string_agg(c->>'content', E'\n') INTO v_scannable
+    FROM jsonb_array_elements(p_chunks) c;
+    -- Fences are LINE-ANCHORED, matching markdown semantics: only ``` at a
+    -- line start opens/closes a block, so a stray backtick run mid-prose
+    -- cannot mis-pair the fences and un-escape a later real code block. An
+    -- unterminated fence strips to end-of-content (under-validates, never
+    -- false-rejects). Inline code is stripped after, so fence markers are
+    -- intact when pairing runs.
+    v_scannable := regexp_replace(
+        COALESCE(v_scannable, ''),
+        E'(^|\\n)[ \\t]*```.*?(\\n[ \\t]*```[^\\n]*|$)', ' ', 'g');
+    v_scannable := regexp_replace(v_scannable, '`[^`]*`', ' ', 'g');
+
+    SELECT array_agg(DISTINCT m[1]) INTO v_missing
+    FROM regexp_matches(
+        v_scannable,
+        '\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)',
+        'g') m
+    WHERE NOT EXISTS (SELECT 1 FROM cerefox_documents d WHERE d.id = m[1]::uuid);
+
+    -- On UPDATE, tolerate dead links the document ALREADY carries: a target
+    -- purged after linking must not make the document unwritable — sync
+    -- flows re-send content verbatim from disk and could never converge, and
+    -- an unrelated partial edit re-sends the untouched section holding the
+    -- link. Only NEWLY-INTRODUCED unresolvable ids reject; legacy dead links
+    -- are the phase-2 sweep's job (#214). Creates validate everything.
+    IF v_missing IS NOT NULL AND p_document_id IS NOT NULL THEN
+        SELECT array_agg(x) INTO v_missing
+        FROM unnest(v_missing) x
+        WHERE strpos(
+            lower(COALESCE((SELECT string_agg(ch.content, E'\n')
+                            FROM cerefox_chunks ch
+                            WHERE ch.document_id = p_document_id
+                              AND ch.version_id IS NULL), '')),
+            lower(x)) = 0;
+    END IF;
+
+    IF v_missing IS NOT NULL THEN
+        RAISE EXCEPTION
+            'CEREFOX_UNRESOLVED_LINKS: % linked document id(s) do not exist: %. If these were meant to link existing documents, the ids are mangled — re-read the source and correct them. If they are examples, put them in code formatting (backticks or a fence).',
+            array_length(v_missing, 1), array_to_string(v_missing, ', ')
+            USING ERRCODE = '22023';  -- deterministic; never a retryable SQLSTATE
     END IF;
 
     -- Validate review_status
@@ -1412,13 +1569,27 @@ BEGIN
         -- updaters serialize here, and the second one sees the first one's
         -- hash — the race window (chunk + embed latency) is closed at the
         -- only place all transports share (iter-32).
-        SELECT COALESCE(d.total_chars, 0), d.content_hash
-        INTO v_old_chars, v_current_hash
+        SELECT COALESCE(d.total_chars, 0), d.content_hash, d.deleted_at
+        INTO v_old_chars, v_current_hash, v_doc_deleted
         FROM cerefox_documents d WHERE d.id = v_doc_id
         FOR UPDATE;
 
         IF NOT FOUND THEN
             RAISE EXCEPTION 'cerefox_ingest_document: document not found: %', v_doc_id
+                USING ERRCODE = '22023';  -- invalid_parameter_value
+        END IF;
+
+        -- Refuse to rewrite a trashed document (0.12.0, #211 review). Before
+        -- this guard an update by document_id landed content in a document
+        -- excluded from search — a write into a black hole — and it silently
+        -- broke the restore contract: restore takes no freshness token on the
+        -- premise that what was reviewed in the trash is what comes back.
+        IF v_doc_deleted IS NOT NULL THEN
+            -- CEREFOX_ prefix per the convention below: transport handlers
+            -- detect it and rephrase for their caller.
+            RAISE EXCEPTION
+                'CEREFOX_DELETED: document % is soft-deleted; restore it first (cerefox_restore_document / cerefox document restore) or create a new document.',
+                v_doc_id
                 USING ERRCODE = '22023';  -- invalid_parameter_value
         END IF;
 
@@ -1442,7 +1613,10 @@ BEGIN
                     'CEREFOX_TOKEN_REQUIRED: content updates require expected_content_hash (the content_hash you read) or last_write_wins=true. Current hash: %',
                     v_current_hash
                     USING ERRCODE = '22023';  -- invalid_parameter_value
-            ELSIF p_expected_content_hash <> v_current_hash THEN
+            -- Trimmed comparison, matching the presence check above: a correct
+            -- hash with stray whitespace is not a stale one (found via the
+            -- delete CAS review, #208 — same flaw existed here since iter-32).
+            ELSIF BTRIM(p_expected_content_hash) <> v_current_hash THEN
                 RAISE EXCEPTION
                     'CEREFOX_CONFLICT: document % changed since it was read (expected hash %, current hash %). Re-read the document, merge your changes, and retry with the new hash.',
                     v_doc_id, p_expected_content_hash, v_current_hash
@@ -2539,6 +2713,12 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.12.0 (#208, #210): cerefox_delete_document — CAS
+    -- (p_expected_content_hash), p_reason in audit description, JSONB return,
+    -- idempotent re-delete; cerefox_restore_document — same rework (JSONB,
+    -- p_reason, honest no-op). Back the new cerefox_delete_document and
+    -- cerefox_restore_document MCP tools (CLI parity). Ingest CAS compares
+    -- trimmed.
     -- 0.11.3 (#204): cerefox_set_document_metadata — metadata-only writes.
     -- 0.11.2 (iteration 36): RLS enabled on cerefox_document_relations,
     -- which iteration 29 left off the list (Supabase rls_disabled_in_public).
@@ -2546,7 +2726,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.11.3'::TEXT;
+    SELECT '0.12.0'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────

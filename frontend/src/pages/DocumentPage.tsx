@@ -35,6 +35,7 @@ import { DiffViewer } from "../components/DiffViewer";
 import { MarkdownLink } from "../components/MarkdownLink";
 import { useProjects } from "../hooks/useProjects";
 import { formatDateTime } from "../utils/dates";
+import { invalidateDocumentViews } from "../lib/invalidate";
 import { showError, showSuccess } from "../utils/notifications";
 import md from "../components/MarkdownViewer.module.css";
 import ui from "../styles/redesign.module.css";
@@ -135,12 +136,7 @@ export function DocumentPage() {
   const { data: projects } = useProjects();
   const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
 
-  const invalidateDoc = () => {
-    queryClient.invalidateQueries({ queryKey: ["document", id] });
-    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    queryClient.invalidateQueries({ queryKey: ["search"] });
-    queryClient.invalidateQueries({ queryKey: ["trash"] });
-  };
+  const invalidateDoc = () => invalidateDocumentViews(queryClient, id);
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteDocument(id!),
@@ -171,7 +167,10 @@ export function DocumentPage() {
   const reviewMutation = useMutation({
     mutationFn: (status: string) => setReviewStatus(id!, status),
     onSuccess: (_, status) => {
-      queryClient.invalidateQueries({ queryKey: ["document", id] });
+      // Same blast radius as delete/restore: the pill also renders in the
+      // dashboard, search and project lists, and only invalidating this
+      // document left those showing the old status on back-navigation.
+      invalidateDoc();
       showSuccess("Review status updated", status === "approved" ? "Approved" : "Pending review");
     },
     onError: (err) => showError("Status update failed", String(err)),

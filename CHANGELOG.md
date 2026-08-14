@@ -9,7 +9,129 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **`cerefox_delete_document` MCP tool — agents can now soft-delete (#208).**
+  Closes a parity gap, not a policy: the trust model always sanctioned agent
+  soft-delete (audited, recoverable from the web-UI trash), but the tool was
+  never built, so agents had no path where the CLI had `document delete`. The
+  tool requires `expected_content_hash` — the MCP analogue of the CLI's y/N
+  prompt: a delete must follow a read, and a stale hash fails with a conflict
+  (re-read, reconsider, retry). An optional `reason` is recorded in the audit
+  entry for the human reviewing the trash. Its inverse ships alongside it
+  (below); permanent purge remains web-UI-only.
+- **`cerefox_restore_document` MCP tool — the delete's audited inverse (#210).**
+  By maintainer decision, restore moves out of the human-only tier: every
+  restore is audited with author attribution, restoring cannot destroy
+  content, and the CLI had `document restore` all along. Restoring a
+  non-deleted document is a reported no-op. **Permanent purge remains
+  web-UI-only** — the one action that destroys data keeps its
+  human-in-the-loop confirmation. Tool surface: 15 core + 4 dormant.
+- **`cerefox document delete --reason` / `document restore --reason` are now
+  recorded** in the audit-log entry (delete's was previously printed but not
+  stored; restore had no reason flag).
+
+- **Referential integrity for UUID document links (#214).** Every write now
+  validates `[Text](uuid)` links against the store and rejects the write if
+  any target id does not exist, listing the offenders. Agents mangle long
+  random ids when regenerating text; this turns a silent dead link into a
+  loud, same-turn-fixable error (~1–2ms per write — one regex pass and one
+  indexed lookup). Fenced code and inline code spans are not validated —
+  code formatting is the markdown-native way to write an example link — and
+  `[[wikilinks]]` remain the sanctioned dangling form. On updates only
+  newly-introduced links are validated, so a document that already carries
+  a dead link (target purged after linking) stays editable and syncable;
+  creates validate everything. Fence pairing is line-anchored, so a stray
+  backtick run in prose cannot un-escape a real code block. The GPT-Actions
+  ingest Edge Function maps the new rejections (422 unresolved links, 409
+  deleted document) and the pasted OpenAPI block documents them
+  (info.version 3.2.0). Design: `docs/specs/link-integrity-design.md`.
+- **Dashboard: the recently-changed tile can be scoped to a project.** A
+  selector next to the tile (default "All projects", the previous behavior)
+  refetches the top-10 recently changed documents within the chosen project —
+  the "what did agents change in X lately" view — via a dedicated light
+  endpoint (`/api/v1/dashboard/recent-docs`), so flipping projects moves 10
+  rows, not the whole dashboard aggregate. The tile's "View all" link, which
+  just opened search and did not do what it promised, is removed.
+
+### Changed
+
+- **`cerefox_ingest` now refuses to rewrite a soft-deleted document.** Before,
+  an update by `document_id` on a trashed document silently landed content in
+  a document excluded from search — a write into a black hole — and it broke
+  restore's contract that what was reviewed in the trash is what comes back.
+  The error says to restore first or create a new document. Three companions
+  make the whole re-ingest-after-delete story coherent: title/source-path
+  resolution **prefers a live match over a trashed twin** (recency alone
+  resolved a freshly-trashed doc and made the live one unreachable);
+  filesystem-sync flows (`ingest-dir`, `guides ingest`) **skip** trashed
+  matches with a note instead of erroring forever — the deletion is
+  respected and the sync converges; and an identical-content re-upload says
+  the content **is in the trash** instead of "already up-to-date" about a
+  document search cannot find. The web edit and review-status routes refuse
+  writes to trashed documents with a 409 (metadata-only saves previously
+  slipped through).
+- **A delete on an already-trashed document validates the read-hash first.**
+  "A delete proves a read" now holds for trashed documents too: a stale or
+  garbage hash is a conflict, not a reported no-op.
+- **`cerefox_delete_document` RPC** (schema 0.11.3 → 0.12.0): optional CAS via
+  `p_expected_content_hash` (`CEREFOX_CONFLICT`/PT409 on mismatch, same
+  pattern as the ingest CAS), `p_reason` appended to the audit description,
+  JSONB return instead of VOID, and idempotent re-delete (original
+  `deleted_at` preserved, no duplicate audit entry). Re-run
+  `cerefox server deploy` to pick it up; reconnect MCP clients to see the new
+  tool.
+
+### Fixed
+
+- **Review-status pills no longer go stale after a toggle.** Flipping
+  pending-review → approved on a document invalidated only that document's
+  query, so navigating back to the dashboard, search results, or a project
+  list showed the old status until a manual refresh. The toggle now
+  invalidates the same set of views a delete or restore does; that set gains
+  project document lists and the document's own audit-trail card, and the
+  Trash page's mutations get the same completion.
+- **Web lifecycle routes report client-state races as 404, not 500.** Deleting
+  or restoring a document that another tab already purged used to surface the
+  raw RPC error as a server error; both routes now return 404 and pass
+  through the RPC's `already_deleted` / `restored` honesty signals. A
+  malformed `project_id` on `/api/v1/dashboard` is a 400 naming the
+  parameter instead of failing the whole dashboard with a 500.
+- **CLI delete/restore verify before claiming.** The shared RPC wrapper maps
+  "function does not exist" to a null result — indistinguishable from a
+  pre-0.12.0 server's void success — so both verbs now confirm the document's
+  actual state before printing ✓, and a mid-deploy missing-function error
+  gets redeploy guidance that only mentions `--reason` when it was passed
+  (detection single-sited in `isMissingFunctionError`, five hand-rolled
+  copies before).
+- **Whitespace around a concurrency token no longer fakes a conflict.** Both
+  the delete CAS and the ingest CAS trimmed the hash for the presence check
+  but compared it raw, so a correct hash with a stray trailing newline was
+  reported as "changed since it was read" — with two hashes that look
+  identical and a re-read that can never fix it. All comparison sites now
+  trim: both RPCs, the MCP handlers, and the CLI/web pipeline's advisory
+  fast-fail (which otherwise faked the same conflict before the fixed RPC
+  was ever reached). Found by review on #208; the ingest side had carried
+  the flaw since iter-32.
+- **`cerefox document delete` reports what actually happened.** If another
+  writer deleted the document while the confirmation prompt sat open, the CLI
+  used to claim success (and a recorded reason) for a delete that was a no-op;
+  it now reads the RPC's `already_deleted` return and says so.
+- **A v1.7.0 client against a pre-0.12.0 server gets actionable guidance**
+  ("run `cerefox server deploy`") from both the MCP delete tool and
+  `document delete --reason`, instead of a raw schema-cache error.
+- **The stdio smoke test derives its expected tool list from the registry**
+  instead of a hardcoded 10-name list that had been stale since v1.4.0
+  (invisible because the test probe-and-skips without live credentials).
+- **The quick-reference CLI mapping table** gained the missing
+  `cerefox_insert` / `cerefox_edit` / `cerefox_delete_document` rows and lost
+  four relation-tool rows that had been pasted in with the wrong columns; the
+  bundled `cerefox_get_help` content is regenerated to match.
+- **Stale docs**: the Path A tool table in `connect-agents.md` was missing the
+  v1.4.0 partial-edit tools, its "all core tools on Path B" claim predated the
+  MCP-only tools (GPT Actions exposes 8 primitive operations), and two
+  relation-count arithmetic leftovers said 16 where the total is 18. The
+  doc-count guard now also catches "N named tools" phrasing.
 
 ---
 

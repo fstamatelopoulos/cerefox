@@ -160,6 +160,12 @@ export class Acceptance {
     return { id, hash };
   }
 
+  /** Register a document created OUTSIDE seed() (e.g. via a direct
+   *  cerefox_ingest in a test) for the same teardown. */
+  track(id: string): void {
+    this.created.push(id);
+  }
+
   /** Ids this run created, for assertions about cleanup. */
   get ids(): readonly string[] {
     return this.created;

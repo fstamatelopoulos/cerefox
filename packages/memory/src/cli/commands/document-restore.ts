@@ -19,9 +19,11 @@ import {
   systemError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
+import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface RestoreOptions {
+  reason?: string;
   author?: string;
   authorType?: string;
 }
@@ -48,13 +50,79 @@ async function action(documentId: string, options: RestoreOptions): Promise<void
     warn("No --author / CEREFOX_AUTHOR_NAME set — audit log will record this restore as 'unknown'.");
   }
 
-  await client.rpc("cerefox_restore_document", {
-    p_document_id: documentId,
-    p_author: author,
-    p_author_type: authorType,
-  });
+  // p_reason lands in the audit description (schema 0.12.0, #210). Only pass
+  // it when given, so the bare 3-arg call still matches the old function
+  // signature against pre-0.12.0 servers.
+  let result: { restored?: boolean } | null;
+  try {
+    result = await client.rpc("cerefox_restore_document", {
+      p_document_id: documentId,
+      p_author: author,
+      p_author_type: authorType,
+      ...(options.reason ? { p_reason: options.reason } : {}),
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (isMissingFunctionError(message, "cerefox_restore_document")) {
+      throw systemError(
+        options.reason
+          ? `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
+              `Run \`cerefox server deploy\` and retry, or retry without --reason.`
+          : `The restore did not run: the server has no matching cerefox_restore_document ` +
+              `(mid-deploy window, or an old schema). Run \`cerefox server deploy\` and retry.`,
+      );
+    }
+    throw e;
+  }
+
+  if (result === null) {
+    // Same ambiguity as delete: the rpc() wrapper maps 42883 to null, and a
+    // pre-0.12.0 VOID restore also returns null. Verify before claiming —
+    // and only claim success on POSITIVE evidence (a row with deleted_at
+    // cleared). Failing open here printed "✓ Restored" for a restore that
+    // never ran whenever the verify read errored or the doc was purged.
+    const { data: check, error: checkError } = await client.raw
+      .from("cerefox_documents")
+      .select("deleted_at")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (checkError) {
+      warn(
+        `Restore submitted, but the follow-up verification read failed (${checkError.message}). ` +
+          `Confirm with: cerefox document get ${documentId}`,
+      );
+      return;
+    }
+    if (!check) {
+      throw systemError(
+        `Document ${documentId} no longer exists — it may have been purged concurrently. Nothing was restored.`,
+      );
+    }
+    if (check.deleted_at) {
+      throw systemError(
+        `The restore did not take effect — the server has no matching ` +
+          `cerefox_restore_document (mid-deploy window, or an old schema). ` +
+          `Run \`cerefox server deploy\` and retry.`,
+      );
+    }
+  }
+
+  // The 0.12.0 RPC reports what happened; pre-0.12.0 returns void (null) and
+  // gets the old unconditional message. If another writer restored it first
+  // (restored: false), say so instead of claiming this call did it.
+  if (result && result.restored === false) {
+    println(
+      c.dim(
+        `Document ${documentId} ("${doc.title}") was already restored by the time this ran. No change was made.`,
+      ),
+    );
+    return;
+  }
 
   println(c.green(`✓ Restored "${doc.title}" (id: ${documentId}) from the trash.`));
+  if (options.reason) {
+    println(c.dim(`  Reason (recorded in the audit log): ${options.reason}`));
+  }
 }
 
 export function registerDocumentRestore(parent: Command): void {
@@ -62,6 +130,7 @@ export function registerDocumentRestore(parent: Command): void {
     .command("restore")
     .description("Restore a soft-deleted document from the trash (inverse of `document delete`).")
     .argument("<document-id>", "UUID of the soft-deleted document.")
+    .option("--reason <text>", "Optional reason recorded in the audit log.")
     .option("-a, --author <name>", "Caller identity (audit log).")
     .option("--author-type <type>", "'user' or 'agent' (default: user).", "user")
     .action(action);

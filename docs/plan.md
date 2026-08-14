@@ -28,7 +28,23 @@
 ---
 ## Current Focus
 
-**2026-08-12 — v1.6.1 shipped, deployed and announced. No work in flight.**
+**2026-08-13 — Iteration 37 in progress: MCP delete parity (#208), target v1.7.0.**
+
+An agent's question ("why is there no delete in MCP?") exposed a parity gap the
+trust model had always sanctioned closing. On `feat/mcp-delete-document`
+(PR #211): `cerefox_delete_document` (requires the caller's read-hash, reason
+recorded in audit) and `cerefox_restore_document` (#210 — the maintainer moved
+restore out of the human-only tier; **permanent purge is now the single
+web-UI-only action**), plus the dashboard recent-docs project selector and the
+review-status-pill staleness fix, and referential integrity for `](uuid)`
+document links (#214 — mangled-UUID protection, validated in the ingest RPC
+on every write). Schema 0.11.3 → 0.12.0; ingest now refuses
+to rewrite trashed documents. Two high-effort review rounds applied. Staging
+is stuck in Supabase restoration (ticket filed), so verification runs
+carefully on prod after merge + cut.
+Details: [iteration 37](plans/iteration-37-mcp-delete-parity.md).
+
+Previous state (v1.6.1, for context):
 
 Three releases went out in six days, all driven by agents using the previous
 one:
@@ -73,7 +89,10 @@ one:
 
 ## Active iteration
 
-**None.** The last three closed in sequence:
+**[Iteration 37 — MCP delete parity](plans/iteration-37-mcp-delete-parity.md)**
+— in progress (2026-08-13), target v1.7.0, issue #208.
+
+The three before it closed in sequence:
 
 **[Iteration 36 — Observability, surface parity, test hygiene](plans/iteration-36-observability-and-parity.md)**
 — ✅ **CLOSED, shipped v1.5.0** (2026-08-11), plus the v1.6.x follow-ons.

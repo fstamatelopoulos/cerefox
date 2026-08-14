@@ -193,4 +193,156 @@ describe("release acceptance (live)", () => {
       expect(versions).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/);
     }
   });
+
+  test("delete requires the read-hash and a stale one is a conflict, not a delete (#208)", async () => {
+    const { id, hash } = await A.seed("delete-guard", DOC);
+
+    const noHash = await A.mcp("cerefox_delete_document", { document_id: id });
+    expect(noHash.isError).toBe(true);
+    expect(noHash.text).toContain("expected_content_hash");
+
+    const stale = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: "0".repeat(64),
+    });
+    expect(stale.isError).toBe(true);
+    expect(stale.text).toContain("changed since you read it");
+
+    // Neither attempt deleted anything: the document still reads back whole.
+    const read = await A.mcp("cerefox_get_document", { document_id: id });
+    expect(read.isError).toBe(false);
+    expect(read.text).toContain(hash);
+  });
+
+  test("delete with the read-hash soft-deletes, records the reason, and re-delete is a no-op (#208)", async () => {
+    const { id, hash } = await A.seed("delete-happy", DOC);
+
+    const del = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: hash,
+      reason: "acceptance fixture — should be visible in audit",
+      author: "acceptance",
+    });
+    expect(del.isError).toBe(false);
+    expect(del.text).toContain("Soft-deleted");
+    expect(del.text).toContain("recoverable");
+
+    // The reason is what the human reviewing the trash goes on.
+    const audit = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "delete" })).text;
+    expect(audit).toContain("should be visible in audit");
+
+    // Idempotent: the original deletion stands, no second audit entry.
+    const again = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: hash,
+    });
+    expect(again.isError).toBe(false);
+    expect(again.text).toContain("ALREADY soft-deleted");
+
+    // The read-proof holds in the trash too: a garbage hash on an
+    // already-deleted document is a conflict, not a comfortable no-op.
+    const garbage = await A.mcp("cerefox_delete_document", {
+      document_id: id,
+      expected_content_hash: "0".repeat(64),
+    });
+    expect(garbage.isError).toBe(true);
+    expect(garbage.text).toContain("changed since you read it");
+    const auditAfter = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "delete" })).text;
+    expect((auditAfter.match(/Soft-deleted document/g) ?? []).length).toBe(1);
+
+    // The path back (#210): MCP restore, the delete's audited inverse.
+    const restored = await A.mcp("cerefox_restore_document", {
+      document_id: id,
+      reason: "acceptance roundtrip",
+      author: "acceptance",
+    });
+    expect(restored.isError).toBe(false);
+    expect(restored.text).toContain("Restored");
+    const back = await A.mcp("cerefox_get_document", { document_id: id });
+    expect(back.isError).toBe(false);
+
+    // Restoring a live document is a reported no-op, and the CLI verb still
+    // works as the human-surface equivalent.
+    const again2 = await A.mcp("cerefox_restore_document", { document_id: id });
+    expect(again2.isError).toBe(false);
+    expect(again2.text).toContain("NOT deleted");
+    const cliRestore = A.cli(["document", "restore", id, "--author", "acceptance"]);
+    expect(cliRestore.code).toBe(0);
+
+    // CLI delete with --reason: same RPC, reason recorded, exit clean.
+    const cliDel = A.cli([
+      "document", "delete", id, "--yes",
+      "--reason", "acceptance cleanup",
+      "--author", "acceptance", "--author-type", "agent",
+    ]);
+    expect(cliDel.code).toBe(0);
+    expect(cliDel.out).toContain("recorded in the audit log");
+
+    // Trashed documents refuse content updates on every resolution path —
+    // this is what makes restore safe without a freshness token.
+    const byId = await A.mcp("cerefox_ingest", {
+      document_id: id,
+      title: "whatever",
+      content: "# New\n\nrewrite attempt",
+      author: "acceptance",
+    });
+    expect(byId.isError).toBe(true);
+    expect(byId.text).toContain("soft-deleted");
+    expect(byId.text).toContain("restore");
+  });
+
+  test("unresolvable ](uuid) links reject the write; code formatting escapes (#214)", async () => {
+    const { id: realId } = await A.seed("link-target", DOC);
+    const bogus = "00000000-dead-beef-0000-000000000000";
+
+    // A link to a REAL document passes.
+    const ok = await A.mcp("cerefox_ingest", {
+      title: `[E2E acceptance] linker ${Date.now() % 1e6}`,
+      content: `# Linker\n\nSee [the target](${realId}) for details.\n`,
+      author: "acceptance",
+    });
+    expect(ok.isError).toBe(false);
+    const okId = ok.text.match(/id: ([0-9a-f-]{36})/)?.[1];
+    if (okId) A.track(okId);
+
+    // A mangled id is rejected, naming the offender — the agent can
+    // self-correct in the same turn.
+    const bad = await A.mcp("cerefox_ingest", {
+      title: `[E2E acceptance] bad linker ${Date.now() % 1e6}`,
+      content: `# Bad\n\nSee [broken](${bogus}).\n`,
+      author: "acceptance",
+    });
+    expect(bad.isError).toBe(true);
+    expect(bad.text).toContain(bogus);
+    expect(bad.text).toContain("mangled");
+
+    // Code formatting is the escape: the same bogus id inside a fence and
+    // inline code is an EXAMPLE, not a link, and passes.
+    const escaped = await A.mcp("cerefox_ingest", {
+      title: `[E2E acceptance] escaped linker ${Date.now() % 1e6}`,
+      content:
+        `# Escaped\n\nExample syntax: \`[Text](${bogus})\`.\n\n` +
+        "```\n" + `[Also fine](${bogus})\n` + "```\n",
+      author: "acceptance",
+    });
+    expect(escaped.isError).toBe(false);
+    const escId = escaped.text.match(/id: ([0-9a-f-]{36})/)?.[1];
+    if (escId) A.track(escId);
+
+    // Partial edits go through the same guard: an edit that introduces a
+    // dead link is rejected with the same self-correction loop.
+    if (okId) {
+      const read = await A.mcp("cerefox_get_document", { document_id: okId, outline: true });
+      const hash = read.text.match(/content_hash: ([0-9a-f]{64})/)?.[1];
+      const edit = await A.mcp("cerefox_insert", {
+        document_id: okId,
+        position: "end_of_document",
+        text: `\nAnd [a mangled one](${bogus}).\n`,
+        expected_content_hash: hash,
+        author: "acceptance",
+      });
+      expect(edit.isError).toBe(true);
+      expect(edit.text).toContain(bogus);
+    }
+  });
 });

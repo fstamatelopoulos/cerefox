@@ -6,7 +6,7 @@ Cerefox is a **user-owned knowledge memory layer**: a persistent, curated knowle
 
 The primary use case is **shared memory across AI agents**: knowledge written by one tool becomes immediately available to all others, preventing context fragmentation across sessions and AI tools.
 
-> For the full project vision, core principles, and future direction, see [`docs/research/vision.md`](../research/vision.md).
+> For the full project vision, core principles, and future direction, see [`docs/research/vision.md`](research/vision.md).
 
 **Layer model:**
 ```
@@ -715,6 +715,21 @@ Ingestion is designed to be non-blocking where the caller allows it:
 - Content hash (SHA-256) computed on raw markdown
 - If hash exists in `cerefox_documents.content_hash`, ingestion is skipped (or optionally updates metadata if `update_if_exists=True` and content is identical — skip re-chunking, skip version snapshot since content unchanged)
 - This prevents accidental double-ingestion of the same file
+- The hash constraint is store-wide including trashed documents, so a hash
+  match on a soft-deleted document reports "identical content is in the
+  TRASH — restore it" rather than a bare skip (v1.7.0)
+
+### 6.3b Write-time guards in `cerefox_ingest_document` (v1.7.0)
+
+- **Trashed documents refuse content updates** — restore first
+  (`CEREFOX_DELETED`); title/source-path resolution prefers a live match over
+  a trashed twin, and filesystem-sync flows skip trashed matches with a note
+  instead of erroring forever.
+- **Link integrity (#214)** — `[Text](uuid)` links are validated against the
+  store; unresolvable ids reject the write (`CEREFOX_UNRESOLVED_LINKS`,
+  listing the offenders). Code fences / inline code escape; on updates only
+  newly-introduced ids are validated. Design:
+  [`docs/specs/link-integrity-design.md`](specs/link-integrity-design.md).
 
 ### 6.4 Update vs. Create
 
@@ -992,7 +1007,7 @@ for the SPA migration design document.
 
 ### 9.2 Pages/Features
 
-1. **Dashboard** (`/app/`): stat cards, recent documents table, projects table with doc counts, quick search
+1. **Dashboard** (`/app/`): stat cards, recent documents table (scopable to a project via its selector, backed by `GET /api/v1/dashboard/recent-docs`), projects table with doc counts, quick search
 2. **Search** (`/app/search`): 4 search modes (docs, hybrid, FTS, semantic), project and metadata filters, Markdown content accordion with Full/Excerpt badges
 3. **Document Detail** (`/app/document/:id`): Markdown viewer with Rendered/Raw toggle, collapsible version history, metadata accordion, chunks view, edit/download/delete actions
 4. **Document Edit** (`/app/document/:id/edit`): Edit/Preview content toggle, multi-select projects, dynamic metadata key/value editor
@@ -1029,7 +1044,7 @@ Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
 subprocess via npx (Node ≥20 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
-as the local server, so both expose the identical 13 core tools. Path 3's primitive
+as the local server, so both expose the identical 15 core tools. Path 3's primitive
 Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers
 authenticate with a **Cerefox access token** (`cerefox token generate`),
 validated in-function; Edge Functions use the service-role key internally. The
@@ -1055,6 +1070,8 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_set_document_metadata` | Write | Change a document's metadata without touching content. Merges by default; a JSON null removes a key. Metadata-only: no re-chunk, no re-embed, no version snapshot. |
 | `cerefox_insert` | Write (additive) | Add text at `end_of_document` / `end_of_section` / `after_heading` / `before_heading` without resending the document. Structurally cannot remove content. |
 | `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section`) applied **atomically** in a single write. |
+| `cerefox_delete_document` | Write (destructive) | Soft-delete to the trash. Requires the caller's read-hash (`expected_content_hash`); optional `reason` recorded in the audit entry. Permanent purge remains web-UI-only. |
+| `cerefox_restore_document` | Write (recovery) | Restore a soft-deleted document from the trash — the audited inverse of delete. Optional `reason`; no-op if the document is not deleted. |
 | `cerefox_get_help` | Read | Return the bundled agent quick-reference (tools, rules, workflows). |
 | `cerefox_set_relation` ⚑ | Write | Link two documents (`source --rel_type--> target`). |
 | `cerefox_delete_relation` ⚑ | Write (destructive) | Remove a relation. |
@@ -1067,11 +1084,13 @@ true`. A tool an agent can see is a tool an agent may use, so "dormant" has to
 mean invisible rather than merely unused — enabling and disabling change
 visibility only, never data.
 
-This is the full set of **13 core MCP tools, plus 4 dormant relation tools**,
+This is the full set of **15 core MCP tools, plus 4 dormant relation tools**,
 exposed identically over both transports
 (remote `cerefox-mcp` Edge Function and local `cerefox mcp`), via the shared
-`_shared/mcp-tools/` handlers. Note: document **delete** is *not* an MCP tool — it
-is available only via the CLI / web UI / REST.
+`_shared/mcp-tools/` handlers. Note: document delete on MCP is **soft-only**
+(v1.7.0, #208) with `cerefox_restore_document` as its audited inverse (#210) —
+permanent purge stays web-UI-only by design (see
+`docs/guides/access-paths.md` → Destructive operations and the trust model).
 
 All read tools accept an optional `requestor` parameter for usage log attribution.
 The `cerefox_ingest` tool uses `author` for the same purpose on writes.

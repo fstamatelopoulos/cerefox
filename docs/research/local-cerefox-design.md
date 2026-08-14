@@ -349,7 +349,7 @@ drop a compose file + `up`) → wire the **mounted volume**, `OPENAI_API_KEY`, p
 | `rpcs.sql` (22 RPCs, all logic) | **reused 100%** |
 | `schema.sql` + migrations | **reused 100%** (first-boot deploy via existing `db_deploy.ts`) |
 | `supabase-js` data-access (CLI/MCP/web) | **unchanged** — config points at local PostgREST |
-| `_shared/mcp-tools/*` (13 core tools) | **reused 100%** |
+| `_shared/mcp-tools/*` (15 core tools) | **reused 100%** |
 | `_shared/embeddings/*` | **reused 100%** (local embedder slots behind it later) |
 | Hono web app + `/api/v1` + React SPA | **reused 100%** |
 | PostgREST | **stock OSS component** — configured, not maintained (pinned version) |

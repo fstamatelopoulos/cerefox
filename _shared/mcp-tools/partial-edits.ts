@@ -35,7 +35,7 @@ import {
   sha256hex,
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
-import { logUsage } from "./_utils.ts";
+import { extractConflictHashes, isMissingFunctionError, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type MCPSupabaseClient, type ToolContext, type ToolDefinition } from "./types.ts";
 
 /**
@@ -175,6 +175,28 @@ async function readDocument(
   supabase: MCPSupabaseClient,
   documentId: string,
 ): Promise<{ title: string; content: string; hash: string }> {
+  // Trashed check BEFORE anything else: a partial edit of a trashed document
+  // would otherwise pay for embeddings and then hit the RPC's CEREFOX_DELETED
+  // refusal as an unshaped error, on every retry (round-4 review). ADVISORY
+  // only — the RPC guard is authoritative — so a client without the .from()
+  // surface (test doubles) skips it rather than failing.
+  try {
+    const { data: lifecycle } = await supabase
+      .from("cerefox_documents")
+      .select("deleted_at")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (lifecycle?.deleted_at) {
+      throw new McpInvalidParams(
+        `Document ${documentId} is soft-deleted (in the trash). A trashed document ` +
+          `cannot be edited — restore it first with cerefox_restore_document, then retry.`,
+      );
+    }
+  } catch (e) {
+    if (e instanceof McpInvalidParams) throw e;
+    // fall through — the RPC's CEREFOX_DELETED guard still refuses the write
+  }
+
   const { data, error } = await supabase.rpc("cerefox_get_document", {
     p_document_id: documentId,
     p_version_id: null,
@@ -303,8 +325,7 @@ async function applyAndWrite(
   if (error) {
     const message = error.message ?? "";
     if (message.includes("CEREFOX_CONFLICT")) {
-      const current = message.match(/current hash ([0-9a-f]{64})/)?.[1] ?? "unknown";
-      throw conflictError(documentId, expectedHash, current);
+      throw conflictError(documentId, expectedHash, extractConflictHashes(message).current);
     }
     if (message.includes("cerefox_documents_hash_unique")) {
       // content_hash is UNIQUE store-wide, so an edit whose result matches
@@ -318,7 +339,25 @@ async function applyAndWrite(
           `cerefox_search for the resulting content to find it.`,
       );
     }
-    if (message.includes("does not exist") && message.includes("cerefox_ingest_document")) {
+    if (message.includes("CEREFOX_UNRESOLVED_LINKS")) {
+      // Only ids INTRODUCED by this write reject (the RPC tolerates dead
+      // links the document already carried), so the diagnosis is specific.
+      const ids = message.match(/do not exist: ([^.]+)\./)?.[1] ?? "(unparsed)";
+      throw new Error(
+        `Edit rejected — this edit introduces link(s) to document id(s) that do not ` +
+          `exist: ${ids}. The UUIDs are almost certainly mangled — re-read the source ` +
+          `you copied each link from, correct the id(s), and retry. Do not retry ` +
+          `unchanged. Deliberate examples belong in code formatting (backticks).`,
+      );
+    }
+    if (message.includes("CEREFOX_DELETED")) {
+      // Race backstop: the doc was trashed between our read and the write.
+      throw new Error(
+        `Document ${documentId} was soft-deleted while this edit was in flight. ` +
+          `Restore it first with cerefox_restore_document, then retry.`,
+      );
+    }
+    if (isMissingFunctionError(message, "cerefox_ingest_document")) {
       throw new Error(
         `This server is behind: partial edits need schema 0.11.0 or newer. ` +
           `Run \`cerefox server deploy\`, then retry. (${message})`,
