@@ -1,6 +1,7 @@
 # Referential integrity for UUID document links (#214)
 
-**Ships in v1.7.0. Status: implemented alongside this spec.**
+**Ships in v1.7.0 (guard) / v1.7.1 (sweep). Status: implemented alongside this spec.
+User-facing guide: [`docs/guides/linking.md`](../guides/linking.md).**
 
 ## Problem
 

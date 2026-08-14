@@ -478,7 +478,7 @@ Call `cerefox_list_metadata_keys` for the current list -- conventions evolve.
 
 ## Writing linkable content
 
-Documents you ingest may contain markdown links to other Cerefox documents. The Cerefox web UI intercepts these links at click time and resolves them to the target document. The resolution happens entirely in the browser; the stored markdown is untouched.
+Documents you ingest may contain markdown links to other Cerefox documents. The Cerefox web UI intercepts these links at click time and resolves them to the target document. The resolution happens entirely in the browser; the stored markdown is untouched. (User-facing overview of the whole linking system, including *why* long ids corrupt during regeneration: [`docs/guides/linking.md`](docs/guides/linking.md).)
 
 ### The rule for agents: use document UUIDs
 
