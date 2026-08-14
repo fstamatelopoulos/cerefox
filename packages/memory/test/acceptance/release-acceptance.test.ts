@@ -303,6 +303,9 @@ describe("release acceptance (live)", () => {
     });
     expect(ok.isError).toBe(false);
     const okId = ok.text.match(/id: ([0-9a-f-]{36})/)?.[1];
+    // Every write returns the new hash (#189) — capture it here rather than
+    // re-reading via outline, whose header format this regex once mismatched.
+    const okHash = ok.text.match(/([0-9a-f]{64})/)?.[1];
     if (okId) A.track(okId);
 
     // A mangled id is rejected, naming the offender — the agent can
@@ -331,18 +334,16 @@ describe("release acceptance (live)", () => {
 
     // Partial edits go through the same guard: an edit that introduces a
     // dead link is rejected with the same self-correction loop.
-    if (okId) {
-      const read = await A.mcp("cerefox_get_document", { document_id: okId, outline: true });
-      const hash = read.text.match(/content_hash: ([0-9a-f]{64})/)?.[1];
-      const edit = await A.mcp("cerefox_insert", {
-        document_id: okId,
-        position: "end_of_document",
-        text: `\nAnd [a mangled one](${bogus}).\n`,
-        expected_content_hash: hash,
-        author: "acceptance",
-      });
-      expect(edit.isError).toBe(true);
-      expect(edit.text).toContain(bogus);
-    }
+    expect(okId).toBeDefined();
+    expect(okHash).toBeDefined();
+    const edit = await A.mcp("cerefox_insert", {
+      document_id: okId!,
+      position: "end_of_document",
+      text: `\nAnd [a mangled one](${bogus}).\n`,
+      expected_content_hash: okHash!,
+      author: "acceptance",
+    });
+    expect(edit.isError).toBe(true);
+    expect(edit.text).toContain(bogus);
   });
 });

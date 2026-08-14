@@ -9,6 +9,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **Orphaned 1-arg overloads of `cerefox_purge_document` / `cerefox_restore_document`
+  dropped** (schema 0.12.0 → 0.12.1, migration 0025). `CREATE OR REPLACE`
+  never removed the pre-author-era signatures when the functions grew, so
+  long-lived databases carried both overloads and a named 1-arg call was
+  ambiguous (PostgREST PGRST203) — found live when the first production
+  acceptance run failed to purge its fixtures. Fresh databases were never
+  affected. The acceptance harness now passes all three purge args, checks
+  the soft-delete's error before purging, and sweeps the audit rows the
+  purge cascade orphans (document_id nulled), which the id-based cleanup
+  missed.
+
 Open roadmap.
 
 ---

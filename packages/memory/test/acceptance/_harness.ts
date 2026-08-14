@@ -196,14 +196,28 @@ export class Acceptance {
           // 1. Soft delete, via the same RPC `document delete` calls. Spawning
           //    the CLI once per fixture is a process launch each and timed the
           //    teardown hook out at eight documents; the RPC is the identical
-          //    operation without the overhead.
-          await raw.rpc("cerefox_delete_document", {
+          //    operation without the overhead. Its error matters: an undeleted
+          //    doc makes the purge below refuse, so surface the real failure.
+          const del = await raw.rpc("cerefox_delete_document", {
             p_document_id: id,
             p_author: "acceptance",
             p_author_type: "agent",
           });
+          if ((del as { error?: unknown }).error) {
+            failed.push(id);
+            continue;
+          }
           // 2. Purge through the gate, which refuses anything not soft-deleted.
-          const { error } = await raw.rpc("cerefox_purge_document", { p_document_id: id });
+          //    ALL THREE args, always: long-lived databases carry an orphaned
+          //    1-arg overload of this RPC from the pre-author era (CREATE OR
+          //    REPLACE never dropped it), and a 1-arg call is ambiguous there
+          //    (PGRST203) — which is how the first prod run left 13 fixtures
+          //    behind. The named 3-arg call resolves uniquely everywhere.
+          const { error } = await raw.rpc("cerefox_purge_document", {
+            p_document_id: id,
+            p_author: "acceptance",
+            p_author_type: "agent",
+          });
           if (error) failed.push(id);
           else purged++;
         } catch {
@@ -211,9 +225,18 @@ export class Acceptance {
         }
       }
       // 3. The audit rows the RPC deliberately keeps are litter for a fixture.
-      //    Attempted regardless of individual purge failures.
+      //    Attempted regardless of individual purge failures. TWO passes: the
+      //    purge CASCADE nulls audit.document_id (ON DELETE SET NULL), so the
+      //    id-based delete misses rows for already-purged docs — the orphaned
+      //    acceptance-authored rows are swept separately (64 accumulated in
+      //    prod before this second pass existed).
       try {
         await raw.from("cerefox_audit_log").delete().in("document_id", this.created);
+        await (raw.from("cerefox_audit_log").delete() as unknown as {
+          is: (c: string, v: null) => { eq: (c: string, v: string) => Promise<unknown> };
+        })
+          .is("document_id", null)
+          .eq("author", "acceptance");
       } catch {
         // Non-fatal: the documents are gone, which is what matters.
       }

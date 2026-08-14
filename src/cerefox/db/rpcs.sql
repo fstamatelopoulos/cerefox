@@ -1247,6 +1247,9 @@ $$;
 
 DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS cerefox_restore_document(UUID, TEXT, TEXT);
+-- 0.12.1: the pre-author 1-arg overload survived every CREATE OR REPLACE
+-- since the signature grew (same orphan class as purge; found live on prod).
+DROP FUNCTION IF EXISTS cerefox_restore_document(UUID);
 CREATE FUNCTION cerefox_restore_document(
     p_document_id   UUID,
     p_author        TEXT    DEFAULT 'unknown',
@@ -1309,7 +1312,14 @@ $$;
 -- ── cerefox_purge_document ───────────────────────────────────────────────────
 -- Permanently deletes a soft-deleted document (CASCADE). Only works on
 -- documents that are already soft-deleted (deleted_at IS NOT NULL).
+--
+-- 0.12.1: drop the pre-author 1-arg overload. CREATE OR REPLACE never removed
+-- it when the signature grew, so long-lived databases carried BOTH — and a
+-- 1-arg named call was ambiguous there (PGRST203), which is how the first
+-- prod acceptance run failed to purge its fixtures. Same cleanup for
+-- cerefox_restore_document below.
 
+DROP FUNCTION IF EXISTS cerefox_purge_document(UUID);
 CREATE OR REPLACE FUNCTION cerefox_purge_document(
     p_document_id   UUID,
     p_author        TEXT    DEFAULT 'unknown',
@@ -2713,6 +2723,8 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.12.1: drop orphaned 1-arg overloads of purge/restore (pre-author era;
+    -- CREATE OR REPLACE never removed them; ambiguous PGRST203 on 1-arg calls).
     -- 0.12.0 (#208, #210): cerefox_delete_document — CAS
     -- (p_expected_content_hash), p_reason in audit description, JSONB return,
     -- idempotent re-delete; cerefox_restore_document — same rework (JSONB,
@@ -2726,7 +2738,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.12.0'::TEXT;
+    SELECT '0.12.1'::TEXT;
 $$;
 
 -- ── cerefox_content_format_stats ─────────────────────────────────────────────
