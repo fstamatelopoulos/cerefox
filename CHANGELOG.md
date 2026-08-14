@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.7.1] -- 2026-08-14
+
 ### Added
 
 - **Dead-link sweep — phase 2 of link integrity (#214).**
