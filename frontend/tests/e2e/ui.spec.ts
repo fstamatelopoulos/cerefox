@@ -162,8 +162,12 @@ test.describe("Dashboard recent docs", () => {
     await expect(select).toBeVisible();
     await expect(select).toHaveValue(""); // "All projects" default
 
+    // The options arrive with the dashboard query — poll instead of reading
+    // once, or the test skips on a race it should have waited out.
     const options = select.locator("option");
-    if ((await options.count()) < 2) {
+    try {
+      await expect.poll(async () => options.count(), { timeout: 8000 }).toBeGreaterThan(1);
+    } catch {
       test.skip(true, "No projects to scope by");
       return;
     }

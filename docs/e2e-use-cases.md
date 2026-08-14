@@ -110,8 +110,8 @@ frontend built (`cd frontend && bun run build`). Tests target the React SPA at
 | `TestProjects` | `test_project_crud` | Create project via UI form, verify it appears, cleanup | Done |
 | `TestDocumentView` | `test_document_page_loads` | Navigate from dashboard to document detail, verify Edit/Download buttons | Done |
 | `TestDocumentView` | `test_review_status_toggle_visible` | Document detail shows review status (Approved badge) | Done |
-| `Dashboard recent docs` | `project selector scopes the tile and refetches` | Recent-docs tile scoped by project via server refetch (`/dashboard/recent-docs?project_id=`), "All projects" default | Added (unrun — staging down; runs with the next e2e pass) |
-| `Dashboard recent docs` | `the misleading View all link is gone` | "View all" (which just opened search) removed from the recent-docs tile | Added (unrun — staging down; runs with the next e2e pass) |
+| `Dashboard recent docs` | `project selector scopes the tile and refetches` | Recent-docs tile scoped by project via server refetch (`/dashboard/recent-docs?project_id=`), "All projects" default | Done — verified on staging (v1.7.1, 2026-08-14) |
+| `Dashboard recent docs` | `the misleading View all link is gone` | "View all" (which just opened search) removed from the recent-docs tile | Done — verified on staging (v1.7.1, 2026-08-14) |
 | `TestAuditLog` | `test_audit_log_page_loads` | Audit log page renders with heading | Done |
 
 ### 6B. ID-Based Ingest (17B)
