@@ -13,6 +13,22 @@
 -- any rows already in the non-object state, so the operator sees them at
 -- upgrade time; repair is `cerefox document set-metadata <id> --replace`.
 
+-- Table-level backstop (round-5 review): closes every current and future
+-- direct writer at once, not only the RPC/CLI/web paths patched in code.
+-- NOT VALID: legacy non-object rows survive (reported below) until repaired
+-- with `document set-metadata --replace`, which the constraint then checks.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'cerefox_documents_metadata_object'
+    ) THEN
+        ALTER TABLE cerefox_documents
+            ADD CONSTRAINT cerefox_documents_metadata_object
+            CHECK (jsonb_typeof(metadata) = 'object') NOT VALID;
+    END IF;
+END $$;
+
 DO $$
 DECLARE
     v_count INT;

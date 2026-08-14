@@ -35,35 +35,6 @@ interface EditOptions {
   authorType?: string;
 }
 
-/**
- * Patch stored metadata with sets/unsets — the pure core of `document edit`,
- * exported for unit tests (#212).
- *
- * REFUSES non-object stored metadata instead of spreading it: `metadata` is
- * jsonb and can legitimately hold a string / array / number, and a JS spread
- * does not copy those — it DECOMPOSES them (a stored string becomes one key
- * per character, a number becomes {}), after which the write destroys the
- * original with a "✓ Edited" on top. Found on 13 real documents (#212).
- */
-export function patchMetadata(
-  stored: unknown,
-  sets: Array<[string, unknown]>,
-  unsets: string[],
-  documentId: string,
-): Record<string, unknown> {
-  if (stored !== null && stored !== undefined && (typeof stored !== "object" || Array.isArray(stored))) {
-    throw userError(
-      `Document ${documentId} has non-object metadata (${Array.isArray(stored) ? "array" : typeof stored}); ` +
-        `refusing to patch it — a patch would destroy the stored value. Repair it first with: ` +
-        `cerefox document set-metadata ${documentId} --replace --json '<the intended object>'`,
-    );
-  }
-  const metadata: Record<string, unknown> = { ...((stored as Record<string, unknown>) ?? {}) };
-  for (const [k, v] of sets) metadata[k] = v;
-  for (const k of unsets) delete metadata[k.trim()];
-  return metadata;
-}
-
 /** Parse a `key=value` pair; value is JSON-parsed when possible (numbers,
  *  booleans, arrays/objects), else kept as a raw string. */
 function parseMetaPair(pair: string): [string, unknown] {
@@ -105,18 +76,55 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
   const newTitle = hasTitle ? options.title!.trim() : (doc.title as string);
   const titleChanged = newTitle !== doc.title;
 
-  // Only include metadata in the write when a metadata flag was passed: a
-  // title-only edit must not touch (let alone destroy) the stored value (#212).
-  const update: Record<string, unknown> = { title: newTitle, updated_at: new Date().toISOString() };
-  if (metaTouched) {
-    update.metadata = patchMetadata(doc.metadata, sets.map(parseMetaPair), unsets, documentId);
+  const author = resolveAuthor(options.author);
+  const authorType = resolveAuthorType(options.authorType);
+  if (author === "unknown") {
+    warn(
+      "No --author / CEREFOX_AUTHOR_NAME set — audit log will record this write as 'unknown'.",
+    );
   }
 
-  const { error: updErr } = await client.raw
-    .from("cerefox_documents")
-    .update(update)
-    .eq("id", documentId);
-  if (updErr) throw systemError(`Update failed: ${updErr.message}`);
+  // Metadata goes through cerefox_set_document_metadata (#212 round-5 review):
+  // the RPC merges atomically under a row lock, refuses to merge onto a
+  // corrupt (non-object) stored value with the repair named, and writes its
+  // own audit entry — one implementation instead of a client-side re-derive
+  // that bypassed the guards and the audit trail. `--unset-meta k` is the
+  // RPC's JSON-null removal; a literal `--set-meta k=null` therefore also
+  // removes (storing JSON null was never distinguishable downstream anyway).
+  if (metaTouched) {
+    const patch: Record<string, unknown> = {};
+    for (const pair of sets) {
+      const [k, v] = parseMetaPair(pair);
+      patch[k] = v;
+    }
+    for (const k of unsets) patch[k.trim()] = null;
+    const { error: metaErr } = await client.raw.rpc("cerefox_set_document_metadata", {
+      p_document_id: documentId,
+      p_metadata: patch,
+      p_replace: false,
+      p_author: author,
+      p_author_type: authorType,
+    });
+    if (metaErr) {
+      if (metaErr.message?.includes("CEREFOX_BAD_METADATA")) {
+        throw userError(
+          `Document ${documentId} has non-object metadata; a patch cannot repair it. ` +
+            `Repair it first with: cerefox document set-metadata ${documentId} --replace --json '<the intended object>'`,
+        );
+      }
+      throw systemError(`Metadata update failed: ${metaErr.message}`);
+    }
+  }
+
+  // Title-only table write: metadata is never included, so a title edit
+  // cannot touch (let alone destroy) the stored value (#212).
+  if (hasTitle) {
+    const { error: updErr } = await client.raw
+      .from("cerefox_documents")
+      .update({ title: newTitle, updated_at: new Date().toISOString() })
+      .eq("id", documentId);
+    if (updErr) throw systemError(`Update failed: ${updErr.message}`);
+  }
 
   // Title boosting: refresh the FTS vector so search reflects the new title.
   if (titleChanged) {
@@ -127,23 +135,17 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
     if (ftsErr) throw systemError(`Title updated but FTS refresh failed: ${ftsErr.message}`);
   }
 
-  const author = resolveAuthor(options.author);
-  const authorType = resolveAuthorType(options.authorType);
-  if (author === "unknown") {
-    warn(
-      "No --author / CEREFOX_AUTHOR_NAME set — audit log will record this write as 'unknown'.",
-    );
+  // Metadata edits are audit-logged by the RPC above; a title change gets
+  // its own entry here (there is no title-editing RPC).
+  if (titleChanged) {
+    await client.raw.rpc("cerefox_create_audit_entry", {
+      p_document_id: documentId,
+      p_operation: "update-metadata",
+      p_author: author,
+      p_author_type: authorType,
+      p_description: "Edited title",
+    });
   }
-  await client.raw.rpc("cerefox_create_audit_entry", {
-    p_document_id: documentId,
-    p_operation: "update-metadata",
-    p_author: author,
-    p_author_type: authorType,
-    p_description:
-      `Edited${titleChanged ? " title" : ""}` +
-      (sets.length ? ` · set ${sets.length} meta key(s)` : "") +
-      (unsets.length ? ` · unset ${unsets.length} meta key(s)` : ""),
-  });
 
   println(c.green(`✓ Edited "${newTitle}" (id: ${documentId}).`));
   if (titleChanged) {

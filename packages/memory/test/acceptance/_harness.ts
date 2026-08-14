@@ -47,7 +47,12 @@ export const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
 export const PREFIX = "[E2E acceptance]";
 
 export interface CliResult {
+  /** stdout + stderr combined — for substring assertions. */
   out: string;
+  /** stdout ALONE — parse machine output (--json) from this, never from
+   *  `out`: a stderr line (version-skew banner, runtime warning) would break
+   *  JSON.parse for a passing feature. */
+  stdout: string;
   code: number;
 }
 
@@ -64,7 +69,7 @@ export class Acceptance {
   /** Run the built CLI. */
   cli(args: string[]): CliResult {
     const r = spawnSync("node", [BIN, ...args], { encoding: "utf8", maxBuffer: 40e6 });
-    return { out: (r.stdout ?? "") + (r.stderr ?? ""), code: r.status ?? 1 };
+    return { out: (r.stdout ?? "") + (r.stderr ?? ""), stdout: r.stdout ?? "", code: r.status ?? 1 };
   }
 
   /**

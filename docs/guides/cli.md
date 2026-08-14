@@ -353,7 +353,7 @@ cerefox document set-projects <doc-id> --clear
 
 **Synopsis**: `cerefox document dead-links [--json]`
 
-The write-time guard (v1.7.0) validates only links a write *introduces* — deliberately, so a target purged after linking cannot make its linkers unwritable. This command finds those legacy dead links on demand. A trashed target still exists and is **not** reported. Full chunk scan server-side (one RPC call); run on demand, not part of `doctor`.
+The write-time guard (v1.7.0) validates only links a write *introduces* — deliberately, so a target purged after linking cannot make its linkers unwritable. This command finds those legacy dead links on demand. A trashed target still exists and is **not** reported; trashed **linker** documents are also excluded (inert until restored — a restore re-enters them into the next sweep). Full chunk scan server-side (one RPC call); run on demand, not part of `doctor`.
 
 **Fix each hit** by editing the linking document: correct the id, remove the link, or backtick it as an example.
 

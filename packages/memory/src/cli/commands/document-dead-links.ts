@@ -13,7 +13,8 @@
 
 import type { Command } from "commander";
 
-import { c, printJson, println } from "../../../../../_shared/cli-core/index.ts";
+import { c, printJson, println, systemError } from "../../../../../_shared/cli-core/index.ts";
+import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface DeadLinkRow {
@@ -23,9 +24,26 @@ interface DeadLinkRow {
   occurrences: number;
 }
 
+const SERVER_BEHIND =
+  "The sweep did not run: this server has no cerefox_find_dead_links (needs schema 0.12.2). " +
+  "Run `cerefox server deploy`, then retry.";
+
 async function action(options: { json?: boolean }): Promise<void> {
   const client = getClient();
-  const rows = (await client.rpc<DeadLinkRow[]>("cerefox_find_dead_links", {})) ?? [];
+  // NEVER report a clean sweep for a sweep that did not run: the shared rpc()
+  // wrapper maps "function does not exist" to null, and PostgREST's PGRST202
+  // throws — both mean the server predates 0.12.2, not "no dead links".
+  let rows: DeadLinkRow[] | null;
+  try {
+    rows = await client.rpc<DeadLinkRow[]>("cerefox_find_dead_links", {});
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (isMissingFunctionError(message, "cerefox_find_dead_links")) {
+      throw systemError(SERVER_BEHIND);
+    }
+    throw e;
+  }
+  if (rows === null) throw systemError(SERVER_BEHIND);
 
   if (options.json) {
     printJson(rows);

@@ -31,13 +31,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   non-object value; the command's JS spread *decomposed* those (a stored
   string became one key per character, a number became `{}`) and wrote the
   result back with "✓ Edited" — even on a title-only edit, which never
-  mentioned metadata. Three-layer fix: the ingest RPC now rejects non-object
-  `p_metadata` (the MCP layer always did; now every write path agrees),
-  `cerefox_set_document_metadata` refuses to *merge* onto a non-object stored
-  value (Postgres `||` would produce an array; only `--replace` repairs, and
-  the error says so), and `document edit` refuses to patch a corrupt row
-  (naming the repair command) and only writes `metadata` at all when a
-  metadata flag was passed.
+  mentioned metadata. Fixed at every layer: the ingest RPC rejects
+  non-object `p_metadata` (the MCP layer always did; now every write path
+  agrees), `cerefox_set_document_metadata` refuses to *merge* onto a
+  non-object stored value (Postgres `||` would produce an array; only
+  `--replace` repairs, and the error says so) **while the `--replace` repair
+  itself now works on corrupt rows** (its change-reporting called
+  `jsonb_object_keys` on the scalar and rolled the repair back), the web
+  edit route validates metadata at runtime (a cast is compile-time only),
+  a table-level `CHECK (jsonb_typeof(metadata) = 'object')` closes every
+  current and future direct writer (added `NOT VALID` on existing databases
+  so legacy rows survive until repaired), and `document edit` now delegates
+  its metadata patch to the guarded, audited `cerefox_set_document_metadata`
+  RPC instead of merging client-side — title-only edits do not touch
+  metadata at all.
+- **The `](uuid)` link scan no longer goes blind after a code fence.**
+  Postgres regexes give a whole pattern the greediness of its *first*
+  quantifier, so the v1.7.0 fence-stripping regex consumed from the first
+  fence to end-of-content — silently skipping validation of every link
+  after any code block. The scan now splits on line-anchored fence markers
+  (no pairing regex at all) and lives in ONE shared function
+  (`cerefox_extract_doc_link_ids`) used by both the write guard and the
+  dead-link sweep, so the two can never disagree.
+- **`cerefox document dead-links` refuses to report a clean sweep it never
+  ran**: against a pre-0.12.2 server it says "run `cerefox server deploy`"
+  instead of printing a false all-clear.
 
 - **Orphaned 1-arg overloads of `cerefox_purge_document` / `cerefox_restore_document`
   dropped** (schema 0.12.0 → 0.12.1, migration 0025). `CREATE OR REPLACE`

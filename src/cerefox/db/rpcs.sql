@@ -1357,6 +1357,43 @@ END;
 $$;
 
 
+-- ── cerefox_extract_doc_link_ids ─────────────────────────────────────────────
+-- The ONE implementation of [Text](uuid) link scanning (#214), shared by the
+-- write-time guard in cerefox_ingest_document and the cerefox_find_dead_links
+-- sweep — "same scanning rules" is enforced by this being the only copy.
+--
+-- Fences are LINE-ANCHORED and handled by SPLITTING, not by a paired-fence
+-- regex: Postgres AREs give the whole RE the greediness of their first
+-- quantified atom, which silently overrode a later .*? and made a closed
+-- fence strip everything to end-of-string (round-5 review, verified live) —
+-- blinding the scan to every link after any code block. Odd-numbered split
+-- segments are outside fences; an unterminated fence leaves its tail inside
+-- an even segment, dropped (under-validate, never false-reject). Inline code
+-- spans are stripped after (their regex has no greediness hazard).
+
+CREATE OR REPLACE FUNCTION cerefox_extract_doc_link_ids(p_content TEXT)
+RETURNS TABLE (link_id TEXT)
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public, pg_catalog
+AS $$
+    WITH segments AS (
+        SELECT seg, row_number() OVER () AS rn
+        FROM regexp_split_to_table(COALESCE(p_content, ''), '^[ \t]*```.*$', 'n') AS seg
+    ),
+    outside AS (
+        SELECT string_agg(regexp_replace(seg, '`[^`]*`', ' ', 'g'), ' ') AS s
+        FROM segments
+        WHERE rn % 2 = 1
+    )
+    SELECT lower(m[1])
+    FROM outside,
+    LATERAL regexp_matches(
+        outside.s,
+        '\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)',
+        'g') AS m;
+$$;
+
 -- ── cerefox_ingest_document ──────────────────────────────────────────────────
 -- Single RPC for ingesting a document (create or update). Handles:
 --   - Create: insert document row, insert chunks, set review_status, create audit entry
@@ -1529,23 +1566,14 @@ BEGIN
     -- See docs/specs/link-integrity-design.md.
     SELECT string_agg(c->>'content', E'\n') INTO v_scannable
     FROM jsonb_array_elements(p_chunks) c;
-    -- Fences are LINE-ANCHORED, matching markdown semantics: only ``` at a
-    -- line start opens/closes a block, so a stray backtick run mid-prose
-    -- cannot mis-pair the fences and un-escape a later real code block. An
-    -- unterminated fence strips to end-of-content (under-validates, never
-    -- false-rejects). Inline code is stripped after, so fence markers are
-    -- intact when pairing runs.
-    v_scannable := regexp_replace(
-        COALESCE(v_scannable, ''),
-        E'(^|\\n)[ \\t]*```.*?(\\n[ \\t]*```[^\\n]*|$)', ' ', 'g');
-    v_scannable := regexp_replace(v_scannable, '`[^`]*`', ' ', 'g');
 
-    SELECT array_agg(DISTINCT m[1]) INTO v_missing
-    FROM regexp_matches(
-        v_scannable,
-        '\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)',
-        'g') m
-    WHERE NOT EXISTS (SELECT 1 FROM cerefox_documents d WHERE d.id = m[1]::uuid);
+    -- Scanning delegated to cerefox_extract_doc_link_ids — the one copy of
+    -- the fence/inline-code/uuid rules, shared with the dead-link sweep
+    -- (0.12.2; the previous inline regex was defeated by ARE whole-RE
+    -- greediness — see the helper's header).
+    SELECT array_agg(DISTINCT l.link_id) INTO v_missing
+    FROM cerefox_extract_doc_link_ids(v_scannable) l
+    WHERE NOT EXISTS (SELECT 1 FROM cerefox_documents d WHERE d.id = l.link_id::uuid);
 
     -- On UPDATE, tolerate dead links the document ALREADY carries: a target
     -- purged after linking must not make the document unwritable — sync
@@ -2688,14 +2716,26 @@ BEGIN
     -- #212: a legacy row can hold NON-OBJECT metadata (the ingest RPC did not
     -- validate its input until 0.12.2). Merging onto it with || would produce
     -- an ARRAY — Postgres treats both sides as arrays — burying the stored
-    -- value one level deeper and leaving the row still corrupt. Only
-    -- replace=true actually repairs such a row, so refuse the merge and say so.
-    IF NOT p_replace AND v_before IS NOT NULL AND jsonb_typeof(v_before) <> 'object' THEN
+    -- value one level deeper and leaving the row still corrupt. Only replace
+    -- actually repairs such a row, so refuse the merge and say so. jsonb
+    -- 'null' is treated like SQL NULL (empty), matching the CLI.
+    IF NOT p_replace AND v_before IS NOT NULL
+       AND jsonb_typeof(v_before) NOT IN ('object', 'null') THEN
         RAISE EXCEPTION
-            'CEREFOX_BAD_METADATA: stored metadata on document % is not an object (%). A merge cannot repair it — retry with replace=true, passing the full intended object.',
+            'CEREFOX_BAD_METADATA: stored metadata on document % is not an object (%). A merge cannot repair it — retry with replace (CLI: --replace; MCP: replace: true), passing the full intended object.',
             p_document_id, jsonb_typeof(v_before)
             USING ERRCODE = '22023';
     END IF;
+
+    -- Normalized BEFORE value for merge and reporting: everything below must
+    -- work when the stored value is a scalar/array/'null' and p_replace is
+    -- true — that is the REPAIR path, and jsonb_object_keys on a scalar
+    -- errors, which would roll back the repair itself (round-5 review,
+    -- verified live).
+    v_before := CASE
+        WHEN v_before IS NULL OR jsonb_typeof(v_before) <> 'object' THEN '{}'::jsonb
+        ELSE v_before
+    END;
 
     -- Keys explicitly set to null are removals, never stored values.
     SELECT COALESCE(array_agg(key), ARRAY[]::TEXT[]) INTO v_null_keys
@@ -2791,6 +2831,10 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
+    -- Scanning delegated to cerefox_extract_doc_link_ids — the one copy of
+    -- the fence/inline-code/uuid rules, shared with the write-time guard.
+    -- Deliberate scope: trashed LINKER documents are excluded (they are
+    -- inert until restored; restoring one re-enters it into the next sweep).
     WITH doc_content AS (
         SELECT d.id, d.title, string_agg(c.content, E'\n' ORDER BY c.chunk_index) AS content
         FROM cerefox_documents d
@@ -2798,20 +2842,10 @@ AS $$
         WHERE d.deleted_at IS NULL
         GROUP BY d.id, d.title
     ),
-    scannable AS (
-        SELECT id, title,
-               regexp_replace(
-                   regexp_replace(content, E'(^|\\n)[ \\t]*```.*?(\\n[ \\t]*```[^\\n]*|$)', ' ', 'g'),
-                   '`[^`]*`', ' ', 'g') AS s
-        FROM doc_content
-    ),
     links AS (
-        SELECT sc.id, sc.title, lower(m.captured[1]) AS target
-        FROM scannable sc,
-        LATERAL regexp_matches(
-            sc.s,
-            '\]\(([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)',
-            'g') AS m(captured)
+        SELECT dc.id, dc.title, l.link_id AS target
+        FROM doc_content dc,
+        LATERAL cerefox_extract_doc_link_ids(dc.content) l
     )
     SELECT l.id, l.title, l.target::uuid, count(*)
     FROM links l
