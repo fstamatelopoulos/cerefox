@@ -216,7 +216,17 @@ export interface DbMigrateResult {
  */
 export async function runDbMigrate(opts: DbMigrateOptions): Promise<DbMigrateResult> {
   const log = opts.log ?? (() => {});
-  const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
+  // Migration NOTICEs are the operator's report (0026 lists corrupt-metadata
+  // rows; 0027 reports rows/bytes stripped) — the blanket onnotice:()=>{}
+  // used elsewhere silently swallowed them, so every data migration ran mute
+  // (found while planning the 0027 staging rehearsal). Surface them through
+  // the same log the step lines use.
+  const sql = postgres(opts.dbUrl, {
+    prepare: false,
+    onnotice: (n: { message?: string }) => {
+      if (n.message) log(`   ↳ ${n.message}`);
+    },
+  });
   try {
     await sql.unsafe(BOOTSTRAP_MIGRATIONS_SQL);
     const allFiles = listMigrationFiles(opts.assets.migrationsDir);

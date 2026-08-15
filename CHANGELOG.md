@@ -9,6 +9,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Changed
+
+- **Archived chunks no longer carry search artifacts (#216, reported by
+  @tdebasis).** Search is current-chunks-only by design (every search index
+  is partial on `version_id IS NULL`), version reconstruction and diffs read
+  `content`, and restoring an old version is deliberately manual re-ingest —
+  so embeddings and FTS vectors on archived chunks were never readable by
+  anything: pure storage cost, measured at 30–45% of the chunk relation on
+  long-lived stores, and stale for the current embedder after any reindex
+  besides. `cerefox_snapshot_version` now nulls `embedding_primary`,
+  `embedding_upgrade`, and `fts` in the same UPDATE that archives the rows;
+  migration 0027 back-fills the invariant onto existing archived chunks and
+  reports what it freed. The archived *content* — the actual safety copy —
+  is untouched, and there is deliberately no config and no maintenance
+  command: nothing can read the artifacts, so this is an invariant, not a
+  policy. Space note: Postgres frees the bytes for reuse via autovacuum;
+  growth stops even if reported database size does not drop immediately.
+  Schema 0.12.2 → 0.13.0.
+
 ### Fixed
 
 - **`cerefox doctor` remediation commands are environment-aware.** In a
