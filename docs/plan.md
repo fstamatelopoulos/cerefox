@@ -28,7 +28,7 @@
 ---
 ## Current Focus
 
-**2026-08-15 — v1.8.0 in progress on `feat/v1.8.0-drop-version-artifacts` (#216: archived chunks drop their search artifacts; schema 0.13.0). v1.7.x shipped, deployed, verified, announced.**
+**2026-08-15 — v1.8.0 is CUT-READY on `feat/v1.8.0-drop-version-artifacts` / PR #217 (#216: archived chunks drop their search artifacts; schema 0.13.0). Six review rounds done, sandbox-validated; next: maintainer merges + cuts, installs on staging, then the agreed staging dress rehearsal (before-baseline → migrate → byte-identical reconstruction, search, new-write strip, restore, retention, acceptance + Playwright, idempotent re-deploy) gates the prod deploy. v1.7.x shipped, deployed, verified, announced.**
 
 Schema is at 0.12.2; `minSchema` stays 0.10.5 (reviewed each release,
 deliberately not raised). The tool surface is 15 core + 4 dormant relation
