@@ -28,7 +28,7 @@
 ---
 ## Current Focus
 
-**2026-08-14 — Iteration 37 CLOSED. v1.7.0 and v1.7.1 shipped, deployed, verified live, and announced. No work in flight.**
+**2026-08-15 — v1.8.0 in progress on `feat/v1.8.0-drop-version-artifacts` (#216: archived chunks drop their search artifacts; schema 0.13.0). v1.7.x shipped, deployed, verified, announced.**
 
 Schema is at 0.12.2; `minSchema` stays 0.10.5 (reviewed each release,
 deliberately not raised). The tool surface is 15 core + 4 dormant relation
@@ -47,10 +47,10 @@ content updates; dashboard recent-docs project selector; review-status-pill
 staleness fix. Five review rounds, 54 findings addressed.
 Details: [iteration 37](plans/iteration-37-mcp-delete-parity.md).
 
-**Open threads for a next session**: staging is still stuck in Supabase
-"Restoration in progress" (support ticket filed — nothing on our side; use
-careful prod verification via the self-cleaning acceptance suite until it
-returns); the deferred-by-decision items below still stand.
+**Open threads for a next session**: staging is UP and current (recovered
+8/14 after a Supabase-side transient; the maintainer leaves it running and
+pauses over the weekend if nothing is being built); the deferred-by-decision
+items below still stand.
 
 Previous state (v1.6.1, for context):
 

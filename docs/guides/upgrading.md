@@ -150,6 +150,15 @@ knowing about:
   you're coming from a pre-installer 0.1.x clone, see the "old pre-installer
   clone" note above: install the package and run `cerefox init`.
 
+## Notable: v1.8.0 storage reclaim (migration 0027)
+
+Upgrading to v1.8.0 strips never-read search artifacts (embeddings + FTS)
+from archived version chunks — on long-lived stores that is typically 30–45%
+of the chunk relation. The migration prints what it freed. Postgres releases
+the bytes for **reuse** via autovacuum rather than shrinking files
+immediately, so expect growth to stop rather than the reported database size
+to drop the same day. Archived version *content* is untouched.
+
 ## After upgrading: AI agents
 
 New tools and updated tool signatures are picked up by MCP clients in **new

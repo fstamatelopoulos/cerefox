@@ -109,3 +109,26 @@ describe("delete/restore/sweep invariants (#208, #210, #214)", () => {
     expect(functionBody("cerefox_find_dead_links")).toContain("cerefox_extract_doc_link_ids");
   });
 });
+
+describe("archived chunks carry no search artifacts (#216)", () => {
+  test("snapshot nulls all three artifacts in the SAME archive UPDATE", () => {
+    const body = functionBody("cerefox_snapshot_version");
+    const update = body.slice(body.indexOf("UPDATE cerefox_chunks"));
+    const stmt = update.slice(0, update.indexOf(";"));
+    // One atomic write: re-point AND strip, so no window exists where an
+    // archived row still carries artifacts.
+    expect(stmt).toContain("SET version_id = v_version_id");
+    expect(stmt).toContain("embedding_primary = NULL");
+    expect(stmt).toContain("embedding_upgrade = NULL");
+    expect(stmt).toContain("fts = NULL");
+  });
+
+  test("embedding_primary is nullable in the schema (archiving nulls it)", () => {
+    const schema = readFileSync(
+      join(import.meta.dir, "..", "..", "src", "cerefox", "db", "schema.sql"),
+      "utf8",
+    );
+    expect(schema).not.toMatch(/embedding_primary\s+VECTOR\(768\)\s+NOT NULL/);
+    expect(schema).toMatch(/embedding_primary\s+VECTOR\(768\)/);
+  });
+});

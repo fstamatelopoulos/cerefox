@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.12.2
+-- @version: 0.13.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -212,8 +212,15 @@ CREATE TABLE IF NOT EXISTS cerefox_chunks (
     -- reconstructs with its OWN format. See docs/guides/content-format.md.
     content_format  SMALLINT    NOT NULL DEFAULT 1,
 
-    -- Primary embedding: always computed, cloud API (default: OpenAI text-embedding-3-small)
-    embedding_primary  VECTOR(768) NOT NULL,
+    -- Primary embedding: always computed on write, cloud API (default: OpenAI
+    -- text-embedding-3-small). NULLABLE since 0.13.0 (#216): archiving a chunk
+    -- nulls its search artifacts (embedding_primary, embedding_upgrade, fts) —
+    -- search is current-chunks-only by design, so artifacts on archived rows
+    -- were pure storage cost (~30-45% of the chunk relation on long-lived
+    -- stores), and after a reindex they are stale for the current embedder
+    -- anyway. Current (version_id IS NULL) chunks always carry an embedding;
+    -- the ingest RPC inserts never write NULL.
+    embedding_primary  VECTOR(768),
     -- Upgrade embedding: optional, alternative model (Fireworks, Vertex, etc.)
     embedding_upgrade  VECTOR(768),
 

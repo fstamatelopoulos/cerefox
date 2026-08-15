@@ -1009,9 +1009,19 @@ BEGIN
     )
     RETURNING id INTO v_version_id;
 
-    -- Archive all current chunks by pointing them at the new version
+    -- Archive all current chunks by pointing them at the new version, and
+    -- NULL their search artifacts in the same write (#216, 0.13.0): search is
+    -- current-chunks-only by design, version reconstruction and diffs read
+    -- `content`, and a version restore is deliberately manual re-ingest
+    -- (which re-embeds). Artifacts on archived rows were ~30-45% of the chunk
+    -- relation on long-lived stores, and after a reindex they are stale for
+    -- the current embedder anyway. The content — the actual safety copy — is
+    -- untouched.
     UPDATE cerefox_chunks c
-    SET version_id = v_version_id
+    SET version_id = v_version_id,
+        embedding_primary = NULL,
+        embedding_upgrade = NULL,
+        fts = NULL
     WHERE c.document_id = p_document_id
       AND c.version_id IS NULL;
 
@@ -2788,6 +2798,10 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.13.0 (#216): archived chunks carry no search artifacts —
+    -- cerefox_snapshot_version nulls embedding_primary/embedding_upgrade/fts
+    -- at archive time; embedding_primary becomes nullable; migration 0027
+    -- strips existing archived rows.
     -- 0.12.2 (#212, #214): metadata must be a JSON object (ingest input guard
     -- + set_document_metadata stored-state merge guard); cerefox_find_dead_links
     -- (link-integrity phase-2 sweep); cerefox_metadata_health (doctor check).
@@ -2806,7 +2820,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.12.2'::TEXT;
+    SELECT '0.13.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────
