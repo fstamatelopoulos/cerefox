@@ -426,7 +426,7 @@ const UNRELEASED_PLACEHOLDER = "Open roadmap.";
  * Only the most recent released section is checked: that is where a promoted
  * anchor lives, so it is where the misfiling always lands.
  */
-function checkReleasedSectionUnchanged(changelogText: string): void {
+function checkReleasedSectionUnchanged(changelogText: string, acceptEditOf?: string): void {
   const m = changelogText.match(/^## \[(v[^\]]+)\][^\n]*$/m);
   if (!m) return;                       // no released sections yet
   const tag = m[1];
@@ -445,6 +445,18 @@ function checkReleasedSectionUnchanged(changelogText: string): void {
   const current = sectionOf(changelogText);
   if (released === null || current === null) return;
   if (released.trim() === current.trim()) return;
+
+  // A deliberate history edit (e.g. scrubbing an instance-specific detail from
+  // shipped notes) is legitimate but indistinguishable from a misfiled entry.
+  // The override is tag-scoped so it acknowledges exactly this one divergence
+  // and cannot become a habit that blankets future misfilings.
+  if (acceptEditOf === tag) {
+    warn(
+      `The ${tag} section differs from the tag — accepted via --accept-history-edit=${tag}.\n` +
+        `  Verify the diff is the edit you meant:  git diff ${tag} -- CHANGELOG.md`,
+    );
+    return;
+  }
 
   die(
     `The ${tag} section of CHANGELOG.md has changed since that release was cut.\n` +
@@ -577,6 +589,8 @@ interface Args {
   dockerPublish: boolean;
   /** Optional assertion: the branch you believe you are cutting from. */
   branch?: string;
+  /** Tag whose CHANGELOG section is knowingly edited post-release (e.g. a scrub). */
+  acceptHistoryEdit?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -591,6 +605,8 @@ function parseArgs(argv: string[]): Args {
   };
   for (const a of argv) {
     if (a.startsWith("--branch=")) out.branch = a.slice("--branch=".length);
+    else if (a.startsWith("--accept-history-edit="))
+      out.acceptHistoryEdit = a.slice("--accept-history-edit=".length);
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--check") out.check = true;
     else if (a === "--yes" || a === "-y") out.yes = true;
@@ -618,6 +634,12 @@ function parseArgs(argv: string[]): Args {
           "                   stable, non-prerelease version). Default off — same policy as",
           "                   --npm-publish: a Release is a milestone, shipping is opt-in.",
           "  --check          Report the current VERSION; suggest the next obvious bump.",
+          "  --accept-history-edit=<tag>",
+          "                   Acknowledge that <tag>'s CHANGELOG section was deliberately",
+          "                   edited after release (e.g. scrubbing a detail from shipped",
+          "                   notes), downgrading that one guard failure to a warning.",
+          "                   Tag-scoped on purpose: it cannot suppress a misfiled entry",
+          "                   under any other section.",
         ].join("\n"),
       );
       exit(0);
@@ -707,7 +729,7 @@ async function main(): Promise<void> {
   info("Parsing CHANGELOG.md…");
   const changelogText = readFileSync(CHANGELOG_FILE, "utf8");
   const parts = parseChangelog(changelogText);
-  checkReleasedSectionUnchanged(changelogText);
+  checkReleasedSectionUnchanged(changelogText, args.acceptHistoryEdit);
   if (!unreleasedHasContent(parts.unreleasedBody)) {
     die(
       "[Unreleased] section in CHANGELOG.md is empty. " +
