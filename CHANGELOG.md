@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.8.0] -- 2026-08-15
+
 ### Changed
 
 - **Archived chunks no longer carry search artifacts (#216, reported by
@@ -37,8 +43,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   is set, the remediation now says to prefix the command the same way (or
   use the environment alias). Observed live: a staging doctor's suggestion
   ran against production.
-
-Open roadmap.
 
 ---
 
