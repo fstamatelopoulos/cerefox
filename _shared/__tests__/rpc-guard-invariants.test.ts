@@ -123,12 +123,36 @@ describe("archived chunks carry no search artifacts (#216)", () => {
     expect(stmt).toContain("fts = NULL");
   });
 
-  test("embedding_primary is nullable in the schema (archiving nulls it)", () => {
+  test("embedding_primary is nullable, WITH the current-chunk CHECK replacing NOT NULL", () => {
     const schema = readFileSync(
       join(import.meta.dir, "..", "..", "src", "cerefox", "db", "schema.sql"),
       "utf8",
     );
     expect(schema).not.toMatch(/embedding_primary\s+VECTOR\(768\)\s+NOT NULL/);
-    expect(schema).toMatch(/embedding_primary\s+VECTOR\(768\)/);
+    // Round-6 review: dropping NOT NULL alone would let a short embedding-API
+    // response insert a silently search-invisible CURRENT chunk. The CHECK
+    // keeps that failure loud.
+    expect(schema).toContain("cerefox_chunks_current_has_embedding");
+    expect(schema).toContain("CHECK (version_id IS NOT NULL OR embedding_primary IS NOT NULL)");
+  });
+
+  test("snapshot also clears the upgrade-embedder stamp with its vector", () => {
+    const body = functionBody("cerefox_snapshot_version");
+    const stmt = body.slice(body.indexOf("UPDATE cerefox_chunks"), body.indexOf("Lazy retention"));
+    expect(stmt).toContain("embedder_upgrade = NULL");
+  });
+
+  test("migration 0027 carries the new snapshot body and the CHECK (repair-path closure)", () => {
+    const mig = readFileSync(
+      join(import.meta.dir, "..", "..", "src", "cerefox", "db", "migrations", "0027_drop_archived_search_artifacts.sql"),
+      "utf8",
+    );
+    // db_migrate.ts never refreshes rpcs.sql, and a deploy can fail between
+    // the migration step and the RPC refresh — in both states the OLD
+    // snapshot would keep archiving WITH artifacts while 0027 is stamped
+    // applied. Shipping the function inside the migration closes both.
+    expect(mig).toContain("CREATE FUNCTION cerefox_snapshot_version");
+    expect(mig).toContain("embedding_primary = NULL");
+    expect(mig).toContain("cerefox_chunks_current_has_embedding");
   });
 });

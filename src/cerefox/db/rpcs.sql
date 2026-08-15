@@ -1010,17 +1010,17 @@ BEGIN
     RETURNING id INTO v_version_id;
 
     -- Archive all current chunks by pointing them at the new version, and
-    -- NULL their search artifacts in the same write (#216, 0.13.0): search is
-    -- current-chunks-only by design, version reconstruction and diffs read
-    -- `content`, and a version restore is deliberately manual re-ingest
-    -- (which re-embeds). Artifacts on archived rows were ~30-45% of the chunk
-    -- relation on long-lived stores, and after a reindex they are stale for
-    -- the current embedder anyway. The content — the actual safety copy — is
-    -- untouched.
+    -- NULL their search artifacts in the same write (0.13.0, #216 — full
+    -- rationale in migration 0027). The content — the actual safety copy —
+    -- is untouched. embedder_upgrade is nulled with its vector;
+    -- embedder_primary is deliberately KEPT (it is NOT NULL, and the label
+    -- is harmless provenance for a vector that no longer exists — nothing
+    -- reads embedder columns without a version_id IS NULL filter).
     UPDATE cerefox_chunks c
     SET version_id = v_version_id,
         embedding_primary = NULL,
         embedding_upgrade = NULL,
+        embedder_upgrade = NULL,
         fts = NULL
     WHERE c.document_id = p_document_id
       AND c.version_id IS NULL;
@@ -1839,9 +1839,9 @@ $$;
 -- Reads chunk title and content directly from the DB -- caller only needs to
 -- supply the new document title.
 --
--- Only affects current chunks (version_id IS NULL). Archived chunks retain their
--- original tsvectors (they are excluded from all search indexes and require
--- re-ingestion to restore anyway).
+-- Only affects current chunks (version_id IS NULL). Archived chunks carry NO
+-- tsvector at all since 0.13.0 (#216) — fts is nulled at archive time, and a
+-- restore is a re-ingest that recomputes everything.
 
 DROP FUNCTION IF EXISTS cerefox_update_chunk_fts(UUID, TEXT);
 CREATE FUNCTION cerefox_update_chunk_fts(

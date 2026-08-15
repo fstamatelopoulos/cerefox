@@ -127,9 +127,11 @@ CREATE TABLE cerefox_chunks (
   char_count INT NOT NULL,
 
   -- Embeddings (768 dims: OpenAI text-embedding-3-small default; local ONNX nomic on Cerefox Local)
-  -- Only current chunks (version_id IS NULL) need embeddings; archived chunks retain their
-  -- original embeddings but are excluded from search.
-  embedding_primary VECTOR(768) NOT NULL,
+  -- Current chunks (version_id IS NULL) always carry an embedding (table CHECK);
+  -- ARCHIVED chunks carry none — embeddings and fts are nulled at archive time
+  -- (v1.8.0, #216): search is current-chunks-only, so artifacts on archived rows
+  -- were unread storage; the version's `content` is the safety copy.
+  embedding_primary VECTOR(768),  -- NULL only on archived rows
   embedding_upgrade VECTOR(768),               -- optional: alternative embedder
 
   -- Full Text Search: document title (A) + chunk heading title (A) + body content (B).

@@ -152,12 +152,12 @@ knowing about:
 
 ## Notable: v1.8.0 storage reclaim (migration 0027)
 
-Upgrading to v1.8.0 strips never-read search artifacts (embeddings + FTS)
-from archived version chunks — on long-lived stores that is typically 30–45%
-of the chunk relation. The migration prints what it freed. Postgres releases
-the bytes for **reuse** via autovacuum rather than shrinking files
-immediately, so expect growth to stop rather than the reported database size
-to drop the same day. Archived version *content* is untouched.
+Upgrading to v1.8.0 strips never-read search artifacts from archived version
+chunks (rationale: #216 / the migration's own header) and the migration
+prints what it freed. Postgres releases the bytes for **reuse** via
+autovacuum rather than shrinking files immediately, so expect growth to stop
+rather than the reported database size to drop the same day. Archived
+version *content* is untouched.
 
 ## After upgrading: AI agents
 

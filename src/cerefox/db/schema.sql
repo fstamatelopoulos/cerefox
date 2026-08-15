@@ -213,14 +213,15 @@ CREATE TABLE IF NOT EXISTS cerefox_chunks (
     content_format  SMALLINT    NOT NULL DEFAULT 1,
 
     -- Primary embedding: always computed on write, cloud API (default: OpenAI
-    -- text-embedding-3-small). NULLABLE since 0.13.0 (#216): archiving a chunk
-    -- nulls its search artifacts (embedding_primary, embedding_upgrade, fts) —
-    -- search is current-chunks-only by design, so artifacts on archived rows
-    -- were pure storage cost (~30-45% of the chunk relation on long-lived
-    -- stores), and after a reindex they are stale for the current embedder
-    -- anyway. Current (version_id IS NULL) chunks always carry an embedding;
-    -- the ingest RPC inserts never write NULL.
-    embedding_primary  VECTOR(768),
+    -- text-embedding-3-small). NULL only on ARCHIVED rows (0.13.0, #216 —
+    -- rationale in migration 0027): archiving nulls the search artifacts.
+    -- The CHECK below preserves the pre-0.13.0 guarantee that a CURRENT
+    -- chunk always has an embedding — without it, a short embedding-API
+    -- response could insert a silently search-invisible chunk where the old
+    -- NOT NULL failed loudly.
+    embedding_primary  VECTOR(768)
+                       CONSTRAINT cerefox_chunks_current_has_embedding
+                       CHECK (version_id IS NOT NULL OR embedding_primary IS NOT NULL),
     -- Upgrade embedding: optional, alternative model (Fireworks, Vertex, etc.)
     embedding_upgrade  VECTOR(768),
 
