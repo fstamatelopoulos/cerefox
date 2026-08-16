@@ -132,11 +132,11 @@ The full 22-item list with file/line/fix lives in the PR description.
       the config-change extension of the same idea. Bullets 2 (audit FTS
       endpoint) and 3 (LLM knowledge processing) stay open; note that on the
       issue when 1.9.0 ships.
-- [ ] **#150** (ops, maintainer action, zero code): flip **Disable legacy
-      API keys** in the Supabase dashboard during the v1.9.0 release window,
-      after confirming nothing outside Cerefox still uses the legacy JWTs.
-      Immediately after the flip: `cerefox doctor` + acceptance suite to
-      prove nothing regressed. Close #150 on success.
+- [x] Deployment-hardening reminder for OPERATORS (any deployment, not part
+      of this release's code): if your install predates iter-28E and you have
+      not yet disabled the legacy API keys in the Supabase dashboard, do it —
+      the full walkthrough is `docs/guides/migration-1.0.md` step 5. Verify
+      with `cerefox doctor` afterward.
 
 ### 8. Release mechanics
 

@@ -4007,7 +4007,7 @@ and the web UI relation panel — re-opening search ranking so soon after the
    (2 warnings)"; add an opt-in non-zero exit on warnings.
 
 **Deliberately out of scope**: #129 (multi-language FTS — own design cycle),
-#150 (maintainer dashboard action), the #140–#149 backlog issues.
+the #140–#149 backlog issues.
 
 **Release shape**: dogfooded through `1.1.0-beta.N` on both worlds per
 RELEASING.md, since Phase 1 and Phase 2 both carry real regression risk.

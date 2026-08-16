@@ -45,6 +45,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Deploys nudge PostgREST's schema cache.** `server deploy` and the
+  migration path now send `NOTIFY pgrst, 'reload schema'` after DDL, closing
+  the window where a just-changed RPC returns "Could not find the function"
+  through the Data API (hosted Supabase auto-reloads within moments; a plain
+  PostgREST — Cerefox Local — did not). Error messages for that window now
+  say "retry in a few seconds" instead of misdiagnosing an undeployed server.
 - **Documentation caught up with v1.4.0 → v1.8.0** (22 findings): the
   solution design now reflects chunks-anchored versioning with artifact-free
   archived chunks and the current documents DDL; requirements gained FR

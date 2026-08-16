@@ -32,8 +32,7 @@
 ([iteration 38](plans/iteration-38-audit-completeness.md)): audit-log
 completeness (config-change + project-op entries, #147 part 1), settings-UI
 terminology fix, dead-RPC cleanup, and a 22-finding docs restoration
-(v1.4→v1.8 staleness). Schema 0.13.0 → 0.14.0, migration 0028. #150 rides the
-release window as a maintainer ops action. Previous: v1.8.0 shipped and
+(v1.4→v1.8 staleness). Schema 0.13.0 → 0.14.0, migration 0028. Previous: v1.8.0 shipped and
 verified on production (#216; schema 0.13.0).**
 
 The staging dress rehearsal ran against the *released artifact* and gated the
