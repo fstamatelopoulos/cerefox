@@ -28,7 +28,13 @@
 ---
 ## Current Focus
 
-**2026-08-16 — v1.8.0 SHIPPED and verified on production (#216: archived chunks drop their search artifacts; schema 0.13.0). #216/#217 closed.**
+**2026-08-16 — v1.9.0 IN PROGRESS on `feat/v1.9.0-audit-completeness`
+([iteration 38](plans/iteration-38-audit-completeness.md)): audit-log
+completeness (config-change + project-op entries, #147 part 1), settings-UI
+terminology fix, dead-RPC cleanup, and a 22-finding docs restoration
+(v1.4→v1.8 staleness). Schema 0.13.0 → 0.14.0, migration 0028. #150 rides the
+release window as a maintainer ops action. Previous: v1.8.0 shipped and
+verified on production (#216; schema 0.13.0).**
 
 The staging dress rehearsal ran against the *released artifact* and gated the
 prod deploy: migration 0027 back-filled both stores completely (staging 1,006
@@ -106,7 +112,10 @@ one:
 
 ## Active iteration
 
-**None.** The most recent:
+**[Iteration 38 — Audit completeness, settings clarity, docs restoration](plans/iteration-38-audit-completeness.md)**
+— ⏳ **IN PROGRESS**, target v1.9.0 (schema 0.14.0).
+
+The most recent closed:
 
 **[Iteration 37 — MCP delete/restore parity, link integrity, dashboard UX](plans/iteration-37-mcp-delete-parity.md)**
 — ✅ **CLOSED, shipped v1.7.0 + v1.7.1** (2026-08-14), verified live, announced.
