@@ -84,7 +84,12 @@ async function action(options: {
       // Keep the zone: a bare "2026-08-11 06:32:13" reads as local (#199).
       when: `${(row.created_at ?? "").slice(0, 19).replace("T", " ")}Z`,
       operation: row.operation,
-      doc: ((row.doc_title ?? (row.document_id ?? "?").slice(0, 8) + "…") as string).slice(0, 40),
+      doc: ((row.doc_title ??
+        (row.document_id
+          ? row.document_id.slice(0, 8) + "…"
+          : /^(config-change|project-)/.test(row.operation ?? "")
+            ? "(store)"
+            : "(purged)")) as string).slice(0, 40),
       author: (row.author ?? "") + (row.author_type ? `(${row.author_type})` : ""),
       size_delta:
         row.size_before !== null && row.size_after !== null
@@ -102,7 +107,7 @@ export function registerGetAuditLog(program: Command): void {
     .option("-a, --author <name>", "Filter by author.")
     .option(
       "-o, --operation <type>",
-      "Filter by operation: create, update-content, update-metadata, delete, restore.",
+      "Filter by operation: create, update-content, update-metadata, insert, replace-section, delete-section, rename-section, delete, restore, status-change, archive, unarchive, config-change, project-create, project-edit, project-delete.",
     )
     .option("--since <iso>", "Lower-bound ISO timestamp.")
     .option("--until <iso>", "Upper-bound ISO timestamp.")

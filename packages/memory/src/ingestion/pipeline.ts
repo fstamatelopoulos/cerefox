@@ -109,7 +109,8 @@ export class IngestionPipeline {
     const listFormProvided =
       (projectIds !== undefined && projectIds !== null) ||
       (projectNames !== undefined && projectNames !== null);
-    const getOrCreate = (name: string) => this.db.getOrCreateProject(name);
+    const getOrCreate = (name: string) =>
+      this.db.getOrCreateProject(name, { author, authorType });
 
     // ── (1) ID-based update ──────────────────────────────────────────────
     if (documentId) {

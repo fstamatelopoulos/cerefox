@@ -62,7 +62,14 @@ async function handler(
 
   const lines = entries.map((e) => {
     const docLabel =
-      e.doc_title ?? (e.document_id ? e.document_id.slice(0, 8) + "..." : "(deleted)");
+      e.doc_title ??
+      (e.document_id
+        ? e.document_id.slice(0, 8) + "..."
+        : // Store-level ops (0.14.0) have no document by design; only a
+          // document-shaped entry with a NULL id means the doc was purged.
+          /^(config-change|project-)/.test(e.operation)
+          ? "(store)"
+          : "(deleted)");
     const sizeInfo =
       e.size_before != null && e.size_after != null
         ? ` | ${e.size_before} -> ${e.size_after} chars`
@@ -94,7 +101,7 @@ export const auditLogTool: ToolDefinition = {
       operation: {
         type: "string",
         description:
-          "Filter by operation type: create, update-content, update-metadata, delete, status-change, archive, unarchive (optional)",
+          "Filter by operation type: create, update-content, update-metadata, insert, replace-section, delete-section, rename-section, delete, restore, status-change, archive, unarchive, config-change, project-create, project-edit, project-delete (optional)",
       },
       since: {
         type: "string",

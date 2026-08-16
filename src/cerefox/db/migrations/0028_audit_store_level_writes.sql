@@ -95,6 +95,28 @@ BEGIN
 END;
 $$;
 
+-- 2b. Lock the new signature down. A freshly CREATEd function gets Postgres'
+--     default EXECUTE-to-PUBLIC, and the repo's blanket REVOKE/GRANT loop
+--     lives at the bottom of rpcs.sql — which `db_migrate.ts` alone never
+--     applies, and which a deploy failing between the migration step and the
+--     RPC refresh also misses. Without this, the anon/publishable key could
+--     call the one function that WRITES store governance. Same guarded shape
+--     as the rpcs.sql block (safe on non-Supabase Postgres).
+DO $$
+DECLARE
+  r TEXT;
+BEGIN
+  REVOKE EXECUTE ON FUNCTION cerefox_set_config(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
+  FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION cerefox_set_config(TEXT, TEXT, TEXT, TEXT) FROM %I', r);
+    END IF;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    GRANT EXECUTE ON FUNCTION cerefox_set_config(TEXT, TEXT, TEXT, TEXT) TO service_role;
+  END IF;
+END $$;
+
 -- 3. Dead V1 RPC.
 DROP FUNCTION IF EXISTS cerefox_save_note(TEXT, TEXT, TEXT, UUID, JSONB);
 

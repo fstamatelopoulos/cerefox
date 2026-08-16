@@ -1490,23 +1490,6 @@ neighbours** (±`p_window_size` chunks within the same document).
 Returns: `chunk_id`, `document_id`, `chunk_index`, `title`, `content`, `heading_path`,
 `heading_level`, `doc_title`, `is_seed` (TRUE for the original seed chunks)
 
-#### `cerefox_save_note`
-
-Create a document record directly. The note is stored but **not embedded** — use `cerefox-ingest`
-Edge Function instead for notes that need to be immediately searchable.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `p_title` | TEXT | required | Note title |
-| `p_content` | TEXT | required | Markdown content |
-| `p_source` | TEXT | `'agent'` | Origin label |
-| `p_project_id` | UUID | null | Project to assign |
-| `p_metadata` | JSONB | `{}` | Metadata (agent name, tags, etc.) |
-
-Returns: `id`, `title`, `created_at`
-
----
-
 ### Metadata RPCs
 
 #### `cerefox_list_metadata_keys`

@@ -362,7 +362,10 @@ export class IngestionDbBridge {
     if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
-  async getOrCreateProject(name: string): Promise<ProjectRow> {
+  async getOrCreateProject(
+    name: string,
+    audit?: { author: string; authorType: "user" | "agent" },
+  ): Promise<ProjectRow> {
     // Try by-name lookup first (case-sensitive, matches Python).
     const { data: existing } = await this.supabase
       .from("cerefox_projects")
@@ -378,6 +381,17 @@ export class IngestionDbBridge {
       .maybeSingle();
     if (error || !data) {
       throw error ?? new Error(`getOrCreateProject(${name}) returned no data`);
+    }
+    // 0.14.0 (#147): implicit creation is a store-level write; without this
+    // the CLI/web ingestion pipeline was the one interface whose project
+    // creations left no trail (review round 1 caught the gap).
+    if (audit) {
+      await this.createAuditEntry({
+        operation: "project-create",
+        author: audit.author,
+        authorType: audit.authorType,
+        description: `Project '${name}' created implicitly (document assignment)`,
+      });
     }
     return data as ProjectRow;
   }

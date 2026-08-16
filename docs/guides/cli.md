@@ -519,7 +519,7 @@ cerefox audit list [OPTIONS]
 |---|---|---|---|
 | `--document-id TEXT` | UUID | _none_ | Filter to a single document. |
 | `--author TEXT` | str | _none_ | Filter by author name (exact match). |
-| `--operation [create\|update-content\|update-metadata\|delete\|status-change\|archive\|unarchive\|restore]` | choice | _none_ | Filter by operation type. |
+| `--operation TEXT` | choice | _none_ | Filter by operation type: `create`, `update-content`, `update-metadata`, `insert`, `replace-section`, `delete-section`, `rename-section`, `delete`, `restore`, `status-change`, `archive`, `unarchive`, `config-change`, `project-create`, `project-edit`, `project-delete`. |
 | `--since TEXT` | ISO-8601 | _none_ | Lower bound on `created_at`. |
 | `--until TEXT` | ISO-8601 | _none_ | Upper bound on `created_at`. |
 | `--limit INTEGER` | int | `50` | Max rows. |

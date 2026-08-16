@@ -3,6 +3,7 @@
 import type { Command } from "commander";
 
 import { c, println, resolveAuthor, resolveAuthorType, systemError, warn } from "../../../../../_shared/cli-core/index.ts";
+import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface ConfigSetOptions {
@@ -19,18 +20,22 @@ async function action(key: string, value: string, options: ConfigSetOptions): Pr
       "No --author / CEREFOX_AUTHOR_NAME set — audit log will record this change as 'unknown'.",
     );
   }
-  try {
-    await client.rpc("cerefox_set_config", {
-      p_key: key,
-      p_value: value,
-      p_author: author,
-      p_author_type: authorType,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+  // Deliberately the RAW client, not the probing wrapper: the wrapper folds
+  // 42883 (function missing) into `null` so callers can probe — but this RPC
+  // RETURNS VOID, so success is null too, and the two outcomes would be
+  // indistinguishable. Review round 1 caught the CLI printing "✓" while the
+  // set had rolled back against a stale PostgREST schema cache.
+  const { error } = await client.raw.rpc("cerefox_set_config", {
+    p_key: key,
+    p_value: value,
+    p_author: author,
+    p_author_type: authorType,
+  });
+  if (error) {
+    const msg = error.message ?? String(error);
     // 0.14.0 grew the signature; against an older server the 4-arg call has
     // no matching function. Say "redeploy", not "bad key".
-    if (/could not find the function|PGRST202/i.test(msg)) {
+    if (isMissingFunctionError(msg, "cerefox_set_config")) {
       throw systemError(
         `Could not set ${key}: the deployed server predates schema 0.14.0.`,
         "Run `cerefox server deploy` to update the schema and RPCs, then retry.",

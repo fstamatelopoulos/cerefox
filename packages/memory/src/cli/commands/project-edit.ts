@@ -46,7 +46,7 @@ async function action(target: string, options: EditOptions): Promise<void> {
   const isUuid = UUID_RE.test(target);
   const { data: project, error: lookupErr } = await client.raw
     .from("cerefox_projects")
-    .select("id, name")
+    .select("id, name, description")
     .eq(isUuid ? "id" : "name", target)
     .maybeSingle();
 
@@ -64,11 +64,16 @@ async function action(target: string, options: EditOptions): Promise<void> {
     throw systemError(`Update failed: ${error?.message ?? "no row returned"}`);
   }
 
+  // Compare against the fetched before-values: the trail must record what
+  // actually changed, not which flags were passed (review round 1).
   const changes: string[] = [];
   if (update.name !== undefined && update.name !== project.name) {
     changes.push(`renamed '${project.name}' → '${update.name}'`);
   }
-  if (update.description !== undefined) changes.push("description changed");
+  const oldDescription = ((project as { description?: string | null }).description ?? "").trim();
+  if (update.description !== undefined && update.description !== oldDescription) {
+    changes.push("description changed");
+  }
   await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
     operation: "project-edit",
     description: `Project '${data.name}' edited (${changes.join("; ") || "no-op"})`,

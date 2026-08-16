@@ -115,20 +115,22 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
   // ── DELETE /projects/{id} ─────────────────────────────────────────────────
   app.delete("/api/v1/projects/:project_id", async (c) => {
     const projectId = c.req.param("project_id");
-    const { data: before } = await ctx.supabase
-      .from("cerefox_projects")
-      .select("name")
-      .eq("id", projectId)
-      .maybeSingle();
-    const { error } = await ctx.supabase
+    // DELETE ... RETURNING in one statement: the returned row is both the
+    // proof a deletion happened and the name for the trail. Auditing off a
+    // separate pre-SELECT would fabricate an immutable "deleted" record when
+    // nothing matched (double-click, stale tab) — the audit log must never
+    // assert an event that did not occur.
+    const { data: deleted, error } = await ctx.supabase
       .from("cerefox_projects")
       .delete()
-      .eq("id", projectId);
+      .eq("id", projectId)
+      .select("name");
     if (error) return c.json({ detail: error.message }, 500);
-    const name = (before as { name?: string } | null)?.name ?? projectId;
+    const row = (deleted as Array<{ name?: string }> | null)?.[0];
+    if (!row) return c.json({ detail: "Project not found" }, 404);
     await auditProjectOp(audit, {
       operation: "project-delete",
-      description: `Project '${name}' deleted`,
+      description: `Project '${row.name ?? projectId}' deleted`,
       author: "user",
       authorType: "user",
     });

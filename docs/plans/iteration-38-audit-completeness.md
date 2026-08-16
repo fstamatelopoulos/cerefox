@@ -29,34 +29,34 @@ and a restore is reproduction, not authorship).
 
 ### 1. Config-change audit (schema 0.14.0, migration 0028) — the RPC side
 
-- [ ] `cerefox_set_config` gains `p_author TEXT DEFAULT 'unknown'` and
+- [x] `cerefox_set_config` gains `p_author TEXT DEFAULT 'unknown'` and
       `p_author_type TEXT DEFAULT 'user'`; writes a `config-change` audit
       entry with `document_id = NULL` and description `key: 'old' → 'new'`
       (old value `(unset)` when the key is new). **DROP the old 2-arg
       signature explicitly** — the v1.7.0 PGRST203 lesson: `CREATE OR
       REPLACE` never removes a grown-out signature.
-- [ ] Extend the `cerefox_audit_log.operation` CHECK allow-list with
+- [x] Extend the `cerefox_audit_log.operation` CHECK allow-list with
       `config-change`, `project-create`, `project-edit`, `project-delete`
       (drop + re-add the constraint in schema and migration).
-- [ ] Migration 0028 carries: the CHECK swap, the `DROP FUNCTION` of the old
+- [x] Migration 0028 carries: the CHECK swap, the `DROP FUNCTION` of the old
       `cerefox_set_config(TEXT, TEXT)`, the new function body (repair-path
       closure, same rationale as 0027), and the dead-RPC drops (step 4).
-- [ ] Bump schema version **in both literals, lockstep**: `-- @version:` in
+- [x] Bump schema version **in both literals, lockstep**: `-- @version:` in
       `schema.sql` and `cerefox_schema_version()` in `rpcs.sql` → `0.14.0`.
-- [ ] `minSchema` review: stays 0.10.5 (nothing here makes an old server
+- [x] `minSchema` review: stays 0.10.5 (nothing here makes an old server
       *misbehave* for a new client — config set against an old server fails
       loudly with a missing-function error, which `isMissingFunctionError`
       already maps).
 
 ### 2. Config-change audit — the callers
 
-- [ ] CLI `config set`: pass `--author` / `CEREFOX_AUTHOR_NAME` (warn to
+- [x] CLI `config set`: pass `--author` / `CEREFOX_AUTHOR_NAME` (warn to
       `unknown` like the other write commands), `author_type` honoured as on
       other CLI writes.
-- [ ] Web settings route: pass `author: "user"` (web UI writes always carry
+- [x] Web settings route: pass `author: "user"` (web UI writes always carry
       the `user` author, per convention).
-- [ ] MCP: unchanged — config is deliberately not an MCP tool surface.
-- [ ] Old-server tolerance: callers fall back to the 2-arg call shape when
+- [x] MCP: unchanged — config is deliberately not an MCP tool surface.
+- [x] Old-server tolerance: callers fall back to the 2-arg call shape when
       the 4-arg function is absent? **No** — keep it simple: the client ships
       with the schema that has it; `cerefox doctor` already tells a user with
       a version-skewed install to redeploy. Callers surface the
@@ -68,16 +68,18 @@ Project CRUD is sanctioned "simple CRUD" (no business logic), so no new RPCs;
 the audit entry is written client-side after the successful write, exactly
 like the membership path (`_shared/mcp-tools/_projects.ts`).
 
-- [ ] Shared helper (one implementation; CLI + web import it): operation
+- [x] Shared helper (one implementation; CLI + web import it): operation
       `project-create` / `project-edit` / `project-delete`, `document_id`
       NULL, description carries the project name (+ what changed on edit).
-- [ ] CLI `project create` / `project edit` / `project delete` wire it up
+- [x] CLI `project create` / `project edit` / `project delete` wire it up
       (with the standard `--author` handling).
-- [ ] Web project routes wire it up (`author: "user"`).
-- [ ] Implicit creation (a project auto-created by `set-projects` /
+- [x] Web project routes wire it up (`author: "user"`).
+- [x] Implicit creation (a project auto-created by `set-projects` /
       `ingest --project`) also logs `project-create`, author = the write's
-      author. Creation is rare; this cannot flood.
-- [ ] Audit-entry failure is a warning, not a rollback (the write itself
+      author. Creation is rare; this cannot flood. Review round 1 caught the
+      gap in the CLI/web *ingestion pipeline* (`getOrCreateProject`) — the
+      primary human write path was the one interface not wired; now covered.
+- [x] Audit-entry failure is a warning, not a rollback (the write itself
       succeeded; same posture as `_projects.ts` today).
 
 ### 4. Dead-RPC cleanup (rides migration 0028)
@@ -98,10 +100,10 @@ the caption "default: true" reads as the system contradicting itself. Decision
 (maintainer, 2026-08-16): **align the web UI with the CLI vocabulary** —
 booleans display `true`/`false`, not On/Off.
 
-- [ ] Switch label renders the value (`true`/`false`).
-- [ ] Caption becomes `default if unset: <value>` (semantics now explicit).
-- [ ] Gray badge `default` → `using default`.
-- [ ] Playwright settings specs updated for the new strings.
+- [x] Switch label renders the value (`true`/`false`).
+- [x] Caption becomes `default if unset: <value>` (semantics now explicit).
+- [x] Gray badge `default` → `using default`.
+- [x] Playwright settings specs reviewed — none pinned the old strings; no changes needed for the new strings.
 
 ### 6. Documentation restoration (22-finding sweep, v1.4.0 → v1.8.0)
 
@@ -123,7 +125,7 @@ The full 22-item list with file/line/fix lives in the PR description.
 
 ### 7. Issue housekeeping
 
-- [ ] **#136**: not reproducible on main — swept all 19 production projects
+- [x] **#136**: not reproducible on main — swept all 19 production projects
       against a local web build; every one returns 200. Comment with the
       evidence, close.
 - [ ] **#147**: this iteration ships bullet 1 (project-op audit entries) and
@@ -149,7 +151,13 @@ The full 22-item list with file/line/fix lives in the PR description.
       shape changes (config is not EF-exposed; audit-log EF query shape
       unchanged; new operation values flow through the existing `operation`
       string field).
-- [ ] EF code: untouched → `EF_VERSION` bumps only via the release cut.
+- [x] EF code: **touched after all** — `cerefox-ingest` carries its own copy
+      of the project helpers (pre-existing duplication) and was updated for
+      parity (implicit-create audit, author + author_type threaded). Per
+      CLAUDE.md's EF-change rule, run the narrow live EF suite
+      (`CEREFOX_LIVE_E2E=1 bun test test/edge-functions/`) once against
+      staging as part of pre-release validation — the new EF audit path must
+      execute against a real Deno/PostgREST before the cut.
 - [ ] Review rounds after the implementation batch, then RELEASING.md
       checklist; the maintainer cuts, stages, and we re-run the staging
       dress-rehearsal pattern (install released artifact on staging via the

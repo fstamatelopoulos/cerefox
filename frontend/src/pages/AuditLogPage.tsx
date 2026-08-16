@@ -16,20 +16,47 @@ const OPERATIONS = [
   { value: "create", label: "Create" },
   { value: "update-content", label: "Update content" },
   { value: "update-metadata", label: "Update metadata" },
+  { value: "insert", label: "Insert (partial edit)" },
+  { value: "replace-section", label: "Replace section" },
+  { value: "delete-section", label: "Delete section" },
+  { value: "rename-section", label: "Rename section" },
   { value: "delete", label: "Delete" },
+  { value: "restore", label: "Restore" },
   { value: "status-change", label: "Status change" },
   { value: "archive", label: "Archive" },
   { value: "unarchive", label: "Unarchive" },
+  { value: "config-change", label: "Config change" },
+  { value: "project-create", label: "Project create" },
+  { value: "project-edit", label: "Project edit" },
+  { value: "project-delete", label: "Project delete" },
 ];
+
+// Store-level operations carry no document by design (0.14.0) — the NULL
+// document_id must not render as "(deleted)".
+const STORE_LEVEL_OPS = new Set([
+  "config-change",
+  "project-create",
+  "project-edit",
+  "project-delete",
+]);
 
 const OP_TONE: Record<string, string> = {
   create: ui.bGreen,
   "update-content": ui.bBlue,
   "update-metadata": ui.bViolet,
+  insert: ui.bBlue,
+  "replace-section": ui.bBlue,
+  "delete-section": ui.bRed,
+  "rename-section": ui.bViolet,
   "status-change": ui.bYellow,
   archive: ui.bPrimary,
   unarchive: ui.bPrimary,
+  restore: ui.bGreen,
   delete: ui.bRed,
+  "config-change": ui.bYellow,
+  "project-create": ui.bGreen,
+  "project-edit": ui.bViolet,
+  "project-delete": ui.bRed,
 };
 
 export function AuditLogPage() {
@@ -95,7 +122,7 @@ export function AuditLogPage() {
           </span>
         ) : (
           <span className={ui.faint} style={{ fontSize: 12 }}>
-            (deleted)
+            {STORE_LEVEL_OPS.has(e.operation) ? "(store)" : "(deleted)"}
           </span>
         ),
     },

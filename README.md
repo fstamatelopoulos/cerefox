@@ -229,7 +229,7 @@ chunk_count           fts (TSVECTOR, title-boosted)
 
 Search RPCs (MCP tools): `cerefox_hybrid_search`, `cerefox_fts_search`,
 `cerefox_semantic_search`, `cerefox_search_docs`, `cerefox_reconstruct_doc`,
-`cerefox_context_expand`, `cerefox_save_note`
+`cerefox_context_expand`
 
 ---
 
