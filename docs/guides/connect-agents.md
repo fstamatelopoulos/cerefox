@@ -638,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 3.2.0
+  version: 3.3.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -934,7 +934,9 @@ paths:
                   type: string
                   description: >
                     Filter by operation type: create, update-content, update-metadata,
-                    delete, status-change, archive, unarchive (optional)
+                    insert, replace-section, delete-section, rename-section, delete,
+                    restore, status-change, archive, unarchive, config-change,
+                    project-create, project-edit, project-delete (optional)
                 since:
                   type: string
                   description: ISO timestamp lower bound for temporal queries (optional)

@@ -37,8 +37,8 @@ async function action(key: string, value: string, options: ConfigSetOptions): Pr
     // no matching function. Say "redeploy", not "bad key".
     if (isMissingFunctionError(msg, "cerefox_set_config")) {
       throw systemError(
-        `Could not set ${key}: the deployed server predates schema 0.14.0.`,
-        "Run `cerefox server deploy` to update the schema and RPCs, then retry.",
+        `Could not set ${key}: the deployed server predates schema 0.14.0 — or PostgREST's schema cache is stale right after a deploy.`,
+        "If you just deployed, retry in a few seconds (the deploy now nudges the cache, and hosted Supabase refreshes it automatically). Otherwise run `cerefox server deploy`.",
       );
     }
     throw systemError(

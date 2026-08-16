@@ -20,6 +20,7 @@ import {
 } from "../../../../../_shared/config-catalog/index.ts";
 import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import type { WebContext } from "../context.ts";
+import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 
 function unwrapScalarRpc(data: unknown): string | null {
   if (typeof data === "string") return data;
@@ -144,7 +145,22 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
       p_author: "user",
       p_author_type: "user",
     });
-    if (error) return c.json({ detail: error.message }, 500);
+    if (error) {
+      // Same guided remediation the CLI gives (iteration-38 step 2): the
+      // 4-arg signature is 0.14.0; against an older server — or a stale
+      // PostgREST cache right after a deploy — PGRST202 comes back raw.
+      if (isMissingFunctionError(error.message ?? "", "cerefox_set_config")) {
+        return c.json(
+          {
+            detail:
+              "The deployed server predates schema 0.14.0 (or its schema cache is stale right after a deploy). " +
+              "Run `cerefox server deploy`, or retry in a few seconds if you just deployed.",
+          },
+          503,
+        );
+      }
+      return c.json({ detail: error.message }, 500);
+    }
     return c.json({ key, value });
   });
 }

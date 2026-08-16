@@ -82,30 +82,45 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     } catch {
       return c.json({ detail: "Invalid JSON body" }, 400);
     }
-    const name = String(body.name ?? "").trim();
-    const description = String(body.description ?? "").trim();
-    // The old name makes the audit description say what actually changed.
+    // Update ONLY the fields the body carries (mirrors the CLI): a
+    // description-only PUT used to blank the name via String(undefined ?? ""),
+    // and the audit entry would have immortalized the accident.
+    const update: { name?: string; description?: string } = {};
+    if (body.name !== undefined) {
+      const name = String(body.name).trim();
+      if (!name) return c.json({ detail: "Project name cannot be empty" }, 400);
+      update.name = name;
+    }
+    if (body.description !== undefined) update.description = String(body.description).trim();
+    if (Object.keys(update).length === 0) {
+      return c.json({ detail: "Nothing to update — pass name and/or description" }, 400);
+    }
+    // The old row makes the audit description say what actually changed.
     const { data: before } = await ctx.supabase
       .from("cerefox_projects")
-      .select("name")
+      .select("name, description")
       .eq("id", projectId)
       .maybeSingle();
     const { data, error } = await ctx.supabase
       .from("cerefox_projects")
-      .update({ name, description })
+      .update(update)
       .eq("id", projectId)
       .select("*")
       .maybeSingle();
     if (error || !data) {
       return c.json({ detail: error?.message ?? "update_project returned no data" }, 500);
     }
-    const oldName = (before as { name?: string } | null)?.name;
+    const old = before as { name?: string; description?: string | null } | null;
+    const changes: string[] = [];
+    if (update.name !== undefined && old?.name !== update.name) {
+      changes.push(`renamed '${old?.name}' → '${update.name}'`);
+    }
+    if (update.description !== undefined && (old?.description ?? "").trim() !== update.description) {
+      changes.push("description changed");
+    }
     await auditProjectOp(audit, {
       operation: "project-edit",
-      description:
-        oldName && oldName !== name
-          ? `Project '${oldName}' renamed to '${name}'`
-          : `Project '${name}' edited`,
+      description: `Project '${(data as { name?: string }).name}' edited (${changes.join("; ") || "no-op"})`,
       author: "user",
       authorType: "user",
     });

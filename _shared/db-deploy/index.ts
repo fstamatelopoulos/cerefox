@@ -124,9 +124,27 @@ export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult
         return { ok: false, stepsRun, failedStep: step.label, error: message };
       }
     }
+    await reloadPostgrestSchemaCache(sql);
     return { ok: true, stepsRun };
   } finally {
     await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
+/**
+ * Ask PostgREST to reload its schema cache after DDL. rpcs.sql and the
+ * migrations DROP/CREATE functions; until the cache refreshes, calling a
+ * changed function through the Data API yields PGRST202 ("Could not find the
+ * function") — which callers misread as "server not deployed". Hosted
+ * Supabase auto-reloads via a DDL event trigger within moments; a plain
+ * PostgREST (Cerefox Local) may not, so the deploy paths nudge it explicitly.
+ * Best-effort: NOTIFY costs nothing when nobody is listening.
+ */
+async function reloadPostgrestSchemaCache(sql: ReturnType<typeof postgres>): Promise<void> {
+  try {
+    await sql.unsafe("NOTIFY pgrst, 'reload schema'");
+  } catch {
+    // Non-fatal — the hosted event trigger covers the common case.
   }
 }
 
@@ -262,6 +280,7 @@ export async function runDbMigrate(opts: DbMigrateOptions): Promise<DbMigrateRes
         };
       }
     }
+    if (applied.length > 0) await reloadPostgrestSchemaCache(sql);
     return { ok: true, applied, pending };
   } finally {
     await sql.end({ timeout: 5 }).catch(() => {});
@@ -286,6 +305,7 @@ export async function applyRpcs(opts: {
   const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
   try {
     await sql.unsafe(rpcsSql);
+    await reloadPostgrestSchemaCache(sql);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

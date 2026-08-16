@@ -47,6 +47,11 @@ interface ProjectRow {
 
 async function action(target: string, options: DeleteProjectOptions): Promise<void> {
   const client = getClient();
+  // Resolve identity BEFORE any write: an invalid --author-type must abort
+  // while nothing has happened, not after the destructive delete committed
+  // (review round 2).
+  const author = resolveAuthor(options.author);
+  const authorType = resolveAuthorType(options.authorType);
   const isUuid = UUID_RE.test(target);
 
   const lookup = isUuid
@@ -94,20 +99,27 @@ async function action(target: string, options: DeleteProjectOptions): Promise<vo
     }
   }
 
-  const { error: delErr } = await client.raw
+  // DELETE ... RETURNING: only a returned row proves a deletion happened.
+  // Auditing off the earlier lookup would fabricate an immutable record if
+  // the project vanished concurrently (same fix as the web route).
+  const { data: deleted, error: delErr } = await client.raw
     .from("cerefox_projects")
     .delete()
-    .eq("id", project.id);
+    .eq("id", project.id)
+    .select("id");
 
   if (delErr) {
     throw systemError(`Delete failed: ${delErr.message}`);
+  }
+  if (!((deleted as unknown[] | null)?.length)) {
+    throw notFound(`Project "${project.name}" was already deleted (concurrently).`);
   }
 
   await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
     operation: "project-delete",
     description: `Project '${project.name}' deleted (${docCount} document link(s) removed)`,
-    author: resolveAuthor(options.author),
-    authorType: resolveAuthorType(options.authorType),
+    author,
+    authorType,
   });
 
   println(c.green(`✓ Deleted project "${project.name}" (id: ${project.id}).`));

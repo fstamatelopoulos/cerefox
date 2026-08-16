@@ -215,6 +215,24 @@ export function isDocumentNotFoundError(error: { code?: string; message?: string
   return error.code === "22023" && /not found/i.test(error.message ?? "");
 }
 
+/**
+ * Store-level audit operations (0.14.0, #147) carry document_id NULL by
+ * design. ONE definition — the web AuditLogPage mirrors it (it cannot import
+ * _shared without a vite alias; its copy carries a lockstep comment pointing
+ * here). A NULL-document row that is NOT store-level means the document was
+ * purged.
+ */
+export const STORE_LEVEL_AUDIT_OPS = [
+  "config-change",
+  "project-create",
+  "project-edit",
+  "project-delete",
+] as const;
+
+export function isStoreLevelAuditOp(operation: string | null | undefined): boolean {
+  return (STORE_LEVEL_AUDIT_OPS as readonly string[]).includes(operation ?? "");
+}
+
 export function isMissingFunctionError(message: string, fnName: string): boolean {
   return (
     (message.includes("Could not find the function") && message.includes(fnName)) ||

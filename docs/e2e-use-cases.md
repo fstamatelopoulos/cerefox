@@ -15,7 +15,7 @@ cd packages/memory && bun run build && bun test
 CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts
 CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts
 
-# Release acceptance — 12 cases, live, self-cleaning (staging config dir;
+# Release acceptance — 13 cases, live, self-cleaning (staging config dir;
 # refuses unlabelled prod targets)
 cd packages/memory && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test test/acceptance
 
@@ -173,7 +173,7 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 
 ### 6D. Release Acceptance (live harness)
 
-`packages/memory/test/acceptance/release-acceptance.test.ts` — 12 cases, live,
+`packages/memory/test/acceptance/release-acceptance.test.ts` — 13 cases, live,
 self-cleaning. Run: `cd packages/memory && CEREFOX_CONFIG_DIR=~/.cerefox/staging
 bun test test/acceptance` (refuses unlabelled production targets).
 
@@ -188,6 +188,7 @@ bun test test/acceptance` (refuses unlabelled production targets).
 | acceptance | v1.8.0 invariant | Archived chunks carry no search artifacts after a snapshot (`embedding_primary`/`embedding_upgrade`/`fts` NULL; content kept) | Done |
 | migration validation | 0027 back-fill | Migration 0027 nulls artifacts on pre-existing archived chunks and reports reclaimed space | Done |
 | acceptance | #212 metadata guard | Malformed (non-object) metadata is rejected at every write path | Done |
+| acceptance | #147 config audit | A config change lands in the audit trail with author and old→new value (skips when the key is unset — writing would flip it to explicitly-set) | Done |
 
 ### 7. Governance Features (future e2e)
 

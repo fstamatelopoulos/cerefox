@@ -43,6 +43,9 @@ async function action(target: string, options: EditOptions): Promise<void> {
   }
 
   const client = getClient();
+  // Resolve identity BEFORE the write (review round 2).
+  const author = resolveAuthor(options.author);
+  const authorType = resolveAuthorType(options.authorType);
   const isUuid = UUID_RE.test(target);
   const { data: project, error: lookupErr } = await client.raw
     .from("cerefox_projects")
@@ -77,8 +80,8 @@ async function action(target: string, options: EditOptions): Promise<void> {
   await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
     operation: "project-edit",
     description: `Project '${data.name}' edited (${changes.join("; ") || "no-op"})`,
-    author: resolveAuthor(options.author),
-    authorType: resolveAuthorType(options.authorType),
+    author,
+    authorType,
   });
 
   println(c.green(`✓ Updated project "${data.name}" (id: ${data.id}).`));

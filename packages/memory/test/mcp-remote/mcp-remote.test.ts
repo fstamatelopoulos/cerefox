@@ -390,6 +390,10 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       await client.raw.rpc("cerefox_set_config", {
         p_key: "usage_tracking_enabled",
         p_value: "true",
+        // 0.14.0: config changes are audited; attribute the suite's writes
+        // like every other e2e call, not as 'unknown'.
+        p_author: "e2e-test",
+        p_author_type: "agent",
       });
       const marker = `usage logging mcp e2e ${crypto.randomUUID().slice(0, 8)}`;
       try {
@@ -408,6 +412,8 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
         await client.raw.rpc("cerefox_set_config", {
           p_key: "usage_tracking_enabled",
           p_value: prev,
+          p_author: "e2e-test",
+          p_author_type: "agent",
         });
       }
     });

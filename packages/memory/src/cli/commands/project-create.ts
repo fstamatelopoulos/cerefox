@@ -32,6 +32,10 @@ async function action(name: string, options: CreateOptions): Promise<void> {
   if (!trimmed) throw userError("Project name is required.");
 
   const client = getClient();
+  // Resolve identity BEFORE the write: an invalid --author-type must abort
+  // while nothing has happened (review round 2).
+  const author = resolveAuthor(options.author);
+  const authorType = resolveAuthorType(options.authorType);
   const { data, error } = await client.raw
     .from("cerefox_projects")
     .insert({ name: trimmed, description: (options.description ?? "").trim() })
@@ -45,8 +49,8 @@ async function action(name: string, options: CreateOptions): Promise<void> {
   await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
     operation: "project-create",
     description: `Project '${data.name}' created`,
-    author: resolveAuthor(options.author),
-    authorType: resolveAuthorType(options.authorType),
+    author,
+    authorType,
   });
 
   println(c.green(`✓ Created project "${data.name}" (id: ${data.id}).`));

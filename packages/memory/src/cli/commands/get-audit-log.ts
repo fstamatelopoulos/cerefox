@@ -8,6 +8,8 @@
 
 import type { Command } from "commander";
 
+import { isStoreLevelAuditOp } from "../../../../../_shared/mcp-tools/_utils.ts";
+
 import {
   parsePositiveInt,
   printJson,
@@ -87,9 +89,9 @@ async function action(options: {
       doc: ((row.doc_title ??
         (row.document_id
           ? row.document_id.slice(0, 8) + "…"
-          : /^(config-change|project-)/.test(row.operation ?? "")
+          : isStoreLevelAuditOp(row.operation)
             ? "(store)"
-            : "(purged)")) as string).slice(0, 40),
+            : "(deleted)")) as string).slice(0, 40),
       author: (row.author ?? "") + (row.author_type ? `(${row.author_type})` : ""),
       size_delta:
         row.size_before !== null && row.size_after !== null

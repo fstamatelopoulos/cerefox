@@ -5,7 +5,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.ts";
+import { logUsage, isStoreLevelAuditOp } from "./_utils.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
 
 /**
@@ -65,9 +65,7 @@ async function handler(
       e.doc_title ??
       (e.document_id
         ? e.document_id.slice(0, 8) + "..."
-        : // Store-level ops (0.14.0) have no document by design; only a
-          // document-shaped entry with a NULL id means the doc was purged.
-          /^(config-change|project-)/.test(e.operation)
+        : isStoreLevelAuditOp(e.operation)
           ? "(store)"
           : "(deleted)");
     const sizeInfo =

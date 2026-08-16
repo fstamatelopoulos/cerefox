@@ -392,14 +392,20 @@ describe("release acceptance (live)", () => {
   });
 
   test("a config change lands in the audit trail with author and old→new (#147)", async () => {
-    // Non-destructive by construction: read the current value and re-assert
-    // it. The store's config is left exactly as found; the only residue is
-    // one append-only 'config-change' audit row attributed to 'acceptance',
-    // which is the behavior under test.
+    // Non-destructive by construction: re-assert the CURRENT stored value.
+    // When the key is unset ("using default"), writing anything would flip it
+    // to explicitly-set with no `config unset` to undo — so the case skips
+    // instead (round 2 caught the ?? "0" coercion doing exactly that). The
+    // only residue on the set path is one append-only 'config-change' audit
+    // row attributed to 'acceptance', which is the behavior under test.
     const KEY = "document_size_warning_chars";
     const get = A.cli(["config", "get", KEY, "--json"]);
     expect(get.code).toBe(0);
-    const current = (JSON.parse(get.stdout) as { value: string | null }).value ?? "0";
+    const current = (JSON.parse(get.stdout) as { value: string | null }).value;
+    if (current === null) {
+      console.warn(`CONFIG_UNSET: ${KEY} is unset on this store — config-audit case skipped (writing would make it explicitly set)`);
+      return;
+    }
 
     const set = A.cli(["config", "set", KEY, current, "--author", "acceptance"]);
     if (set.code !== 0 && /predates schema 0\.14\.0/.test(set.out)) {

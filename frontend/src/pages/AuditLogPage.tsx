@@ -32,7 +32,9 @@ const OPERATIONS = [
 ];
 
 // Store-level operations carry no document by design (0.14.0) — the NULL
-// document_id must not render as "(deleted)".
+// document_id must not render as "(deleted)". LOCKSTEP: mirrors
+// STORE_LEVEL_AUDIT_OPS in _shared/mcp-tools/_utils.ts (no vite alias into
+// _shared yet); update both together.
 const STORE_LEVEL_OPS = new Set([
   "config-change",
   "project-create",

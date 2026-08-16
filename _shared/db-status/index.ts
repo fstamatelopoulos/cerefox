@@ -51,12 +51,20 @@ export const EXPECTED_FUNCTIONS = [
   "cerefox_pg_function_exists",
   // Post-v1.0 additions (0.14.0 catch-up, same as the tables above).
   "cerefox_set_config",
+  "cerefox_get_config",
+  "cerefox_config_float",
+  "cerefox_config_int",
+  "cerefox_config_bool",
   "cerefox_set_document_metadata",
   "cerefox_restore_document",
   "cerefox_purge_document",
   "cerefox_find_dead_links",
   "cerefox_metadata_health",
   "cerefox_metadata_search",
+  "cerefox_list_projects",
+  "cerefox_log_usage",
+  "cerefox_list_usage_log",
+  "cerefox_usage_summary",
 ] as const;
 
 export const ROW_COUNT_TABLES = [

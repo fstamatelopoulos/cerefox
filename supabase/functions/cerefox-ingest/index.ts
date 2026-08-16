@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
+import { auditProjectOp } from "../../../_shared/mcp-tools/_projects.ts";
 import {
   chunkMarkdown,
   embeddingInputFor,
@@ -220,28 +221,6 @@ async function sha256hex(text: string): Promise<string> {
 //
 // Used by both update branches AND the create path so resolution is consistent.
 
-// 0.14.0 (#147): an implicit project creation is a store-level write and
-// belongs in the audit trail, attributed to the ingest that caused it.
-// Best-effort — never blocks the write (and tolerates a pre-0.14 CHECK).
-// deno-lint-ignore no-explicit-any
-async function auditImplicitProjectCreate(supabase: any, name: string, author: string, authorType: string): Promise<void> {
-  try {
-    const { error } = await supabase.rpc("cerefox_create_audit_entry", {
-      p_document_id: null,
-      p_version_id: null,
-      p_operation: "project-create",
-      p_author: author,
-      p_author_type: authorType,
-      p_size_before: null,
-      p_size_after: null,
-      p_description: `Project '${name}' created implicitly (document assignment)`,
-    });
-    if (error) console.warn("auditImplicitProjectCreate failed", error);
-  } catch (err) {
-    console.warn("auditImplicitProjectCreate failed", err);
-  }
-}
-
 // deno-lint-ignore no-explicit-any
 async function ensureDocumentInProject(
   // deno-lint-ignore no-explicit-any
@@ -267,7 +246,12 @@ async function ensureDocumentInProject(
       .select("id");
     projectId = newProj?.[0]?.id ?? null;
     if (projectId && auditAuthor) {
-      await auditImplicitProjectCreate(supabase, projectName, auditAuthor, auditAuthorType);
+      await auditProjectOp(supabase, {
+        operation: "project-create",
+        description: `Project '${projectName}' created implicitly (document assignment)`,
+        author: auditAuthor,
+        authorType: auditAuthorType,
+      });
     }
   }
   if (!projectId) return null;
@@ -327,7 +311,14 @@ async function setDocumentProjectsByName(
         .select("id");
       if (newProj?.[0]?.id) {
         projectIds.push(newProj[0].id);
-        if (auditAuthor) await auditImplicitProjectCreate(supabase, name, auditAuthor, auditAuthorType);
+        if (auditAuthor) {
+          await auditProjectOp(supabase, {
+            operation: "project-create",
+            description: `Project '${name}' created implicitly (document assignment)`,
+            author: auditAuthor,
+            authorType: auditAuthorType,
+          });
+        }
       }
     }
   }
