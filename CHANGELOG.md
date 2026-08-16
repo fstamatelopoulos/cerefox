@@ -9,7 +9,49 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **Store-level writes join the audit trail (#147, first half).** Config
+  changes are now recorded by `cerefox_set_config` itself — one
+  `config-change` entry per write, in the same transaction, with the author
+  and the old → new value — so "who turned retention off, and when?" is
+  finally answerable from the trail. Project create/edit/delete record
+  `project-create` / `project-edit` / `project-delete` entries from every
+  interface (CLI, web, and implicit creation during document assignment,
+  attributed to the write that caused it). These entries carry no
+  `document_id`, the same shape as purge-orphaned rows, so existing audit
+  readers need no changes. `cerefox config set` and the three
+  `cerefox project` commands accept `--author` (falling back to
+  `CEREFOX_AUTHOR_NAME`, then `unknown` with a warning). Schema
+  0.13.0 → 0.14.0, migration 0028.
+
+### Changed
+
+- **Settings page speaks the CLI's vocabulary.** Boolean settings display
+  `true` / `false` (matching `cerefox config set`), the fallback caption now
+  reads `default if unset: …` — it states what applies when the setting is
+  *not* set, which next to an explicitly-set opposite value used to read as a
+  contradiction — and the badge on unset settings says `using default`.
+
+### Removed
+
+- **Dead V1 RPCs `cerefox_save_note` and `cerefox_context_expand`.**
+  Python-era leftovers with zero callers since the TypeScript rewrite; no
+  CLI command, MCP tool, Edge Function, or web route ever reached them.
+  Dropped by migration 0028; `db-status` no longer expects them.
+
+### Fixed
+
+- **Documentation caught up with v1.4.0 → v1.8.0** (22 findings): the
+  solution design now reflects chunks-anchored versioning with artifact-free
+  archived chunks and the current documents DDL; requirements gained FR
+  numbers for everything shipped since v1.3; agent guides state the correct
+  tool surface (15 core + 4 dormant relation tools); READMEs stop citing
+  env vars retired in v1.1.0; the e2e catalog lists the 12-case release
+  acceptance harness and its coverage; the ops-scripts inventory matches the
+  current schema — and `db-status` itself now verifies the post-v1.0 tables
+  and RPCs it had silently stopped covering (`cerefox_usage_log`,
+  `cerefox_config`, `cerefox_document_relations`, and seven newer RPCs).
 
 ---
 

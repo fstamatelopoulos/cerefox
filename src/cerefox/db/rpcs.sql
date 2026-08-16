@@ -598,125 +598,14 @@ AS $$
     GROUP BY d.id, d.title, d.source, d.metadata;
 $$;
 
--- ── cerefox_save_note ─────────────────────────────────────────────────────────
--- Agent write tool: create a minimal document record for a short text note.
--- Embedding and chunking are NOT done server-side in V1 — the Python ingestion
--- pipeline should be used for full ingest.  This RPC is intended for quick
--- one-shot note capture from AI agents that want to store something immediately.
---
--- Parameters:
---   p_title       : Note title (required)
---   p_content     : Markdown content (required)
---   p_source      : Origin label, e.g. 'agent' (default: 'agent')
---   p_project_id  : Optional project UUID (assigns to a single project)
---   p_metadata    : Optional JSONB metadata (e.g. agent name, session id)
---
--- Returns: the created document row (id, title, created_at)
-
-CREATE OR REPLACE FUNCTION cerefox_save_note(
-    p_title       TEXT,
-    p_content     TEXT,
-    p_source      TEXT    DEFAULT 'agent',
-    p_project_id  UUID    DEFAULT NULL,
-    p_metadata    JSONB   DEFAULT '{}'::JSONB
-)
-RETURNS TABLE (
-    id          UUID,
-    title       TEXT,
-    created_at  TIMESTAMPTZ
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_catalog
-AS $$
-DECLARE
-    v_hash TEXT;
-    v_doc_id UUID;
-    v_created_at TIMESTAMPTZ;
-BEGIN
-    -- Compute content hash to support deduplication on the caller side.
-    v_hash := encode(sha256(p_content::BYTEA), 'hex');
-
-    INSERT INTO cerefox_documents (
-        title, source, content_hash, metadata, chunk_count, total_chars
-    ) VALUES (
-        p_title, p_source, v_hash, p_metadata, 0, length(p_content)
-    )
-    RETURNING cerefox_documents.id, cerefox_documents.created_at
-    INTO v_doc_id, v_created_at;
-
-    -- Assign to project if provided (many-to-many junction).
-    IF p_project_id IS NOT NULL THEN
-        INSERT INTO cerefox_document_projects (document_id, project_id)
-        VALUES (v_doc_id, p_project_id)
-        ON CONFLICT DO NOTHING;
-    END IF;
-
-    RETURN QUERY SELECT v_doc_id, p_title, v_created_at;
-END;
-$$;
-
--- ── cerefox_context_expand ────────────────────────────────────────────────────
--- Small-to-big retrieval: given a set of chunk IDs from a search result,
--- return those chunks plus their immediate neighbours (±window_size by
--- chunk_index within the same document).  Use this after a chunk-level search
--- to recover more surrounding context without fetching the full document.
---
--- Parameters:
---   p_chunk_ids   : Array of chunk UUIDs from the search results
---   p_window_size : Number of chunks to expand in each direction (default: 1)
---
--- Returns each expanded chunk with is_seed=TRUE for original results.
-
-CREATE OR REPLACE FUNCTION cerefox_context_expand(
-    p_chunk_ids   UUID[],
-    p_window_size INT DEFAULT 1
-)
-RETURNS TABLE (
-    chunk_id      UUID,
-    document_id   UUID,
-    chunk_index   INT,
-    title         TEXT,
-    content       TEXT,
-    heading_path  TEXT[],
-    heading_level INT,
-    doc_title     TEXT,
-    is_seed       BOOL
-)
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-SET search_path = public, pg_catalog
-AS $$
-    WITH seeds AS (
-        SELECT c.id, c.document_id, c.chunk_index
-        FROM cerefox_chunks c
-        WHERE c.id = ANY(p_chunk_ids)
-          AND c.version_id IS NULL
-    ),
-    expanded AS (
-        SELECT DISTINCT c.id
-        FROM cerefox_chunks c
-        JOIN seeds s ON c.document_id = s.document_id
-        WHERE c.version_id IS NULL
-          AND c.chunk_index BETWEEN s.chunk_index - p_window_size
-                                AND s.chunk_index + p_window_size
-    )
-    SELECT
-        c.id            AS chunk_id,
-        c.document_id,
-        c.chunk_index,
-        c.title,
-        c.content,
-        c.heading_path,
-        c.heading_level,
-        d.title         AS doc_title,
-        c.id = ANY(p_chunk_ids) AS is_seed
-    FROM expanded e
-    JOIN cerefox_chunks   c ON c.id = e.id
-    JOIN cerefox_documents d ON c.document_id = d.id
-    ORDER BY c.document_id, c.chunk_index;
-$$;
+-- ── retired V1 RPCs (dropped in 0.14.0) ─────────────────────────────────────
+-- cerefox_save_note and cerefox_context_expand were Python-era V1 tools with
+-- zero callers since the TS rewrite — nothing in the CLI, MCP tools, Edge
+-- Functions, or web app ever called them, and their comments still pointed at
+-- the removed Python ingestion pipeline. The DROPs stay here so re-applying
+-- rpcs.sql also cleans long-lived databases (migration 0028 carries the same).
+DROP FUNCTION IF EXISTS cerefox_save_note(TEXT, TEXT, TEXT, UUID, JSONB);
+DROP FUNCTION IF EXISTS cerefox_context_expand(UUID[], INT);
 
 -- ── cerefox_search_docs ───────────────────────────────────────────────────────
 -- Document-level hybrid search: runs hybrid search internally, deduplicates
@@ -2442,7 +2331,19 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION cerefox_set_config(p_key TEXT, p_value TEXT)
+-- The 2-arg signature grew to 4 in 0.14.0 (audit trail). CREATE OR REPLACE
+-- never removes the old overload, and a surviving one makes named calls
+-- ambiguous under PostgREST (PGRST203) — the v1.7.0 purge/restore lesson.
+DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT);
+
+CREATE FUNCTION cerefox_set_config(
+    p_key         TEXT,
+    p_value       TEXT,
+    -- 0.14.0: config changes are governance decisions ("who turned retention
+    -- off, and when?") and belong in the audit trail like any other write.
+    p_author      TEXT DEFAULT 'unknown',
+    p_author_type TEXT DEFAULT 'user'
+)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -2467,14 +2368,30 @@ DECLARE
         -- point. A signal in the write's response, never a refusal.
         'document_size_warning_chars'
     ];
+    v_old TEXT;
 BEGIN
     IF NOT (p_key = ANY(v_allowed)) THEN
         RAISE EXCEPTION 'Unknown config key: %. Allowed keys: %', p_key, v_allowed;
     END IF;
 
+    SELECT value INTO v_old FROM cerefox_config WHERE key = p_key;
+
     INSERT INTO cerefox_config (key, value)
     VALUES (p_key, p_value)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+    -- Same-transaction audit entry (document_id NULL — a store-level write).
+    -- A no-op set (same value) is still recorded: "checked and confirmed" is
+    -- itself a governance action, and skipping it would make the trail lie by
+    -- omission when someone re-asserts a setting.
+    PERFORM cerefox_create_audit_entry(
+        p_operation   := 'config-change',
+        p_author      := p_author,
+        p_author_type := p_author_type,
+        p_description := 'config: ' || p_key || ': '
+            || COALESCE('''' || v_old || '''', '(unset)')
+            || ' → ''' || p_value || ''''
+    );
 END;
 $$;
 
@@ -2820,7 +2737,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.13.0'::TEXT;
+    SELECT '0.14.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

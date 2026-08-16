@@ -156,3 +156,58 @@ describe("archived chunks carry no search artifacts (#216)", () => {
     expect(mig).toContain("cerefox_chunks_current_has_embedding");
   });
 });
+
+describe("store-level writes join the audit trail (0.14.0, #147)", () => {
+  const SCHEMA = readFileSync(
+    join(import.meta.dir, "..", "..", "src", "cerefox", "db", "schema.sql"),
+    "utf8",
+  );
+  const MIG = readFileSync(
+    join(import.meta.dir, "..", "..", "src", "cerefox", "db", "migrations", "0028_audit_store_level_writes.sql"),
+    "utf8",
+  );
+
+  test("cerefox_set_config writes a config-change entry in the same transaction", () => {
+    const body = functionBody("cerefox_set_config");
+    expect(body).toContain("cerefox_create_audit_entry");
+    expect(body).toContain("'config-change'");
+    // The old→new description is what makes the trail answer "what changed".
+    expect(body).toMatch(/v_old/);
+  });
+
+  test("the grown set_config DROPs its old 2-arg signature (PGRST203 class)", () => {
+    expect(RPCS).toContain("DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT);");
+  });
+
+  test("the operation CHECK allows all four store-level values, in schema AND migration", () => {
+    for (const op of ["config-change", "project-create", "project-edit", "project-delete"]) {
+      expect(SCHEMA).toContain(`'${op}'`);
+      expect(MIG).toContain(`'${op}'`);
+    }
+  });
+
+  test("migration 0028 carries the new set_config body (repair-path closure, as 0027)", () => {
+    expect(MIG).toContain("CREATE OR REPLACE FUNCTION cerefox_set_config");
+    expect(MIG).toContain("'config-change'");
+    expect(MIG).toContain("DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT);");
+  });
+
+  test("dead V1 RPCs are gone: no CREATE remains, and both rpcs.sql and 0028 DROP them", () => {
+    expect(RPCS).not.toContain("CREATE OR REPLACE FUNCTION cerefox_save_note");
+    expect(RPCS).not.toContain("CREATE OR REPLACE FUNCTION cerefox_context_expand");
+    for (const text of [RPCS, MIG]) {
+      expect(text).toContain("DROP FUNCTION IF EXISTS cerefox_save_note(TEXT, TEXT, TEXT, UUID, JSONB);");
+      expect(text).toContain("DROP FUNCTION IF EXISTS cerefox_context_expand(UUID[], INT);");
+    }
+  });
+
+  test("the allow-listed config keys stay in lockstep between rpcs.sql and migration 0028", () => {
+    // Drift here means a key settable after `server deploy` (rpcs refresh)
+    // but not after `db_migrate` alone, or vice versa.
+    const fromRpcs = functionBody("cerefox_set_config").match(/ARRAY\[[\s\S]*?\]/)![0];
+    const fromMig = MIG.match(/ARRAY\[[\s\S]*?\]/)![0];
+    const strip = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+    expect(strip(fromMig)).toEqual(strip(fromRpcs));
+  });
+});
+

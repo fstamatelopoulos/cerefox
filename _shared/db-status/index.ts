@@ -21,6 +21,11 @@ export const EXPECTED_TABLES = [
   "cerefox_document_projects",
   "cerefox_chunks",
   "cerefox_migrations",
+  // Post-v1.0 additions (list caught up in 0.14.0 — it had frozen pre-1.0
+  // while the schema kept growing, so db-status verified an old shape).
+  "cerefox_usage_log",
+  "cerefox_config",
+  "cerefox_document_relations",
 ] as const;
 
 export const EXPECTED_FUNCTIONS = [
@@ -29,9 +34,7 @@ export const EXPECTED_FUNCTIONS = [
   "cerefox_fts_search",
   "cerefox_semantic_search",
   "cerefox_reconstruct_doc",
-  "cerefox_save_note",
   "cerefox_search_docs",
-  "cerefox_context_expand",
   "cerefox_list_metadata_keys",
   "cerefox_snapshot_version",
   "cerefox_get_document",
@@ -43,6 +46,14 @@ export const EXPECTED_FUNCTIONS = [
   "cerefox_update_chunk_fts",
   "cerefox_schema_version",
   "cerefox_pg_function_exists",
+  // Post-v1.0 additions (0.14.0 catch-up, same as the tables above).
+  "cerefox_set_config",
+  "cerefox_set_document_metadata",
+  "cerefox_restore_document",
+  "cerefox_purge_document",
+  "cerefox_find_dead_links",
+  "cerefox_metadata_health",
+  "cerefox_metadata_search",
 ] as const;
 
 export const ROW_COUNT_TABLES = [

@@ -8,10 +8,17 @@
  * keep the dashboard-shaped doc projection logic in one place.
  *
  * Python source: `src/cerefox/api/routes_api.py` lines 417-438 (list).
+ *
+ * 0.14.0 (#147): the three write routes record project-create / project-edit /
+ * project-delete audit entries via the shared helper (author "user" — web
+ * writes always carry the human author). Best-effort: the write's success is
+ * never rolled back over a failed audit entry.
  */
 
 import { Hono } from "hono";
 
+import { auditProjectOp } from "../../../../../_shared/mcp-tools/_projects.ts";
+import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import type { WebContext } from "../context.ts";
 
 function projectRowToResponse(row: Record<string, unknown>): Record<string, unknown> {
@@ -25,6 +32,8 @@ function projectRowToResponse(row: Record<string, unknown>): Record<string, unkn
 }
 
 export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
+  const audit = ctx.supabase as unknown as MCPSupabaseClient;
+
   // ── GET /projects ─────────────────────────────────────────────────────────
   app.get("/api/v1/projects", async (c) => {
     const { data, error } = await ctx.supabase
@@ -55,6 +64,12 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     if (error || !data) {
       return c.json({ detail: error?.message ?? "create_project returned no data" }, 500);
     }
+    await auditProjectOp(audit, {
+      operation: "project-create",
+      description: `Project '${name}' created`,
+      author: "user",
+      authorType: "user",
+    });
     return c.json(projectRowToResponse(data as Record<string, unknown>));
   });
 
@@ -69,6 +84,12 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     }
     const name = String(body.name ?? "").trim();
     const description = String(body.description ?? "").trim();
+    // The old name makes the audit description say what actually changed.
+    const { data: before } = await ctx.supabase
+      .from("cerefox_projects")
+      .select("name")
+      .eq("id", projectId)
+      .maybeSingle();
     const { data, error } = await ctx.supabase
       .from("cerefox_projects")
       .update({ name, description })
@@ -78,17 +99,39 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     if (error || !data) {
       return c.json({ detail: error?.message ?? "update_project returned no data" }, 500);
     }
+    const oldName = (before as { name?: string } | null)?.name;
+    await auditProjectOp(audit, {
+      operation: "project-edit",
+      description:
+        oldName && oldName !== name
+          ? `Project '${oldName}' renamed to '${name}'`
+          : `Project '${name}' edited`,
+      author: "user",
+      authorType: "user",
+    });
     return c.json(projectRowToResponse(data as Record<string, unknown>));
   });
 
   // ── DELETE /projects/{id} ─────────────────────────────────────────────────
   app.delete("/api/v1/projects/:project_id", async (c) => {
     const projectId = c.req.param("project_id");
+    const { data: before } = await ctx.supabase
+      .from("cerefox_projects")
+      .select("name")
+      .eq("id", projectId)
+      .maybeSingle();
     const { error } = await ctx.supabase
       .from("cerefox_projects")
       .delete()
       .eq("id", projectId);
     if (error) return c.json({ detail: error.message }, 500);
+    const name = (before as { name?: string } | null)?.name ?? projectId;
+    await auditProjectOp(audit, {
+      operation: "project-delete",
+      description: `Project '${name}' deleted`,
+      author: "user",
+      authorType: "user",
+    });
     return c.json({ success: true });
   });
 }

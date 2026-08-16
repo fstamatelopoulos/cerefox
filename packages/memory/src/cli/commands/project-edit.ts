@@ -12,9 +12,13 @@ import {
   c,
   notFound,
   println,
+  resolveAuthor,
+  resolveAuthorType,
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { auditProjectOp } from "../../../../../_shared/mcp-tools/_projects.ts";
+import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -22,6 +26,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 interface EditOptions {
   name?: string;
   description?: string;
+  author?: string;
+  authorType?: string;
 }
 
 async function action(target: string, options: EditOptions): Promise<void> {
@@ -58,6 +64,18 @@ async function action(target: string, options: EditOptions): Promise<void> {
     throw systemError(`Update failed: ${error?.message ?? "no row returned"}`);
   }
 
+  const changes: string[] = [];
+  if (update.name !== undefined && update.name !== project.name) {
+    changes.push(`renamed '${project.name}' → '${update.name}'`);
+  }
+  if (update.description !== undefined) changes.push("description changed");
+  await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
+    operation: "project-edit",
+    description: `Project '${data.name}' edited (${changes.join("; ") || "no-op"})`,
+    author: resolveAuthor(options.author),
+    authorType: resolveAuthorType(options.authorType),
+  });
+
   println(c.green(`✓ Updated project "${data.name}" (id: ${data.id}).`));
 }
 
@@ -68,5 +86,7 @@ export function registerProjectEdit(parent: Command): void {
     .argument("<name-or-id>", "Project name (exact match) or UUID.")
     .option("--name <new-name>", "New project name.")
     .option("--description <text>", "New project description.")
+    .option("-a, --author <name>", "Caller identity (audit log).")
+    .option("--author-type <type>", "user | agent (default: user).")
     .action(action);
 }

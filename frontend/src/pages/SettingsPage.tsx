@@ -223,7 +223,7 @@ function ConfigRow({
             </Text>
             {entry.value === null && (
               <Badge size="xs" variant="light" color="gray">
-                default
+                using default
               </Badge>
             )}
             {entry.high_impact && (
@@ -275,7 +275,7 @@ function ConfigRow({
               checked={current === "true"}
               disabled={saving}
               onChange={(e) => onSave(e.currentTarget.checked ? "true" : "false")}
-              label={current === "true" ? "On" : "Off"}
+              label={current === "true" ? "true" : "false"}
             />
           ) : entry.kind === "number" ? (
             <Group gap="xs" wrap="nowrap">
@@ -308,7 +308,7 @@ function ConfigRow({
             </Group>
           )}
           <Text size="xs" c="dimmed" ta="right" mt={4}>
-            default: {entry.default || "(empty)"}
+            default if unset: {entry.default || "(empty)"}
           </Text>
         </div>
       </Group>

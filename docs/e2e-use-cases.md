@@ -15,6 +15,10 @@ cd packages/memory && bun run build && bun test
 CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts
 CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts
 
+# Release acceptance — 12 cases, live, self-cleaning (staging config dir;
+# refuses unlabelled prod targets)
+cd packages/memory && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test test/acceptance
+
 # UI e2e tests (Playwright, requires `cerefox web` running)
 cd frontend && bun run test:e2e
 ```
@@ -167,6 +171,24 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 | `_shared` unit (mocked) | ingest handler | Stale `expected_content_hash` fast-fails before embedding, with merge instructions + current hash | Done |
 | Web UI (manual / future Playwright) | edit conflict | Edit page sends loaded hash; concurrent change → 409 → "merge needed" toast | Manual |
 
+### 6D. Release Acceptance (live harness)
+
+`packages/memory/test/acceptance/release-acceptance.test.ts` — 12 cases, live,
+self-cleaning. Run: `cd packages/memory && CEREFOX_CONFIG_DIR=~/.cerefox/staging
+bun test test/acceptance` (refuses unlabelled production targets).
+
+| Suite | Test | Use Case | Status |
+|-------|------|----------|--------|
+| acceptance | section read | `document get --section` (CLI) and MCP `section` return identical text (#198/#201) | Done |
+| acceptance | section ambiguity | An ambiguous section anchor is refused identically on CLI and MCP (parity) | Done |
+| acceptance | rename_section | Heading renamed in place, body and position preserved; a level change is refused (#197) | Done |
+| acceptance | emoji phantom-loss | Emoji content does not trigger a phantom loss report | Done |
+| acceptance | loss warning | Deleting the last section surfaces a loss warning (#196) | Done |
+| acceptance | UTC timestamps | Timestamp markers are UTC (#199) | Done |
+| acceptance | v1.8.0 invariant | Archived chunks carry no search artifacts after a snapshot (`embedding_primary`/`embedding_upgrade`/`fts` NULL; content kept) | Done |
+| migration validation | 0027 back-fill | Migration 0027 nulls artifacts on pre-existing archived chunks and reports reclaimed space | Done |
+| acceptance | #212 metadata guard | Malformed (non-object) metadata is rejected at every write path | Done |
+
 ### 7. Governance Features (future e2e)
 
 | # | Use Case | Status |
@@ -177,7 +199,7 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 | 7.4 | Review status filter on search returns only matching documents | TODO |
 | 7.5 | Version diff view displays correct added/removed lines | TODO |
 
-### 8. MCP Server (future)
+### 8. MCP Server (partially covered)
 
 | # | Use Case | Status |
 |---|----------|--------|

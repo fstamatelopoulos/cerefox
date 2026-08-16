@@ -222,9 +222,9 @@ async function handler(
     });
 
     if (project_names !== null) {
-      await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+      await setDocumentProjectsByName(supabase, existingDoc.id, project_names, { author, authorType: author_type });
     } else if (project_name) {
-      await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+      await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
     }
 
     const note = update_if_exists
@@ -326,9 +326,9 @@ async function handler(
       });
 
       if (project_names !== null) {
-        await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+        await setDocumentProjectsByName(supabase, existingDoc.id, project_names, { author, authorType: author_type });
       } else if (project_name) {
-        await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+        await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
       }
 
       return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.`;
@@ -397,9 +397,9 @@ async function handler(
   const documentId = ingestResult[0].document_id;
 
   if (project_names !== null && project_names.length > 0) {
-    await setDocumentProjectsByName(supabase, documentId, project_names);
+    await setDocumentProjectsByName(supabase, documentId, project_names, { author, authorType: author_type });
   } else if (project_name) {
-    await ensureDocumentInProject(supabase, documentId, project_name);
+    await ensureDocumentInProject(supabase, documentId, project_name, { author, authorType: author_type });
   }
 
   logUsage(supabase, {

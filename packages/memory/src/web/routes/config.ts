@@ -136,9 +136,13 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
     const invalid = validateConfigValue(key, value);
     if (invalid) return c.json({ detail: invalid }, 400);
 
+    // Web writes always carry the 'user' author (a human at the dashboard);
+    // the RPC records the change in the audit trail (0.14.0).
     const { error } = await ctx.supabase.rpc("cerefox_set_config", {
       p_key: key,
       p_value: value,
+      p_author: "user",
+      p_author_type: "user",
     });
     if (error) return c.json({ detail: error.message }, 500);
     return c.json({ key, value });

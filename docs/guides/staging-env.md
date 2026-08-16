@@ -278,6 +278,7 @@ read but nothing acts on it.
 |---|---|
 | **Agent (MCP) config** | Safe since v1.4.0 ([#168](https://github.com/fstamatelopoulos/cerefox/issues/168)). `configure-agent` names the server after `CEREFOX_ENV_LABEL`, so a staging environment registers as **`cerefox-staging`** alongside your production `cerefox` entry rather than replacing it, and an agent can hold both. The labelled entry also carries its own `CEREFOX_CONFIG_DIR` and `CEREFOX_ENV_LABEL` in the config it writes — without that the client would spawn the server with *its own* environment (a GUI client launched from the dock has none), `CEREFOX_CONFIG_DIR` would be absent, and an entry named `cerefox-staging` would quietly serve production. Before v1.4.0 it registered every environment as `cerefox` and running it from staging silently repointed all your agents. |
 | **`doctor`'s `mcp clients` line** | It inspects your global agent configs, which point at production, and reports them even in staging mode. Informative, but easy to misread as "staging is wired to my agents". |
+| **`doctor` remediation commands** | Environment-aware since v1.8.0: in a staging environment the remediations tell you to prefix `CEREFOX_CONFIG_DIR` (or use the alias). Before that, a staging `doctor` printed bare `cerefox …` remediations that act on production. |
 
 Everything else — config, database, backups, CLI version, web daemon — is
 separated and validated.

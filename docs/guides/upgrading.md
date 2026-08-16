@@ -136,7 +136,7 @@ a linked Supabase project.
 
 ## Notable cross-version transitions
 
-Most upgrades need nothing beyond the steps above. Two transitions are worth
+Most upgrades need nothing beyond the steps above. A few transitions are worth
 knowing about:
 
 - **v0.9 — CLI verbs moved to a resource-verb shape** (`cerefox document get`,
@@ -149,6 +149,10 @@ knowing about:
   `@cerefox/memory` npm package (CLI, MCP server, web server, ingestion). If
   you're coming from a pre-installer 0.1.x clone, see the "old pre-installer
   clone" note above: install the package and run `cerefox init`.
+- **v1.5.0 — heading-duplication refusal.** Documents with duplicate headings
+  that ingested fine before now need deduplication, or are refused on edit.
+- **v1.7.0 — trashed documents refuse content updates.** A soft-deleted
+  document must be restored before its content can be updated.
 
 ## Notable: v1.8.0 storage reclaim (migration 0027)
 

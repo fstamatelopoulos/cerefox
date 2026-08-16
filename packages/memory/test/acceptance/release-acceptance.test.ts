@@ -390,4 +390,26 @@ describe("release acceptance (live)", () => {
     });
     expect(unrelated.isError).toBe(false);
   });
+
+  test("a config change lands in the audit trail with author and old→new (#147)", async () => {
+    // Non-destructive by construction: read the current value and re-assert
+    // it. The store's config is left exactly as found; the only residue is
+    // one append-only 'config-change' audit row attributed to 'acceptance',
+    // which is the behavior under test.
+    const KEY = "document_size_warning_chars";
+    const get = A.cli(["config", "get", KEY, "--json"]);
+    expect(get.code).toBe(0);
+    const current = (JSON.parse(get.stdout) as { value: string | null }).value ?? "0";
+
+    const set = A.cli(["config", "set", KEY, current, "--author", "acceptance"]);
+    if (set.code !== 0 && /predates schema 0\.14\.0/.test(set.out)) {
+      console.warn("SERVER_BEHIND: deployed server predates 0.14.0 — config-audit case skipped");
+      return;
+    }
+    expect(set.code).toBe(0);
+
+    const audit = (await A.mcp("cerefox_get_audit_log", { operation: "config-change", limit: 5 })).text;
+    expect(audit).toContain(`config: ${KEY}:`);
+    expect(audit).toContain("acceptance");
+  });
 });

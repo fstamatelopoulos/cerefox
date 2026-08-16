@@ -42,7 +42,7 @@ flowchart TD
 The original spec used a single `cerefox_notes` table. The current design uses:
 
 - **`cerefox_documents`** — document-level metadata (no content column — content lives in chunks)
-- **`cerefox_chunks`** — search corpus and version store. Current chunks have `version_id IS NULL`; archived chunks have `version_id` pointing to their version row. All embeddings and FTS live here.
+- **`cerefox_chunks`** — search corpus and version store. Current chunks have `version_id IS NULL`; archived chunks have `version_id` pointing to their version row. All embeddings and FTS live here, on current chunks only (archived chunks carry none — see §7.5).
 - **`cerefox_document_versions`** — lightweight version metadata rows (`version_number`, `source`, `chunk_count`, `total_chars`, `archived`, `created_at`). No content TEXT, no `content_hash`/`metadata` snapshot columns — content for any version is reconstructed from its archived chunks. Created only when content actually changes. Includes `archived` boolean for protecting specific versions from retention cleanup.
 - **`cerefox_audit_log`** — immutable, append-only log of all write operations. Records author, author_type ('user' or 'agent'), operation type, size delta, and description. FK references to documents and versions (SET NULL on delete). Used for accountability and temporal queries.
 - **`cerefox_usage_log`** — opt-in log of all operations (reads and writes) across all access paths. Records operation, access_path ('remote-mcp', 'local-mcp', 'edge-function', 'webapp', 'cli'), requestor (agent name or 'user'), document_id, query_text, result_count. Feeds the analytics page. Controlled by `cerefox_config` ('usage_tracking_enabled'). The `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled.
@@ -89,11 +89,15 @@ CREATE TABLE cerefox_documents (
   source TEXT NOT NULL DEFAULT 'manual',      -- 'file', 'paste', 'agent', 'url', 'manual'
   source_path TEXT,                            -- original file path or URL
   content_hash TEXT NOT NULL,                  -- SHA-256 of raw markdown; used for dedup
-  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    CONSTRAINT cerefox_documents_metadata_object
+    CHECK (jsonb_typeof(metadata) = 'object'), -- #212: metadata must be a JSON object
   chunk_count INT NOT NULL DEFAULT 0,          -- count of current-version chunks (version_id IS NULL)
   total_chars INT NOT NULL DEFAULT 0,          -- sum of char_count for current-version chunks
+  review_status TEXT NOT NULL DEFAULT 'approved',  -- 'approved' | 'pending_review'
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ DEFAULT NULL,         -- soft delete: NULL = active, timestamp = trashed
 
   UNIQUE(content_hash)
 );
@@ -874,7 +878,9 @@ Version rows store no `content_hash` and no `metadata` snapshot — content (and
 metadata) is reconstructed from the archived chunks.
 
 **Version content** (in `cerefox_chunks` WHERE `version_id = <id>`):
-Full chunk rows including content, heading_path, and embeddings. Retrieved via:
+Chunk rows keeping `content` and `heading_path`; `embedding_primary`,
+`embedding_upgrade`, and `fts` are NULL on archived rows (v1.8.0 invariant —
+archived content is the safety copy; restore is manual re-ingest). Retrieved via:
 ```sql
 SELECT content FROM cerefox_chunks
 WHERE version_id = '<version_id>'
@@ -896,7 +902,7 @@ This preserves a full audit trail — the "bad" state becomes a version, and the
 
 ### 7.5 Why Versions Are Not Searchable
 
-Archived chunks exist in `cerefox_chunks` but are excluded from all search indexes (`WHERE version_id IS NULL` on FTS and HNSW partial indexes). This means:
+Archived chunks exist in `cerefox_chunks` but are excluded from all search indexes (`WHERE version_id IS NULL` on FTS and HNSW partial indexes). Beyond the partial indexes, archived chunks since v1.8.0 carry no search artifacts at all — `embedding_primary`, `embedding_upgrade`, and `fts` are nulled at archive time (an invariant, not a config or a maintenance command; nothing can read them). This means:
 - Search always operates on current-version content only
 - The HNSW index does not grow with version history (predictable performance)
 - No search RPC changes are needed to prevent version leakage into results
@@ -946,9 +952,15 @@ BEGIN
         (p_document_id, v_version_number, p_source, v_chunk_count, v_total_chars)
     RETURNING id INTO v_version_id;
 
-    -- Archive current chunks by pointing them to the new version
+    -- Archive current chunks by pointing them to the new version.
+    -- Search artifacts are stripped at archive time since v1.8.0
+    -- (schema 0.13.0; migration 0027 back-filled existing archives).
     UPDATE cerefox_chunks
-    SET version_id = v_version_id
+    SET version_id = v_version_id,
+        embedding_primary = NULL,
+        embedding_upgrade = NULL,
+        embedder_upgrade = NULL,
+        fts = NULL
     WHERE document_id = p_document_id AND version_id IS NULL;
 
     -- Lazy cleanup (skipped when p_cleanup_enabled is false): delete expired,
@@ -1076,7 +1088,7 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_set_document_projects` | Write | Set (replace) the set of projects a document belongs to. |
 | `cerefox_set_document_metadata` | Write | Change a document's metadata without touching content. Merges by default; a JSON null removes a key. Metadata-only: no re-chunk, no re-embed, no version snapshot. |
 | `cerefox_insert` | Write (additive) | Add text at `end_of_document` / `end_of_section` / `after_heading` / `before_heading` without resending the document. Structurally cannot remove content. |
-| `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section`) applied **atomically** in a single write. |
+| `cerefox_edit` | Write (destructive) | One to many operations (`insert` / `replace_section` / `delete_section` / `rename_section`) applied **atomically** in a single write. |
 | `cerefox_delete_document` | Write (destructive) | Soft-delete to the trash. Requires the caller's read-hash (`expected_content_hash`); optional `reason` recorded in the audit entry. Permanent purge remains web-UI-only. |
 | `cerefox_restore_document` | Write (recovery) | Restore a soft-deleted document from the trash — the audited inverse of delete. Optional `reason`; no-op if the document is not deleted. |
 | `cerefox_get_help` | Read | Return the bundled agent quick-reference (tools, rules, workflows). |

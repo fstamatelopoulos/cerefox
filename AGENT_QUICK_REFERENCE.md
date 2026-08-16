@@ -1,6 +1,6 @@
 # Cerefox Knowledge Base -- Agent Quick Reference
 
-Cerefox is a persistent, shared knowledge base. You have **19 MCP tools** (18 of them have CLI equivalents — `cerefox_get_help` is MCP-only). For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
+Cerefox is a persistent, shared knowledge base. You have **15 core MCP tools** (14 with CLI equivalents — `cerefox_get_help` is MCP-only), plus 4 dormant relation tools that appear only when `relations_enabled` is on. For the full guide, search Cerefox for "How AI Agents Use Cerefox" or call `cerefox_get_help` to retrieve this content over MCP.
 
 ## Tools
 

@@ -220,12 +220,35 @@ async function sha256hex(text: string): Promise<string> {
 //
 // Used by both update branches AND the create path so resolution is consistent.
 
+// 0.14.0 (#147): an implicit project creation is a store-level write and
+// belongs in the audit trail, attributed to the ingest that caused it.
+// Best-effort — never blocks the write (and tolerates a pre-0.14 CHECK).
+// deno-lint-ignore no-explicit-any
+async function auditImplicitProjectCreate(supabase: any, name: string, author: string): Promise<void> {
+  try {
+    const { error } = await supabase.rpc("cerefox_create_audit_entry", {
+      p_document_id: null,
+      p_version_id: null,
+      p_operation: "project-create",
+      p_author: author,
+      p_author_type: "agent",
+      p_size_before: null,
+      p_size_after: null,
+      p_description: `Project '${name}' created implicitly (document assignment)`,
+    });
+    if (error) console.warn("auditImplicitProjectCreate failed", error);
+  } catch (err) {
+    console.warn("auditImplicitProjectCreate failed", err);
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 async function ensureDocumentInProject(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   documentId: string,
   projectName: string,
+  auditAuthor?: string,
 ): Promise<string | null> {
   // Resolve project name → id (look up; create if absent).
   let projectId: string | null = null;
@@ -242,6 +265,9 @@ async function ensureDocumentInProject(
       .insert({ name: projectName })
       .select("id");
     projectId = newProj?.[0]?.id ?? null;
+    if (projectId && auditAuthor) {
+      await auditImplicitProjectCreate(supabase, projectName, auditAuthor);
+    }
   }
   if (!projectId) return null;
 
@@ -280,6 +306,7 @@ async function setDocumentProjectsByName(
   supabase: any,
   documentId: string,
   projectNames: string[],
+  auditAuthor?: string,
 ): Promise<string[]> {
   const projectIds: string[] = [];
   for (const name of projectNames) {
@@ -296,7 +323,10 @@ async function setDocumentProjectsByName(
         .from("cerefox_projects")
         .insert({ name })
         .select("id");
-      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
+      if (newProj?.[0]?.id) {
+        projectIds.push(newProj[0].id);
+        if (auditAuthor) await auditImplicitProjectCreate(supabase, name, auditAuthor);
+      }
     }
   }
 
@@ -535,9 +565,9 @@ Deno.serve(async (req: Request) => {
     // - project_names (list) → destructive replace (full-set semantics)
     // - project_name (singular) → non-destructive add (only if project_names absent)
     if (project_names !== null) {
-      await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+      await setDocumentProjectsByName(supabase, existingDoc.id, project_names, author);
     } else if (project_name) {
-      await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+      await ensureDocumentInProject(supabase, existingDoc.id, project_name, author);
     }
 
     const note = update_if_exists ? undefined : "update_if_exists flag was overridden by document_id";
@@ -658,9 +688,9 @@ Deno.serve(async (req: Request) => {
       // - project_names (list) → destructive replace (full-set semantics)
       // - project_name (singular) → non-destructive add (only if project_names absent)
       if (project_names !== null) {
-        await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+        await setDocumentProjectsByName(supabase, existingDoc.id, project_names, author);
       } else if (project_name) {
-        await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+        await ensureDocumentInProject(supabase, existingDoc.id, project_name, author);
       }
 
       return new Response(
@@ -759,9 +789,9 @@ Deno.serve(async (req: Request) => {
   // - project_name (singular) → assign one via the non-destructive helper
   let projectId: string | null = null;
   if (project_names !== null && project_names.length > 0) {
-    await setDocumentProjectsByName(supabase, documentId, project_names);
+    await setDocumentProjectsByName(supabase, documentId, project_names, author);
   } else if (project_name) {
-    projectId = await ensureDocumentInProject(supabase, documentId, project_name);
+    projectId = await ensureDocumentInProject(supabase, documentId, project_name, author);
   }
 
   // Fire-and-forget usage logging for ingest

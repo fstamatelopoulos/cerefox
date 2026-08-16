@@ -21,9 +21,13 @@ import {
   confirm,
   notFound,
   println,
+  resolveAuthor,
+  resolveAuthorType,
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { auditProjectOp } from "../../../../../_shared/mcp-tools/_projects.ts";
+import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,6 +35,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 interface DeleteProjectOptions {
   yes?: boolean;
   force?: boolean;
+  author?: string;
+  authorType?: string;
 }
 
 interface ProjectRow {
@@ -97,6 +103,13 @@ async function action(target: string, options: DeleteProjectOptions): Promise<vo
     throw systemError(`Delete failed: ${delErr.message}`);
   }
 
+  await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
+    operation: "project-delete",
+    description: `Project '${project.name}' deleted (${docCount} document link(s) removed)`,
+    author: resolveAuthor(options.author),
+    authorType: resolveAuthorType(options.authorType),
+  });
+
   println(c.green(`✓ Deleted project "${project.name}" (id: ${project.id}).`));
 }
 
@@ -107,5 +120,7 @@ export function registerDeleteProject(program: Command): void {
     .argument("<name-or-id>", "Project name (exact match) or UUID.")
     .option("--yes", "Skip the confirmation prompt.")
     .option("--force", "Allow deletion when documents are still linked to the project.")
+    .option("-a, --author <name>", "Caller identity (audit log).")
+    .option("--author-type <type>", "user | agent (default: user).")
     .action(action);
 }

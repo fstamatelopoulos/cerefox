@@ -25,13 +25,57 @@ import type { AccessPath, MCPSupabaseClient } from "./types.ts";
 
 import { logUsage } from "./_utils.ts";
 
+export type ProjectAuditOp = "project-create" | "project-edit" | "project-delete";
+
+/** Who to attribute an implicit/explicit project write to in the audit log. */
+export interface ProjectAuditContext {
+  author: string;
+  authorType: string;
+}
+
+/**
+ * Best-effort store-level audit entry for a project operation (0.14.0, #147).
+ * `document_id` is NULL — the same shape purge-orphaned rows already have, so
+ * every audit reader tolerates it. Failure warns and never blocks the write
+ * that succeeded — including against a pre-0.14 server whose operation CHECK
+ * does not yet allow these values.
+ */
+export async function auditProjectOp(
+  supabase: MCPSupabaseClient,
+  opts: {
+    operation: ProjectAuditOp;
+    description: string;
+    author: string;
+    authorType: string;
+  },
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc("cerefox_create_audit_entry", {
+      p_document_id: null,
+      p_version_id: null,
+      p_operation: opts.operation,
+      p_author: opts.author,
+      p_author_type: opts.authorType,
+      p_size_before: null,
+      p_size_after: null,
+      p_description: opts.description,
+    });
+    if (error) console.warn("auditProjectOp: audit entry failed", error);
+  } catch (err) {
+    console.warn("auditProjectOp: audit entry failed", err);
+  }
+}
+
 /** Ensure `(documentId, project)` exists. Resolves project by name
  *  (case-insensitive); creates the project if missing. Idempotent.
- *  Returns the resolved project_id, or `null` if creation failed. */
+ *  Returns the resolved project_id, or `null` if creation failed.
+ *  Pass `audit` so an implicit creation lands in the audit trail
+ *  attributed to the write that caused it (0.14.0). */
 export async function ensureDocumentInProject(
   supabase: MCPSupabaseClient,
   documentId: string,
   projectName: string,
+  audit?: ProjectAuditContext,
 ): Promise<string | null> {
   let projectId: string | null = null;
   const { data: proj } = await supabase
@@ -47,6 +91,14 @@ export async function ensureDocumentInProject(
       .insert({ name: projectName })
       .select("id");
     projectId = newProj?.[0]?.id ?? null;
+    if (projectId && audit) {
+      await auditProjectOp(supabase, {
+        operation: "project-create",
+        description: `Project '${projectName}' created implicitly (document assignment)`,
+        author: audit.author,
+        authorType: audit.authorType,
+      });
+    }
   }
   if (!projectId) return null;
 
@@ -75,6 +127,7 @@ export async function setDocumentProjectsByName(
   supabase: MCPSupabaseClient,
   documentId: string,
   projectNames: string[],
+  audit?: ProjectAuditContext,
 ): Promise<string[]> {
   const projectIds: string[] = [];
   for (const name of projectNames) {
@@ -91,7 +144,17 @@ export async function setDocumentProjectsByName(
         .from("cerefox_projects")
         .insert({ name })
         .select("id");
-      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
+      if (newProj?.[0]?.id) {
+        projectIds.push(newProj[0].id);
+        if (audit) {
+          await auditProjectOp(supabase, {
+            operation: "project-create",
+            description: `Project '${name}' created implicitly (document assignment)`,
+            author: audit.author,
+            authorType: audit.authorType,
+          });
+        }
+      }
     }
   }
 
@@ -179,7 +242,15 @@ export async function replaceDocumentProjects(
         .from("cerefox_projects")
         .insert({ name })
         .select("id");
-      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
+      if (newProj?.[0]?.id) {
+        projectIds.push(newProj[0].id);
+        await auditProjectOp(supabase, {
+          operation: "project-create",
+          description: `Project '${name}' created implicitly (document assignment)`,
+          author,
+          authorType,
+        });
+      }
     }
   }
 
