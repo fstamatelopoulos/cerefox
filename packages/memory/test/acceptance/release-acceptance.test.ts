@@ -418,4 +418,41 @@ describe("release acceptance (live)", () => {
     expect(audit).toContain(`config: ${KEY}:`);
     expect(audit).toContain("acceptance");
   });
+
+  test("project create/edit/delete audit atomically via the RPCs (#147/#219)", async () => {
+    // Self-cleaning: the project is created, renamed, and deleted by the
+    // test itself. The audit rows are the append-only residue under test.
+    const NAME = `[E2E ACC] project-audit ${Date.now().toString(36)}`;
+    const RENAMED = `${NAME} v2`;
+
+    const created = A.cli(["project", "create", NAME, "--author", "acceptance"]);
+    if (created.code !== 0 && /predates schema 0\.14\.0/.test(created.out)) {
+      console.warn("SERVER_BEHIND: deployed server predates 0.14.0 — project-audit case skipped");
+      return;
+    }
+    expect(created.code).toBe(0);
+
+    const edited = A.cli(["project", "edit", NAME, "--name", RENAMED, "--author", "acceptance"]);
+    expect(edited.code).toBe(0);
+
+    const deleted = A.cli(["project", "delete", RENAMED, "--yes", "--author", "acceptance"]);
+    expect(deleted.code).toBe(0);
+
+    // The trail: one entry per operation, attributed, with the real diff.
+    const creates = (await A.mcp("cerefox_get_audit_log", { operation: "project-create", limit: 10 })).text;
+    expect(creates).toContain(`Project '${NAME}' created`);
+    const edits = (await A.mcp("cerefox_get_audit_log", { operation: "project-edit", limit: 10 })).text;
+    expect(edits).toContain(`renamed '${NAME}' → '${RENAMED}'`);
+    const deletes = (await A.mcp("cerefox_get_audit_log", { operation: "project-delete", limit: 10 })).text;
+    expect(deletes).toContain(`Project '${RENAMED}' deleted`);
+    // Store-level rows render as "(store)", never "(deleted)".
+    expect(deletes).toContain("(store)");
+
+    // A repeat delete is refused and — critically — adds NO second entry.
+    const again = A.cli(["project", "delete", RENAMED, "--yes", "--author", "acceptance"]);
+    expect(again.code).not.toBe(0);
+    const after = (await A.mcp("cerefox_get_audit_log", { operation: "project-delete", limit: 10 })).text;
+    expect((after.match(new RegExp(`Project '.{0,80}v2' deleted`, "g")) ?? []).length)
+      .toBe((deletes.match(new RegExp(`Project '.{0,80}v2' deleted`, "g")) ?? []).length);
+  });
 });

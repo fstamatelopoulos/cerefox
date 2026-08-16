@@ -402,7 +402,10 @@ export class IngestionDbBridge {
     description?: string;
   }): Promise<void> {
     try {
-      await this.supabase.rpc("cerefox_create_audit_entry", {
+      // supabase-js resolves with {error} rather than throwing — the catch
+      // alone never fires, so the returned error MUST be inspected or a
+      // rejected audit insert vanishes without a trace (round-3 review).
+      const { error } = await this.supabase.rpc("cerefox_create_audit_entry", {
         p_document_id: args.documentId ?? null,
         p_version_id: args.versionId ?? null,
         p_operation: args.operation,
@@ -412,9 +415,11 @@ export class IngestionDbBridge {
         p_size_after: args.sizeAfter ?? null,
         p_description: args.description ?? "",
       });
-    } catch {
-      // Audit failures don't block the user-visible operation — Python
-      // logs a warning and continues; we match that behaviour.
+      if (error) console.warn("createAuditEntry failed:", error.message ?? error);
+    } catch (err) {
+      // Audit failures don't block the user-visible operation — log a
+      // warning and continue.
+      console.warn("createAuditEntry failed:", err);
     }
   }
 }

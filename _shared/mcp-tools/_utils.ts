@@ -233,6 +233,16 @@ export function isStoreLevelAuditOp(operation: string | null | undefined): boole
   return (STORE_LEVEL_AUDIT_OPS as readonly string[]).includes(operation ?? "");
 }
 
+/**
+ * A store whose RPCs are 0.14.0+ but whose cerefox_audit_log operation CHECK
+ * was never widened (migration 0028 unapplied — e.g. a partial deploy) rejects
+ * every in-transaction audit insert with 23514. The write itself rolls back,
+ * so the remediation is "apply the migration", never "fix your input".
+ */
+export function isAuditCheckError(message: string): boolean {
+  return /cerefox_audit_log_operation_check/.test(message);
+}
+
 export function isMissingFunctionError(message: string, fnName: string): boolean {
   return (
     (message.includes("Could not find the function") && message.includes(fnName)) ||

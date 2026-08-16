@@ -12,7 +12,9 @@
  * 0.14.0 (#147/#219): the three write routes call the project write RPCs
  * (cerefox_create_project / cerefox_update_project / cerefox_delete_project),
  * which perform the write AND its audit entry in one transaction. Author is
- * "user" — web writes always carry the human author.
+ * "web-ui" with author_type "user" — the convention every other web audit
+ * site follows (documents-write.ts, ingest.ts), so filtering the trail by
+ * author='web-ui' catches dashboard-originated store-level writes too.
  */
 
 import { Hono } from "hono";
@@ -55,7 +57,7 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     const { data, error } = await ctx.supabase.rpc("cerefox_create_project", {
       p_name: name,
       p_description: description,
-      p_author: "user",
+      p_author: "web-ui",
       p_author_type: "user",
     });
     if (error) {
@@ -101,7 +103,7 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
       p_project_id: projectId,
       p_name: update.name ?? null,
       p_description: update.description ?? null,
-      p_author: "user",
+      p_author: "web-ui",
       p_author_type: "user",
     });
     if (error) {
@@ -127,7 +129,7 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     // not occur (double-click, stale tab → 404 here, no entry).
     const { data, error } = await ctx.supabase.rpc("cerefox_delete_project", {
       p_project_id: projectId,
-      p_author: "user",
+      p_author: "web-ui",
       p_author_type: "user",
     });
     if (error) return c.json({ detail: error.message }, 500);

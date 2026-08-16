@@ -13,7 +13,17 @@ export class ApiError extends Error {
   body: string;
 
   constructor(status: number, statusText: string, body: string) {
-    super(`API error ${status}: ${statusText}`);
+    // The backend puts its human remediation in the JSON body's `detail`
+    // ("run `cerefox server deploy`…"); a bare "API error 503: Service
+    // Unavailable" hides the fix from the one surface it was written for.
+    let detail = "";
+    try {
+      const parsed = JSON.parse(body) as { detail?: unknown };
+      if (typeof parsed.detail === "string" && parsed.detail) detail = parsed.detail;
+    } catch {
+      // Non-JSON body — keep the generic message.
+    }
+    super(detail ? `${detail} (HTTP ${status})` : `API error ${status}: ${statusText}`);
     this.name = "ApiError";
     this.status = status;
     this.statusText = statusText;

@@ -11,6 +11,21 @@ import { ListPage, type ListColumn } from "../components/ListPage";
 import { formatDateTime } from "../utils/dates";
 import ui from "../styles/redesign.module.css";
 
+// Store-level operations carry no document by design (0.14.0) — the NULL
+// document_id must not render as "(deleted)". LOCKSTEP: mirrors
+// STORE_LEVEL_AUDIT_OPS in _shared/mcp-tools/_utils.ts; a vite alias into
+// _shared (like the existing @cerefox/schemas one) could import it directly —
+// deferred to keep this release's frontend surface small. This array is the
+// ONE local definition: the dropdown entries, badge tones, and document-cell
+// rendering below all derive from it.
+const STORE_LEVEL_OP_DEFS = [
+  { value: "config-change", label: "Config change", tone: "yellow" },
+  { value: "project-create", label: "Project create", tone: "green" },
+  { value: "project-edit", label: "Project edit", tone: "violet" },
+  { value: "project-delete", label: "Project delete", tone: "red" },
+] as const;
+const STORE_LEVEL_OPS = new Set<string>(STORE_LEVEL_OP_DEFS.map((d) => d.value));
+
 const OPERATIONS = [
   { value: "", label: "All operations" },
   { value: "create", label: "Create" },
@@ -25,22 +40,9 @@ const OPERATIONS = [
   { value: "status-change", label: "Status change" },
   { value: "archive", label: "Archive" },
   { value: "unarchive", label: "Unarchive" },
-  { value: "config-change", label: "Config change" },
-  { value: "project-create", label: "Project create" },
-  { value: "project-edit", label: "Project edit" },
-  { value: "project-delete", label: "Project delete" },
+  ...STORE_LEVEL_OP_DEFS.map((d) => ({ value: d.value, label: d.label })),
 ];
 
-// Store-level operations carry no document by design (0.14.0) — the NULL
-// document_id must not render as "(deleted)". LOCKSTEP: mirrors
-// STORE_LEVEL_AUDIT_OPS in _shared/mcp-tools/_utils.ts (no vite alias into
-// _shared yet); update both together.
-const STORE_LEVEL_OPS = new Set([
-  "config-change",
-  "project-create",
-  "project-edit",
-  "project-delete",
-]);
 
 const OP_TONE: Record<string, string> = {
   create: ui.bGreen,
@@ -55,10 +57,12 @@ const OP_TONE: Record<string, string> = {
   unarchive: ui.bPrimary,
   restore: ui.bGreen,
   delete: ui.bRed,
-  "config-change": ui.bYellow,
-  "project-create": ui.bGreen,
-  "project-edit": ui.bViolet,
-  "project-delete": ui.bRed,
+  ...Object.fromEntries(
+    STORE_LEVEL_OP_DEFS.map((d) => [
+      d.value,
+      { yellow: ui.bYellow, green: ui.bGreen, violet: ui.bViolet, red: ui.bRed }[d.tone],
+    ]),
+  ),
 };
 
 export function AuditLogPage() {

@@ -82,7 +82,7 @@ bun scripts/db_status.ts --json   # structured JSON output
 
 Reports (the expected lists live in `_shared/db-status/index.ts` — the single source of truth):
 - Tables: `cerefox_projects`, `cerefox_documents`, `cerefox_document_versions`, `cerefox_audit_log`, `cerefox_document_projects`, `cerefox_chunks`, `cerefox_migrations`, `cerefox_usage_log`, `cerefox_config`, `cerefox_document_relations`
-- RPC functions: set_updated_at, hybrid_search, fts_search, semantic_search, reconstruct_doc, search_docs, context_expand, list_metadata_keys, snapshot_version, get_document, list_document_versions, create_audit_entry, list_audit_entries, ingest_document, delete_document, restore_document, purge_document, set_config, set_document_metadata, find_dead_links, metadata_health, metadata_search, update_chunk_fts, `cerefox_schema_version`, `cerefox_pg_function_exists`
+- RPC functions: set_updated_at, hybrid_search, fts_search, semantic_search, reconstruct_doc, list_projects, log_usage, list_metadata_keys, snapshot_version, get_document, list_document_versions, create_audit_entry, list_audit_entries, ingest_document, delete_document, restore_document, purge_document, set_config, create_project, update_project, delete_project, set_document_metadata, find_dead_links, metadata_health, metadata_search, update_chunk_fts, `cerefox_schema_version`, `cerefox_pg_function_exists`
 - Row counts per table
 - **Schema-version mismatch**: compares the `@version` marker in the bundled `schema.sql` against the deployed `cerefox_schema_version()` RPC. Non-zero exit if they differ (the same check powers the web UI's schema-mismatch banner).
 

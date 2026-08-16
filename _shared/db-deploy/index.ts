@@ -50,7 +50,7 @@ export interface DbDeployStep {
 /** Build the ordered list of SQL steps for a deploy (no I/O beyond reads). */
 export function buildDeploySteps(
   assets: ServerAssetPaths,
-  opts: { reset?: boolean } = {},
+  opts: { reset?: boolean; stampMigrations?: boolean } = {},
 ): DbDeployStep[] {
   const schemaSql = readFileSync(assets.schemaFile, "utf8");
   const rpcsSql = readFileSync(assets.rpcsFile, "utf8");
@@ -64,7 +64,7 @@ export function buildDeploySteps(
     { label: "Apply RPCs (search functions)", sql: rpcsSql },
   );
   const migrationFiles = listMigrationFiles(assets.migrationsDir);
-  if (migrationFiles.length > 0) {
+  if ((opts.stampMigrations ?? true) && migrationFiles.length > 0) {
     const values = migrationFiles
       .map((n) => `('${n.replace(/'/g, "''")}')`)
       .join(", ");
@@ -100,7 +100,21 @@ export interface DbDeployResult {
  */
 export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult> {
   const log = opts.log ?? (() => {});
-  const steps = buildDeploySteps(opts.assets, { reset: opts.reset });
+
+  // Stamping every migration as "already applied" is ONLY valid when the
+  // whole schema was just created from schema.sql (which already embodies
+  // them). On an EXISTING schema, CREATE TABLE IF NOT EXISTS leaves old
+  // tables (and old CHECK constraints) in place, so stamping would mark
+  // pending data migrations applied WITHOUT running them — permanently,
+  // since nothing would ever list them as pending again (round-3 review;
+  // the 0028 operation-CHECK widening was the live example). A reset makes
+  // the database fresh by definition.
+  const fresh = opts.reset || opts.dryRun ? true : !(await detectExistingSchema(opts.dbUrl));
+  const steps = buildDeploySteps(opts.assets, { reset: opts.reset, stampMigrations: fresh });
+  if (!fresh) {
+    log("⚠  Existing schema detected: pending migrations are NOT stamped by a re-apply.");
+    log("   Run `bun scripts/db_migrate.ts` (or `cerefox server deploy`) to apply them.");
+  }
 
   if (opts.dryRun) {
     for (const step of steps) {

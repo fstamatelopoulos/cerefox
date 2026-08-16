@@ -20,7 +20,7 @@ import {
 } from "../../../../../_shared/config-catalog/index.ts";
 import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import type { WebContext } from "../context.ts";
-import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { isAuditCheckError, isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 
 function unwrapScalarRpc(data: unknown): string | null {
   if (typeof data === "string") return data;
@@ -137,12 +137,13 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
     const invalid = validateConfigValue(key, value);
     if (invalid) return c.json({ detail: invalid }, 400);
 
-    // Web writes always carry the 'user' author (a human at the dashboard);
-    // the RPC records the change in the audit trail (0.14.0).
+    // Author "web-ui" + author_type "user": the same convention every other
+    // web audit site uses, so an author='web-ui' filter catches dashboard
+    // config changes too. The RPC records the entry in-transaction (0.14.0).
     const { error } = await ctx.supabase.rpc("cerefox_set_config", {
       p_key: key,
       p_value: value,
-      p_author: "user",
+      p_author: "web-ui",
       p_author_type: "user",
     });
     if (error) {
@@ -155,6 +156,16 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
             detail:
               "The deployed server predates schema 0.14.0 (or its schema cache is stale right after a deploy). " +
               "Run `cerefox server deploy`, or retry in a few seconds if you just deployed.",
+          },
+          503,
+        );
+      }
+      if (isAuditCheckError(error.message ?? "")) {
+        return c.json(
+          {
+            detail:
+              "The server's audit-log constraint predates migration 0028 (partial deploy). " +
+              "Run `cerefox server deploy` to apply pending migrations, then retry.",
           },
           503,
         );
