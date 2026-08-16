@@ -598,14 +598,80 @@ AS $$
     GROUP BY d.id, d.title, d.source, d.metadata;
 $$;
 
--- ── retired V1 RPCs (dropped in 0.14.0) ─────────────────────────────────────
--- cerefox_save_note and cerefox_context_expand were Python-era V1 tools with
--- zero callers since the TS rewrite — nothing in the CLI, MCP tools, Edge
--- Functions, or web app ever called them, and their comments still pointed at
--- the removed Python ingestion pipeline. The DROPs stay here so re-applying
--- rpcs.sql also cleans long-lived databases (migration 0028 carries the same).
+-- ── retired V1 RPC (dropped in 0.14.0) ──────────────────────────────────────
+-- cerefox_save_note was a Python-era V1 tool with zero callers since the TS
+-- rewrite — nothing in the CLI, MCP tools, Edge Functions, web app, OR the
+-- SQL layer ever called it. The DROP stays here so re-applying rpcs.sql also
+-- cleans long-lived databases (migration 0028 carries the same).
+--
+-- cerefox_context_expand (below) looked like the same class but is NOT dead:
+-- cerefox_search_docs calls it for small-to-big retrieval. TS-side grep alone
+-- cannot establish an RPC is unused — SQL functions have SQL callers. It was
+-- briefly slated for removal in this release; the sandbox validation caught
+-- the breakage (42883 from search_docs) before anything shipped.
 DROP FUNCTION IF EXISTS cerefox_save_note(TEXT, TEXT, TEXT, UUID, JSONB);
-DROP FUNCTION IF EXISTS cerefox_context_expand(UUID[], INT);
+
+-- ── cerefox_context_expand ────────────────────────────────────────────────────
+-- Small-to-big retrieval: given a set of chunk IDs from a search result,
+-- return those chunks plus their immediate neighbours (±window_size by
+-- chunk_index within the same document).  Use this after a chunk-level search
+-- to recover more surrounding context without fetching the full document.
+--
+-- Parameters:
+--   p_chunk_ids   : Array of chunk UUIDs from the search results
+--   p_window_size : Number of chunks to expand in each direction (default: 1)
+--
+-- Returns each expanded chunk with is_seed=TRUE for original results.
+
+CREATE OR REPLACE FUNCTION cerefox_context_expand(
+    p_chunk_ids   UUID[],
+    p_window_size INT DEFAULT 1
+)
+RETURNS TABLE (
+    chunk_id      UUID,
+    document_id   UUID,
+    chunk_index   INT,
+    title         TEXT,
+    content       TEXT,
+    heading_path  TEXT[],
+    heading_level INT,
+    doc_title     TEXT,
+    is_seed       BOOL
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+    WITH seeds AS (
+        SELECT c.id, c.document_id, c.chunk_index
+        FROM cerefox_chunks c
+        WHERE c.id = ANY(p_chunk_ids)
+          AND c.version_id IS NULL
+    ),
+    expanded AS (
+        SELECT DISTINCT c.id
+        FROM cerefox_chunks c
+        JOIN seeds s ON c.document_id = s.document_id
+        WHERE c.version_id IS NULL
+          AND c.chunk_index BETWEEN s.chunk_index - p_window_size
+                                AND s.chunk_index + p_window_size
+    )
+    SELECT
+        c.id            AS chunk_id,
+        c.document_id,
+        c.chunk_index,
+        c.title,
+        c.content,
+        c.heading_path,
+        c.heading_level,
+        d.title         AS doc_title,
+        c.id = ANY(p_chunk_ids) AS is_seed
+    FROM expanded e
+    JOIN cerefox_chunks   c ON c.id = e.id
+    JOIN cerefox_documents d ON c.document_id = d.id
+    ORDER BY c.document_id, c.chunk_index;
+$$;
 
 -- ── cerefox_search_docs ───────────────────────────────────────────────────────
 -- Document-level hybrid search: runs hybrid search internally, deduplicates
@@ -2334,7 +2400,11 @@ $$;
 -- The 2-arg signature grew to 4 in 0.14.0 (audit trail). CREATE OR REPLACE
 -- never removes the old overload, and a surviving one makes named calls
 -- ambiguous under PostgREST (PGRST203) — the v1.7.0 purge/restore lesson.
+-- Both signatures dropped (house pattern, cf. delete_document): the old one
+-- so it cannot linger, the current one so re-applying this file stays
+-- idempotent after migration 0028 has already created it.
 DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT);
+DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT, TEXT, TEXT);
 
 CREATE FUNCTION cerefox_set_config(
     p_key         TEXT,

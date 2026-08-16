@@ -35,6 +35,9 @@ export const EXPECTED_FUNCTIONS = [
   "cerefox_semantic_search",
   "cerefox_reconstruct_doc",
   "cerefox_search_docs",
+  // Called BY cerefox_search_docs (small-to-big retrieval) — a SQL-level
+  // dependency with no TS caller, which is exactly why it must stay listed.
+  "cerefox_context_expand",
   "cerefox_list_metadata_keys",
   "cerefox_snapshot_version",
   "cerefox_get_document",

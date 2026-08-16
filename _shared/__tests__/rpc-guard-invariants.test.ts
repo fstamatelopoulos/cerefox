@@ -192,13 +192,16 @@ describe("store-level writes join the audit trail (0.14.0, #147)", () => {
     expect(MIG).toContain("DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT);");
   });
 
-  test("dead V1 RPCs are gone: no CREATE remains, and both rpcs.sql and 0028 DROP them", () => {
+  test("save_note is gone; context_expand SURVIVES because search_docs calls it", () => {
     expect(RPCS).not.toContain("CREATE OR REPLACE FUNCTION cerefox_save_note");
-    expect(RPCS).not.toContain("CREATE OR REPLACE FUNCTION cerefox_context_expand");
     for (const text of [RPCS, MIG]) {
       expect(text).toContain("DROP FUNCTION IF EXISTS cerefox_save_note(TEXT, TEXT, TEXT, UUID, JSONB);");
-      expect(text).toContain("DROP FUNCTION IF EXISTS cerefox_context_expand(UUID[], INT);");
+      // The sandbox caught this: dropping context_expand broke search_docs
+      // (SQL-level caller invisible to TS grep). Neither file may drop it.
+      expect(text).not.toContain("DROP FUNCTION IF EXISTS cerefox_context_expand");
     }
+    expect(RPCS).toContain("CREATE OR REPLACE FUNCTION cerefox_context_expand");
+    expect(functionBody("cerefox_search_docs")).toContain("cerefox_context_expand(");
   });
 
   test("the allow-listed config keys stay in lockstep between rpcs.sql and migration 0028", () => {

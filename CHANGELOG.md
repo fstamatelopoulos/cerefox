@@ -35,10 +35,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Removed
 
-- **Dead V1 RPCs `cerefox_save_note` and `cerefox_context_expand`.**
-  Python-era leftovers with zero callers since the TypeScript rewrite; no
-  CLI command, MCP tool, Edge Function, or web route ever reached them.
-  Dropped by migration 0028; `db-status` no longer expects them.
+- **Dead V1 RPC `cerefox_save_note`.** A Python-era leftover with zero
+  callers since the TypeScript rewrite; no CLI command, MCP tool, Edge
+  Function, web route, or SQL function ever reached it. Dropped by
+  migration 0028; `db-status` no longer expects it. (Its sibling
+  `cerefox_context_expand` looked equally dead from the TypeScript side but
+  is called by `cerefox_search_docs` inside SQL — it stays, and the sandbox
+  validation is what caught the difference.)
 
 ### Fixed
 

@@ -82,10 +82,14 @@ like the membership path (`_shared/mcp-tools/_projects.ts`).
 
 ### 4. Dead-RPC cleanup (rides migration 0028)
 
-- [ ] Drop `cerefox_save_note` and `cerefox_context_expand`: Python-era V1
-      leftovers, zero callers anywhere in the codebase, comments still
-      pointing at "the Python ingestion pipeline" (removed at v1.0.0).
-- [ ] Remove both from the `db-status` expected-RPCs list.
+- [x] Drop `cerefox_save_note`: Python-era V1 leftover, zero callers
+      anywhere (TS or SQL), comments still pointing at "the Python ingestion
+      pipeline" (removed at v1.0.0). Removed from the `db-status` list.
+- [x] **`cerefox_context_expand` STAYS** — originally slated for removal on
+      the same evidence, but the sandbox validation of migration 0028 caught
+      that `cerefox_search_docs` calls it inside SQL (42883 on every
+      document-level search had it shipped). Lesson recorded: a TS-side grep
+      cannot establish an RPC is unused; SQL functions have SQL callers.
 
 ### 5. Settings-UI terminology (frontend only)
 

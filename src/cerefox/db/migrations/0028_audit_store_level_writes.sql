@@ -23,9 +23,11 @@
 --      between the migration step and the RPC refresh can leave the old,
 --      non-auditing function behind while 0028 is stamped applied (same
 --      repair-path closure as 0027).
---   3. Drops the dead V1 RPCs cerefox_save_note and cerefox_context_expand:
---      Python-era tools with zero callers since the TS rewrite, never exposed
---      by any CLI command, MCP tool, Edge Function, or web route.
+--   3. Drops the dead V1 RPC cerefox_save_note: a Python-era tool with zero
+--      callers since the TS rewrite — no CLI command, MCP tool, Edge
+--      Function, web route, or SQL function references it. (Its sibling
+--      cerefox_context_expand looked identical but is load-bearing:
+--      cerefox_search_docs calls it for small-to-big retrieval, so it stays.)
 --
 -- Project create/edit/delete audit entries are written client-side by the
 -- callers (project CRUD is plain table access with no RPC); this migration
@@ -93,12 +95,11 @@ BEGIN
 END;
 $$;
 
--- 3. Dead V1 RPCs.
+-- 3. Dead V1 RPC.
 DROP FUNCTION IF EXISTS cerefox_save_note(TEXT, TEXT, TEXT, UUID, JSONB);
-DROP FUNCTION IF EXISTS cerefox_context_expand(UUID[], INT);
 
 DO $$
 BEGIN
     RAISE NOTICE
-        'Migration 0028: audit trail now covers store-level writes (config-change, project-create/edit/delete). Dropped retired V1 RPCs cerefox_save_note and cerefox_context_expand.';
+        'Migration 0028: audit trail now covers store-level writes (config-change, project-create/edit/delete). Dropped the retired V1 RPC cerefox_save_note.';
 END $$;
