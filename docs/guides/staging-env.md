@@ -137,6 +137,15 @@ production-version-on-production-data and `cfx-stg` means
 staging-version-on-staging-data. There is no combination of the two that a typo
 can produce.
 
+> **The alias is the protection — scripts and agents that bypass it lose it.**
+> `CEREFOX_CONFIG_DIR=~/.cerefox/staging cerefox …` (bare binary, staging
+> config) recombines the axes: production *code* on staging *data*. Aliases
+> don't exist in non-interactive shells, which is exactly where automation
+> runs, so spell out the pinned binary path there. And remember the global
+> binary is itself a production component: `cerefox self-update` replaces it
+> no matter which `CEREFOX_CONFIG_DIR` is set — updating "for staging" that
+> way is a production change.
+
 Verify the split before trusting it:
 
 ```bash

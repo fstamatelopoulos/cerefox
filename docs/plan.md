@@ -28,9 +28,18 @@
 ---
 ## Current Focus
 
-**2026-08-15 — v1.8.0 is CUT-READY on `feat/v1.8.0-drop-version-artifacts` / PR #217 (#216: archived chunks drop their search artifacts; schema 0.13.0). Six review rounds done, sandbox-validated; next: maintainer merges + cuts, installs on staging, then the agreed staging dress rehearsal (before-baseline → migrate → byte-identical reconstruction, search, new-write strip, restore, retention, acceptance + Playwright, idempotent re-deploy) gates the prod deploy. v1.7.x shipped, deployed, verified, announced.**
+**2026-08-16 — v1.8.0 SHIPPED and verified on production (#216: archived chunks drop their search artifacts; schema 0.13.0). #216/#217 closed.**
 
-Schema is at 0.12.2; `minSchema` stays 0.10.5 (reviewed each release,
+The staging dress rehearsal ran against the *released artifact* and gated the
+prod deploy: migration 0027 back-filled both stores completely (staging 1,006
+archived chunks → 0 with artifacts; prod 3,137 → 0, ~19 MB freed, reported
+live by the migration's own NOTICE — the pre-deploy read-only baseline
+predicted the identical numbers), pre-migration versions reconstruct
+byte-identically, the new `cerefox_chunks_current_has_embedding` CHECK fires
+loudly, search is unaffected, and acceptance (12/12 on both envs) + Playwright
+(20/20, staging) pass. Both environments fully on 1.8.0 (CLI, schema, EFs).
+
+Schema is at 0.13.0; `minSchema` stays 0.10.5 (reviewed each release,
 deliberately not raised). The tool surface is 15 core + 4 dormant relation
 tools (delete/restore joined in v1.7.0).
 
