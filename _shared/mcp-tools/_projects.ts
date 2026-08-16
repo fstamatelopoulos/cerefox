@@ -25,8 +25,6 @@ import type { AccessPath, MCPSupabaseClient } from "./types.ts";
 
 import { logUsage } from "./_utils.ts";
 
-export type ProjectAuditOp = "project-create" | "project-edit" | "project-delete";
-
 /** Who to attribute an implicit/explicit project write to in the audit log. */
 export interface ProjectAuditContext {
   author: string;
@@ -34,35 +32,35 @@ export interface ProjectAuditContext {
 }
 
 /**
- * Best-effort store-level audit entry for a project operation (0.14.0, #147).
- * `document_id` is NULL — the same shape purge-orphaned rows already have, so
- * every audit reader tolerates it. Failure warns and never blocks the write
- * that succeeded — including against a pre-0.14 server whose operation CHECK
- * does not yet allow these values.
+ * Resolve (or create) a project by name via cerefox_create_project with
+ * p_if_exists='return' — the single implementation (0.14.0, #219): the RPC
+ * audits an actual creation in the SAME transaction as the insert, and an
+ * existing project is returned untouched with no audit entry. Returns the
+ * project id, or null on failure (best-effort, matching the historical
+ * posture of the assignment paths).
  */
-export async function auditProjectOp(
+export async function resolveOrCreateProject(
   supabase: MCPSupabaseClient,
-  opts: {
-    operation: ProjectAuditOp;
-    description: string;
-    author: string;
-    authorType: string;
-  },
-): Promise<void> {
+  projectName: string,
+  audit?: ProjectAuditContext,
+): Promise<string | null> {
   try {
-    const { error } = await supabase.rpc("cerefox_create_audit_entry", {
-      p_document_id: null,
-      p_version_id: null,
-      p_operation: opts.operation,
-      p_author: opts.author,
-      p_author_type: opts.authorType,
-      p_size_before: null,
-      p_size_after: null,
-      p_description: opts.description,
+    const { data, error } = await supabase.rpc("cerefox_create_project", {
+      p_name: projectName,
+      p_description: "",
+      p_author: audit?.author ?? "unknown",
+      p_author_type: audit?.authorType ?? "agent",
+      p_if_exists: "return",
     });
-    if (error) console.warn("auditProjectOp: audit entry failed", error);
+    if (error) {
+      console.warn("resolveOrCreateProject: RPC failed", error);
+      return null;
+    }
+    const row = (data as Array<{ project_id?: string }> | null)?.[0];
+    return row?.project_id ?? null;
   } catch (err) {
-    console.warn("auditProjectOp: audit entry failed", err);
+    console.warn("resolveOrCreateProject: RPC failed", err);
+    return null;
   }
 }
 
@@ -77,29 +75,7 @@ export async function ensureDocumentInProject(
   projectName: string,
   audit?: ProjectAuditContext,
 ): Promise<string | null> {
-  let projectId: string | null = null;
-  const { data: proj } = await supabase
-    .from("cerefox_projects")
-    .select("id")
-    .ilike("name", projectName)
-    .limit(1);
-  if (proj?.length) {
-    projectId = proj[0].id;
-  } else {
-    const { data: newProj } = await supabase
-      .from("cerefox_projects")
-      .insert({ name: projectName })
-      .select("id");
-    projectId = newProj?.[0]?.id ?? null;
-    if (projectId && audit) {
-      await auditProjectOp(supabase, {
-        operation: "project-create",
-        description: `Project '${projectName}' created implicitly (document assignment)`,
-        author: audit.author,
-        authorType: audit.authorType,
-      });
-    }
-  }
+  const projectId = await resolveOrCreateProject(supabase, projectName, audit);
   if (!projectId) return null;
 
   const { data: existing } = await supabase
@@ -132,30 +108,8 @@ export async function setDocumentProjectsByName(
   const projectIds: string[] = [];
   for (const name of projectNames) {
     if (!name) continue;
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", name)
-      .limit(1);
-    if (proj?.length) {
-      projectIds.push(proj[0].id);
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name })
-        .select("id");
-      if (newProj?.[0]?.id) {
-        projectIds.push(newProj[0].id);
-        if (audit) {
-          await auditProjectOp(supabase, {
-            operation: "project-create",
-            description: `Project '${name}' created implicitly (document assignment)`,
-            author: audit.author,
-            authorType: audit.authorType,
-          });
-        }
-      }
-    }
+    const pid = await resolveOrCreateProject(supabase, name, audit);
+    if (pid) projectIds.push(pid);
   }
 
   await supabase
@@ -228,30 +182,12 @@ export async function replaceDocumentProjects(
   }
 
   // Resolve each name → project_id (create if absent). Preserve order.
+  // Creation goes through cerefox_create_project (p_if_exists='return'),
+  // which audits an actual create in the same transaction (#219).
   const projectIds: string[] = [];
   for (const name of cleanNames) {
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", name)
-      .limit(1);
-    if (proj?.length) {
-      projectIds.push(proj[0].id);
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name })
-        .select("id");
-      if (newProj?.[0]?.id) {
-        projectIds.push(newProj[0].id);
-        await auditProjectOp(supabase, {
-          operation: "project-create",
-          description: `Project '${name}' created implicitly (document assignment)`,
-          author,
-          authorType,
-        });
-      }
-    }
+    const pid = await resolveOrCreateProject(supabase, name, { author, authorType });
+    if (pid) projectIds.push(pid);
   }
 
   // DELETE-then-INSERT replace (matches Python assign_document_projects).

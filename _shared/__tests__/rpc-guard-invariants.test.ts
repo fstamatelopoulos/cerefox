@@ -204,6 +204,47 @@ describe("store-level writes join the audit trail (0.14.0, #147)", () => {
     expect(functionBody("cerefox_search_docs")).toContain("cerefox_context_expand(");
   });
 
+  test("project writes audit IN-TRANSACTION via their RPCs (#219)", () => {
+    for (const fn of ["cerefox_create_project", "cerefox_update_project", "cerefox_delete_project"]) {
+      expect(functionBody(fn)).toContain("cerefox_create_audit_entry");
+    }
+    // Delete audits only when a row actually came back — the trail must
+    // never assert an event that did not occur.
+    const del = functionBody("cerefox_delete_project");
+    expect(del.indexOf("RETURNING name INTO v_name")).toBeGreaterThan(-1);
+    expect(del.indexOf("IF v_name IS NULL")).toBeLessThan(del.indexOf("cerefox_create_audit_entry"));
+    // 'return' mode must not audit the already-exists path: the early RETURN
+    // precedes the INSERT + audit.
+    const create = functionBody("cerefox_create_project");
+    expect(create.indexOf("RETURN QUERY SELECT v_id, v_name, FALSE")).toBeLessThan(create.indexOf("INSERT INTO cerefox_projects"));
+  });
+
+  test("migration 0028 carries the project RPC bodies VERBATIM (no drift)", () => {
+    const bodyOf = (text: string, name: string): string => {
+      const i = text.indexOf(`CREATE OR REPLACE FUNCTION ${name}(`);
+      expect(i).toBeGreaterThan(-1);
+      return text.slice(i, text.indexOf("\n$$;", i));
+    };
+    // set_config is excluded: its rpcs.sql form is CREATE FUNCTION with
+    // narrative comments; its migration copy is checked by the key-lockstep
+    // and content tests instead.
+    for (const fn of ["cerefox_create_project", "cerefox_update_project", "cerefox_delete_project"]) {
+      expect(bodyOf(MIG, fn)).toBe(bodyOf(RPCS, fn));
+    }
+  });
+
+  test("migration 0028 locks down every function it creates (REVOKE PUBLIC)", () => {
+    for (const sig of [
+      "cerefox_set_config(TEXT, TEXT, TEXT, TEXT)",
+      "cerefox_create_project(TEXT, TEXT, TEXT, TEXT, TEXT)",
+      "cerefox_update_project(UUID, TEXT, TEXT, TEXT, TEXT)",
+      "cerefox_delete_project(UUID, TEXT, TEXT)",
+    ]) {
+      expect(MIG).toContain(sig);
+    }
+    expect(MIG.match(/REVOKE EXECUTE ON FUNCTION/g)!.length).toBeGreaterThanOrEqual(2);
+  });
+
   test("the allow-listed config keys stay in lockstep between rpcs.sql and migration 0028", () => {
     // Drift here means a key settable after `server deploy` (rpcs refresh)
     // but not after `db_migrate` alone, or vice versa.

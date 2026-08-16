@@ -9,16 +9,14 @@
  *
  * Python source: `src/cerefox/api/routes_api.py` lines 417-438 (list).
  *
- * 0.14.0 (#147): the three write routes record project-create / project-edit /
- * project-delete audit entries via the shared helper (author "user" — web
- * writes always carry the human author). Best-effort: the write's success is
- * never rolled back over a failed audit entry.
+ * 0.14.0 (#147/#219): the three write routes call the project write RPCs
+ * (cerefox_create_project / cerefox_update_project / cerefox_delete_project),
+ * which perform the write AND its audit entry in one transaction. Author is
+ * "user" — web writes always carry the human author.
  */
 
 import { Hono } from "hono";
 
-import { auditProjectOp } from "../../../../../_shared/mcp-tools/_projects.ts";
-import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import type { WebContext } from "../context.ts";
 
 function projectRowToResponse(row: Record<string, unknown>): Record<string, unknown> {
@@ -32,8 +30,6 @@ function projectRowToResponse(row: Record<string, unknown>): Record<string, unkn
 }
 
 export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
-  const audit = ctx.supabase as unknown as MCPSupabaseClient;
-
   // ── GET /projects ─────────────────────────────────────────────────────────
   app.get("/api/v1/projects", async (c) => {
     const { data, error } = await ctx.supabase
@@ -56,21 +52,25 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     const name = String(body.name ?? "").trim();
     if (!name) return c.json({ detail: "Project name is required" }, 400);
     const description = String(body.description ?? "").trim();
-    const { data, error } = await ctx.supabase
-      .from("cerefox_projects")
-      .insert({ name, description })
-      .select("*")
-      .maybeSingle();
-    if (error || !data) {
-      return c.json({ detail: error?.message ?? "create_project returned no data" }, 500);
-    }
-    await auditProjectOp(audit, {
-      operation: "project-create",
-      description: `Project '${name}' created`,
-      author: "user",
-      authorType: "user",
+    const { data, error } = await ctx.supabase.rpc("cerefox_create_project", {
+      p_name: name,
+      p_description: description,
+      p_author: "user",
+      p_author_type: "user",
     });
-    return c.json(projectRowToResponse(data as Record<string, unknown>));
+    if (error) {
+      const status = /duplicate key|unique/i.test(error.message ?? "") ? 409 : 500;
+      return c.json({ detail: error.message }, status as 409 | 500);
+    }
+    const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
+    if (!row) return c.json({ detail: "create_project returned no data" }, 500);
+    // Re-read for the full row shape the UI expects (timestamps).
+    const { data: full } = await ctx.supabase
+      .from("cerefox_projects")
+      .select("*")
+      .eq("id", row.project_id)
+      .maybeSingle();
+    return c.json(projectRowToResponse((full ?? { id: row.project_id, name: row.project_name }) as Record<string, unknown>));
   });
 
   // ── PUT /projects/{id} ────────────────────────────────────────────────────
@@ -95,60 +95,44 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     if (Object.keys(update).length === 0) {
       return c.json({ detail: "Nothing to update — pass name and/or description" }, 400);
     }
-    // The old row makes the audit description say what actually changed.
-    const { data: before } = await ctx.supabase
-      .from("cerefox_projects")
-      .select("name, description")
-      .eq("id", projectId)
-      .maybeSingle();
-    const { data, error } = await ctx.supabase
-      .from("cerefox_projects")
-      .update(update)
-      .eq("id", projectId)
-      .select("*")
-      .maybeSingle();
-    if (error || !data) {
-      return c.json({ detail: error?.message ?? "update_project returned no data" }, 500);
-    }
-    const old = before as { name?: string; description?: string | null } | null;
-    const changes: string[] = [];
-    if (update.name !== undefined && old?.name !== update.name) {
-      changes.push(`renamed '${old?.name}' → '${update.name}'`);
-    }
-    if (update.description !== undefined && (old?.description ?? "").trim() !== update.description) {
-      changes.push("description changed");
-    }
-    await auditProjectOp(audit, {
-      operation: "project-edit",
-      description: `Project '${(data as { name?: string }).name}' edited (${changes.join("; ") || "no-op"})`,
-      author: "user",
-      authorType: "user",
+    // The RPC updates only the provided fields, diffs against the stored
+    // row for the audit description, and audits in-transaction (#219).
+    const { data, error } = await ctx.supabase.rpc("cerefox_update_project", {
+      p_project_id: projectId,
+      p_name: update.name ?? null,
+      p_description: update.description ?? null,
+      p_author: "user",
+      p_author_type: "user",
     });
-    return c.json(projectRowToResponse(data as Record<string, unknown>));
+    if (error) {
+      const msg = error.message ?? "";
+      if (/not found/i.test(msg)) return c.json({ detail: msg }, 404);
+      return c.json({ detail: msg }, 500);
+    }
+    const row = (data as Array<{ project_id: string }> | null)?.[0];
+    if (!row) return c.json({ detail: "update_project returned no data" }, 500);
+    const { data: full } = await ctx.supabase
+      .from("cerefox_projects")
+      .select("*")
+      .eq("id", row.project_id)
+      .maybeSingle();
+    return c.json(projectRowToResponse((full ?? row) as Record<string, unknown>));
   });
 
   // ── DELETE /projects/{id} ─────────────────────────────────────────────────
   app.delete("/api/v1/projects/:project_id", async (c) => {
     const projectId = c.req.param("project_id");
-    // DELETE ... RETURNING in one statement: the returned row is both the
-    // proof a deletion happened and the name for the trail. Auditing off a
-    // separate pre-SELECT would fabricate an immutable "deleted" record when
-    // nothing matched (double-click, stale tab) — the audit log must never
-    // assert an event that did not occur.
-    const { data: deleted, error } = await ctx.supabase
-      .from("cerefox_projects")
-      .delete()
-      .eq("id", projectId)
-      .select("name");
-    if (error) return c.json({ detail: error.message }, 500);
-    const row = (deleted as Array<{ name?: string }> | null)?.[0];
-    if (!row) return c.json({ detail: "Project not found" }, 404);
-    await auditProjectOp(audit, {
-      operation: "project-delete",
-      description: `Project '${row.name ?? projectId}' deleted`,
-      author: "user",
-      authorType: "user",
+    // The RPC deletes and audits atomically, and audits ONLY when a row was
+    // actually removed — the audit log must never assert an event that did
+    // not occur (double-click, stale tab → 404 here, no entry).
+    const { data, error } = await ctx.supabase.rpc("cerefox_delete_project", {
+      p_project_id: projectId,
+      p_author: "user",
+      p_author_type: "user",
     });
+    if (error) return c.json({ detail: error.message }, 500);
+    const row = (data as Array<{ deleted: boolean }> | null)?.[0];
+    if (!row?.deleted) return c.json({ detail: "Project not found" }, 404);
     return c.json({ success: true });
   });
 }

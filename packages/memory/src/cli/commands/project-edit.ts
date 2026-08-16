@@ -17,8 +17,6 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { auditProjectOp } from "../../../../../_shared/mcp-tools/_projects.ts";
-import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,42 +47,28 @@ async function action(target: string, options: EditOptions): Promise<void> {
   const isUuid = UUID_RE.test(target);
   const { data: project, error: lookupErr } = await client.raw
     .from("cerefox_projects")
-    .select("id, name, description")
+    .select("id, name")
     .eq(isUuid ? "id" : "name", target)
     .maybeSingle();
 
   if (lookupErr) throw systemError(`Lookup failed: ${lookupErr.message}`);
   if (!project) throw notFound(`Project "${target}" not found.`);
 
-  const { data, error } = await client.raw
-    .from("cerefox_projects")
-    .update(update)
-    .eq("id", project.id)
-    .select("id, name, description")
-    .maybeSingle();
-
-  if (error || !data) {
-    throw systemError(`Update failed: ${error?.message ?? "no row returned"}`);
-  }
-
-  // Compare against the fetched before-values: the trail must record what
-  // actually changed, not which flags were passed (review round 1).
-  const changes: string[] = [];
-  if (update.name !== undefined && update.name !== project.name) {
-    changes.push(`renamed '${project.name}' → '${update.name}'`);
-  }
-  const oldDescription = ((project as { description?: string | null }).description ?? "").trim();
-  if (update.description !== undefined && update.description !== oldDescription) {
-    changes.push("description changed");
-  }
-  await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
-    operation: "project-edit",
-    description: `Project '${data.name}' edited (${changes.join("; ") || "no-op"})`,
-    author,
-    authorType,
+  // The RPC updates only the provided fields, diffs against the stored row,
+  // and audits in the same transaction (#219).
+  const { data, error } = await client.raw.rpc("cerefox_update_project", {
+    p_project_id: project.id,
+    p_name: update.name ?? null,
+    p_description: update.description ?? null,
+    p_author: author,
+    p_author_type: authorType,
   });
 
-  println(c.green(`✓ Updated project "${data.name}" (id: ${data.id}).`));
+  if (error) throw systemError(`Update failed: ${error.message}`);
+  const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
+  if (!row) throw systemError("Update failed: no row returned");
+
+  println(c.green(`✓ Updated project "${row.project_name}" (id: ${row.project_id}).`));
 }
 
 export function registerProjectEdit(parent: Command): void {

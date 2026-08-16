@@ -17,8 +17,6 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { auditProjectOp } from "../../../../../_shared/mcp-tools/_projects.ts";
-import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
 
 interface CreateOptions {
@@ -36,24 +34,24 @@ async function action(name: string, options: CreateOptions): Promise<void> {
   // while nothing has happened (review round 2).
   const author = resolveAuthor(options.author);
   const authorType = resolveAuthorType(options.authorType);
-  const { data, error } = await client.raw
-    .from("cerefox_projects")
-    .insert({ name: trimmed, description: (options.description ?? "").trim() })
-    .select("id, name, description")
-    .maybeSingle();
-
-  if (error || !data) {
-    throw systemError(`Create failed: ${error?.message ?? "no row returned"}`);
-  }
-
-  await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
-    operation: "project-create",
-    description: `Project '${data.name}' created`,
-    author,
-    authorType,
+  // The RPC inserts AND audits in one transaction (#219).
+  const { data, error } = await client.raw.rpc("cerefox_create_project", {
+    p_name: trimmed,
+    p_description: (options.description ?? "").trim(),
+    p_author: author,
+    p_author_type: authorType,
   });
 
-  println(c.green(`✓ Created project "${data.name}" (id: ${data.id}).`));
+  if (error) {
+    if (/duplicate key|unique/i.test(error.message ?? "")) {
+      throw userError(`Project "${trimmed}" already exists.`);
+    }
+    throw systemError(`Create failed: ${error.message}`);
+  }
+  const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
+  if (!row) throw systemError("Create failed: no row returned");
+
+  println(c.green(`✓ Created project "${row.project_name}" (id: ${row.project_id}).`));
 }
 
 export function registerProjectCreate(parent: Command): void {

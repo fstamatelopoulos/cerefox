@@ -3,7 +3,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
-import { auditProjectOp } from "../../../_shared/mcp-tools/_projects.ts";
 import {
   chunkMarkdown,
   embeddingInputFor,
@@ -230,30 +229,18 @@ async function ensureDocumentInProject(
   auditAuthor?: string,
   auditAuthorType: string = "agent",
 ): Promise<string | null> {
-  // Resolve project name → id (look up; create if absent).
-  let projectId: string | null = null;
-  const { data: proj } = await supabase
-    .from("cerefox_projects")
-    .select("id")
-    .ilike("name", projectName)
-    .limit(1);
-  if (proj?.length) {
-    projectId = proj[0].id;
-  } else {
-    const { data: newProj } = await supabase
-      .from("cerefox_projects")
-      .insert({ name: projectName })
-      .select("id");
-    projectId = newProj?.[0]?.id ?? null;
-    if (projectId && auditAuthor) {
-      await auditProjectOp(supabase, {
-        operation: "project-create",
-        description: `Project '${projectName}' created implicitly (document assignment)`,
-        author: auditAuthor,
-        authorType: auditAuthorType,
-      });
-    }
-  }
+  // Resolve project name → id via cerefox_create_project (p_if_exists=
+  // 'return'): an actual create is audited IN the RPC's transaction (#219);
+  // an existing project is returned untouched.
+  const { data: resolved, error: resolveErr } = await supabase.rpc("cerefox_create_project", {
+    p_name: projectName,
+    p_description: "",
+    p_author: auditAuthor ?? "unknown",
+    p_author_type: auditAuthorType,
+    p_if_exists: "return",
+  });
+  if (resolveErr) console.warn("ensureDocumentInProject: create RPC failed", resolveErr);
+  const projectId: string | null = resolved?.[0]?.project_id ?? null;
   if (!projectId) return null;
 
   // Check membership; INSERT only if missing. PRIMARY KEY (document_id, project_id)
@@ -297,30 +284,19 @@ async function setDocumentProjectsByName(
   const projectIds: string[] = [];
   for (const name of projectNames) {
     if (!name) continue;
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", name)
-      .limit(1);
-    if (proj?.length) {
-      projectIds.push(proj[0].id);
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name })
-        .select("id");
-      if (newProj?.[0]?.id) {
-        projectIds.push(newProj[0].id);
-        if (auditAuthor) {
-          await auditProjectOp(supabase, {
-            operation: "project-create",
-            description: `Project '${name}' created implicitly (document assignment)`,
-            author: auditAuthor,
-            authorType: auditAuthorType,
-          });
-        }
-      }
+    const { data: resolved, error: resolveErr } = await supabase.rpc("cerefox_create_project", {
+      p_name: name,
+      p_description: "",
+      p_author: auditAuthor ?? "unknown",
+      p_author_type: auditAuthorType,
+      p_if_exists: "return",
+    });
+    if (resolveErr) {
+      console.warn("setDocumentProjectsByName: create RPC failed", resolveErr);
+      continue;
     }
+    const pid: string | null = resolved?.[0]?.project_id ?? null;
+    if (pid) projectIds.push(pid);
   }
 
   // DELETE-then-INSERT replace (matches Python assign_document_projects).

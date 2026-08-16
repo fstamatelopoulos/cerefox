@@ -366,34 +366,21 @@ export class IngestionDbBridge {
     name: string,
     audit?: { author: string; authorType: "user" | "agent" },
   ): Promise<ProjectRow> {
-    // Try by-name lookup first (case-sensitive, matches Python).
-    const { data: existing } = await this.supabase
-      .from("cerefox_projects")
-      .select("*")
-      .eq("name", name)
-      .maybeSingle();
-    if (existing) return existing as ProjectRow;
-
-    const { data, error } = await this.supabase
-      .from("cerefox_projects")
-      .insert({ name, description: "" })
-      .select("*")
-      .maybeSingle();
-    if (error || !data) {
-      throw error ?? new Error(`getOrCreateProject(${name}) returned no data`);
-    }
-    // 0.14.0 (#147): implicit creation is a store-level write; without this
-    // the CLI/web ingestion pipeline was the one interface whose project
-    // creations left no trail (review round 1 caught the gap).
-    if (audit) {
-      await this.createAuditEntry({
-        operation: "project-create",
-        author: audit.author,
-        authorType: audit.authorType,
-        description: `Project '${name}' created implicitly (document assignment)`,
-      });
-    }
-    return data as ProjectRow;
+    // 0.14.0 (#219): resolution and creation go through the RPC, which
+    // audits an actual create in the same transaction as the insert. An
+    // existing project comes back untouched and unaudited.
+    const { data, error } = await this.supabase.rpc("cerefox_create_project", {
+      p_name: name,
+      p_description: "",
+      p_author: audit?.author ?? "unknown",
+      p_author_type: audit?.authorType ?? "user",
+      p_if_exists: "return",
+    });
+    if (error) throw new Error(error.message ?? JSON.stringify(error));
+    const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
+    if (!row) throw new Error(`getOrCreateProject(${name}) returned no data`);
+    // The RPC returns id + name; description is not part of resolution.
+    return { id: row.project_id, name: row.project_name, description: null };
   }
 
   // ── Audit ─────────────────────────────────────────────────────────────────

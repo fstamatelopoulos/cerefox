@@ -1975,6 +1975,164 @@ AS $$
     ORDER BY p.name;
 $$;
 
+-- ── Project write RPCs (0.14.0, #147/#219) ──────────────────────────────────
+-- Project writes carried no business logic until the audit trail arrived —
+-- then every caller (CLI, web, shared helpers, ingestion pipeline, the ingest
+-- EF) grew its own follow-up cerefox_create_audit_entry call: non-atomic,
+-- warn-on-failure, and empirically forgettable (review round 1 caught two
+-- unwired paths in the release that introduced the convention). Single
+-- Implementation Principle applies the moment a write has a side effect: the
+-- write AND its audit entry live here, in one transaction. Callers are thin.
+
+CREATE OR REPLACE FUNCTION cerefox_create_project(
+    p_name        TEXT,
+    p_description TEXT DEFAULT '',
+    p_author      TEXT DEFAULT 'unknown',
+    p_author_type TEXT DEFAULT 'user',
+    -- 'error'  → explicit creation (CLI/web): duplicate name raises.
+    -- 'return' → get-or-create (implicit creation during document
+    --            assignment): an existing project is returned untouched and
+    --            NOT audited — only an actual create writes an entry.
+    p_if_exists   TEXT DEFAULT 'error'
+)
+RETURNS TABLE (project_id UUID, project_name TEXT, created BOOLEAN)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_id   UUID;
+    v_name TEXT;
+BEGIN
+    IF NULLIF(BTRIM(p_name), '') IS NULL THEN
+        RAISE EXCEPTION 'Project name is required' USING ERRCODE = '22023';
+    END IF;
+    IF p_if_exists NOT IN ('error', 'return') THEN
+        RAISE EXCEPTION 'p_if_exists must be ''error'' or ''return''' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_if_exists = 'return' THEN
+        -- Case-insensitive, matching the name resolution the assignment
+        -- paths have always used.
+        SELECT p.id, p.name INTO v_id, v_name
+        FROM cerefox_projects p WHERE lower(p.name) = lower(BTRIM(p_name)) LIMIT 1;
+        IF v_id IS NOT NULL THEN
+            RETURN QUERY SELECT v_id, v_name, FALSE;
+            RETURN;
+        END IF;
+    END IF;
+
+    INSERT INTO cerefox_projects (name, description)
+    VALUES (BTRIM(p_name), COALESCE(p_description, ''))
+    RETURNING id, name INTO v_id, v_name;
+
+    PERFORM cerefox_create_audit_entry(
+        p_operation   := 'project-create',
+        p_author      := p_author,
+        p_author_type := p_author_type,
+        p_description := 'Project ''' || v_name || ''' created'
+            || CASE WHEN p_if_exists = 'return'
+                    THEN ' implicitly (document assignment)' ELSE '' END
+    );
+    RETURN QUERY SELECT v_id, v_name, TRUE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cerefox_update_project(
+    p_project_id  UUID,
+    -- NULL = keep the current value (the #191/#204 "NULL means not provided"
+    -- convention). An explicit empty name is rejected.
+    p_name        TEXT DEFAULT NULL,
+    p_description TEXT DEFAULT NULL,
+    p_author      TEXT DEFAULT 'unknown',
+    p_author_type TEXT DEFAULT 'user'
+)
+RETURNS TABLE (project_id UUID, project_name TEXT, project_description TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_old  cerefox_projects%ROWTYPE;
+    v_new  cerefox_projects%ROWTYPE;
+    v_changes TEXT[] := '{}';
+BEGIN
+    IF p_name IS NULL AND p_description IS NULL THEN
+        RAISE EXCEPTION 'Nothing to update: pass p_name and/or p_description' USING ERRCODE = '22023';
+    END IF;
+    IF p_name IS NOT NULL AND NULLIF(BTRIM(p_name), '') IS NULL THEN
+        RAISE EXCEPTION 'Project name cannot be empty' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT * INTO v_old FROM cerefox_projects WHERE id = p_project_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Project not found: %', p_project_id USING ERRCODE = '22023';
+    END IF;
+
+    UPDATE cerefox_projects SET
+        name        = COALESCE(BTRIM(p_name), name),
+        description = COALESCE(p_description, description),
+        updated_at  = NOW()
+    WHERE id = p_project_id
+    RETURNING * INTO v_new;
+
+    -- The trail records what actually changed, not which arguments arrived.
+    IF v_new.name <> v_old.name THEN
+        v_changes := v_changes || ('renamed ''' || v_old.name || ''' → ''' || v_new.name || '''');
+    END IF;
+    IF COALESCE(v_new.description, '') <> COALESCE(v_old.description, '') THEN
+        v_changes := v_changes || 'description changed';
+    END IF;
+
+    PERFORM cerefox_create_audit_entry(
+        p_operation   := 'project-edit',
+        p_author      := p_author,
+        p_author_type := p_author_type,
+        p_description := 'Project ''' || v_new.name || ''' edited ('
+            || COALESCE(NULLIF(array_to_string(v_changes, '; '), ''), 'no-op') || ')'
+    );
+    RETURN QUERY SELECT v_new.id, v_new.name, v_new.description;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cerefox_delete_project(
+    p_project_id  UUID,
+    p_author      TEXT DEFAULT 'unknown',
+    p_author_type TEXT DEFAULT 'user'
+)
+RETURNS TABLE (deleted BOOLEAN, project_name TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_name  TEXT;
+    v_links INT;
+BEGIN
+    SELECT COUNT(*) INTO v_links FROM cerefox_document_projects WHERE project_id = p_project_id;
+
+    DELETE FROM cerefox_projects WHERE id = p_project_id
+    RETURNING name INTO v_name;
+
+    IF v_name IS NULL THEN
+        -- Zero rows: nothing happened, so nothing is audited — the trail
+        -- must never assert an event that did not occur. Callers decide
+        -- whether "already gone" is an error (CLI) or a 404 (web).
+        RETURN QUERY SELECT FALSE, NULL::TEXT;
+        RETURN;
+    END IF;
+
+    PERFORM cerefox_create_audit_entry(
+        p_operation   := 'project-delete',
+        p_author      := p_author,
+        p_author_type := p_author_type,
+        p_description := 'Project ''' || v_name || ''' deleted ('
+            || v_links || ' document link(s) removed)'
+    );
+    RETURN QUERY SELECT TRUE, v_name;
+END;
+$$;
+
 -- ── cerefox_metadata_search ──────────────────────────────────────────────────
 -- Query documents by metadata key-value criteria without a text search term.
 -- Uses JSONB containment (@>) which leverages the existing GIN index on

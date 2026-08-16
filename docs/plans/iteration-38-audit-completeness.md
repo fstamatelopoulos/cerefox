@@ -62,25 +62,28 @@ and a restore is reproduction, not authorship).
       a version-skewed install to redeploy. Callers surface the
       missing-function error with the redeploy hint.
 
-### 3. Project create/edit/delete audit — client-side, shared helper
+### 3. Project create/edit/delete audit — in-RPC (#219; re-decided mid-iteration)
 
-Project CRUD is sanctioned "simple CRUD" (no business logic), so no new RPCs;
-the audit entry is written client-side after the successful write, exactly
-like the membership path (`_shared/mcp-tools/_projects.ts`).
+First built client-side under the "simple CRUD" exception; the maintainer
+ruled that misaligned with the Single Implementation Principle (2026-08-16) —
+a write that carries a side effect is business logic — and review had already
+proven the fragility empirically (round 1 caught two unwired paths; round 2 a
+third-of-a-kind fabrication bug the atomic design makes impossible).
 
-- [x] Shared helper (one implementation; CLI + web import it): operation
-      `project-create` / `project-edit` / `project-delete`, `document_id`
-      NULL, description carries the project name (+ what changed on edit).
-- [x] CLI `project create` / `project edit` / `project delete` wire it up
-      (with the standard `--author` handling).
-- [x] Web project routes wire it up (`author: "user"`).
-- [x] Implicit creation (a project auto-created by `set-projects` /
-      `ingest --project`) also logs `project-create`, author = the write's
-      author. Creation is rare; this cannot flood. Review round 1 caught the
-      gap in the CLI/web *ingestion pipeline* (`getOrCreateProject`) — the
-      primary human write path was the one interface not wired; now covered.
-- [x] Audit-entry failure is a warning, not a rollback (the write itself
-      succeeded; same posture as `_projects.ts` today).
+- [x] Three RPCs — `cerefox_create_project(p_if_exists 'error'|'return')`,
+      `cerefox_update_project` (NULL = keep; audits the actual diff),
+      `cerefox_delete_project` (audits ONLY when a row was deleted) — each
+      writing its audit entry in the same transaction. Bodies carried
+      verbatim in migration 0028 (invariant-tested) + ACL lockdown.
+- [x] Every caller is a thin RPC call: CLI project commands, web routes,
+      `_shared/mcp-tools/_projects.ts` (`resolveOrCreateProject`), the
+      ingestion pipeline (`getOrCreateProject`), and the `cerefox-ingest` EF.
+      Implicit creation uses `'return'` — an existing project is returned
+      untouched and unaudited; only an actual create writes an entry.
+- [x] Sandbox-validated: create audits (+1), 'return' resolves
+      case-insensitively without a second entry, duplicate raises in 'error'
+      mode, update audits the real diff and NULL keeps, zero-row delete
+      audits nothing, all three locked down by the migration alone.
 
 ### 4. Dead-RPC cleanup (rides migration 0028)
 

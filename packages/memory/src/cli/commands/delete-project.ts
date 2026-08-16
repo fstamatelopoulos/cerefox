@@ -26,8 +26,6 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { auditProjectOp } from "../../../../../_shared/mcp-tools/_projects.ts";
-import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -99,28 +97,22 @@ async function action(target: string, options: DeleteProjectOptions): Promise<vo
     }
   }
 
-  // DELETE ... RETURNING: only a returned row proves a deletion happened.
-  // Auditing off the earlier lookup would fabricate an immutable record if
-  // the project vanished concurrently (same fix as the web route).
-  const { data: deleted, error: delErr } = await client.raw
-    .from("cerefox_projects")
-    .delete()
-    .eq("id", project.id)
-    .select("id");
+  // The RPC deletes and audits in one transaction, and audits ONLY when a
+  // row was actually removed (#219) — a concurrent deletion cannot fabricate
+  // an audit entry.
+  const { data: delData, error: delErr } = await client.raw.rpc("cerefox_delete_project", {
+    p_project_id: project.id,
+    p_author: author,
+    p_author_type: authorType,
+  });
 
   if (delErr) {
     throw systemError(`Delete failed: ${delErr.message}`);
   }
-  if (!((deleted as unknown[] | null)?.length)) {
+  const delRow = (delData as Array<{ deleted: boolean }> | null)?.[0];
+  if (!delRow?.deleted) {
     throw notFound(`Project "${project.name}" was already deleted (concurrently).`);
   }
-
-  await auditProjectOp(client.raw as unknown as MCPSupabaseClient, {
-    operation: "project-delete",
-    description: `Project '${project.name}' deleted (${docCount} document link(s) removed)`,
-    author,
-    authorType,
-  });
 
   println(c.green(`✓ Deleted project "${project.name}" (id: ${project.id}).`));
 }

@@ -11,14 +11,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Added
 
-- **Store-level writes join the audit trail (#147, first half).** Config
-  changes are now recorded by `cerefox_set_config` itself — one
+- **Store-level writes join the audit trail (#147, first half; #219).**
+  Config changes are recorded by `cerefox_set_config` itself — one
   `config-change` entry per write, in the same transaction, with the author
   and the old → new value — so "who turned retention off, and when?" is
-  finally answerable from the trail. Project create/edit/delete record
-  `project-create` / `project-edit` / `project-delete` entries from every
-  interface (CLI, web, and implicit creation during document assignment,
-  attributed to the write that caused it). These entries carry no
+  finally answerable from the trail. Project create/edit/delete go through
+  three new RPCs (`cerefox_create_project` / `cerefox_update_project` /
+  `cerefox_delete_project`) that write AND audit **in one transaction**, per
+  the single-implementation principle — every interface (CLI, web, MCP
+  document assignment, the ingestion pipeline, the ingest Edge Function) is
+  a thin caller, so no future write path can forget the trail. Implicit
+  creation during document assignment is attributed to the write that caused
+  it; a delete that matched nothing audits nothing. These entries carry no
   `document_id`, the same shape as purge-orphaned rows, so existing audit
   readers need no changes. `cerefox config set` and the three
   `cerefox project` commands accept `--author` (falling back to
