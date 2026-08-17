@@ -4,7 +4,7 @@
  *
  * Tests each EF independently (bypassing cerefox-mcp). Probe-and-skip when
  * Supabase / the access token isn't available. All created documents are
- * prefixed `[E2E-EF]` and hard-deleted in afterAll via the service client.
+ * prefixed `[E2E-EF]` and purged in afterAll via the purge RPC (audited).
  *
  * Requires CEREFOX_SUPABASE_URL + the Cerefox access token
  * (CEREFOX_ACCESS_TOKEN, set by `cerefox token generate`) + OPENAI_API_KEY
@@ -129,11 +129,16 @@ describe("Edge Functions (live HTTP)", () => {
   }
 
   afterAll(async () => {
-    // Hard-delete tracked docs via the service client (cascades to chunks).
+    // Purge via the RPC (audited, attributed) — a raw table delete left
+    // creates pointing at "(deleted)" docs with no deletion in the trail.
     try {
       const client = createClient(settings);
       for (const id of createdIds) {
-        await client.raw.from("cerefox_documents").delete().eq("id", id);
+        await client.raw.rpc("cerefox_purge_document", {
+          p_document_id: id,
+          p_author: "e2e-test",
+          p_author_type: "agent",
+        });
       }
     } catch {
       // best-effort; leftovers are [E2E-EF]-prefixed + purgeable.

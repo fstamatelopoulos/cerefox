@@ -5,7 +5,7 @@
  * Talks to the deployed cerefox-mcp over HTTP with no MCP SDK, so protocol
  * failures are unambiguously the EF's. Probe-and-skip when Supabase / the
  * access token is unavailable. Created docs are [E2E-MCP]-prefixed and
- * hard-deleted in afterAll via the service client.
+ * purged in afterAll via the purge RPC (attributed in the audit trail).
  */
 
 import { afterAll, describe, expect, test } from "bun:test";
@@ -106,10 +106,20 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
   }
 
   afterAll(async () => {
+    // Cleanup goes through the purge RPC, NOT a raw table delete: a raw
+    // delete leaves creates in the audit trail pointing at "(deleted)"
+    // documents with no deletion recorded anywhere — the maintainer spotted
+    // exactly that on staging and reasonably asked whether the dashboard
+    // was broken. Purge writes an attributed 'delete' entry, so the trail
+    // tells the whole story. Best-effort, as before.
     try {
       const client = createClient(settings);
       for (const id of createdIds) {
-        await client.raw.from("cerefox_documents").delete().eq("id", id);
+        await client.raw.rpc("cerefox_purge_document", {
+          p_document_id: id,
+          p_author: "e2e-test",
+          p_author_type: "agent",
+        });
       }
     } catch {
       // best-effort; [E2E-MCP]-prefixed leftovers are purgeable.
