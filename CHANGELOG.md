@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.9.1] -- 2026-08-17
+
 ### Fixed
 
 - **Project description edits no longer fail (v1.9.0 regression, caught in
