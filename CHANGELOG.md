@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.9.0] -- 2026-08-17
+
 ### Added
 
 - **Store-level writes join the audit trail (#147, first half; #219).**
