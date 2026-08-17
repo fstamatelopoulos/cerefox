@@ -129,19 +129,38 @@ describe("Edge Functions (live HTTP)", () => {
   }
 
   afterAll(async () => {
-    // Purge via the RPC (audited, attributed) — a raw table delete left
-    // creates pointing at "(deleted)" docs with no deletion in the trail.
     try {
       const client = createClient(settings);
       for (const id of createdIds) {
-        await client.raw.rpc("cerefox_purge_document", {
+        // Full audited lifecycle, matching the acceptance harness: purge has
+        // a trash-first guard (it only acts on soft-deleted rows — it is the
+        // empty-trash action), so a bare purge of a live doc is a no-op.
+        // First attempt purged live docs and left every fixture behind, with
+        // the {error} returns unchecked — supabase-js resolves, never
+        // throws, so EVERY result must be inspected.
+        const { data: doc } = await client.raw
+          .from("cerefox_documents")
+          .select("content_hash")
+          .eq("id", id)
+          .maybeSingle();
+        if (!doc) continue; // already gone
+        const del = await client.raw.rpc("cerefox_delete_document", {
+          p_document_id: id,
+          p_author: "e2e-test",
+          p_author_type: "agent",
+          p_expected_content_hash: (doc as { content_hash: string }).content_hash,
+          p_reason: "e2e cleanup",
+        });
+        if (del.error) console.warn("cleanup soft-delete failed:", id, del.error.message);
+        const purge = await client.raw.rpc("cerefox_purge_document", {
           p_document_id: id,
           p_author: "e2e-test",
           p_author_type: "agent",
         });
+        if (purge.error) console.warn("cleanup purge failed:", id, purge.error.message);
       }
-    } catch {
-      // best-effort; leftovers are [E2E-EF]-prefixed + purgeable.
+    } catch (err) {
+      console.warn("cleanup failed:", err);
     }
   });
 
