@@ -2118,11 +2118,16 @@ BEGIN
     RETURNING * INTO v_new;
 
     -- The trail records what actually changed, not which arguments arrived.
+    -- array_append, NOT `||`: with an untyped string literal on the right,
+    -- `TEXT[] || 'literal'` resolves to the array||array overload and dies
+    -- with `malformed array literal` — found LIVE on staging (v1.9.0; every
+    -- description-only edit failed; the rename branch only survived because
+    -- its parenthesized concatenation is typed TEXT).
     IF v_new.name <> v_old.name THEN
-        v_changes := v_changes || ('renamed ''' || v_old.name || ''' → ''' || v_new.name || '''');
+        v_changes := array_append(v_changes, 'renamed ''' || v_old.name || ''' → ''' || v_new.name || '''');
     END IF;
     IF COALESCE(v_new.description, '') <> COALESCE(v_old.description, '') THEN
-        v_changes := v_changes || 'description changed';
+        v_changes := array_append(v_changes, 'description changed');
     END IF;
 
     PERFORM cerefox_create_audit_entry(
@@ -3012,7 +3017,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.14.0'::TEXT;
+    SELECT '0.14.1'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

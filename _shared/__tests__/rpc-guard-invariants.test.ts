@@ -231,10 +231,22 @@ describe("store-level writes join the audit trail (0.14.0, #147)", () => {
     };
     // set_config is excluded: its rpcs.sql form is CREATE FUNCTION with
     // narrative comments; its migration copy is checked by the key-lockstep
-    // and content tests instead.
-    for (const fn of ["cerefox_create_project", "cerefox_update_project", "cerefox_delete_project"]) {
-      expect(bodyOf(MIG, fn)).toBe(bodyOf(RPCS, fn));
+    // and content tests instead. Each body is compared against the LATEST
+    // migration that carries it (0029 re-ships update_project's fix).
+    const MIG29 = readFileSync(
+      join(import.meta.dir, "..", "..", "src", "cerefox", "db", "migrations", "0029_fix_project_edit_description_audit.sql"),
+      "utf8",
+    );
+    for (const [fn, mig] of [
+      ["cerefox_create_project", MIG],
+      ["cerefox_update_project", MIG29],
+      ["cerefox_delete_project", MIG],
+    ] as const) {
+      expect(bodyOf(mig, fn)).toBe(bodyOf(RPCS, fn));
     }
+    // The bug class itself: no untyped-literal array append may return.
+    expect(bodyOf(RPCS, "cerefox_update_project")).toContain("array_append");
+    expect(bodyOf(RPCS, "cerefox_update_project")).not.toMatch(/v_changes \|\| '/);
   });
 
   test("migration 0028 locks down every function it creates (REVOKE PUBLIC)", () => {
