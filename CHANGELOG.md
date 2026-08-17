@@ -29,6 +29,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   `CEREFOX_AUTHOR_NAME`, then `unknown` with a warning). Schema
   0.13.0 → 0.14.0, migration 0028.
 
+  **Redeploy required**: `minSchema` is raised to **0.14.0** — the first
+  raise since the compatibility policy was written. This client resolves and
+  creates projects through the new RPCs on its core write path (ingesting
+  with a project name), so against an older server routine work degrades to
+  errors. After `self-update`, run `cerefox server deploy`; until then
+  `cerefox web` refuses to start and `doctor` says exactly why.
+
 ### Changed
 
 - **Settings page speaks the CLI's vocabulary.** Boolean settings display

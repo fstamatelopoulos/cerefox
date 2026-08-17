@@ -9,22 +9,19 @@ import { fetchAuditLog } from "../api/audit";
 import { CliHint } from "../components/CliHint";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { formatDateTime } from "../utils/dates";
+import { STORE_LEVEL_AUDIT_OPS } from "@cerefox/audit-ops";
 import ui from "../styles/redesign.module.css";
 
-// Store-level operations carry no document by design (0.14.0) — the NULL
-// document_id must not render as "(deleted)". LOCKSTEP: mirrors
-// STORE_LEVEL_AUDIT_OPS in _shared/mcp-tools/_utils.ts; a vite alias into
-// _shared (like the existing @cerefox/schemas one) could import it directly —
-// deferred to keep this release's frontend surface small. This array is the
-// ONE local definition: the dropdown entries, badge tones, and document-cell
-// rendering below all derive from it.
+// Membership is the SHARED definition (via the @cerefox/audit-ops alias, the
+// @cerefox/schemas pattern): a fifth store-level operation renders "(store)"
+// here without a frontend edit. Labels/tones are presentation and stay local.
 const STORE_LEVEL_OP_DEFS = [
   { value: "config-change", label: "Config change", tone: "yellow" },
   { value: "project-create", label: "Project create", tone: "green" },
   { value: "project-edit", label: "Project edit", tone: "violet" },
   { value: "project-delete", label: "Project delete", tone: "red" },
 ] as const;
-const STORE_LEVEL_OPS = new Set<string>(STORE_LEVEL_OP_DEFS.map((d) => d.value));
+const STORE_LEVEL_OPS = new Set<string>(STORE_LEVEL_AUDIT_OPS);
 
 const OPERATIONS = [
   { value: "", label: "All operations" },

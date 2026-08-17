@@ -17,7 +17,9 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@cerefox/schemas": ["../_shared/schemas"],
+      "@cerefox/audit-ops": ["../_shared/mcp-tools/audit-ops.ts"]
     },
 
     /* Linting */

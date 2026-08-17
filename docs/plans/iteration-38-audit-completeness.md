@@ -43,10 +43,15 @@ and a restore is reproduction, not authorship).
       closure, same rationale as 0027), and the dead-RPC drops (step 4).
 - [x] Bump schema version **in both literals, lockstep**: `-- @version:` in
       `schema.sql` and `cerefox_schema_version()` in `rpcs.sql` → `0.14.0`.
-- [x] `minSchema` review: stays 0.10.5 (nothing here makes an old server
-      *misbehave* for a new client — config set against an old server fails
-      loudly with a missing-function error, which `isMissingFunctionError`
-      already maps).
+- [x] `minSchema` review — RAISED to **0.14.0** (revised in round 4, the
+      first raise since the policy was written): once project writes went
+      in-RPC (#219), the client's CORE write path (ingest with a project
+      name) hard-requires the new surface, and a round-4 verifier
+      demonstrated a membership REPLACE wiping without re-adding on a
+      version-skewed server. A code-side guard now aborts before any wipe
+      (resolution failures are loud and stop the destructive step), and the
+      matrix makes the skew a refusal instead of a footgun. CHANGELOG
+      carries the "redeploy required" callout.
 
 ### 2. Config-change audit — the callers
 

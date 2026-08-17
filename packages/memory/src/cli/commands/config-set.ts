@@ -3,7 +3,7 @@
 import type { Command } from "commander";
 
 import { c, println, resolveAuthor, resolveAuthorType, systemError, warn } from "../../../../../_shared/cli-core/index.ts";
-import { isAuditCheckError, isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { storeWriteRemediation } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface ConfigSetOptions {
@@ -33,20 +33,10 @@ async function action(key: string, value: string, options: ConfigSetOptions): Pr
   });
   if (error) {
     const msg = error.message ?? String(error);
-    // 0.14.0 grew the signature; against an older server the 4-arg call has
-    // no matching function. Say "redeploy", not "bad key".
-    if (isMissingFunctionError(msg, "cerefox_set_config")) {
-      throw systemError(
-        `Could not set ${key}: the deployed server predates schema 0.14.0 — or PostgREST's schema cache is stale right after a deploy.`,
-        "If you just deployed, retry in a few seconds (the deploy now nudges the cache, and hosted Supabase refreshes it automatically). Otherwise run `cerefox server deploy`.",
-      );
-    }
-    if (isAuditCheckError(msg)) {
-      throw systemError(
-        `Could not set ${key}: the server's audit-log constraint predates migration 0028 (partial deploy).`,
-        "Run `cerefox server deploy` to apply pending migrations, then retry.",
-      );
-    }
+    // One classifier shared with the web route (round 4): deployment-state
+    // failures get remediation, everything else gets the key-spelling hint.
+    const remediation = storeWriteRemediation(msg, "cerefox_set_config");
+    if (remediation) throw systemError(`Could not set ${key}.`, remediation);
     throw systemError(
       `Could not set ${key}: ${msg}`,
       "The RPC validates against an allowlist of known keys; check the key spelling.",

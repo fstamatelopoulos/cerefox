@@ -27,6 +27,8 @@
  *   create_audit_entry → createAuditEntry
  */
 
+import { resolveOrCreateProject } from "../../../../_shared/mcp-tools/_projects.ts";
+import type { MCPSupabaseClient } from "../../../../_shared/mcp-tools/types.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
 import { extractConflictHashes } from "../../../../_shared/mcp-tools/_utils.ts";
@@ -366,21 +368,16 @@ export class IngestionDbBridge {
     name: string,
     audit?: { author: string; authorType: "user" | "agent" },
   ): Promise<ProjectRow> {
-    // 0.14.0 (#219): resolution and creation go through the RPC, which
-    // audits an actual create in the same transaction as the insert. An
-    // existing project comes back untouched and unaudited.
-    const { data, error } = await this.supabase.rpc("cerefox_create_project", {
-      p_name: name,
-      p_description: "",
-      p_author: audit?.author ?? "unknown",
-      p_author_type: audit?.authorType ?? "user",
-      p_if_exists: "return",
-    });
-    if (error) throw new Error(error.message ?? JSON.stringify(error));
-    const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
-    if (!row) throw new Error(`getOrCreateProject(${name}) returned no data`);
-    // The RPC returns id + name; description is not part of resolution.
-    return { id: row.project_id, name: row.project_name, description: null };
+    // 0.14.0 (#219): one implementation — the shared resolver, which routes
+    // through cerefox_create_project (audits an actual create
+    // in-transaction) and throws loudly on deployment-state failures.
+    const resolved = await resolveOrCreateProject(
+      this.supabase as unknown as MCPSupabaseClient,
+      name,
+      audit,
+    );
+    if (!resolved) throw new Error(`getOrCreateProject(${name}) returned no data`);
+    return { id: resolved.projectId, name: resolved.projectName, description: null };
   }
 
   // ── Audit ─────────────────────────────────────────────────────────────────

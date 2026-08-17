@@ -17,6 +17,7 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { isDuplicateKeyError, storeWriteRemediation } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 
 interface CreateOptions {
@@ -43,10 +44,13 @@ async function action(name: string, options: CreateOptions): Promise<void> {
   });
 
   if (error) {
-    if (/duplicate key|unique/i.test(error.message ?? "")) {
+    const msg = error.message ?? "";
+    if (isDuplicateKeyError(msg)) {
       throw userError(`Project "${trimmed}" already exists.`);
     }
-    throw systemError(`Create failed: ${error.message}`);
+    const remediation = storeWriteRemediation(msg, "cerefox_create_project");
+    if (remediation) throw systemError("Create failed.", remediation);
+    throw systemError(`Create failed: ${msg}`);
   }
   const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
   if (!row) throw systemError("Create failed: no row returned");

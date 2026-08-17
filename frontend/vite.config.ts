@@ -14,6 +14,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@cerefox/schemas': path.resolve(here, '..', '_shared', 'schemas'),
+      // Round 4: the audit page's store-level-op set imports the shared
+      // definition instead of hand-mirroring it (same pattern as schemas).
+      '@cerefox/audit-ops': path.resolve(here, '..', '_shared', 'mcp-tools', 'audit-ops.ts'),
     },
   },
   server: {

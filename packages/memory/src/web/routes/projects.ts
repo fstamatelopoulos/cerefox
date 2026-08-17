@@ -19,7 +19,28 @@
 
 import { Hono } from "hono";
 
+import { isDuplicateKeyError, storeWriteRemediation } from "../../../../../_shared/mcp-tools/_utils.ts";
 import type { WebContext } from "../context.ts";
+
+interface ProjectRpcRow {
+  project_id: string;
+  project_name: string;
+  project_description: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** The RPCs return prefixed column names (avoiding plpgsql ambiguity); map
+ * to the API's row shape so the response contract is identical to a GET. */
+function rpcRowToResponse(row: ProjectRpcRow): Record<string, unknown> {
+  return {
+    id: row.project_id,
+    name: row.project_name,
+    description: row.project_description ?? null,
+    created_at: row.created_at ?? "",
+    updated_at: row.updated_at ?? "",
+  };
+}
 
 function projectRowToResponse(row: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -61,18 +82,16 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
       p_author_type: "user",
     });
     if (error) {
-      const status = /duplicate key|unique/i.test(error.message ?? "") ? 409 : 500;
-      return c.json({ detail: error.message }, status as 409 | 500);
+      const msg = error.message ?? "";
+      if (isDuplicateKeyError(msg)) return c.json({ detail: msg }, 409);
+      const remediation = storeWriteRemediation(msg, "cerefox_create_project");
+      if (remediation) return c.json({ detail: remediation }, 503);
+      return c.json({ detail: msg }, 500);
     }
-    const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
+    // The RPC returns the full row (round 4) — no re-read, no fallback.
+    const row = (data as ProjectRpcRow[] | null)?.[0];
     if (!row) return c.json({ detail: "create_project returned no data" }, 500);
-    // Re-read for the full row shape the UI expects (timestamps).
-    const { data: full } = await ctx.supabase
-      .from("cerefox_projects")
-      .select("*")
-      .eq("id", row.project_id)
-      .maybeSingle();
-    return c.json(projectRowToResponse((full ?? { id: row.project_id, name: row.project_name }) as Record<string, unknown>));
+    return c.json(rpcRowToResponse(row));
   });
 
   // ── PUT /projects/{id} ────────────────────────────────────────────────────
@@ -88,12 +107,14 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     // description-only PUT used to blank the name via String(undefined ?? ""),
     // and the audit entry would have immortalized the accident.
     const update: { name?: string; description?: string } = {};
-    if (body.name !== undefined) {
+    // != null: a JSON `null` must mean "not provided", not the string "null"
+    // (round 4 — PUT {name: null} renamed the project to literally "null").
+    if (body.name != null) {
       const name = String(body.name).trim();
       if (!name) return c.json({ detail: "Project name cannot be empty" }, 400);
       update.name = name;
     }
-    if (body.description !== undefined) update.description = String(body.description).trim();
+    if (body.description != null) update.description = String(body.description).trim();
     if (Object.keys(update).length === 0) {
       return c.json({ detail: "Nothing to update — pass name and/or description" }, 400);
     }
@@ -109,16 +130,13 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     if (error) {
       const msg = error.message ?? "";
       if (/not found/i.test(msg)) return c.json({ detail: msg }, 404);
+      const remediation = storeWriteRemediation(msg, "cerefox_update_project");
+      if (remediation) return c.json({ detail: remediation }, 503);
       return c.json({ detail: msg }, 500);
     }
-    const row = (data as Array<{ project_id: string }> | null)?.[0];
+    const row = (data as ProjectRpcRow[] | null)?.[0];
     if (!row) return c.json({ detail: "update_project returned no data" }, 500);
-    const { data: full } = await ctx.supabase
-      .from("cerefox_projects")
-      .select("*")
-      .eq("id", row.project_id)
-      .maybeSingle();
-    return c.json(projectRowToResponse((full ?? row) as Record<string, unknown>));
+    return c.json(rpcRowToResponse(row));
   });
 
   // ── DELETE /projects/{id} ─────────────────────────────────────────────────

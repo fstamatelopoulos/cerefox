@@ -109,14 +109,8 @@ export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult
   // since nothing would ever list them as pending again (round-3 review;
   // the 0028 operation-CHECK widening was the live example). A reset makes
   // the database fresh by definition.
-  const fresh = opts.reset || opts.dryRun ? true : !(await detectExistingSchema(opts.dbUrl));
-  const steps = buildDeploySteps(opts.assets, { reset: opts.reset, stampMigrations: fresh });
-  if (!fresh) {
-    log("⚠  Existing schema detected: pending migrations are NOT stamped by a re-apply.");
-    log("   Run `bun scripts/db_migrate.ts` (or `cerefox server deploy`) to apply them.");
-  }
-
   if (opts.dryRun) {
+    const steps = buildDeploySteps(opts.assets, { reset: opts.reset });
     for (const step of steps) {
       log(`▶  ${step.label}… (dry-run, not executed)`);
     }
@@ -126,6 +120,12 @@ export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult
   // `prepare: false` — Supabase's pooler doesn't support prepared statements
   // at txn level. `sql.unsafe()` runs multi-statement SQL (schema/rpcs files).
   const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
+  const fresh = opts.reset ? true : !(await detectExistingSchema(opts.dbUrl, sql));
+  const steps = buildDeploySteps(opts.assets, { reset: opts.reset, stampMigrations: fresh });
+  if (!fresh) {
+    log("⚠  Existing schema detected: pending migrations are NOT stamped by a re-apply.");
+    log("   Run `bun scripts/db_migrate.ts` (or `cerefox server deploy`) to apply them.");
+  }
   let stepsRun = 0;
   try {
     for (const step of steps) {
@@ -182,15 +182,20 @@ CREATE TABLE IF NOT EXISTS cerefox_migrations (
  * `cerefox deploy-server` to choose the fresh-deploy path vs the
  * apply-pending-migrations path. Probes for the core documents table.
  */
-export async function detectExistingSchema(dbUrl: string): Promise<boolean> {
-  const sql = postgres(dbUrl, { prepare: false, onnotice: () => {} });
+export async function detectExistingSchema(
+  dbUrl: string,
+  existing?: ReturnType<typeof postgres>,
+): Promise<boolean> {
+  // Reuse the caller's connection when offered — a deploy otherwise pays a
+  // second TCP+TLS+auth handshake for one to_regclass probe (round 4).
+  const sql = existing ?? postgres(dbUrl, { prepare: false, onnotice: () => {} });
   try {
     const rows = (await sql`SELECT to_regclass('public.cerefox_documents') AS t`) as Array<{
       t: string | null;
     }>;
     return rows[0]?.t != null;
   } finally {
-    await sql.end({ timeout: 5 }).catch(() => {});
+    if (!existing) await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
 

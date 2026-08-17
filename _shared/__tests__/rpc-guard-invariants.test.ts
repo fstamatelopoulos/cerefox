@@ -208,22 +208,26 @@ describe("store-level writes join the audit trail (0.14.0, #147)", () => {
     for (const fn of ["cerefox_create_project", "cerefox_update_project", "cerefox_delete_project"]) {
       expect(functionBody(fn)).toContain("cerefox_create_audit_entry");
     }
-    // Delete audits only when a row actually came back — the trail must
-    // never assert an event that did not occur.
+    // Delete audits only when a row actually existed (locked SELECT, then
+    // DELETE) — the trail must never assert an event that did not occur.
     const del = functionBody("cerefox_delete_project");
-    expect(del.indexOf("RETURNING name INTO v_name")).toBeGreaterThan(-1);
+    expect(del).toContain("FOR UPDATE");
+    expect(del.indexOf("IF v_name IS NULL")).toBeLessThan(del.indexOf("DELETE FROM cerefox_projects"));
     expect(del.indexOf("IF v_name IS NULL")).toBeLessThan(del.indexOf("cerefox_create_audit_entry"));
     // 'return' mode must not audit the already-exists path: the early RETURN
     // precedes the INSERT + audit.
     const create = functionBody("cerefox_create_project");
-    expect(create.indexOf("RETURN QUERY SELECT v_id, v_name, FALSE")).toBeLessThan(create.indexOf("INSERT INTO cerefox_projects"));
+    expect(create.indexOf("v_row.description, FALSE")).toBeLessThan(create.indexOf("INSERT INTO cerefox_projects"));
+    // The TOCTOU retry (round 4) resolves the concurrent winner in 'return'
+    // mode instead of surfacing a spurious unique violation.
+    expect(create).toContain("WHEN unique_violation");
   });
 
   test("migration 0028 carries the project RPC bodies VERBATIM (no drift)", () => {
     const bodyOf = (text: string, name: string): string => {
-      const i = text.indexOf(`CREATE OR REPLACE FUNCTION ${name}(`);
-      expect(i).toBeGreaterThan(-1);
-      return text.slice(i, text.indexOf("\n$$;", i));
+      const m = text.match(new RegExp(`CREATE (OR REPLACE )?FUNCTION ${name}\\(`));
+      expect(m?.index).toBeGreaterThan(-1);
+      return text.slice(m!.index!, text.indexOf("\n$$;", m!.index!));
     };
     // set_config is excluded: its rpcs.sql form is CREATE FUNCTION with
     // narrative comments; its migration copy is checked by the key-lockstep

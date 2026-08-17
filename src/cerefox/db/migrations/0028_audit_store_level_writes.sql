@@ -122,8 +122,11 @@ BEGIN
 END $$;
 
 -- 2c. Project write RPCs (bodies identical to rpcs.sql — extracted, not
---     retyped) and their lockdown, same rationale as 2b.
-CREATE OR REPLACE FUNCTION cerefox_create_project(
+--     retyped; an invariant test compares them byte-for-byte) and their
+--     lockdown, same rationale as 2b.
+DROP FUNCTION IF EXISTS cerefox_create_project(TEXT, TEXT, TEXT, TEXT, TEXT);
+
+CREATE FUNCTION cerefox_create_project(
     p_name        TEXT,
     p_description TEXT DEFAULT '',
     p_author      TEXT DEFAULT 'unknown',
@@ -134,14 +137,20 @@ CREATE OR REPLACE FUNCTION cerefox_create_project(
     --            NOT audited — only an actual create writes an entry.
     p_if_exists   TEXT DEFAULT 'error'
 )
-RETURNS TABLE (project_id UUID, project_name TEXT, created BOOLEAN)
+RETURNS TABLE (
+    project_id          UUID,
+    project_name        TEXT,
+    project_description TEXT,
+    created             BOOLEAN,
+    created_at          TIMESTAMPTZ,
+    updated_at          TIMESTAMPTZ
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    v_id   UUID;
-    v_name TEXT;
+    v_row cerefox_projects%ROWTYPE;
 BEGIN
     IF NULLIF(BTRIM(p_name), '') IS NULL THEN
         RAISE EXCEPTION 'Project name is required' USING ERRCODE = '22023';
@@ -152,32 +161,56 @@ BEGIN
 
     IF p_if_exists = 'return' THEN
         -- Case-insensitive, matching the name resolution the assignment
-        -- paths have always used.
-        SELECT p.id, p.name INTO v_id, v_name
+        -- paths have always used. (A case-colliding pair created directly is
+        -- pre-existing behavior: the unique constraint is exact-match; this
+        -- resolver returns the first match.)
+        SELECT p.* INTO v_row
         FROM cerefox_projects p WHERE lower(p.name) = lower(BTRIM(p_name)) LIMIT 1;
-        IF v_id IS NOT NULL THEN
-            RETURN QUERY SELECT v_id, v_name, FALSE;
+        IF v_row.id IS NOT NULL THEN
+            RETURN QUERY SELECT v_row.id, v_row.name, v_row.description, FALSE,
+                                v_row.created_at, v_row.updated_at;
             RETURN;
         END IF;
     END IF;
 
-    INSERT INTO cerefox_projects (name, description)
-    VALUES (BTRIM(p_name), COALESCE(p_description, ''))
-    RETURNING id, name INTO v_id, v_name;
+    BEGIN
+        INSERT INTO cerefox_projects (name, description)
+        VALUES (BTRIM(p_name), COALESCE(p_description, ''))
+        RETURNING * INTO v_row;
+    EXCEPTION WHEN unique_violation THEN
+        -- TOCTOU (round 4): a concurrent create won the race between the
+        -- resolve above and this insert. In 'return' mode that is exactly
+        -- the get-or-create contract — hand back the winner, no audit entry
+        -- (this call created nothing). In 'error' mode a duplicate is the
+        -- caller's error, exactly as if there had been no race.
+        IF p_if_exists = 'return' THEN
+            SELECT p.* INTO v_row
+            FROM cerefox_projects p WHERE lower(p.name) = lower(BTRIM(p_name)) LIMIT 1;
+            IF v_row.id IS NOT NULL THEN
+                RETURN QUERY SELECT v_row.id, v_row.name, v_row.description, FALSE,
+                                    v_row.created_at, v_row.updated_at;
+                RETURN;
+            END IF;
+        END IF;
+        RAISE;
+    END;
 
     PERFORM cerefox_create_audit_entry(
         p_operation   := 'project-create',
         p_author      := p_author,
         p_author_type := p_author_type,
-        p_description := 'Project ''' || v_name || ''' created'
+        p_description := 'Project ''' || v_row.name || ''' created'
             || CASE WHEN p_if_exists = 'return'
                     THEN ' implicitly (document assignment)' ELSE '' END
     );
-    RETURN QUERY SELECT v_id, v_name, TRUE;
+    RETURN QUERY SELECT v_row.id, v_row.name, v_row.description, TRUE,
+                        v_row.created_at, v_row.updated_at;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION cerefox_update_project(
+DROP FUNCTION IF EXISTS cerefox_update_project(UUID, TEXT, TEXT, TEXT, TEXT);
+
+CREATE FUNCTION cerefox_update_project(
     p_project_id  UUID,
     -- NULL = keep the current value (the #191/#204 "NULL means not provided"
     -- convention). An explicit empty name is rejected.
@@ -186,7 +219,13 @@ CREATE OR REPLACE FUNCTION cerefox_update_project(
     p_author      TEXT DEFAULT 'unknown',
     p_author_type TEXT DEFAULT 'user'
 )
-RETURNS TABLE (project_id UUID, project_name TEXT, project_description TEXT)
+RETURNS TABLE (
+    project_id          UUID,
+    project_name        TEXT,
+    project_description TEXT,
+    created_at          TIMESTAMPTZ,
+    updated_at          TIMESTAMPTZ
+)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_catalog
@@ -203,7 +242,7 @@ BEGIN
         RAISE EXCEPTION 'Project name cannot be empty' USING ERRCODE = '22023';
     END IF;
 
-    SELECT * INTO v_old FROM cerefox_projects WHERE id = p_project_id FOR UPDATE;
+    SELECT p.* INTO v_old FROM cerefox_projects p WHERE p.id = p_project_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Project not found: %', p_project_id USING ERRCODE = '22023';
     END IF;
@@ -230,7 +269,8 @@ BEGIN
         p_description := 'Project ''' || v_new.name || ''' edited ('
             || COALESCE(NULLIF(array_to_string(v_changes, '; '), ''), 'no-op') || ')'
     );
-    RETURN QUERY SELECT v_new.id, v_new.name, v_new.description;
+    RETURN QUERY SELECT v_new.id, v_new.name, v_new.description,
+                        v_new.created_at, v_new.updated_at;
 END;
 $$;
 
@@ -248,10 +288,13 @@ DECLARE
     v_name  TEXT;
     v_links INT;
 BEGIN
-    SELECT COUNT(*) INTO v_links FROM cerefox_document_projects WHERE project_id = p_project_id;
-
-    DELETE FROM cerefox_projects WHERE id = p_project_id
-    RETURNING name INTO v_name;
+    -- Lock + read name and link count in one pass: the memberships CASCADE
+    -- with the row, so the count must be read pre-DELETE — but the zero-row
+    -- path (repeat delete) pays for nothing (round 4).
+    SELECT p.name, (SELECT COUNT(*) FROM cerefox_document_projects dp
+                    WHERE dp.project_id = p.id)
+    INTO v_name, v_links
+    FROM cerefox_projects p WHERE p.id = p_project_id FOR UPDATE;
 
     IF v_name IS NULL THEN
         -- Zero rows: nothing happened, so nothing is audited — the trail
@@ -260,6 +303,8 @@ BEGIN
         RETURN QUERY SELECT FALSE, NULL::TEXT;
         RETURN;
     END IF;
+
+    DELETE FROM cerefox_projects WHERE id = p_project_id;
 
     PERFORM cerefox_create_audit_entry(
         p_operation   := 'project-delete',

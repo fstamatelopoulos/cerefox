@@ -20,7 +20,7 @@ import {
 } from "../../../../../_shared/config-catalog/index.ts";
 import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import type { WebContext } from "../context.ts";
-import { isAuditCheckError, isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { storeWriteRemediation } from "../../../../../_shared/mcp-tools/_utils.ts";
 
 function unwrapScalarRpc(data: unknown): string | null {
   if (typeof data === "string") return data;
@@ -147,29 +147,10 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
       p_author_type: "user",
     });
     if (error) {
-      // Same guided remediation the CLI gives (iteration-38 step 2): the
-      // 4-arg signature is 0.14.0; against an older server — or a stale
-      // PostgREST cache right after a deploy — PGRST202 comes back raw.
-      if (isMissingFunctionError(error.message ?? "", "cerefox_set_config")) {
-        return c.json(
-          {
-            detail:
-              "The deployed server predates schema 0.14.0 (or its schema cache is stale right after a deploy). " +
-              "Run `cerefox server deploy`, or retry in a few seconds if you just deployed.",
-          },
-          503,
-        );
-      }
-      if (isAuditCheckError(error.message ?? "")) {
-        return c.json(
-          {
-            detail:
-              "The server's audit-log constraint predates migration 0028 (partial deploy). " +
-              "Run `cerefox server deploy` to apply pending migrations, then retry.",
-          },
-          503,
-        );
-      }
+      // One classifier shared with the CLI (round 4): deployment-state
+      // failures return the guided remediation as a 503.
+      const remediation = storeWriteRemediation(error.message ?? "", "cerefox_set_config");
+      if (remediation) return c.json({ detail: remediation }, 503);
       return c.json({ detail: error.message }, 500);
     }
     return c.json({ key, value });
