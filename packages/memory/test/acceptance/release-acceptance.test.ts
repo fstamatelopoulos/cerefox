@@ -435,6 +435,11 @@ describe("release acceptance (live)", () => {
     const edited = A.cli(["project", "edit", NAME, "--name", RENAMED, "--author", "acceptance"]);
     expect(edited.code).toBe(0);
 
+    // Description-only edit — the v1.9.0 staging catch: the RPC's untyped
+    // array append killed exactly this branch (rename-only worked).
+    const descEdit = A.cli(["project", "edit", RENAMED, "--description", "battery probe", "--author", "acceptance"]);
+    expect(descEdit.code).toBe(0);
+
     const deleted = A.cli(["project", "delete", RENAMED, "--yes", "--author", "acceptance"]);
     expect(deleted.code).toBe(0);
 
@@ -443,6 +448,7 @@ describe("release acceptance (live)", () => {
     expect(creates).toContain(`Project '${NAME}' created`);
     const edits = (await A.mcp("cerefox_get_audit_log", { operation: "project-edit", limit: 10 })).text;
     expect(edits).toContain(`renamed '${NAME}' → '${RENAMED}'`);
+    expect(edits).toContain("description changed");
     const deletes = (await A.mcp("cerefox_get_audit_log", { operation: "project-delete", limit: 10 })).text;
     expect(deletes).toContain(`Project '${RENAMED}' deleted`);
     // Store-level rows render as "(store)", never "(deleted)".

@@ -133,20 +133,28 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(resp.result.serverInfo.name).toBe("cerefox");
     });
 
-    test("tools/list returns all 10 tools with schemas", async () => {
+    test("tools/list returns the 15 core tools with schemas", async () => {
       const resp = await rpc("tools/list");
       expect(resp.error).toBeUndefined();
       const names = new Set((resp.result.tools as Array<{ name: string }>).map((t) => t.name));
+      // The 15-tool core surface (relations dormant by default). This list
+      // was stale at 10 from before v1.3–v1.7 grew the surface — the suite
+      // is gated and had not run across those releases.
       const expected = [
         "cerefox_search",
         "cerefox_ingest",
-        "cerefox_list_metadata_keys",
+        "cerefox_insert",
+        "cerefox_edit",
         "cerefox_get_document",
         "cerefox_list_versions",
         "cerefox_get_audit_log",
         "cerefox_list_projects",
+        "cerefox_list_metadata_keys",
         "cerefox_metadata_search",
         "cerefox_set_document_projects",
+        "cerefox_set_document_metadata",
+        "cerefox_delete_document",
+        "cerefox_restore_document",
         "cerefox_get_help",
       ];
       for (const name of expected) expect(names.has(name)).toBe(true);
@@ -259,14 +267,19 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text === "No metadata keys found across documents." || text.startsWith("[")).toBe(true);
     });
 
-    test("missing required param → -32602", async () => {
+    test("missing required param → in-band tool error (isError)", async () => {
+      // The server reports validation failures as MCP tool results with
+      // isError, not JSON-RPC protocol errors — the modern MCP convention.
       const resp = await tool("cerefox_search", {});
-      expect(resp.error?.code).toBe(-32602);
+      expect(resp.error).toBeUndefined();
+      expect(resp.result?.isError).toBe(true);
+      expect(JSON.stringify(resp.result)).toContain("query is required");
     });
 
-    test("ingest missing content → -32602", async () => {
+    test("ingest missing content → in-band tool error", async () => {
       const resp = await tool("cerefox_ingest", { title: "No Content" });
-      expect(resp.error?.code).toBe(-32602);
+      expect(resp.error).toBeUndefined();
+      expect(resp.result?.isError).toBe(true);
     });
   });
 
@@ -298,9 +311,12 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text).toContain("No documents match");
     });
 
-    test("metadata_search empty filter → error", async () => {
+    test("metadata_search empty filter without any other scope → tool error", async () => {
+      // Since v0.11.1 an empty filter is legal WITH another scope
+      // (project/time); alone it is refused as an in-band tool error.
       const resp = await tool("cerefox_metadata_search", { metadata_filter: {} });
-      expect(resp.error).toBeDefined();
+      expect(resp.error).toBeUndefined();
+      expect(resp.result?.isError).toBe(true);
     });
 
     test("metadata_search with project_name", async () => {
@@ -351,14 +367,16 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(t2).toContain(docId);
     });
 
-    test("ingest by document_id not found → -32603", async () => {
+    test("ingest by document_id not found → in-band tool error", async () => {
       const resp = await tool("cerefox_ingest", {
         title: "Ghost",
         content: "# Ghost\n\nc.",
         document_id: crypto.randomUUID(),
         author: "e2e-mcp-test",
       });
-      expect(resp.error?.code).toBe(-32603);
+      expect(resp.error).toBeUndefined();
+      expect(resp.result?.isError).toBe(true);
+      expect(JSON.stringify(resp.result).toLowerCase()).toContain("not found");
     });
 
     test("ingest by document_id with update_if_exists=false → note", async () => {

@@ -9,7 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Project description edits no longer fail (v1.9.0 regression, caught in
+  the staging dress rehearsal before any production deployment).**
+  `cerefox_update_project` appended its audit-diff fragment with
+  `v_changes || 'description changed'`; Postgres resolves the untyped
+  literal via the array||array overload and raises `malformed array
+  literal`, rolling back every project edit that changed a description
+  (rename-only edits worked). Both branches now use `array_append`;
+  migration 0029 re-ships the corrected function. Schema 0.14.0 → 0.14.1.
+- **The gated live remote-MCP suite matches the current server contract**:
+  the 15-tool core surface (its list was stale at 10 from before v1.3–v1.7)
+  and in-band MCP tool errors (`isError`) for validation failures instead of
+  JSON-RPC protocol codes. The release-acceptance project case now covers a
+  description-only edit — the exact branch the regression lived in.
 
 ---
 
