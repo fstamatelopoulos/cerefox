@@ -28,12 +28,18 @@
 ---
 ## Current Focus
 
-**2026-08-16 — v1.9.0 IN PROGRESS on `feat/v1.9.0-audit-completeness`
-([iteration 38](plans/iteration-38-audit-completeness.md)): audit-log
-completeness (config-change + project-op entries, #147 part 1), settings-UI
-terminology fix, dead-RPC cleanup, and a 22-finding docs restoration
-(v1.4→v1.8 staleness). Schema 0.13.0 → 0.14.0, migration 0028. Previous: v1.8.0 shipped and
-verified on production (#216; schema 0.13.0).**
+**2026-08-17 — v1.9.1 released and staging-verified; production update pending
+(maintainer, tonight). v1.9.0 was cut but is superseded UNRELEASED-to-prod:
+its staging dress rehearsal caught a regression (project description edits
+failed on an untyped-literal array append in `cerefox_update_project`), fixed
+as v1.9.1 (schema 0.14.1, migration 0029) — production goes 0.13.0 → 0.14.1
+directly and never runs v1.9.0. Iteration 38 shipped: store-level audit
+trail (config + project writes, in-RPC per #219), settings-UI vocabulary,
+docs restoration, dead-RPC cleanup, `minSchema` RAISED to 0.14.0 (first
+raise ever — the client's core write path hard-requires the new RPCs).
+Four review rounds + a live battery; the live EF suites now clean up via
+the audited delete→purge lifecycle (two bugs found by the maintainer
+noticing "(deleted)" audit rows with no deletions recorded).**
 
 The staging dress rehearsal ran against the *released artifact* and gated the
 prod deploy: migration 0027 back-filled both stores completely (staging 1,006
