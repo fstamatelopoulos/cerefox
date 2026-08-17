@@ -78,7 +78,8 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Small-to-big retrieval** | `cerefox_context_expand` RPC returns chunk neighbours for richer context |
 | **Audit log** | Immutable, append-only log of all write operations (create, update, delete, restore, status change). Author attribution with `author_type` ('user' or 'agent'). Browsable via web UI, queryable via MCP tool and Edge Function |
 | **Review status** | Schema-level `review_status` on documents (`approved` / `pending_review`). Auto-transitions based on author_type. Filterable on search |
-| **Version governance** | Version archival (protect specific versions from cleanup), configurable retention (`CEREFOX_VERSION_CLEANUP_ENABLED`), version diff viewer |
+| **Version governance** | Version archival (protect specific versions from cleanup), configurable retention (`cerefox config set version_cleanup_enabled`), version diff viewer |
+| **Lean version storage** | Archived chunks keep their content (the safety copy) but carry no embeddings or FTS (v1.8.0) — typically 30–45% of chunk storage reclaimed |
 | **Usage tracking** | Opt-in logging of all operations (reads and writes) across all access paths. Tracks operation type, access path (remote-mcp, local-mcp, edge-function, webapp, cli), requestor identity, query text, and result count. Controlled via `cerefox config set usage_tracking_enabled true/false` -- no redeploy needed |
 | **Analytics dashboard** | `/app/analytics` -- 8 interactive charts: calls per day, access path breakdown, top documents, top readers, operations donut, requestor word cloud, requestor→document access patterns (HEB), and requestor→operation patterns (HEB). Date range + project + path filters. CSV export. |
 
@@ -228,7 +229,7 @@ chunk_count           fts (TSVECTOR, title-boosted)
 
 Search RPCs (MCP tools): `cerefox_hybrid_search`, `cerefox_fts_search`,
 `cerefox_semantic_search`, `cerefox_search_docs`, `cerefox_reconstruct_doc`,
-`cerefox_context_expand`, `cerefox_save_note`
+`cerefox_context_expand`
 
 ---
 

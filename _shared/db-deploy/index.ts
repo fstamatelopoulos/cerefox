@@ -50,7 +50,7 @@ export interface DbDeployStep {
 /** Build the ordered list of SQL steps for a deploy (no I/O beyond reads). */
 export function buildDeploySteps(
   assets: ServerAssetPaths,
-  opts: { reset?: boolean } = {},
+  opts: { reset?: boolean; stampMigrations?: boolean } = {},
 ): DbDeployStep[] {
   const schemaSql = readFileSync(assets.schemaFile, "utf8");
   const rpcsSql = readFileSync(assets.rpcsFile, "utf8");
@@ -64,7 +64,7 @@ export function buildDeploySteps(
     { label: "Apply RPCs (search functions)", sql: rpcsSql },
   );
   const migrationFiles = listMigrationFiles(assets.migrationsDir);
-  if (migrationFiles.length > 0) {
+  if ((opts.stampMigrations ?? true) && migrationFiles.length > 0) {
     const values = migrationFiles
       .map((n) => `('${n.replace(/'/g, "''")}')`)
       .join(", ");
@@ -100,9 +100,17 @@ export interface DbDeployResult {
  */
 export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult> {
   const log = opts.log ?? (() => {});
-  const steps = buildDeploySteps(opts.assets, { reset: opts.reset });
 
+  // Stamping every migration as "already applied" is ONLY valid when the
+  // whole schema was just created from schema.sql (which already embodies
+  // them). On an EXISTING schema, CREATE TABLE IF NOT EXISTS leaves old
+  // tables (and old CHECK constraints) in place, so stamping would mark
+  // pending data migrations applied WITHOUT running them — permanently,
+  // since nothing would ever list them as pending again (round-3 review;
+  // the 0028 operation-CHECK widening was the live example). A reset makes
+  // the database fresh by definition.
   if (opts.dryRun) {
+    const steps = buildDeploySteps(opts.assets, { reset: opts.reset });
     for (const step of steps) {
       log(`▶  ${step.label}… (dry-run, not executed)`);
     }
@@ -112,6 +120,12 @@ export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult
   // `prepare: false` — Supabase's pooler doesn't support prepared statements
   // at txn level. `sql.unsafe()` runs multi-statement SQL (schema/rpcs files).
   const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
+  const fresh = opts.reset ? true : !(await detectExistingSchema(opts.dbUrl, sql));
+  const steps = buildDeploySteps(opts.assets, { reset: opts.reset, stampMigrations: fresh });
+  if (!fresh) {
+    log("⚠  Existing schema detected: pending migrations are NOT stamped by a re-apply.");
+    log("   Run `bun scripts/db_migrate.ts` (or `cerefox server deploy`) to apply them.");
+  }
   let stepsRun = 0;
   try {
     for (const step of steps) {
@@ -124,9 +138,27 @@ export async function runDbDeploy(opts: DbDeployOptions): Promise<DbDeployResult
         return { ok: false, stepsRun, failedStep: step.label, error: message };
       }
     }
+    await reloadPostgrestSchemaCache(sql);
     return { ok: true, stepsRun };
   } finally {
     await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
+/**
+ * Ask PostgREST to reload its schema cache after DDL. rpcs.sql and the
+ * migrations DROP/CREATE functions; until the cache refreshes, calling a
+ * changed function through the Data API yields PGRST202 ("Could not find the
+ * function") — which callers misread as "server not deployed". Hosted
+ * Supabase auto-reloads via a DDL event trigger within moments; a plain
+ * PostgREST (Cerefox Local) may not, so the deploy paths nudge it explicitly.
+ * Best-effort: NOTIFY costs nothing when nobody is listening.
+ */
+async function reloadPostgrestSchemaCache(sql: ReturnType<typeof postgres>): Promise<void> {
+  try {
+    await sql.unsafe("NOTIFY pgrst, 'reload schema'");
+  } catch {
+    // Non-fatal — the hosted event trigger covers the common case.
   }
 }
 
@@ -150,15 +182,20 @@ CREATE TABLE IF NOT EXISTS cerefox_migrations (
  * `cerefox deploy-server` to choose the fresh-deploy path vs the
  * apply-pending-migrations path. Probes for the core documents table.
  */
-export async function detectExistingSchema(dbUrl: string): Promise<boolean> {
-  const sql = postgres(dbUrl, { prepare: false, onnotice: () => {} });
+export async function detectExistingSchema(
+  dbUrl: string,
+  existing?: ReturnType<typeof postgres>,
+): Promise<boolean> {
+  // Reuse the caller's connection when offered — a deploy otherwise pays a
+  // second TCP+TLS+auth handshake for one to_regclass probe (round 4).
+  const sql = existing ?? postgres(dbUrl, { prepare: false, onnotice: () => {} });
   try {
     const rows = (await sql`SELECT to_regclass('public.cerefox_documents') AS t`) as Array<{
       t: string | null;
     }>;
     return rows[0]?.t != null;
   } finally {
-    await sql.end({ timeout: 5 }).catch(() => {});
+    if (!existing) await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
 
@@ -262,6 +299,7 @@ export async function runDbMigrate(opts: DbMigrateOptions): Promise<DbMigrateRes
         };
       }
     }
+    if (applied.length > 0) await reloadPostgrestSchemaCache(sql);
     return { ok: true, applied, pending };
   } finally {
     await sql.end({ timeout: 5 }).catch(() => {});
@@ -286,6 +324,7 @@ export async function applyRpcs(opts: {
   const sql = postgres(opts.dbUrl, { prepare: false, onnotice: () => {} });
   try {
     await sql.unsafe(rpcsSql);
+    await reloadPostgrestSchemaCache(sql);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

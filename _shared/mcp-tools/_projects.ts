@@ -23,31 +23,66 @@
 
 import type { AccessPath, MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.ts";
+import { logUsage, storeWriteRemediation } from "./_utils.ts";
+
+/** Who to attribute an implicit/explicit project write to in the audit log. */
+export interface ProjectAuditContext {
+  author: string;
+  authorType: string;
+}
+
+/**
+ * Resolve (or create) a project by name via cerefox_create_project with
+ * p_if_exists='return' — the single implementation (0.14.0, #219): the RPC
+ * audits an actual creation in the SAME transaction as the insert, and an
+ * existing project is returned untouched with no audit entry. Returns the
+ * project id, or null on failure (best-effort, matching the historical
+ * posture of the assignment paths).
+ */
+export interface ResolvedProject {
+  projectId: string;
+  projectName: string;
+}
+
+export async function resolveOrCreateProject(
+  supabase: MCPSupabaseClient,
+  projectName: string,
+  audit?: ProjectAuditContext,
+): Promise<ResolvedProject | null> {
+  const { data, error } = await supabase.rpc("cerefox_create_project", {
+    p_name: projectName,
+    p_description: "",
+    p_author: audit?.author ?? "unknown",
+    p_author_type: audit?.authorType ?? "agent",
+    p_if_exists: "return",
+  });
+  if (error) {
+    // Deployment-state failures must be LOUD: swallowing them here is what
+    // turned a version skew into a membership wipe downstream (round-4
+    // verifier — the destructive replace ran after every resolution
+    // silently nulled out). Anything else stays best-effort.
+    const remediation = storeWriteRemediation(error.message ?? "", "cerefox_create_project");
+    if (remediation) throw new Error(`Project resolution failed for '${projectName}': ${remediation}`);
+    console.warn("resolveOrCreateProject: RPC failed", error);
+    return null;
+  }
+  const row = (data as Array<{ project_id?: string; project_name?: string }> | null)?.[0];
+  return row?.project_id ? { projectId: row.project_id, projectName: row.project_name ?? projectName } : null;
+}
 
 /** Ensure `(documentId, project)` exists. Resolves project by name
  *  (case-insensitive); creates the project if missing. Idempotent.
- *  Returns the resolved project_id, or `null` if creation failed. */
+ *  Returns the resolved project_id, or `null` if creation failed.
+ *  Pass `audit` so an implicit creation lands in the audit trail
+ *  attributed to the write that caused it (0.14.0). */
 export async function ensureDocumentInProject(
   supabase: MCPSupabaseClient,
   documentId: string,
   projectName: string,
+  audit?: ProjectAuditContext,
 ): Promise<string | null> {
-  let projectId: string | null = null;
-  const { data: proj } = await supabase
-    .from("cerefox_projects")
-    .select("id")
-    .ilike("name", projectName)
-    .limit(1);
-  if (proj?.length) {
-    projectId = proj[0].id;
-  } else {
-    const { data: newProj } = await supabase
-      .from("cerefox_projects")
-      .insert({ name: projectName })
-      .select("id");
-    projectId = newProj?.[0]?.id ?? null;
-  }
+  const resolved = await resolveOrCreateProject(supabase, projectName, audit);
+  const projectId = resolved?.projectId ?? null;
   if (!projectId) return null;
 
   const { data: existing } = await supabase
@@ -75,25 +110,20 @@ export async function setDocumentProjectsByName(
   supabase: MCPSupabaseClient,
   documentId: string,
   projectNames: string[],
+  audit?: ProjectAuditContext,
 ): Promise<string[]> {
-  const projectIds: string[] = [];
-  for (const name of projectNames) {
-    if (!name) continue;
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", name)
-      .limit(1);
-    if (proj?.length) {
-      projectIds.push(proj[0].id);
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name })
-        .select("id");
-      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
-    }
+  // Resolve EVERYTHING before touching memberships (concurrently — the
+  // names are independent), and abort if any requested name failed to
+  // resolve: proceeding would wipe memberships the caller asked to keep.
+  const wanted = projectNames.filter((n) => !!n);
+  const resolved = await Promise.all(wanted.map((n) => resolveOrCreateProject(supabase, n, audit)));
+  const failed = wanted.filter((_, i) => !resolved[i]);
+  if (failed.length > 0) {
+    throw new Error(
+      `Could not resolve project(s): ${failed.join(", ")} — memberships left unchanged.`,
+    );
   }
+  const projectIds = resolved.map((r) => r!.projectId);
 
   await supabase
     .from("cerefox_document_projects")
@@ -164,24 +194,19 @@ export async function replaceDocumentProjects(
     throw new Error(`Document not found (or soft-deleted): ${documentId}`);
   }
 
-  // Resolve each name → project_id (create if absent). Preserve order.
-  const projectIds: string[] = [];
-  for (const name of cleanNames) {
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", name)
-      .limit(1);
-    if (proj?.length) {
-      projectIds.push(proj[0].id);
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name })
-        .select("id");
-      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
-    }
+  // Resolve each name → project_id (create if absent) CONCURRENTLY, and
+  // abort before the destructive replace if any name failed to resolve —
+  // wiping memberships because resolution errored is the round-4 wipe bug.
+  const resolved = await Promise.all(
+    cleanNames.map((name) => resolveOrCreateProject(supabase, name, { author, authorType })),
+  );
+  const failed = cleanNames.filter((_, i) => !resolved[i]);
+  if (failed.length > 0) {
+    throw new Error(
+      `Could not resolve project(s): ${failed.join(", ")} — memberships left unchanged.`,
+    );
   }
+  const projectIds = resolved.map((r) => r!.projectId);
 
   // DELETE-then-INSERT replace (matches Python assign_document_projects).
   await supabase.from("cerefox_document_projects").delete().eq("document_id", documentId);

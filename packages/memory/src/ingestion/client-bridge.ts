@@ -27,6 +27,8 @@
  *   create_audit_entry → createAuditEntry
  */
 
+import { resolveOrCreateProject } from "../../../../_shared/mcp-tools/_projects.ts";
+import type { MCPSupabaseClient } from "../../../../_shared/mcp-tools/types.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
 import { extractConflictHashes } from "../../../../_shared/mcp-tools/_utils.ts";
@@ -362,24 +364,20 @@ export class IngestionDbBridge {
     if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
-  async getOrCreateProject(name: string): Promise<ProjectRow> {
-    // Try by-name lookup first (case-sensitive, matches Python).
-    const { data: existing } = await this.supabase
-      .from("cerefox_projects")
-      .select("*")
-      .eq("name", name)
-      .maybeSingle();
-    if (existing) return existing as ProjectRow;
-
-    const { data, error } = await this.supabase
-      .from("cerefox_projects")
-      .insert({ name, description: "" })
-      .select("*")
-      .maybeSingle();
-    if (error || !data) {
-      throw error ?? new Error(`getOrCreateProject(${name}) returned no data`);
-    }
-    return data as ProjectRow;
+  async getOrCreateProject(
+    name: string,
+    audit?: { author: string; authorType: "user" | "agent" },
+  ): Promise<ProjectRow> {
+    // 0.14.0 (#219): one implementation — the shared resolver, which routes
+    // through cerefox_create_project (audits an actual create
+    // in-transaction) and throws loudly on deployment-state failures.
+    const resolved = await resolveOrCreateProject(
+      this.supabase as unknown as MCPSupabaseClient,
+      name,
+      audit,
+    );
+    if (!resolved) throw new Error(`getOrCreateProject(${name}) returned no data`);
+    return { id: resolved.projectId, name: resolved.projectName, description: null };
   }
 
   // ── Audit ─────────────────────────────────────────────────────────────────
@@ -401,7 +399,10 @@ export class IngestionDbBridge {
     description?: string;
   }): Promise<void> {
     try {
-      await this.supabase.rpc("cerefox_create_audit_entry", {
+      // supabase-js resolves with {error} rather than throwing — the catch
+      // alone never fires, so the returned error MUST be inspected or a
+      // rejected audit insert vanishes without a trace (round-3 review).
+      const { error } = await this.supabase.rpc("cerefox_create_audit_entry", {
         p_document_id: args.documentId ?? null,
         p_version_id: args.versionId ?? null,
         p_operation: args.operation,
@@ -411,9 +412,11 @@ export class IngestionDbBridge {
         p_size_after: args.sizeAfter ?? null,
         p_description: args.description ?? "",
       });
-    } catch {
-      // Audit failures don't block the user-visible operation — Python
-      // logs a warning and continues; we match that behaviour.
+      if (error) console.warn("createAuditEntry failed:", error.message ?? error);
+    } catch (err) {
+      // Audit failures don't block the user-visible operation — log a
+      // warning and continue.
+      console.warn("createAuditEntry failed:", err);
     }
   }
 }

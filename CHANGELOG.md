@@ -9,7 +9,69 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **Store-level writes join the audit trail (#147, first half; #219).**
+  Config changes are recorded by `cerefox_set_config` itself — one
+  `config-change` entry per write, in the same transaction, with the author
+  and the old → new value — so "who turned retention off, and when?" is
+  finally answerable from the trail. Project create/edit/delete go through
+  three new RPCs (`cerefox_create_project` / `cerefox_update_project` /
+  `cerefox_delete_project`) that write AND audit **in one transaction**, per
+  the single-implementation principle — every interface (CLI, web, MCP
+  document assignment, the ingestion pipeline, the ingest Edge Function) is
+  a thin caller, so no future write path can forget the trail. Implicit
+  creation during document assignment is attributed to the write that caused
+  it; a delete that matched nothing audits nothing. These entries carry no
+  `document_id`, the same shape as purge-orphaned rows, so existing audit
+  readers need no changes. `cerefox config set` and the three
+  `cerefox project` commands accept `--author` (falling back to
+  `CEREFOX_AUTHOR_NAME`, then `unknown` with a warning). Schema
+  0.13.0 → 0.14.0, migration 0028.
+
+  **Redeploy required**: `minSchema` is raised to **0.14.0** — the first
+  raise since the compatibility policy was written. This client resolves and
+  creates projects through the new RPCs on its core write path (ingesting
+  with a project name), so against an older server routine work degrades to
+  errors. After `self-update`, run `cerefox server deploy`; until then
+  `cerefox web` refuses to start and `doctor` says exactly why.
+
+### Changed
+
+- **Settings page speaks the CLI's vocabulary.** Boolean settings display
+  `true` / `false` (matching `cerefox config set`), the fallback caption now
+  reads `default if unset: …` — it states what applies when the setting is
+  *not* set, which next to an explicitly-set opposite value used to read as a
+  contradiction — and the badge on unset settings says `using default`.
+
+### Removed
+
+- **Dead V1 RPC `cerefox_save_note`.** A Python-era leftover with zero
+  callers since the TypeScript rewrite; no CLI command, MCP tool, Edge
+  Function, web route, or SQL function ever reached it. Dropped by
+  migration 0028; `db-status` no longer expects it. (Its sibling
+  `cerefox_context_expand` looked equally dead from the TypeScript side but
+  is called by `cerefox_search_docs` inside SQL — it stays, and the sandbox
+  validation is what caught the difference.)
+
+### Fixed
+
+- **Deploys nudge PostgREST's schema cache.** `server deploy` and the
+  migration path now send `NOTIFY pgrst, 'reload schema'` after DDL, closing
+  the window where a just-changed RPC returns "Could not find the function"
+  through the Data API (hosted Supabase auto-reloads within moments; a plain
+  PostgREST — Cerefox Local — did not). Error messages for that window now
+  say "retry in a few seconds" instead of misdiagnosing an undeployed server.
+- **Documentation caught up with v1.4.0 → v1.8.0** (22 findings): the
+  solution design now reflects chunks-anchored versioning with artifact-free
+  archived chunks and the current documents DDL; requirements gained FR
+  numbers for everything shipped since v1.3; agent guides state the correct
+  tool surface (15 core + 4 dormant relation tools); READMEs stop citing
+  env vars retired in v1.1.0; the e2e catalog lists the 12-case release
+  acceptance harness and its coverage; the ops-scripts inventory matches the
+  current schema — and `db-status` itself now verifies the post-v1.0 tables
+  and RPCs it had silently stopped covering (`cerefox_usage_log`,
+  `cerefox_config`, `cerefox_document_relations`, and seven newer RPCs).
 
 ---
 

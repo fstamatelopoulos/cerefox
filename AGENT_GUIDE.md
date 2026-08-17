@@ -356,6 +356,19 @@ Cheap and idempotent. Call it any time you're uncertain about a convention (link
 
 ---
 
+### Dormant relation tools
+
+Four additional tools exist but are hidden unless the operator has set `relations_enabled=true` (default false). If you don't see them, they are off — don't ask for them.
+
+| Tool | Purpose |
+|------|---------|
+| `cerefox_set_relation` | Link two documents (`source --rel_type--> target`). |
+| `cerefox_delete_relation` | Remove a relation. |
+| `cerefox_get_relations` | List all relations touching a document, both directions. |
+| `cerefox_get_neighbors` | Walk the graph along one relation type, cycle-safe. |
+
+---
+
 ## Choosing a retrieval tool: `cerefox_search` vs `cerefox_metadata_search`
 
 These two tools have **different contracts**. Picking the wrong one is the most common retrieval mistake.

@@ -11,6 +11,7 @@ import { CliCard } from "../components/CliCard";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { useProjects } from "../hooks/useProjects";
 import { showError, showSuccess } from "../utils/notifications";
+import { ApiError } from "../api/client";
 import ui from "../styles/redesign.module.css";
 
 const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
@@ -63,7 +64,18 @@ export function ProjectsPage() {
       showSuccess("Project deleted");
       setConfirmDeleteId(null);
     },
-    onError: (err) => showError("Delete failed", String(err)),
+    onError: (err) => {
+      // 404 on delete = the project is already gone (double-click, second
+      // tab, concurrent CLI). The user's goal is achieved; refresh, don't
+      // alarm. The server 404s instead of fabricating an audit entry (0.14.0).
+      if (err instanceof ApiError && err.status === 404) {
+        queryClient.invalidateQueries({ queryKey: ["projects"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        setConfirmDeleteId(null);
+        return;
+      }
+      showError("Delete failed", String(err));
+    },
   });
 
   const columns: ListColumn<Project>[] = [
@@ -191,6 +203,7 @@ export function ProjectsPage() {
                 type="button"
                 className={`${ui.btn} ${ui.btnSubtle}`}
                 style={{ color: "var(--red)" }}
+                disabled={deleteMutation.isPending}
                 onClick={() => deleteMutation.mutate(p.id)}
               >
                 Delete

@@ -9,27 +9,57 @@ import { fetchAuditLog } from "../api/audit";
 import { CliHint } from "../components/CliHint";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { formatDateTime } from "../utils/dates";
+import { STORE_LEVEL_AUDIT_OPS } from "@cerefox/audit-ops";
 import ui from "../styles/redesign.module.css";
+
+// Membership is the SHARED definition (via the @cerefox/audit-ops alias, the
+// @cerefox/schemas pattern): a fifth store-level operation renders "(store)"
+// here without a frontend edit. Labels/tones are presentation and stay local.
+const STORE_LEVEL_OP_DEFS = [
+  { value: "config-change", label: "Config change", tone: "yellow" },
+  { value: "project-create", label: "Project create", tone: "green" },
+  { value: "project-edit", label: "Project edit", tone: "violet" },
+  { value: "project-delete", label: "Project delete", tone: "red" },
+] as const;
+const STORE_LEVEL_OPS = new Set<string>(STORE_LEVEL_AUDIT_OPS);
 
 const OPERATIONS = [
   { value: "", label: "All operations" },
   { value: "create", label: "Create" },
   { value: "update-content", label: "Update content" },
   { value: "update-metadata", label: "Update metadata" },
+  { value: "insert", label: "Insert (partial edit)" },
+  { value: "replace-section", label: "Replace section" },
+  { value: "delete-section", label: "Delete section" },
+  { value: "rename-section", label: "Rename section" },
   { value: "delete", label: "Delete" },
+  { value: "restore", label: "Restore" },
   { value: "status-change", label: "Status change" },
   { value: "archive", label: "Archive" },
   { value: "unarchive", label: "Unarchive" },
+  ...STORE_LEVEL_OP_DEFS.map((d) => ({ value: d.value, label: d.label })),
 ];
+
 
 const OP_TONE: Record<string, string> = {
   create: ui.bGreen,
   "update-content": ui.bBlue,
   "update-metadata": ui.bViolet,
+  insert: ui.bBlue,
+  "replace-section": ui.bBlue,
+  "delete-section": ui.bRed,
+  "rename-section": ui.bViolet,
   "status-change": ui.bYellow,
   archive: ui.bPrimary,
   unarchive: ui.bPrimary,
+  restore: ui.bGreen,
   delete: ui.bRed,
+  ...Object.fromEntries(
+    STORE_LEVEL_OP_DEFS.map((d) => [
+      d.value,
+      { yellow: ui.bYellow, green: ui.bGreen, violet: ui.bViolet, red: ui.bRed }[d.tone],
+    ]),
+  ),
 };
 
 export function AuditLogPage() {
@@ -95,7 +125,7 @@ export function AuditLogPage() {
           </span>
         ) : (
           <span className={ui.faint} style={{ fontSize: 12 }}>
-            (deleted)
+            {STORE_LEVEL_OPS.has(e.operation) ? "(store)" : "(deleted)"}
           </span>
         ),
     },

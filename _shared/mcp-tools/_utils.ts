@@ -215,6 +215,51 @@ export function isDocumentNotFoundError(error: { code?: string; message?: string
   return error.code === "22023" && /not found/i.test(error.message ?? "");
 }
 
+export {
+  AUDIT_OPERATIONS,
+  auditDocLabel,
+  isStoreLevelAuditOp,
+  STORE_LEVEL_AUDIT_OPS,
+} from "./audit-ops.ts";
+
+/**
+ * A store whose RPCs are 0.14.0+ but whose cerefox_audit_log operation CHECK
+ * was never widened (migration 0028 unapplied — e.g. a partial deploy) rejects
+ * every in-transaction audit insert with 23514. The write itself rolls back,
+ * so the remediation is "apply the migration", never "fix your input".
+ */
+export function isAuditCheckError(message: string): boolean {
+  return /cerefox_audit_log_operation_check/.test(message);
+}
+
+/** Postgres 23505 through PostgREST — one predicate, not N copied regexes. */
+export function isDuplicateKeyError(message: string): boolean {
+  return /duplicate key|unique constraint|23505/i.test(message);
+}
+
+/**
+ * One classifier for a failed store-level write RPC (set_config, the project
+ * writes): returns the remediation text, or null when the failure is not a
+ * deployment-state problem. Keeps the CLI and web surfaces in lockstep —
+ * round 4 found the two carrying hand-copied, already-diverging prose.
+ */
+export function storeWriteRemediation(message: string, fnName: string): string | null {
+  if (isMissingFunctionError(message, fnName)) {
+    return (
+      "The deployed server predates schema 0.14.0 — or PostgREST's schema cache " +
+      "is stale right after a deploy. If you just deployed, retry in a few " +
+      "seconds; otherwise run `cerefox server deploy`."
+    );
+  }
+  if (isAuditCheckError(message)) {
+    return (
+      "The server's audit-log constraint predates migration 0028 (partial " +
+      "deploy). Run `cerefox server deploy` to apply pending migrations, then retry."
+    );
+  }
+  return null;
+}
+
 export function isMissingFunctionError(message: string, fnName: string): boolean {
   return (
     (message.includes("Could not find the function") && message.includes(fnName)) ||

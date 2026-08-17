@@ -156,3 +156,106 @@ describe("archived chunks carry no search artifacts (#216)", () => {
     expect(mig).toContain("cerefox_chunks_current_has_embedding");
   });
 });
+
+describe("store-level writes join the audit trail (0.14.0, #147)", () => {
+  const SCHEMA = readFileSync(
+    join(import.meta.dir, "..", "..", "src", "cerefox", "db", "schema.sql"),
+    "utf8",
+  );
+  const MIG = readFileSync(
+    join(import.meta.dir, "..", "..", "src", "cerefox", "db", "migrations", "0028_audit_store_level_writes.sql"),
+    "utf8",
+  );
+
+  test("cerefox_set_config writes a config-change entry in the same transaction", () => {
+    const body = functionBody("cerefox_set_config");
+    expect(body).toContain("cerefox_create_audit_entry");
+    expect(body).toContain("'config-change'");
+    // The old→new description is what makes the trail answer "what changed".
+    expect(body).toMatch(/v_old/);
+  });
+
+  test("the grown set_config DROPs its old 2-arg signature (PGRST203 class)", () => {
+    expect(RPCS).toContain("DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT);");
+  });
+
+  test("the operation CHECK allows all four store-level values, in schema AND migration", () => {
+    for (const op of ["config-change", "project-create", "project-edit", "project-delete"]) {
+      expect(SCHEMA).toContain(`'${op}'`);
+      expect(MIG).toContain(`'${op}'`);
+    }
+  });
+
+  test("migration 0028 carries the new set_config body (repair-path closure, as 0027)", () => {
+    expect(MIG).toContain("CREATE OR REPLACE FUNCTION cerefox_set_config");
+    expect(MIG).toContain("'config-change'");
+    expect(MIG).toContain("DROP FUNCTION IF EXISTS cerefox_set_config(TEXT, TEXT);");
+  });
+
+  test("save_note is gone; context_expand SURVIVES because search_docs calls it", () => {
+    expect(RPCS).not.toContain("CREATE OR REPLACE FUNCTION cerefox_save_note");
+    for (const text of [RPCS, MIG]) {
+      expect(text).toContain("DROP FUNCTION IF EXISTS cerefox_save_note(TEXT, TEXT, TEXT, UUID, JSONB);");
+      // The sandbox caught this: dropping context_expand broke search_docs
+      // (SQL-level caller invisible to TS grep). Neither file may drop it.
+      expect(text).not.toContain("DROP FUNCTION IF EXISTS cerefox_context_expand");
+    }
+    expect(RPCS).toContain("CREATE OR REPLACE FUNCTION cerefox_context_expand");
+    expect(functionBody("cerefox_search_docs")).toContain("cerefox_context_expand(");
+  });
+
+  test("project writes audit IN-TRANSACTION via their RPCs (#219)", () => {
+    for (const fn of ["cerefox_create_project", "cerefox_update_project", "cerefox_delete_project"]) {
+      expect(functionBody(fn)).toContain("cerefox_create_audit_entry");
+    }
+    // Delete audits only when a row actually existed (locked SELECT, then
+    // DELETE) — the trail must never assert an event that did not occur.
+    const del = functionBody("cerefox_delete_project");
+    expect(del).toContain("FOR UPDATE");
+    expect(del.indexOf("IF v_name IS NULL")).toBeLessThan(del.indexOf("DELETE FROM cerefox_projects"));
+    expect(del.indexOf("IF v_name IS NULL")).toBeLessThan(del.indexOf("cerefox_create_audit_entry"));
+    // 'return' mode must not audit the already-exists path: the early RETURN
+    // precedes the INSERT + audit.
+    const create = functionBody("cerefox_create_project");
+    expect(create.indexOf("v_row.description, FALSE")).toBeLessThan(create.indexOf("INSERT INTO cerefox_projects"));
+    // The TOCTOU retry (round 4) resolves the concurrent winner in 'return'
+    // mode instead of surfacing a spurious unique violation.
+    expect(create).toContain("WHEN unique_violation");
+  });
+
+  test("migration 0028 carries the project RPC bodies VERBATIM (no drift)", () => {
+    const bodyOf = (text: string, name: string): string => {
+      const m = text.match(new RegExp(`CREATE (OR REPLACE )?FUNCTION ${name}\\(`));
+      expect(m?.index).toBeGreaterThan(-1);
+      return text.slice(m!.index!, text.indexOf("\n$$;", m!.index!));
+    };
+    // set_config is excluded: its rpcs.sql form is CREATE FUNCTION with
+    // narrative comments; its migration copy is checked by the key-lockstep
+    // and content tests instead.
+    for (const fn of ["cerefox_create_project", "cerefox_update_project", "cerefox_delete_project"]) {
+      expect(bodyOf(MIG, fn)).toBe(bodyOf(RPCS, fn));
+    }
+  });
+
+  test("migration 0028 locks down every function it creates (REVOKE PUBLIC)", () => {
+    for (const sig of [
+      "cerefox_set_config(TEXT, TEXT, TEXT, TEXT)",
+      "cerefox_create_project(TEXT, TEXT, TEXT, TEXT, TEXT)",
+      "cerefox_update_project(UUID, TEXT, TEXT, TEXT, TEXT)",
+      "cerefox_delete_project(UUID, TEXT, TEXT)",
+    ]) {
+      expect(MIG).toContain(sig);
+    }
+    expect(MIG.match(/REVOKE EXECUTE ON FUNCTION/g)!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("the allow-listed config keys stay in lockstep between rpcs.sql and migration 0028", () => {
+    // Drift here means a key settable after `server deploy` (rpcs refresh)
+    // but not after `db_migrate` alone, or vice versa.
+    const fromRpcs = functionBody("cerefox_set_config").match(/ARRAY\[[\s\S]*?\]/)![0];
+    const fromMig = MIG.match(/ARRAY\[[\s\S]*?\]/)![0];
+    const strip = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+    expect(strip(fromMig)).toEqual(strip(fromRpcs));
+  });
+});
+

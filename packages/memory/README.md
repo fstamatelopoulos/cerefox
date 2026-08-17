@@ -173,6 +173,10 @@ never your data.
 ```bash
 cerefox search "second brain"                          # hybrid (FTS + semantic)
 cerefox document ingest notes.md --project "Personal"  # add a doc
+cerefox document get <id> --section "## Heading"       # read one section
+cerefox document set-metadata <id> --set-meta k='"v"'  # metadata-only write
+cerefox document delete <id>                           # soft-delete (restore undoes it)
+cerefox document dead-links                            # sweep for dead document links
 cerefox project list                                   # discover projects
 cerefox metadata search --metadata-filter '{"type":"decision-log"}'
 cerefox audit list --since 2026-05-01                  # immutable history

@@ -65,8 +65,19 @@ export const COMPATIBILITY = {
    * over one operation a user may never call would be the more harmful
    * failure. The schema-version bump already drives the "redeploy required"
    * banner in `doctor`, which is the right-sized signal.
+   *
+   * v1.9.0 RAISED this to 0.14.0 — the first raise since the policy was
+   * written, and it meets the bar: this client resolves and creates projects
+   * through `cerefox_create_project` (0.14.0) on its CORE write path
+   * (ingesting with a project name), so against an older server routine
+   * ingestion degrades to errors on every project assignment — and a
+   * review-round verifier demonstrated the worse case, a membership REPLACE
+   * that wipes without re-adding when resolution fails. A code-side guard now
+   * aborts before the wipe, but "the client's primary flows cannot work" is
+   * exactly what minSchema exists to say. CHANGELOG carries the loud
+   * "redeploy required" callout per RELEASING.md.
    */
-  minSchema: "0.10.5",
+  minSchema: "0.14.0",
   /** Minimum deployed Edge Function version this client requires. */
   minEdgeFunctions: "0.6.0",
 } as const;

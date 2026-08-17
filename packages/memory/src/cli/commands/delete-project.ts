@@ -21,6 +21,8 @@ import {
   confirm,
   notFound,
   println,
+  resolveAuthor,
+  resolveAuthorType,
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
@@ -31,6 +33,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 interface DeleteProjectOptions {
   yes?: boolean;
   force?: boolean;
+  author?: string;
+  authorType?: string;
 }
 
 interface ProjectRow {
@@ -41,6 +45,11 @@ interface ProjectRow {
 
 async function action(target: string, options: DeleteProjectOptions): Promise<void> {
   const client = getClient();
+  // Resolve identity BEFORE any write: an invalid --author-type must abort
+  // while nothing has happened, not after the destructive delete committed
+  // (review round 2).
+  const author = resolveAuthor(options.author);
+  const authorType = resolveAuthorType(options.authorType);
   const isUuid = UUID_RE.test(target);
 
   const lookup = isUuid
@@ -88,13 +97,21 @@ async function action(target: string, options: DeleteProjectOptions): Promise<vo
     }
   }
 
-  const { error: delErr } = await client.raw
-    .from("cerefox_projects")
-    .delete()
-    .eq("id", project.id);
+  // The RPC deletes and audits in one transaction, and audits ONLY when a
+  // row was actually removed (#219) — a concurrent deletion cannot fabricate
+  // an audit entry.
+  const { data: delData, error: delErr } = await client.raw.rpc("cerefox_delete_project", {
+    p_project_id: project.id,
+    p_author: author,
+    p_author_type: authorType,
+  });
 
   if (delErr) {
     throw systemError(`Delete failed: ${delErr.message}`);
+  }
+  const delRow = (delData as Array<{ deleted: boolean }> | null)?.[0];
+  if (!delRow?.deleted) {
+    throw notFound(`Project "${project.name}" was already deleted (concurrently).`);
   }
 
   println(c.green(`✓ Deleted project "${project.name}" (id: ${project.id}).`));
@@ -107,5 +124,7 @@ export function registerDeleteProject(program: Command): void {
     .argument("<name-or-id>", "Project name (exact match) or UUID.")
     .option("--yes", "Skip the confirmation prompt.")
     .option("--force", "Allow deletion when documents are still linked to the project.")
+    .option("-a, --author <name>", "Caller identity (audit log).")
+    .option("--author-type <type>", "user | agent (default: user).")
     .action(action);
 }

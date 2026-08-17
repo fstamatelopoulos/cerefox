@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.13.0
+-- @version: 0.14.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -140,7 +140,13 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
                       'insert', 'replace-section', 'delete-section',
                       -- iteration 35 (#197): renaming a heading is neither a
                       -- rewrite nor a removal, and the trail should say so.
-                      'rename-section')
+                      'rename-section',
+                      -- 0.14.0 (iteration 38, #147): store-level writes join the
+                      -- trail. These entries carry document_id NULL — like the
+                      -- rows a purge cascade orphans, so every reader already
+                      -- tolerates them.
+                      'config-change', 'project-create', 'project-edit',
+                      'project-delete')
     ),
     CONSTRAINT cerefox_audit_log_author_type_check CHECK (author_type IN ('user', 'agent'))
 );

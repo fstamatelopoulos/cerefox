@@ -638,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 3.2.0
+  version: 3.3.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -934,7 +934,9 @@ paths:
                   type: string
                   description: >
                     Filter by operation type: create, update-content, update-metadata,
-                    delete, status-change, archive, unarchive (optional)
+                    insert, replace-section, delete-section, rename-section, delete,
+                    restore, status-change, archive, unarchive, config-change,
+                    project-create, project-edit, project-delete (optional)
                 since:
                   type: string
                   description: ISO timestamp lower bound for temporal queries (optional)
@@ -1489,23 +1491,6 @@ neighbours** (±`p_window_size` chunks within the same document).
 
 Returns: `chunk_id`, `document_id`, `chunk_index`, `title`, `content`, `heading_path`,
 `heading_level`, `doc_title`, `is_seed` (TRUE for the original seed chunks)
-
-#### `cerefox_save_note`
-
-Create a document record directly. The note is stored but **not embedded** — use `cerefox-ingest`
-Edge Function instead for notes that need to be immediately searchable.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `p_title` | TEXT | required | Note title |
-| `p_content` | TEXT | required | Markdown content |
-| `p_source` | TEXT | `'agent'` | Origin label |
-| `p_project_id` | UUID | null | Project to assign |
-| `p_metadata` | JSONB | `{}` | Metadata (agent name, tags, etc.) |
-
-Returns: `id`, `title`, `created_at`
-
----
 
 ### Metadata RPCs
 

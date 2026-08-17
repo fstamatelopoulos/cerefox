@@ -453,6 +453,8 @@ cerefox project delete [OPTIONS] PROJECT
 | `--description TEXT` | str | _none_ | Project description (`create` / `edit`). |
 | `--name TEXT` | str | _unchanged_ | New name (`edit`). |
 | `-y, --yes` | flag | off | Skip confirmation (`delete`; required for non-interactive use). |
+| `-a, --author TEXT` | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Identity recorded in the audit log (v1.9.0 — project writes are audited in-transaction by the server). |
+| `--author-type TEXT` | user\|agent | `user` | Recorded alongside the author. |
 
 **Examples**:
 ```bash
@@ -460,6 +462,10 @@ cerefox project create research --description "Literature and design notes"
 cerefox project edit research --name research-archive
 cerefox project delete research-archive --yes
 ```
+
+Since v1.9.0 every project mutation is recorded in the audit log by the
+server itself (`project-create` / `project-edit` / `project-delete`), with
+the audit entry written in the same transaction as the change.
 
 ---
 
@@ -519,7 +525,7 @@ cerefox audit list [OPTIONS]
 |---|---|---|---|
 | `--document-id TEXT` | UUID | _none_ | Filter to a single document. |
 | `--author TEXT` | str | _none_ | Filter by author name (exact match). |
-| `--operation [create\|update-content\|update-metadata\|delete\|status-change\|archive\|unarchive\|restore]` | choice | _none_ | Filter by operation type. |
+| `--operation TEXT` | choice | _none_ | Filter by operation type: `create`, `update-content`, `update-metadata`, `insert`, `replace-section`, `delete-section`, `rename-section`, `delete`, `restore`, `status-change`, `archive`, `unarchive`, `config-change`, `project-create`, `project-edit`, `project-delete`. |
 | `--since TEXT` | ISO-8601 | _none_ | Lower bound on `created_at`. |
 | `--until TEXT` | ISO-8601 | _none_ | Upper bound on `created_at`. |
 | `--limit INTEGER` | int | `50` | Max rows. |
@@ -698,8 +704,13 @@ Agents see 15 tools with the flag off and 19 with it on. See
 ```
 cerefox config list           # all current key/value pairs
 cerefox config get KEY
-cerefox config set KEY VALUE
+cerefox config set KEY VALUE [--author NAME] [--author-type user|agent]
 ```
+
+Since v1.9.0 every `config set` is recorded in the audit log by the server
+itself (`config-change`, with the old → new value), in the same transaction
+as the write — pass `--author` (or set `CEREFOX_AUTHOR_NAME`) so the entry
+is attributed; it records `unknown` otherwise, with a warning.
 
 Used for toggling features at runtime without a redeploy — see the "Decision Log Q1 Part 2 — usage tracking opt-in" entry (stored in the Cerefox knowledge base).
 

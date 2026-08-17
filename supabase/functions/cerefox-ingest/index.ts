@@ -4,6 +4,10 @@ import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/inde
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
 import {
+  ensureDocumentInProject,
+  setDocumentProjectsByName,
+} from "../../../_shared/mcp-tools/_projects.ts";
+import {
   chunkMarkdown,
   embeddingInputFor,
   CONTENT_FORMAT_BLIND_STITCH,
@@ -220,97 +224,10 @@ async function sha256hex(text: string): Promise<string> {
 //
 // Used by both update branches AND the create path so resolution is consistent.
 
-// deno-lint-ignore no-explicit-any
-async function ensureDocumentInProject(
-  // deno-lint-ignore no-explicit-any
-  supabase: any,
-  documentId: string,
-  projectName: string,
-): Promise<string | null> {
-  // Resolve project name → id (look up; create if absent).
-  let projectId: string | null = null;
-  const { data: proj } = await supabase
-    .from("cerefox_projects")
-    .select("id")
-    .ilike("name", projectName)
-    .limit(1);
-  if (proj?.length) {
-    projectId = proj[0].id;
-  } else {
-    const { data: newProj } = await supabase
-      .from("cerefox_projects")
-      .insert({ name: projectName })
-      .select("id");
-    projectId = newProj?.[0]?.id ?? null;
-  }
-  if (!projectId) return null;
-
-  // Check membership; INSERT only if missing. PRIMARY KEY (document_id, project_id)
-  // guarantees uniqueness, so this is safe under concurrent calls (worst case:
-  // one of two concurrent inserts fails with 23505 unique_violation — we log
-  // and treat as "already a member"; outcome is identical).
-  const { data: existing } = await supabase
-    .from("cerefox_document_projects")
-    .select("document_id")
-    .eq("document_id", documentId)
-    .eq("project_id", projectId)
-    .limit(1);
-  if (existing?.length) return projectId;  // Already a member — non-destructive
-
-  const { error: insertErr } = await supabase
-    .from("cerefox_document_projects")
-    .insert({ document_id: documentId, project_id: projectId });
-  if (insertErr && !String(insertErr.message ?? "").includes("duplicate key")) {
-    console.warn("ensureDocumentInProject: insert failed", insertErr);
-  }
-  return projectId;
-}
-
-// ── Destructive set-the-full-list helper (project_names list form) ─────────
-//
-// Resolves each name to a project_id (creating if absent), then REPLACES the
-// document's project memberships with exactly that set. Used by the
-// project_names: string[] form on cerefox_ingest (full-set semantics).
-//
-// Empty list = remove from all projects.
-
-// deno-lint-ignore no-explicit-any
-async function setDocumentProjectsByName(
-  // deno-lint-ignore no-explicit-any
-  supabase: any,
-  documentId: string,
-  projectNames: string[],
-): Promise<string[]> {
-  const projectIds: string[] = [];
-  for (const name of projectNames) {
-    if (!name) continue;
-    const { data: proj } = await supabase
-      .from("cerefox_projects")
-      .select("id")
-      .ilike("name", name)
-      .limit(1);
-    if (proj?.length) {
-      projectIds.push(proj[0].id);
-    } else {
-      const { data: newProj } = await supabase
-        .from("cerefox_projects")
-        .insert({ name })
-        .select("id");
-      if (newProj?.[0]?.id) projectIds.push(newProj[0].id);
-    }
-  }
-
-  // DELETE-then-INSERT replace (matches Python assign_document_projects).
-  await supabase
-    .from("cerefox_document_projects")
-    .delete()
-    .eq("document_id", documentId);
-  if (projectIds.length > 0) {
-    const rows = projectIds.map((pid) => ({ document_id: documentId, project_id: pid }));
-    await supabase.from("cerefox_document_projects").insert(rows);
-  }
-  return projectIds;
-}
+// Project resolution + membership helpers are the SHARED implementations
+// (_shared/mcp-tools/_projects.ts) — the EF carried textual clones until
+// v1.9.0, which is exactly how forks drift (round-3 review). Both route
+// project creation through cerefox_create_project (audits in-transaction).
 
 // ── Main handler ───────────────────────────────────────────────────────────
 
@@ -535,9 +452,9 @@ Deno.serve(async (req: Request) => {
     // - project_names (list) → destructive replace (full-set semantics)
     // - project_name (singular) → non-destructive add (only if project_names absent)
     if (project_names !== null) {
-      await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+      await setDocumentProjectsByName(supabase, existingDoc.id, project_names, { author, authorType: author_type });
     } else if (project_name) {
-      await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+      await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
     }
 
     const note = update_if_exists ? undefined : "update_if_exists flag was overridden by document_id";
@@ -658,9 +575,9 @@ Deno.serve(async (req: Request) => {
       // - project_names (list) → destructive replace (full-set semantics)
       // - project_name (singular) → non-destructive add (only if project_names absent)
       if (project_names !== null) {
-        await setDocumentProjectsByName(supabase, existingDoc.id, project_names);
+        await setDocumentProjectsByName(supabase, existingDoc.id, project_names, { author, authorType: author_type });
       } else if (project_name) {
-        await ensureDocumentInProject(supabase, existingDoc.id, project_name);
+        await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
       }
 
       return new Response(
@@ -759,9 +676,9 @@ Deno.serve(async (req: Request) => {
   // - project_name (singular) → assign one via the non-destructive helper
   let projectId: string | null = null;
   if (project_names !== null && project_names.length > 0) {
-    await setDocumentProjectsByName(supabase, documentId, project_names);
+    await setDocumentProjectsByName(supabase, documentId, project_names, { author, authorType: author_type });
   } else if (project_name) {
-    projectId = await ensureDocumentInProject(supabase, documentId, project_name);
+    projectId = await ensureDocumentInProject(supabase, documentId, project_name, { author, authorType: author_type });
   }
 
   // Fire-and-forget usage logging for ingest

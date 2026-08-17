@@ -12,6 +12,8 @@ import {
   c,
   notFound,
   println,
+  resolveAuthor,
+  resolveAuthorType,
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
@@ -22,6 +24,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 interface EditOptions {
   name?: string;
   description?: string;
+  author?: string;
+  authorType?: string;
 }
 
 async function action(target: string, options: EditOptions): Promise<void> {
@@ -37,6 +41,9 @@ async function action(target: string, options: EditOptions): Promise<void> {
   }
 
   const client = getClient();
+  // Resolve identity BEFORE the write (review round 2).
+  const author = resolveAuthor(options.author);
+  const authorType = resolveAuthorType(options.authorType);
   const isUuid = UUID_RE.test(target);
   const { data: project, error: lookupErr } = await client.raw
     .from("cerefox_projects")
@@ -47,18 +54,21 @@ async function action(target: string, options: EditOptions): Promise<void> {
   if (lookupErr) throw systemError(`Lookup failed: ${lookupErr.message}`);
   if (!project) throw notFound(`Project "${target}" not found.`);
 
-  const { data, error } = await client.raw
-    .from("cerefox_projects")
-    .update(update)
-    .eq("id", project.id)
-    .select("id, name, description")
-    .maybeSingle();
+  // The RPC updates only the provided fields, diffs against the stored row,
+  // and audits in the same transaction (#219).
+  const { data, error } = await client.raw.rpc("cerefox_update_project", {
+    p_project_id: project.id,
+    p_name: update.name ?? null,
+    p_description: update.description ?? null,
+    p_author: author,
+    p_author_type: authorType,
+  });
 
-  if (error || !data) {
-    throw systemError(`Update failed: ${error?.message ?? "no row returned"}`);
-  }
+  if (error) throw systemError(`Update failed: ${error.message}`);
+  const row = (data as Array<{ project_id: string; project_name: string }> | null)?.[0];
+  if (!row) throw systemError("Update failed: no row returned");
 
-  println(c.green(`✓ Updated project "${data.name}" (id: ${data.id}).`));
+  println(c.green(`✓ Updated project "${row.project_name}" (id: ${row.project_id}).`));
 }
 
 export function registerProjectEdit(parent: Command): void {
@@ -68,5 +78,7 @@ export function registerProjectEdit(parent: Command): void {
     .argument("<name-or-id>", "Project name (exact match) or UUID.")
     .option("--name <new-name>", "New project name.")
     .option("--description <text>", "New project description.")
+    .option("-a, --author <name>", "Caller identity (audit log).")
+    .option("--author-type <type>", "user | agent (default: user).")
     .action(action);
 }

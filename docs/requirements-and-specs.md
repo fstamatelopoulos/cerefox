@@ -284,16 +284,17 @@ chunks for large documents) and serves as the primitive for:
 
 #### Database Impact
 
-Versioning requires a new table (e.g., `cerefox_document_versions`) linked to
-`cerefox_documents` with cascade delete. Each version row stores the full content snapshot,
-metadata snapshot, and a timestamp. Versions do NOT have chunks or embeddings — they are
-plain text snapshots for recovery purposes only.
+Versioning is chunks-anchored: a lightweight `cerefox_document_versions` table
+(linked to `cerefox_documents` with cascade delete) holds version metadata only,
+and archiving re-points the existing chunk rows via `version_id`. Archived chunks
+keep their `content` (the safety copy) and, since v1.8.0, carry no embeddings or
+FTS — versions exist for recovery purposes only, and restore is manual re-ingest.
 
 #### Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `CEREFOX_VERSION_RETENTION_HOURS` | `48` | Hours to retain all versions before lazy cleanup |
+| `version_retention_hours` | `48` | Hours to retain all versions before lazy cleanup. Set via `cerefox config set version_retention_hours` (the `CEREFOX_VERSION_RETENTION_HOURS` env var was retired at v1.1.0 — retention lives in `cerefox_config`) |
 
 ---
 
@@ -315,9 +316,21 @@ plain text snapshots for recovery purposes only.
 - Partial edits MUST NOT change a document's provenance, title or metadata:
   they change content only.
 
+The post-v1.3 read/edit surface features, numbered in the FR-11.x series:
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-11.14 | Section read (#198): retrieve a single section of a document by heading (`cerefox_get_document` `section` / CLI `document get --section`) without transferring the whole document | P1 |
+| FR-11.15 | `rename_section` (#197): a `cerefox_edit` operation that renames a heading in place, preserving the section body and position; a heading-level change is refused | P1 |
+| FR-11.16 | Loss reporting (#196): destructive edit responses MUST report content that was removed (e.g. a last-section loss warning), never lose it silently | P1 |
+| FR-11.17 | Heading-duplication refusal (v1.5.0): a write that would produce duplicate headings within a document is refused, so section anchors stay unambiguous | P1 |
+| FR-11.18 | `cerefox_set_document_metadata` (#204): change a document's metadata without touching content — no re-chunk, no re-embed, no version snapshot | P1 |
+
+(The v1.8.0 archived-artifact invariant, #216, is FR-11.13 above.)
+
 ---
 
-### Agent-surface document deletion (iteration 37, #208)
+### FR-11.19: Agent-surface document deletion (iteration 37, #208)
 
 - An agent MUST be able to **soft-delete** a document over MCP
   (`cerefox_delete_document`): the document leaves search and lands in the
@@ -345,7 +358,7 @@ plain text snapshots for recovery purposes only.
 
 ---
 
-### Link integrity (iteration 37, #214)
+### FR-11.20: Link integrity (iteration 37, #214)
 
 - A write whose content contains a `[Text](uuid)` link to a document id that
   does not exist MUST be rejected, listing every unresolvable id, under a
@@ -365,7 +378,7 @@ plain text snapshots for recovery purposes only.
 
 ---
 
-### Metadata well-formedness (v1.7.1, #212)
+### FR-11.21: Metadata well-formedness (v1.7.1, #212)
 
 - Document metadata MUST be a JSON object on every write path (RPC-enforced;
   the MCP layer's long-standing validation is now matched server-side).
@@ -518,4 +531,4 @@ All parameters use `CEREFOX_` prefix and can be set via environment variables or
 | `CEREFOX_LOG_LEVEL` | `INFO` | Logging level |
 | `CEREFOX_SMALL_TO_BIG_THRESHOLD` | `20000` | Doc size (chars) above which search returns chunks + neighbors instead of full document |
 | `CEREFOX_CONTEXT_WINDOW` | `1` | Number of neighbor chunks on each side of matched chunks in small-to-big retrieval |
-| `CEREFOX_VERSION_RETENTION_HOURS` | `48` | Hours to retain all document versions before lazy cleanup |
+| `CEREFOX_VERSION_RETENTION_HOURS` | `48` | Retired at v1.1.0 — retention now lives in `cerefox_config` (`cerefox config set version_retention_hours`) |

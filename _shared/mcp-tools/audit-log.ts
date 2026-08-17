@@ -5,7 +5,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.ts";
+import { logUsage, auditDocLabel, AUDIT_OPERATIONS } from "./_utils.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
 
 /**
@@ -61,8 +61,7 @@ async function handler(
   if (!entries.length) return "No audit log entries found.";
 
   const lines = entries.map((e) => {
-    const docLabel =
-      e.doc_title ?? (e.document_id ? e.document_id.slice(0, 8) + "..." : "(deleted)");
+    const docLabel = auditDocLabel(e.doc_title, e.document_id, e.operation);
     const sizeInfo =
       e.size_before != null && e.size_after != null
         ? ` | ${e.size_before} -> ${e.size_after} chars`
@@ -93,8 +92,7 @@ export const auditLogTool: ToolDefinition = {
       author: { type: "string", description: "Filter by author name (optional)" },
       operation: {
         type: "string",
-        description:
-          "Filter by operation type: create, update-content, update-metadata, delete, status-change, archive, unarchive (optional)",
+        description: `Filter by operation type: ${AUDIT_OPERATIONS.join(", ")} (optional)`,
       },
       since: {
         type: "string",
