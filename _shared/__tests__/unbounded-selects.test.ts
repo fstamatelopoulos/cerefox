@@ -49,6 +49,8 @@ const ALLOWLIST = new Map<string, string>([
   ["_shared/mcp-tools/_projects.ts:cerefox_projects", "small set"],
   // One document's project memberships: a handful of rows by construction.
   ["packages/memory/src/ingestion/client-bridge.ts:cerefox_document_projects", "per-document memberships"],
+  ["_shared/mcp-tools/_document-meta.ts:cerefox_document_projects", "per-document memberships (facet diff + replace tail)"],
+  ["_shared/mcp-tools/_document-meta.ts:cerefox_projects", "id-validation of the requested set (bounded by request size)"],
   ["packages/memory/src/web/routes/documents-read.ts:cerefox_document_projects", "per-document memberships"],
   ["scripts/cerefox_export.ts:cerefox_document_projects", "per-document memberships"],
   ["packages/memory/src/web/routes/discovery.ts:cerefox_document_projects", "per-document memberships (dashboard); the bulk scans paginate"],
