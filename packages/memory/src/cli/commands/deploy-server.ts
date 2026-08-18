@@ -419,6 +419,10 @@ async function action(options: DeployServerOptions): Promise<void> {
 
   println(c.green("\n✓ Server deploy complete."));
   println(c.dim("Verify with: cerefox doctor"));
+  // Now is the correct moment for the bundled-guides sync: client AND server
+  // are both on this release (self-update used to fire it pre-deploy, where a
+  // schema-requiring release cannot ingest — see self-update.ts).
+  println(c.dim("Refresh the bundled guides: cerefox guides ingest"));
 }
 
 export function registerDeployServer(program: Command): void {

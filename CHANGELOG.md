@@ -9,7 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **`cerefox self-update` no longer runs the bundled-guides sync
+  automatically** — it prints the next steps instead (`server deploy`, then
+  `guides ingest`). The upgrade ordering is necessarily client-first, so the
+  automatic sync fired at the exact moment the new client faced the old
+  server; a release that requires its own schema (like v1.9.x) failed the
+  sync mid-upgrade, observed live. `cerefox server deploy` now points at
+  `cerefox guides ingest` on success — the moment both sides are current.
 
 ---
 

@@ -1,8 +1,21 @@
 # Upgrading Cerefox
 
-Upgrading is almost always two steps: **update the CLI, then re-deploy the
-server side if the release changed it.** Everything here is idempotent and safe
-to re-run.
+Upgrading is almost always three steps, **in this order**: update the CLI,
+re-deploy the server side if the release changed it, then re-sync the bundled
+guides. Everything here is idempotent and safe to re-run.
+
+```bash
+cerefox self-update      # 1. the client
+cerefox server deploy    # 2. schema + RPCs + Edge Functions (if the release changed them)
+cerefox guides ingest    # 3. the bundled guides, into your KB
+```
+
+The order matters: a release may require its own schema (the version notes
+say so — v1.9.x is one), and until `server deploy` runs, the freshly updated
+client is talking to the previous release's server. That is why
+`self-update` no longer runs the guides sync automatically — it used to fire
+at the one moment in the upgrade where it cannot succeed against a
+schema-requiring release.
 
 ## Pick your path
 

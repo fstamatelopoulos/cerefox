@@ -158,30 +158,22 @@ async function action(options: SelfUpdateOptions): Promise<void> {
   println("");
   println(c.green(`✓ Upgraded to ${target}.`));
 
-  // Refresh the bundled-docs ingest so the KB stays in lockstep.
+  // Deliberately NO automatic guides ingest here (changed after v1.9.1).
   //
-  // MUST run in a child process of the FRESHLY INSTALLED binary (#106): this
-  // process is still the OLD bundle, so an in-process `await import(...)` would
-  // run the old sync code and stamp the old PKG_VERSION on the synced docs (the
-  // .md files on disk are already new — the package manager replaced them —
-  // which made the bug subtle: fresh content, stale version stamp). The package
-  // manager replaces the global bin file in place, so re-executing our own
-  // argv[1] loads the new code — the same pattern `init` uses to run
-  // `server deploy`.
-  //
-  // Best-effort: if the user has no config yet (e.g. self-update before init),
-  // the child prints its own clear skip message.
+  // The upgrade ordering is necessarily client-first: self-update, THEN
+  // `cerefox server deploy`. An ingest fired from this command therefore runs
+  // at the exact moment the client is newest and the server is oldest — and a
+  // release that requires its new schema (v1.9.x: minSchema 0.14.0) fails
+  // right here, observed live: 6 of 17 bundled docs errored against the
+  // not-yet-deployed server mid-upgrade. It only ever "worked" because
+  // earlier releases did not hard-require their schema at ingest time.
+  // The sync belongs AFTER the server update; `cerefox server deploy` prints
+  // the pointer, and `cerefox guides ingest` remains the standalone command.
   println("");
-  println(c.dim("Refreshing bundled-docs ingest (using the new version)…"));
-  const sync = spawnSync(process.execPath, [process.argv[1], "guides", "ingest"], {
-    stdio: "inherit",
-  });
-  if (sync.status !== 0) {
-    println(
-      cErr.yellow("⚠ ") + "Could not refresh self-docs (see output above).",
-    );
-    println(c.dim("  Run `cerefox guides ingest` manually after a successful `cerefox init`."));
-  }
+  println("Next steps:");
+  println("  1. " + c.bold("cerefox server deploy") + "   apply this release's schema/RPC/EF updates");
+  println("  2. " + c.bold("cerefox guides ingest") + "   re-sync the bundled guides into your KB");
+  println(c.dim("  (order matters: the new client may require the new schema — run the deploy first)"));
 }
 
 export function registerSelfUpdate(program: Command): void {
