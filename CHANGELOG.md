@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.9.2] -- 2026-08-18
+
 ### Changed
 
 - **`cerefox self-update` no longer runs the bundled-guides sync
