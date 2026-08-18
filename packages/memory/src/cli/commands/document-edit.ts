@@ -25,7 +25,11 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
-import { changeDocumentTitle } from "../../../../../_shared/mcp-tools/_document-meta.ts";
+import {
+  changeDocumentTitle,
+  FacetNotFoundError,
+  FacetValidationError,
+} from "../../../../../_shared/mcp-tools/_document-meta.ts";
 import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
 
@@ -122,12 +126,21 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
   // refresh + the factual audit entry ("Title changed: 'a' → 'b'"), one
   // implementation with the web save path.
   if (hasTitle && titleChanged) {
-    await changeDocumentTitle(
-      client.raw as unknown as MCPSupabaseClient,
-      documentId,
-      newTitle,
-      { author, authorType },
-    );
+    try {
+      await changeDocumentTitle(
+        client.raw as unknown as MCPSupabaseClient,
+        documentId,
+        newTitle,
+        { author, authorType },
+      );
+    } catch (err) {
+      // Typed → CLI error classes (review round 1: the bare Error used to
+      // fall through to the bin's catch-all and print a stack trace).
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof FacetNotFoundError) throw notFound(msg);
+      if (err instanceof FacetValidationError) throw userError(msg);
+      throw systemError(msg);
+    }
   }
 
   println(c.green(`✓ Edited "${newTitle}" (id: ${documentId}).`));

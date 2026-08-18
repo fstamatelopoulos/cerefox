@@ -261,6 +261,32 @@ describe("store-level writes join the audit trail (0.14.0, #147)", () => {
     expect(MIG.match(/REVOKE EXECUTE ON FUNCTION/g)!.length).toBeGreaterThanOrEqual(2);
   });
 
+  test("rename_document is atomic: update, FTS refresh, and audit in ONE function (0.15.0)", () => {
+    const body = functionBody("cerefox_rename_document");
+    expect(body).toContain("UPDATE cerefox_documents SET title");
+    expect(body).toContain("cerefox_update_chunk_fts");
+    expect(body).toContain("cerefox_create_audit_entry");
+    // Unchanged title returns BEFORE the update — the trail never records
+    // non-events.
+    expect(body.indexOf("IF v_old = v_new THEN")).toBeLessThan(body.indexOf("UPDATE cerefox_documents"));
+    // Trash guard: a trashed document is immutable until restored.
+    expect(body).toContain("deleted_at IS NULL");
+  });
+
+  test("migration 0030 carries the rename body VERBATIM + its lockdown", () => {
+    const MIG30 = readFileSync(
+      join(import.meta.dir, "..", "..", "src", "cerefox", "db", "migrations", "0030_rename_document_rpc.sql"),
+      "utf8",
+    );
+    const bodyOf = (text: string): string => {
+      const m = text.match(/CREATE (OR REPLACE )?FUNCTION cerefox_rename_document\(/);
+      expect(m?.index).toBeGreaterThan(-1);
+      return text.slice(m!.index!, text.indexOf("\n$$;", m!.index!));
+    };
+    expect(bodyOf(MIG30)).toBe(bodyOf(RPCS));
+    expect(MIG30).toContain("REVOKE EXECUTE ON FUNCTION cerefox_rename_document");
+  });
+
   test("the allow-listed config keys stay in lockstep between rpcs.sql and migration 0028", () => {
     // Drift here means a key settable after `server deploy` (rpcs refresh)
     // but not after `db_migrate` alone, or vice versa.

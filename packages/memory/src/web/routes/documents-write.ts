@@ -36,7 +36,12 @@ import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts"
 import { Hono } from "hono";
 
 import { contentHash } from "../../../../../_shared/ingest/index.ts";
-import { updateDocumentFacets } from "../../../../../_shared/mcp-tools/_document-meta.ts";
+import {
+  FacetNotFoundError,
+  FacetUpdateError,
+  FacetValidationError,
+  updateDocumentFacets,
+} from "../../../../../_shared/mcp-tools/_document-meta.ts";
 import { isDocumentNotFoundError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import {
@@ -260,7 +265,10 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       const facets = await updateDocumentFacets(ctx.supabase as unknown as MCPSupabaseClient, {
         documentId,
         title: title || undefined,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        // Carried-vs-absent, NOT empty-vs-non-empty: metadata {} means
+        // "clear every key" (review round 1 — deleting the last key in the
+        // editor used to be a silent no-op that toasted success).
+        metadata: body.metadata !== undefined ? metadata : undefined,
         projectIds: Array.isArray(body.project_ids) ? projectIds : undefined,
         author: "web-ui",
         authorType: "user",
@@ -268,11 +276,20 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       });
       return c.json({ success: true, reindexed: false, ...facets });
     } catch (err) {
+      // Typed errors from the cores (review round 1: no status-by-prose).
+      // FacetUpdateError wraps the real cause and names any facets that
+      // committed before the failure; classify by the CAUSE, report the
+      // wrapper's honest combined message. `detail` is the key ApiError
+      // surfaces in the frontend toast.
+      const cause = err instanceof FacetUpdateError ? err.cause2 : err;
       const msg = err instanceof Error ? err.message : String(err);
-      if (/Unknown project id|CEREFOX_BAD_METADATA/.test(msg)) {
-        return c.json({ success: false, error: msg }, 400);
+      if (cause instanceof FacetNotFoundError) {
+        return c.json({ success: false, error: msg, detail: msg }, 404);
       }
-      return c.json({ success: false, error: msg }, 500);
+      if (cause instanceof FacetValidationError) {
+        return c.json({ success: false, error: msg, detail: msg }, 400);
+      }
+      return c.json({ success: false, error: msg, detail: msg }, 500);
     }
   });
 

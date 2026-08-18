@@ -9,6 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Changed
+
+- **Title renames are atomic** — new `cerefox_rename_document` RPC commits
+  the row update, the chunk-FTS refresh (title boosting), and the audit
+  entry in one transaction, replacing client-side sequencing that could
+  commit the rename and then fail the refresh with no retry path. Schema
+  0.14.1 → **0.15.0**, migration 0030. (`minSchema` stays 0.14.0: against a
+  0.14.x server, title edits fail loudly with redeploy guidance while
+  everything else works.)
+- **An unchanged project-membership set is now a complete no-op on every
+  interface** — previously `cerefox_set_document_projects` (MCP/CLI) wrote
+  an audit entry even when the set did not change; the trail never records
+  non-events now.
+
 ### Fixed
 
 - **Web document-save moved onto the shared cores** (it was the last
@@ -24,7 +38,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   entry) and records the same factual description as the CLI/MCP for the
   same change (`Title changed: 'a' → 'b'`, `Set document projects to […]`,
   `Metadata replaced/merged …`). The CLI's bare "Edited title" entry is
-  upgraded to the factual diff too.
+  upgraded to the factual diff too. Also from the review of this change:
+  clearing the last metadata key in the web editor was a silent no-op that
+  toasted success (now `{}` genuinely clears); a save that partially applies
+  reports exactly which facets committed; typed errors map to 404/400
+  instead of prose-matching; and the web editor's error toasts now show the
+  server's actual message.
 
 ---
 

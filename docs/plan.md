@@ -36,9 +36,10 @@ renames skipped the FTS refresh; web metadata bypassed the #212 guards) and
 the request-shape audit entry ("title=false, metadata=true, projects=true").
 Per-facet factual entries everywhere; no schema change.**
 
-Schema is at 0.14.1; `minSchema` is 0.14.0 (raised in v1.9.0 — the first raise; see iteration 38). `minSchema` stays 0.10.5 (reviewed each release,
-deliberately not raised). The tool surface is 15 core + 4 dormant relation
-tools (delete/restore joined in v1.7.0).
+Schema is at 0.15.0 (v1.10.0 in progress); `minSchema` is **0.14.0**, raised
+in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
+The tool surface is 15 core + 4 dormant relation tools (delete/restore
+joined in v1.7.0).
 
 **What shipped** — an agent's question ("why is there no delete in MCP?")
 grew into the release pair: `cerefox_delete_document` (requires the caller's
@@ -77,8 +78,7 @@ one:
   other. Plus two dashboard fixes (#205, #206) and their follow-up. Schema
   0.11.3.
 
-**Production is current**: schema 0.11.3, Edge Functions and web UI on 1.6.1.
-`minSchema` remains 0.10.5, reviewed each time and deliberately not raised.
+**Production is current**: schema 0.14.1, Edge Functions and web UI on 1.9.1+.
 
 ### What is open
 

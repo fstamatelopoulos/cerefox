@@ -419,6 +419,32 @@ describe("release acceptance (live)", () => {
     expect(audit).toContain("acceptance");
   });
 
+  test("title rename is atomic and factual: FTS refresh + diff entry; repeat adds nothing (iter-39)", async () => {
+    const { id } = await A.seed("rename-atomic", DOC);
+    const NEW = `Acceptance renamed ${Date.now().toString(36)}`;
+
+    const edit = A.cli(["document", "edit", id, "--title", NEW, "--author", "acceptance"]);
+    if (edit.code !== 0 && /predates schema/.test(edit.out)) {
+      console.warn("SERVER_BEHIND: rename RPC absent — title case skipped");
+      return;
+    }
+    expect(edit.code).toBe(0);
+
+    const audit = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "update-metadata" })).text;
+    expect(audit).toContain("Title changed: '[E2E acceptance]");
+    expect(audit).toContain(`→ '${NEW}'`);
+    // Search must find the doc under its NEW title (the FTS refresh the web
+    // path shipped without for six weeks).
+    const hits = (await A.mcp("cerefox_search", { query: NEW, match_count: 5 })).text;
+    expect(hits).toContain(id);
+
+    // Re-assert the same title: exit 0, but NO second entry.
+    const again = A.cli(["document", "edit", id, "--title", NEW, "--author", "acceptance"]);
+    expect(again.code).toBe(0);
+    const after = (await A.mcp("cerefox_get_audit_log", { document_id: id, operation: "update-metadata" })).text;
+    expect((after.match(/Title changed:/g) ?? []).length).toBe(1);
+  });
+
   test("project create/edit/delete audit atomically via the RPCs (#147/#219)", async () => {
     // Self-cleaning: the project is created, renamed, and deleted by the
     // test itself. The audit rows are the append-only residue under test.

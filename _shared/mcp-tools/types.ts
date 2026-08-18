@@ -52,7 +52,8 @@ export type JsonSchema = Record<string, unknown>;
  *                     Python CLI's `access_path = "cli"`.
  *
  * Adding a new channel here also requires updating
- * `cerefox_usage_log.access_path`'s domain (Postgres CHECK constraint).
+ * `cerefox_usage_log.access_path`'s documented domain (no DB CHECK exists —
+ * verified in review; the column is free text and this type is the guard).
  */
 // The documented access_path domain (CLAUDE.md → usage tracking) — the type
 // had lagged at the three MCP-era values while webapp/edge-function callers

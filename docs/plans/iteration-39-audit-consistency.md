@@ -1,8 +1,8 @@
 # Iteration 39 — Audit consistency: the web save on shared cores (v1.10.0)
 
 **Status: IN PROGRESS** (opened 2026-08-18). Branch: `feat/v1.10.0-audit-consistency`.
-Target: **v1.10.0**. **No schema change** (all primitives exist; no new audit
-operation values).
+Target: **v1.10.0**, schema **0.14.1 → 0.15.0**, migration `0030` (revised in
+review round 1 — see below; the plan originally claimed no schema change).
 
 ## Why
 
@@ -50,7 +50,18 @@ functional bugs riding the same route since iter-24E:
 - [x] Web save branch on the orchestrator; local membership helper and the
       boolean-flags entry deleted; response reports per-facet outcomes.
 - [x] CLI `document edit` title facet on the shared core.
-- [ ] Suites + Playwright green; PR review round.
+- [x] Review round 1 (10 findings, all applied). The one that changed the
+      design: the title facet's three client-side steps could commit the
+      rename and then fail the FTS refresh, with the retry early-returning
+      on the already-renamed title — permanently stale search. Title renames
+      moved into an atomic `cerefox_rename_document` RPC (row + FTS + audit
+      in one transaction; schema 0.15.0, migration 0030, sandbox 10/10).
+      Also: unified membership tail (both twins delegate; unchanged set =
+      no-op everywhere, a deliberate behavior change for the MCP path);
+      typed facet errors (404/400 mapping, CLI error classes, honest
+      partial-application reporting); carried-`{}` clears metadata;
+      replace-mode null normalization; frontend toasts show server detail.
+- [ ] Suites + Playwright green; PR review round 2.
 - [ ] Post-cut staging battery: exercise all facet combinations via web API
       + CLI, **deliberately leaving the test documents and audit entries in
       place** for joint inspection of the trail (maintainer request).
