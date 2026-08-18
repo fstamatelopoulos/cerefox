@@ -126,7 +126,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
         400,
       );
     }
-    const metadata = (body.metadata as Record<string, string> | undefined) ?? {};
+    const metadata = (body.metadata as Record<string, unknown> | undefined) ?? {};
 
     const doc = await getCurrentDoc(ctx, documentId);
     if (!doc) {
