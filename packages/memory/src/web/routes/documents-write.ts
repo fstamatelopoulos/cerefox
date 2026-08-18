@@ -36,7 +36,9 @@ import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts"
 import { Hono } from "hono";
 
 import { contentHash } from "../../../../../_shared/ingest/index.ts";
+import { updateDocumentFacets } from "../../../../../_shared/mcp-tools/_document-meta.ts";
 import { isDocumentNotFoundError } from "../../../../../_shared/mcp-tools/_utils.ts";
+import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import {
   ConcurrencyConflictError,
   ConcurrencyTokenRequiredError,
@@ -75,25 +77,6 @@ async function createAuditEntry(
     });
   } catch {
     // Audit failures don't block the user-visible operation — same as Python.
-  }
-}
-
-async function assignDocumentProjects(
-  ctx: WebContext,
-  documentId: string,
-  projectIds: string[],
-): Promise<void> {
-  // Destructive replace (Python's assign_document_projects).
-  await ctx.supabase
-    .from("cerefox_document_projects")
-    .delete()
-    .eq("document_id", documentId);
-  if (projectIds.length > 0) {
-    const rows = projectIds.map((pid) => ({
-      document_id: documentId,
-      project_id: pid,
-    }));
-    await ctx.supabase.from("cerefox_document_projects").insert(rows);
   }
 }
 
@@ -265,42 +248,32 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       }
     }
 
-    // Metadata-only update path. Mirrors the no-content-change branch of
-    // Python's IngestionPipeline.update_document.
-    const updates: Record<string, unknown> = {};
-    if (title && title !== (doc.title as string)) {
-      updates.title = title;
-    }
-    if (Object.keys(metadata).length > 0) {
-      updates.metadata = metadata;
-    }
-    if (Object.keys(updates).length > 0) {
-      updates.updated_at = new Date().toISOString();
-      const { error } = await ctx.supabase
-        .from("cerefox_documents")
-        .update(updates)
-        .eq("id", documentId);
-      if (error) return c.json({ success: false, error: error.message }, 500);
-    }
-    const projectsTouched = Array.isArray(body.project_ids);
-    if (projectsTouched) {
-      await assignDocumentProjects(ctx, documentId, projectIds);
-    }
-
-    const anythingChanged =
-      "title" in updates || "metadata" in updates || projectsTouched;
-    if (anythingChanged) {
-      await createAuditEntry(ctx, {
-        operation: "update-metadata",
-        author: "web-ui",
+    // Meta-facet update path — the shared orchestrator (iteration 39). Each
+    // facet applies through its single implementation, diffs against the
+    // stored value (a facet the request carried unchanged is skipped, so the
+    // trail never records non-events), and writes its own factual audit
+    // entry. This route used to raw-write title (skipping the FTS refresh
+    // title boosting requires), raw-replace metadata (bypassing the #212
+    // guards), and record the REQUEST shape ("title=false, metadata=true,
+    // projects=true") instead of what changed.
+    try {
+      const facets = await updateDocumentFacets(ctx.supabase as unknown as MCPSupabaseClient, {
         documentId,
-        description: `Updated via web UI (title=${
-          "title" in updates
-        }, metadata=${"metadata" in updates}, projects=${projectsTouched})`,
+        title: title || undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        projectIds: Array.isArray(body.project_ids) ? projectIds : undefined,
+        author: "web-ui",
+        authorType: "user",
+        accessPath: "webapp",
       });
+      return c.json({ success: true, reindexed: false, ...facets });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/Unknown project id|CEREFOX_BAD_METADATA/.test(msg)) {
+        return c.json({ success: false, error: msg }, 400);
+      }
+      return c.json({ success: false, error: msg }, 500);
     }
-
-    return c.json({ success: true, reindexed: false });
   });
 
   // ── DELETE /documents/{id} ─────────────────────────────────────────────────

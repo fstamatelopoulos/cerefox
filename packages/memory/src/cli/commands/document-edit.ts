@@ -25,6 +25,8 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { changeDocumentTitle } from "../../../../../_shared/mcp-tools/_document-meta.ts";
+import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
 
 interface EditOptions {
@@ -116,35 +118,16 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
     }
   }
 
-  // Title-only table write: metadata is never included, so a title edit
-  // cannot touch (let alone destroy) the stored value (#212).
-  if (hasTitle) {
-    const { error: updErr } = await client.raw
-      .from("cerefox_documents")
-      .update({ title: newTitle, updated_at: new Date().toISOString() })
-      .eq("id", documentId);
-    if (updErr) throw systemError(`Update failed: ${updErr.message}`);
-  }
-
-  // Title boosting: refresh the FTS vector so search reflects the new title.
-  if (titleChanged) {
-    const { error: ftsErr } = await client.raw.rpc("cerefox_update_chunk_fts", {
-      p_document_id: documentId,
-      p_new_title: newTitle,
-    });
-    if (ftsErr) throw systemError(`Title updated but FTS refresh failed: ${ftsErr.message}`);
-  }
-
-  // Metadata edits are audit-logged by the RPC above; a title change gets
-  // its own entry here (there is no title-editing RPC).
-  if (titleChanged) {
-    await client.raw.rpc("cerefox_create_audit_entry", {
-      p_document_id: documentId,
-      p_operation: "update-metadata",
-      p_author: author,
-      p_author_type: authorType,
-      p_description: "Edited title",
-    });
+  // Title facet through the shared core (iteration 39): table write + FTS
+  // refresh + the factual audit entry ("Title changed: 'a' → 'b'"), one
+  // implementation with the web save path.
+  if (hasTitle && titleChanged) {
+    await changeDocumentTitle(
+      client.raw as unknown as MCPSupabaseClient,
+      documentId,
+      newTitle,
+      { author, authorType },
+    );
   }
 
   println(c.green(`✓ Edited "${newTitle}" (id: ${documentId}).`));

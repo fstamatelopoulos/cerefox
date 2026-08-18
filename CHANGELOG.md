@@ -9,7 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Web document-save moved onto the shared cores** (it was the last
+  multi-facet write path with its own implementation), fixing three things at
+  once: title renames from the web UI now refresh chunk FTS (title boosting
+  had been silently skipped there since the web editor shipped — renamed
+  documents ranked as if they still had the old title); metadata saves go
+  through `cerefox_set_document_metadata` (replace mode), inheriting the
+  malformed-metadata guards and the per-key audit report; and the audit
+  entry `Updated via web UI (title=…, metadata=…, projects=…)` — which
+  recorded what the request carried, not what changed — is gone. Every facet
+  now diffs against the stored value first (an unchanged facet writes no
+  entry) and records the same factual description as the CLI/MCP for the
+  same change (`Title changed: 'a' → 'b'`, `Set document projects to […]`,
+  `Metadata replaced/merged …`). The CLI's bare "Edited title" entry is
+  upgraded to the factual diff too.
 
 ---
 
