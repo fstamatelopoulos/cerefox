@@ -243,10 +243,17 @@ export function isDuplicateKeyError(message: string): boolean {
  * deployment-state problem. Keeps the CLI and web surfaces in lockstep —
  * round 4 found the two carrying hand-copied, already-diverging prose.
  */
-export function storeWriteRemediation(message: string, fnName: string): string | null {
+export function storeWriteRemediation(
+  message: string,
+  fnName: string,
+  // The schema floor the CALLING feature requires — round 2 caught the
+  // hardcoded "0.14.0" contradicting doctor on a 0.14.1 store missing a
+  // 0.15.0-only function.
+  requiredSchema = "0.14.0",
+): string | null {
   if (isMissingFunctionError(message, fnName)) {
     return (
-      "The deployed server predates schema 0.14.0 — or PostgREST's schema cache " +
+      `The deployed server predates schema ${requiredSchema} — or PostgREST's schema cache ` +
       "is stale right after a deploy. If you just deployed, retry in a few " +
       "seconds; otherwise run `cerefox server deploy`."
     );

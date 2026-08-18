@@ -34,7 +34,8 @@
 document-save moves onto shared cores — fixing two latent bugs (web title
 renames skipped the FTS refresh; web metadata bypassed the #212 guards) and
 the request-shape audit entry ("title=false, metadata=true, projects=true").
-Per-facet factual entries everywhere; no schema change.**
+Per-facet factual entries everywhere; schema 0.14.1 → 0.15.0 (atomic
+`cerefox_rename_document`, migration 0030 — revised in review round 1).**
 
 Schema is at 0.15.0 (v1.10.0 in progress); `minSchema` is **0.14.0**, raised
 in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
@@ -104,7 +105,7 @@ one:
 ## Active iteration
 
 **[Iteration 39 — Audit consistency: the web save on shared cores](plans/iteration-39-audit-consistency.md)**
-— ⏳ **IN PROGRESS**, target v1.10.0 (no schema change).
+— ⏳ **IN PROGRESS**, target v1.10.0 (schema 0.15.0, migration 0030).
 
 **[Iteration 38 — Audit completeness, settings clarity, docs restoration](plans/iteration-38-audit-completeness.md)**
 — ✅ **CLOSED, shipped v1.9.0/v1.9.1/v1.9.2** (2026-08-17/18), verified on

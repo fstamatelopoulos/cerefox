@@ -182,7 +182,9 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           projectIds: Array.isArray(body.project_ids)
             ? (body.project_ids as string[])
             : undefined,
-          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          // Carried-vs-absent (round 2): {} must CLEAR metadata on a
+          // content-changing save too, not silently vanish.
+          metadata: body.metadata != null ? metadata : undefined,
           author: "web-ui",
           authorType: "user",
           // Optimistic concurrency (iter-32): the SPA sends the content_hash
@@ -264,11 +266,18 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     try {
       const facets = await updateDocumentFacets(ctx.supabase as unknown as MCPSupabaseClient, {
         documentId,
-        title: title || undefined,
+        // Carried-vs-absent AND pre-diffed: an unchanged title never
+        // invokes the rename RPC (0.15.0-only — a 0.14.x server must keep
+        // serving metadata/project saves), and a CLEARED title flows through
+        // to the typed 400 instead of silently collapsing to "absent".
+        title:
+          body.title !== undefined && title !== (doc.title as string) ? title : undefined,
         // Carried-vs-absent, NOT empty-vs-non-empty: metadata {} means
         // "clear every key" (review round 1 — deleting the last key in the
         // editor used to be a silent no-op that toasted success).
-        metadata: body.metadata !== undefined ? metadata : undefined,
+        // != null: an explicit JSON null is "not provided", NOT carried-{}
+        // (which clears every key) — round 2 caught null wiping metadata.
+        metadata: body.metadata != null ? metadata : undefined,
         projectIds: Array.isArray(body.project_ids) ? projectIds : undefined,
         author: "web-ui",
         authorType: "user",
@@ -281,7 +290,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       // committed before the failure; classify by the CAUSE, report the
       // wrapper's honest combined message. `detail` is the key ApiError
       // surfaces in the frontend toast.
-      const cause = err instanceof FacetUpdateError ? err.cause2 : err;
+      const cause = err instanceof FacetUpdateError ? err.cause : err;
       const msg = err instanceof Error ? err.message : String(err);
       if (cause instanceof FacetNotFoundError) {
         return c.json({ success: false, error: msg, detail: msg }, 404);

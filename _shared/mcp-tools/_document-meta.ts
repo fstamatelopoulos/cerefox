@@ -98,7 +98,7 @@ export async function changeDocumentTitle(
     if (/cannot be empty/i.test(msg)) throw new FacetValidationError(msg);
     // 0.15.0 grew the server surface; against a 0.14.x server the RPC is
     // absent — say "redeploy", with the shared remediation prose.
-    const remediation = storeWriteRemediation(msg, "cerefox_rename_document");
+    const remediation = storeWriteRemediation(msg, "cerefox_rename_document", "0.15.0");
     if (remediation) throw new Error(`Title update failed: ${remediation}`);
     throw new Error(`Title update failed: ${msg}`);
   }
@@ -265,7 +265,6 @@ export interface FacetUpdateResult {
  *  atomicity would need one mega-RPC for three loosely related writes). */
 export class FacetUpdateError extends Error {
   applied: FacetUpdateResult;
-  cause2: Error;
   constructor(applied: FacetUpdateResult, cause: Error) {
     const done = [
       applied.metadataChanged ? "metadata" : null,
@@ -279,7 +278,7 @@ export class FacetUpdateError extends Error {
     );
     this.name = "FacetUpdateError";
     this.applied = applied;
-    this.cause2 = cause;
+    this.cause = cause;
   }
 }
 

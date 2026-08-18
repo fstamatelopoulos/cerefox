@@ -55,7 +55,11 @@ export function DocumentEditPage() {
     setMetaPairs(
       Object.entries(doc.doc_metadata || {}).map(([key, value]) => ({
         key,
-        value: String(value),
+        // Non-strings display as JSON (and JSON.parse below restores the
+        // type on save) — String() flattened arrays/numbers, which made
+        // every save on a typed-metadata document fire an unrequested
+        // replace that permanently retyped the values.
+        value: typeof value === "string" ? value : JSON.stringify(value),
       })),
     );
     setInitialized(true);
@@ -63,10 +67,20 @@ export function DocumentEditPage() {
 
   const mutation = useMutation({
     mutationFn: () => {
-      const metadata: Record<string, string> = {};
+      const metadata: Record<string, unknown> = {};
       for (const pair of metaPairs) {
         if (pair.key.trim() && pair.value.trim()) {
-          metadata[pair.key.trim()] = pair.value.trim();
+          const raw = pair.value.trim();
+          // Mirror the CLI's --set-meta: JSON-parse when it parses (so
+          // `2024` stays a number and `["a","b"]` stays an array — including
+          // the JSON we rendered above), otherwise a plain string.
+          let parsed: unknown = raw;
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            // plain string
+          }
+          metadata[pair.key.trim()] = parsed;
         }
       }
       return editDocument(id!, {

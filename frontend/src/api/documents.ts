@@ -27,7 +27,7 @@ export async function editDocument(
     title: string;
     content: string;
     project_ids: string[];
-    metadata: Record<string, string>;
+    metadata: Record<string, unknown>;
     /** Optimistic-concurrency token: the content_hash the document was
      * loaded with. A concurrent change → HTTP 409 (iter-32). */
     expected_content_hash?: string | null;
@@ -52,7 +52,7 @@ export async function ingestPaste(data: {
   content: string;
   update_existing: boolean;
   project_ids: string[];
-  metadata: Record<string, string>;
+  metadata: Record<string, unknown>;
 }): Promise<IngestResponse> {
   return apiFetch<IngestResponse>("/ingest", {
     method: "POST",
