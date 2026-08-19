@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.10.0] -- 2026-08-19
+
 ### Changed
 
 - **Title renames are atomic** — new `cerefox_rename_document` RPC commits
