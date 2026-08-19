@@ -23,7 +23,8 @@
 
 import type { AccessPath, MCPSupabaseClient } from "./types.ts";
 
-import { logUsage, storeWriteRemediation } from "./_utils.ts";
+import { applyMembershipReplace } from "./_document-meta.ts";
+import { storeWriteRemediation } from "./_utils.ts";
 
 /** Who to attribute an implicit/explicit project write to in the audit log. */
 export interface ProjectAuditContext {
@@ -208,38 +209,18 @@ export async function replaceDocumentProjects(
   }
   const projectIds = resolved.map((r) => r!.projectId);
 
-  // DELETE-then-INSERT replace (matches Python assign_document_projects).
-  await supabase.from("cerefox_document_projects").delete().eq("document_id", documentId);
-  if (projectIds.length > 0) {
-    const rows = projectIds.map((pid) => ({ document_id: documentId, project_id: pid }));
-    await supabase.from("cerefox_document_projects").insert(rows);
-  }
-
-  // Audit entry — project membership is metadata, not content.
-  try {
-    await supabase.rpc("cerefox_create_audit_entry", {
-      p_document_id: documentId,
-      p_version_id: null,
-      p_operation: "update-metadata",
-      p_author: author,
-      p_author_type: authorType,
-      p_size_before: null,
-      p_size_after: null,
-      p_description:
-        cleanNames.length > 0
-          ? `Set document projects to [${cleanNames.join(", ")}]`
-          : "Cleared all project memberships",
-    });
-  } catch (err) {
-    console.warn("replaceDocumentProjects: audit entry failed", err);
-  }
-
-  logUsage(supabase, {
-    operation: "set-document-projects",
+  // Delegate the replace + audit + usage-log tail to the shared core
+  // (review round 1: the id-based twin had a drifting copy). Unified
+  // semantics: an unchanged set is a complete no-op with NO audit entry —
+  // the trail never records non-events (this changes the previously
+  // always-logging behavior of this path, deliberately).
+  await applyMembershipReplace(supabase, {
+    documentId,
+    projectIds,
+    projectNames: cleanNames,
     accessPath,
-    requestor: author,
-    document_id: documentId,
-    result_count: projectIds.length,
+    author,
+    authorType,
   });
 
   return { documentTitle: doc[0].title as string, cleanNames, projectIds };

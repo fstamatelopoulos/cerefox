@@ -24,6 +24,19 @@ import { invalidateDocumentViews } from "../lib/invalidate";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import { showSuccess, showError, showV07DeferredToast } from "../utils/notifications";
 
+/** Inverse of the parse-on-save: strings that JSON.parse would reinterpret
+ * (numbers, booleans, quoted strings, JSON structures) render JSON-encoded
+ * so the round-trip is faithful; plain strings render bare. */
+function displayMetaValue(value: unknown): string {
+  if (typeof value !== "string") return JSON.stringify(value);
+  try {
+    JSON.parse(value);
+    return JSON.stringify(value); // parseable → quote it to survive the trip
+  } catch {
+    return value; // plain string, renders and saves as-is
+  }
+}
+
 export function DocumentEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,6 +58,7 @@ export function DocumentEditPage() {
     [],
   );
   const [initialized, setInitialized] = useState(false);
+
   const [contentView, setContentView] = useState<string>("edit");
 
   // Initialize form state from loaded document (once)
@@ -55,7 +69,13 @@ export function DocumentEditPage() {
     setMetaPairs(
       Object.entries(doc.doc_metadata || {}).map(([key, value]) => ({
         key,
-        value: String(value),
+        // Display must be the exact INVERSE of the parse-on-save below, or
+        // an untouched save retypes values (review round 3: a stored STRING
+        // "8" shown bare re-parsed to the number 8 — breaking, among other
+        // things, the Decision Log's latest:"true" string convention).
+        // Rule: a string renders bare only when JSON.parse would NOT
+        // reinterpret it; anything else renders JSON-encoded.
+        value: displayMetaValue(value),
       })),
     );
     setInitialized(true);
@@ -63,10 +83,20 @@ export function DocumentEditPage() {
 
   const mutation = useMutation({
     mutationFn: () => {
-      const metadata: Record<string, string> = {};
+      const metadata: Record<string, unknown> = {};
       for (const pair of metaPairs) {
         if (pair.key.trim() && pair.value.trim()) {
-          metadata[pair.key.trim()] = pair.value.trim();
+          const raw = pair.value.trim();
+          // Mirror the CLI's --set-meta: JSON-parse when it parses (so
+          // `2024` stays a number and `["a","b"]` stays an array — including
+          // the JSON we rendered above), otherwise a plain string.
+          let parsed: unknown = raw;
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            // plain string
+          }
+          metadata[pair.key.trim()] = parsed;
         }
       }
       return editDocument(id!, {

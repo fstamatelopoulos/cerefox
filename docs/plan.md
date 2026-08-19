@@ -28,31 +28,19 @@
 ---
 ## Current Focus
 
-**2026-08-17 — v1.9.1 released and staging-verified; production update pending
-(maintainer, tonight). v1.9.0 was cut but is superseded UNRELEASED-to-prod:
-its staging dress rehearsal caught a regression (project description edits
-failed on an untyped-literal array append in `cerefox_update_project`), fixed
-as v1.9.1 (schema 0.14.1, migration 0029) — production goes 0.13.0 → 0.14.1
-directly and never runs v1.9.0. Iteration 38 shipped: store-level audit
-trail (config + project writes, in-RPC per #219), settings-UI vocabulary,
-docs restoration, dead-RPC cleanup, `minSchema` RAISED to 0.14.0 (first
-raise ever — the client's core write path hard-requires the new RPCs).
-Four review rounds + a live battery; the live EF suites now clean up via
-the audited delete→purge lifecycle (two bugs found by the maintainer
-noticing "(deleted)" audit rows with no deletions recorded).**
+**2026-08-18 — v1.9.2 shipped, verified on staging AND production, announced
+(Discord). v1.10.0 in progress on `feat/v1.10.0-audit-consistency`
+([iteration 39](plans/iteration-39-audit-consistency.md)): the web
+document-save moves onto shared cores — fixing two latent bugs (web title
+renames skipped the FTS refresh; web metadata bypassed the #212 guards) and
+the request-shape audit entry ("title=false, metadata=true, projects=true").
+Per-facet factual entries everywhere; schema 0.14.1 → 0.15.0 (atomic
+`cerefox_rename_document`, migration 0030 — revised in review round 1).**
 
-The staging dress rehearsal ran against the *released artifact* and gated the
-prod deploy: migration 0027 back-filled both stores completely (staging 1,006
-archived chunks → 0 with artifacts; prod 3,137 → 0, ~19 MB freed, reported
-live by the migration's own NOTICE — the pre-deploy read-only baseline
-predicted the identical numbers), pre-migration versions reconstruct
-byte-identically, the new `cerefox_chunks_current_has_embedding` CHECK fires
-loudly, search is unaffected, and acceptance (12/12 on both envs) + Playwright
-(20/20, staging) pass. Both environments fully on 1.8.0 (CLI, schema, EFs).
-
-Schema is at 0.13.0; `minSchema` stays 0.10.5 (reviewed each release,
-deliberately not raised). The tool surface is 15 core + 4 dormant relation
-tools (delete/restore joined in v1.7.0).
+Schema is at 0.15.0 (v1.10.0 in progress); `minSchema` is **0.14.0**, raised
+in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
+The tool surface is 15 core + 4 dormant relation tools (delete/restore
+joined in v1.7.0).
 
 **What shipped** — an agent's question ("why is there no delete in MCP?")
 grew into the release pair: `cerefox_delete_document` (requires the caller's
@@ -91,8 +79,7 @@ one:
   other. Plus two dashboard fixes (#205, #206) and their follow-up. Schema
   0.11.3.
 
-**Production is current**: schema 0.11.3, Edge Functions and web UI on 1.6.1.
-`minSchema` remains 0.10.5, reviewed each time and deliberately not raised.
+**Production is current**: schema 0.14.1, Edge Functions and web UI on 1.9.1+.
 
 ### What is open
 
@@ -117,8 +104,12 @@ one:
 
 ## Active iteration
 
+**[Iteration 39 — Audit consistency: the web save on shared cores](plans/iteration-39-audit-consistency.md)**
+— ⏳ **IN PROGRESS**, target v1.10.0 (schema 0.15.0, migration 0030).
+
 **[Iteration 38 — Audit completeness, settings clarity, docs restoration](plans/iteration-38-audit-completeness.md)**
-— ⏳ **IN PROGRESS**, target v1.9.0 (schema 0.14.0).
+— ✅ **CLOSED, shipped v1.9.0/v1.9.1/v1.9.2** (2026-08-17/18), verified on
+staging and production, announced.
 
 The most recent closed:
 

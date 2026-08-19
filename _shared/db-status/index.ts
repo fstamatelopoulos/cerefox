@@ -65,6 +65,7 @@ export const EXPECTED_FUNCTIONS = [
   "cerefox_create_project",
   "cerefox_update_project",
   "cerefox_delete_project",
+  "cerefox_rename_document",
   "cerefox_log_usage",
   "cerefox_list_usage_log",
   "cerefox_usage_summary",

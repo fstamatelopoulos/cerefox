@@ -36,7 +36,14 @@ import { resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts"
 import { Hono } from "hono";
 
 import { contentHash } from "../../../../../_shared/ingest/index.ts";
+import {
+  FacetNotFoundError,
+  FacetUpdateError,
+  FacetValidationError,
+  updateDocumentFacets,
+} from "../../../../../_shared/mcp-tools/_document-meta.ts";
 import { isDocumentNotFoundError } from "../../../../../_shared/mcp-tools/_utils.ts";
+import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import {
   ConcurrencyConflictError,
   ConcurrencyTokenRequiredError,
@@ -75,25 +82,6 @@ async function createAuditEntry(
     });
   } catch {
     // Audit failures don't block the user-visible operation — same as Python.
-  }
-}
-
-async function assignDocumentProjects(
-  ctx: WebContext,
-  documentId: string,
-  projectIds: string[],
-): Promise<void> {
-  // Destructive replace (Python's assign_document_projects).
-  await ctx.supabase
-    .from("cerefox_document_projects")
-    .delete()
-    .eq("document_id", documentId);
-  if (projectIds.length > 0) {
-    const rows = projectIds.map((pid) => ({
-      document_id: documentId,
-      project_id: pid,
-    }));
-    await ctx.supabase.from("cerefox_document_projects").insert(rows);
   }
 }
 
@@ -138,7 +126,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
         400,
       );
     }
-    const metadata = (body.metadata as Record<string, string> | undefined) ?? {};
+    const metadata = (body.metadata as Record<string, unknown> | undefined) ?? {};
 
     const doc = await getCurrentDoc(ctx, documentId);
     if (!doc) {
@@ -194,7 +182,9 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           projectIds: Array.isArray(body.project_ids)
             ? (body.project_ids as string[])
             : undefined,
-          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          // Carried-vs-absent (round 2): {} must CLEAR metadata on a
+          // content-changing save too, not silently vanish.
+          metadata: body.metadata != null ? metadata : undefined,
           author: "web-ui",
           authorType: "user",
           // Optimistic concurrency (iter-32): the SPA sends the content_hash
@@ -265,42 +255,51 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       }
     }
 
-    // Metadata-only update path. Mirrors the no-content-change branch of
-    // Python's IngestionPipeline.update_document.
-    const updates: Record<string, unknown> = {};
-    if (title && title !== (doc.title as string)) {
-      updates.title = title;
-    }
-    if (Object.keys(metadata).length > 0) {
-      updates.metadata = metadata;
-    }
-    if (Object.keys(updates).length > 0) {
-      updates.updated_at = new Date().toISOString();
-      const { error } = await ctx.supabase
-        .from("cerefox_documents")
-        .update(updates)
-        .eq("id", documentId);
-      if (error) return c.json({ success: false, error: error.message }, 500);
-    }
-    const projectsTouched = Array.isArray(body.project_ids);
-    if (projectsTouched) {
-      await assignDocumentProjects(ctx, documentId, projectIds);
-    }
-
-    const anythingChanged =
-      "title" in updates || "metadata" in updates || projectsTouched;
-    if (anythingChanged) {
-      await createAuditEntry(ctx, {
-        operation: "update-metadata",
-        author: "web-ui",
+    // Meta-facet update path — the shared orchestrator (iteration 39). Each
+    // facet applies through its single implementation, diffs against the
+    // stored value (a facet the request carried unchanged is skipped, so the
+    // trail never records non-events), and writes its own factual audit
+    // entry. This route used to raw-write title (skipping the FTS refresh
+    // title boosting requires), raw-replace metadata (bypassing the #212
+    // guards), and record the REQUEST shape ("title=false, metadata=true,
+    // projects=true") instead of what changed.
+    try {
+      const facets = await updateDocumentFacets(ctx.supabase as unknown as MCPSupabaseClient, {
         documentId,
-        description: `Updated via web UI (title=${
-          "title" in updates
-        }, metadata=${"metadata" in updates}, projects=${projectsTouched})`,
+        // Carried-vs-absent AND pre-diffed: an unchanged title never
+        // invokes the rename RPC (0.15.0-only — a 0.14.x server must keep
+        // serving metadata/project saves), and a CLEARED title flows through
+        // to the typed 400 instead of silently collapsing to "absent".
+        title:
+          body.title !== undefined && title !== (doc.title as string) ? title : undefined,
+        // Carried-vs-absent, NOT empty-vs-non-empty: metadata {} means
+        // "clear every key" (review round 1 — deleting the last key in the
+        // editor used to be a silent no-op that toasted success).
+        // != null: an explicit JSON null is "not provided", NOT carried-{}
+        // (which clears every key) — round 2 caught null wiping metadata.
+        metadata: body.metadata != null ? metadata : undefined,
+        projectIds: Array.isArray(body.project_ids) ? projectIds : undefined,
+        author: "web-ui",
+        authorType: "user",
+        accessPath: "webapp",
       });
+      return c.json({ success: true, reindexed: false, ...facets });
+    } catch (err) {
+      // Typed errors from the cores (review round 1: no status-by-prose).
+      // FacetUpdateError wraps the real cause and names any facets that
+      // committed before the failure; classify by the CAUSE, report the
+      // wrapper's honest combined message. `detail` is the key ApiError
+      // surfaces in the frontend toast.
+      const cause = err instanceof FacetUpdateError ? err.cause : err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (cause instanceof FacetNotFoundError) {
+        return c.json({ success: false, error: msg, detail: msg }, 404);
+      }
+      if (cause instanceof FacetValidationError) {
+        return c.json({ success: false, error: msg, detail: msg }, 400);
+      }
+      return c.json({ success: false, error: msg, detail: msg }, 500);
     }
-
-    return c.json({ success: true, reindexed: false });
   });
 
   // ── DELETE /documents/{id} ─────────────────────────────────────────────────

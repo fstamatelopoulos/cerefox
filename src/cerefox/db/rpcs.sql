@@ -1975,6 +1975,68 @@ AS $$
     ORDER BY p.name;
 $$;
 
+-- ── cerefox_rename_document (0.15.0, iteration 39) ──────────────────────────
+-- Title is a search-ranking input (title boosting bakes it into every current
+-- chunk's FTS vector at weight A), so a rename is a write WITH a side effect:
+-- business logic, which lives here per the single-implementation principle.
+-- The row update, the FTS refresh, and the audit entry commit or roll back
+-- TOGETHER — the client-side sequencing this replaces could commit the rename
+-- and then fail the refresh, leaving the document ranking under its old title
+-- with no retry path (the retry saw the new title and did nothing).
+-- Unchanged title → no-op (renamed=FALSE), no audit entry: the trail never
+-- records non-events. Semantic embeddings deliberately defer to the next
+-- content update / reindex (they cost API calls; FTS is free).
+
+CREATE OR REPLACE FUNCTION cerefox_rename_document(
+    p_document_id UUID,
+    p_new_title   TEXT,
+    p_author      TEXT DEFAULT 'unknown',
+    p_author_type TEXT DEFAULT 'user'
+)
+RETURNS TABLE (renamed BOOLEAN, old_title TEXT, new_title TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_old TEXT;
+    v_new TEXT := BTRIM(p_new_title);
+BEGIN
+    IF NULLIF(v_new, '') IS NULL THEN
+        RAISE EXCEPTION 'Title cannot be empty' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT d.title INTO v_old
+    FROM cerefox_documents d
+    WHERE d.id = p_document_id AND d.deleted_at IS NULL
+    FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Document not found (or in the trash): %', p_document_id
+            USING ERRCODE = '22023';
+    END IF;
+
+    IF v_old = v_new THEN
+        RETURN QUERY SELECT FALSE, v_old, v_old;
+        RETURN;
+    END IF;
+
+    UPDATE cerefox_documents SET title = v_new, updated_at = NOW()
+    WHERE id = p_document_id;
+
+    -- Same transaction: the FTS vectors and the title row can never disagree.
+    PERFORM cerefox_update_chunk_fts(p_document_id, v_new);
+
+    PERFORM cerefox_create_audit_entry(
+        p_document_id := p_document_id,
+        p_operation   := 'update-metadata',
+        p_author      := p_author,
+        p_author_type := p_author_type,
+        p_description := 'Title changed: ''' || v_old || ''' → ''' || v_new || ''''
+    );
+    RETURN QUERY SELECT TRUE, v_old, v_new;
+END;
+$$;
+
 -- ── Project write RPCs (0.14.0, #147/#219) ──────────────────────────────────
 -- Project writes carried no business logic until the audit trail arrived —
 -- then every caller (CLI, web, shared helpers, ingestion pipeline, the ingest
@@ -3017,7 +3079,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.14.1'::TEXT;
+    SELECT '0.15.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────
