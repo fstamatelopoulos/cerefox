@@ -139,7 +139,12 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
     } catch (err) {
       console.warn("cleanup failed:", err);
     }
-  });
+    // The audited lifecycle is 3 round-trips per doc over WAN; bun's default
+    // 5s hook budget silently killed it partway, leaving fixtures in the
+    // trash — which then collided with the fixed-content tests below via
+    // content-hash dedup ("already in the TRASH"). Budget sized like the
+    // acceptance harness's teardown.
+  }, 120_000);
 
   // ── Protocol ────────────────────────────────────────────────────────────
   describe("protocol", () => {
@@ -377,13 +382,13 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
 
     test("ingest by document_id updates", async () => {
       const title = uniqueTitle("ID Update");
-      const t1 = await toolText("cerefox_ingest", { title, content: "# ID Update\n\nv1.", author: "e2e-mcp-test" });
+      const t1 = await toolText("cerefox_ingest", { title, content: uniqueContent(), author: "e2e-mcp-test" });
       expect(t1).toContain("(id:");
       const docId = extractId(t1)!;
       track(docId);
       const t2 = await toolText("cerefox_ingest", {
         title,
-        content: "# ID Update\n\nv1.\n\n## More\n\nvia id.",
+        content: uniqueContent() + "\n\n## More\n\nvia id.\n",
         document_id: docId,
         last_write_wins: true, // sole-writer test: bypass the v0.11 concurrency token
         author: "e2e-mcp-test",
@@ -406,13 +411,13 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
 
     test("ingest by document_id with update_if_exists=false → note", async () => {
       const title = uniqueTitle("ID Note");
-      const t1 = await toolText("cerefox_ingest", { title, content: "# ID Note\n\nv1.", author: "e2e-mcp-test" });
+      const t1 = await toolText("cerefox_ingest", { title, content: uniqueContent(), author: "e2e-mcp-test" });
       expect(t1).toContain("(id:");
       const docId = extractId(t1)!;
       track(docId);
       const t2 = await toolText("cerefox_ingest", {
         title,
-        content: "# ID Note\n\nmodified.",
+        content: uniqueContent(),
         document_id: docId,
         update_if_exists: false,
         last_write_wins: true, // sole-writer test: bypass the v0.11 concurrency token

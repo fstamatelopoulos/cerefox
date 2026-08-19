@@ -44,6 +44,8 @@ function uniqueTitle(label: string): string {
  * content_hash. Without this, the v0.7 dedup check skips the 2nd+ ingest of
  * identical content within a run, and a freshly-tagged doc is never created.
  */
+const RUN_ID = crypto.randomUUID().slice(0, 8);
+
 function uniqueContent(): string {
   return `${SAMPLE_CONTENT}\n<!-- e2e-marker ${crypto.randomUUID()} -->\n`;
 }
@@ -162,7 +164,10 @@ describe("Edge Functions (live HTTP)", () => {
     } catch (err) {
       console.warn("cleanup failed:", err);
     }
-  });
+    // 3 WAN round-trips per doc; the default 5s hook budget killed the
+    // cleanup partway and stranded fixtures in the trash (see the
+    // mcp-remote twin for the full story).
+  }, 120_000);
 
   // ── cerefox-search ────────────────────────────────────────────────────────
   describe("cerefox-search", () => {
@@ -218,7 +223,7 @@ describe("Edge Functions (live HTTP)", () => {
       const title = uniqueTitle("Ingest Update-If-Exists");
       const r1 = await invokeOk("cerefox-ingest", {
         title,
-        content: "# A\n\nv1.",
+        content: `# A\n\n${RUN_ID} v1.`,
         update_if_exists: true,
         author: "e2e-ef-test",
         author_type: "agent",
@@ -226,7 +231,7 @@ describe("Edge Functions (live HTTP)", () => {
       track(r1.document_id);
       const r2 = await invokeOk("cerefox-ingest", {
         title,
-        content: "# A\n\nv2 changed.",
+        content: `# A\n\n${RUN_ID} v2 changed.`,
         update_if_exists: true,
         // sole-writer test: bypass the v0.11 concurrency token (no concurrent writer)
         last_write_wins: true,
@@ -393,7 +398,7 @@ describe("Edge Functions (live HTTP)", () => {
       const title = uniqueTitle("ID Update");
       const r1 = await invokeOk("cerefox-ingest", {
         title,
-        content: "# ID Update\n\nOriginal.",
+        content: `# ID Update\n\n${RUN_ID} original.`,
         author: "e2e-ef-test",
         author_type: "agent",
       });
