@@ -19,7 +19,7 @@ describe("measureEscapes", () => {
 
 describe("escapedContentNote", () => {
   test("clean multi-line content: quiet", () => {
-    expect(escapedContentNote("# T\n\nline\n\nline\n")).toBeNull();
+    expect(escapedContentNote("# T\n\nline\n\nline\n")).toBe("");
   });
 
   test("the observed corruption profile warns (literals rival real newlines)", () => {
@@ -31,7 +31,7 @@ describe("escapedContentNote", () => {
   test("legitimate escaping documentation stays quiet (ratio, not count)", () => {
     // 6 literals among 1500+ real newlines — the bundled-guides profile.
     const content = "line\n".repeat(1569) + 'the E"\\n\\n"-join uses \\n\\n literals \\n \\n';
-    expect(escapedContentNote(content)).toBeNull();
+    expect(escapedContentNote(content)).toBe("");
   });
 
   test("literal quotes count toward the signal", () => {
@@ -40,7 +40,7 @@ describe("escapedContentNote", () => {
   });
 
   test("below the floor (fewer than 3 literals): quiet even with few newlines", () => {
-    expect(escapedContentNote("short\\nnote")).toBeNull();
+    expect(escapedContentNote("short\\nnote")).toBe("");
   });
 
   test("fully collapsed single-line corruption warns", () => {
