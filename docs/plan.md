@@ -28,16 +28,14 @@
 ---
 ## Current Focus
 
-**2026-08-22 — v1.10.1 (#222 write-time escaped-content warning) in progress
-on `fix/v1.10.1-escaped-content-warning` (PR #223). v1.10.0 (iteration 39:
-web save on shared cores, atomic rename RPC, schema 0.15.0) is released and
-staging-verified; PRODUCTION is still on v1.9.1/schema 0.14.1 — the prod
-upgrade will jump 1.9.1 → 1.10.1 in one hop, running migration 0030 there
-for the first time. #154 (commander 15 / Node ≥ 22.12) reviewed and
-deliberately deferred to a well-announced v1.11.0: a platform drop does not
-belong in a patch. The #222 warning deliberately excludes the primitive
-GPT-Actions EF (response-shape change; noted as a candidate follow-up with
-an OpenAPI bump).**
+**2026-08-22 — v1.10.0 + v1.10.1 SHIPPED and verified on BOTH staging and
+production. Production jumped 1.9.1 → 1.10.1 in one hop (migration 0030 ran
+clean; the interrupted-then-rerun deploy proved the idempotency design;
+guides re-synced 17/17; acceptance 15/15 on prod; #222 warning verified
+firing on prod CLI and quiet on clean writes). #222 closed. #154 deferred to
+a well-announced v1.11.0 (platform drop ≠ patch). Next: maintainer backup
+(post-upgrade), Discord announcement for the 1.10.x line, then v1.11.0
+(commander 15 + Node ≥ 22.12 + installer detection) when scheduled.**
 
 Schema is at 0.15.0 (v1.10.0 in progress); `minSchema` is **0.14.0**, raised
 in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
