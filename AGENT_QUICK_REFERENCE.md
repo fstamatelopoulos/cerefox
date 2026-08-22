@@ -227,3 +227,4 @@ Each of these comes from a real agent session, and each is easy to make.
   an upgrade — clients cache it at connect time. Ask the user to restart the
   client. Do not record a capability difference between servers as a fact; every
   such report so far has been a stale client.
+- Long inline bodies can arrive with literal `\n`/`\"` (the author over-escaped; Cerefox stores bytes faithfully). For long or quote-dense content, ingest from a file or build incrementally with `cerefox_insert`; read back multi-line writes.

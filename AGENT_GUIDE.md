@@ -716,6 +716,21 @@ server-side does.
 
 Each of these comes from a real agent session, and each is easy to make.
 
+- **Long content authored inline in a tool call can arrive escape-corrupted.**
+  When a large multi-line body travels as one JSON string inside the tool
+  call, the authoring model can escape a stretch one level too many — the
+  stored document then contains the literal two-character sequences `\n` and
+  `\"` where newlines and quotes were meant, mixed with correctly-encoded
+  text. Cerefox stores exactly the bytes it receives (verified at the byte
+  level: real newlines store as real newlines, literals as literals), so the
+  fix is on the authoring side. The risk concentrates in long, quote-dense
+  bodies — transcripts and call notes are the worst case; it has never been
+  observed on short edit calls. Mitigations, strongest first: ingest long
+  content from a file where the interface allows it; build big documents
+  incrementally with `cerefox_insert` / `cerefox_edit` instead of one giant
+  ingest; and read back every multi-line write — literal `\n` in the
+  read-back means re-send with real newlines.
+
 - **`cerefox_ingest` always replaces the ENTIRE document.** Never a section.
   Before sending, check that the tool name matches the intent: if the intent is
   "change one section", the call is `cerefox_edit` with `replace_section`. A
