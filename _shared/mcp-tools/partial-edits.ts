@@ -21,6 +21,7 @@
  * that prevents the scope-confusion data loss in spec §1.
  */
 
+import { escapedContentNote } from "./escape-heuristic.ts";
 import {
   applyOperations,
   validateOperations,
@@ -383,6 +384,11 @@ async function applyAndWrite(
     ? `\n\n⚠ This document has passed the configured size threshold ` +
       `(document_size_warning_chars). Consider splitting it.`
     : "";
+  // #222: check only the INCOMING text (not the whole stored doc, which may
+  // legitimately discuss escaping) for the over-escaping signature.
+  const escapeNote = escapedContentNote(
+    operations.map((o) => (typeof (o as { text?: unknown }).text === "string" ? (o as { text: string }).text : "")).join("\n"),
+  );
 
   // Deliberately no document body: returning it would spend exactly the tokens
   // this feature saves, on the response side (spec §3.8).
@@ -391,7 +397,7 @@ async function applyAndWrite(
     `New content_hash: ${row?.content_hash ?? newHash}\n` +
     `Size: ${row?.total_chars ?? totalChars} chars (was ${doc.content.length}), ${chunks.length} chunk(s).\n` +
     shrinkNote(doc.content, row?.total_chars ?? totalChars, applied) +
-    `Pass the new content_hash as expected_content_hash on your next edit.${warning}`
+    `Pass the new content_hash as expected_content_hash on your next edit.${warning}${escapeNote ?? ""}`
   );
 }
 

@@ -15,6 +15,7 @@
  * extraction (no behaviour change).
  */
 
+import { escapedContentNote } from "./escape-heuristic.ts";
 import type { MCPSupabaseClient } from "./types.ts";
 
 import {
@@ -230,7 +231,7 @@ async function handler(
     const note = update_if_exists
       ? ""
       : " Note: update_if_exists flag was overridden by document_id.";
-    return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${note}`;
+    return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${note}${escapedContentNote(content) ?? ""}`;
   }
 
   // ── Update-existing path ─────────────────────────────────────────────────
@@ -331,7 +332,7 @@ async function handler(
         await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
       }
 
-      return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.`;
+      return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${escapedContentNote(content) ?? ""}`;
     }
     // Fall through to create path
   }
@@ -417,7 +418,8 @@ async function handler(
   // bypassing concurrency control on the first edit of every new document.
   return (
     `Document saved: "${title}" (id: ${documentId}), ${chunks.length} chunk(s), ${totalChars} chars${projectInfo}. ` +
-    `content_hash: ${contentHash} — pass it as expected_content_hash on your next edit.`
+    `content_hash: ${contentHash} — pass it as expected_content_hash on your next edit.` +
+    (escapedContentNote(content) ?? "")
   );
 }
 

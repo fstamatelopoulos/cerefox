@@ -11,6 +11,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Added
 
+- **Write-time escaped-content warning (#222).** When ingested or edited
+  content carries the over-escaping signature — literal `\n` / `\"` sequences
+  at 25%+ of the real newline count (at least 3) — the MCP write response and
+  the CLI ingest summary append a non-blocking note naming the counts and the
+  fix. Calibrated on real incident data: legitimate documents that *discuss*
+  escaping sit far below 1% and stay quiet. A signal in the write's response,
+  never a refusal, and deliberately never a normalization (auto-converting
+  would corrupt legitimate content and mask the emitting client's bug).
 - **Agent guides document the escape-drift failure mode** (from live agent
   feedback, the #222 companion): long multi-line content authored inline in a
   tool call can arrive with a stretch JSON-escaped one level too many —
