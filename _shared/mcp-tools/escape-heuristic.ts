@@ -29,22 +29,34 @@ export function measureEscapes(content: string): EscapeSuspicion {
   };
 }
 
-/** The non-blocking note to append to a write response, or null when the
- *  content looks fine. A signal in the write's response, never a refusal —
- *  the iteration-33 posture. */
-export function escapedContentNote(content: string): string | null {
+/**
+ * The non-blocking note to append to a write response, or "" when the
+ * content looks fine — an empty string appends as nothing and stays falsy,
+ * so callers concatenate directly with no `?? ""` dance (review round 1:
+ * forgetting it would interpolate the literal string "null"). A signal in
+ * the write's response, never a refusal — the iteration-33 posture.
+ *
+ * The remedy clause is channel-aware: the MCP tail names MCP tools; the CLI
+ * tail must not tell a user who just ingested a file to "prefer ingesting
+ * from a file".
+ */
+export function escapedContentNote(content: string, channel: "mcp" | "cli" = "mcp"): string {
   const m = measureEscapes(content);
   const literals = m.literalNewlines + m.literalQuotes;
-  if (literals < 3 || literals * 4 < m.realNewlines) return null;
+  if (literals < 3 || literals * 4 < m.realNewlines) return "";
   const parts = [
     m.literalNewlines > 0 ? `${m.literalNewlines} literal \\n` : null,
     m.literalQuotes > 0 ? `${m.literalQuotes} literal \\"` : null,
   ].filter(Boolean);
+  const remedy =
+    channel === "cli"
+      ? `fix the escaping in the source and re-ingest.`
+      : `re-send with actual characters. For long content, prefer ` +
+        `ingesting from a file or building the document incrementally with ` +
+        `cerefox_insert/cerefox_edit.`;
   return (
     ` Note: content contains ${parts.join(" and ")} sequence(s) against ` +
     `${m.realNewlines} real newline(s) — if line breaks or quotes were ` +
-    `intended, re-send with actual characters. For long content, prefer ` +
-    `ingesting from a file or building the document incrementally with ` +
-    `cerefox_insert/cerefox_edit.`
+    `intended, ` + remedy
   );
 }
