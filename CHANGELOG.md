@@ -9,7 +9,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **Agent guides document the escape-drift failure mode** (from live agent
+  feedback, the #222 companion): long multi-line content authored inline in a
+  tool call can arrive with a stretch JSON-escaped one level too many —
+  literal `\n` and `\"` mixed into the stored text. Cerefox stores exactly
+  the bytes it receives (byte-level verified), so `AGENT_GUIDE.md`, the quick
+  reference, and the bundled `cerefox_get_help` content now teach the
+  authoring-side practice: ingest long content from a file, build big
+  documents incrementally with `cerefox_insert`/`cerefox_edit`, and read back
+  multi-line writes. The server-side write-time warning is tracked as #222.
+
+### Fixed
+
+- **The gated live suites no longer strand fixtures.** Their audited cleanup
+  (soft-delete + purge per document) exceeded the test runner's default
+  5-second hook budget and died partway, leaving fixtures in the trash where
+  the suites' fixed per-test content then collided across runs via
+  content-hash dedup. Hooks got a realistic budget and every repeated content
+  is now run-unique; both suites recorded their first fully green runs
+  (26/26, 19/19).
 
 ---
 
