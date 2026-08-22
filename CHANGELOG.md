@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.10.1] -- 2026-08-22
+
 ### Added
 
 - **Write-time escaped-content warning (#222).** When ingested or edited
