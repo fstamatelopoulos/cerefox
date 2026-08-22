@@ -729,7 +729,8 @@ Each of these comes from a real agent session, and each is easy to make.
   content from a file where the interface allows it; build big documents
   incrementally with `cerefox_insert` / `cerefox_edit` instead of one giant
   ingest; and read back every multi-line write — literal `\n` in the
-  read-back means re-send with real newlines.
+  read-back means re-send with real newlines. Since v1.10.1 the write
+  response itself warns when content matches the over-escaping signature.
 
 - **`cerefox_ingest` always replaces the ENTIRE document.** Never a section.
   Before sending, check that the tool name matches the intent: if the intent is

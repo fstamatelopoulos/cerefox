@@ -28,14 +28,16 @@
 ---
 ## Current Focus
 
-**2026-08-18 — v1.9.2 shipped, verified on staging AND production, announced
-(Discord). v1.10.0 in progress on `feat/v1.10.0-audit-consistency`
-([iteration 39](plans/iteration-39-audit-consistency.md)): the web
-document-save moves onto shared cores — fixing two latent bugs (web title
-renames skipped the FTS refresh; web metadata bypassed the #212 guards) and
-the request-shape audit entry ("title=false, metadata=true, projects=true").
-Per-facet factual entries everywhere; schema 0.14.1 → 0.15.0 (atomic
-`cerefox_rename_document`, migration 0030 — revised in review round 1).**
+**2026-08-22 — v1.10.1 (#222 write-time escaped-content warning) in progress
+on `fix/v1.10.1-escaped-content-warning` (PR #223). v1.10.0 (iteration 39:
+web save on shared cores, atomic rename RPC, schema 0.15.0) is released and
+staging-verified; PRODUCTION is still on v1.9.1/schema 0.14.1 — the prod
+upgrade will jump 1.9.1 → 1.10.1 in one hop, running migration 0030 there
+for the first time. #154 (commander 15 / Node ≥ 22.12) reviewed and
+deliberately deferred to a well-announced v1.11.0: a platform drop does not
+belong in a patch. The #222 warning deliberately excludes the primitive
+GPT-Actions EF (response-shape change; noted as a candidate follow-up with
+an OpenAPI bump).**
 
 Schema is at 0.15.0 (v1.10.0 in progress); `minSchema` is **0.14.0**, raised
 in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
