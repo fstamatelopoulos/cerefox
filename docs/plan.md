@@ -33,11 +33,12 @@ production. Production jumped 1.9.1 → 1.10.1 in one hop (migration 0030 ran
 clean; the interrupted-then-rerun deploy proved the idempotency design;
 guides re-synced 17/17; acceptance 15/15 on prod; #222 warning verified
 firing on prod CLI and quiet on clean writes). #222 closed. #154 deferred to
-a well-announced v1.11.0 (platform drop ≠ patch). Next: maintainer backup
-(post-upgrade), Discord announcement for the 1.10.x line, then v1.11.0
-(commander 15 + Node ≥ 22.12 + installer detection) when scheduled.**
+a well-announced v1.11.0 (platform drop ≠ patch). The 1.10.x line was
+announced in Discord `#announcements` on 2026-08-22. Nothing is in flight.
+Next: v1.11.0 (commander 15 + Node ≥ 22.12 + installer detection) when
+scheduled.**
 
-Schema is at 0.15.0 (v1.10.0 in progress); `minSchema` is **0.14.0**, raised
+Schema is at 0.15.0 (shipped in v1.10.0); `minSchema` is **0.14.0**, raised
 in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
 The tool surface is 15 core + 4 dormant relation tools (delete/restore
 joined in v1.7.0).
