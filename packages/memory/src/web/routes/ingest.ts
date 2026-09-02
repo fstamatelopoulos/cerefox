@@ -25,6 +25,10 @@ import { Hono } from "hono";
 
 import { fileToMarkdown } from "../../ingestion/file-to-markdown.ts";
 import { IngestionPipeline } from "../../ingestion/pipeline.ts";
+import {
+  ConcurrencyConflictError,
+  ConcurrencyTokenRequiredError,
+} from "../../ingestion/types.ts";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
 import { resolveCallerIdentity } from "../identity.ts";
@@ -37,10 +41,52 @@ interface IngestResponse {
   updated?: boolean;
   note?: string;
   error?: string;
+  /** Present on a 409 so the caller can re-read without a second round trip —
+   *  the same field `documents-write.ts` returns on an edit conflict. */
+  current_hash?: string;
+  /** Same text as `error`. Present because the rest of `/api/v1` puts its
+   *  human-readable reason in `detail`, and the frontend's `ApiError` reads
+   *  exactly that field to build its message (`api/client.ts`). Emitting only
+   *  `error` on a non-2xx would show the user a bare "API error 400". */
+  detail?: string;
 }
 
 function notReady(error: string): IngestResponse {
-  return { success: false, error };
+  return { success: false, error, detail: error };
+}
+
+/**
+ * Map a pipeline failure to its HTTP status (#232).
+ *
+ * These routes used to answer `200 {success:false, error}` for EVERY pipeline
+ * failure, including a refused write. That was survivable while the only
+ * caller was the bundled UI, which reads `success`. #226 opened the surface to
+ * other clients, and an HTTP client that checks `resp.ok` — what
+ * `raise_for_status()`, `curl -f` and every retry wrapper do by default —
+ * would read a refused write as a successful one. A concurrency refusal is the
+ * worst case to miss, because the caller's next move depends on knowing.
+ *
+ * The mapping is not invented here: `documents-write.ts` has mapped these same
+ * two typed errors to 400/409 since iter-32. This brings the three ingest
+ * routes onto that existing convention rather than adding a second one.
+ *
+ * `success: false` and `error` stay in the body, so a client reading either of
+ * them keeps working; only the status (and the added `detail`) are new.
+ */
+function ingestFailure(err: unknown): [IngestResponse, 400 | 409 | 500] {
+  if (err instanceof ConcurrencyConflictError) {
+    return [
+      {
+        ...notReady(err.message),
+        ...(err.currentHash ? { current_hash: err.currentHash } : {}),
+      },
+      409,
+    ];
+  }
+  if (err instanceof ConcurrencyTokenRequiredError) {
+    return [notReady(err.message), 400];
+  }
+  return [notReady(err instanceof Error ? err.message : String(err)), 500];
 }
 
 export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
@@ -100,10 +146,8 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
       });
       return c.json(resp, 200);
     } catch (err) {
-      return c.json(
-        notReady(err instanceof Error ? err.message : String(err)),
-        200,
-      );
+      const [body, status] = ingestFailure(err);
+      return c.json(body, status);
     }
   });
 
@@ -190,10 +234,8 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         200,
       );
     } catch (err) {
-      return c.json(
-        notReady(err instanceof Error ? err.message : String(err)),
-        200,
-      );
+      const [body, status] = ingestFailure(err);
+      return c.json(body, status);
     }
   });
 
@@ -288,10 +330,8 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         200,
       );
     } catch (err) {
-      return c.json(
-        notReady(err instanceof Error ? err.message : String(err)),
-        200,
-      );
+      const [body, status] = ingestFailure(err);
+      return c.json(body, status);
     }
   });
 }

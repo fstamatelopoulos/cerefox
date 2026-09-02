@@ -122,6 +122,33 @@ export async function detectV07FromResponse(
   return v07 ? new V07IngestionDeferredError(body, v07) : null;
 }
 
+/**
+ * Human-readable reason for a failed raw-`fetch` upload (#232).
+ *
+ * The ingest routes answer 400/409 for a refused write and put the reason in
+ * the body's `detail` (and `error`). `apiFetch` call sites get that for free
+ * via `ApiError`; the FormData upload paths use raw `fetch` and would
+ * otherwise show only a status code. Safe to call after
+ * `detectV07FromResponse` returned null: that only consumes the body on a 503.
+ */
+export async function uploadFailureMessage(resp: Response): Promise<string> {
+  let body = "";
+  try {
+    body = await resp.text();
+  } catch {
+    /* body already consumed or unreadable — fall through to the status */
+  }
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown; error?: unknown };
+    for (const field of [parsed.detail, parsed.error]) {
+      if (typeof field === "string" && field.trim()) return field;
+    }
+  } catch {
+    /* non-JSON body */
+  }
+  return `Upload failed: ${resp.status}`;
+}
+
 /** Build a query string from a params object, omitting empty values. */
 export function buildQueryString(
   params: Record<string, string | number | undefined>,

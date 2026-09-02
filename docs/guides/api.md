@@ -183,8 +183,18 @@ honour the identity headers. `/version` needs nothing.
 Cerefox uses optimistic locking, and this API is no exception. A content update
 requires the `content_hash` you read the document at, as
 `expected_content_hash`, or an explicit `last_write_wins`. A stale hash returns
-`409`; sending neither returns `400` with `CEREFOX_TOKEN_REQUIRED`. Read, then
-modify, then write with the token you read.
+`409` (with `current_hash`, so you can re-read without a second round trip);
+sending neither returns `400` with `CEREFOX_TOKEN_REQUIRED`. Read, then modify,
+then write with the token you read.
+
+**Check the status code, not just the body.** Every refusal is a real HTTP
+status: `400` for a malformed or incomplete request, `409` for a concurrency
+conflict, `404` for a missing document, `503` when the embedder is
+unavailable. The reason is in the body's `detail` (and, on the ingest routes,
+also in `error`, which they have always used). Before v1.12.0 the three ingest
+routes answered `200` with `success: false` for a *refused* write, so a client
+checking only `resp.ok` read a refusal as a success; that is fixed, and it is
+the one response-shape change in v1.12.0.
 
 `POST /documents/{id}/upload` takes the same contract: pass
 `expected_content_hash` as a form field, or `last_write_wins=true` if the file

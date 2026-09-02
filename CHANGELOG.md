@@ -9,6 +9,54 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Changed
+
+- **The three `/api/v1` ingest routes answer with real HTTP status codes
+  (#232).** `POST /ingest`, `POST /ingest/file` and
+  `POST /documents/{id}/upload` used to catch every pipeline failure and return
+  `200` with `success: false`, including a *refused* write. A client checking
+  `resp.ok` — what `raise_for_status()`, `curl -f` and every retry wrapper do
+  by default — read a refusal as a success, and a concurrency refusal is the
+  worst case to miss. They now return `400` for a missing concurrency token,
+  `409` for a stale one (carrying `current_hash`), and `500` otherwise, which
+  is the mapping the edit route has used since v0.11.0. Response bodies keep
+  `success: false` and `error`, and gain `detail` so the message survives to
+  the UI. Invisible while the API was the web app's private backend; it matters
+  now that other clients are invited onto it.
+
+### Security
+
+- **Four high and three moderate advisories cleared** by pinning three
+  transitive dependencies to their patched versions via root `overrides`:
+  `fast-uri` (host confusion and SSRF, four advisories, reached through
+  `@modelcontextprotocol/sdk` and `eslint`), `qs` (array-limit bypass and DoS,
+  through `@modelcontextprotocol/sdk`), and `@xmldom/xmldom` (XML fragment
+  injection, through `mammoth`). All were published upstream after v1.11.0 was
+  cut and none is reachable from a direct dependency; `bun update` could not
+  resolve past them because the intermediate packages' ranges pin them.
+
+### Fixed
+
+- **Live test suites skipped in a full `bun test` run (#230).** `loadEnv()`
+  cached "already loaded" as a boolean, so the second call was a no-op forever
+  — including after `CEREFOX_CONFIG_DIR` changed. One test sets that variable
+  to a non-existent directory on purpose (proving the production-write guard
+  refuses an unlabelled target), which poisoned the cache for the rest of the
+  run: every live suite loaded afterwards saw no credentials and skipped. The
+  cache is now keyed on the resolved path. **The full package suite went from
+  215 passing with 12 skipped to 262 passing with 2 skipped** — 47 tests that
+  had been reporting success while running nothing. Same shape as the
+  renamed-probe bug fixed in v1.11.0.
+- **`cerefox server deploy` explains an upstream package-registry failure
+  instead of dumping a raw 400.** When Supabase publishes a new
+  `supabase-js` to JSR before its npm dependency lands, every Edge Function
+  fails to bundle for the length of that window; the bundler's reply is a 400
+  with a JSR stack trace, repeated once per function, which reads exactly like
+  a broken release. The deploy now recognises that signature and says what it
+  is: upstream, your deployed functions are unchanged and still serving, retry
+  in a few minutes. (Observed 2026-09-02 on a production deploy that landed in
+  a 108-second gap between the two registries.)
+
 Open roadmap.
 
 ---

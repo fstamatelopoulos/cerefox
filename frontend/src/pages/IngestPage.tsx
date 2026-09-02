@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { detectV07FromResponse } from "../api/client";
+import { detectV07FromResponse, uploadFailureMessage } from "../api/client";
 import { checkFilename, ingestPaste } from "../api/documents";
 import type { FilenameCheckResponse, IngestResponse } from "../api/types";
 import { invalidateDocumentViews } from "../lib/invalidate";
@@ -90,7 +90,11 @@ export function IngestPage() {
       if (!resp.ok) {
         const v07 = await detectV07FromResponse(resp);
         if (v07) throw v07;
-        throw new Error(`Upload failed: ${resp.status}`);
+        // Since #232 these routes answer 400/409 for a refused write and put
+        // the reason in the body. A bare `Upload failed: 400` would drop the
+        // one thing the user needs (this path does NOT go through apiFetch,
+        // so it gets no ApiError message for free).
+        throw new Error(await uploadFailureMessage(resp));
       }
       return resp.json() as Promise<IngestResponse>;
     },
