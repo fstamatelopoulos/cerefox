@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.11.0] -- 2026-09-02
+
 ### Added
 
 - **`/api/v1` accepts an optional caller identity (#226).** `author`,
