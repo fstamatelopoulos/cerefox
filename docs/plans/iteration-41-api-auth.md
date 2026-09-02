@@ -57,8 +57,13 @@ releases; landing an auth change and a platform-baseline drop together makes
       still serving, retry in a few minutes. Output is now captured rather
       than inherited so the reply can be read, and printed verbatim so nothing
       is hidden.
-- [ ] **#229 — authentication for the local surface. DESIGN WRITTEN, awaiting
-      four decisions.** `docs/specs/api-auth-design.md`.
+- [ ] **#229 — authentication for the local surface. DESIGN APPROVED
+      2026-09-02, ready to build.** `docs/specs/api-auth-design.md`. Decided:
+      loopback-exempt with a key for every other interface; `X-Forwarded-For`
+      never consulted, **enforced by a test**, not by a sentence in a guide;
+      `/api/v1/version` gated with everything else (verified: no local caller
+      is affected, because the CLI never talks to the web server); purge stays
+      reachable; ships in v1.12.0 alongside #232, as a second PR.
 - [ ] Live regression against staging + Playwright.
 - [ ] CHANGELOG, guides.
 

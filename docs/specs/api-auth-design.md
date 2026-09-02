@@ -1,8 +1,8 @@
 # Authenticating the local HTTP surface (#229)
 
-**Status: DESIGN, awaiting maintainer decisions.** Target: v1.12.0
-(iteration 41). Nothing below is implemented yet. Four questions marked
-**DECISION** need answering before code; everything else follows from them.
+**Status: DESIGN APPROVED 2026-09-02, ready to build.** Target: v1.12.0
+(iteration 41). The four open questions were decided by the maintainer on
+2026-09-02 and are recorded under "Decisions" below.
 
 ## The problem, stated precisely
 
@@ -46,7 +46,7 @@ defending against. **A key embedded in an unauthenticated page is not a
 secret.** Every design below is really a different answer to "how does the
 browser prove itself".
 
-## The recommendation: authenticate by network origin, with a key for everything else
+## The design: authenticate by network origin, with a key for everything else
 
 Requests arriving on the **loopback interface** are allowed without a
 credential. Requests arriving on any other interface must present the key.
@@ -156,37 +156,79 @@ so a malicious page in the user's browser cannot drive the API even though the
 browser is on loopback. This is the one real gap the loopback design leaves,
 and it closes it.
 
-## Open decisions
+## Decisions
 
-**DECISION 1 — Is loopback-exempt the right call?** The recommendation above,
-or key-always with a browser story. This is the load-bearing choice; everything
-else follows.
+Settled with the maintainer 2026-09-02.
 
-**DECISION 2 — Does `/api/v1/version` stay open?** It is how a client learns
-the server is up and what it is, and `doctor`/`checks.ts` rely on it. Standing
-maintainer preference is to gate rather than expose when a credential is at
-hand. Under the loopback design this matters less than it looks: a local caller
-is exempt anyway, so the question is only whether a *remote* caller can probe
-liveness without a key. Recommendation: gate it, and let liveness be answered
-by a TCP connect.
+**1 — Loopback-exempt is the design.** Requests on the loopback interface are
+allowed without a credential; every other interface must present the key.
 
-**DECISION 3 — Does purge stay reachable over the API?** Raised on the ticket
-and unchanged by this design. A key makes purge *safer*, not *intended*. The
-route cannot simply be deleted: the web UI's own trash-purge button calls it.
-Options are keep it, gate it behind an additional flag, or require a
-confirmation token. Worth deciding on its own merits, not folded into the auth
-change.
+**`X-Forwarded-For` is never consulted, and that is enforced in code, not
+prose.** A documented rule that some future change could quietly violate is
+kicking the can down the road: the header is caller-supplied, so trusting it
+would let any client claim any origin and would be strictly worse than no gate
+at all. Build requirements: the middleware reads only the transport-level
+remote address; a test asserts a request carrying
+`X-Forwarded-For: 127.0.0.1` from a non-loopback address is still refused; the
+test says in its own comment that it exists to fail a plausible future "fix".
 
-**DECISION 4 — Does this ship with #232 in v1.12.0, or on its own?** It is the
-larger and more security-relevant half. Splitting would let #232 and the
-smaller fixes ship immediately.
+**2 — `/api/v1/version` is gated with everything else. No exceptions.**
+Verified before deciding: **nothing local is affected.** The CLI never calls
+the local web API at all — it talks to the Supabase Data API directly
+(`${supabaseUrl}/rest/v1/...`, `cli/util/checks.ts:183-189`), and the only CLI
+references to `/api/v1` are doc comments plus the URL `cerefox web` prints.
+`doctor`'s peer-version aggregator is a *different* endpoint on the Edge
+Function host, authenticated with the Cerefox access token. The browser is on
+loopback. The one contributor script that curls `/version`
+(`scripts/capture_python_parity.sh:27`) runs against localhost.
+
+So the only caller a gate affects is a **remote** one, and a remote caller
+probing liveness without a credential is precisely what this ticket exists to
+stop. One rule with no exceptions is also easier to reason about than one rule
+plus a carve-out, and liveness can still be answered by a TCP connect.
+
+**3 — Purge stays reachable over the API.** It cannot be removed without
+breaking the web UI's own trash-purge button, and the maintainer wants it
+reachable from both surfaces. Hiding it was a defensive measure against
+hallucinating models; soft-delete-then-purge is two deliberate steps, which is
+friction enough, and agents overwhelmingly reach Cerefox through MCP rather
+than the API or CLI. No additional flag, no confirmation token.
+
+**4 — #229 ships in v1.12.0 alongside #232.** The question was badly framed on
+my part: a PR is not a release. #233 (#232 + #230 + the deploy message) merges
+as soon as it is reviewed, #229 lands as a second PR, and v1.12.0 is cut when
+both are in. There is no reason to hold finished work behind unbuilt work, and
+no reason to split the release. The only case for revisiting is if #229 grows a
+long tail in review, in which case v1.12.0 cuts with what is ready and #229
+becomes v1.13.0 — a decision to defer, not to make now.
+
+## What this does NOT do: mint a key when the page loads
+
+Worth stating because it is the intuitive reading and it is the design that was
+rejected. There is **no** flow where the SPA loads, triggers minting, and
+receives a key. The browser never holds the key, is never sent it, and never
+asks for it.
+
+The key is minted by an explicit action, never as a side effect of a page load:
+
+- `cerefox api-key generate` (or `rotate`), modelled on `token.ts`, writing to
+  the resolved `.env` via `upsertEnvVar`.
+- Cerefox Local mints it at container boot in `s6/scripts/db-init`, beside the
+  JWT secret it already mints, persisted on the data volume.
+
+The browser works because it is on loopback, not because it holds a credential.
+And the CLI is untouched by any of this: it never talks to the web server, so
+there is nothing for it to read or present.
 
 ## Testing
 
 - Unit: the middleware's decision table (loopback vs not, key present/absent/
-  wrong, force-key on, `Origin` mismatch), and that `X-Forwarded-For` changes
-  nothing. The last one is a **regression test against a plausible future
-  "fix"**, which is the reason to write it now.
+  wrong, force-key on, `Origin` mismatch).
+- **`X-Forwarded-For` changes nothing.** A non-loopback request carrying
+  `X-Forwarded-For: 127.0.0.1` is still refused. This is a regression test
+  against a plausible future "fix" — someone adding proxy support without
+  realising the header is caller-supplied — and the test comment says so, so
+  the next reader does not delete it as redundant.
 - Integration: the existing `web-integration` suite spawns a real server, so it
   can assert a keyless remote-shaped request is refused and a keyed one is not.
 - Explicitly: a test that `/rest/v1/*` is gated too, since forgetting it is the
