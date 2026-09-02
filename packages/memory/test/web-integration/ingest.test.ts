@@ -210,9 +210,46 @@ describe("web ingest endpoints (HTTP boundary)", () => {
       `${server.base}/api/v1/documents/${initialBody.document_id}/upload`,
       { method: "POST", body: noToken },
     );
-    const refusedBody = (await refused.json()) as { success: boolean; error?: string };
+    // #232: the REFUSAL IS A 400, not a 200 carrying success:false. A client
+    // that checks `resp.ok` (raise_for_status, curl -f, most retry wrappers)
+    // read the old shape as a successful write. Asserting the status is the
+    // whole point of this line — the body assertions below would pass either
+    // way, which is exactly how the old behaviour survived.
+    expect(refused.status).toBe(400);
+    const refusedBody = (await refused.json()) as {
+      success: boolean;
+      error?: string;
+      detail?: string;
+    };
     expect(refusedBody.success).toBe(false);
     expect(refusedBody.error ?? "").toContain("CEREFOX_TOKEN_REQUIRED");
+    // `detail` carries the same text: the frontend's ApiError reads that field
+    // and nothing else, so omitting it would show the user a bare
+    // "API error 400" and lose the remediation.
+    expect(refusedBody.detail ?? "").toContain("CEREFOX_TOKEN_REQUIRED");
+
+    // A STALE token is a 409, and carries the current hash so a caller can
+    // re-read without a second round trip.
+    const staleForm = new FormData();
+    staleForm.append(
+      "file",
+      new Blob(["# stale\n"], { type: "text/markdown" }),
+      `stale-${RUN_TAG}.md`,
+    );
+    staleForm.append("expected_content_hash", "0".repeat(64));
+    const stale = await fetch(
+      `${server.base}/api/v1/documents/${initialBody.document_id}/upload`,
+      { method: "POST", body: staleForm },
+    );
+    expect(stale.status).toBe(409);
+    const staleBody = (await stale.json()) as {
+      success: boolean;
+      detail?: string;
+      current_hash?: string;
+    };
+    expect(staleBody.success).toBe(false);
+    expect(staleBody.detail ?? "").toContain("CEREFOX_CONFLICT");
+    expect(staleBody.current_hash).toBe(read.content_hash);
 
     // Now upload-replace, with the token.
     const newText = `# v2\n\nReplacement content ${RUN_TAG}.\n`;
@@ -236,7 +273,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     expect(body.success).toBe(true);
     expect(body.document_id).toBe(initialBody.document_id);
     expect(body.updated).toBe(true);
-    // Four round-trips (ingest, read, refused upload, upload), each embedding
-    // real content, so the default 5s is not enough.
+    // Five round-trips (ingest, read, refused upload, stale upload, upload),
+    // each embedding real content, so the default 5s is not enough.
   }, 30_000);
 });
