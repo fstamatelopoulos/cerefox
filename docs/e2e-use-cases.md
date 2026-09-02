@@ -191,6 +191,27 @@ bun test test/acceptance` (refuses unlabelled production targets).
 | acceptance | #147 config audit | A config change lands in the audit trail with author and old→new value (skips when the key is unset — writing would flip it to explicitly-set) | Done |
 | acceptance | #147/#219 project audit | Project create/edit/delete audit atomically via the RPCs: real diff recorded, "(store)" rendering, repeat delete adds no entry | Done |
 
+### 6E. HTTP API boundary (`packages/memory/test/web-integration/`, v1.11.0)
+
+Spawns a real `cerefox web` from `packages/memory/dist` and drives `/api/v1`
+over HTTP against a live database, asserting on the **stored rows**, not the
+responses. Probe-and-skip via the shared `_live-probe.ts`, which *throws* if
+the CLI rejects the probe command (the suite had skipped silently from v0.9.0
+to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
+(production) target. Self-cleans `[E2E web-attr]` / `[E2E …]` data.
+
+| Suite | Test | Use Case | Status |
+|-------|------|----------|--------|
+| attribution | default | No identity → audit `author='web-ui'`, `author_type='user'`, usage `access_path='webapp'`; the pre-#226 row byte for byte | Done |
+| attribution | named | `X-Cerefox-Author` + `X-Cerefox-Author-Type: agent` → recorded as itself, `access_path='api'`, document lands `pending_review` | Done |
+| attribution | body | Identity as JSON body fields is honoured | Done |
+| attribution | invalid type | `author_type: robot` → 400 naming the field, nothing stored | Done |
+| attribution | delete | Identified caller without hash → 400 `CEREFOX_TOKEN_REQUIRED`, document intact; with hash → 200 | Done |
+| attribution | anon delete | No identity, no hash → 200 (the bundled UI's path, unchanged) | Done |
+| attribution | read | `X-Cerefox-Requestor` on GET → usage row `requestor`/`access_path='api'` | Done |
+| ingest | upload | `POST /documents/{id}/upload` without token → 400 `CEREFOX_TOKEN_REQUIRED`; with `expected_content_hash` → replaced (#228, broken since v0.11.0) | Done |
+| destructive | fixture | Fixtures ingested over HTTP with `author_type: agent`, no Edge Function calls | Done |
+
 ### 7. Governance Features (future e2e)
 
 | # | Use Case | Status |

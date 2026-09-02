@@ -20,7 +20,7 @@ Single-user, open-source (Apache 2.0), designed to be cheap/free to operate. See
 - **Shared TS modules**: `_shared/{config,db-client,db-status,embeddings,mcp-tools}/` — imported by both Edge Functions (Deno) and local server (Node/Bun) via structural typing
 - **Package management**: bun workspaces for TS
 - **Testing**: `bun test` (TypeScript) — the only test runner as of v0.9.0 (pytest retired; `tests/**/*.py` deleted)
-- **Type-checking**: `tsc --noEmit` for TS (`bun run typecheck`)
+- **Type-checking**: `bun run typecheck` — `tsc --noEmit` for `_shared` + `packages/memory`, `tsc -b` for the frontend (a plain `--noEmit` there checks nothing)
 
 ## Project Structure
 
@@ -81,7 +81,7 @@ cerefox/
 ## Development Conventions
 
 ### Code Style
-- Type-check TypeScript with `bun run typecheck` (`tsc --noEmit`)
+- Type-check TypeScript with `bun run typecheck` (covers `_shared`, `packages/memory` and the frontend)
 - Type hints on all public functions
 - Docstrings only where the purpose isn't obvious from the name/signature
 - Prefer simple, flat code over abstractions — don't create a helper for something used once

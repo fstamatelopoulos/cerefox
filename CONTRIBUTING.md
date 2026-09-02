@@ -90,7 +90,7 @@ cd frontend && bun run test:e2e                         # UI e2e (Playwright)
 CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote  # live EF e2e (opt-in)
 
 # Type-check
-bun run typecheck            # tsc --noEmit across _shared
+bun run typecheck            # tsc across _shared, packages/memory and the frontend (tsc -b)
 
 # Build frontend
 cd frontend && bun install && bun run build
@@ -244,7 +244,7 @@ If something needs fixing after a tag is published, **cut a new patch version**.
 
 PRs must pass these jobs before merge. Cold-cache wall clock is ~60-90 seconds. Live e2e tests (`CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote`, `scripts/check_ef_parity.ts`) need Supabase credentials and are run manually by the maintainer before each cut — see `docs/research/v0.7-manual-test-plan.md` (the rolling test plan that spans v0.5 → v0.7).
 
-**Type-checking**: `bun run typecheck` (`tsc --noEmit` across `_shared`) is the TS quality gate. A dedicated formatter/linter (biome) is not yet wired.
+**Type-checking**: `bun run typecheck` (`tsc --noEmit` across `_shared` and `packages/memory`, plus `tsc -b` for the frontend — a plain `tsc --noEmit` in `frontend/` checks nothing, because its `tsconfig.json` is `files: []` plus project references) is the TS quality gate. A dedicated formatter/linter (biome) is not yet wired.
 
 ---
 

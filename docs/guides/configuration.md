@@ -441,7 +441,7 @@ Each usage log entry records:
 | Field | Description |
 |-------|-------------|
 | `operation` | What was called: `search`, `metadata_search`, `get_document`, `list_versions`, `get_audit_log`, `list_metadata_keys`, `list_projects` |
-| `access_path` | Where the call came from: `remote-mcp`, `local-mcp`, `edge-function`, `webapp`, `cli` |
+| `access_path` | Where the call came from: `remote-mcp`, `local-mcp`, `edge-function`, `webapp`, `cli`, `api` |
 | `requestor` | Who made the call: agent name (e.g., "Claude Code", "mcp-agent") or "user" for webapp/CLI |
 | `document_id` | Optional: which document was accessed (for get_document, list_versions) |
 | `project_id` | Optional: which project was filtered on |
@@ -452,7 +452,7 @@ Each usage log entry records:
 The `access_path` is set by the caller layer (not the end user):
 - Edge Functions set `"edge-function"` (GPT Actions, direct HTTP callers)
 - `cerefox-mcp` tool handlers set `"remote-mcp"` (Claude Code, Cursor, Claude Desktop)
-- The web UI's JSON API routes set `"webapp"`
+- The web UI's JSON API routes set `"webapp"` when the caller sends no identity, and `"api"` when it names itself with `X-Cerefox-Author` / `X-Cerefox-Requestor` (v1.11.0; see [`api.md`](api.md)). The path is derived, never accepted from the caller.
 - Local MCP server sets `"local-mcp"`
 - CLI sets `"cli"` for read/search commands
 
