@@ -11,16 +11,19 @@
  *
  * 0.14.0 (#147/#219): the three write routes call the project write RPCs
  * (cerefox_create_project / cerefox_update_project / cerefox_delete_project),
- * which perform the write AND its audit entry in one transaction. Author is
- * "web-ui" with author_type "user" — the convention every other web audit
- * site follows (documents-write.ts, ingest.ts), so filtering the trail by
- * author='web-ui' catches dashboard-originated store-level writes too.
+ * which perform the write AND its audit entry in one transaction. Author
+ * defaults to "web-ui" with author_type "user" — the convention every other
+ * web audit site follows (documents-write.ts, ingest.ts), so filtering the
+ * trail by author='web-ui' still catches dashboard-originated store-level
+ * writes. Since #226 a caller that identifies itself is recorded as itself;
+ * see `../identity.ts`.
  */
 
 import { Hono } from "hono";
 
 import { isDuplicateKeyError, storeWriteRemediation } from "../../../../../_shared/mcp-tools/_utils.ts";
 import type { WebContext } from "../context.ts";
+import { resolveCallerIdentity } from "../identity.ts";
 
 interface ProjectRpcRow {
   project_id: string;
@@ -75,11 +78,13 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     const name = String(body.name ?? "").trim();
     if (!name) return c.json({ detail: "Project name is required" }, 400);
     const description = String(body.description ?? "").trim();
+    const who = resolveCallerIdentity(c, body as Record<string, unknown>);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const { data, error } = await ctx.supabase.rpc("cerefox_create_project", {
       p_name: name,
       p_description: description,
-      p_author: "web-ui",
-      p_author_type: "user",
+      p_author: who.identity.author,
+      p_author_type: who.identity.authorType,
     });
     if (error) {
       const msg = error.message ?? "";
@@ -120,12 +125,14 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     }
     // The RPC updates only the provided fields, diffs against the stored
     // row for the audit description, and audits in-transaction (#219).
+    const who = resolveCallerIdentity(c, body as Record<string, unknown>);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const { data, error } = await ctx.supabase.rpc("cerefox_update_project", {
       p_project_id: projectId,
       p_name: update.name ?? null,
       p_description: update.description ?? null,
-      p_author: "web-ui",
-      p_author_type: "user",
+      p_author: who.identity.author,
+      p_author_type: who.identity.authorType,
     });
     if (error) {
       const msg = error.message ?? "";
@@ -145,10 +152,13 @@ export function registerProjectsRoutes(app: Hono, ctx: WebContext): void {
     // The RPC deletes and audits atomically, and audits ONLY when a row was
     // actually removed — the audit log must never assert an event that did
     // not occur (double-click, stale tab → 404 here, no entry).
+    // No body on this method — identity comes from headers only.
+    const who = resolveCallerIdentity(c);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const { data, error } = await ctx.supabase.rpc("cerefox_delete_project", {
       p_project_id: projectId,
-      p_author: "web-ui",
-      p_author_type: "user",
+      p_author: who.identity.author,
+      p_author_type: who.identity.authorType,
     });
     if (error) return c.json({ detail: error.message }, 500);
     const row = (data as Array<{ deleted: boolean }> | null)?.[0];

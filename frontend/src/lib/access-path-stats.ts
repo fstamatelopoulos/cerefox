@@ -16,7 +16,9 @@ export interface AccessPathStats {
   localMcpOps: number;
   remoteMcpOps: number;
   efOps: number;
-  /** MCP + Edge Function. Deliberately excludes CLI — see below. */
+  /** `/api/v1` calls from a client that identified itself (#226). */
+  apiOps: number;
+  /** MCP + Edge Function + identified API. Deliberately excludes CLI — see below. */
   agentOps: number;
   cliOps: number;
   webOps: number;
@@ -27,14 +29,21 @@ export function deriveAccessPathStats(rows: AccessPathRow[] | undefined): Access
   const localMcpOps = at("local-mcp");
   const remoteMcpOps = at("remote-mcp");
   const efOps = at("edge-function");
+  // `api` = /api/v1 with caller identity supplied (#226). Added here
+  // deliberately, which is the whole point of the rule below: the value
+  // existed in the database and on the Analytics chart the moment the server
+  // started writing it, and would have been invisible in this tile until
+  // someone noticed an undercount months later.
+  const apiOps = at("api");
   return {
     localMcpOps,
     remoteMcpOps,
     efOps,
+    apiOps,
     // Only the paths that are unambiguously agents. An unknown access path is
     // NOT swept in: a future transport should appear deliberately, not by
     // silently inflating this number.
-    agentOps: localMcpOps + remoteMcpOps + efOps,
+    agentOps: localMcpOps + remoteMcpOps + efOps + apiOps,
     // CLI is reported alongside, never folded in. The usage log records both
     // requestor and access path, but the summary endpoint does not
     // cross-tabulate them, so an agent's CLI use cannot be told from a human's

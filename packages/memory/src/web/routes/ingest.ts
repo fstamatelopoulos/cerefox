@@ -27,6 +27,7 @@ import { fileToMarkdown } from "../../ingestion/file-to-markdown.ts";
 import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
+import { resolveCallerIdentity } from "../identity.ts";
 
 interface IngestResponse {
   success: boolean;
@@ -61,6 +62,9 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     if (!title) return c.json(notReady("Title is required."), 200);
     if (!content.trim()) return c.json(notReady("Content cannot be empty."), 200);
 
+    const who = resolveCallerIdentity(c, body);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
+
     try {
       const pipeline = new IngestionPipeline({
         supabase: ctx.supabase,
@@ -76,8 +80,8 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         metadata: (body.metadata as Record<string, string> | undefined) ?? null,
         updateExisting: Boolean(body.update_existing),
         documentId: (body.document_id as string | undefined) ?? null,
-        author: "web-ui",
-        authorType: "user",
+        author: who.identity.author,
+        authorType: who.identity.authorType,
       });
       const skipped = result.action === "skipped";
       const resp: IngestResponse = {
@@ -88,7 +92,12 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         updated: result.reindexed,
       };
       if (result.note) resp.note = result.note;
-      logWebUsage(ctx, { operation: "ingest", document_id: result.documentId });
+      logWebUsage(ctx, {
+        operation: "ingest",
+        document_id: result.documentId,
+        requestor: who.identity.requestor,
+        access_path: who.identity.accessPath,
+      });
       return c.json(resp, 200);
     } catch (err) {
       return c.json(
@@ -139,6 +148,10 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
       }
     }
 
+    // Multipart form fields are strings, so the same resolver reads them.
+    const who = resolveCallerIdentity(c, form);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
+
     try {
       const pipeline = new IngestionPipeline({
         supabase: ctx.supabase,
@@ -152,11 +165,16 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         projectIds,
         metadata,
         updateExisting,
-        author: "web-ui",
-        authorType: "user",
+        author: who.identity.author,
+        authorType: who.identity.authorType,
       });
       const skipped = result.action === "skipped";
-      logWebUsage(ctx, { operation: "ingest", document_id: result.documentId });
+      logWebUsage(ctx, {
+        operation: "ingest",
+        document_id: result.documentId,
+        requestor: who.identity.requestor,
+        access_path: who.identity.accessPath,
+      });
       return c.json(
         {
           success: !skipped,
@@ -218,6 +236,9 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     const title =
       (existing.title as string | null) || file.name || "Untitled";
 
+    const who = resolveCallerIdentity(c, form);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
+
     try {
       const pipeline = new IngestionPipeline({
         supabase: ctx.supabase,
@@ -228,10 +249,37 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         text,
         title,
         source: "file",
-        author: "web-ui",
-        authorType: "user",
+        author: who.identity.author,
+        authorType: who.identity.authorType,
+        // Optimistic concurrency (iter-40, #228). This route passed NEITHER a
+        // hash nor last_write_wins, so from v0.11.0 — when content updates
+        // began requiring one — every call returned CEREFOX_TOKEN_REQUIRED.
+        // It went unnoticed for eleven releases because the only test covering
+        // it lives in the web-integration suite, which had been skipping since
+        // v0.9.0 on a renamed probe verb. The bundled web app never calls this
+        // endpoint, so nothing user-visible broke; API clients got a hard stop.
+        //
+        // Replacing a document's content with an uploaded file IS the
+        // file-re-sync case the design names as the legitimate use of
+        // last_write_wins (`ingest-dir` and `guides ingest` do the same), so
+        // that is the default and it restores the pre-v0.11 contract. A caller
+        // that wants the safe path sends expected_content_hash and gets a 409
+        // on a stale token like every other write.
+        expectedContentHash:
+          typeof form.expected_content_hash === "string" &&
+          form.expected_content_hash.trim() !== ""
+            ? form.expected_content_hash.trim()
+            : null,
+        lastWriteWins:
+          !(typeof form.expected_content_hash === "string" &&
+            form.expected_content_hash.trim() !== ""),
       });
-      logWebUsage(ctx, { operation: "ingest", document_id: result.documentId });
+      logWebUsage(ctx, {
+        operation: "ingest",
+        document_id: result.documentId,
+        requestor: who.identity.requestor,
+        access_path: who.identity.accessPath,
+      });
       return c.json(
         {
           success: true,

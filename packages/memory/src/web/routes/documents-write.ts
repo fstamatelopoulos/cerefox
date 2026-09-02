@@ -50,6 +50,7 @@ import {
   IngestionPipeline,
 } from "../../ingestion/pipeline.ts";
 import type { WebContext } from "../context.ts";
+import { resolveCallerIdentity } from "../identity.ts";
 
 // `normaliseForHash` + `contentHash` promoted to `_shared/ingest/pipeline-
 // helpers.ts` in iter-25 Part 25C so the TS ingestion pipeline (v0.7) and
@@ -107,6 +108,8 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     } catch {
       return c.json({ success: false, error: "Invalid JSON body" }, 400);
     }
+    const who = resolveCallerIdentity(c, body);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const title = String(body.title ?? "").trim();
     const content = String(body.content ?? "");
     const projectIds = Array.isArray(body.project_ids)
@@ -185,8 +188,8 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           // Carried-vs-absent (round 2): {} must CLEAR metadata on a
           // content-changing save too, not silently vanish.
           metadata: body.metadata != null ? metadata : undefined,
-          author: "web-ui",
-          authorType: "user",
+          author: who.identity.author,
+          authorType: who.identity.authorType,
           // Optimistic concurrency (iter-32): the SPA sends the content_hash
           // it loaded the document with; a concurrent change → 409 below.
           expectedContentHash:
@@ -279,9 +282,9 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
         // (which clears every key) — round 2 caught null wiping metadata.
         metadata: body.metadata != null ? metadata : undefined,
         projectIds: Array.isArray(body.project_ids) ? projectIds : undefined,
-        author: "web-ui",
-        authorType: "user",
-        accessPath: "webapp",
+        author: who.identity.author,
+        authorType: who.identity.authorType,
+        accessPath: who.identity.accessPath,
       });
       return c.json({ success: true, reindexed: false, ...facets });
     } catch (err) {
@@ -305,10 +308,13 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
   // ── DELETE /documents/{id} ─────────────────────────────────────────────────
   app.delete("/api/v1/documents/:document_id", async (c) => {
     const documentId = c.req.param("document_id");
+    // No body on this method — identity comes from headers only.
+    const who = resolveCallerIdentity(c);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const { data, error } = await ctx.supabase.rpc("cerefox_delete_document", {
       p_document_id: documentId,
-      p_author: "web-ui",
-      p_author_type: "user",
+      p_author: who.identity.author,
+      p_author_type: who.identity.authorType,
     });
     if (error) {
       // 0.12.0: a missing document RAISEs instead of silently no-opping. A
@@ -328,10 +334,13 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
   // ── POST /documents/{id}/restore ───────────────────────────────────────────
   app.post("/api/v1/documents/:document_id/restore", async (c) => {
     const documentId = c.req.param("document_id");
+    // No body on this method — identity comes from headers only.
+    const who = resolveCallerIdentity(c);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const { data, error } = await ctx.supabase.rpc("cerefox_restore_document", {
       p_document_id: documentId,
-      p_author: "web-ui",
-      p_author_type: "user",
+      p_author: who.identity.author,
+      p_author_type: who.identity.authorType,
     });
     if (error) {
       // Two-tab race: A purges, B restores. 404 keeps the wrong-state class
@@ -352,10 +361,13 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
   // ── DELETE /documents/{id}/purge ───────────────────────────────────────────
   app.delete("/api/v1/documents/:document_id/purge", async (c) => {
     const documentId = c.req.param("document_id");
+    // No body on this method — identity comes from headers only.
+    const who = resolveCallerIdentity(c);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const { error } = await ctx.supabase.rpc("cerefox_purge_document", {
       p_document_id: documentId,
-      p_author: "web-ui",
-      p_author_type: "user",
+      p_author: who.identity.author,
+      p_author_type: who.identity.authorType,
     });
     if (error) return c.json({ detail: error.message }, 500);
     return c.json({ success: true });
@@ -370,6 +382,8 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     } catch {
       return c.json({ detail: "Invalid JSON body" }, 400);
     }
+    const who = resolveCallerIdentity(c, body);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const status = body.status;
     if (status !== "approved" && status !== "pending_review") {
       return c.json(
@@ -398,7 +412,8 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
 
     await createAuditEntry(ctx, {
       operation: "status-change",
-      author: "user",
+      author: who.identity.author,
+      authorType: who.identity.authorType,
       documentId,
       description: `Review status changed from '${oldStatus}' to '${status}'`,
     });
@@ -417,6 +432,8 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       } catch {
         return c.json({ detail: "Invalid JSON body" }, 400);
       }
+      const who = resolveCallerIdentity(c, body);
+      if (!who.ok) return c.json({ detail: who.detail }, 400);
       const archived = Boolean(body.archived);
 
       const { data, error } = await ctx.supabase
@@ -433,7 +450,8 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       const op = archived ? "archive" : "unarchive";
       await createAuditEntry(ctx, {
         operation: op,
-        author: "user",
+        author: who.identity.author,
+        authorType: who.identity.authorType,
         documentId: ver?.document_id ?? documentId,
         versionId,
         description: `Version ${ver?.version_number ?? "?"} ${op}d`,

@@ -16,6 +16,8 @@
  * each consumer; the handlers themselves are runtime-agnostic.
  */
 
+import type { AccessPath } from "./access-paths.ts";
+
 /** Structural type for the Supabase client surface the handlers actually
  *  use (`.rpc()` + `.from()`). We deliberately don't `import { SupabaseClient }
  *  from "@supabase/supabase-js"` here because Bun workspaces install a
@@ -42,23 +44,20 @@ export type JsonSchema = Record<string, unknown>;
 
 /**
  * Logical channel through which a Cerefox operation reached the backend.
- * Recorded in `cerefox_usage_log.access_path` so the analytics dashboard
- * can attribute load to each surface.
+ * Recorded in `cerefox_usage_log.access_path` so the analytics dashboard can
+ * attribute load to each surface.
  *
- * Values:
- *   - `remote-mcp`  — `cerefox-mcp` Edge Function (HTTP MCP transport).
- *   - `local-mcp`   — `@cerefox/memory`'s `cerefox-mcp` stdio bin.
- *   - `cli`         — the `cerefox` CLI bin (v0.5+). Mirrors the
- *                     Python CLI's `access_path = "cli"`.
+ * **Defined once** in the dependency-free leaf `./access-paths.ts`, and
+ * re-exported here so server-side callers keep importing it from `types.ts`.
+ * The values, and why the definition moved, are documented there.
  *
- * Adding a new channel here also requires updating
- * `cerefox_usage_log.access_path`'s documented domain (no DB CHECK exists —
- * verified in review; the column is free text and this type is the guard).
+ * Adding a channel means adding it to `ACCESS_PATHS` and then to
+ * `deriveAccessPathStats()` in the frontend, which resolves paths by exact
+ * name and deliberately ignores unknown ones. A value added to the vocabulary
+ * but not to the deriver is stored, charted, and invisible on the dashboard.
  */
-// The documented access_path domain (CLAUDE.md → usage tracking) — the type
-// had lagged at the three MCP-era values while webapp/edge-function callers
-// logged through wider-typed wrappers.
-export type AccessPath = "remote-mcp" | "local-mcp" | "cli" | "webapp" | "edge-function";
+export type { AccessPath };
+export { ACCESS_PATHS } from "./access-paths.ts";
 
 export interface ToolContext {
   /** OpenAI/Fireworks API key for tools that need to embed (search, ingest).

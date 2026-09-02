@@ -10,6 +10,7 @@
  */
 
 import type { WebContext } from "./context.ts";
+import { DEFAULT_WEB_AUTHOR, type WebAccessPath } from "./identity.ts";
 
 export interface WebUsageParams {
   operation: string;
@@ -18,14 +19,20 @@ export interface WebUsageParams {
   query_text?: string | null;
   result_count?: number | null;
   requestor?: string | null;
+  /**
+   * Where the call came from (iter-40, #226). Derived from whether the caller
+   * identified itself — never taken from the request. Defaults to `"webapp"`,
+   * which is what every caller was recorded as before #226.
+   */
+  access_path?: WebAccessPath | null;
 }
 
 export function logWebUsage(ctx: WebContext, params: WebUsageParams): void {
   Promise.resolve(
     ctx.supabase.rpc("cerefox_log_usage", {
       p_operation: params.operation,
-      p_access_path: "webapp",
-      p_requestor: params.requestor ?? "web-ui",
+      p_access_path: params.access_path ?? "webapp",
+      p_requestor: params.requestor ?? DEFAULT_WEB_AUTHOR,
       p_document_id: params.document_id ?? null,
       p_project_id: params.project_id ?? null,
       p_query_text: params.query_text ?? null,

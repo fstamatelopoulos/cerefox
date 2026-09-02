@@ -20,6 +20,7 @@ import {
 } from "../../../../../_shared/config-catalog/index.ts";
 import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import type { WebContext } from "../context.ts";
+import { resolveCallerIdentity } from "../identity.ts";
 import { storeWriteRemediation } from "../../../../../_shared/mcp-tools/_utils.ts";
 
 function unwrapScalarRpc(data: unknown): string | null {
@@ -137,14 +138,18 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
     const invalid = validateConfigValue(key, value);
     if (invalid) return c.json({ detail: invalid }, 400);
 
-    // Author "web-ui" + author_type "user": the same convention every other
-    // web audit site uses, so an author='web-ui' filter catches dashboard
-    // config changes too. The RPC records the entry in-transaction (0.14.0).
+    // "web-ui" / "user" remains the default when the caller supplies no
+    // identity: the same convention every other web audit site uses, so an
+    // author='web-ui' filter still catches dashboard config changes. A caller
+    // that names itself is recorded as itself (#226). The RPC records the
+    // entry in-transaction (0.14.0).
+    const who = resolveCallerIdentity(c, body as Record<string, unknown>);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
     const { error } = await ctx.supabase.rpc("cerefox_set_config", {
       p_key: key,
       p_value: value,
-      p_author: "web-ui",
-      p_author_type: "user",
+      p_author: who.identity.author,
+      p_author_type: who.identity.authorType,
     });
     if (error) {
       // One classifier shared with the CLI (round 4): deployment-state

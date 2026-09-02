@@ -17,6 +17,9 @@ export default defineConfig({
       // Round 4: the audit page's store-level-op set imports the shared
       // definition instead of hand-mirroring it (same pattern as schemas).
       '@cerefox/audit-ops': path.resolve(here, '..', '_shared', 'mcp-tools', 'audit-ops.ts'),
+      // #226: the Analytics access-path filter derives its options from the
+      // shared vocabulary rather than hand-mirroring it (same pattern again).
+      '@cerefox/access-paths': path.resolve(here, '..', '_shared', 'mcp-tools', 'access-paths.ts'),
     },
   },
   server: {
