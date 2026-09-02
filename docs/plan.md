@@ -28,15 +28,23 @@
 ---
 ## Current Focus
 
-**2026-08-22 — v1.10.0 + v1.10.1 SHIPPED and verified on BOTH staging and
-production. Production jumped 1.9.1 → 1.10.1 in one hop (migration 0030 ran
-clean; the interrupted-then-rerun deploy proved the idempotency design;
-guides re-synced 17/17; acceptance 15/15 on prod; #222 warning verified
-firing on prod CLI and quiet on clean writes). #222 closed. #154 deferred to
-a well-announced v1.11.0 (platform drop ≠ patch). The 1.10.x line was
-announced in Discord `#announcements` on 2026-08-22. Nothing is in flight.
-Next: v1.11.0 (commander 15 + Node ≥ 22.12 + installer detection) when
-scheduled.**
+**2026-09-01 — Iteration 40 IN PROGRESS on `feat/v1.11.0-api-attribution`,
+target v1.11.0: optional `author`/`requestor`/`author_type` on `/api/v1`
+(#226), the `doctor` config-dir misreport (#225), and the repo-root compose
+bind (#227). Detail: [iteration 40](plans/iteration-40-api-attribution.md).**
+
+**v1.11.0 is this work, NOT the Node baseline drop.** #154 (commander 15,
+Node ≥ 22.12, installer detection) moves to **v1.12.0** — decision
+2026-09-01. The two want opposite announcements: one says "check your Node
+version before upgrading", the other says "here is a new optional
+parameter", and bundling them buries the warning.
+
+Previously: **v1.10.0 + v1.10.1 SHIPPED** (2026-08-22) and verified on BOTH
+staging and production. Production jumped 1.9.1 → 1.10.1 in one hop
+(migration 0030 ran clean; the interrupted-then-rerun deploy proved the
+idempotency design; guides re-synced 17/17; acceptance 15/15 on prod; #222
+warning verified firing on prod CLI and quiet on clean writes). #222 closed.
+The 1.10.x line was announced in Discord `#announcements` on 2026-08-22.
 
 Schema is at 0.15.0 (shipped in v1.10.0); `minSchema` is **0.14.0**, raised
 in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
@@ -105,8 +113,13 @@ one:
 
 ## Active iteration
 
+**[Iteration 40 — API attribution and environment honesty](plans/iteration-40-api-attribution.md)**
+— ⏳ **IN PROGRESS** (opened 2026-09-01), target v1.11.0. No schema change
+expected. Closes #225, #226, #227.
+
 **[Iteration 39 — Audit consistency: the web save on shared cores](plans/iteration-39-audit-consistency.md)**
-— ⏳ **IN PROGRESS**, target v1.10.0 (schema 0.15.0, migration 0030).
+— ✅ **CLOSED, shipped v1.10.0 + v1.10.1** (2026-08-22; schema 0.15.0,
+migration 0030), verified on staging and production, announced.
 
 **[Iteration 38 — Audit completeness, settings clarity, docs restoration](plans/iteration-38-audit-completeness.md)**
 — ✅ **CLOSED, shipped v1.9.0/v1.9.1/v1.9.2** (2026-08-17/18), verified on
