@@ -57,15 +57,39 @@ releases; landing an auth change and a platform-baseline drop together makes
       still serving, retry in a few minutes. Output is now captured rather
       than inherited so the reply can be read, and printed verbatim so nothing
       is hidden.
-- [ ] **#229 — authentication for the local surface. DESIGN APPROVED
+- [x] **#229 — authentication for the local surface. BUILT.** Loopback-exempt
+      gate over `/api/v1/*` AND `/rest/v1/*`, reusing `_shared/ef-auth` rather
+      than writing a second auth primitive. `cerefox api-key generate|show|
+      rotate`; Cerefox Local mints at boot in `db-init` (persisted on the data
+      volume, so it survives `upgrade`) and `cerefox-local api-key` reads it.
+      Verified against a **real non-loopback connection**: bound `0.0.0.0`,
+      then from the LAN address confirmed 401 without a key, 401 with a spoofed
+      `X-Forwarded-For: 127.0.0.1`, 401 on ingest and purge, 200 with the key —
+      while `127.0.0.1` stayed 200 throughout.
+      - **Found while building**: `userError()` RETURNS a `CliError`, it does
+        not throw. `userError(...)` without `throw` is a silent no-op that
+        exits 0, which is what the first version of `api-key generate`'s
+        refusal did. Invisible to the type checker (a discarded return value is
+        legal) and to any test that only walks the happy path. Caught by
+        running the command; pinned by `cli-api-key.test.ts`.
+      - Both gate guards proven to fire by regressing them independently
+        (always-allow → 8 failures; unknown-address-is-loopback → 1).
+- [x] **~~#229 DESIGN~~ APPROVED
       2026-09-02, ready to build.** `docs/specs/api-auth-design.md`. Decided:
       loopback-exempt with a key for every other interface; `X-Forwarded-For`
       never consulted, **enforced by a test**, not by a sentence in a guide;
       `/api/v1/version` gated with everything else (verified: no local caller
       is affected, because the CLI never talks to the web server); purge stays
       reachable; ships in v1.12.0 alongside #232, as a second PR.
-- [ ] Live regression against staging + Playwright.
-- [ ] CHANGELOG, guides.
+- [x] **Dead Python parity capture script deleted**, its fixtures documented.
+      The script needed `uv run cerefox web` (removed at v1.0.0) so it could
+      never run again while implying regeneration was possible; its OUTPUT is
+      still the wire-shape regression guard for `/api/v1`.
+- [x] **Seven dependency advisories cleared** (4 high, 3 moderate) via root
+      `overrides`. Pre-existing on `main`, folded into #233 because it blocked
+      the merge.
+- [x] Live regression against staging (294 pass / 2 skip) + Playwright 20/20.
+- [x] CHANGELOG, `api.md`, `configuration.md`, `access-paths.md`.
 
 ## Found during recon
 
