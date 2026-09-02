@@ -130,7 +130,14 @@ in lockstep and this section is wrong.
 - [x] **Audit authorship unification** — the two `author: "user"` routes.
 - [x] **#227** — repo-root `docker-compose.yml` publishes to loopback.
 - [x] **#228 (found in flight)** — `POST /documents/{id}/upload` broken since
-      v0.11.0; accepts the hash optionally, defaults to last-write-wins.
+      v0.11.0. Takes the SAME contract as every other content update: the hash,
+      or an explicit `last_write_wins=true`. No implicit default — the endpoint
+      has been a hard error for eleven releases, so there is no working caller
+      to preserve and the strict semantics cost nothing.
+- [x] **Delete follows a read on the API too.** `DELETE /documents/{id}`
+      requires the hash from an identified caller, matching what
+      `cerefox_delete_document` enforces over MCP. Anonymous callers (the
+      bundled UI, which confirms in a dialog) are unaffected.
 - [x] **Tests** — resolver unit tests (20), deriver tests (+3), HTTP-boundary
       attribution tests (5) covering omitted-parameter parity against the
       stored row.
@@ -158,6 +165,15 @@ fixture through the deployed `cerefox-ingest` Edge Function, a v0.6 workaround
 from when `/api/v1/ingest` was a 503 stub. That suite is not one of the two
 `CEREFOX_LIVE_E2E` suites permitted to spend free-tier quota. It now ingests
 over HTTP, and the dead helper is deleted rather than left for reuse.
+
+**Live suites skip in a full run (#230, filed, not fixed here).**
+`ingest.test.ts` passes when its directory is run and skips under the
+documented full `bun test`, because `LIVE_OK` is frozen at module load and
+`live-write-guard-coverage.test.ts` blanks `CEREFOX_CONFIG_DIR` mid-run to
+exercise the guard. Same shape as the renamed-probe bug — a suite reporting
+success while running nothing — with ordering as the trigger instead of a stale
+verb. Filed rather than fixed because the durable answer is to evaluate
+`LIVE_OK` lazily across every live suite, which is its own change.
 
 **A local `bun run typecheck` never checked the frontend.** `tsc --noEmit`
 there checks nothing, because `tsconfig.json` is `files: []` plus references.

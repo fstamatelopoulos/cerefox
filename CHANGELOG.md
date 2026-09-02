@@ -22,25 +22,37 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   app and every existing client are unaffected. `author` and `requestor` stand
   in for each other, and `author_type: "agent"` queues an ingest for review
   exactly as it does over MCP — that equivalence is the point.
+- **`DELETE /api/v1/documents/{id}` requires the content hash from an
+  identified caller**, as `X-Cerefox-Expected-Content-Hash` or an
+  `expected_content_hash` query parameter — the same "a delete must follow a
+  read" rule `cerefox_delete_document` enforces over MCP. The route previously
+  passed no CAS token at all, which was defensible while its only caller was
+  the web UI, where a human sees the document and confirms in a dialog.
+  Identified callers have no such dialog. An anonymous caller is the bundled
+  UI and is unaffected.
 - **A new `api` access path**, derived rather than accepted: name yourself and
   the operation logs as `api`, otherwise `webapp`. There is deliberately no way
   to request a particular access path, because it is the one field in the usage
   log the server still sets itself. The Dashboard counts `api` toward agent
   operations and the Analytics filter offers it.
-- **`docs/guides/api.md`**, the first reference for the HTTP API: what it is,
-  the caller-attribution contract, the full endpoint list, and a plain
-  statement that the surface has **no authentication** and is loopback-bound by
-  design.
+- **`docs/guides/api.md`**, the first reference for the HTTP API: the
+  caller-attribution contract, the concurrency rules, and the full endpoint
+  list — opening with an unmissable statement that the surface has **no
+  authentication of any kind** and is **for local access only**. Not to be
+  exposed to a LAN, a tunnel, or a TLS-only reverse proxy: encryption is not
+  authorization. Adding a locally generated key is tracked as #229.
 
 ### Fixed
 
 - **`POST /api/v1/documents/{id}/upload` has failed on every call since
   v0.11.0 (#228).** It passed neither `expected_content_hash` nor
-  `last_write_wins`, so the concurrency contract introduced in v0.11.0
-  rejected it every time. It now accepts the hash optionally and defaults to
-  last-write-wins, which is the file-re-sync case the design names. The bundled
-  web app never calls this endpoint, so nothing user-visible broke; API clients
-  got a hard stop.
+  `last_write_wins`, so the concurrency contract introduced in v0.11.0 rejected
+  it every time. It now takes the same contract as every other content update:
+  send the hash you read, or say `last_write_wins=true` explicitly. There is no
+  implicit default — the endpoint has been a hard error for eleven releases, so
+  there is no working caller to stay compatible with and the strict semantics
+  cost nothing. The bundled web app never calls this endpoint; API clients got
+  a hard stop.
 - **`cerefox doctor` named the wrong config file (#225).** The `legacy env`
   check hardcoded `~/.cerefox/.env` instead of asking the resolver, so under
   `CEREFOX_CONFIG_DIR` it contradicted the `config` line four rows above it.

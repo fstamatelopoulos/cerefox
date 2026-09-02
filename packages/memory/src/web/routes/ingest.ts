@@ -256,23 +256,21 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         // began requiring one — every call returned CEREFOX_TOKEN_REQUIRED.
         // It went unnoticed for eleven releases because the only test covering
         // it lives in the web-integration suite, which had been skipping since
-        // v0.9.0 on a renamed probe verb. The bundled web app never calls this
-        // endpoint, so nothing user-visible broke; API clients got a hard stop.
+        // v0.9.0 on a renamed probe verb.
         //
-        // Replacing a document's content with an uploaded file IS the
-        // file-re-sync case the design names as the legitimate use of
-        // last_write_wins (`ingest-dir` and `guides ingest` do the same), so
-        // that is the default and it restores the pre-v0.11 contract. A caller
-        // that wants the safe path sends expected_content_hash and gets a 409
-        // on a stale token like every other write.
+        // It takes the SAME contract as every other content update: send the
+        // hash you read, or say last_write_wins explicitly. There is no
+        // implicit last-write-wins default, because there is no working caller
+        // to stay compatible with — the endpoint has been a hard error since
+        // v0.11.0, so the strict semantics cost nothing and a silent clobber
+        // would have been a new way to lose data on a surface we are opening
+        // to more clients.
         expectedContentHash:
           typeof form.expected_content_hash === "string" &&
           form.expected_content_hash.trim() !== ""
             ? form.expected_content_hash.trim()
             : null,
-        lastWriteWins:
-          !(typeof form.expected_content_hash === "string" &&
-            form.expected_content_hash.trim() !== ""),
+        lastWriteWins: String(form.last_write_wins ?? "") === "true",
       });
       logWebUsage(ctx, {
         operation: "ingest",

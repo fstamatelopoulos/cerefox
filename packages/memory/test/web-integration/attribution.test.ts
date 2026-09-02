@@ -249,6 +249,62 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     expect(body.detail).toContain("author_type");
   });
 
+  test.skipIf(!LIVE_OK)(
+    "an identified caller must present the hash to delete",
+    async () => {
+      if (!server) return;
+      const { body } = await ingest(`${TITLE_PREFIX} del ${RUN_TAG}`);
+      const id = body.document_id as string;
+
+      // Named caller, no hash: refused, the same rule MCP enforces.
+      const refused = await fetch(`${server.base}/api/v1/documents/${id}`, {
+        method: "DELETE",
+        headers: { "X-Cerefox-Author": "e2e-attr-bot" },
+      });
+      expect(refused.status).toBe(400);
+      const refusedBody = (await refused.json()) as { detail?: string };
+      expect(refusedBody.detail ?? "").toContain("CEREFOX_TOKEN_REQUIRED");
+
+      // Still there.
+      const { data: alive } = await admin!
+        .from("cerefox_documents")
+        .select("deleted_at")
+        .eq("id", id)
+        .maybeSingle();
+      expect((alive as { deleted_at: string | null } | null)?.deleted_at).toBeNull();
+
+      // With the hash it goes through.
+      const read = (await (
+        await fetch(`${server.base}/api/v1/documents/${id}`)
+      ).json()) as { content_hash: string };
+      const ok = await fetch(`${server.base}/api/v1/documents/${id}`, {
+        method: "DELETE",
+        headers: {
+          "X-Cerefox-Author": "e2e-attr-bot",
+          "X-Cerefox-Expected-Content-Hash": read.content_hash,
+        },
+      });
+      expect(ok.status).toBe(200);
+    },
+    30_000,
+  );
+
+  test.skipIf(!LIVE_OK)(
+    "an anonymous delete still works exactly as before",
+    async () => {
+      if (!server) return;
+      // The bundled web UI sends no identity and no hash; it confirms in a
+      // dialog instead. That path must not have changed.
+      const { body } = await ingest(`${TITLE_PREFIX} anondel ${RUN_TAG}`);
+      const id = body.document_id as string;
+      const resp = await fetch(`${server.base}/api/v1/documents/${id}`, {
+        method: "DELETE",
+      });
+      expect(resp.status).toBe(200);
+    },
+    30_000,
+  );
+
   test.skipIf(!LIVE_OK)("a read logs the requestor that asked for it", async () => {
     if (!server) return;
     if (!usageTracked) return; // nothing to assert with tracking off

@@ -311,10 +311,40 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     // No body on this method — identity comes from headers only.
     const who = resolveCallerIdentity(c);
     if (!who.ok) return c.json({ detail: who.detail }, 400);
+
+    // Optimistic locking on delete (iter-40). The RPC has taken an optional
+    // CAS token since 0.12.0 (#208) and cerefox_delete_document over MCP
+    // REQUIRES it: a delete must follow a read. This route passed nothing,
+    // which was defensible while the only caller was the web UI, where the
+    // human sees the document and confirms in a dialog.
+    //
+    // Opening the surface to identified clients removes that safeguard without
+    // replacing it, so: a caller that names itself must present the hash, the
+    // same rule it would meet over MCP. An anonymous caller is the bundled web
+    // UI and keeps today's behaviour exactly, which is the compatibility
+    // promise this whole change is built on.
+    const expectedHash = (
+      c.req.header("x-cerefox-expected-content-hash") ??
+      c.req.query("expected_content_hash") ??
+      ""
+    ).trim();
+    if (who.identity.named && expectedHash === "") {
+      return c.json(
+        {
+          detail:
+            "CEREFOX_TOKEN_REQUIRED: an identified caller must send the content_hash it read, " +
+            "as the X-Cerefox-Expected-Content-Hash header or an expected_content_hash query " +
+            "parameter. A delete must follow a read.",
+        },
+        400,
+      );
+    }
+
     const { data, error } = await ctx.supabase.rpc("cerefox_delete_document", {
       p_document_id: documentId,
       p_author: who.identity.author,
       p_author_type: who.identity.authorType,
+      p_expected_content_hash: expectedHash === "" ? null : expectedHash,
     });
     if (error) {
       // 0.12.0: a missing document RAISEs instead of silently no-opping. A

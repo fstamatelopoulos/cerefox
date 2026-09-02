@@ -17,26 +17,38 @@ and do not want an MCP client in the loop.
 
 ---
 
-## Read this before you expose it
+## ⚠ This API is unauthenticated. It is for local access only.
 
-**`/api/v1` has no authentication.** There is no token, no session, and no
-per-route check. Anything that can reach the port can read, write, and delete
-every document in the store.
+**`/api/v1` has no authentication of any kind.** No token, no session, no
+per-route check. Anything that can open a TCP connection to the port can read
+every document, edit them, delete them, and permanently purge them.
 
-That is a deliberate consequence of how Cerefox is deployed, not an oversight
-to route around:
+**Never expose this port outside the machine it runs on.** Not to your LAN, not
+through a tunnel, not behind a reverse proxy that does not add authentication of
+its own. There is no setting that makes it safe to do so, and a proxy that only
+adds TLS adds nothing here: encryption is not authorization.
 
-- `cerefox web` binds `127.0.0.1` by default.
-- Cerefox Local publishes its container port to `127.0.0.1` by default
-  (`CEREFOX_LOCAL_BIND` opts into a wider bind).
-- Both assume a single-user machine, where the boundary is the loopback
-  interface.
+The surface is designed for **local callers only**:
 
-So: **do not publish this port to a network you do not control**, do not put it
-behind a reverse proxy without adding authentication of your own, and treat
-`--host 0.0.0.0` as a decision rather than a convenience. If you need a
-network-reachable Cerefox, the Edge Functions are the surface designed for it
-(they authenticate in-function against a Cerefox access token).
+- an agent or bot harness running on the same machine,
+- the bundled web UI in your own browser,
+- your own scripts on localhost.
+
+Both supported deployments bind loopback by default and mean it:
+
+- `cerefox web` binds `127.0.0.1`.
+- Cerefox Local publishes its container port to `127.0.0.1`
+  (`CEREFOX_LOCAL_BIND` exists for the case where you have decided otherwise
+  and accept what follows).
+
+`--host 0.0.0.0` and a wider `CEREFOX_LOCAL_BIND` are decisions with a blast
+radius, not conveniences. If you need Cerefox reachable over a network, use the
+Edge Functions: that is the surface built for it, and it authenticates every
+request in-function against a Cerefox access token.
+
+*Adding a locally generated key to this surface is tracked as
+[#229](https://github.com/fstamatelopoulos/cerefox/issues/229). Until it ships,
+the loopback interface is the whole security boundary.*
 
 ---
 
@@ -147,17 +159,29 @@ Paths are shown without the `/api/v1` prefix for width; every one carries it.
 The writes and the two reads that log usage (`/search`, `/documents/{id}`)
 honour the identity headers. `/version` needs nothing.
 
-### Content updates need a concurrency token
+### Every mutation needs a concurrency token
 
-Anything that changes a document's content requires the `content_hash` you read
-it at, as `expected_content_hash`, or an explicit `last_write_wins`. A stale
-hash gets a `409`; omitting both gets a `400` with `CEREFOX_TOKEN_REQUIRED`.
-This matches every other Cerefox surface; see the MCP guidance in
-`AGENT_GUIDE.md` for the read → modify → write loop.
+Cerefox uses optimistic locking, and this API is no exception. A content update
+requires the `content_hash` you read the document at, as
+`expected_content_hash`, or an explicit `last_write_wins`. A stale hash returns
+`409`; sending neither returns `400` with `CEREFOX_TOKEN_REQUIRED`. Read, then
+modify, then write with the token you read.
 
-`POST /documents/{id}/upload` is the exception: replacing a document wholesale
-from a file is a re-sync, so it defaults to last-write-wins. Pass
-`expected_content_hash` as a form field if you want the checked path.
+`POST /documents/{id}/upload` takes the same contract: pass
+`expected_content_hash` as a form field, or `last_write_wins=true` if the file
+you are uploading is an external source of truth and a conflict is genuinely
+meaningless. There is no implicit default.
+
+**Delete follows a read too.** `DELETE /documents/{id}` requires the hash from
+an identified caller, as `X-Cerefox-Expected-Content-Hash` or an
+`expected_content_hash` query parameter, exactly as `cerefox_delete_document`
+requires it over MCP. A caller that sends no identity is the bundled web UI,
+which confirms with the human in a dialog instead, and it keeps working
+unchanged.
+
+Purge (`DELETE /documents/{id}/purge`) is irreversible and takes no token. It is
+reachable by anything that can reach the port, which is another reason the
+warning at the top of this guide is not boilerplate.
 
 ---
 
