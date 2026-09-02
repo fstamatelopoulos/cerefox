@@ -189,7 +189,32 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     const initialBody = (await initial.json()) as { document_id: string };
     created.push(initialBody.document_id);
 
-    // Now upload-replace.
+    // #228: this route takes the same concurrency contract as every other
+    // content update. Read the hash first, exactly as a real client would.
+    const read = (await (
+      await fetch(`${server.base}/api/v1/documents/${initialBody.document_id}`)
+    ).json()) as { content_hash: string };
+    expect(read.content_hash).toBeTruthy();
+
+    // Omitting the token is refused, not silently applied. Asserted before the
+    // happy path because the endpoint spent eleven releases in a state where
+    // NOTHING worked, and a fix that made everything work would have been just
+    // as wrong in the other direction.
+    const noToken = new FormData();
+    noToken.append(
+      "file",
+      new Blob(["# nope\n"], { type: "text/markdown" }),
+      `no-token-${RUN_TAG}.md`,
+    );
+    const refused = await fetch(
+      `${server.base}/api/v1/documents/${initialBody.document_id}/upload`,
+      { method: "POST", body: noToken },
+    );
+    const refusedBody = (await refused.json()) as { success: boolean; error?: string };
+    expect(refusedBody.success).toBe(false);
+    expect(refusedBody.error ?? "").toContain("CEREFOX_TOKEN_REQUIRED");
+
+    // Now upload-replace, with the token.
     const newText = `# v2\n\nReplacement content ${RUN_TAG}.\n`;
     const form = new FormData();
     form.append(
@@ -197,6 +222,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
       new Blob([newText], { type: "text/markdown" }),
       `replacement-${RUN_TAG}.md`,
     );
+    form.append("expected_content_hash", read.content_hash);
     const resp = await fetch(
       `${server.base}/api/v1/documents/${initialBody.document_id}/upload`,
       { method: "POST", body: form },
@@ -210,5 +236,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     expect(body.success).toBe(true);
     expect(body.document_id).toBe(initialBody.document_id);
     expect(body.updated).toBe(true);
-  });
+    // Four round-trips (ingest, read, refused upload, upload), each embedding
+    // real content, so the default 5s is not enough.
+  }, 30_000);
 });

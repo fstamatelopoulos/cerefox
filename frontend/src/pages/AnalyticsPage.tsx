@@ -14,6 +14,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
+import { ACCESS_PATHS, type AccessPath } from "@cerefox/access-paths";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsivePie } from "@nivo/pie";
 import { IconDownload, IconPlayerPlay } from "@tabler/icons-react";
@@ -43,13 +44,22 @@ const DATE_PRESETS = [
   { value: "all", label: "All time" },
 ];
 
+// Derived from the shared vocabulary, not hand-mirrored (#226). The label map
+// is keyed by the union, so a new access path that nobody labelled fails the
+// typecheck instead of quietly missing from this dropdown — which is how the
+// filter came to be missing `api` in the first place.
+const ACCESS_PATH_LABELS: Record<AccessPath, string> = {
+  "remote-mcp": "Remote MCP",
+  "local-mcp": "Local MCP",
+  "edge-function": "Edge Function",
+  webapp: "Web App",
+  cli: "CLI",
+  api: "API (identified)",
+};
+
 const ACCESS_PATH_OPTIONS = [
   { value: "", label: "All paths" },
-  { value: "remote-mcp", label: "Remote MCP" },
-  { value: "local-mcp", label: "Local MCP" },
-  { value: "edge-function", label: "Edge Function" },
-  { value: "webapp", label: "Web App" },
-  { value: "cli", label: "CLI" },
+  ...ACCESS_PATHS.map((p) => ({ value: p, label: ACCESS_PATH_LABELS[p] })),
 ];
 
 const PIE_COLORS = [

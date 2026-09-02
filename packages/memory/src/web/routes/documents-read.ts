@@ -22,6 +22,7 @@ import { Hono } from "hono";
 
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
+import { resolveCallerIdentity } from "../identity.ts";
 
 interface DocReconRow {
   document_id?: string;
@@ -154,7 +155,15 @@ export function registerDocumentReadRoutes(app: Hono, ctx: WebContext): void {
     const projectIds = await listDocumentProjectIds(ctx, documentId);
     const versions = await listDocumentVersions(ctx, documentId);
 
-    logWebUsage(ctx, { operation: "get-document", document_id: documentId });
+    // Reads are header-only: a GET carries no body (#226).
+    const who = resolveCallerIdentity(c);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
+    logWebUsage(ctx, {
+      operation: "get-document",
+      document_id: documentId,
+      requestor: who.identity.requestor,
+      access_path: who.identity.accessPath,
+    });
 
     return c.json({
       document_id: documentId,

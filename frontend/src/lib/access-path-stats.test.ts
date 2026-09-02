@@ -70,4 +70,36 @@ describe("dashboard access-path split (#195)", () => {
     const d = derive([...REAL, { access_path: "future-transport", count: 999 }]);
     expect(d.agentOps).toBe(638);
   });
+
+  // ── `api`: /api/v1 with caller identity (#226, iter-40) ──────────────────
+  //
+  // The deliberate-inclusion rule above is exactly why this needs its own
+  // coverage. `api` rows reach the database and the Analytics chart as soon
+  // as the server writes them; without the line in the deriver they would be
+  // absent from this tile and nobody would see a number go wrong, only a
+  // number stay smaller than it should be.
+
+  test("identified API calls count as agent operations", () => {
+    const d = derive([...REAL, { access_path: "api", count: 100 }]);
+    expect(d.apiOps).toBe(100);
+    expect(d.agentOps).toBe(738);
+  });
+
+  test("api is reported separately from webapp", () => {
+    const d = derive([...REAL, { access_path: "api", count: 100 }]);
+    // Same route, different callers: the bundled web app supplied no identity,
+    // the API client did. Merging them would erase the distinction the whole
+    // feature exists to record.
+    expect(d.webOps).toBe(652);
+    expect(d.apiOps).toBe(100);
+    expect(d.webOps).not.toBe(d.apiOps);
+  });
+
+  test("no api rows reads as zero, not as missing", () => {
+    // Every install before v1.11.0 has no `api` rows at all. That must be a
+    // clean zero, not NaN and not an inflated agent total.
+    const d = derive(REAL);
+    expect(d.apiOps).toBe(0);
+    expect(d.agentOps).toBe(638);
+  });
 });

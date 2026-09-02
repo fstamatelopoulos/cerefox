@@ -19,7 +19,8 @@
     "paths": {
       "@/*": ["src/*"],
       "@cerefox/schemas": ["../_shared/schemas"],
-      "@cerefox/audit-ops": ["../_shared/mcp-tools/audit-ops.ts"]
+      "@cerefox/audit-ops": ["../_shared/mcp-tools/audit-ops.ts"],
+      "@cerefox/access-paths": ["../_shared/mcp-tools/access-paths.ts"]
     },
 
     /* Linting */

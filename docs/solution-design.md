@@ -45,7 +45,7 @@ The original spec used a single `cerefox_notes` table. The current design uses:
 - **`cerefox_chunks`** — search corpus and version store. Current chunks have `version_id IS NULL`; archived chunks have `version_id` pointing to their version row. All embeddings and FTS live here, on current chunks only (archived chunks carry none — see §7.5).
 - **`cerefox_document_versions`** — lightweight version metadata rows (`version_number`, `source`, `chunk_count`, `total_chars`, `archived`, `created_at`). No content TEXT, no `content_hash`/`metadata` snapshot columns — content for any version is reconstructed from its archived chunks. Created only when content actually changes. Includes `archived` boolean for protecting specific versions from retention cleanup.
 - **`cerefox_audit_log`** — immutable, append-only log of all write operations. Records author, author_type ('user' or 'agent'), operation type, size delta, and description. FK references to documents and versions (SET NULL on delete). Used for accountability and temporal queries.
-- **`cerefox_usage_log`** — opt-in log of all operations (reads and writes) across all access paths. Records operation, access_path ('remote-mcp', 'local-mcp', 'edge-function', 'webapp', 'cli'), requestor (agent name or 'user'), document_id, query_text, result_count. Feeds the analytics page. Controlled by `cerefox_config` ('usage_tracking_enabled'). The `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled.
+- **`cerefox_usage_log`** — opt-in log of all operations (reads and writes) across all access paths. Records operation, access_path ('remote-mcp', 'local-mcp', 'edge-function', 'webapp', 'cli', 'api' — the last for `/api/v1` called by a client that identified itself, v1.11.0), requestor (agent name or 'user'), document_id, query_text, result_count. Feeds the analytics page. Controlled by `cerefox_config` ('usage_tracking_enabled'). The `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled.
 - **`cerefox_config`** — key-value runtime config stored in Postgres. Currently used for `usage_tracking_enabled`. No redeploy needed to toggle -- `cerefox_set_config` validates against an allowlist.
 
 Key design properties:
@@ -1185,7 +1185,7 @@ table on every call and returns immediately when tracking is disabled (no perfor
 impact).
 
 Each usage log entry records: `operation` (what), `access_path` (where: remote-mcp,
-local-mcp, edge-function, webapp, cli), `requestor` (who: agent name or "user"),
+local-mcp, edge-function, webapp, cli, api), `requestor` (who: agent name or "user"),
 `document_id`, `query_text`, and `result_count`. The `requestor` field enables
 multi-agent analytics -- distinguishing between different agents (e.g., "archiver",
 "master", "Claude Code") in usage patterns.

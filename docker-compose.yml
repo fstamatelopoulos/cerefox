@@ -1,7 +1,7 @@
 version: "3.9"
 
 # ── Cerefox local stack ────────────────────────────────────────────────────────
-# ⚠ UNTESTED end-to-end (tracked in docs/TODO.md). The `cerefox` service builds
+# ⚠ UNTESTED end-to-end. The `cerefox` service builds
 # the TypeScript web image (Dockerfile → `cerefox web`); the former Python/FastAPI
 # image was retired in v0.9.
 #
@@ -15,6 +15,12 @@ version: "3.9"
 #   docker compose up -d              # start everything
 #   docker compose up -d postgres     # start only the database
 #   docker compose logs -f cerefox   # watch the web UI logs
+#
+# Ports are published to 127.0.0.1 only. Cerefox has no authentication on
+# /api/v1 or on this Postgres, so exposing either beyond the host is a
+# decision to make deliberately, not a default to inherit. The supported local
+# install (docker/local/) does the same thing and offers CEREFOX_LOCAL_BIND for
+# the LAN case.
 
 services:
 
@@ -30,7 +36,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Loopback-only, matching docker/local/compose.yml and the installer
+      # (#227). Docker's short "5432:5432" form binds the HOST's 0.0.0.0, so
+      # this published a database with in-file credentials to the LAN.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cerefox -d cerefox"]
       interval: 10s
@@ -67,7 +76,12 @@ services:
     volumes:
       - cerefox_data:/data
     ports:
-      - "8000:8000"
+      # Loopback-only (#227). /api/v1 has no authentication, so the short
+      # form published an unauthenticated write API on every interface.
+      # `--host 0.0.0.0` in the Dockerfile CMD is correct and stays: the
+      # container's own loopback is not the host's, so the BIND must be broad
+      # and the PUBLISH is what should be narrow.
+      - "127.0.0.1:8000:8000"
 
 volumes:
   postgres_data:

@@ -216,6 +216,7 @@ single container with an internally-held token.
 | ChatGPT Custom GPT | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | AI assistant via GPT Actions |
 | curl / HTTP scripts | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | Ad-hoc queries, automation |
 | Web UI (`cerefox web`) | Supabase REST API | Secret key (or legacy service_role) | Web UI backend (TS Hono) |
+| **HTTP client → `/api/v1`** | Plain HTTP to `cerefox web` / Cerefox Local | **None** — loopback-bound by default | A local program or bot harness that wants HTTP rather than MCP. Names itself with `X-Cerefox-Author` / `X-Cerefox-Requestor` (v1.11.0): a declared label for attribution, not a verified identity. See [`api.md`](api.md) |
 | `cerefox` CLI (human) | Supabase REST API | Secret key (or legacy service_role) | Ingestion, search, reindex, backup |
 | Local coding agent via `cerefox` CLI | Supabase REST API | Secret key (or legacy service_role) | User-authorised agent (Claude Code, Codex CLI, opencode, OpenClaw, Hermes, …) acting on user's behalf via Bash tool |
 | `cerefox server deploy` / deployment scripts | Direct TCP | DB password | Schema deploy, data restore |

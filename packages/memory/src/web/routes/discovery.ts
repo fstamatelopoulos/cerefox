@@ -20,6 +20,7 @@ import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getMinSearchScore, getSearchAlpha } from "../../../../../_shared/mcp-tools/_utils.js";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
+import { resolveCallerIdentity } from "../identity.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -515,7 +516,16 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       }
     }
 
-    logWebUsage(ctx, { operation: "search", query_text: q, result_count: results.length });
+    // Reads are header-only: a GET carries no body (#226).
+    const who = resolveCallerIdentity(c);
+    if (!who.ok) return c.json({ detail: who.detail }, 400);
+    logWebUsage(ctx, {
+      operation: "search",
+      query_text: q,
+      result_count: results.length,
+      requestor: who.identity.requestor,
+      access_path: who.identity.accessPath,
+    });
 
     return c.json({
       results,

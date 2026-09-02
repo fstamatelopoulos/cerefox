@@ -20,9 +20,10 @@ import { PKG_VERSION } from "../../meta.ts";
 import { EF_LAST_CHANGED, EF_VERSION } from "../../../../../_shared/ef-meta/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import {
+  envFileHasCerefoxKey,
   resolveConfigDir,
   resolveEnvFile,
-  USER_STATE_DIR_NAME,
+  type ResolverOptions,
 } from "../../../../../_shared/config/index.ts";
 import {
   aggregatorUrlFor,
@@ -691,31 +692,53 @@ export function checkMcpConfigs(): CheckResult {
 }
 
 /**
- * v0.5.3: when `~/.cerefox/.env` exists AND a different `<cwd>/.env` exists,
- * report the CWD file as a shadowed legacy config. The TS CLI reads the
- * home file (new precedence), but Python's `uv run cerefox …` still reads
- * the CWD file during the migration window — safe to delete in v0.9+.
+ * v0.5.3: when the active config file exists AND a different `<cwd>/.env`
+ * exists, report the CWD file as a shadowed legacy config. The TS CLI reads
+ * the active file (new precedence), but Python's `uv run cerefox …` still
+ * read the CWD file during the migration window — safe to delete in v0.9+.
  *
  * Returns `null` when there's nothing interesting to report (no shadowing,
- * or the two paths resolve to the same physical file via symlink).
+ * the two paths resolve to the same physical file via symlink, or the CWD
+ * file isn't a Cerefox env at all).
+ *
+ * **Two bugs fixed in iter-40 (#225), both from this check making up its own
+ * rules instead of asking the resolver:**
+ *
+ *  1. It hardcoded `~/.cerefox/.env` as the shadower. Under
+ *     `CEREFOX_CONFIG_DIR` (how the staging convention works) that is not the
+ *     file in effect, so `doctor` printed a `config` line and a `legacy env`
+ *     line naming two different authorities. `doctor` is what people run to
+ *     confirm which environment they are addressing, so a false statement
+ *     there costs more than its size.
+ *  2. It fired on the mere existence of both files, without the
+ *     `CEREFOX_*`-key test `resolveConfigDir()` has used since iter-24. Run
+ *     `cerefox` from any unrelated project that happens to have a `.env` and
+ *     doctor named that project's file and called it "Safe to delete."
+ *
+ * Both are why this takes `ResolverOptions` and routes through
+ * `resolveEnvFile()`: a test that asserts on a hardcoded path would pass
+ * before and after a wrong fix.
  */
-export function checkLegacyShadowEnv(): CheckResult | null {
-  const home = homedir();
-  const homeEnv = join(home, USER_STATE_DIR_NAME, ".env");
-  const cwdEnv = join(process.cwd(), ".env");
-  if (!existsSync(homeEnv) || !existsSync(cwdEnv)) return null;
-  // Same file via symlink? Skip.
+export function checkLegacyShadowEnv(
+  opts: ResolverOptions = {},
+): CheckResult | null {
+  const activeEnv = resolveEnvFile(opts);
+  const cwdEnv = join(opts.cwd ?? process.cwd(), ".env");
+  if (!existsSync(activeEnv) || !existsSync(cwdEnv)) return null;
+  // The active config IS the CWD file (legacy dev-mode). Nothing is shadowed.
   try {
-    if (realpathSync(homeEnv) === realpathSync(cwdEnv)) return null;
+    if (realpathSync(activeEnv) === realpathSync(cwdEnv)) return null;
   } catch {
     // realpath failed on one of them — fall through to reporting.
   }
+  // Only a Cerefox env is ours to call disposable.
+  if (!envFileHasCerefoxKey(cwdEnv)) return null;
   return {
     name: "legacy env",
     status: "skipped",
-    detail: `${cwdEnv} (shadowed by ~/.cerefox/.env)`,
+    detail: `${cwdEnv} (shadowed by ${activeEnv})`,
     hint:
-      "Shadowed by ~/.cerefox/.env and no longer read by anything (Python was removed at " +
+      `Shadowed by ${activeEnv} and no longer read by anything (Python was removed at ` +
       "v1.0.0). Safe to delete.",
   };
 }

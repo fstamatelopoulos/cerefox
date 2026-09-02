@@ -441,7 +441,7 @@ Each usage log entry records:
 | Field | Description |
 |-------|-------------|
 | `operation` | What was called: `search`, `metadata_search`, `get_document`, `list_versions`, `get_audit_log`, `list_metadata_keys`, `list_projects` |
-| `access_path` | Where the call came from: `remote-mcp`, `local-mcp`, `edge-function`, `webapp`, `cli` |
+| `access_path` | Where the call came from: `remote-mcp`, `local-mcp`, `edge-function`, `webapp`, `cli`, `api` |
 | `requestor` | Who made the call: agent name (e.g., "Claude Code", "mcp-agent") or "user" for webapp/CLI |
 | `document_id` | Optional: which document was accessed (for get_document, list_versions) |
 | `project_id` | Optional: which project was filtered on |
@@ -452,7 +452,7 @@ Each usage log entry records:
 The `access_path` is set by the caller layer (not the end user):
 - Edge Functions set `"edge-function"` (GPT Actions, direct HTTP callers)
 - `cerefox-mcp` tool handlers set `"remote-mcp"` (Claude Code, Cursor, Claude Desktop)
-- The web UI's JSON API routes set `"webapp"`
+- The web UI's JSON API routes set `"webapp"` when the caller sends no identity, and `"api"` when it names itself with `X-Cerefox-Author` / `X-Cerefox-Requestor` (v1.11.0; see [`api.md`](api.md)). The path is derived, never accepted from the caller.
 - Local MCP server sets `"local-mcp"`
 - CLI sets `"cli"` for read/search commands
 
@@ -477,9 +477,33 @@ optional. When omitted, it defaults to `"mcp-agent"`. This means the usage log s
 `"mcp-agent"` for all calls that don't explicitly identify themselves, making analytics
 less useful in multi-agent setups.
 
-You can optionally enforce caller identification so that all MCP tool calls must include
+You can optionally enforce caller identification so that MCP tool calls must include
 a requestor/author identity. Calls without identity receive a JSON-RPC `-32602` error
 with a helpful message telling the agent what to provide.
+
+### What it actually covers
+
+**These two settings are enforced by the Edge Functions only.** Each of the nine
+Edge Functions carries the check, including `cerefox-mcp`, which is the **remote**
+MCP transport. Nothing else does:
+
+| Surface | Enforced? |
+|---|---|
+| Edge Functions (GPT Actions, direct HTTP) | Yes |
+| Remote MCP (`cerefox-mcp` Edge Function) | Yes |
+| **Local MCP** (`cerefox mcp`, stdio) | **No** |
+| **`/api/v1`** (`cerefox web`, Cerefox Local) | **No** |
+| CLI | **No** |
+
+This is stated plainly because the setting's name promises more than it
+delivers: enabling it does not make identity required everywhere, and an
+operator who assumes otherwise has a gap exactly where their local agents are.
+The reason it is scoped this way is that the Edge Functions are the
+internet-facing surface, while the local surfaces are already reachable only by
+whoever is on the machine.
+
+If you need it everywhere, that is a shared helper every transport calls, not a
+tenth copy of the same block. Raise an issue rather than assuming it is there.
 
 ### Enabling enforcement
 

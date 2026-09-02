@@ -19,7 +19,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import {
-  ingestViaEdgeFunction,
   probeSupabase,
   spawnWebServer,
   type SpawnedServer,
@@ -34,15 +33,35 @@ describe("destructive web endpoints (HTTP boundary)", () => {
   beforeAll(async () => {
     if (!LIVE_OK) return;
     server = await spawnWebServer();
-    docId = await ingestViaEdgeFunction({
-      title: `[E2E web-destructive] iter-24L follow-up ${Date.now()}`,
-      content:
-        "# Destructive endpoint smoke\n\n" +
-        "Created by the web-integration test suite to exercise the v0.6\n" +
-        "mutation endpoints end-to-end. Purged automatically when the\n" +
-        "test finishes.\n",
-      author: "web-destructive-test",
+    if (!server) return;
+    // Fixture created through the web API, NOT the deployed Edge Function
+    // (iter-40). The EF helper dated from v0.6, when `/api/v1/ingest` was a
+    // 503 stub; it has been a real endpoint since v0.7, so the EF round-trip
+    // bought nothing and cost free-tier invocations on every run. That went
+    // unnoticed because this whole directory had been skipping since v0.9.0
+    // (see `_live-probe.ts`) — turning the suite back on turned the billing
+    // back on with it. The live EF suites are gated behind CEREFOX_LIVE_E2E=1
+    // for exactly this reason; this suite has no business calling one.
+    const resp = await fetch(`${server.base}/api/v1/ingest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: `[E2E web-destructive] iter-24L follow-up ${Date.now()}`,
+        content:
+          "# Destructive endpoint smoke\n\n" +
+          "Created by the web-integration test suite to exercise the\n" +
+          "mutation endpoints end-to-end. Purged automatically when the\n" +
+          "test finishes.\n",
+        author: "web-destructive-test",
+        // author_type "agent" keeps the fixture's original starting state:
+        // the Edge Function used to ingest as an agent, so the document
+        // arrived as `pending_review`, which the review-status test below
+        // depends on. Expressing that over the API is exactly what #226 added.
+        author_type: "agent",
+      }),
     });
+    const body = (await resp.json()) as { document_id?: string };
+    docId = body.document_id ?? null;
   });
 
   afterAll(async () => {
@@ -83,7 +102,7 @@ describe("destructive web endpoints (HTTP boundary)", () => {
 
   test("review-status flip: pending_review → approved → reflected in GET", async () => {
     if (!LIVE_OK || !server || !docId) return;
-    // EF-authored docs land as pending_review (author_type=agent). Confirm.
+    // agent-authored docs land as pending_review. Confirm.
     const baseline = await (
       await fetch(`${server.base}/api/v1/documents/${docId}`)
     ).json();

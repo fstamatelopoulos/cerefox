@@ -293,6 +293,7 @@ Full setup for every client — plus a manual per-client config appendix for whe
 | [`docs/guides/agent-coordination.md`](docs/guides/agent-coordination.md) | Multi-agent coordination patterns and best practices |
 | [`docs/guides/response-limits.md`](docs/guides/response-limits.md) | Response size limits: per-path behaviour and tuning |
 | [`docs/guides/access-paths.md`](docs/guides/access-paths.md) | All access layers, credentials, and integration paths |
+| [`docs/guides/api.md`](docs/guides/api.md) | The `/api/v1` HTTP API: security posture, caller attribution, endpoints |
 | [`docs/guides/setup-local.md`](docs/guides/setup-local.md) | Local / self-hosted (Docker) backend — install, `cerefox-local`, MCP |
 | [`docs/guides/ops-scripts.md`](docs/guides/ops-scripts.md) | Backup, restore, migrate, sync docs |
 | [`docs/guides/setup-cloud-run.md`](docs/guides/setup-cloud-run.md) | Google Cloud Run deployment |

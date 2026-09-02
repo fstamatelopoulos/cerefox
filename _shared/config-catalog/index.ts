@@ -49,7 +49,8 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
   },
   {
     key: "require_requestor_identity",
-    description: "Require a requestor/author on MCP tool calls.",
+    description:
+      "Require a requestor/author. Enforced on the Edge Functions (incl. remote MCP) ONLY — not local MCP, /api/v1 or the CLI.",
     kind: "boolean",
     defaultValue: "false",
     group: "Governance",

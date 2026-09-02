@@ -13,7 +13,7 @@
  * destructive-endpoint coverage that was the 24L follow-up gap.
  */
 
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,19 +35,12 @@ export function freshPort(): number {
 }
 
 /**
- * Probe Supabase reachability via the same `cerefox list-projects --json`
- * call the stdio smoke uses. Returns true when the live backend answered;
- * tests gate their DB-touching assertions on this.
+ * Probe Supabase reachability. Delegates to the single shared implementation
+ * in `../_live-probe.ts` — this file used to carry its own copy calling
+ * `cerefox list-projects`, a verb renamed in v0.9.0, so every test in this
+ * directory skipped for eleven releases while reporting success.
  */
-export function probeSupabase(): boolean {
-  if (!existsSync(BIN)) return false;
-  const result = spawnSync("node", [BIN, "list-projects", "--json"], {
-    cwd: REPO_ROOT,
-    env: { ...process.env },
-    timeout: 5_000,
-  });
-  return result.status === 0;
-}
+export { probeSupabase } from "../_live-probe.ts";
 
 export interface SpawnedServer {
   child: ChildProcess;
@@ -117,46 +110,12 @@ export async function spawnWebServer(): Promise<SpawnedServer | null> {
 }
 
 /**
- * Create a test document via the deployed `cerefox-ingest` Edge
- * Function. Used by tests that need a real document_id to exercise
- * mutations against (since v0.6's web `/api/v1/ingest` returns 503).
- *
- * Reads CEREFOX_SUPABASE_URL + CEREFOX_ACCESS_TOKEN from the env (the EFs
- * validate the Cerefox access token in-function, iter-28E).
- * Returns the new document's id.
+ * (Removed in iter-40.) `ingestViaEdgeFunction()` created fixtures through the
+ * deployed `cerefox-ingest` Edge Function. It dated from v0.6, when the web
+ * `/api/v1/ingest` route was a 503 stub. That has not been true since v0.7, so
+ * the helper only bought a live Edge Function invocation per fixture — against
+ * a free-tier quota, from a suite that is not one of the two CEREFOX_LIVE_E2E
+ * suites allowed to spend it. Its only caller now ingests over HTTP like every
+ * other test here. Deleted rather than left in place: an unused helper that
+ * quietly bills is one someone reaches for again.
  */
-export async function ingestViaEdgeFunction(opts: {
-  title: string;
-  content: string;
-  author?: string;
-}): Promise<string> {
-  const url = process.env.CEREFOX_SUPABASE_URL;
-  const key = process.env.CEREFOX_ACCESS_TOKEN;
-  if (!url || !key) {
-    throw new Error("CEREFOX_SUPABASE_URL + CEREFOX_ACCESS_TOKEN required for ingestViaEdgeFunction");
-  }
-  const resp = await fetch(`${url}/functions/v1/cerefox-ingest`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      apikey: key,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      title: opts.title,
-      content: opts.content,
-      source: "test",
-      author: opts.author ?? "web-integration-test",
-    }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`cerefox-ingest EF returned ${resp.status}: ${text}`);
-  }
-  const body = (await resp.json()) as { document_id?: string; id?: string };
-  const id = body.document_id ?? body.id;
-  if (!id) {
-    throw new Error(`cerefox-ingest EF returned no document_id: ${JSON.stringify(body)}`);
-  }
-  return id;
-}

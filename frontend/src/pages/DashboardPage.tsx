@@ -92,6 +92,7 @@ export function DashboardPage() {
     localMcpOps,
     remoteMcpOps,
     efOps,
+    apiOps,
     agentOps,
     cliOps,
     webOps,
@@ -236,13 +237,13 @@ export function DashboardPage() {
               `edge` moves down because it is an agent path that is normally
               zero (ChatGPT Actions only), so it reads as noise in the badge and
               as information here. */}
-          {(efOps > 0 || cliOps > 0 || webOps > 0) && (
+          {(efOps > 0 || apiOps > 0 || cliOps > 0 || webOps > 0) && (
             <div
               className={styles.statSub}
-              title="edge = ChatGPT Actions (counted in the total above). cli and web are NOT counted as agent operations: the usage summary cannot separate an agent's CLI use from a person's."
+              title="edge = ChatGPT Actions and api = an /api/v1 client that identified itself (both counted in the total above). cli and web are NOT counted as agent operations: the usage summary cannot separate an agent's CLI use from a person's, and web is the bundled UI."
             >
-              {efOps.toLocaleString()} edge · {cliOps.toLocaleString()} cli ·{" "}
-              {webOps.toLocaleString()} web
+              {efOps.toLocaleString()} edge · {apiOps.toLocaleString()} api ·{" "}
+              {cliOps.toLocaleString()} cli · {webOps.toLocaleString()} web
             </div>
           )}
         </div>

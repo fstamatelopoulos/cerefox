@@ -28,16 +28,30 @@
 ---
 ## Current Focus
 
-**2026-08-22 — v1.10.0 + v1.10.1 SHIPPED and verified on BOTH staging and
-production. Production jumped 1.9.1 → 1.10.1 in one hop (migration 0030 ran
-clean; the interrupted-then-rerun deploy proved the idempotency design;
-guides re-synced 17/17; acceptance 15/15 on prod; #222 warning verified
-firing on prod CLI and quiet on clean writes). #222 closed. #154 deferred to
-a well-announced v1.11.0 (platform drop ≠ patch). Next: maintainer backup
-(post-upgrade), Discord announcement for the 1.10.x line, then v1.11.0
-(commander 15 + Node ≥ 22.12 + installer detection) when scheduled.**
+**2026-09-01 — Iteration 40 IMPLEMENTATION COMPLETE on
+`feat/v1.11.0-api-attribution`, target v1.11.0, awaiting review + release.
+Optional `author`/`requestor`/`author_type` on `/api/v1` (#226), the `doctor`
+config-dir misreport (#225), the repo-root compose bind (#227), and #228 —
+`POST /documents/{id}/upload`, broken since v0.11.0 and found only because the
+same work revealed that the web-integration suite had been skipping since
+v0.9.0. No schema change. Verified on staging (215 pass / 0 fail) and in a
+throwaway Cerefox Local container. Detail:
+[iteration 40](plans/iteration-40-api-attribution.md).**
 
-Schema is at 0.15.0 (v1.10.0 in progress); `minSchema` is **0.14.0**, raised
+**v1.11.0 is this work, NOT the Node baseline drop.** #154 (commander 15,
+Node ≥ 22.12, installer detection) moves to **v1.12.0** — decision
+2026-09-01. The two want opposite announcements: one says "check your Node
+version before upgrading", the other says "here is a new optional
+parameter", and bundling them buries the warning.
+
+Previously: **v1.10.0 + v1.10.1 SHIPPED** (2026-08-22) and verified on BOTH
+staging and production. Production jumped 1.9.1 → 1.10.1 in one hop
+(migration 0030 ran clean; the interrupted-then-rerun deploy proved the
+idempotency design; guides re-synced 17/17; acceptance 15/15 on prod; #222
+warning verified firing on prod CLI and quiet on clean writes). #222 closed.
+The 1.10.x line was announced in Discord `#announcements` on 2026-08-22.
+
+Schema is at 0.15.0 (shipped in v1.10.0); `minSchema` is **0.14.0**, raised
 in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
 The tool surface is 15 core + 4 dormant relation tools (delete/restore
 joined in v1.7.0).
@@ -104,8 +118,17 @@ one:
 
 ## Active iteration
 
+**[Iteration 40 — API attribution and environment honesty](plans/iteration-40-api-attribution.md)**
+— ⏳ **IMPLEMENTATION COMPLETE, awaiting review + release** (2026-09-01), target
+v1.11.0. **No schema change.** Closes #225, #226, #227, and #228 (found in
+flight). Verified on staging (215 pass / 0 fail) and in a throwaway Cerefox
+Local container. The find that outlived the feature: the web-integration suite
+had been skipping since v0.9.0 on a renamed probe verb, which is how #228
+survived eleven releases.
+
 **[Iteration 39 — Audit consistency: the web save on shared cores](plans/iteration-39-audit-consistency.md)**
-— ⏳ **IN PROGRESS**, target v1.10.0 (schema 0.15.0, migration 0030).
+— ✅ **CLOSED, shipped v1.10.0 + v1.10.1** (2026-08-22; schema 0.15.0,
+migration 0030), verified on staging and production, announced.
 
 **[Iteration 38 — Audit completeness, settings clarity, docs restoration](plans/iteration-38-audit-completeness.md)**
 — ✅ **CLOSED, shipped v1.9.0/v1.9.1/v1.9.2** (2026-08-17/18), verified on

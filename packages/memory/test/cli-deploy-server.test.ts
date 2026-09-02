@@ -9,7 +9,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -64,12 +65,25 @@ describe("cerefox deploy-server CLI", () => {
   });
 
   test("missing CEREFOX_DATABASE_URL → pre-flight refuses with remediation", () => {
-    const { stdout, stderr, status } = run(["server", "deploy", "--schema-only"], {
-      CEREFOX_DATABASE_URL: "",
-    });
-    expect(status).toBe(1);
-    const all = stdout + stderr;
-    expect(all).toContain("CEREFOX_DATABASE_URL");
-    expect(all).toMatch(/prerequisite|Cannot deploy/i);
+    // An empty string in the child env is not enough: the CLI calls loadEnv(),
+    // which fills unset keys from the RESOLVED config file. Run this against a
+    // scratch config dir with no .env at all, so nothing ambient can supply the
+    // value. Without it the test fails under the documented staging invocation
+    // (`CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test`), because that .env
+    // legitimately defines CEREFOX_DATABASE_URL — a red test caused by the
+    // environment being correctly configured.
+    const emptyConfigDir = mkdtempSync(join(tmpdir(), "cfx-nodburl-"));
+    try {
+      const { stdout, stderr, status } = run(["server", "deploy", "--schema-only"], {
+        CEREFOX_DATABASE_URL: "",
+        CEREFOX_CONFIG_DIR: emptyConfigDir,
+      });
+      expect(status).toBe(1);
+      const all = stdout + stderr;
+      expect(all).toContain("CEREFOX_DATABASE_URL");
+      expect(all).toMatch(/prerequisite|Cannot deploy/i);
+    } finally {
+      rmSync(emptyConfigDir, { recursive: true, force: true });
+    }
   });
 });

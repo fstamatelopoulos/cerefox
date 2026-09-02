@@ -78,14 +78,23 @@ export function resolveConfigDir(opts: ResolverOptions = {}): string {
   // leftover in the pre-iter-24 review; resolved here.
   const here = opts.cwd ?? processCwd();
   const cwdEnv = join(here, ".env");
-  if (existsSync(cwdEnv) && cwdEnvHasCerefoxKey(cwdEnv)) {
+  if (existsSync(cwdEnv) && envFileHasCerefoxKey(cwdEnv)) {
     return resolvePath(here);
   }
 
   return userState;
 }
 
-function cwdEnvHasCerefoxKey(envPath: string): boolean {
+/**
+ * `true` if `envPath` looks like a *Cerefox* env file, i.e. it declares at
+ * least one `CEREFOX_*` key.
+ *
+ * Exported (iter-40, #225) because `doctor` needs the same test: without it,
+ * the `legacy env` check reported any unrelated project's `.env` as a
+ * leftover Cerefox config and told the user it was safe to delete. The
+ * predicate was already the resolver's rule; it just wasn't shared.
+ */
+export function envFileHasCerefoxKey(envPath: string): boolean {
   try {
     const contents = readFileSync(envPath, "utf8");
     return /^\s*CEREFOX_[A-Z0-9_]+\s*=/m.test(contents);
@@ -119,7 +128,7 @@ export function isDevMode(opts: ResolverOptions = {}): boolean {
   // `.env` only counts as "Cerefox dev-mode" when it actually has a
   // CEREFOX_* key. An unrelated Node project's .env doesn't trip
   // dev-mode detection.
-  return existsSync(cwdEnv) && cwdEnvHasCerefoxKey(cwdEnv);
+  return existsSync(cwdEnv) && envFileHasCerefoxKey(cwdEnv);
 }
 
 /**

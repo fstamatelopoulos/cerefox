@@ -9,7 +9,100 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **`/api/v1` accepts an optional caller identity (#226).** `author`,
+  `requestor` and `author_type`, as `X-Cerefox-Author` /
+  `X-Cerefox-Requestor` / `X-Cerefox-Author-Type` headers on any method, or as
+  fields in the JSON body / multipart form where a route has one (a header
+  wins). The API hardcoded `author: "web-ui"` at 17 call sites, so any client
+  but the bundled web app was unattributable — which pushed agent harnesses
+  onto MCP purely to obtain an identity. **Omitted, nothing changes**: the
+  stored audit and usage rows are byte-identical to before, so the bundled web
+  app and every existing client are unaffected. `author` and `requestor` stand
+  in for each other, and `author_type: "agent"` queues an ingest for review
+  exactly as it does over MCP — that equivalence is the point. The identity is
+  **declared, not verified**: it is a label for attribution and record-keeping
+  (the audit trail, usage analytics, the review queue), not a credential and
+  not a security measure. Nothing checks it, exactly as nothing checks `author`
+  over MCP.
+- **`DELETE /api/v1/documents/{id}` requires the content hash from an
+  identified caller**, as `X-Cerefox-Expected-Content-Hash` or an
+  `expected_content_hash` query parameter — the same "a delete must follow a
+  read" rule `cerefox_delete_document` enforces over MCP. The route previously
+  passed no CAS token at all, which was defensible while its only caller was
+  the web UI, where a human sees the document and confirms in a dialog.
+  Identified callers have no such dialog. An anonymous caller is the bundled
+  UI and is unaffected.
+- **A new `api` access path**, derived rather than accepted: name yourself and
+  the operation logs as `api`, otherwise `webapp`. There is deliberately no way
+  to request a particular access path, because it is the one field in the usage
+  log the server still sets itself. The Dashboard counts `api` toward agent
+  operations and the Analytics filter offers it.
+- **`docs/guides/api.md`**, the first reference for the HTTP API: the
+  caller-attribution contract, the concurrency rules, and the full endpoint
+  list — opening with an unmissable statement that the surface has **no
+  authentication of any kind** and is **for local access only**. Not to be
+  exposed to a LAN, a tunnel, or a TLS-only reverse proxy: encryption is not
+  authorization. Adding a locally generated key is tracked as #229.
+
+### Fixed
+
+- **`POST /api/v1/documents/{id}/upload` has failed on every call since
+  v0.11.0 (#228).** It passed neither `expected_content_hash` nor
+  `last_write_wins`, so the concurrency contract introduced in v0.11.0 rejected
+  it every time. It now takes the same contract as every other content update:
+  send the hash you read, or say `last_write_wins=true` explicitly. There is no
+  implicit default — the endpoint has been a hard error for eleven releases, so
+  there is no working caller to stay compatible with and the strict semantics
+  cost nothing. The bundled web app never calls this endpoint; API clients got
+  a hard stop.
+- **`cerefox doctor` named the wrong config file (#225).** The `legacy env`
+  check hardcoded `~/.cerefox/.env` instead of asking the resolver, so under
+  `CEREFOX_CONFIG_DIR` it contradicted the `config` line four rows above it.
+  It also fired on any `<cwd>/.env` whatsoever, without the `CEREFOX_*`-key
+  test the resolver has used since iter-24 — so running `cerefox` inside an
+  unrelated project named that project's config file and called it "Safe to
+  delete."
+- **The web-integration test suite had been skipping since v0.9.0.** Its
+  Supabase probe shelled out to `cerefox list-projects`, renamed to
+  `project list` in v0.9.0; the renamed-verb husk exits non-zero by design and
+  the probe read that as "backend unreachable". Eleven releases of a green
+  suite running nothing, and the reason #228 went unnoticed. The probe is now
+  one shared implementation that throws when the CLI rejects the probe command,
+  because "the backend is down" and "that command no longer exists" are
+  different answers and only the first justifies a skip.
+- **The destructive web tests no longer spend Edge Function quota.** They built
+  their fixture through the deployed `cerefox-ingest` function, a workaround
+  from v0.6 when `/api/v1/ingest` was a 503 stub. They now ingest over HTTP
+  like every other test in that directory.
+- **Two tests failed under the documented staging invocation**
+  (`CEREFOX_CONFIG_DIR=… bun test`), both environment-sensitivity in the tests
+  rather than product bugs. A red test under the command the guides give
+  teaches people that red is normal.
+- **Audit authorship is consistent across the web routes.** Review-status
+  changes and version archives recorded `author: "user"` while every other web
+  write recorded `"web-ui"`, so an `author='web-ui'` filter silently missed
+  both. Existing rows are unchanged.
+
+### Changed
+
+- **The repo-root `docker-compose.yml` publishes to `127.0.0.1` (#227).** Its
+  short `"8000:8000"` / `"5432:5432"` form binds the host's `0.0.0.0`, so it
+  exposed an unauthenticated write API and a database with in-file credentials
+  to the local network. Both shipped local paths (`docker/local/`) already bind
+  loopback deliberately; this file contradicted them. `--host 0.0.0.0` in the
+  `Dockerfile` CMD is correct and stays: the container's loopback is not the
+  host's, so the bind must be broad and the publish narrow.
+- **`require_requestor_identity` documents what it actually covers.** It is
+  enforced by the Edge Functions only, including remote MCP — **not** by the
+  local stdio MCP server, `/api/v1`, or the CLI. No behaviour change; the
+  setting's name promised more than it delivered and an operator enabling it
+  deserves to know where the gaps are.
+- **The root `typecheck` script now includes the frontend.** `tsc --noEmit` in
+  `frontend/` checks nothing (its `tsconfig.json` is `files: []` plus project
+  references), so a local typecheck silently skipped the whole SPA. CI built it
+  and was unaffected.
 
 ---
 

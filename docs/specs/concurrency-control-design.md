@@ -57,7 +57,13 @@ conflicts meaningless:
 | `cerefox document ingest-dir` | passes `last_write_wins` internally (filesystem is the source of truth) |
 | `cerefox guides ingest` (self-docs sync) | same |
 | Python frozen fallback (`db/client.py`) | passes `last_write_wins` (preserves its historical behavior; explicitly unsafe — one deliberate exception to its frozen status) |
-| Everything else (MCP, EF, CLI single-doc, web edit) | must supply `expected_content_hash` or explicitly pass the flag |
+| Everything else (MCP, EF, CLI single-doc, web edit, web upload-replace) | must supply `expected_content_hash` or explicitly pass the flag |
+
+Delete follows the same read-before-write rule: `cerefox_delete_document` takes
+`p_expected_content_hash` (0.12.0, #208), MCP requires it, and since v1.11.0 so
+does `DELETE /api/v1/documents/{id}` for any caller that identifies itself. The
+bundled web UI sends no identity and confirms with the human in a dialog
+instead, which is its safeguard.
 
 ### Error surface
 

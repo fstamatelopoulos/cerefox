@@ -15,13 +15,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ALL_TOOLS } from "../../../_shared/mcp-tools/index.ts";
 import { RELATION_TOOL_NAMES } from "../../../_shared/mcp-tools/feature-flags.ts";
+import { probeSupabase } from "./_live-probe.ts";
 
 // Derived, not hardcoded: a literal list here sat at 10 names while the
 // surface grew to 13 — invisible because this test probe-and-skips without
@@ -34,21 +35,12 @@ const REPO_ROOT = join(PKG_ROOT, "..", "..");
 const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
 const MCP_ARGS = [BIN, "mcp"];
 
-// Match the probe-and-skip pattern from read/write/lifecycle live tests:
-// spawn `cerefox list-projects --json` from REPO_ROOT (so `.env` is
-// resolved exactly as the MCP server would resolve it on a real boot).
-// Non-zero exit = no config / Supabase unreachable; skip the test.
-// CI without secrets (and a fresh dev box that hasn't run `cerefox init`
-// yet) both land here cleanly instead of timing out at 5s.
-function probeSupabase(): boolean {
-  if (!existsSync(BIN)) return false;
-  const result = spawnSync("node", [BIN, "list-projects", "--json"], {
-    cwd: REPO_ROOT,
-    env: { ...process.env },
-    timeout: 5_000,
-  });
-  return result.status === 0;
-}
+// Probe-and-skip, via the ONE shared implementation (`_live-probe.ts`). It
+// resolves `.env` from REPO_ROOT exactly as the MCP server would on a real
+// boot, so CI without secrets and a fresh dev box both skip cleanly instead of
+// timing out. This file used to carry its own copy calling the verb
+// `list-projects`, renamed in v0.9.0 — the copy read the renamed-verb husk's
+// exit code as "Supabase unreachable" and skipped every live test here.
 const LIVE_OK = probeSupabase();
 
 describe("stdio MCP server smoke", () => {

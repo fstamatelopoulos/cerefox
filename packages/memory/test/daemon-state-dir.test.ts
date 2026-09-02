@@ -16,7 +16,21 @@ const HOME = "/home/tester";
 
 describe("resolveStateDir", () => {
   test("defaults to ~/.cerefox when no override is set", () => {
-    expect(resolveStateDir(undefined, HOME)).toBe(join(HOME, ".cerefox"));
+    // `override` DEFAULTS to process.env.CEREFOX_CONFIG_DIR, so passing
+    // `undefined` does not mean "unset" — it means "read the environment".
+    // The ambient value has to go for the duration, or this test fails under
+    // the documented staging invocation
+    // (`CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test`), which is exactly how
+    // it was failing: a red test under the command the guides tell you to run
+    // teaches people that red is normal.
+    const saved = process.env.CEREFOX_CONFIG_DIR;
+    delete process.env.CEREFOX_CONFIG_DIR;
+    try {
+      expect(resolveStateDir(undefined, HOME)).toBe(join(HOME, ".cerefox"));
+    } finally {
+      if (saved === undefined) delete process.env.CEREFOX_CONFIG_DIR;
+      else process.env.CEREFOX_CONFIG_DIR = saved;
+    }
   });
 
   test("treats an empty or whitespace override as unset", () => {
