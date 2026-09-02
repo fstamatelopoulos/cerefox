@@ -395,7 +395,11 @@ describe("cerefox write commands (live)", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+    // Three CLI invocations, two of them live embedding calls — same reason
+    // the flow test above carries a budget. Without one this inherits bun's
+    // 5s default and fails whenever the embedding API is having a slow day
+    // (observed: 22s, in the v1.11.0 staging pass).
+  }, 60_000);
 
   test("delete-doc: bogus UUID → exit 3", () => {
     const { status, stderr } = run([
