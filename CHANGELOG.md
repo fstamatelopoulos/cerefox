@@ -21,7 +21,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   stored audit and usage rows are byte-identical to before, so the bundled web
   app and every existing client are unaffected. `author` and `requestor` stand
   in for each other, and `author_type: "agent"` queues an ingest for review
-  exactly as it does over MCP — that equivalence is the point.
+  exactly as it does over MCP — that equivalence is the point. The identity is
+  **declared, not verified**: it is a label for attribution and record-keeping
+  (the audit trail, usage analytics, the review queue), not a credential and
+  not a security measure. Nothing checks it, exactly as nothing checks `author`
+  over MCP.
 - **`DELETE /api/v1/documents/{id}` requires the content hash from an
   identified caller**, as `X-Cerefox-Expected-Content-Hash` or an
   `expected_content_hash` query parameter — the same "a delete must follow a

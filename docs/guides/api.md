@@ -57,6 +57,14 @@ the loopback interface is the whole security boundary.*
 By default every call is recorded as the web app: author `web-ui`, author type
 `user`, access path `webapp`. Supply an identity and it is recorded as you.
 
+**This identity is declared, not verified.** It is a label the caller chooses,
+recorded for attribution and record-keeping: so the audit trail says which
+harness wrote a document, so usage analytics can tell your bot's reads from the
+web app's, and so an agent-authored ingest is queued for review. It is not a
+credential, it grants nothing, and nothing checks it. See
+[Attribution is not authentication](#attribution-is-not-authentication) below
+before relying on it for anything else.
+
 Three optional fields:
 
 | Field | Header | Recorded as | Default |
@@ -110,11 +118,22 @@ let a client misreport which transport it used. In the Analytics dashboard,
 
 ### Attribution is not authentication
 
-Nothing verifies an identity claim, here or anywhere else in Cerefox. MCP takes
-`author` as a client-declared string; the Edge Functions accept whatever
-`requestor` arrives. These fields exist so a trail is *legible*, not so it is
-*provable*. On an API with no authentication at all, the identity you send is a
-label you chose, and it should be read that way.
+`author`, `requestor` and `author_type` are **declared by the caller and taken
+at face value**. Nothing verifies them, here or anywhere else in Cerefox: MCP
+takes `author` as a client-declared string, and the Edge Functions accept
+whatever `requestor` arrives. Any client can send any name, including a name
+another client uses.
+
+They exist for **attribution and record-keeping**: a legible audit trail, usage
+analytics that can tell callers apart, and the review-queue behaviour of
+`author_type: agent`. They are not a security measure, they do not establish an
+authenticated identity, and no access decision is made on them. Treat a name in
+the audit log as "what the caller said", never as "who the caller was".
+
+Authentication for this surface is a separate problem and is tracked as
+[#229](https://github.com/fstamatelopoulos/cerefox/issues/229). A key, when it
+ships, will prove that a caller is allowed to talk to this server; it will not
+prove the caller is who it says it is, and these fields will remain labels.
 
 `require_requestor_identity` and `requestor_identity_format` do **not** apply to
 this surface. They are enforced by the Edge Functions only. See
