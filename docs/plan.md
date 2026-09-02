@@ -28,21 +28,44 @@
 ---
 ## Current Focus
 
-**2026-09-01 — Iteration 40 IMPLEMENTATION COMPLETE on
-`feat/v1.11.0-api-attribution`, target v1.11.0, awaiting review + release.
-Optional `author`/`requestor`/`author_type` on `/api/v1` (#226), the `doctor`
-config-dir misreport (#225), the repo-root compose bind (#227), and #228 —
-`POST /documents/{id}/upload`, broken since v0.11.0 and found only because the
-same work revealed that the web-integration suite had been skipping since
-v0.9.0. No schema change. Verified on staging (215 pass / 0 fail) and in a
-throwaway Cerefox Local container. Detail:
-[iteration 40](plans/iteration-40-api-attribution.md).**
+**2026-09-02 — v1.11.0 SHIPPED and verified on ALL THREE instances**
+(staging, production, Cerefox Local). Iteration 40 delivered optional
+`author`/`requestor`/`author_type` on `/api/v1` (#226), the `doctor` config-dir
+misreport (#225), the repo-root compose bind (#227), and #228 — `POST
+/documents/{id}/upload`, broken since v0.11.0 and found only because the same
+work revealed the web-integration suite had been skipping since v0.9.0. No
+schema change. #225–#228 closed by PR #231. Detail:
+[iteration 40](plans/iteration-40-api-attribution.md).
 
-**v1.11.0 is this work, NOT the Node baseline drop.** #154 (commander 15,
-Node ≥ 22.12, installer detection) moves to **v1.12.0** — decision
-2026-09-01. The two want opposite announcements: one says "check your Node
-version before upgrading", the other says "here is a new optional
-parameter", and bundling them buries the warning.
+**Live verification** (2026-09-02): production `doctor` all-green on EF v1.11.0;
+attributed reads confirmed logging `access_path=api` on the shared Cerefox Local
+instance (the bot harness's own backend); MCP read path unaffected. The
+production EF deploy first failed on an upstream registry race — JSR published
+`supabase-js@2.113.0` at 06:03:13Z, npm published its `auth-js` dependency at
+06:05:01Z, and the deploy landed in that 108-second window. Staging had deployed
+before 06:03 and resolved 2.112.4, which is why the same command worked there.
+Retrying after the window closed succeeded. **Pinning the `jsr:@supabase/
+supabase-js@2` specifier was considered and REJECTED** (2026-09-02): the failure
+is rare, loud, leaves the previous functions live, and self-heals on retry, so a
+permanent manual-bump burden across 9 files is the worse trade. What it does
+justify is a readable error message (see iteration 41).
+
+**2026-09-02 — Iteration 41 OPEN, target v1.12.0.** Authentication for
+`/api/v1` (#229, design-first), the ingest routes' HTTP-status inconsistency
+(#232), live suites skipping in a full `bun test` (#230), and the deploy-error
+message above. Detail: [iteration 41](plans/iteration-41-api-auth.md).
+
+**Release lineage decided 2026-09-02**: v1.12.0 is this batch; **#154**
+(commander 15, Node ≥ 22.12, installer detection) moves to **v1.13.0**. Both are
+"your setup may need attention" releases, and landing an auth change and a
+platform-baseline drop together makes "what broke?" ambiguous for anyone who
+hits a problem. #154 has now moved twice (v1.11.0 → v1.12.0 → v1.13.0), which is
+acceptable because each move was made to protect a clearer announcement, not to
+avoid the work.
+
+**Unreleased on `main`**: `00e37ca` (test-only — the `ingest-dir` live test had
+no timeout and inherited bun's 5s default, failing at 22s during the v1.11.0
+staging pass). Rides the next cut.
 
 Previously: **v1.10.0 + v1.10.1 SHIPPED** (2026-08-22) and verified on BOTH
 staging and production. Production jumped 1.9.1 → 1.10.1 in one hop

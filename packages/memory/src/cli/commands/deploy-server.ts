@@ -340,6 +340,8 @@ async function action(options: DeployServerOptions): Promise<void> {
     println(c.bold(`\n▶  Deploying ${efNames.length} Edge Function(s)…`));
     let efOk = 0;
     const efFailed: string[] = [];
+    /** Captured output of the failed deploys, for cause detection below. */
+    const efOutput: string[] = [];
     for (const ef of efNames) {
       info(`   deploying ${ef}…`);
       // Run with cwd = the assets root's supabase parent so the CLI finds
@@ -363,18 +365,47 @@ async function action(options: DeployServerOptions): Promise<void> {
         args.push("--no-verify-jwt");
         info(`     (${ef}: --no-verify-jwt — in-function auth)`);
       }
+      // stdout/stderr are captured rather than inherited so we can READ the
+      // bundler's reply and explain it (see `upstreamRegistryRace` below).
+      // Everything captured is printed verbatim immediately after, so nothing
+      // is hidden — the only change is that a function's output appears when
+      // it finishes instead of while it runs.
       const r = spawnSync("npx", args, {
         encoding: "utf8",
-        stdio: "inherit",
+        stdio: ["inherit", "pipe", "pipe"],
         cwd: workdir,
         timeout: 120_000,
       });
+      if (r.stdout) process.stdout.write(r.stdout);
+      if (r.stderr) process.stderr.write(r.stderr);
       if (r.status === 0) efOk++;
-      else efFailed.push(ef);
+      else {
+        efFailed.push(ef);
+        efOutput.push(`${r.stdout ?? ""}\n${r.stderr ?? ""}`);
+      }
     }
     if (efFailed.length > 0) {
       eprintln(c.red(`\n✗ ${efFailed.length} Edge Function(s) failed: ${efFailed.join(", ")}`));
-      eprintln(c.dim("   Re-run `cerefox server deploy --functions-only` after fixing the cause."));
+      if (upstreamRegistryRace(efOutput.join("\n"))) {
+        // Observed 2026-09-02: JSR published supabase-js 2.113.0 at 06:03:13Z
+        // and npm published the auth-js it depends on at 06:05:01Z. A deploy
+        // inside that 108-second window resolves a JSR package whose npm
+        // dependency does not exist yet, and every function fails to bundle.
+        // The raw reply is a 400 with a JSR stack trace, which reads exactly
+        // like "your release is broken" — hence this block.
+        eprintln("");
+        eprintln(c.yellow("   This looks like an UPSTREAM package-registry race, not a problem"));
+        eprintln(c.yellow("   with your Cerefox install:"));
+        eprintln(c.dim("     The Edge Functions import `jsr:@supabase/supabase-js@2`. When Supabase"));
+        eprintln(c.dim("     publishes a new version, JSR and npm do not land at the same instant;"));
+        eprintln(c.dim("     a deploy in that gap resolves a JSR package whose npm dependency is not"));
+        eprintln(c.dim("     published yet, and bundling fails."));
+        eprintln(c.dim("     Your deployed functions were NOT changed — the previous version is"));
+        eprintln(c.dim("     still serving, so nothing is down."));
+        eprintln(c.cyan("   → Wait a few minutes, then re-run: cerefox server deploy --functions-only"));
+      } else {
+        eprintln(c.dim("   Re-run `cerefox server deploy --functions-only` after fixing the cause."));
+      }
       process.exit(1);
     }
     println(c.green(`   ✓ Deployed ${efOk} Edge Function(s).`));
@@ -423,6 +454,29 @@ async function action(options: DeployServerOptions): Promise<void> {
   // are both on this release (self-update used to fire it pre-deploy, where a
   // schema-requiring release cannot ingest — see self-update.ts).
   println(c.dim("Refresh the bundled guides: cerefox guides ingest"));
+}
+
+/**
+ * Does this failed-deploy output look like an upstream package-registry race
+ * rather than a Cerefox problem? (#232 companion, observed 2026-09-02.)
+ *
+ * Supabase's Edge Function bundler resolves `jsr:@supabase/supabase-js@2` at
+ * deploy time. JSR and npm publishes are not atomic with respect to each
+ * other, so there is a window in which the JSR package exists and the npm
+ * dependency it names does not. Every function then fails with a 400 whose
+ * body says `Could not find npm package '<name>' matching '<version>'`.
+ *
+ * Deliberately matched on the bundler's phrasing rather than on a package
+ * name: the same race can happen with any transitive dependency, and pinning
+ * the specifier to dodge it was considered and rejected (the failure is rare,
+ * loud, leaves the previous functions serving, and self-heals on retry — a
+ * standing manual-bump burden across 9 functions is the worse trade).
+ */
+export function upstreamRegistryRace(output: string): boolean {
+  return (
+    /Failed to bundle the function/i.test(output) &&
+    /Could not find npm package/i.test(output)
+  );
 }
 
 export function registerDeployServer(program: Command): void {

@@ -35,16 +35,35 @@ function parseDotenv(content: string): Record<string, string> {
   return result;
 }
 
-let _loaded = false;
+/**
+ * Which env file this process has already loaded, or null for none.
+ *
+ * Keyed on the resolved PATH rather than a boolean (#230). A boolean made
+ * `loadEnv()` a no-op forever after the first call, including after
+ * `CEREFOX_CONFIG_DIR` changed — so a process that loaded one environment and
+ * then pointed at another silently kept the first one's values, or kept
+ * nothing at all if the first path did not exist.
+ *
+ * That is not a hypothetical either: `live-write-guard-coverage.test.ts` sets
+ * `CEREFOX_CONFIG_DIR` to a deliberately non-existent directory to prove the
+ * production-write guard refuses an unlabelled target. Under a boolean flag
+ * that one assertion poisoned the cache for the rest of the run, and every
+ * live suite loaded afterwards saw no credentials and skipped — passing, while
+ * running nothing. Same failure shape as the renamed-probe bug in v1.11.0.
+ *
+ * Still idempotent for the normal case (repeated calls resolving the same
+ * path do no work); it just stops lying when the question changes.
+ */
+let _loadedPath: string | null = null;
 
 export function loadEnv(opts: ResolverOptions = {}): { path: string; vars: number } {
-  // Idempotent: loading twice in one process is a no-op.
-  if (_loaded) {
+  const envPath = resolveEnvFile(opts);
+  // Idempotent per resolved path: loading the SAME file twice is a no-op.
+  if (_loadedPath === envPath) {
     return { path: "(already loaded)", vars: 0 };
   }
-  _loaded = true;
+  _loadedPath = envPath;
 
-  const envPath = resolveEnvFile(opts);
   let content: string;
   try {
     content = readFileSync(envPath, "utf8");
