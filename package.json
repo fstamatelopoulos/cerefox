@@ -1,7 +1,7 @@
 {
   "name": "cerefox-workspace",
   "version": "0.0.0-unreleased",
-  "description": "Repo-root npm workspace covering all Cerefox TypeScript surfaces — published packages (packages/*), shared internal modules (_shared), the React web UI (frontend), and ad-hoc TS scripts (scripts/*.ts). The package itself is not published; the workspace pattern lets `bun install` at the repo root hoist deps for every member.",
+  "description": "Repo-root npm workspace covering all Cerefox TypeScript surfaces \u2014 published packages (packages/*), shared internal modules (_shared), the React web UI (frontend), and ad-hoc TS scripts (scripts/*.ts). The package itself is not published; the workspace pattern lets `bun install` at the repo root hoist deps for every member.",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -12,6 +12,11 @@
   "dependencies": {
     "ora": "^9.4.0",
     "postgres": "^3.4.9"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.7",
+    "qs": "^6.16.0",
+    "@xmldom/xmldom": "^0.8.15"
   },
   "scripts": {
     "test": "cd _shared && bun test",

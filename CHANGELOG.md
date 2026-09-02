@@ -24,6 +24,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the UI. Invisible while the API was the web app's private backend; it matters
   now that other clients are invited onto it.
 
+### Security
+
+- **Four high and three moderate advisories cleared** by pinning three
+  transitive dependencies to their patched versions via root `overrides`:
+  `fast-uri` (host confusion and SSRF, four advisories, reached through
+  `@modelcontextprotocol/sdk` and `eslint`), `qs` (array-limit bypass and DoS,
+  through `@modelcontextprotocol/sdk`), and `@xmldom/xmldom` (XML fragment
+  injection, through `mammoth`). All were published upstream after v1.11.0 was
+  cut and none is reachable from a direct dependency; `bun update` could not
+  resolve past them because the intermediate packages' ranges pin them.
+
 ### Fixed
 
 - **Live test suites skipped in a full `bun test` run (#230).** `loadEnv()`
