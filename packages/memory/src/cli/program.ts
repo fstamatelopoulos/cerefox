@@ -69,6 +69,7 @@ import { registerRestore } from "./commands/restore.ts";
 import { registerSearch } from "./commands/search.ts";
 import { registerSelfUpdate } from "./commands/self-update.ts";
 import { registerStatus } from "./commands/status.ts";
+import { registerApiKey } from "./commands/api-key.ts";
 import { registerToken } from "./commands/token.ts";
 import { registerSyncSelfDocs } from "./commands/sync-self-docs.ts";
 import { registerWeb } from "./commands/web.ts";
@@ -187,6 +188,7 @@ export function buildProgram(): Command {
   registerWeb(program);
   registerCompletion(program);
   registerToken(program); // `token generate|rotate|list` — self-contained group (iter-28E)
+  registerApiKey(program); // `api-key generate|rotate|show` — LOCAL /api/v1 key (#229)
 
   // ── Resource groups (v0.9.0 rename-only redesign) ────────────────────────
   const document = program

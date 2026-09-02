@@ -80,7 +80,14 @@ warn_if_small_vm() {
   fi
 }
 
-PASSTHROUGH_VARS="CEREFOX_EMBEDDER CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
+# CEREFOX_API_KEY (#229) is here so an installer that provisions BOTH Cerefox
+# Local and a client container can mint one key on the host and hand the same
+# value to each, instead of booting Cerefox, reading the key back out, and
+# reconfiguring the client. db-init prefers an injected key over the persisted
+# one, so setting it in $ENV_FILE pins it across recreates.
+# CEREFOX_API_REQUIRE_KEY forces the key even for loopback callers — the setting
+# a same-host reverse proxy needs, since proxied requests all look local.
+PASSTHROUGH_VARS="CEREFOX_EMBEDDER CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME CEREFOX_API_KEY CEREFOX_API_REQUIRE_KEY"
 
 # Emit `-e VAR=value` for each passthrough var present in $ENV_FILE.
 config_env_args() {
@@ -138,6 +145,8 @@ Lifecycle (handled on the host):
   uninstall [--purge]   remove the container (--purge also DELETES the data volume)
   status                show container state + URL
   logs [-f]             show container logs
+  api-key [--rotate]    print the local API key (only needed by callers that are
+                        NOT on this machine; loopback callers need none)
   configure-agent [--tool X]  wire an MCP client (claude-code default; also claude-desktop|cursor|codex|gemini)
 
 Knowledge base (run inside the container — same as the cloud CLI):
@@ -285,6 +294,48 @@ case "$cmd" in
     else echo "✗ not installed   (run install-local.sh)"; fi
     ;;
   logs)          need_docker; docker logs "$@" "$CONTAINER" ;;
+
+  api-key)
+    # The local API key for /api/v1 + /rest/v1 (#229). Minted by the container
+    # at first boot and persisted on the DATA volume, so it survives upgrades.
+    #
+    # This is a READ, deliberately: the container owns its credentials and the
+    # host holds none of them (same boundary as the service_role JWT — see the
+    # header of this file). We print it on request rather than mirroring it
+    # into the host .env, so there is exactly one copy to reason about.
+    #
+    # You need this only for a caller that is NOT on this machine — a container
+    # on a Docker network, or a widened CEREFOX_LOCAL_BIND. Anything reaching
+    # the published port over loopback (your browser, a harness using host
+    # networking, your own scripts) needs no credential at all.
+    need_docker
+    is_running || die "container '$CONTAINER' is not running (run: cerefox-local start)"
+    case "${1:-}" in
+      --rotate)
+        # Delete the persisted key and restart so db-init mints a fresh one.
+        # Every remote client must then be reconfigured — hence the warning
+        # rather than a silent success.
+        docker exec "$CONTAINER" rm -f /var/lib/postgresql/data/.cerefox_api_key \
+          || die "could not remove the persisted key"
+        echo "Restarting to mint a new key…"
+        docker restart "$CONTAINER" >/dev/null
+        # db-init runs after postgres is ready; give it a moment before reading.
+        for _i in 1 2 3 4 5 6 7 8 9 10; do
+          sleep 2
+          _k="$(docker exec "$CONTAINER" cat /var/lib/postgresql/data/.cerefox_api_key 2>/dev/null || true)"
+          [ -n "$_k" ] && break
+        done
+        [ -n "${_k:-}" ] || die "the container restarted but no key appeared — check: cerefox-local logs"
+        echo "$_k"
+        echo "⚠ The previous key no longer works. Update every remote client." >&2
+        ;;
+      "")
+        docker exec "$CONTAINER" cat /var/lib/postgresql/data/.cerefox_api_key 2>/dev/null \
+          || die "no API key found — this image predates v1.12.0 (run: cerefox-local upgrade)"
+        ;;
+      *) die "unknown api-key option: $1 (use --rotate, or no argument to print)" ;;
+    esac
+    ;;
 
   upgrade)
     # `upgrade` with no argument resolves the newest published release and

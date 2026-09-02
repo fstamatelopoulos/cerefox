@@ -1,6 +1,12 @@
 #!/command/with-contenv bash
 set -euo pipefail
 SECRET_FILE=/var/lib/postgresql/data/.cerefox_jwt_secret
+# Local API key for /api/v1 + /rest/v1 (#229). Persisted on the DATA volume,
+# beside the JWT secret, so it survives `cerefox-local upgrade` (which
+# recreates the container but keeps the volume) — a key that changed on every
+# upgrade would silently break every remote client that had been configured
+# with it.
+API_KEY_FILE=/var/lib/postgresql/data/.cerefox_api_key
 RUNTIME_ENV=/run/cerefox-runtime.env
 log(){ echo "[db-init] $*"; }
 
@@ -12,10 +18,23 @@ if [ -n "${PGRST_JWT_SECRET:-}" ]; then SECRET="$PGRST_JWT_SECRET"; log "using i
 elif [ -f "$SECRET_FILE" ]; then SECRET="$(cat "$SECRET_FILE")"; log "loaded persisted secret";
 else SECRET="$(bun -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"; printf '%s' "$SECRET" > "$SECRET_FILE"; chmod 600 "$SECRET_FILE" || true; log "generated secret"; fi
 
+# Local API key: injected env > persisted (volume) > generate. Same ladder as
+# the JWT secret above, for the same reasons.
+#
+# Note what this key is NOT for: callers on the host reach the published port
+# over loopback and need no credential at all, which is why the web UI and any
+# harness using host networking keep working with no configuration. It is for a
+# caller arriving from somewhere that is not this machine — a container on a
+# Docker network, or a deliberately widened CEREFOX_LOCAL_BIND. Read it from
+# the host with `cerefox-local api-key`.
+if [ -n "${CEREFOX_API_KEY:-}" ]; then API_KEY="$CEREFOX_API_KEY"; log "using injected API key";
+elif [ -f "$API_KEY_FILE" ]; then API_KEY="$(cat "$API_KEY_FILE")"; log "loaded persisted API key";
+else API_KEY="cfx_lak_$(bun -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64url"))')"; printf '%s' "$API_KEY" > "$API_KEY_FILE"; chmod 600 "$API_KEY_FILE" || true; log "generated API key"; fi
+
 # mint the service_role JWT and hand both to the longrun services via a /run env file
 JWT="$(SECRET="$SECRET" bun -e 'const c=require("node:crypto");const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");const h=b({alg:"HS256",typ:"JWT"});const p=b({role:"service_role"});process.stdout.write(h+"."+p+"."+c.createHmac("sha256",process.env.SECRET).update(h+"."+p).digest("base64url"))')"
 umask 077
-{ printf 'PGRST_JWT_SECRET=%s\n' "$SECRET"; printf 'CEREFOX_SUPABASE_KEY=%s\n' "$JWT"; } > "$RUNTIME_ENV"
+{ printf 'PGRST_JWT_SECRET=%s\n' "$SECRET"; printf 'CEREFOX_SUPABASE_KEY=%s\n' "$JWT"; printf 'CEREFOX_API_KEY=%s\n' "$API_KEY"; } > "$RUNTIME_ENV"
 
 log "deploying schema + RPCs (idempotent)…"
 echo y | bun /opt/cerefox/dist/bin/cerefox.js server deploy --schema-only

@@ -26,6 +26,8 @@
 
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
+
+import { apiAuth, isLoopbackAddress } from "./auth.ts";
 import { existsSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -79,6 +81,19 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   if (process.env.NODE_ENV !== "test") {
     app.use(logger((message, ...rest) => console.log(`${localTimestamp()}  ${message}`, ...rest)));
   }
+
+  // Auth gate (#229) — BEFORE every route it protects, including the 503
+  // stubs below, so an unconfigured server does not leak its state either.
+  // Covers both HTTP surfaces on this port: `/api/v1/*` and the PostgREST
+  // passthrough at `/rest/v1/*` (live on Cerefox Local). Gating only the first
+  // would move the hole rather than close it.
+  //
+  // No exception for `/api/v1/version`: verified that no local caller is
+  // affected (the CLI talks to the Supabase Data API directly and never to
+  // this server), so the only caller a gate touches is a remote one — which is
+  // the caller this exists to stop.
+  app.use("/api/v1/*", apiAuth());
+  app.use("/rest/v1/*", apiAuth());
 
   // (1) JSON API — registered first.
   registerMetaRoutes(app, ctx);
@@ -220,6 +235,20 @@ export async function buildWebServer(
   const port = options.port ?? 8000;
 
   await assertServerCompatible();
+
+  // The one case the loopback design cannot cover on its own: a non-loopback
+  // bind with no key configured is a fully open API on a reachable interface.
+  // The gate allows an unconfigured server through (so upgrades never break a
+  // working install), which makes silence here the dangerous default — say it
+  // out loud at the moment the decision is made.
+  if (!isLoopbackAddress(host) && !(process.env.CEREFOX_API_KEY ?? "").trim()) {
+    console.warn(
+      `\n⚠  Binding ${host} with NO API key configured.\n` +
+        `   Every read, write, delete and purge on this server is reachable by\n` +
+        `   anything that can connect to port ${port}, with no credential.\n` +
+        `   Mint one:  cerefox api-key generate\n`,
+    );
+  }
 
   const app = buildApp();
 
