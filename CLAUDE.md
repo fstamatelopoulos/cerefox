@@ -119,8 +119,8 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
 - **Fire-and-forget ingestion**: ingestion can be async; failures log errors but don't block
 - **Parameterized limits**: response size limits, chunk sizes, etc. are configurable via settings
 - **Two-table design**: `cerefox_documents` (document-level) + `cerefox_chunks` (chunk-level) for clean separation
-- **Usage tracking**: `cerefox_usage_log` logs all operations (reads and writes); `cerefox_config` stores runtime config (e.g., `usage_tracking_enabled`). Opt-in; controlled via RPC, not env vars. `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled. Each entry records `requestor` (who: agent name or "user") and `access_path` (where: remote-mcp, local-mcp, edge-function, webapp, cli).
-- **Requestor enforcement**: optional `require_requestor_identity` config (default false) makes `requestor`/`author` mandatory on MCP tool calls. Optional `requestor_identity_format` config validates against a regex pattern. Both controlled via `cerefox_config`.
+- **Usage tracking**: `cerefox_usage_log` logs all operations (reads and writes); `cerefox_config` stores runtime config (e.g., `usage_tracking_enabled`). Opt-in; controlled via RPC, not env vars. `cerefox_log_usage` RPC checks config on every call and returns immediately when disabled. Each entry records `requestor` (who: agent name or "user") and `access_path` (where: remote-mcp, local-mcp, edge-function, webapp, cli, api). The domain is defined ONCE in `_shared/mcp-tools/access-paths.ts` and everything else derives from it — the column itself is free text with no CHECK, so that type is the guard. `api` means `/api/v1` called by a client that identified itself (v1.11.0, #226); `webapp` means the same routes with no identity supplied.
+- **Requestor enforcement**: optional `require_requestor_identity` config (default false) makes `requestor`/`author` mandatory, and optional `requestor_identity_format` validates them against a regex. Both controlled via `cerefox_config`. **Scope, stated precisely because the name promises more than it delivers: these are enforced by the Edge Functions only** — each of the 9 carries its own copy of the check, including `cerefox-mcp` (the REMOTE MCP transport). The **local stdio MCP server does not enforce them, and neither does `/api/v1`.** So enabling it does not make identity required everywhere. Making it global means one shared helper every transport calls, not a tenth copy of the block.
 
 ### Configuration
 - Config is loaded from `.env` / environment via `_shared/config/`
@@ -466,6 +466,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `setup-local.md` | Full local Docker deployment |
 | `setup-cloud-run.md` | GCP Cloud Run deployment |
 | `access-paths.md` | All access layers, credentials, and integration paths |
+| `api.md` | The `/api/v1` HTTP API: its (absent) auth posture, caller attribution, endpoint list |
 | `connect-agents.md` | MCP setup for Claude, Cursor, and generic clients |
 | `configuration.md` | All `CEREFOX_` environment variables with defaults |
 | `linking.md` | Document links: forms, the write-time validation guardrail (why LLMs corrupt long ids), the dead-link sweep |

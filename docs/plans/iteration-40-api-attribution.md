@@ -1,12 +1,13 @@
 # Iteration 40 — API attribution and environment honesty (v1.11.0)
 
-**Status: IN PROGRESS** (opened 2026-09-01). Branch:
-`feat/v1.11.0-api-attribution`. Target: **v1.11.0**. No schema change
-expected (see "No schema change" below).
+**Status: IMPLEMENTATION COMPLETE, awaiting review + release** (opened 2026-09-01). Branch:
+`feat/v1.11.0-api-attribution`. Target: **v1.11.0**. No schema change (confirmed, see below).
 
 Closes [#225](https://github.com/fstamatelopoulos/cerefox/issues/225),
 [#226](https://github.com/fstamatelopoulos/cerefox/issues/226),
-[#227](https://github.com/fstamatelopoulos/cerefox/issues/227).
+[#227](https://github.com/fstamatelopoulos/cerefox/issues/227), and
+[#228](https://github.com/fstamatelopoulos/cerefox/issues/228) (filed in
+flight — see "Found in flight" below).
 
 ## Why
 
@@ -112,31 +113,58 @@ in lockstep and this section is wrong.
 
 ## Steps
 
-- [ ] **#225** — `checkLegacyShadowEnv()` resolves the active env file through
-      `resolveEnvFile()` instead of assuming `~/.cerefox/.env`, and gates on
-      the same "has a `CEREFOX_*` key" heuristic `resolveConfigDir()` uses, so
-      it stops calling an unrelated project's `.env` safe to delete. Tests
-      drive the resolver, never a hardcoded path.
-- [ ] **#226 core** — a single shared helper resolves caller identity and the
-      derived access path from a request, used by every `/api/v1` route that
-      writes or logs. One implementation, not 17 edits.
-- [ ] **#226 routes** — ingest, document write, projects, config routes accept
-      the optional parameters; `logWebUsage()` accepts requestor and access
-      path.
-- [ ] **#226 domain** — `AccessPath` gains `"api"`; `deriveAccessPathStats()`
-      and its test learn it; `CLAUDE.md` usage-tracking paragraph updated.
-- [ ] **Audit authorship unification** — the two `author: "user"` routes move
-      to the shared resolver.
-- [ ] **#227** — repo-root `docker-compose.yml` binds published ports to
-      loopback, matching `docker/local/compose.yml` and the installer.
-- [ ] **Tests** — unit tests for the resolver and the deriver; HTTP-boundary
-      tests under `web-integration/` covering omitted-parameter parity and
-      supplied-parameter attribution.
-- [ ] **Docs** — `/api/v1` reference guide; `configuration.md` enforcement
-      scope; CHANGELOG.
-- [ ] **Live regression** — staging first, then a throwaway local Docker
-      instance. The maintainer's own Cerefox Local is in use by another agent
-      and is not to be touched.
+- [x] **#225** — `checkLegacyShadowEnv()` resolves the active env file through
+      `resolveEnvFile()` and gates on the shared `CEREFOX_*`-key predicate.
+      Both guards proven to fire independently by regressing each alone.
+- [x] **#226 core** — `packages/memory/src/web/identity.ts`: one resolver, used
+      by every route that writes or logs. Headers first, body honoured, derived
+      access path, `author_type` validated at the boundary (the DB CHECK would
+      otherwise surface as a 500 for a caller mistake).
+- [x] **#226 routes** — ingest (3), document write (6), projects (3), config,
+      and the two reads that log usage. No route carries a default any more.
+- [x] **#226 domain** — the vocabulary moved to a dependency-free leaf
+      (`_shared/mcp-tools/access-paths.ts`); `AccessPath` derives from it, the
+      Analytics filter derives from it through a vite alias, and its label map
+      is keyed by the union so an unlabelled path fails the typecheck.
+      `deriveAccessPathStats()` and the Dashboard learn `api` explicitly.
+- [x] **Audit authorship unification** — the two `author: "user"` routes.
+- [x] **#227** — repo-root `docker-compose.yml` publishes to loopback.
+- [x] **#228 (found in flight)** — `POST /documents/{id}/upload` broken since
+      v0.11.0; accepts the hash optionally, defaults to last-write-wins.
+- [x] **Tests** — resolver unit tests (20), deriver tests (+3), HTTP-boundary
+      attribution tests (5) covering omitted-parameter parity against the
+      stored row.
+- [x] **Docs** — `docs/guides/api.md` (new), `configuration.md` enforcement
+      scope, config-catalog description, `access-paths.md` + README + CLAUDE.md
+      cross-links, CHANGELOG.
+- [x] **Live regression** — staging 215 pass / 0 fail; a throwaway Cerefox
+      Local container on 18040, destroyed afterwards.
+
+## Found in flight
+
+Three things this iteration did not set out to fix, recorded because each was
+invisible until the code was opened.
+
+**The web-integration suite had been skipping since v0.9.0.** `probeSupabase()`
+shelled out to `cerefox list-projects`; v0.9.0 renamed that verb and left a
+husk that exits non-zero by design. The probe read that as "backend
+unreachable". Eleven releases, green throughout, running nothing — and the
+reason #228 survived. The fix is one probe that **throws** when the CLI rejects
+the probe command, because a probe that cannot tell "the backend is down" from
+"that command no longer exists" is not a probe.
+
+**Turning the suite on turned its billing on.** `destructive.test.ts` built its
+fixture through the deployed `cerefox-ingest` Edge Function, a v0.6 workaround
+from when `/api/v1/ingest` was a 503 stub. That suite is not one of the two
+`CEREFOX_LIVE_E2E` suites permitted to spend free-tier quota. It now ingests
+over HTTP, and the dead helper is deleted rather than left for reuse.
+
+**A local `bun run typecheck` never checked the frontend.** `tsc --noEmit`
+there checks nothing, because `tsconfig.json` is `files: []` plus references.
+CI builds the frontend and was unaffected, but the local script that people
+actually run was blind to the whole SPA. This is the same shape as the two
+incidents `CLAUDE.md` already records under "tests and CI are only as honest as
+their coverage", which is why it is written down rather than quietly fixed.
 
 ## Verification plan
 

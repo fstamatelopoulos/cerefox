@@ -28,10 +28,15 @@
 ---
 ## Current Focus
 
-**2026-09-01 — Iteration 40 IN PROGRESS on `feat/v1.11.0-api-attribution`,
-target v1.11.0: optional `author`/`requestor`/`author_type` on `/api/v1`
-(#226), the `doctor` config-dir misreport (#225), and the repo-root compose
-bind (#227). Detail: [iteration 40](plans/iteration-40-api-attribution.md).**
+**2026-09-01 — Iteration 40 IMPLEMENTATION COMPLETE on
+`feat/v1.11.0-api-attribution`, target v1.11.0, awaiting review + release.
+Optional `author`/`requestor`/`author_type` on `/api/v1` (#226), the `doctor`
+config-dir misreport (#225), the repo-root compose bind (#227), and #228 —
+`POST /documents/{id}/upload`, broken since v0.11.0 and found only because the
+same work revealed that the web-integration suite had been skipping since
+v0.9.0. No schema change. Verified on staging (215 pass / 0 fail) and in a
+throwaway Cerefox Local container. Detail:
+[iteration 40](plans/iteration-40-api-attribution.md).**
 
 **v1.11.0 is this work, NOT the Node baseline drop.** #154 (commander 15,
 Node ≥ 22.12, installer detection) moves to **v1.12.0** — decision
@@ -114,8 +119,12 @@ one:
 ## Active iteration
 
 **[Iteration 40 — API attribution and environment honesty](plans/iteration-40-api-attribution.md)**
-— ⏳ **IN PROGRESS** (opened 2026-09-01), target v1.11.0. No schema change
-expected. Closes #225, #226, #227.
+— ⏳ **IMPLEMENTATION COMPLETE, awaiting review + release** (2026-09-01), target
+v1.11.0. **No schema change.** Closes #225, #226, #227, and #228 (found in
+flight). Verified on staging (215 pass / 0 fail) and in a throwaway Cerefox
+Local container. The find that outlived the feature: the web-integration suite
+had been skipping since v0.9.0 on a renamed probe verb, which is how #228
+survived eleven releases.
 
 **[Iteration 39 — Audit consistency: the web save on shared cores](plans/iteration-39-audit-consistency.md)**
 — ✅ **CLOSED, shipped v1.10.0 + v1.10.1** (2026-08-22; schema 0.15.0,

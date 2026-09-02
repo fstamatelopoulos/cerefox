@@ -477,9 +477,33 @@ optional. When omitted, it defaults to `"mcp-agent"`. This means the usage log s
 `"mcp-agent"` for all calls that don't explicitly identify themselves, making analytics
 less useful in multi-agent setups.
 
-You can optionally enforce caller identification so that all MCP tool calls must include
+You can optionally enforce caller identification so that MCP tool calls must include
 a requestor/author identity. Calls without identity receive a JSON-RPC `-32602` error
 with a helpful message telling the agent what to provide.
+
+### What it actually covers
+
+**These two settings are enforced by the Edge Functions only.** Each of the nine
+Edge Functions carries the check, including `cerefox-mcp`, which is the **remote**
+MCP transport. Nothing else does:
+
+| Surface | Enforced? |
+|---|---|
+| Edge Functions (GPT Actions, direct HTTP) | Yes |
+| Remote MCP (`cerefox-mcp` Edge Function) | Yes |
+| **Local MCP** (`cerefox mcp`, stdio) | **No** |
+| **`/api/v1`** (`cerefox web`, Cerefox Local) | **No** |
+| CLI | **No** |
+
+This is stated plainly because the setting's name promises more than it
+delivers: enabling it does not make identity required everywhere, and an
+operator who assumes otherwise has a gap exactly where their local agents are.
+The reason it is scoped this way is that the Edge Functions are the
+internet-facing surface, while the local surfaces are already reachable only by
+whoever is on the machine.
+
+If you need it everywhere, that is a shared helper every transport calls, not a
+tenth copy of the same block. Raise an issue rather than assuming it is there.
 
 ### Enabling enforcement
 
