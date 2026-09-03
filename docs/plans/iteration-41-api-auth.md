@@ -89,7 +89,13 @@ releases; landing an auth change and a platform-baseline drop together makes
       `overrides`. Pre-existing on `main`, folded into #233 because it blocked
       the merge.
 - [x] Live regression against staging (294 pass / 2 skip) + Playwright 20/20.
-- [x] CHANGELOG, `api.md`, `configuration.md`, `access-paths.md`.
+- [x] CHANGELOG, `api.md`, `configuration.md`, `access-paths.md`, and a new
+      task-oriented guide `docs/guides/securing-local-access.md`. The depth
+      lives THERE and `api.md` links to it rather than repeating it: two
+      documents explaining the same mechanism is the drift pattern this repo
+      has already been bitten by (the access-path vocabulary, the compat
+      matrix). `api.md`'s reader is writing a client; this guide's reader is
+      deciding whether they have a problem.
 
 ## Found during recon
 

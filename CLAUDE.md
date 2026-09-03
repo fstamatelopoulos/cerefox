@@ -466,7 +466,8 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `setup-local.md` | Full local Docker deployment |
 | `setup-cloud-run.md` | GCP Cloud Run deployment |
 | `access-paths.md` | All access layers, credentials, and integration paths |
-| `api.md` | The `/api/v1` HTTP API: its (absent) auth posture, caller attribution, endpoint list |
+| `api.md` | The `/api/v1` HTTP API: auth posture, caller attribution, endpoint list |
+| `securing-local-access.md` | The v1.12.0 API key: the loopback-exempt rule, when a key is needed, container + reverse-proxy recipes, rotation |
 | `connect-agents.md` | MCP setup for Claude, Cursor, and generic clients |
 | `configuration.md` | All `CEREFOX_` environment variables with defaults |
 | `linking.md` | Document links: forms, the write-time validation guardrail (why LLMs corrupt long ids), the dead-link sweep |

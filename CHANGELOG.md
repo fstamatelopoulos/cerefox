@@ -44,6 +44,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   every request look local, so that topology sets `CEREFOX_API_REQUIRE_KEY=1`,
   which demands the key from every caller including loopback.
 
+- **New guide: [`docs/guides/securing-local-access.md`](docs/guides/securing-local-access.md)** —
+  whether you need a key at all (a table of concrete situations, including the
+  two Docker networking cases that differ), why the boundary is drawn at the
+  network rather than at every request, recipes for a harness in its own
+  container and for a same-host reverse proxy, rotation without downtime, and
+  an explicit list of what this does **not** protect.
 - **`cerefox api-key generate|show|rotate`** and **`cerefox-local api-key
   [--rotate]`** to mint, read and replace that key. `generate` refuses to
   overwrite an existing key: silently replacing one would give every already

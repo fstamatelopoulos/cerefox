@@ -20,81 +20,39 @@ and do not want an MCP client in the loop.
 
 ## Security posture: local by default, key for anything else
 
-Since **v1.12.0** this surface has an authentication gate, and the rule is
-short:
+Since **v1.12.0** this surface is authenticated for callers that are not on the
+same machine:
 
-> **Requests arriving on the loopback interface (127.0.0.1) are allowed without
-> a credential. Requests arriving on any other interface must present the
-> server's API key.**
+> **A request arriving on the loopback interface (`127.0.0.1`) is allowed
+> without a credential. A request arriving on any other interface must present
+> the server's API key** as `Authorization: Bearer <key>`.
 
-### Why it is built this way
-
-The attacker worth defending against can reach the port but has no read access
-to your filesystem: another machine on the network after someone widened the
-bind, a container on a shared Docker network, a malicious page in your browser.
-An attacker who already has filesystem access can read the key, the `.env` and
-your database credentials, so demanding a key from them would achieve nothing.
-On a single-user machine, loopback access and key-file access are the same
-trust boundary.
-
-The practical result is that **nothing local needs configuring**. The web UI,
-an agent on the same machine, your own scripts: all keep working exactly as
-before, with no key and no prompt. The browser in particular never holds a
-credential, which is deliberate — the SPA is a static file, so a key embedded
-in it could be read by anything that can load the page.
-
-### What this does NOT protect
-
-**Anything already running on your machine.** Any local process can reach a
-loopback port. The gate is about the network boundary, not about isolating
-programs from each other.
-
-**A same-host reverse proxy.** If you put nginx or Caddy in front of Cerefox on
-the same machine, it reconnects from `127.0.0.1`, so every forwarded request
-looks local and is exempt. `X-Forwarded-For` is deliberately **never** consulted
-to recover the original address: that header is set by the caller, so trusting
-it would let anyone claim to be local. If you front Cerefox with a proxy, set
-`CEREFOX_API_REQUIRE_KEY=1`, which demands the key from every caller including
-loopback.
-
-**Confidentiality on the wire.** There is no TLS here. The key authenticates;
-it does not encrypt.
-
-### Getting and using a key
+So the web UI, agents on the same machine and localhost scripts need nothing,
+while a caller on a Docker network or across a widened bind needs a key:
 
 ```bash
-cerefox api-key generate     # mint one, written to your .env, printed once
-cerefox api-key show         # print it again, in full
-cerefox api-key rotate       # replace it (remote clients must be updated)
-
-cerefox-local api-key            # Cerefox Local: print the container's key
-cerefox-local api-key --rotate   # mint a new one and restart
-```
-
-Cerefox Local mints its key automatically at first boot and persists it on the
-data volume, so it survives `cerefox-local upgrade`. `cerefox web` mints
-nothing on its own: until you run `api-key generate` there is no key, and the
-server behaves exactly as it did before v1.12.0. That is intentional, so
-upgrading never breaks a working setup.
-
-A remote caller presents it as a bearer token:
-
-```bash
-curl http://<host>:8000/api/v1/documents/<uuid> \
-  -H 'Authorization: Bearer cfx_lak_…' \
-  -H 'X-Cerefox-Requestor: my-bot'
+cerefox api-key generate     # cerefox web
+cerefox-local api-key        # Cerefox Local (minted at first boot)
 ```
 
 Without a valid key the server answers `401` with a `WWW-Authenticate: Bearer`
-challenge and a `detail` explaining what to do.
+challenge and a `detail` explaining what to do. With no key configured at all,
+the gate is off and the server behaves exactly as it did before v1.12.0, so
+upgrading never breaks a working install.
 
-### Still: do not put this on the internet
+**→ [`securing-local-access.md`](securing-local-access.md) is the full guide**:
+whether you need a key at all, why it is drawn at the network boundary, the
+container and reverse-proxy recipes, rotation, and what this deliberately does
+not protect.
 
-A key makes a widened bind survivable. It does not make this surface an
-internet-facing API. There is no TLS, no rate limiting, no per-client scoping,
-and no revocation beyond rotating the single key. If you need Cerefox reachable
-over a network you do not control, use the Edge Functions: that is the surface
-built for it.
+Two things to carry into the rest of this document:
+
+- **There is no TLS here.** The key authenticates; it does not encrypt. This is
+  still not an internet-facing API. If you need Cerefox reachable over a
+  network you do not control, use the Edge Functions.
+- **`X-Forwarded-For` is never consulted** to decide where a request came from.
+  A same-host reverse proxy therefore makes every request look local; that
+  topology sets `CEREFOX_API_REQUIRE_KEY=1`.
 
 ## Identifying your client
 
