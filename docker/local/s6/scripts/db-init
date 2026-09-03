@@ -20,21 +20,55 @@ else SECRET="$(bun -e 'process.stdout.write(require("node:crypto").randomBytes(3
 
 # Local API key: injected env > persisted (volume) > generate. Same ladder as
 # the JWT secret above, for the same reasons.
-#
-# Note what this key is NOT for: callers on the host reach the published port
-# over loopback and need no credential at all, which is why the web UI and any
-# harness using host networking keep working with no configuration. It is for a
-# caller arriving from somewhere that is not this machine — a container on a
-# Docker network, or a deliberately widened CEREFOX_LOCAL_BIND. Read it from
-# the host with `cerefox-local api-key`.
 if [ -n "${CEREFOX_API_KEY:-}" ]; then API_KEY="$CEREFOX_API_KEY"; log "using injected API key";
 elif [ -f "$API_KEY_FILE" ]; then API_KEY="$(cat "$API_KEY_FILE")"; log "loaded persisted API key";
 else API_KEY="cfx_lak_$(bun -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64url"))')"; printf '%s' "$API_KEY" > "$API_KEY_FILE"; chmod 600 "$API_KEY_FILE" || true; log "generated API key"; fi
 
+# ── Whether the gate is ON is decided on the HOST, not here (v1.12.1) ────────
+#
+# v1.12.0 injected the key unconditionally, which broke every containerised
+# install: Docker's port publishing NATs the source address, so a request from
+# the host to 127.0.0.1:<port> reaches this process appearing to come from the
+# bridge gateway, NOT from 127.0.0.1. The server's loopback exemption therefore
+# never matched and every caller — the web UI included — got a 401.
+#
+# The deeper point, which is why this is not just a wiring fix: inside a
+# bridge-networked container the server CANNOT distinguish a host-loopback
+# request from a LAN request. Docker NATs both to the same address. So the
+# loopback-exempt middle ground is not implementable here, and pretending
+# otherwise is what produced the bug.
+#
+# Hence: in a container the gate is either fully OFF or fully ON (every caller
+# presents the key). Which one is a property of the PUBLISH address, and only
+# the host knows that at `docker run` time — so `cerefox-local` passes the
+# decision in as CEREFOX_API_REQUIRE_KEY.
+#
+#   default publish (127.0.0.1)  → no key injected → gate off; the host's own
+#                                  bind is the boundary, exactly as pre-1.12.0
+#   wider publish, or an operator-supplied key → key injected + require mode
+#
+# The key is still minted and persisted above either way, so
+# `cerefox-local api-key` always has something to print and turning the gate on
+# never changes the value clients were given.
+API_KEY_LINE=""
+if [ "${CEREFOX_API_REQUIRE_KEY:-}" = "1" ] || [ -n "${CEREFOX_API_KEY:-}" ]; then
+  API_KEY_LINE="CEREFOX_API_KEY=$API_KEY"
+  log "API key gate ENABLED (every caller must present the key)"
+else
+  log "API key gate off (published on loopback; the host bind is the boundary)"
+fi
+
 # mint the service_role JWT and hand both to the longrun services via a /run env file
 JWT="$(SECRET="$SECRET" bun -e 'const c=require("node:crypto");const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");const h=b({alg:"HS256",typ:"JWT"});const p=b({role:"service_role"});process.stdout.write(h+"."+p+"."+c.createHmac("sha256",process.env.SECRET).update(h+"."+p).digest("base64url"))')"
 umask 077
-{ printf 'PGRST_JWT_SECRET=%s\n' "$SECRET"; printf 'CEREFOX_SUPABASE_KEY=%s\n' "$JWT"; printf 'CEREFOX_API_KEY=%s\n' "$API_KEY"; } > "$RUNTIME_ENV"
+{
+  printf 'PGRST_JWT_SECRET=%s\n' "$SECRET"
+  printf 'CEREFOX_SUPABASE_KEY=%s\n' "$JWT"
+  # Empty unless the gate is on — see the block above. When it IS on, force
+  # require-mode too: a key without it would rely on the loopback exemption,
+  # which cannot work behind Docker's NAT.
+  [ -n "$API_KEY_LINE" ] && { printf '%s\n' "$API_KEY_LINE"; printf 'CEREFOX_API_REQUIRE_KEY=1\n'; }
+} > "$RUNTIME_ENV"
 
 log "deploying schema + RPCs (idempotent)…"
 echo y | bun /opt/cerefox/dist/bin/cerefox.js server deploy --schema-only

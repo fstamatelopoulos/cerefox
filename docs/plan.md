@@ -50,7 +50,28 @@ is rare, loud, leaves the previous functions live, and self-heals on retry, so a
 permanent manual-bump burden across 9 files is the worse trade. What it does
 justify is a readable error message (see iteration 41).
 
-**2026-09-02 — Iteration 41 OPEN, target v1.12.0.** Authentication for
+**2026-09-03 — v1.12.0 SHIPPED then IMMEDIATELY HOTFIXED. Iteration 42
+(v1.12.1) fixes a release-day break.** v1.12.0's #229 auth gate made Cerefox
+Local **completely inaccessible** — every request 401, web UI included —
+because Docker's port publishing rewrites the source address, so the loopback
+exemption never matched. Found live on the maintainer's instance by a demo
+agent, not by the suite. Detail:
+[iteration 42](plans/iteration-42-container-loopback.md).
+
+**The design correction, which matters beyond the bug**: inside a
+bridge-networked container the server CANNOT distinguish a host-loopback caller
+from a remote one (Docker NATs both to the same address), so the loopback-exempt
+middle ground is not implementable there. The container gate is now
+all-or-nothing, decided on the HOST from the publish address. Guarded by
+`docker/local/smoke-auth.sh`, which builds the real image and was verified to
+fail on the v1.12.0 behaviour.
+
+**Lesson**: a feature that depends on a property of the transport must be tested
+in every packaging that changes the transport. 17 unit tests, 8 HTTP-boundary
+tests and a real LAN verification all passed — every one of them against
+`cerefox web` running natively.
+
+**2026-09-02 — Iteration 41 CLOSED (v1.12.0).** Authentication for
 `/api/v1` (#229, design-first), the ingest routes' HTTP-status inconsistency
 (#232), live suites skipping in a full `bun test` (#230), and the deploy-error
 message above. Detail: [iteration 41](plans/iteration-41-api-auth.md).

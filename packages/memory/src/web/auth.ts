@@ -39,6 +39,8 @@
  * so anyone fronting Cerefox that way must set it.
  */
 
+import { existsSync } from "node:fs";
+
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { Context, MiddlewareHandler } from "hono";
 
@@ -68,6 +70,47 @@ const LOOPBACK_ADDRESSES = new Set([
   "::1",
   "::ffff:127.0.0.1",
 ]);
+
+/**
+ * Are we running inside a container? (`/.dockerenv` is Docker's own marker.)
+ *
+ * This matters because of the v1.12.0 bug: Docker's port publishing NATs the
+ * source address, so a request from the host to a published port arrives here
+ * appearing to come from the bridge gateway rather than 127.0.0.1. The
+ * loopback exemption therefore never matches, and — worse — a bridge-networked
+ * container CANNOT distinguish a host-loopback caller from a LAN one, because
+ * both are NAT'd to the same address. The exemption is not implementable here,
+ * so a key without require-mode is a misconfiguration rather than a
+ * preference. `warnIfLoopbackExemptionIsUseless()` says so at boot.
+ */
+export function isContainerised(): boolean {
+  try {
+    return existsSync("/.dockerenv");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Boot-time check for the one configuration that cannot work.
+ *
+ * Returns the warning text, or null when the configuration is sound — a string
+ * rather than a `console.warn` so it can be asserted in a test. The v1.12.0
+ * incident is the reason this is a function with a test and not a comment.
+ */
+export function containerGateWarning(env: NodeJS.ProcessEnv = process.env): string | null {
+  const hasKey = (env.CEREFOX_API_KEY ?? "").trim() !== "";
+  const requireAll = (env.CEREFOX_API_REQUIRE_KEY ?? "") === "1";
+  if (!hasKey || requireAll || !isContainerised()) return null;
+  return (
+    "\n⚠  CEREFOX_API_KEY is set inside a container without CEREFOX_API_REQUIRE_KEY=1.\n" +
+    "   Docker rewrites the source address of every published-port request, so the\n" +
+    "   loopback exemption cannot match and EVERY caller will get a 401 — including\n" +
+    "   the web UI. In a container the gate must be all-or-nothing:\n" +
+    "     • publishing on 127.0.0.1 → leave CEREFOX_API_KEY unset (the bind is the boundary)\n" +
+    "     • publishing wider        → also set CEREFOX_API_REQUIRE_KEY=1\n"
+  );
+}
 
 /** Is this the address of a connection that originated on this machine? */
 export function isLoopbackAddress(address: string | undefined): boolean {
