@@ -27,7 +27,7 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 
-import { apiAuth, isLoopbackAddress } from "./auth.ts";
+import { apiAuth, containerGateWarning, isLoopbackAddress } from "./auth.ts";
 import { existsSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -241,6 +241,12 @@ export async function buildWebServer(
   // The gate allows an unconfigured server through (so upgrades never break a
   // working install), which makes silence here the dangerous default — say it
   // out loud at the moment the decision is made.
+  // The container misconfiguration that shipped in v1.12.0 and broke every
+  // Cerefox Local install. Checked before the bind warning because it is the
+  // more specific of the two.
+  const containerWarning = containerGateWarning();
+  if (containerWarning) console.warn(containerWarning);
+
   if (!isLoopbackAddress(host) && !(process.env.CEREFOX_API_KEY ?? "").trim()) {
     console.warn(
       `\n⚠  Binding ${host} with NO API key configured.\n` +

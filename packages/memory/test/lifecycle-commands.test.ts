@@ -386,12 +386,16 @@ describe("doctor / status (live)", () => {
     expect(names).toContain("binary");
     expect(names).toContain("supabase");
     expect(names).toContain("schema + RPCs");
-  });
+    // `doctor` runs every check: Supabase, OpenAI, schema RPC, embedder, content
+    // format, metadata health, and the Edge Function version aggregator. Many
+    // real round trips, routinely past bun's 5s default (#235).
+  }, 60_000);
 
   test("status --json returns a 3-element array", () => {
     const { stdout, status } = run(["status", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as unknown[];
     expect(parsed.length).toBe(3);
-  });
+    // Live: shells out to the CLI, which reaches the store (#235).
+  }, 60_000);
 });

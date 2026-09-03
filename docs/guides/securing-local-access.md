@@ -22,21 +22,53 @@ Introduced in **v1.12.0** ([#229](https://github.com/fstamatelopoulos/cerefox/is
 
 ## Do you need a key?
 
+**It depends on how Cerefox itself is running**, so start there.
+
+### If you run Cerefox Local (Docker)
+
+| Your publish address | Gate | You do |
+|---|---|---|
+| `127.0.0.1` (the default) | **Off** | Nothing. Every caller that can reach the published port is allowed, and the port is only reachable from this machine. |
+| Anything wider (`CEREFOX_LOCAL_BIND=0.0.0.0`) | **On, for everyone** | Give the key to every client, including your own browser. |
+
+There is no middle setting here, and that is deliberate rather than a
+limitation we forgot to lift. **Docker rewrites the source address of every
+request that comes through a published port**, so a server inside a container
+cannot tell a request from your own machine apart from one that crossed the
+network — both arrive from the same bridge address. Since the distinction
+cannot be made, the gate does not pretend to make it: it is either off, with
+the publish address as the boundary, or on for everybody.
+
+`cerefox-local` sets this for you from `CEREFOX_LOCAL_BIND`. To force the gate
+on while still publishing to loopback:
+
+```bash
+echo 'CEREFOX_API_REQUIRE_KEY=1' >> ~/.cerefox/local/.env
+cerefox-local restart
+```
+
+> **v1.12.0 got this wrong** and injected a key into every container without
+> require-mode, so the loopback exemption never matched and every caller — the
+> web UI included — got a `401`. Fixed in **v1.12.1**. If you are on v1.12.0
+> and seeing 401s from a container, upgrade.
+
+### If you run `cerefox web` directly (npm install)
+
+Here the server sees real client addresses, so the loopback rule applies as
+written.
+
 | Your situation | Need a key? |
 |---|---|
 | You use the web UI in your browser | **No** |
-| An agent or script runs on the same machine as Cerefox | **No** |
-| Your harness runs in a container using **host networking** or `host.docker.internal` | **No** — the connection still arrives on the host's loopback |
-| Your harness runs in a container on a **Docker bridge network**, reaching Cerefox as a container | **Yes** |
-| You set `--host 0.0.0.0` or `CEREFOX_LOCAL_BIND=0.0.0.0` to reach Cerefox from another machine | **Yes** |
-| You put a reverse proxy in front of Cerefox on the same machine | **Yes**, plus `CEREFOX_API_REQUIRE_KEY=1` (see below) |
+| An agent or script runs on the same machine | **No** |
+| A container reaches your host server via `host.docker.internal` | **No** — it arrives on the host's loopback |
+| You bind `--host 0.0.0.0` to reach Cerefox from another machine | **Yes** |
+| A reverse proxy sits in front on the same machine | **Yes**, plus `CEREFOX_API_REQUIRE_KEY=1` (see below) |
 
-If every row that applies to you says No, you are done. Nothing to install,
-nothing to configure, nothing changed in v1.12.0.
+If every row that applies to you says No, you are done.
 
-**Not sure which container case you are in?** Ask for the version endpoint from
-inside the client container. A `200` means you are on the exempt path; a `401`
-means you need a key.
+**Not sure?** Ask for the version endpoint the way your client will. `200`
+means you are on the exempt path; `401` means you need a key.
 
 ```bash
 docker exec <your-client-container> \
@@ -84,9 +116,14 @@ the data volume, so it survives `cerefox-local upgrade`. You never create it;
 you only read it.
 
 ```bash
-cerefox-local api-key            # print it
+cerefox-local api-key            # print it (and say whether it is enforced)
 cerefox-local api-key --rotate   # mint a new one and restart
 ```
+
+The key exists whether or not the gate is on, so turning the gate on later
+never changes the value your clients were given. `cerefox-local api-key` tells
+you which state you are in — printing a key while implying it is being enforced
+when it is not would be worse than printing nothing.
 
 ## Using it
 
@@ -120,10 +157,16 @@ the one it would generate, so this pins it across recreates.
 # 1. Mint once, on the host.
 KEY="cfx_lak_$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-43)"
 
-# 2. Give it to Cerefox Local. It is on the passthrough allowlist, so it
-#    survives `cerefox-local upgrade` and any recreate.
-echo "CEREFOX_API_KEY=$KEY" >> ~/.cerefox/local/.env
+# 2. Give it to Cerefox Local. Both variables are on the passthrough allowlist,
+#    so they survive `cerefox-local upgrade` and any recreate. REQUIRE_KEY is
+#    what turns the gate on: inside a container there is no loopback exemption
+#    to fall back on, so the gate is all-or-nothing.
+{ echo "CEREFOX_API_KEY=$KEY"; echo "CEREFOX_API_REQUIRE_KEY=1"; } >> ~/.cerefox/local/.env
 cerefox-local restart
+
+# Note: with the gate on, YOUR BROWSER needs the key too. If you use the web UI
+# daily, prefer leaving Cerefox published on loopback with the gate off and
+# giving your harness host networking instead.
 
 # 3. Give the same value to your client container, however it takes config.
 docker run -e CEREFOX_API_KEY="$KEY" … your-harness
@@ -181,9 +224,13 @@ authenticates every request against a rotatable token. See
 set, which removes the loopback exemption. Unset it unless you are running a
 reverse proxy.
 
-**My container gets 401 but curl on the host works.** That is the gate behaving
-correctly: your container reaches Cerefox over a Docker network, not loopback.
-Give it the key (see the recipe above).
+**My container gets 401 but curl on the host works.** With `cerefox web` on the
+host, that is the gate behaving correctly: your container reaches Cerefox over
+a Docker network, not loopback. Give it the key (see the recipe above).
+
+**Everything gets 401 from a Cerefox Local container, including the web UI.**
+That is the v1.12.0 bug, not a configuration problem. Run
+`cerefox-local upgrade` to get v1.12.1 or newer.
 
 **`cerefox-local api-key` says no key was found.** The image predates v1.12.0.
 Run `cerefox-local upgrade`.

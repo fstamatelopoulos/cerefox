@@ -9,6 +9,47 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cerefox Local was completely inaccessible on v1.12.0 — every request
+  returned `401`, including the web UI.** v1.12.0 injected an API key into the
+  container unconditionally, and **Docker's port publishing rewrites the source
+  address**: a request from the host to `127.0.0.1:<port>` reaches the server
+  inside the container appearing to come from the bridge gateway, never from
+  `127.0.0.1`. The loopback exemption could therefore never match. **Upgrade
+  to v1.12.1 if you run Cerefox Local.**
+
+  The fix is not only wiring. Inside a bridge-networked container the server
+  **cannot** distinguish a host-loopback caller from one that crossed the
+  network, because Docker NATs both to the same address — so the loopback-exempt
+  middle ground is not implementable there, and v1.12.0 was pretending
+  otherwise. In a container the gate is now all-or-nothing, and which one is
+  decided on the **host**, where the publish address is actually known:
+  published on `127.0.0.1` (the default) → gate off, the bind is the boundary,
+  exactly as pre-1.12.0; published wider → gate on for every caller.
+  `cerefox-local` derives this from `CEREFOX_LOCAL_BIND`; an explicit
+  `CEREFOX_API_REQUIRE_KEY=1` still forces it on.
+
+  Two guards so this cannot recur: `cerefox web` now **warns at boot** when a
+  key is configured inside a container without require-mode (the exact broken
+  configuration), and `docker/local/smoke-auth.sh` builds the real image,
+  publishes a real port and makes real requests from the host — verified to
+  fail on the v1.12.0 behaviour and pass on the fix. The original bug was
+  invisible to every unit test and to a native `cerefox web` run, because the
+  mechanism was right and only the packaging was wrong.
+
+- **`cerefox-local api-key` says whether the key is actually enforced.**
+  Printing a key while implying it gates something, when it does not, is worse
+  than printing nothing.
+- **Two more live tests given realistic time budgets** (`pipeline-update`,
+  `doctor --json`). They make several real Supabase/OpenAI round trips while
+  inheriting bun's 5-second default, so they failed on a slow API day. The
+  systematic version — ~130 live tests across 16 files with almost no explicit
+  budgets — is tracked as
+  [#235](https://github.com/fstamatelopoulos/cerefox/issues/235); note there
+  that `bunfig.toml`'s `[test] timeout` is **not** honored by bun 1.3.13, which
+  was verified rather than assumed.
+
 Open roadmap.
 
 ---

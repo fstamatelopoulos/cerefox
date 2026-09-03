@@ -106,6 +106,19 @@ recreate() {
   # shellcheck disable=SC1090
   PORT="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_PORT:-8000}")"
   BIND_ADDR="$(. "$ENV_FILE"; echo "${CEREFOX_LOCAL_BIND:-127.0.0.1}")"
+  # The API-key gate is decided HERE, on the host, because only the host knows
+  # the publish address (v1.12.1). Inside the container Docker has already
+  # NAT'd every request to the bridge gateway, so the server cannot tell a
+  # host-loopback caller from a LAN one — the loopback exemption that works for
+  # a native `cerefox web` is not implementable there.
+  #   published on loopback → gate off (the bind is the boundary)
+  #   published wider       → gate on, every caller presents the key
+  # An explicit CEREFOX_API_REQUIRE_KEY in $ENV_FILE always wins (it is on the
+  # passthrough allowlist), so an operator can force the gate on regardless.
+  case "$BIND_ADDR" in
+    127.0.0.1|localhost|::1) GATE_ARGS="" ;;
+    *) GATE_ARGS=" -e CEREFOX_API_REQUIRE_KEY=1" ;;
+  esac
   OPENAI_API_KEY="$(. "$ENV_FILE"; echo "${OPENAI_API_KEY:-}")"
   # Ensure the image is available BEFORE removing the running container, so a failed pull
   # (offline, or a tag that doesn't exist yet) can't leave us with no container at all.
@@ -126,6 +139,7 @@ recreate() {
     --restart unless-stopped \
     -v "$VOLUME:/var/lib/postgresql/data" \
     ${OPENAI_API_KEY:+-e OPENAI_API_KEY=$OPENAI_API_KEY} \
+    $GATE_ARGS \
     $(config_env_args) \
     "$IMAGE" >/dev/null
   echo "✓ container (re)started → http://localhost:$PORT/app/"
@@ -330,8 +344,20 @@ case "$cmd" in
         echo "⚠ The previous key no longer works. Update every remote client." >&2
         ;;
       "")
-        docker exec "$CONTAINER" cat /var/lib/postgresql/data/.cerefox_api_key 2>/dev/null \
-          || die "no API key found — this image predates v1.12.0 (run: cerefox-local upgrade)"
+        _key="$(docker exec "$CONTAINER" cat /var/lib/postgresql/data/.cerefox_api_key 2>/dev/null || true)"
+        [ -n "$_key" ] || die "no API key found — this image predates v1.12.0 (run: cerefox-local upgrade)"
+        echo "$_key"
+        # Print the key, but never let someone believe it is being enforced
+        # when it is not. On a loopback publish the gate is OFF by design (the
+        # bind is the boundary) and this key is simply not in play.
+        if docker exec "$CONTAINER" grep -q '^CEREFOX_API_KEY=' /run/cerefox-runtime.env 2>/dev/null; then
+          echo "ℹ The gate is ON: every caller must send this key." >&2
+        else
+          echo "ℹ The gate is OFF — this container publishes on loopback, so the bind is" >&2
+          echo "  the boundary and this key is not currently required by anything." >&2
+          echo "  It turns on automatically if you widen CEREFOX_LOCAL_BIND, or now with:" >&2
+          echo "    echo CEREFOX_API_REQUIRE_KEY=1 >> $ENV_FILE && cerefox-local restart" >&2
+        fi
         ;;
       *) die "unknown api-key option: $1 (use --rotate, or no argument to print)" ;;
     esac

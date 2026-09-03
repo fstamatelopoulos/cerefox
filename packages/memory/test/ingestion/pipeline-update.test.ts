@@ -230,7 +230,9 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       .maybeSingle();
     expect(row?.content_hash).toBeTruthy();
     // The v1 hash != v2 hash assertion is implicit (we just snapshotted v1).
-  });
+    // Live: ingest, re-ingest with new content, embed both, snapshot a
+    // version. Several real round trips, well past bun's 5s default.
+  }, 60_000);
 
   test("collision with a different doc → throws ValueError-like", async () => {
     if (!pipeline || !supabase) return;

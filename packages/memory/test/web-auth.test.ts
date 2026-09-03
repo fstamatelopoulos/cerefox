@@ -11,7 +11,13 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { decideAuth, isLoopbackAddress, API_KEY_PREFIX } from "../src/web/auth.ts";
+import {
+  API_KEY_PREFIX,
+  containerGateWarning,
+  decideAuth,
+  isContainerised,
+  isLoopbackAddress,
+} from "../src/web/auth.ts";
 
 const KEY = `${API_KEY_PREFIX}testkeytestkeytestkeytestkey`;
 const OTHER = `${API_KEY_PREFIX}differentdifferentdifferent`;
@@ -180,5 +186,46 @@ describe("forwarding headers are never trusted", () => {
     for (const forbidden of ["forwardedFor", "xForwardedFor", "trustProxy", "clientIp"]) {
       expect(accepted).not.toContain(forbidden);
     }
+  });
+});
+
+describe("containerGateWarning — the v1.12.0 container bug", () => {
+  /**
+   * v1.12.0 injected an API key into Cerefox Local unconditionally. Docker's
+   * port publishing NATs the source address, so every request from the host
+   * arrived looking like it came from the bridge gateway, the loopback
+   * exemption never matched, and EVERY caller got a 401 — the web UI included.
+   *
+   * The deeper lesson, and why the fix is "all-or-nothing in a container"
+   * rather than a tweak: inside a bridge-networked container the server cannot
+   * distinguish a host-loopback caller from a LAN one, because Docker NAT's
+   * both to the same address. The exemption is not implementable there.
+   *
+   * These tests pin the boot-time detection of that configuration. They pass
+   * `isContainerised` implicitly through the real filesystem, so the container
+   * branch only asserts the non-container cases here; the real container
+   * behaviour is verified by `docker/local/smoke-auth.sh` against a built
+   * image, which is the check that was missing.
+   */
+  test("says nothing when no key is configured", () => {
+    expect(containerGateWarning({} as NodeJS.ProcessEnv)).toBeNull();
+  });
+
+  test("says nothing when require-mode is on (the sound container config)", () => {
+    expect(
+      containerGateWarning({
+        CEREFOX_API_KEY: KEY,
+        CEREFOX_API_REQUIRE_KEY: "1",
+      } as NodeJS.ProcessEnv),
+    ).toBeNull();
+  });
+
+  test("says nothing outside a container, where the exemption works fine", () => {
+    // A key without require-mode is the NORMAL, correct config for a native
+    // `cerefox web`; warning about it there would be noise.
+    if (isContainerised()) return; // not applicable when the suite runs in one
+    expect(
+      containerGateWarning({ CEREFOX_API_KEY: KEY } as NodeJS.ProcessEnv),
+    ).toBeNull();
   });
 });
