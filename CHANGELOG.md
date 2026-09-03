@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.12.2] -- 2026-09-03
+
 ### Fixed
 
 - **Cerefox Local no longer warns, on every boot, that it is dangerously
@@ -32,8 +38,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   only, so a remote caller cannot open a connection at all. Now spelled out
   rather than compressed, in both the command and
   `docs/guides/securing-local-access.md`.
-
-Open roadmap.
 
 ---
 

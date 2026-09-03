@@ -18,7 +18,7 @@
  * doesn't touch `supabase/functions/` leaves it alone).
  */
 
-export const EF_VERSION = "1.12.1";
+export const EF_VERSION = "1.12.2";
 
 /**
  * The Cerefox RELEASE version — what `cerefox --version` reports and what npm
@@ -36,7 +36,7 @@ export const EF_VERSION = "1.12.1";
  * is imported by the Deno Edge Functions, which cannot reach into the npm
  * package.
  */
-export const CEREFOX_VERSION = "1.12.1";
+export const CEREFOX_VERSION = "1.12.2";
 
 /**
  * The most recent version whose EF-side SOURCE actually changed (#127).
