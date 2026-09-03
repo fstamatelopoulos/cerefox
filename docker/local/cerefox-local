@@ -350,12 +350,25 @@ case "$cmd" in
         # Print the key, but never let someone believe it is being enforced
         # when it is not. On a loopback publish the gate is OFF by design (the
         # bind is the boundary) and this key is simply not in play.
+        # Say plainly which of the two states this is, and what is protecting
+        # the port in each. The v1.12.1 wording ("the gate is OFF … the bind is
+        # the boundary") was read as "we still block non-local callers, just
+        # without a key", which is the opposite of the truth — so it is spelled
+        # out here rather than compressed.
+        _bind="$(. "$ENV_FILE" 2>/dev/null; echo "${CEREFOX_LOCAL_BIND:-127.0.0.1}")"
         if docker exec "$CONTAINER" grep -q '^CEREFOX_API_KEY=' /run/cerefox-runtime.env 2>/dev/null; then
-          echo "ℹ The gate is ON: every caller must send this key." >&2
+          echo "ℹ REQUIRED. Every caller must send this key, including your browser." >&2
+          echo "  Authorization: Bearer <key>" >&2
         else
-          echo "ℹ The gate is OFF — this container publishes on loopback, so the bind is" >&2
-          echo "  the boundary and this key is not currently required by anything." >&2
-          echo "  It turns on automatically if you widen CEREFOX_LOCAL_BIND, or now with:" >&2
+          echo "ℹ NOT REQUIRED — Cerefox is not checking credentials at all." >&2
+          echo "  Any caller that can reach the port is served, key or no key." >&2
+          echo "  What protects it is the publish address: Docker binds this container" >&2
+          echo "  to $_bind:$(host_port) only, so nothing outside this machine can open a" >&2
+          echo "  connection in the first place." >&2
+          echo "  Set CEREFOX_LOCAL_BIND wider and the key becomes required for EVERY" >&2
+          echo "  caller — inside a container Cerefox cannot tell local callers from" >&2
+          echo "  remote ones (Docker rewrites the source address), so it is all or" >&2
+          echo "  nothing. To require it now, without widening the bind:" >&2
           echo "    echo CEREFOX_API_REQUIRE_KEY=1 >> $ENV_FILE && cerefox-local restart" >&2
         fi
         ;;

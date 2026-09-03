@@ -27,7 +27,12 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 
-import { apiAuth, containerGateWarning, isLoopbackAddress } from "./auth.ts";
+import {
+  apiAuth,
+  containerGateWarning,
+  isContainerised,
+  isLoopbackAddress,
+} from "./auth.ts";
 import { existsSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -247,7 +252,20 @@ export async function buildWebServer(
   const containerWarning = containerGateWarning();
   if (containerWarning) console.warn(containerWarning);
 
-  if (!isLoopbackAddress(host) && !(process.env.CEREFOX_API_KEY ?? "").trim()) {
+  // Deliberately NOT warned inside a container (#237). A container must bind
+  // 0.0.0.0 internally — its own loopback is not the host's, so a narrower
+  // bind would make the published port unreachable. The boundary that actually
+  // matters is the PUBLISH address (`-p 127.0.0.1:8010:8000`), which this
+  // process cannot see. Warning here fired on every normal Cerefox Local boot,
+  // describing a correct and safe setup in alarming terms and recommending a
+  // command that does not apply there. A false alarm on every boot trains
+  // people to ignore real ones. `containerGateWarning()` above still covers
+  // the container configuration that IS broken.
+  if (
+    !isContainerised() &&
+    !isLoopbackAddress(host) &&
+    !(process.env.CEREFOX_API_KEY ?? "").trim()
+  ) {
     console.warn(
       `\n⚠  Binding ${host} with NO API key configured.\n` +
         `   Every read, write, delete and purge on this server is reachable by\n` +
