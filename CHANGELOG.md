@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.12.0] -- 2026-09-03
+
 ### Added
 
 - **`/api/v1` and `/rest/v1` are authenticated for non-local callers (#229).**
@@ -102,8 +108,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   is: upstream, your deployed functions are unchanged and still serving, retry
   in a few minutes. (Observed 2026-09-02 on a production deploy that landed in
   a 108-second gap between the two registries.)
-
-Open roadmap.
 
 ---
 
