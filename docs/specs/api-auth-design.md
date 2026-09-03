@@ -1,8 +1,9 @@
 # Authenticating the local HTTP surface (#229)
 
-**Status: DESIGN APPROVED 2026-09-02, ready to build.** Target: v1.12.0
-(iteration 41). The four open questions were decided by the maintainer on
-2026-09-02 and are recorded under "Decisions" below.
+**Status: BUILT 2026-09-02.** Shipped in v1.12.0 (iteration 41). The four open
+questions were decided by the maintainer and are recorded under "Decisions"
+below; this document is now the record of why the implementation looks the way
+it does, not a proposal.
 
 ## The problem, stated precisely
 

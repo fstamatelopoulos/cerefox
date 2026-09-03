@@ -9,6 +9,52 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **`/api/v1` and `/rest/v1` are authenticated for non-local callers (#229).**
+  The rule is short: **a request arriving on the loopback interface is allowed
+  without a credential; a request arriving on any other interface must present
+  the server's API key** as `Authorization: Bearer <key>`.
+
+  This matches the threat actually worth defending against — something that can
+  reach the port but cannot read your filesystem (a machine on the LAN after a
+  widened bind, a container on a Docker network, a malicious page in your
+  browser). Anyone who *can* read your filesystem already has the key, the
+  `.env` and the database credentials, so demanding a key from them achieves
+  nothing.
+
+  **Nothing local needs configuring.** The web UI, agents on the same machine
+  and localhost scripts keep working with no key and no prompt. The browser
+  never holds a credential, deliberately: the SPA is a static file, so a key
+  embedded in it could be read by anything that can load the page.
+
+  **Existing installs are unaffected on upgrade.** With no key configured the
+  gate is off and the server behaves exactly as before, so nothing breaks;
+  `cerefox web` warns at boot if it binds a non-loopback host with no key.
+  Cerefox Local mints one automatically at first boot and persists it on the
+  data volume, so it survives `cerefox-local upgrade`.
+
+  The PostgREST passthrough at `/rest/v1/*` is gated too. It is a second
+  surface on the same port, live on Cerefox Local, and covering only `/api/v1`
+  would have moved the hole rather than closed it.
+
+  `X-Forwarded-For` is **never** consulted to determine where a request came
+  from: it is set by the caller, so honouring it would let anyone claim to be
+  local — strictly worse than no gate at all. A same-host reverse proxy makes
+  every request look local, so that topology sets `CEREFOX_API_REQUIRE_KEY=1`,
+  which demands the key from every caller including loopback.
+
+- **New guide: [`docs/guides/securing-local-access.md`](docs/guides/securing-local-access.md)** —
+  whether you need a key at all (a table of concrete situations, including the
+  two Docker networking cases that differ), why the boundary is drawn at the
+  network rather than at every request, recipes for a harness in its own
+  container and for a same-host reverse proxy, rotation without downtime, and
+  an explicit list of what this does **not** protect.
+- **`cerefox api-key generate|show|rotate`** and **`cerefox-local api-key
+  [--rotate]`** to mint, read and replace that key. `generate` refuses to
+  overwrite an existing key: silently replacing one would give every already
+  configured client a 401 with no indication why.
+
 ### Changed
 
 - **The three `/api/v1` ingest routes answer with real HTTP status codes

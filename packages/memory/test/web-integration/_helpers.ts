@@ -59,7 +59,11 @@ export async function waitForPort(
     if (hasExited?.()) return false;   // process gave up; no point polling on
     try {
       const resp = await fetch(url, { method: "GET" });
-      if (resp.ok || resp.status === 404) return true;
+      // 401 counts as ready: since #229 a server with the gate forced on
+      // answers the probe with a challenge, and a challenge is proof it is
+      // listening and routing. Treating it as "not up" would hang the auth
+      // suite for the full deadline and turn a working server into a timeout.
+      if (resp.ok || resp.status === 404 || resp.status === 401) return true;
     } catch {
       // not up yet
     }
@@ -68,14 +72,24 @@ export async function waitForPort(
   return false;
 }
 
-export async function spawnWebServer(): Promise<SpawnedServer | null> {
+export async function spawnWebServer(
+  /** Extra environment for the child — used by the auth suite to configure the
+   *  #229 gate. A value of `undefined` UNSETS the variable, which matters
+   *  because the maintainer's own `.env` may already define it. */
+  extraEnv: Record<string, string | undefined> = {},
+): Promise<SpawnedServer | null> {
   if (!existsSync(BIN)) {
     throw new Error(`Built bin not found at ${BIN}. Run \`bun run build\` first.`);
   }
   const port = freshPort();
+  const env: Record<string, string> = { ...process.env } as Record<string, string>;
+  for (const [k, v] of Object.entries(extraEnv)) {
+    if (v === undefined) delete env[k];
+    else env[k] = v;
+  }
   const child = spawn("node", [BIN, "web", "--port", String(port)], {
     cwd: REPO_ROOT,
-    env: { ...process.env },
+    env,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stderr = "";

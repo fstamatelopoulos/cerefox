@@ -3,7 +3,8 @@
 `cerefox web` serves a JSON API at `/api/v1` alongside the web UI. It was built
 as the UI's own backend, and since **v1.11.0** it is also usable by other
 clients: any caller can identify itself, so its reads and writes are attributed
-to it rather than to the web app.
+to it rather than to the web app. Since **v1.12.0** it is authenticated for
+callers that are not on the same machine (see below).
 
 This guide covers what you need to call it from something that is not the
 bundled UI. It is not an exhaustive endpoint reference; the routes live in
@@ -17,40 +18,41 @@ and do not want an MCP client in the loop.
 
 ---
 
-## ⚠ This API is unauthenticated. It is for local access only.
+## Security posture: local by default, key for anything else
 
-**`/api/v1` has no authentication of any kind.** No token, no session, no
-per-route check. Anything that can open a TCP connection to the port can read
-every document, edit them, delete them, and permanently purge them.
+Since **v1.12.0** this surface is authenticated for callers that are not on the
+same machine:
 
-**Never expose this port outside the machine it runs on.** Not to your LAN, not
-through a tunnel, not behind a reverse proxy that does not add authentication of
-its own. There is no setting that makes it safe to do so, and a proxy that only
-adds TLS adds nothing here: encryption is not authorization.
+> **A request arriving on the loopback interface (`127.0.0.1`) is allowed
+> without a credential. A request arriving on any other interface must present
+> the server's API key** as `Authorization: Bearer <key>`.
 
-The surface is designed for **local callers only**:
+So the web UI, agents on the same machine and localhost scripts need nothing,
+while a caller on a Docker network or across a widened bind needs a key:
 
-- an agent or bot harness running on the same machine,
-- the bundled web UI in your own browser,
-- your own scripts on localhost.
+```bash
+cerefox api-key generate     # cerefox web
+cerefox-local api-key        # Cerefox Local (minted at first boot)
+```
 
-Both supported deployments bind loopback by default and mean it:
+Without a valid key the server answers `401` with a `WWW-Authenticate: Bearer`
+challenge and a `detail` explaining what to do. With no key configured at all,
+the gate is off and the server behaves exactly as it did before v1.12.0, so
+upgrading never breaks a working install.
 
-- `cerefox web` binds `127.0.0.1`.
-- Cerefox Local publishes its container port to `127.0.0.1`
-  (`CEREFOX_LOCAL_BIND` exists for the case where you have decided otherwise
-  and accept what follows).
+**→ [`securing-local-access.md`](securing-local-access.md) is the full guide**:
+whether you need a key at all, why it is drawn at the network boundary, the
+container and reverse-proxy recipes, rotation, and what this deliberately does
+not protect.
 
-`--host 0.0.0.0` and a wider `CEREFOX_LOCAL_BIND` are decisions with a blast
-radius, not conveniences. If you need Cerefox reachable over a network, use the
-Edge Functions: that is the surface built for it, and it authenticates every
-request in-function against a Cerefox access token.
+Two things to carry into the rest of this document:
 
-*Adding a locally generated key to this surface is tracked as
-[#229](https://github.com/fstamatelopoulos/cerefox/issues/229). Until it ships,
-the loopback interface is the whole security boundary.*
-
----
+- **There is no TLS here.** The key authenticates; it does not encrypt. This is
+  still not an internet-facing API. If you need Cerefox reachable over a
+  network you do not control, use the Edge Functions.
+- **`X-Forwarded-For` is never consulted** to decide where a request came from.
+  A same-host reverse proxy therefore makes every request look local; that
+  topology sets `CEREFOX_API_REQUIRE_KEY=1`.
 
 ## Identifying your client
 
@@ -130,10 +132,11 @@ analytics that can tell callers apart, and the review-queue behaviour of
 authenticated identity, and no access decision is made on them. Treat a name in
 the audit log as "what the caller said", never as "who the caller was".
 
-Authentication for this surface is a separate problem and is tracked as
-[#229](https://github.com/fstamatelopoulos/cerefox/issues/229). A key, when it
-ships, will prove that a caller is allowed to talk to this server; it will not
-prove the caller is who it says it is, and these fields will remain labels.
+The API key added in v1.12.0 (#229) does not change this. It proves a caller is
+*allowed to talk to this server*; it does not prove the caller is *who it says
+it is*. A remote client holding the key can still send any `author` it likes.
+Authentication and attribution stay separate on purpose — conflating them would
+produce a design that does neither well.
 
 `require_requestor_identity` and `requestor_identity_format` do **not** apply to
 this surface. They are enforced by the Edge Functions only. See
@@ -226,7 +229,7 @@ practical differences:
 | Identity | Optional, defaults to `web-ui` | Per-call `author`/`requestor` |
 | Partial edits | `POST /documents/{id}/edit` | `cerefox_insert`, `cerefox_edit` |
 | Guidance for agents | This guide | `cerefox_get_help()`, in-band |
-| Authentication | None | None locally; token or OAuth remotely |
+| Authentication | None on loopback; API key otherwise | None locally; token or OAuth remotely |
 
 If an agent is doing the calling, MCP is usually better: the tools carry their
 own documentation, and `cerefox_get_help()` keeps the conventions in front of
