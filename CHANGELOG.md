@@ -9,6 +9,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cerefox Local no longer warns, on every boot, that it is dangerously
+  configured when it is not (#237).** The "Binding 0.0.0.0 with NO API key
+  configured" warning was written for `cerefox web` on a host, where that is
+  genuinely an open API on the network. A container **must** bind `0.0.0.0`
+  internally — its own loopback is not the host's, so a narrower bind would
+  make the published port unreachable — and the boundary that matters is the
+  *publish* address, which the process inside cannot see. So it fired on every
+  normal boot, described a correct setup in alarming terms, and recommended a
+  command that does not apply there. Suppressed inside containers, for the same
+  reason the loopback exemption is: in there, the server is not in a position
+  to judge. A false alarm on every boot trains people to ignore real ones.
+  `containerGateWarning()` still covers the container configuration that IS
+  broken.
+- **`cerefox-local api-key` says what is actually protecting the port.** The
+  previous wording ("The gate is OFF — … the bind is the boundary") was read by
+  a maintainer as "we still block non-local callers, just without requiring a
+  key", which is the opposite of the truth: with the gate off Cerefox checks
+  nothing, and the protection is that Docker publishes the port on `127.0.0.1`
+  only, so a remote caller cannot open a connection at all. Now spelled out
+  rather than compressed, in both the command and
+  `docs/guides/securing-local-access.md`.
+
 Open roadmap.
 
 ---

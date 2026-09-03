@@ -26,10 +26,17 @@ Introduced in **v1.12.0** ([#229](https://github.com/fstamatelopoulos/cerefox/is
 
 ### If you run Cerefox Local (Docker)
 
-| Your publish address | Gate | You do |
-|---|---|---|
-| `127.0.0.1` (the default) | **Off** | Nothing. Every caller that can reach the published port is allowed, and the port is only reachable from this machine. |
-| Anything wider (`CEREFOX_LOCAL_BIND=0.0.0.0`) | **On, for everyone** | Give the key to every client, including your own browser. |
+| Your publish address | Cerefox checks credentials? | What protects the port | You do |
+|---|---|---|---|
+| `127.0.0.1` (the default) | **No** | **Docker.** The port is bound to this machine's loopback only, so nothing outside it can open a connection at all. | Nothing |
+| Anything wider (`CEREFOX_LOCAL_BIND=0.0.0.0`) | **Yes, for every caller** | The key | Give the key to every client, including your own browser |
+
+**Read the middle column carefully.** On a default install Cerefox is *not*
+refusing remote callers — it never sees them. Docker declines the connection at
+the socket, before Cerefox is involved. "No key required" and "protected" are
+both true at the same time, for different reasons, and it is worth knowing
+which is doing the work: widen the publish address and the first protection
+disappears instantly, which is why the key turns on in the same move.
 
 There is no middle setting here, and that is deliberate rather than a
 limitation we forgot to lift. **Docker rewrites the source address of every
