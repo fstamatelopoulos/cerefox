@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.12.1] -- 2026-09-03
+
 ### Fixed
 
 - **Cerefox Local was completely inaccessible on v1.12.0 — every request
@@ -49,8 +55,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   [#235](https://github.com/fstamatelopoulos/cerefox/issues/235); note there
   that `bunfig.toml`'s `[test] timeout` is **not** honored by bun 1.3.13, which
   was verified rather than assumed.
-
-Open roadmap.
 
 ---
 
