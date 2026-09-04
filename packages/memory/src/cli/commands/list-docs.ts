@@ -15,6 +15,7 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import { getClient } from "../util/client.ts";
 
 interface DocRow {
@@ -24,7 +25,8 @@ interface DocRow {
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string | null;
-  review_status: string | null;
+  /** Absent when the review workflow is off (#241). */
+  review_status?: string | null;
   deleted_at: string | null;
 }
 
@@ -95,6 +97,10 @@ async function action(options: {
     return doc as DocRow;
   });
 
+  // Off → no status column, and no field in --json either (#241).
+  const showReview = await reviewWorkflowEnabled(client.raw);
+  if (!showReview) for (const row of rows) delete row.review_status;
+
   if (options.json) {
     printJson(rows);
     return;
@@ -115,7 +121,7 @@ async function action(options: {
         id: doc.id.slice(0, 8) + "…",
         title: doc.title.length > 60 ? doc.title.slice(0, 57) + "…" : doc.title,
         source: doc.source ?? "",
-        status: doc.review_status ?? "",
+        ...(showReview ? { status: doc.review_status ?? "" } : {}),
       };
       return deleted
         ? { ...base, deleted_at: (doc.deleted_at ?? "").slice(0, 19).replace("T", " ") }

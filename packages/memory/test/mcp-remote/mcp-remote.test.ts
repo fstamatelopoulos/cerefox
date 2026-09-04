@@ -10,6 +10,8 @@
 
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { liveTest } from "../_live-test.ts";
+
 import { loadSettings } from "../../../../_shared/config/index.ts";
 import { createClient } from "../../../../_shared/db-client/index.ts";
 import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
@@ -148,7 +150,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
 
   // ── Protocol ────────────────────────────────────────────────────────────
   describe("protocol", () => {
-    test("bare GET returns 405 (no SSE)", async () => {
+    liveTest("bare GET returns 405 (no SSE)", async () => {
       const resp = await fetch(mcpUrl, {
         method: "GET",
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -156,14 +158,14 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(resp.status).toBe(405);
     });
 
-    test("initialize returns protocolVersion + serverInfo", async () => {
+    liveTest("initialize returns protocolVersion + serverInfo", async () => {
       const resp = await rpc("initialize");
       expect(resp.error).toBeUndefined();
       expect(typeof resp.result.protocolVersion).toBe("string");
       expect(resp.result.serverInfo.name).toBe("cerefox");
     });
 
-    test("tools/list returns the 15 core tools with schemas", async () => {
+    liveTest("tools/list returns the 15 core tools with schemas", async () => {
       const resp = await rpc("tools/list");
       expect(resp.error).toBeUndefined();
       const names = new Set((resp.result.tools as Array<{ name: string }>).map((t) => t.name));
@@ -195,18 +197,18 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       }
     });
 
-    test("ping returns empty result", async () => {
+    liveTest("ping returns empty result", async () => {
       const resp = await rpc("ping");
       expect(resp.error).toBeUndefined();
       expect(resp.result).toEqual({});
     });
 
-    test("unknown method → -32601", async () => {
+    liveTest("unknown method → -32601", async () => {
       const resp = await rpc("tools/unknown_method");
       expect(resp.error?.code).toBe(-32601);
     });
 
-    test("unknown tool → -32602", async () => {
+    liveTest("unknown tool → -32602", async () => {
       const resp = await tool("cerefox_nonexistent_tool", {});
       expect(resp.error?.code).toBe(-32602);
     });
@@ -214,7 +216,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
 
   // ── Tool calls ────────────────────────────────────────────────────────────
   describe("tool calls", () => {
-    test("cerefox_ingest creates a document", async () => {
+    liveTest("cerefox_ingest creates a document", async () => {
       const text = await toolText("cerefox_ingest", {
         title: uniqueTitle("Ingest"),
         content: uniqueContent(),
@@ -224,7 +226,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       track(extractId(text));
     });
 
-    test("cerefox_search finds an ingested document", async () => {
+    liveTest("cerefox_search finds an ingested document", async () => {
       const title = uniqueTitle("Search Find");
       const ing = await toolText("cerefox_ingest", {
         title,
@@ -236,7 +238,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text).not.toBe("No results found.");
     });
 
-    test("update_if_exists → up-to-date on identical re-ingest", async () => {
+    liveTest("update_if_exists → up-to-date on identical re-ingest", async () => {
       const title = uniqueTitle("Update Dedup");
       const content = uniqueContent();
       const t1 = await toolText("cerefox_ingest", {
@@ -255,7 +257,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(/up-to-date|unchanged/i.test(t2)).toBe(true);
     });
 
-    test("cerefox_get_document returns content", async () => {
+    liveTest("cerefox_get_document returns content", async () => {
       const title = uniqueTitle("Get Doc");
       const t1 = await toolText("cerefox_ingest", { title, content: uniqueContent(), author: "e2e-mcp-test" });
       const docId = extractId(t1)!;
@@ -265,12 +267,12 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text.includes("Sunken Archives") || text.includes(title)).toBe(true);
     });
 
-    test("cerefox_get_document not-found message", async () => {
+    liveTest("cerefox_get_document not-found message", async () => {
       const text = await toolText("cerefox_get_document", { document_id: crypto.randomUUID() });
       expect(text).toBe("Document not found.");
     });
 
-    test("cerefox_list_versions returns a versions message", async () => {
+    liveTest("cerefox_list_versions returns a versions message", async () => {
       const title = uniqueTitle("List Versions");
       const t1 = await toolText("cerefox_ingest", { title, content: uniqueContent(), author: "e2e-mcp-test" });
       const docId = extractId(t1)!;
@@ -279,7 +281,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(/No archived versions|Archived versions/.test(text)).toBe(true);
     });
 
-    test("cerefox_get_audit_log filters by author", async () => {
+    liveTest("cerefox_get_audit_log filters by author", async () => {
       const author = `e2e-mcp-author-${crypto.randomUUID().slice(0, 8)}`;
       const t1 = await toolText("cerefox_ingest", {
         title: uniqueTitle("Audit Author"),
@@ -292,12 +294,12 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text).toContain(author);
     });
 
-    test("cerefox_list_metadata_keys returns keys or empty message", async () => {
+    liveTest("cerefox_list_metadata_keys returns keys or empty message", async () => {
       const text = await toolText("cerefox_list_metadata_keys", {});
       expect(text === "No metadata keys found across documents." || text.startsWith("[")).toBe(true);
     });
 
-    test("missing required param → in-band tool error (isError)", async () => {
+    liveTest("missing required param → in-band tool error (isError)", async () => {
       // The server reports validation failures as MCP tool results with
       // isError, not JSON-RPC protocol errors — the modern MCP convention.
       const resp = await tool("cerefox_search", {});
@@ -306,7 +308,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(JSON.stringify(resp.result)).toContain("query is required");
     });
 
-    test("ingest missing content → in-band tool error", async () => {
+    liveTest("ingest missing content → in-band tool error", async () => {
       const resp = await tool("cerefox_ingest", { title: "No Content" });
       expect(resp.error).toBeUndefined();
       expect(resp.result?.isError).toBe(true);
@@ -315,12 +317,12 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
 
   // ── v0.1.20 / 16B new tools ────────────────────────────────────────────────
   describe("list-projects / metadata-search / id-based ingest", () => {
-    test("cerefox_list_projects returns a list", async () => {
+    liveTest("cerefox_list_projects returns a list", async () => {
       const text = await toolText("cerefox_list_projects", {});
       expect(text.includes("Projects") || text.includes("No projects found")).toBe(true);
     });
 
-    test("metadata_search with a filter finds the tagged doc", async () => {
+    liveTest("metadata_search with a filter finds the tagged doc", async () => {
       const tag = `ms-${crypto.randomUUID().slice(0, 8)}`;
       const t1 = await toolText("cerefox_ingest", {
         title: uniqueTitle("MetaSearch"),
@@ -334,14 +336,14 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text).toContain(tag);
     });
 
-    test("metadata_search with no matches", async () => {
+    liveTest("metadata_search with no matches", async () => {
       const text = await toolText("cerefox_metadata_search", {
         metadata_filter: { e2e_tag: `none-${crypto.randomUUID()}` },
       });
       expect(text).toContain("No documents match");
     });
 
-    test("metadata_search empty filter without any other scope → tool error", async () => {
+    liveTest("metadata_search empty filter without any other scope → tool error", async () => {
       // Since v0.11.1 an empty filter is legal WITH another scope
       // (project/time); alone it is refused as an in-band tool error.
       const resp = await tool("cerefox_metadata_search", { metadata_filter: {} });
@@ -349,7 +351,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(resp.result?.isError).toBe(true);
     });
 
-    test("metadata_search with project_name", async () => {
+    liveTest("metadata_search with project_name", async () => {
       const tag = `mp-${crypto.randomUUID().slice(0, 8)}`;
       const t1 = await toolText("cerefox_ingest", {
         title: uniqueTitle("MetaSearch Project"),
@@ -364,7 +366,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text).toContain(tag);
     });
 
-    test("search with project_name resolves", async () => {
+    liveTest("search with project_name resolves", async () => {
       const t1 = await toolText("cerefox_ingest", {
         title: uniqueTitle("Search Project"),
         content: uniqueContent(),
@@ -380,7 +382,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text).not.toBe("No results found.");
     });
 
-    test("ingest by document_id updates", async () => {
+    liveTest("ingest by document_id updates", async () => {
       const title = uniqueTitle("ID Update");
       const t1 = await toolText("cerefox_ingest", { title, content: uniqueContent(), author: "e2e-mcp-test" });
       expect(t1).toContain("(id:");
@@ -397,7 +399,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(t2).toContain(docId);
     });
 
-    test("ingest by document_id not found → in-band tool error", async () => {
+    liveTest("ingest by document_id not found → in-band tool error", async () => {
       const resp = await tool("cerefox_ingest", {
         title: "Ghost",
         content: "# Ghost\n\nc.",
@@ -409,7 +411,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(JSON.stringify(resp.result).toLowerCase()).toContain("not found");
     });
 
-    test("ingest by document_id with update_if_exists=false → note", async () => {
+    liveTest("ingest by document_id with update_if_exists=false → note", async () => {
       const title = uniqueTitle("ID Note");
       const t1 = await toolText("cerefox_ingest", { title, content: uniqueContent(), author: "e2e-mcp-test" });
       expect(t1).toContain("(id:");
@@ -430,7 +432,7 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
 
   // ── Usage logging ────────────────────────────────────────────────────────
   describe("usage logging", () => {
-    test("MCP tool calls log access_path=remote-mcp", async () => {
+    liveTest("MCP tool calls log access_path=remote-mcp", async () => {
       const client = createClient(settings);
       const original = (await client.raw.rpc("cerefox_get_config", {
         p_key: "usage_tracking_enabled",

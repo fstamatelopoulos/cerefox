@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const RPCS = readFileSync(
@@ -287,11 +287,21 @@ describe("store-level writes join the audit trail (0.14.0, #147)", () => {
     expect(MIG30).toContain("REVOKE EXECUTE ON FUNCTION cerefox_rename_document");
   });
 
-  test("the allow-listed config keys stay in lockstep between rpcs.sql and migration 0028", () => {
+  test("the allow-listed config keys stay in lockstep between rpcs.sql and the newest migration defining cerefox_set_config", () => {
     // Drift here means a key settable after `server deploy` (rpcs refresh)
-    // but not after `db_migrate` alone, or vice versa.
+    // but not after `db_migrate` alone, or vice versa. The newest migration
+    // that (re)defines the function is the one that must match — 0028
+    // introduced it, 0031 (#241) grew the list.
+    const migDir = join(import.meta.dir, "..", "..", "src", "cerefox", "db", "migrations");
+    const latest = readdirSync(migDir)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .reverse()
+      .find((f) => /FUNCTION cerefox_set_config\(/.test(readFileSync(join(migDir, f), "utf8")));
+    expect(latest).toBeDefined();
+    const latestMig = readFileSync(join(migDir, latest!), "utf8");
     const fromRpcs = functionBody("cerefox_set_config").match(/ARRAY\[[\s\S]*?\]/)![0];
-    const fromMig = MIG.match(/ARRAY\[[\s\S]*?\]/)![0];
+    const fromMig = latestMig.slice(latestMig.indexOf("FUNCTION cerefox_set_config(")).match(/ARRAY\[[\s\S]*?\]/)![0];
     const strip = (s: string) => [...s.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
     expect(strip(fromMig)).toEqual(strip(fromRpcs));
   });

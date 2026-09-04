@@ -16,7 +16,10 @@
  * reachable.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect } from "bun:test";
+
+import { liveTest } from "../_live-test.ts";
+import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
 
 import {
   probeSupabase,
@@ -24,7 +27,11 @@ import {
   type SpawnedServer,
 } from "./_helpers.js";
 
-const LIVE_OK = probeSupabase();
+// This suite ingests a real document (and leaves permanent audit-log rows), so
+// it carries the same production guard as the other write suites. It was the
+// one write-bearing file without it — masked only because `cerefox web`
+// refused to start against an out-of-date schema.
+const LIVE_OK = mayWriteToLiveTarget() && probeSupabase();
 
 describe("destructive web endpoints (HTTP boundary)", () => {
   let server: SpawnedServer | null = null;
@@ -90,7 +97,7 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     if (server) await server.stop();
   });
 
-  test("setup: live probe succeeded and a test doc exists", () => {
+  liveTest("setup: live probe succeeded and a test doc exists", () => {
     if (!LIVE_OK) {
       console.log("(skipped: Supabase not reachable)");
       return;
@@ -100,12 +107,30 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     );
   });
 
-  test("review-status flip: pending_review → approved → reflected in GET", async () => {
+  liveTest("review-status flip: pending_review → approved → reflected in GET", async () => {
     if (!LIVE_OK || !server || !docId) return;
-    // agent-authored docs land as pending_review. Confirm.
     const baseline = await (
       await fetch(`${server.base}/api/v1/documents/${docId}`)
     ).json();
+    // With the workflow off (#241) the field is absent from every read and
+    // the endpoint does not exist. Both halves of the contract, asserted.
+    const { value: flag } = (await (
+      await fetch(`${server.base}/api/v1/config/review_workflow_enabled`)
+    ).json()) as { value: string | null };
+    if (String(flag ?? "").toLowerCase() !== "true") {
+      expect("review_status" in baseline).toBe(false);
+      const refused = await fetch(
+        `${server.base}/api/v1/documents/${docId}/review-status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "approved" }),
+        },
+      );
+      expect(refused.status).toBe(404);
+      return;
+    }
+    // agent-authored docs land as pending_review while the workflow is on.
     expect(baseline.review_status).toBe("pending_review");
 
     // Flip to approved.
@@ -128,7 +153,7 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     expect(after.review_status).toBe("approved");
   });
 
-  test("soft-delete: DELETE moves doc to trash, restore brings it back", async () => {
+  liveTest("soft-delete: DELETE moves doc to trash, restore brings it back", async () => {
     if (!LIVE_OK || !server || !docId) return;
 
     // DELETE → expect success body, doc in /documents/trash.
@@ -170,7 +195,7 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     expect(dashAfterRestore.recent_docs.some((d) => d.id === docId)).toBe(true);
   });
 
-  test("hard delete: DELETE + purge → 404 on GET, gone from trash", async () => {
+  liveTest("hard delete: DELETE + purge → 404 on GET, gone from trash", async () => {
     if (!LIVE_OK || !server || !docId) return;
 
     // Soft-delete first (purge only works on already-soft-deleted docs).
@@ -201,7 +226,7 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     docId = null;
   });
 
-  test("version archive flip: archive → reflected, unarchive → reverted", async () => {
+  liveTest("version archive flip: archive → reflected, unarchive → reverted", async () => {
     if (!LIVE_OK || !server) return;
     // Pick any document with at least one version. We can't reuse the
     // purged test doc; pull from /dashboard.recent_docs[0] and find one

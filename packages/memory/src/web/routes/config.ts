@@ -22,6 +22,7 @@ import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import type { WebContext } from "../context.ts";
 import { resolveCallerIdentity } from "../identity.ts";
 import { storeWriteRemediation } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { resetFeatureFlagCache } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 
 function unwrapScalarRpc(data: unknown): string | null {
   if (typeof data === "string") return data;
@@ -158,6 +159,9 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
       if (remediation) return c.json({ detail: remediation }, 503);
       return c.json({ detail: error.message }, 500);
     }
+    // A feature flag flipped from the Settings page takes effect on the next
+    // request of this server, not after the reader's TTL (#241).
+    resetFeatureFlagCache();
     return c.json({ key, value });
   });
 }

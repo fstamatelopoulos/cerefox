@@ -204,7 +204,13 @@ test.describe("Document detail", () => {
     await expect(page.getByRole("link", { name: "Download" })).toBeVisible();
   });
 
-  test("review status toggle visible", async ({ page }) => {
+  test("review status toggle follows review_workflow_enabled", async ({ page, request }) => {
+    // Off → the toggle does not exist (#241); on → it renders the CURRENT
+    // state, either of which is correct. Read the flag, do not set it.
+    const flag = (await (await request.get("/api/v1/config/review_workflow_enabled")).json()) as {
+      value: string | null;
+    };
+    const on = String(flag.value ?? "").toLowerCase() === "true";
     await page.goto(APP);
     await page.waitForTimeout(2000);
     const docRows = page.getByTestId("recent-doc-row");
@@ -214,9 +220,9 @@ test.describe("Document detail", () => {
     }
     await docRows.first().click();
     await page.waitForTimeout(2000);
-    // The toggle shows the CURRENT state — either is correct; the point is that
-    // the control renders.
-    await expect(page.getByText(/^(Approved|Pending)$/)).toBeVisible();
+    const toggle = page.getByText(/^(Approved|Pending)$/);
+    if (on) await expect(toggle).toBeVisible();
+    else await expect(toggle).toHaveCount(0);
   });
 });
 
@@ -310,6 +316,7 @@ test.describe("Settings", () => {
     await page.goto(`${APP}/settings`);
     await expect(page.getByTestId("page-title")).toHaveText(/Settings/i);
     await expect(page.getByTestId("config-row-relations_enabled")).toBeVisible();
+    await expect(page.getByTestId("config-row-review_workflow_enabled")).toBeVisible();
     await expect(page.getByTestId("config-row-min_search_score")).toBeVisible();
   });
 

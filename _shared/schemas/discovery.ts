@@ -85,7 +85,8 @@ export const MetadataSearchResult = z.object({
   document_id: z.string(),
   title: z.string(),
   doc_metadata: z.record(z.string(), z.unknown()),
-  review_status: z.string(),
+  /** Absent when the review workflow is off (#241). */
+  review_status: z.string().optional(),
   source: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -104,7 +105,8 @@ export const DashboardDoc = z.object({
   source: z.string().nullable(),
   chunk_count: z.number().int(),
   total_chars: z.number().int(),
-  review_status: z.string(),
+  /** Absent when the review workflow is off (#241). */
+  review_status: z.string().optional(),
   updated_at: z.string(),
   project_ids: z.array(z.string()).default([]),
   author: z.string().nullable().default(null),

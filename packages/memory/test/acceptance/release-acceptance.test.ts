@@ -14,6 +14,8 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+
+import { liveTest } from "../_live-test.ts";
 import { existsSync } from "node:fs";
 
 import { liveWriteSkipReason, mayWriteToLiveTarget } from "../_live-target-guard.ts";
@@ -65,7 +67,7 @@ describe("release acceptance (live)", () => {
     }
   }, 60_000);
 
-  test("section read returns the same text on the CLI and over MCP (#201)", async () => {
+  liveTest("section read returns the same text on the CLI and over MCP (#201)", async () => {
     const { id } = await A.seed("parity", DOC);
 
     const viaMcp = JSON.parse((await A.mcp("cerefox_get_document", { document_id: id, section: "## Leaf" })).text);
@@ -79,7 +81,7 @@ describe("release acceptance (live)", () => {
     expect(viaCli.content_hash).toBe(viaMcp.content_hash);
   });
 
-  test("both surfaces refuse an ambiguous section identically (#198)", async () => {
+  liveTest("both surfaces refuse an ambiguous section identically (#198)", async () => {
     const { id } = await A.seed("ambiguity", DOC);
 
     const mcp = await A.mcp("cerefox_get_document", { document_id: id, section: "## Parent" });
@@ -95,7 +97,7 @@ describe("release acceptance (live)", () => {
     }
   });
 
-  test("read-after-write: what you read is what a replace overwrites (#198)", async () => {
+  liveTest("read-after-write: what you read is what a replace overwrites (#198)", async () => {
     const { id, hash } = await A.seed("equivalence", DOC);
     const SENTINEL = "SENTINEL-ACCEPTANCE";
 
@@ -109,7 +111,7 @@ describe("release acceptance (live)", () => {
     expect(after.text.trim()).toBe(SENTINEL);
   });
 
-  test("rename_section keeps the body and the position (#197)", async () => {
+  liveTest("rename_section keeps the body and the position (#197)", async () => {
     const { id, hash } = await A.seed("rename", DOC);
 
     const r = await A.mcp("cerefox_edit", {
@@ -126,7 +128,7 @@ describe("release acceptance (live)", () => {
     expect(doc.indexOf("## Parent")).toBeLessThan(doc.indexOf("## Leaf renamed"));
   });
 
-  test("a level change is refused, on both surfaces (#197)", async () => {
+  liveTest("a level change is refused, on both surfaces (#197)", async () => {
     const { id, hash } = await A.seed("level", DOC);
     const ops = JSON.stringify([
       { op: "rename_section", anchor_heading: "## Leaf", new_heading: "### Leaf" },
@@ -146,7 +148,7 @@ describe("release acceptance (live)", () => {
     expect(cli.out.toLowerCase()).toContain("level");
   });
 
-  test("an emoji document reports no phantom loss on an additive edit", async () => {
+  liveTest("an emoji document reports no phantom loss on an additive edit", async () => {
     // Guards the UTF-16-vs-code-point defect: cerefox_insert is annotated
     // destructiveHint: false precisely because it cannot lose content.
     const { id, hash } = await A.seed("emoji", "# Emoji\n\n## Body\n\nDeployed 🎉 shipped 📝\n");
@@ -161,7 +163,7 @@ describe("release acceptance (live)", () => {
     expect(r.text).not.toMatch(/removed \d+ characters/);
   });
 
-  test("clobbering the last section warns however small the ratio (#196)", async () => {
+  liveTest("clobbering the last section warns however small the ratio (#196)", async () => {
     const big = `# Big\n\n## Body\n\n${"filler line\n".repeat(200)}\n## Tail\n\ntail\n`;
     const { id, hash } = await A.seed("shrink", big);
 
@@ -184,7 +186,7 @@ describe("release acceptance (live)", () => {
     expect(r.text).toContain("LAST section");
   });
 
-  test("timestamps carry their zone (#199)", async () => {
+  liveTest("timestamps carry their zone (#199)", async () => {
     const { id } = await A.seed("timestamps", DOC);
     const versions = (await A.mcp("cerefox_list_versions", { document_id: id })).text;
     // A bare date is indistinguishable from a local one, which is how a day of
@@ -194,7 +196,7 @@ describe("release acceptance (live)", () => {
     }
   });
 
-  test("delete requires the read-hash and a stale one is a conflict, not a delete (#208)", async () => {
+  liveTest("delete requires the read-hash and a stale one is a conflict, not a delete (#208)", async () => {
     const { id, hash } = await A.seed("delete-guard", DOC);
 
     const noHash = await A.mcp("cerefox_delete_document", { document_id: id });
@@ -214,7 +216,7 @@ describe("release acceptance (live)", () => {
     expect(read.text).toContain(hash);
   });
 
-  test("delete with the read-hash soft-deletes, records the reason, and re-delete is a no-op (#208)", async () => {
+  liveTest("delete with the read-hash soft-deletes, records the reason, and re-delete is a no-op (#208)", async () => {
     const { id, hash } = await A.seed("delete-happy", DOC);
 
     const del = await A.mcp("cerefox_delete_document", {
@@ -291,7 +293,7 @@ describe("release acceptance (live)", () => {
     expect(byId.text).toContain("restore");
   });
 
-  test("unresolvable ](uuid) links reject the write; code formatting escapes (#214)", async () => {
+  liveTest("unresolvable ](uuid) links reject the write; code formatting escapes (#214)", async () => {
     const { id: realId } = await A.seed("link-target", DOC);
     const bogus = "00000000-dead-beef-0000-000000000000";
 
@@ -347,7 +349,7 @@ describe("release acceptance (live)", () => {
     expect(edit.text).toContain(bogus);
   });
 
-  test("dead-link sweep finds purged targets; pre-existing dead links do not block edits (#214 phase 2)", async () => {
+  liveTest("dead-link sweep finds purged targets; pre-existing dead links do not block edits (#214 phase 2)", async () => {
     const { id: targetId } = await A.seed("sweep-target", DOC);
     const linker = await A.mcp("cerefox_ingest", {
       title: `[E2E acceptance] sweeper ${Date.now() % 1e6}`,
@@ -391,7 +393,7 @@ describe("release acceptance (live)", () => {
     expect(unrelated.isError).toBe(false);
   });
 
-  test("a config change lands in the audit trail with author and old→new (#147)", async () => {
+  liveTest("a config change lands in the audit trail with author and old→new (#147)", async () => {
     // Non-destructive by construction: re-assert the CURRENT stored value.
     // When the key is unset ("using default"), writing anything would flip it
     // to explicitly-set with no `config unset` to undo — so the case skips
@@ -419,7 +421,7 @@ describe("release acceptance (live)", () => {
     expect(audit).toContain("acceptance");
   });
 
-  test("title rename is atomic and factual: FTS refresh + diff entry; repeat adds nothing (iter-39)", async () => {
+  liveTest("title rename is atomic and factual: FTS refresh + diff entry; repeat adds nothing (iter-39)", async () => {
     const { id } = await A.seed("rename-atomic", DOC);
     const NEW = `Acceptance renamed ${Date.now().toString(36)}`;
 
@@ -445,7 +447,7 @@ describe("release acceptance (live)", () => {
     expect((after.match(/Title changed:/g) ?? []).length).toBe(1);
   });
 
-  test("project create/edit/delete audit atomically via the RPCs (#147/#219)", async () => {
+  liveTest("project create/edit/delete audit atomically via the RPCs (#147/#219)", async () => {
     // Self-cleaning: the project is created, renamed, and deleted by the
     // test itself. The audit rows are the append-only residue under test.
     const NAME = `[E2E ACC] project-audit ${Date.now().toString(36)}`;

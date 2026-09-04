@@ -104,11 +104,20 @@ still has its reads attributed correctly.
 
 ### Two consequences worth knowing before you use it
 
-**`author_type: agent` queues your documents for review.** An agent-authored
-ingest lands in `pending_review` rather than `approved`, exactly as it does
-over MCP. That equivalence is the point of the feature: the same actor is
-recorded, and treated, identically whichever transport it used. If you want
-your writes approved on arrival, send `user` (or send nothing).
+**`author_type: agent` queues your documents for review — when the review
+workflow is on.** With `review_workflow_enabled` set to `true` on the store, an
+agent-authored ingest lands in `pending_review` rather than `approved`, exactly
+as it does over MCP. That equivalence is the point of the feature: the same
+actor is recorded, and treated, identically whichever transport it used. If you
+want your writes approved on arrival, send `user` (or send nothing).
+
+With the workflow **off** (the default on a fresh v1.13.0+ install) every
+write lands `approved`, and the API does not expose review status at all: no
+row carries a `review_status` key, `GET /search?review_status=…` is a `400`,
+and `POST /documents/{id}/review-status` is a `404`. Read the flag from
+`GET /config/review_workflow_enabled` if your client needs to know. Attribution
+is unaffected either way. See
+[configuration.md → Review Workflow](configuration.md#review-workflow).
 
 **Identifying yourself changes the access path.** There is deliberately no way
 to ask for a particular `access_path`: the server derives it. Supply any
@@ -153,7 +162,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 |---|---|
 | `GET /version` | Server version and environment label. |
 | `GET /schema-version` | Deployed schema version. |
-| `GET /search?q=…` | Hybrid search (FTS + semantic). |
+| `GET /search?q=…` | Hybrid search (FTS + semantic). `&review_status=approved\|pending_review` filters server-side; `400` while the review workflow is off. |
 | `GET /dashboard`, `GET /dashboard/recent-docs` | Dashboard aggregates. |
 | `GET /documents/{id}` | Full document, with metadata, projects and versions. |
 | `GET /documents/{id}/chunks` | The document's chunks. |
@@ -170,7 +179,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `DELETE /documents/{id}` | Soft-delete (to trash). |
 | `POST /documents/{id}/restore` | Restore from trash. |
 | `DELETE /documents/{id}/purge` | Permanent delete. Irreversible. |
-| `POST /documents/{id}/review-status` | Approve or re-queue for review. |
+| `POST /documents/{id}/review-status` | Approve or re-queue for review. `404` while the review workflow is off. |
 | `GET /projects`, `POST /projects`, `PUT /projects/{id}`, `DELETE /projects/{id}` | Project CRUD. |
 | `GET /projects/{id}/documents` | A project's documents. |
 | `GET /config`, `GET /config/{key}`, `PUT /config/{key}` | Runtime config. |

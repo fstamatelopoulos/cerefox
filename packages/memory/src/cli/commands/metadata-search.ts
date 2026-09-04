@@ -19,13 +19,15 @@ import {
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
+import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import { getClient } from "../util/client.ts";
 
 interface MetadataSearchRow {
   document_id: string;
   title: string;
   doc_metadata: Record<string, unknown>;
-  review_status: string;
+  /** Absent when the review workflow is off (#241). */
+  review_status?: string;
   source: string | null;
   created_at: string;
   updated_at: string;
@@ -110,6 +112,10 @@ async function action(options: {
     })
     .then(() => {}, () => {});
 
+  // Off → the field is absent on every surface, JSON included (#241).
+  const showReview = await reviewWorkflowEnabled(client.raw);
+  if (!showReview) for (const row of rows) delete row.review_status;
+
   if (options.json) {
     printJson(rows);
     return;
@@ -130,7 +136,7 @@ async function action(options: {
     println(c.bold(`## ${row.title} [id: ${row.document_id}]`));
     println(
       c.dim(
-        `${meta}${projects} | ${row.total_chars} chars | ${row.review_status} | updated ${row.updated_at?.slice(0, 10) ?? "?"}`,
+        `${meta}${projects} | ${row.total_chars} chars | ${showReview ? `${row.review_status} | ` : ""}updated ${row.updated_at?.slice(0, 10) ?? "?"}`,
       ),
     );
     if (options.includeContent && row.content) {

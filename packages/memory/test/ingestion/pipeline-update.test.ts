@@ -12,7 +12,9 @@
  *      same as path 1 minus the re-embed.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect } from "bun:test";
+
+import { liveTest } from "../_live-test.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { IngestionPipeline } from "../../src/ingestion/pipeline.ts";
@@ -91,7 +93,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     }
   });
 
-  test("setup: live probe", () => {
+  liveTest("setup: live probe", () => {
     if (!LIVE_OK) {
       console.log("(skipped: Supabase + OpenAI not both available)");
       return;
@@ -103,7 +105,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     expect(pipeline).not.toBeNull();
   });
 
-  test("metadata-only update (same content, title changed) → reindexed=false", async () => {
+  liveTest("metadata-only update (same content, title changed) → reindexed=false", async () => {
     if (!pipeline || !supabase) return;
 
     // Create doc.
@@ -148,7 +150,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     expect(versions?.length ?? 0).toBe(0);
   });
 
-  test("content change → reindexed=true + new version snapshot", async () => {
+  liveTest("content change → reindexed=true + new version snapshot", async () => {
     if (!pipeline || !supabase) return;
 
     const title = `${TITLE_PREFIX} content-change-${RUN_TAG}`;
@@ -234,7 +236,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     // version. Several real round trips, well past bun's 5s default.
   }, 60_000);
 
-  test("collision with a different doc → throws ValueError-like", async () => {
+  liveTest("collision with a different doc → throws ValueError-like", async () => {
     if (!pipeline || !supabase) return;
     const text = "# Collision body\n\nUnique content for run " + RUN_TAG + ".\n";
 
@@ -264,7 +266,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     ).rejects.toThrow(/Identical content already exists/);
   });
 
-  test("RPC: p_metadata NULL on update keeps existing metadata (v0.11.1)", async () => {
+  liveTest("RPC: p_metadata NULL on update keeps existing metadata (v0.11.1)", async () => {
     if (!pipeline || !supabase) return;
 
     // Create a doc WITH metadata via the pipeline.
@@ -284,7 +286,6 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       p_title: title,
       p_source: "agent",
       p_content_hash: "e2e-meta-preserve-" + RUN_TAG,
-      p_review_status: "approved",
       p_chunks: [
         {
           chunk_index: 0,
@@ -318,7 +319,6 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       p_source: "agent",
       p_content_hash: "e2e-meta-clear-" + RUN_TAG,
       p_metadata: {},
-      p_review_status: "approved",
       p_chunks: [
         {
           chunk_index: 0,
@@ -344,7 +344,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     expect(cleared?.metadata).toEqual({});
   });
 
-  test("update non-existent document → throws", async () => {
+  liveTest("update non-existent document → throws", async () => {
     if (!pipeline) return;
     const fakeId = "00000000-0000-0000-0000-000000000000";
     await expect(
@@ -364,7 +364,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
   // document stays on the legacy format, which is precisely the #164 defect
   // that command exists to fix. Verified on staging: converting 3 documents
   // moved the format counts by zero.
-  test("forceRechunk: identical content still re-chunks → reindexed=true", async () => {
+  liveTest("forceRechunk: identical content still re-chunks → reindexed=true", async () => {
     if (!pipeline || !supabase) return;
 
     const title = `${TITLE_PREFIX} force-rechunk-${RUN_TAG}`;

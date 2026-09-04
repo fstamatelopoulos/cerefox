@@ -307,8 +307,8 @@ async function applyAndWrite(
     p_source: null,
     p_content_hash: newHash,
     p_metadata: null, // null = keep existing metadata
-    // Agent writes land in review; a human at the CLI is the reviewer.
-    p_review_status: authorType === "agent" ? "pending_review" : "approved",
+    // review_status: decided by the RPC from p_author_type + the store's
+    // review_workflow_enabled flag (#241), not here.
     p_chunks: chunkData,
     p_author: requestor,
     // Who actually made the write, not which module executed it. The CLI is a

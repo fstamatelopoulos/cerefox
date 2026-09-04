@@ -34,7 +34,8 @@ export const DocumentDetailResponse = z.object({
   total_chars: z.number().int().default(0),
   chunk_count: z.number().int().default(0),
   project_ids: z.array(z.string()).default([]),
-  review_status: z.string().default("approved"),
+  /** Absent when the review workflow is off (#241). */
+  review_status: z.string().optional(),
   created_at: z.string().nullable().optional(),
   updated_at: z.string().nullable().optional(),
   /** Set when the document is soft-deleted (in trash); null/absent otherwise. */

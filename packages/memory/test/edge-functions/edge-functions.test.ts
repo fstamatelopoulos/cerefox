@@ -14,6 +14,8 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { liveTest } from "../_live-test.ts";
+
 import { loadSettings } from "../../../../_shared/config/index.ts";
 import { createClient } from "../../../../_shared/db-client/index.ts";
 import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
@@ -171,14 +173,14 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── cerefox-search ────────────────────────────────────────────────────────
   describe("cerefox-search", () => {
-    test("basic search returns results envelope", async () => {
+    liveTest("basic search returns results envelope", async () => {
       const data = await invokeOk("cerefox-search", { query: "knowledge" });
       expect(data).toHaveProperty("results");
       expect(data).toHaveProperty("query");
       expect(data).toHaveProperty("truncated");
     });
 
-    test("metadata_filter narrows results", async () => {
+    liveTest("metadata_filter narrows results", async () => {
       const title = uniqueTitle("Metadata Filter Test");
       const tag = `mf-${crypto.randomUUID().slice(0, 8)}`;
       const created = await invokeOk("cerefox-ingest", {
@@ -196,7 +198,7 @@ describe("Edge Functions (live HTTP)", () => {
       expect(data).toHaveProperty("results");
     });
 
-    test("unknown project returns 404", async () => {
+    liveTest("unknown project returns 404", async () => {
       const r = await invoke("cerefox-search", {
         query: "anything",
         project_name: `no-such-project-${crypto.randomUUID().slice(0, 8)}`,
@@ -207,7 +209,7 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── cerefox-ingest ──────────────────────────────────────────────────────
   describe("cerefox-ingest", () => {
-    test("creates a document", async () => {
+    liveTest("creates a document", async () => {
       const title = uniqueTitle("Ingest Create");
       const r = await invokeOk("cerefox-ingest", {
         title,
@@ -219,7 +221,7 @@ describe("Edge Functions (live HTTP)", () => {
       track(r.document_id);
     });
 
-    test("update_if_exists updates the same doc", async () => {
+    liveTest("update_if_exists updates the same doc", async () => {
       const title = uniqueTitle("Ingest Update-If-Exists");
       const r1 = await invokeOk("cerefox-ingest", {
         title,
@@ -241,7 +243,7 @@ describe("Edge Functions (live HTTP)", () => {
       expect(r2.document_id).toBe(r1.document_id);
     });
 
-    test("missing title returns 400", async () => {
+    liveTest("missing title returns 400", async () => {
       const r = await invoke("cerefox-ingest", { content: "Some content" });
       expect(r.status).toBe(400);
     });
@@ -249,7 +251,7 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── cerefox-metadata ────────────────────────────────────────────────────
   describe("cerefox-metadata", () => {
-    test("returns an array of metadata keys", async () => {
+    liveTest("returns an array of metadata keys", async () => {
       const r = await invokeOk("cerefox-metadata", {});
       expect(Array.isArray(r)).toBe(true);
     });
@@ -257,7 +259,7 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── cerefox-get-document ──────────────────────────────────────────────────
   describe("cerefox-get-document", () => {
-    test("returns full content for a created doc", async () => {
+    liveTest("returns full content for a created doc", async () => {
       const title = uniqueTitle("Get Document");
       const ingest = await invokeOk("cerefox-ingest", {
         title,
@@ -272,7 +274,7 @@ describe("Edge Functions (live HTTP)", () => {
       expect(r.full_content.length).toBeGreaterThan(0);
     });
 
-    test("not-found returns 404", async () => {
+    liveTest("not-found returns 404", async () => {
       const r = await invoke("cerefox-get-document", { document_id: crypto.randomUUID() });
       expect(r.status).toBe(404);
     });
@@ -280,7 +282,7 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── cerefox-list-versions ──────────────────────────────────────────────────
   describe("cerefox-list-versions", () => {
-    test("returns an array", async () => {
+    liveTest("returns an array", async () => {
       const title = uniqueTitle("List Versions");
       const r = await invokeOk("cerefox-ingest", {
         title,
@@ -296,7 +298,7 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── cerefox-get-audit-log ──────────────────────────────────────────────────
   describe("cerefox-get-audit-log", () => {
-    test("returns entries", async () => {
+    liveTest("returns entries", async () => {
       const title = uniqueTitle("Audit Entries");
       const r = await invokeOk("cerefox-ingest", {
         title,
@@ -309,7 +311,7 @@ describe("Edge Functions (live HTTP)", () => {
       expect(Array.isArray(entries)).toBe(true);
     });
 
-    test("operation filter is accepted", async () => {
+    liveTest("operation filter is accepted", async () => {
       const title = uniqueTitle("Audit Filter");
       const r = await invokeOk("cerefox-ingest", {
         title,
@@ -328,7 +330,7 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── cerefox-metadata-search ────────────────────────────────────────────────
   describe("cerefox-metadata-search", () => {
-    test("returns matches for a metadata filter", async () => {
+    liveTest("returns matches for a metadata filter", async () => {
       const title = uniqueTitle("MetaSearch Match");
       const tag = `ms-${crypto.randomUUID().slice(0, 8)}`;
       const r = await invokeOk("cerefox-ingest", {
@@ -344,9 +346,20 @@ describe("Edge Functions (live HTTP)", () => {
       });
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBeGreaterThanOrEqual(1);
+      // #241: the row carries review_status only while the workflow is on —
+      // the agent write above then lands pending_review; off, the key is
+      // absent from the EF's response like every other surface.
+      const { data: flag } = await createClient(settings).raw.rpc("cerefox_get_config", {
+        p_key: "review_workflow_enabled",
+      });
+      const workflowOn = String(flag ?? "").toLowerCase() === "true";
+      const row = result.find((d: { document_id: string }) => d.document_id === r.document_id);
+      expect(row).toBeDefined();
+      if (workflowOn) expect(row.review_status).toBe("pending_review");
+      else expect("review_status" in row).toBe(false);
     });
 
-    test("include_content returns document text", async () => {
+    liveTest("include_content returns document text", async () => {
       const title = uniqueTitle("MetaSearch Content");
       const tag = `msc-${crypto.randomUUID().slice(0, 8)}`;
       const r = await invokeOk("cerefox-ingest", {
@@ -366,12 +379,12 @@ describe("Edge Functions (live HTTP)", () => {
       expect(typeof result[0].content).toBe("string");
     });
 
-    test("empty filter returns 400", async () => {
+    liveTest("empty filter returns 400", async () => {
       const r = await invoke("cerefox-metadata-search", { metadata_filter: {} });
       expect(r.status).toBe(400);
     });
 
-    test("results include project_names", async () => {
+    liveTest("results include project_names", async () => {
       const title = uniqueTitle("MetaSearch Projects");
       const tag = `mp-${crypto.randomUUID().slice(0, 8)}`;
       const r = await invokeOk("cerefox-ingest", {
@@ -394,7 +407,7 @@ describe("Edge Functions (live HTTP)", () => {
 
   // ── ID-based ingest ────────────────────────────────────────────────────────
   describe("cerefox-ingest (document_id path)", () => {
-    test("document_id routes to update → updated=true", async () => {
+    liveTest("document_id routes to update → updated=true", async () => {
       const title = uniqueTitle("ID Update");
       const r1 = await invokeOk("cerefox-ingest", {
         title,
@@ -407,7 +420,7 @@ describe("Edge Functions (live HTTP)", () => {
         title,
         content: "# ID Update\n\nOriginal.\n\n## Added\n\nVia id path.",
         document_id: r1.document_id,
-        last_write_wins: true, // sole-writer test (see above)
+        last_write_wins: true, // sole-writer liveTest(see above)
         author: "e2e-ef-test",
         author_type: "agent",
       });
@@ -415,7 +428,7 @@ describe("Edge Functions (live HTTP)", () => {
       expect(r2.document_id).toBe(r1.document_id);
     });
 
-    test("document_id pointing at a ghost returns 404", async () => {
+    liveTest("document_id pointing at a ghost returns 404", async () => {
       const r = await invoke("cerefox-ingest", {
         title: "Ghost",
         content: "# Ghost\n\nContent.",
@@ -426,7 +439,7 @@ describe("Edge Functions (live HTTP)", () => {
       expect(r.status).toBe(404);
     });
 
-    test("document_id + update_if_exists=false still updates + returns a note", async () => {
+    liveTest("document_id + update_if_exists=false still updates + returns a note", async () => {
       const title = uniqueTitle("ID Note");
       // uniqueContent() (not fixed strings) so the global content_hash
       // uniqueness constraint isn't tripped by leftovers from a prior run.
@@ -442,7 +455,7 @@ describe("Edge Functions (live HTTP)", () => {
         content: uniqueContent(),
         document_id: r1.document_id,
         update_if_exists: false,
-        last_write_wins: true, // sole-writer test (see above)
+        last_write_wins: true, // sole-writer liveTest(see above)
         author: "e2e-ef-test",
         author_type: "agent",
       });

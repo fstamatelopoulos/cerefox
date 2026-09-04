@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
+import { reviewWorkflowEnabled } from "../../../_shared/mcp-tools/feature-flags.ts";
 
 /**
  * cerefox-metadata-search -- Supabase Edge Function
@@ -27,7 +28,9 @@ import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
  *   include_content  boolean      optional  Include full text (default: false)
  *   max_bytes        number       optional  Byte budget when include_content=true
  *
- * Response (200): Array of matching documents
+ * Response (200): Array of matching documents. `review_status` is present
+ *                 only while the review workflow is on (#241); with the flag
+ *                 off the key is absent, as on every other surface.
  * Response (400): { error: "..." }
  */
 
@@ -160,7 +163,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_project_id: project_id,
     })).catch(() => {});
 
-    return new Response(JSON.stringify(data ?? []), {
+    // Presentation only: the same shared reader every other surface uses.
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const showReview = await reviewWorkflowEnabled(supabase);
+    const out = showReview
+      ? rows
+      : rows.map(({ review_status: _hidden, ...rest }) => rest);
+
+    return new Response(JSON.stringify(out), {
       status: 200,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });

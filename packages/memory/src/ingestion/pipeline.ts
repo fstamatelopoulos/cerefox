@@ -14,9 +14,9 @@
  *   - Singular form (`projectId` or `projectName`): non-destructive add
  *     on update.
  *
- * Review status routing:
- *   - `authorType: "agent"` + write → `pending_review`
- *   - `authorType: "user"` + write → `approved`
+ * Review status is NOT decided here (#241): `cerefox_ingest_document` sets it
+ * from `p_author_type` and the store's `review_workflow_enabled` flag, so the
+ * same write behaves the same over every transport.
  */
 
 import { readFileSync } from "node:fs";
@@ -310,8 +310,6 @@ export class IngestionPipeline {
     }
 
     // ── (8) Atomic RPC write ─────────────────────────────────────────────
-    const reviewStatus =
-      authorType === "agent" ? "pending_review" : "approved";
     const rpcResult = await this.db.ingestDocumentRpc({
       documentId: null,
       title,
@@ -324,7 +322,6 @@ export class IngestionPipeline {
       sourcePath,
       contentHash: hash,
       metadata: validatedMeta,
-      reviewStatus,
       chunks: chunkRows,
       contentFormat: CONTENT_FORMAT_BLIND_STITCH,
       author,
@@ -566,9 +563,6 @@ export class IngestionPipeline {
       }));
     }
 
-    const reviewStatus =
-      authorType === "agent" ? "pending_review" : "approved";
-
     // metadata semantics: undefined/null → keep existing; otherwise use new.
     const metaToWrite =
       metadata !== undefined && metadata !== null
@@ -582,7 +576,6 @@ export class IngestionPipeline {
       sourcePath: existing.source_path,
       contentHash: newHash,
       metadata: metaToWrite,
-      reviewStatus,
       chunks: chunkRows,
       contentFormat: CONTENT_FORMAT_BLIND_STITCH,
       author,

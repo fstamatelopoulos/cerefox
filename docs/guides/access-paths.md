@@ -265,7 +265,7 @@ before "completing" the parity table by adding purge to agent-facing access path
 | Tier | Operations | Reversible? | Where exposed |
 |---|---|---|---|
 | 1. Reads + soft mutations | search, get, list-*, ingest (create/update), metadata-search, get-audit-log | n/a (reads) / yes (versioned) | All paths — MCP, Edge Functions, CLI, web UI |
-| 2. Soft-destructive + recovery | `delete_document` (soft delete to trash), `restore_document` (un-trash), `set_review_status` | yes — delete is restorable; restore recovers | CLI (`cerefox document delete` / `restore`), web UI, and — since v1.7.0 (#208, #210) — MCP (`cerefox_delete_document`, which requires the caller's read-hash, and `cerefox_restore_document`). **Not** the primitive GPT-Actions Edge Functions (deliberately deferred). |
+| 2. Soft-destructive + recovery | `delete_document` (soft delete to trash), `restore_document` (un-trash), `set_review_status` (web only; a `404` while `review_workflow_enabled` is off) | yes — delete is restorable; restore recovers | CLI (`cerefox document delete` / `restore`), web UI, and — since v1.7.0 (#208, #210) — MCP (`cerefox_delete_document`, which requires the caller's read-hash, and `cerefox_restore_document`). **Not** the primitive GPT-Actions Edge Functions (deliberately deferred). |
 | 3. **Hard-destructive** | `purge_document` (permanent), `set_version_archived` (toggle version retention) | no (purge) | **Web UI only** |
 
 ### Why purge is web-UI-only

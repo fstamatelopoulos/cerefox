@@ -136,7 +136,8 @@ async function handler(
   }
 
   const contentHash = await sha256hex(normalizeContent(content));
-  const reviewStatus = author_type === "agent" ? "pending_review" : "approved";
+  // review_status is decided by cerefox_ingest_document from author_type and
+  // the store's review_workflow_enabled flag (#241); clients no longer send it.
 
   // ── ID-based update path ─────────────────────────────────────────────────
   if (document_id) {
@@ -202,7 +203,6 @@ async function handler(
       p_source: source,
       p_content_hash: contentHash,
       p_metadata: metadata,
-      p_review_status: reviewStatus,
       p_chunks: chunkData,
       p_author: author,
       p_author_type: author_type,
@@ -306,7 +306,6 @@ async function handler(
         p_source: source,
         p_content_hash: contentHash,
         p_metadata: metadata,
-        p_review_status: reviewStatus,
         p_chunks: chunkData,
         p_author: author,
         p_author_type: author_type,
@@ -384,7 +383,6 @@ async function handler(
     p_source: source,
     p_content_hash: contentHash,
     p_metadata: metadata,
-    p_review_status: reviewStatus,
     p_chunks: chunkData,
     p_author: author,
     p_author_type: author_type,

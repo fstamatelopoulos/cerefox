@@ -80,7 +80,7 @@ export function ProjectDocumentsPage() {
             </thead>
             <tbody>
               {docs.map((doc) => {
-                const pending = doc.review_status !== "approved";
+                const pending = doc.review_status === "pending_review";
                 return (
                   <tr
                     key={doc.id}

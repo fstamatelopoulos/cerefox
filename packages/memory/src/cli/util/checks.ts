@@ -456,6 +456,65 @@ const EMBEDDER_CHECK_NAME = "embedder";
  * different spaces, so a mismatch silently breaks semantic search. Warns (never
  * blocks) and points at `server reindex`.
  */
+/**
+ * Whether the review workflow is on (#241). Informational: both states are
+ * valid, but "why does nothing show a review status?" and "why are my agent's
+ * documents pending?" are the two questions this line pre-empts. Reads the
+ * flag exactly as every surface does (cerefox_get_config), so what doctor
+ * prints is what the store does.
+ */
+export async function checkReviewWorkflow(): Promise<CheckResult> {
+  const name = "review workflow";
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    return { name, status: "skipped", detail: "no Supabase credentials" };
+  }
+  let raw: string | null = null;
+  try {
+    const resp = await fetch(
+      `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/cerefox_get_config`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: settings.supabaseKey,
+          Authorization: `Bearer ${settings.supabaseKey}`,
+        },
+        body: JSON.stringify({ p_key: "review_workflow_enabled" }),
+      },
+    );
+    if (!resp.ok) {
+      return { name, status: "skipped", detail: `could not read config (HTTP ${resp.status})` };
+    }
+    const body = (await resp.json()) as unknown;
+    raw = typeof body === "string" ? body : null;
+  } catch (err) {
+    return { name, status: "skipped", detail: `could not read config: ${(err as Error).message}` };
+  }
+  if (raw == null) {
+    // No row: a store that predates the flag and has not been migrated yet.
+    // Every reader fails closed, so this behaves as OFF until the schema is
+    // updated (which seeds the row as true on an existing store).
+    return {
+      name,
+      status: "warn",
+      detail: "review_workflow_enabled is not set — treated as OFF until the schema is updated",
+      hint: "Run `cerefox server deploy --schema-only` (v1.13.0+) to seed it.",
+    };
+  }
+  const on = raw.trim().toLowerCase() === "true";
+  return {
+    name,
+    status: "ok",
+    detail: on
+      ? "ON — agent writes land pending_review; review_status is shown everywhere"
+      : "OFF — every write lands approved; review_status is hidden everywhere",
+    hint: on
+      ? undefined
+      : "Turn it on with `cerefox config set review_workflow_enabled true`.",
+  };
+}
+
 export async function checkEmbedderMismatch(): Promise<CheckResult> {
   const settings = loadSettings();
   if (!settings.supabaseUrl || !settings.supabaseKey) {
@@ -970,6 +1029,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "supabase", phase: "Probing Supabase Data API", run: () => checkSupabase() },
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
+    { name: "review workflow", phase: "Reading review workflow flag", run: () => checkReviewWorkflow() },
     { name: "embedder", phase: "Checking embedder consistency", run: () => checkEmbedderMismatch() },
     { name: "content format", phase: "Checking chunk reconstruction format", run: () => checkContentFormat() },
     { name: "metadata health", phase: "Checking metadata well-formedness", run: () => checkMetadataHealth() },

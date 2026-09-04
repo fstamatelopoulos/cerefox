@@ -21,7 +21,9 @@
  *   CEREFOX_CONFIG_DIR=/path/to/that/env bun test test/partial-edits-live.test.ts
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect } from "bun:test";
+
+import { liveTest } from "./_live-test.ts";
 
 import { loadSettings } from "../../../_shared/config/index.ts";
 import { createClient } from "../../../_shared/db-client/index.ts";
@@ -156,7 +158,7 @@ afterAll(async () => {
 }, 30_000);
 
 const it = (name: string, fn: () => Promise<void>) =>
-  test(name, async () => {
+  liveTest(name, async () => {
     if (!reachable) return; // probe-and-skip
     await fn();
   });

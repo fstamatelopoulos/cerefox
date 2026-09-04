@@ -9,6 +9,8 @@
  */
 
 import { afterAll, describe, expect, test } from "bun:test";
+
+import { liveTest } from "./_live-test.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -69,13 +71,13 @@ describe("configure-agent (local-only)", () => {
     rmSync(backupPath, { force: true });
   });
 
-  test("unknown --tool exits 1 with hint", () => {
+  liveTest("unknown --tool exits 1 with hint", () => {
     const { status, stderr } = run(["configure-agent", "--tool", "no-such-client"]);
     expect(status).toBe(1);
     expect(stderr).toContain("Unknown --tool");
   });
 
-  test("--dry-run with --config-path prints without writing (direct-write override)", () => {
+  liveTest("--dry-run with --config-path prints without writing (direct-write override)", () => {
     // --config-path forces direct-write even for delegated writers (claude-code),
     // which is the test-friendly path. Without --config-path, claude-code would
     // shell out to `claude mcp add` (covered separately below).
@@ -116,7 +118,7 @@ describe("configure-agent (local-only)", () => {
     }
   });
 
-  test("--config-path direct-write creates the file with the cerefox entry", () => {
+  liveTest("--config-path direct-write creates the file with the cerefox entry", () => {
     const { status } = run([
       "configure-agent",
       "--tool",
@@ -133,7 +135,7 @@ describe("configure-agent (local-only)", () => {
     expect(cerefoxServerEntry(parsed.mcpServers).args).toContain("--package=@cerefox/memory");
   });
 
-  test("second --config-path run preserves other servers and backs up the original", () => {
+  liveTest("second --config-path run preserves other servers and backs up the original", () => {
     // Pre-seed with another server entry.
     writeFileSync(
       tmpConfig,
@@ -156,7 +158,7 @@ describe("configure-agent (local-only)", () => {
     expect(existsSync(backupPath)).toBe(true);
   });
 
-  test("v0.5.4: claude-code default (no --config-path) is delegated to `claude mcp add`", () => {
+  liveTest("v0.5.4: claude-code default (no --config-path) is delegated to `claude mcp add`", () => {
     // Without --config-path, claude-code is now a delegated writer. We use
     // --dry-run to assert the right command WOULD be invoked, without
     // actually requiring the `claude` CLI to be installed in the test env.
@@ -186,7 +188,7 @@ describe("configure-agent (local-only)", () => {
     expect(parsed.configPath).not.toMatch(/\.claude\/mcp\.json$/);
   });
 
-  test("v0.5.4: claude-desktop stays direct-write (no delegation)", () => {
+  liveTest("v0.5.4: claude-desktop stays direct-write (no delegation)", () => {
     // Claude Desktop has no CLI helper, so its writer remains direct-write.
     const cdConfig = join(tmpdir(), `cerefox-cd-test-${Date.now()}.json`);
     const { stdout, status } = run([
@@ -208,7 +210,7 @@ describe("configure-agent (local-only)", () => {
 
   // Phase 2 (v0.6 / iter-24K): Cursor, Codex, Gemini writers.
 
-  test("Phase 2: cursor writes JSON with mcpServers.cerefox", () => {
+  liveTest("Phase 2: cursor writes JSON with mcpServers.cerefox", () => {
     const cfg = join(tmpdir(), `cerefox-cursor-test-${Date.now()}.json`);
     const { status } = run([
       "configure-agent",
@@ -228,7 +230,7 @@ describe("configure-agent (local-only)", () => {
     rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
   });
 
-  test("Phase 2: gemini writes JSON with mcpServers.cerefox", () => {
+  liveTest("Phase 2: gemini writes JSON with mcpServers.cerefox", () => {
     const cfg = join(tmpdir(), `cerefox-gemini-test-${Date.now()}.json`);
     const { status } = run([
       "configure-agent",
@@ -247,7 +249,7 @@ describe("configure-agent (local-only)", () => {
     rmSync(`${cfg}.pre-cerefox.bak`, { force: true });
   });
 
-  test("Phase 2: codex writes TOML with [mcp_servers.cerefox] table", () => {
+  liveTest("Phase 2: codex writes TOML with [mcp_servers.cerefox] table", () => {
     // R1 default plan: TOML format. Round-trip via smol-toml parse to
     // assert the table shape rather than string-matching format quirks.
     const cfg = join(tmpdir(), `cerefox-codex-test-${Date.now()}.toml`);
@@ -279,7 +281,7 @@ describe("configure-agent (local-only)", () => {
     });
   });
 
-  test("Phase 2: codex merge preserves unrelated TOML keys", () => {
+  liveTest("Phase 2: codex merge preserves unrelated TOML keys", () => {
     const cfg = join(tmpdir(), `cerefox-codex-merge-${Date.now()}.toml`);
     writeFileSync(
       cfg,
@@ -351,13 +353,13 @@ describe("self-update --check (registry probe only)", () => {
     return;
   }
 
-  test("--check exits 0 and prints current/target", () => {
+  liveTest("--check exits 0 and prints current/target", () => {
     expect(probe.status).toBe(0);
     expect(probe.stdout).toContain("Installed:");
     expect(probe.stdout).toContain("Target:");
   });
 
-  test("upgrade alias works the same way", () => {
+  liveTest("upgrade alias works the same way", () => {
     const { stdout, status } = run(["upgrade", "--check"]);
     expect(status).toBe(0);
     expect(stdout).toContain("Installed:");
@@ -373,7 +375,7 @@ describe("doctor / status (live)", () => {
     return;
   }
 
-  test("doctor --json returns an array of checks", () => {
+  liveTest("doctor --json returns an array of checks", () => {
     const { stdout, status } = run(["doctor", "--json"]);
     // 0 when everything passes, 1 when a check errors — e.g. a store that is
     // legitimately behind on schema. This test is about the JSON SHAPE, so it
@@ -391,7 +393,7 @@ describe("doctor / status (live)", () => {
     // real round trips, routinely past bun's 5s default (#235).
   }, 60_000);
 
-  test("status --json returns a 3-element array", () => {
+  liveTest("status --json returns a 3-element array", () => {
     const { stdout, status } = run(["status", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as unknown[];

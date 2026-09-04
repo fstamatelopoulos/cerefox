@@ -211,7 +211,6 @@ export class IngestionDbBridge {
     sourcePath: string | null;
     contentHash: string;
     metadata: Record<string, unknown>;
-    reviewStatus: "approved" | "pending_review";
     chunks: ChunkInsertRow[];
     author: string;
     authorType: "user" | "agent";
@@ -230,7 +229,6 @@ export class IngestionDbBridge {
       p_source_path: args.sourcePath,
       p_content_hash: args.contentHash,
       p_metadata: args.metadata,
-      p_review_status: args.reviewStatus,
       p_chunks: args.chunks,
       p_author: args.author,
       p_author_type: args.authorType,

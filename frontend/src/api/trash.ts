@@ -6,7 +6,8 @@ export interface DeletedDocument {
   source: string | null;
   chunk_count: number;
   total_chars: number;
-  review_status: string;
+  /** Absent when the review workflow is off (#241). */
+  review_status?: string;
   deleted_at: string;
   updated_at: string | null;
   /** Projects the document belonged to before deletion (junction is preserved). */

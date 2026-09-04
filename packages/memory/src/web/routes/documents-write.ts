@@ -43,6 +43,7 @@ import {
   updateDocumentFacets,
 } from "../../../../../_shared/mcp-tools/_document-meta.ts";
 import { isDocumentNotFoundError } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import {
   ConcurrencyConflictError,
@@ -405,6 +406,18 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
 
   // ── POST /documents/{id}/review-status ─────────────────────────────────────
   app.post("/api/v1/documents/:document_id/review-status", async (c) => {
+    // With the review workflow off the route does not exist (#241): a 404,
+    // not a silent write into a field nothing displays.
+    if (!(await reviewWorkflowEnabled(ctx.supabase))) {
+      return c.json(
+        {
+          detail:
+            "The review workflow is off on this store " +
+            "(cerefox config set review_workflow_enabled true to enable it).",
+        },
+        404,
+      );
+    }
     const documentId = c.req.param("document_id");
     let body: { status?: unknown };
     try {

@@ -78,7 +78,8 @@ export interface DocumentDetail {
   total_chars: number;
   chunk_count: number;
   project_ids: string[];
-  review_status: string;
+  /** Absent when the review workflow is off (#241). */
+  review_status?: string;
   created_at: string | null;
   updated_at: string | null;
   deleted_at: string | null;
@@ -104,7 +105,8 @@ export interface MetadataSearchResult {
   document_id: string;
   title: string;
   doc_metadata: Record<string, string>;
-  review_status: string;
+  /** Absent when the review workflow is off (#241). */
+  review_status?: string;
   source: string | null;
   created_at: string;
   updated_at: string;
@@ -151,7 +153,8 @@ export interface DashboardDoc {
   source: string | null;
   chunk_count: number;
   total_chars: number;
-  review_status: string;
+  /** Absent when the review workflow is off (#241). */
+  review_status?: string;
   updated_at: string | null;
   project_ids: string[];
   /** Latest audit author (who last touched the doc); null until deployed/known. */
