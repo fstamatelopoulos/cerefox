@@ -26,6 +26,14 @@ cd frontend && bun run test:e2e
 All test data uses an `[E2E]` or `[E2E-UI]` prefix in titles and is cleaned up
 after each run, even on failure.
 
+**Timeouts (#235, v1.13.0).** Every live test is declared with `liveTest(...)`
+from `packages/memory/test/_live-test.ts` rather than bun's bare `test(...)`:
+it carries a 60 s budget so a slow embedding call or a cold Data API does not
+fail the run at bun's 5 s default — `bunfig.toml`'s `[test] timeout` is not
+honoured by the bun we pin, which is why the budget lives in code. A guard
+test (`live-test-budget.test.ts`) fails the suite if a live file declares a
+bare `test(`, so the fix cannot silently regress.
+
 ## Configuration
 
 - **Supabase REST API tests**: Use credentials from `.env` (`CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY`)
@@ -203,7 +211,7 @@ to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
 | Suite | Test | Use Case | Status |
 |-------|------|----------|--------|
 | attribution | default | No identity → audit `author='web-ui'`, `author_type='user'`, usage `access_path='webapp'`; the pre-#226 row byte for byte | Done |
-| attribution | named | `X-Cerefox-Author` + `X-Cerefox-Author-Type: agent` → recorded as itself, `access_path='api'`, document lands `pending_review` | Done |
+| attribution | named | `X-Cerefox-Author` + `X-Cerefox-Author-Type: agent` → recorded as itself, `access_path='api'`, document lands `pending_review` (workflow on) / `approved` (off) | Done |
 | attribution | body | Identity as JSON body fields is honoured | Done |
 | attribution | invalid type | `author_type: robot` → 400 naming the field, nothing stored | Done |
 | attribution | delete | Identified caller without hash → 400 `CEREFOX_TOKEN_REQUIRED`, document intact; with hash → 200 | Done |
@@ -211,15 +219,19 @@ to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
 | attribution | read | `X-Cerefox-Requestor` on GET → usage row `requestor`/`access_path='api'` | Done |
 | ingest | upload | `POST /documents/{id}/upload` without token → 400 `CEREFOX_TOKEN_REQUIRED`; with `expected_content_hash` → replaced (#228, broken since v0.11.0) | Done |
 | destructive | fixture | Fixtures ingested over HTTP with `author_type: agent`, no Edge Function calls | Done |
+| destructive | review-status | Workflow on: `pending_review` → POST review-status → `approved` in GET. Off: field absent, POST → 404 | Done |
+| review-workflow | off | Flag set `false` via `PUT /config`: agent write lands approved; `review_status` absent from document GET, recent-docs, metadata-search, trash; `?review_status=` → 400; POST review-status → 404 (#241) | Done |
+| review-workflow | on | Flag set `true`: agent write lands `pending_review`; present on GET + metadata-search; `?review_status=pending_review` returns it and `=approved` does not (#240, filter applied before `LIMIT`); bogus value → 400; POST flips to approved | Done |
+| review-workflow | flip | A `PUT /config` flip is visible on the very next request (cache bust, no TTL wait); flag restored to the value found | Done |
 
 ### 7. Governance Features (future e2e)
 
 | # | Use Case | Status |
 |---|----------|--------|
-| 7.1 | Review status auto-transition: ingest via MCP sets `pending_review`, edit via web UI sets `approved` | TODO |
+| 7.1 | Review status auto-transition: ingest via MCP sets `pending_review`, edit via web UI sets `approved` | PARTIAL — the ingest half is covered through `/api/v1` (attribution + review-workflow suites, flag-aware); the MCP transport and the web-edit transition are still TODO |
 | 7.2 | Version archival: archive a version, verify it persists after cleanup | TODO |
 | 7.3 | Audit log entries created for document operations (create, update, delete, status change) | PARTIAL — delete covered by `packages/memory/test/acceptance/release-acceptance.test.ts` (#208: reason recorded, exactly one entry, none duplicated on re-delete); create/update/status still TODO |
-| 7.4 | Review status filter on search returns only matching documents | TODO |
+| 7.4 | Review status filter on search returns only matching documents | Done — `web-integration/review-workflow.test.ts` (on: filter honoured server-side; off: 400) |
 | 7.5 | Version diff view displays correct added/removed lines | TODO |
 
 ### 8. MCP Server (partially covered)

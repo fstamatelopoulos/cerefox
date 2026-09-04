@@ -18,6 +18,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getMinSearchScore, getSearchAlpha } from "../../../../../_shared/mcp-tools/_utils.js";
+import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
 import { resolveCallerIdentity } from "../identity.ts";
@@ -35,6 +36,20 @@ const DASHBOARD_DOC_COLS =
 
 function jsonByteLength(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), "utf8");
+}
+
+/**
+ * Drop `review_status` from a projected row when the review workflow is off
+ * (#241). The contract is "the field is absent", not "the field says
+ * approved": the stored value is untouched and nothing invents one.
+ */
+function withoutReviewStatus<T extends Record<string, unknown>>(
+  row: T,
+  show: boolean,
+): T | Omit<T, "review_status"> {
+  if (show) return row;
+  const { review_status: _dropped, ...rest } = row;
+  return rest;
 }
 
 function parseMetadataFilter(
@@ -238,6 +253,7 @@ async function countDocumentsForProject(
 function dashboardDocFromRow(
   row: Record<string, unknown>,
   projectIds: string[],
+  showReview: boolean,
 ): Record<string, unknown> {
   return {
     id: row.id,
@@ -245,7 +261,8 @@ function dashboardDocFromRow(
     source: (row.source as string | null) ?? null,
     chunk_count: (row.chunk_count as number) ?? 0,
     total_chars: (row.total_chars as number) ?? 0,
-    review_status: (row.review_status as string) ?? "approved",
+    // Absent when the review workflow is off (#241).
+    ...(showReview ? { review_status: (row.review_status as string) ?? "approved" } : {}),
     updated_at: (row.updated_at as string | null) ?? null,
     project_ids: projectIds,
   };
@@ -335,9 +352,12 @@ async function runSearch(
     projectId: string | null;
     count: number;
     metadataFilter: Record<string, unknown> | null;
+    /** Pushed into the RPC (#240) so the filter runs before the LIMIT. Only
+     * the hybrid and docs RPCs take it; fts/semantic ignore it as before. */
+    reviewStatus: string | null;
   },
 ): Promise<Array<Record<string, unknown>>> {
-  const { query, mode, projectId, count, metadataFilter } = opts;
+  const { query, mode, projectId, count, metadataFilter, reviewStatus } = opts;
 
   if (mode === "fts") {
     const params: Record<string, unknown> = {
@@ -384,6 +404,7 @@ async function runSearch(
       p_min_score: getMinSearchScore(),
     };
     if (metadataFilter) params.p_metadata_filter = metadataFilter;
+    if (reviewStatus) params.p_review_status = reviewStatus;
     const { data, error } = await ctx.supabase.rpc(
       "cerefox_hybrid_search",
       params,
@@ -402,6 +423,7 @@ async function runSearch(
     p_min_score: getMinSearchScore(),
   };
   if (metadataFilter) params.p_metadata_filter = metadataFilter;
+  if (reviewStatus) params.p_review_status = reviewStatus;
   const { data, error } = await ctx.supabase.rpc("cerefox_search_docs", params);
   if (error) throw error;
   return ((data ?? []) as DocResultRow[]).map(projectDocResult);
@@ -435,6 +457,24 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     const mf = parseMetadataFilter(metadataFilterStr);
     if (!mf.ok) {
       return c.json({ detail: "Invalid metadata_filter JSON" }, 400);
+    }
+    if (reviewStatus) {
+      if (reviewStatus !== "approved" && reviewStatus !== "pending_review") {
+        return c.json(
+          { detail: `Invalid review_status: ${JSON.stringify(reviewStatus)}` },
+          400,
+        );
+      }
+      if (!(await reviewWorkflowEnabled(ctx.supabase))) {
+        return c.json(
+          {
+            detail:
+              "review_status filtering is unavailable: the review workflow is off " +
+              "(cerefox config set review_workflow_enabled true).",
+          },
+          400,
+        );
+      }
     }
 
     // Browse mode: project selected but no query
@@ -483,37 +523,13 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
         projectId,
         count,
         metadataFilter: mf.value,
+        reviewStatus: reviewStatus || null,
       });
     } catch (err) {
       if (err instanceof HttpError) {
         return c.json({ detail: err.message }, err.status);
       }
       throw err;
-    }
-
-    // Post-filter by review_status (docs mode only).
-    if (
-      reviewStatus &&
-      (reviewStatus === "approved" || reviewStatus === "pending_review") &&
-      mode === "docs"
-    ) {
-      const docIds = results.map((r) => r.document_id as string);
-      if (docIds.length > 0) {
-        const { data } = await ctx.supabase
-          .from("cerefox_documents")
-          .select("id, review_status")
-          .in("id", docIds);
-        const statusMap = new Map<string, string>();
-        for (const row of (data ?? []) as Array<{
-          id: string;
-          review_status: string | null;
-        }>) {
-          statusMap.set(row.id, row.review_status ?? "approved");
-        }
-        results = results.filter(
-          (r) => statusMap.get(r.document_id as string) === reviewStatus,
-        );
-      }
     }
 
     // Reads are header-only: a GET carries no body (#226).
@@ -584,8 +600,9 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     );
     if (error) return c.json({ detail: error.message }, 500);
     const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const showReview = await reviewWorkflowEnabled(ctx.supabase);
     return c.json(
-      rows.map((row) => ({
+      rows.map((row) => withoutReviewStatus({
         document_id: row.document_id,
         title: (row.title as string) ?? "",
         doc_metadata: (row.doc_metadata as Record<string, unknown>) ?? {},
@@ -599,7 +616,7 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
         project_names: (row.project_names as string[]) ?? [],
         version_count: (row.version_count as number) ?? 0,
         content: (row.content as string | null) ?? null,
-      })),
+      }, showReview)),
     );
   });
 
@@ -619,9 +636,10 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       listAllProjects(ctx),
     ]);
     const docIds = recentDocs.map((d) => String(d.id));
-    const [docProjectsMap, authors] = await Promise.all([
+    const [docProjectsMap, authors, showReview] = await Promise.all([
       getProjectsForDocuments(ctx, docIds, projects),
       getRecentDocAuthors(ctx, docIds),
+      reviewWorkflowEnabled(ctx.supabase),
     ]);
     return c.json({
       recent_docs: recentDocs.map((d) => {
@@ -629,7 +647,7 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
         const pids = (docProjectsMap[id] ?? []).map((p) => String(p.id));
         const a = authors[id];
         return {
-          ...dashboardDocFromRow(d, pids),
+          ...dashboardDocFromRow(d, pids, showReview),
           author: a?.author ?? null,
           author_type: a?.author_type ?? null,
         };
@@ -647,10 +665,11 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     ]);
     const projectIds = projects.map((p) => String(p.id));
     const docIds = recentDocs.map((d) => String(d.id));
-    const [docProjectsMap, counts, authors] = await Promise.all([
+    const [docProjectsMap, counts, authors, showReview] = await Promise.all([
       getProjectsForDocuments(ctx, docIds, projects),
       getProjectDocCounts(ctx, projectIds),
       getRecentDocAuthors(ctx, docIds),
+      reviewWorkflowEnabled(ctx.supabase),
     ]);
 
     const recent = recentDocs.map((d) => {
@@ -658,7 +677,7 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       const pids = (docProjectsMap[id] ?? []).map((p) => String(p.id));
       const a = authors[id];
       return {
-        ...dashboardDocFromRow(d, pids),
+        ...dashboardDocFromRow(d, pids, showReview),
         author: a?.author ?? null,
         author_type: a?.author_type ?? null,
       };
@@ -695,17 +714,18 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       Number.parseInt(c.req.query("offset") ?? "0", 10) || 0,
       0,
     );
-    const [docs, total, projects] = await Promise.all([
+    const [docs, total, projects, showReview] = await Promise.all([
       listDocuments(ctx, { projectId, limit, offset }),
       countDocumentsForProject(ctx, projectId),
       listAllProjects(ctx),
+      reviewWorkflowEnabled(ctx.supabase),
     ]);
     const docIds = docs.map((d) => String(d.id));
     const docProjectsMap = await getProjectsForDocuments(ctx, docIds, projects);
     const documents = docs.map((d) => {
       const id = String(d.id);
       const pids = (docProjectsMap[id] ?? []).map((p) => String(p.id));
-      return dashboardDocFromRow(d, pids);
+      return dashboardDocFromRow(d, pids, showReview);
     });
     return c.json({ documents, total, limit, offset });
   });
@@ -727,13 +747,21 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     if (error) return c.json({ detail: error.message }, 500);
     const docs = (data ?? []) as Array<Record<string, unknown>>;
     if (docs.length === 0) return c.json([]);
-    const projects = await listAllProjects(ctx);
+    const [projects, showReview] = await Promise.all([
+      listAllProjects(ctx),
+      reviewWorkflowEnabled(ctx.supabase),
+    ]);
     const docIds = docs.map((d) => String(d.id));
     const map = await getProjectsForDocuments(ctx, docIds, projects);
-    const out = docs.map((d) => ({
-      ...d,
-      project_ids: (map[String(d.id)] ?? []).map((p) => String(p.id)),
-    }));
+    const out = docs.map((d) =>
+      withoutReviewStatus(
+        {
+          ...d,
+          project_ids: (map[String(d.id)] ?? []).map((p) => String(p.id)),
+        },
+        showReview,
+      ),
+    );
     return c.json(out);
   });
 

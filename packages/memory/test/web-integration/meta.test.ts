@@ -10,7 +10,9 @@
  * unconditionally; /schema-version probe-and-skips on Supabase.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect } from "bun:test";
+
+import { liveTest } from "../_live-test.ts";
 
 import { probeSupabase, spawnWebServer, type SpawnedServer } from "./_helpers.js";
 
@@ -29,7 +31,7 @@ describe("meta endpoints (HTTP boundary)", () => {
 
   // ── /api/v1/version ────────────────────────────────────────────────────────
 
-  test("/version returns {version, git_commit_short, build_date, env_label}", async () => {
+  liveTest("/version returns {version, git_commit_short, build_date, env_label}", async () => {
     if (!server) return;
     const resp = await fetch(`${server.base}/api/v1/version`);
     expect(resp.status).toBe(200);
@@ -48,7 +50,7 @@ describe("meta endpoints (HTTP boundary)", () => {
 
   // ── /api/v1/docs ───────────────────────────────────────────────────────────
 
-  test("/docs returns a non-empty list with {path,title,category} entries", async () => {
+  liveTest("/docs returns a non-empty list with {path,title,category} entries", async () => {
     if (!server) return;
     const resp = await fetch(`${server.base}/api/v1/docs`);
     expect(resp.status).toBe(200);
@@ -60,7 +62,7 @@ describe("meta endpoints (HTTP boundary)", () => {
     }
   });
 
-  test("/docs includes README + AGENT guides", async () => {
+  liveTest("/docs includes README + AGENT guides", async () => {
     if (!server) return;
     const resp = await fetch(`${server.base}/api/v1/docs`);
     const body = (await resp.json()) as Array<{ path: string }>;
@@ -72,7 +74,7 @@ describe("meta endpoints (HTTP boundary)", () => {
 
   // ── /api/v1/docs/{path} ────────────────────────────────────────────────────
 
-  test("/docs/README.md returns markdown content", async () => {
+  liveTest("/docs/README.md returns markdown content", async () => {
     if (!server) return;
     const resp = await fetch(`${server.base}/api/v1/docs/README.md`);
     expect(resp.status).toBe(200);
@@ -81,7 +83,7 @@ describe("meta endpoints (HTTP boundary)", () => {
     expect(text).toContain("Cerefox");
   });
 
-  test("/docs/{unknown} returns 404", async () => {
+  liveTest("/docs/{unknown} returns 404", async () => {
     if (!server) return;
     const resp = await fetch(
       `${server.base}/api/v1/docs/guides/nonexistent-xyz.md`,
@@ -89,7 +91,7 @@ describe("meta endpoints (HTTP boundary)", () => {
     expect(resp.status).toBe(404);
   });
 
-  test("/docs/{path} guards against path-traversal", async () => {
+  liveTest("/docs/{path} guards against path-traversal", async () => {
     if (!server) return;
     // Direct ../ inside a path param — Hono's `:path{.+}` matcher passes
     // them through to our handler. The resolver in `web/docs.ts` rejects
@@ -112,7 +114,7 @@ describe("meta endpoints (HTTP boundary)", () => {
 
   // ── /api/v1/schema-version ─────────────────────────────────────────────────
 
-  test("/schema-version returns {bundled, deployed, mismatch}", async () => {
+  liveTest("/schema-version returns {bundled, deployed, mismatch}", async () => {
     if (!server) return;
     if (!LIVE_OK) {
       console.log("(skipped: Supabase not reachable)");
@@ -133,7 +135,7 @@ describe("meta endpoints (HTTP boundary)", () => {
     // beyond shape — same as the Python test's permissive contract.
   });
 
-  test("/schema-version mismatch=false on a healthy deployment", async () => {
+  liveTest("/schema-version mismatch=false on a healthy deployment", async () => {
     if (!server) return;
     if (!LIVE_OK) return;
     const body = (await (

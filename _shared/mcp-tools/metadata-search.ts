@@ -9,6 +9,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { applyByteBudget, getMaxResponseBytes, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
+import { reviewWorkflowEnabled } from "./feature-flags.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 
 async function handler(
@@ -93,6 +94,10 @@ async function handler(
 
   if (rows.length === 0) return "No documents match the given criteria.";
 
+  // The review status is a column of a feature that may be off (#241); when
+  // it is, an agent should not see "approved" and wonder what it means.
+  const showReview = await reviewWorkflowEnabled(supabase);
+
   // Note: when include_content is true the RPC already respects p_max_bytes
   // server-side. The applyByteBudget helper is retained here only for
   // parity with the EF implementation and as a defensive trim — see the
@@ -109,7 +114,7 @@ async function handler(
     const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
     const header =
       `## ${row.title} [id: ${row.document_id}]\n` +
-      `${meta}${projects} | ${row.total_chars} chars | ${row.review_status} | updated ${row.updated_at?.slice(0, 10) ?? "?"}${hash}`;
+      `${meta}${projects} | ${row.total_chars} chars | ${showReview ? `${row.review_status} | ` : ""}updated ${row.updated_at?.slice(0, 10) ?? "?"}${hash}`;
 
     if (include_content && row.content) {
       return `${header}\n\n${row.content}`;

@@ -17,6 +17,8 @@
  */
 
 import { afterAll, describe, expect, test } from "bun:test";
+
+import { liveTest } from "./_live-test.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -118,7 +120,7 @@ describe("search recall refinement (28I, live)", () => {
   const PRESENT = ["zybrofen", "kaltrixon", "murvalade"];
   const ABSENT = "quexolint";
 
-  test("OR-fallback finds a doc despite one absent query term", async () => {
+  liveTest("OR-fallback finds a doc despite one absent query term", async () => {
     await hardPurgeE2eDocs(); // clear any prior-run leftovers first
 
     const dir = mkdtempSync(join(tmpdir(), "cfx-recall-"));
@@ -145,20 +147,20 @@ describe("search recall refinement (28I, live)", () => {
     expect(res.stdout).not.toContain("confidence threshold");
   });
 
-  test("precision guard: all-terms query matches, unflagged", () => {
+  liveTest("precision guard: all-terms query matches, unflagged", () => {
     const res = run(["search", PRESENT.join(" ")]);
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("Recall Seed");
     expect(res.stdout).not.toContain("confidence threshold");
   });
 
-  test("fts mode gets the OR-fallback too", () => {
+  liveTest("fts mode gets the OR-fallback too", () => {
     const res = run(["search", [...PRESENT, ABSENT].join(" "), "--mode", "fts"]);
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("Recall Seed");
   });
 
-  test("coverage gate: one real term among nonsense is never a confident hit (v1.0.4)", () => {
+  liveTest("coverage gate: one real term among nonsense is never a confident hit (v1.0.4)", () => {
     // 1-of-5 coverage — the post-1.0.3 over-relaxation returned these as
     // unflagged results; now they must be flagged fallback or empty.
     // Explicit --min-score: this test is about the COVERAGE gate, so it must not
@@ -173,7 +175,7 @@ describe("search recall refinement (28I, live)", () => {
     }
   });
 
-  test("nothing-matches query: flagged candidates or clean no-results — never an error", () => {
+  liveTest("nothing-matches query: flagged candidates or clean no-results — never an error", () => {
     const res = run(["search", `${ABSENT} vandrobar plixofene`, "--min-score", "0.7"]);
     expect(res.status).toBe(0);
     const flagged = res.stdout.includes("confidence threshold");

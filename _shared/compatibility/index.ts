@@ -76,8 +76,16 @@ export const COMPATIBILITY = {
    * aborts before the wipe, but "the client's primary flows cannot work" is
    * exactly what minSchema exists to say. CHANGELOG carries the loud
    * "redeploy required" callout per RELEASING.md.
+   *
+   * v1.13.0 RAISED this to 0.16.0 (#241). The client no longer decides a
+   * document's review_status; `cerefox_ingest_document` does, from the
+   * author type and the store's `review_workflow_enabled` flag. Against an
+   * older RPC the client sends nothing and the old default ('approved')
+   * applies, so every agent write on a store that had the workflow on would
+   * be silently approved — a governance policy reverting without a word,
+   * the same shape as the v1.1.0 retention case. That is "wrong", not "old".
    */
-  minSchema: "0.14.0",
+  minSchema: "0.16.0",
   /** Minimum deployed Edge Function version this client requires. */
   minEdgeFunctions: "0.6.0",
 } as const;

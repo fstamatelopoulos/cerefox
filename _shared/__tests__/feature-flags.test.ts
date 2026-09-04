@@ -91,3 +91,43 @@ describe("call-path guard", () => {
     await expect(assertToolEnabled(throwing, "cerefox_search")).resolves.toBeUndefined();
   });
 });
+
+describe("review workflow flag (#241)", () => {
+  test("reads review_workflow_enabled and fails closed", async () => {
+    const { reviewWorkflowEnabled } = await import("../mcp-tools/feature-flags.ts");
+    expect(await reviewWorkflowEnabled(configClient("true"))).toBe(true);
+    resetFeatureFlagCache();
+    expect(await reviewWorkflowEnabled(configClient("false"))).toBe(false);
+    resetFeatureFlagCache();
+    expect(await reviewWorkflowEnabled(configClient(null))).toBe(false);
+    resetFeatureFlagCache();
+    expect(await reviewWorkflowEnabled(configClient(null, { fail: true }))).toBe(false);
+  });
+
+  test("keys are cached independently", async () => {
+    const { relationsEnabled, reviewWorkflowEnabled } = await import("../mcp-tools/feature-flags.ts");
+    const asked: string[] = [];
+    const client = {
+      rpc: (_name: string, args: { p_key: string }) => {
+        asked.push(args.p_key);
+        return { data: args.p_key === "review_workflow_enabled" ? "true" : "false", error: null };
+      },
+    } as unknown as MCPSupabaseClient;
+    expect(await reviewWorkflowEnabled(client)).toBe(true);
+    expect(await relationsEnabled(client)).toBe(false);
+    // Second reads come from the cache.
+    expect(await reviewWorkflowEnabled(client)).toBe(true);
+    expect(asked).toEqual(["review_workflow_enabled", "relations_enabled"]);
+  });
+
+  test("a failure is not cached", async () => {
+    const { reviewWorkflowEnabled } = await import("../mcp-tools/feature-flags.ts");
+    let fail = true;
+    const client = {
+      rpc: () => (fail ? { data: null, error: { message: "boom" } } : { data: "true", error: null }),
+    } as unknown as MCPSupabaseClient;
+    expect(await reviewWorkflowEnabled(client)).toBe(false);
+    fail = false;
+    expect(await reviewWorkflowEnabled(client)).toBe(true);
+  });
+});

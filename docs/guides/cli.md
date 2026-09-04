@@ -50,7 +50,7 @@ cerefox document ingest --paste --title "<title>" [OPTIONS]   # stdin
 | `--last-write-wins` | — | flag | off | Skip the concurrency check and overwrite regardless of concurrent changes. For re-sync flows where an external source of truth makes conflicts meaningless. Recorded in the audit log. |
 | `--source` | — | str | `paste` / `file` | Source label recorded on the document. |
 | `--author` | — | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Audit-log author identity. |
-| `--author-type` | — | `user`\|`agent` | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. Agent writes auto-routed to `pending_review`. |
+| `--author-type` | — | `user`\|`agent` | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. Agent writes land `pending_review` while the review workflow is on (`review_workflow_enabled`); `approved` otherwise. |
 
 **Examples**:
 ```bash
@@ -216,7 +216,7 @@ cerefox document list [OPTIONS]
 | `--deleted` | flag | off | List soft-deleted (trashed) documents instead of active ones, newest-deleted first. Pair the ids with `cerefox document restore` / `cerefox document delete`. |
 | `--json` | flag | off | Machine-readable JSON output. |
 
-**Output**: tabular `id | title | source | status | updated_at` listing (or `deleted_at` with `--deleted`).
+**Output**: tabular `id | title | source | status | updated_at` listing (or `deleted_at` with `--deleted`). The `status` column (and the `review_status` key in `--json`) is present only while the review workflow is on — see `review_workflow_enabled` in [configuration.md](configuration.md#review-workflow).
 
 **MCP equivalent**: scope-by-project / metadata / time listing maps to [`cerefox_metadata_search`](../../AGENT_GUIDE.md) — e.g. `cerefox_metadata_search(project_name="research")` lists that project's documents (the `metadata_filter` may be empty when another scope is supplied). The `--deleted` (trash) view and unscoped whole-KB listing remain CLI-only.
 
@@ -702,10 +702,15 @@ Agents see 15 tools with the flag off and 19 with it on. See
 
 **Synopsis**:
 ```
-cerefox config list           # all current key/value pairs
+cerefox config list [--json]  # every settable key, grouped, with kind + default (from the shared catalog)
 cerefox config get KEY
 cerefox config set KEY VALUE [--author NAME] [--author-type user|agent]
 ```
+
+`config list` is derived from the same catalog the web Settings page renders
+(v1.13.0, #239 — the earlier hand-written list had drifted and hid three
+working keys). `--json` returns `{ keys: string[], catalog: [{ key, kind,
+default, group, description }] }`; `keys` keeps its pre-1.13 shape.
 
 Since v1.9.0 every `config set` is recorded in the audit log by the server
 itself (`config-change`, with the old → new value), in the same transaction

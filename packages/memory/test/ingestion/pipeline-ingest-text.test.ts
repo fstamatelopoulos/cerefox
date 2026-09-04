@@ -10,7 +10,9 @@
  * in Part 25E.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect } from "bun:test";
+
+import { liveTest } from "../_live-test.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { IngestionPipeline } from "../../src/ingestion/pipeline.ts";
@@ -71,7 +73,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
     }
     // Projects are deleted AFTER the docs are purged. Purging a document
     // cascade-removes its cerefox_document_projects membership rows, which
-    // unblocks the project delete. Deleting a project inline mid-test (while
+    // unblocks the project delete. Deleting a project inline mid-liveTest(while
     // the doc still exists) fails and supabase-js swallows the error — that
     // is exactly how these projects leaked across runs.
     for (const pid of createdProjects) {
@@ -83,7 +85,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
     }
   });
 
-  test("setup: live probe succeeded", () => {
+  liveTest("setup: live probe succeeded", () => {
     if (!LIVE_OK) {
       console.log("(skipped: Supabase + OpenAI not both available)");
       return;
@@ -91,7 +93,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
     expect(pipeline).not.toBeNull();
   });
 
-  test("ingestText creates a new doc (action='created')", async () => {
+  liveTest("ingestText creates a new doc (action='created')", async () => {
     if (!pipeline) return;
     const title = `${TITLE_PREFIX} create-${RUN_TAG}`;
     const result = await pipeline.ingestText({
@@ -117,7 +119,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
     expect(result.note).toBe("");
   });
 
-  test("ingestText skips on content-hash collision (action='skipped')", async () => {
+  liveTest("ingestText skips on content-hash collision (action='skipped')", async () => {
     if (!pipeline || !supabase) return;
     const title1 = `${TITLE_PREFIX} dedup-a-${RUN_TAG}`;
     const title2 = `${TITLE_PREFIX} dedup-b-${RUN_TAG}`;
@@ -137,7 +139,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
     expect(second.title).toBe(title1);
   });
 
-  test("ingestText with projectName creates + assigns project", async () => {
+  liveTest("ingestText with projectName creates + assigns project", async () => {
     if (!pipeline || !supabase) return;
     const title = `${TITLE_PREFIX} with-project-${RUN_TAG}`;
     const projectName = `[E2E-pipeline-project] ${RUN_TAG}`;
@@ -162,7 +164,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
     expect(data?.name).toBe(projectName);
   });
 
-  test("ingestText with projectNames list creates + assigns all", async () => {
+  liveTest("ingestText with projectNames list creates + assigns all", async () => {
     if (!pipeline || !supabase) return;
     const title = `${TITLE_PREFIX} with-project-list-${RUN_TAG}`;
     const projectNames = [
@@ -188,8 +190,15 @@ describe("IngestionPipeline.ingestText (live)", () => {
     expect(names).toEqual(projectNames.slice().sort());
   });
 
-  test("ingestText with authorType='agent' sets review_status='pending_review'", async () => {
+  liveTest("ingestText with authorType='agent' lands per review_workflow_enabled", async () => {
     if (!pipeline || !supabase) return;
+    // The decision is the RPC's (#241): pending_review only while the review
+    // workflow is on. Read the flag rather than set it — the suite must not
+    // change an operator's store to make itself pass.
+    const { data: flag } = await supabase.rpc("cerefox_get_config", {
+      p_key: "review_workflow_enabled",
+    });
+    const workflowOn = String(flag ?? "").toLowerCase() === "true";
     const title = `${TITLE_PREFIX} agent-write-${RUN_TAG}`;
     const result = await pipeline.ingestText({
       text:
@@ -206,10 +215,10 @@ describe("IngestionPipeline.ingestText (live)", () => {
       .select("review_status")
       .eq("id", result.documentId)
       .maybeSingle();
-    expect(data?.review_status).toBe("pending_review");
+    expect(data?.review_status).toBe(workflowOn ? "pending_review" : "approved");
   });
 
-  test("ingestText with authorType='user' sets review_status='approved'", async () => {
+  liveTest("ingestText with authorType='user' sets review_status='approved'", async () => {
     if (!pipeline || !supabase) return;
     const title = `${TITLE_PREFIX} user-write-${RUN_TAG}`;
     const result = await pipeline.ingestText({

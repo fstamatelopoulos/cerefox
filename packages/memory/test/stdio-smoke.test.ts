@@ -14,7 +14,9 @@
  * tool — just lists them).
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
+
+import { liveTest } from "./_live-test.ts";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -44,7 +46,7 @@ const MCP_ARGS = [BIN, "mcp"];
 const LIVE_OK = probeSupabase();
 
 describe("stdio MCP server smoke", () => {
-  test("bin exists after build", () => {
+  liveTest("bin exists after build", () => {
     if (!existsSync(BIN)) {
       throw new Error(
         `Built bin not found at ${BIN}. Run \`bun run build\` first.`,
@@ -52,7 +54,7 @@ describe("stdio MCP server smoke", () => {
     }
   });
 
-  test("tools/list returns 10 tools over stdio (relations gated off by default)", async () => {
+  liveTest("tools/list returns 10 tools over stdio (relations gated off by default)", async () => {
     if (!existsSync(BIN)) {
       throw new Error(`run \`bun run build\` first`);
     }

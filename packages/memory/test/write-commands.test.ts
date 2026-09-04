@@ -10,6 +10,8 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+
+import { liveTest } from "./_live-test.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -134,13 +136,13 @@ describe("cerefox write commands (live)", () => {
     run(["project", "delete", "_e2e-v0.5", "--yes", "--force"]);
   });
 
-  test("ingest --paste: title required", () => {
+  liveTest("ingest --paste: title required", () => {
     const { status, stderr } = run(["document", "ingest", "--paste"], { stdin: "# hi\n" });
     expect(status).toBe(1);
     expect(stderr).toContain("--title");
   });
 
-  test("ingest --paste: creates doc and prints id", () => {
+  liveTest("ingest --paste: creates doc and prints id", () => {
     const title = "[E2E v0.5-test] paste-mode-ingest";
     const { stdout, status } = run(
       [
@@ -166,7 +168,7 @@ describe("cerefox write commands (live)", () => {
     if (id) createdIds.push(id);
   });
 
-  test("ingest --paste: empty stdin → exit 1", () => {
+  liveTest("ingest --paste: empty stdin → exit 1", () => {
     const { status, stderr } = run(
       ["document", "ingest", "--paste", "--title", "[E2E v0.5-test] empty"],
       { stdin: "" },
@@ -175,13 +177,13 @@ describe("cerefox write commands (live)", () => {
     expect(stderr).toContain("Empty paste");
   });
 
-  test("ingest: missing file → exit 1", () => {
+  liveTest("ingest: missing file → exit 1", () => {
     const { status, stderr } = run(["document", "ingest", "/tmp/nonexistent-file-xyz.md", "--title", "t"]);
     expect(status).toBe(1);
     expect(stderr).toContain("Cannot read");
   });
 
-  test("ingest + update-if-exists: skips identical content, updates on change", () => {
+  liveTest("ingest + update-if-exists: skips identical content, updates on change", () => {
     const title = "[E2E v0.5-test] update-flow";
     // First ingest.
     const r1 = run(
@@ -336,20 +338,20 @@ describe("cerefox write commands (live)", () => {
     // bun's 5s default test timeout.
   }, 60_000);
 
-  test("metadata search: --project-name alone lists docs (v0.11.1 parity)", () => {
+  liveTest("metadata search: --project-name alone lists docs (v0.11.1 parity)", () => {
     const r = run(["metadata", "search", "--project-name", "_e2e-v0.5", "--json"]);
     expect(r.status).toBe(0);
     const rows = JSON.parse(r.stdout) as unknown[];
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  test("metadata search: no criteria at all → exit 1 with guidance", () => {
+  liveTest("metadata search: no criteria at all → exit 1 with guidance", () => {
     const r = run(["metadata", "search"]);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("at least one of");
   });
 
-  test("ingest-dir: walks tree and ingests matching files", () => {
+  liveTest("ingest-dir: walks tree and ingests matching files", () => {
     const dir = mkdtempSync(join(tmpdir(), "cerefox-e2e-"));
     try {
       writeFileSync(
@@ -401,7 +403,7 @@ describe("cerefox write commands (live)", () => {
     // (observed: 22s, in the v1.11.0 staging pass).
   }, 60_000);
 
-  test("delete-doc: bogus UUID → exit 3", () => {
+  liveTest("delete-doc: bogus UUID → exit 3", () => {
     const { status, stderr } = run([
       "document", "delete",
       "00000000-0000-0000-0000-000000000000",
@@ -413,7 +415,7 @@ describe("cerefox write commands (live)", () => {
 
   // ── v0.9.x commands: live round-trips (self-cleaning) ──────────────────────
 
-  test("project create → edit → delete round-trip", () => {
+  liveTest("project create → edit → delete round-trip", () => {
     const name = "[E2E v0.5-test] proj-roundtrip";
     const renamed = "[E2E v0.5-test] proj-renamed";
     const create = run(["project", "create", name, "--description", "tmp"]);
@@ -428,7 +430,7 @@ describe("cerefox write commands (live)", () => {
     expect(del.status).toBe(0);
   });
 
-  test("project create: duplicate name → exit non-zero", () => {
+  liveTest("project create: duplicate name → exit non-zero", () => {
     const name = "[E2E v0.5-test] proj-dup";
     const first = run(["project", "create", name]);
     expect(first.status).toBe(0);
@@ -437,7 +439,7 @@ describe("cerefox write commands (live)", () => {
     run(["project", "delete", name, "--yes", "--force"]); // cleanup
   });
 
-  test("document edit: non-destructive metadata patch (keep / set / unset)", async () => {
+  liveTest("document edit: non-destructive metadata patch (keep / set / unset)", async () => {
     const title = "[E2E v0.5-test] edit-patch";
     const ingest = run(
       [
@@ -478,7 +480,7 @@ describe("cerefox write commands (live)", () => {
     expect(meta.count).toBe(3); // JSON-parsed to a number
   });
 
-  test("document delete → restore clears + re-sets deleted_at", async () => {
+  liveTest("document delete → restore clears + re-sets deleted_at", async () => {
     const title = "[E2E v0.5-test] restore-flow";
     const ingest = run(
       [

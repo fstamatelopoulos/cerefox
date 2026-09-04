@@ -25,6 +25,13 @@
 | 35 — Partial-edit follow-ups and guard debt | [`iteration-35-partial-edits-followups.md`](iteration-35-partial-edits-followups.md) | ✅ shipped v1.4.0 (2026-08-11) |
 | 36 — Observability, surface parity, test hygiene | [`iteration-36-observability-and-parity.md`](iteration-36-observability-and-parity.md) | ✅ shipped v1.5.0 (2026-08-11), with v1.6.x follow-ons |
 | 37 — MCP delete/restore parity, link integrity, dashboard UX | [`iteration-37-mcp-delete-parity.md`](iteration-37-mcp-delete-parity.md) | ✅ shipped v1.7.0 + v1.7.1 (2026-08-14), verified live, announced |
+| 38 — Audit completeness, settings clarity, docs restoration | [`iteration-38-audit-completeness.md`](iteration-38-audit-completeness.md) | ✅ shipped v1.9.0/v1.9.1/v1.9.2 (2026-08-17/18) |
+| 39 — Audit consistency: the web save on shared cores | [`iteration-39-audit-consistency.md`](iteration-39-audit-consistency.md) | ✅ shipped v1.10.0 + v1.10.1 (2026-08-22) |
+| 40 — API attribution and environment honesty | [`iteration-40-api-attribution.md`](iteration-40-api-attribution.md) | ✅ shipped v1.11.0 (2026-09-02) |
+| 41 — API auth | [`iteration-41-api-auth.md`](iteration-41-api-auth.md) | ✅ shipped v1.12.0 (2026-09-02) |
+| 42 — Container loopback | [`iteration-42-container-loopback.md`](iteration-42-container-loopback.md) | ✅ shipped v1.12.1 (2026-09-03) |
+| 43 — Say the true thing | [`iteration-43-warning-clarity.md`](iteration-43-warning-clarity.md) | ✅ shipped v1.12.2 (2026-09-03) |
+| 44 — The review workflow becomes optional | [`iteration-44-review-workflow-toggle.md`](iteration-44-review-workflow-toggle.md) | ⏳ built + verified on staging, awaiting release as v1.13.0 (2026-09-04) |
 
 ---
 

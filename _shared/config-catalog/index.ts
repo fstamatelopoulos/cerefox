@@ -135,6 +135,17 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
     impactNote:
       "This adds four tools (set/delete/get relations, get neighbours) to every connected agent's tool list — local MCP, remote MCP, and Edge Functions alike. Relations data and schema are always present; this switch only controls whether agents can see and use the tools. Turning it back off hides them again without deleting anything.",
   },
+  {
+    key: "review_workflow_enabled",
+    description:
+      "Queue agent-authored writes as 'pending review' for a person to approve. Off: every write lands approved and no surface shows a review status. Off on a fresh install; on for stores that predate the flag.",
+    kind: "boolean",
+    defaultValue: "false",
+    group: "Governance",
+    highImpact: true,
+    impactNote:
+      "Turning this OFF hides the review badges, the approve control and the search filter everywhere (web, API, MCP, CLI), and every new write lands approved whoever wrote it. Nothing stored is changed: turning it back ON shows exactly what was there, including documents still marked pending.",
+  },
 ];
 
 export function configKeySpec(key: string): ConfigKeySpec | undefined {

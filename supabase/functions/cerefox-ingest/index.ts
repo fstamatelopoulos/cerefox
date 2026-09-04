@@ -344,7 +344,8 @@ Deno.serve(async (req: Request) => {
 
   const contentHash = await sha256hex(normalizeContent(content));
   const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };
-  const reviewStatus = author_type === "agent" ? "pending_review" : "approved";
+  // review_status is decided by cerefox_ingest_document from author_type and
+  // the store's review_workflow_enabled flag (#241); the EF no longer sends it.
 
   // ── ID-based update path ────────────────────────────────────────────────────
   // When document_id is provided, update that exact document regardless of
@@ -424,7 +425,6 @@ Deno.serve(async (req: Request) => {
       p_source: source,
       p_content_hash: contentHash,
       p_metadata: metadata,
-      p_review_status: reviewStatus,
       p_chunks: chunkData,
       p_author: author,
       p_author_type: author_type,
@@ -543,7 +543,6 @@ Deno.serve(async (req: Request) => {
         p_source: source,
         p_content_hash: contentHash,
         p_metadata: metadata,
-        p_review_status: reviewStatus,
         p_chunks: chunkData,
         p_author: author,
         p_author_type: author_type,
@@ -655,7 +654,6 @@ Deno.serve(async (req: Request) => {
     p_source: source,
     p_content_hash: contentHash,
     p_metadata: metadata,
-    p_review_status: reviewStatus,
     p_chunks: chunkData,
     p_author: author,
     p_author_type: author_type,

@@ -15,6 +15,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
+
+import { liveTest } from "./_live-test.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -54,7 +56,7 @@ describe("cerefox read commands (live)", () => {
     return;
   }
 
-  test("list-projects: JSON shape", () => {
+  liveTest("list-projects: JSON shape", () => {
     const { stdout, status } = run(["project", "list", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as Array<{ id: string; name: string }>;
@@ -65,7 +67,7 @@ describe("cerefox read commands (live)", () => {
     }
   });
 
-  test("list-projects: table mode has a header line", () => {
+  liveTest("list-projects: table mode has a header line", () => {
     const { stdout, status } = run(["project", "list"]);
     expect(status).toBe(0);
     // Header is `id  name  description`; not all columns must appear,
@@ -74,14 +76,14 @@ describe("cerefox read commands (live)", () => {
     expect(stdout).toContain("name");
   });
 
-  test("list-docs: respects --limit", () => {
+  liveTest("list-docs: respects --limit", () => {
     const { stdout, status } = run(["document", "list", "--limit", "3", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as unknown[];
     expect(parsed.length).toBeLessThanOrEqual(3);
   });
 
-  test("list-docs: bogus project → exit 1", () => {
+  liveTest("list-docs: bogus project → exit 1", () => {
     const { status, stderr } = run([
       "document", "list",
       "--project",
@@ -91,7 +93,7 @@ describe("cerefox read commands (live)", () => {
     expect(stderr).toContain("not found");
   });
 
-  test(
+  liveTest(
     "list-docs: --project scoping doesn't error at scale, for every project in the KB",
     () => {
       // Regression coverage for the unbounded `id=in.(...)` bug: a
@@ -119,7 +121,7 @@ describe("cerefox read commands (live)", () => {
     30000,
   );
 
-  test("list-metadata-keys: returns key/doc_count/example_values", () => {
+  liveTest("list-metadata-keys: returns key/doc_count/example_values", () => {
     const { stdout, status } = run(["metadata", "keys", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as Array<{
@@ -135,7 +137,7 @@ describe("cerefox read commands (live)", () => {
     }
   });
 
-  test("get-doc: bogus UUID → exit 3", () => {
+  liveTest("get-doc: bogus UUID → exit 3", () => {
     const { status, stderr } = run([
       "document", "get",
       "00000000-0000-0000-0000-000000000000",
@@ -144,20 +146,20 @@ describe("cerefox read commands (live)", () => {
     expect(stderr).toContain("not found");
   });
 
-  test("get-audit-log --limit 1 returns at most one row", () => {
+  liveTest("get-audit-log --limit 1 returns at most one row", () => {
     const { stdout, status } = run(["audit", "list", "--limit", "1", "--json"]);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout) as unknown[];
     expect(parsed.length).toBeLessThanOrEqual(1);
   });
 
-  test("metadata-search: missing --metadata-filter → exit 1", () => {
+  liveTest("metadata-search: missing --metadata-filter → exit 1", () => {
     // commander treats a missing required option as exit 1
     const { status } = run(["metadata", "search"]);
     expect(status).toBe(1);
   });
 
-  test("metadata-search: invalid JSON in --metadata-filter → exit 1", () => {
+  liveTest("metadata-search: invalid JSON in --metadata-filter → exit 1", () => {
     const { status, stderr } = run([
       "metadata", "search",
       "--metadata-filter",
@@ -167,7 +169,7 @@ describe("cerefox read commands (live)", () => {
     expect(stderr).toContain("not valid JSON");
   });
 
-  test("metadata-search: empty object with no other criteria → exit 1", () => {
+  liveTest("metadata-search: empty object with no other criteria → exit 1", () => {
     // v0.11.1: the filter alone may be empty, but at least one narrowing
     // criterion (filter / project / time) is required.
     const { status, stderr } = run(["metadata", "search", "--metadata-filter", "{}"]);
@@ -175,12 +177,12 @@ describe("cerefox read commands (live)", () => {
     expect(stderr).toContain("at least one of");
   });
 
-  test("search: empty query → exit 1", () => {
+  liveTest("search: empty query → exit 1", () => {
     const { status } = run(["search", ""]);
     expect(status).toBe(1);
   });
 
-  test("search: --mode fts requires no embedding", () => {
+  liveTest("search: --mode fts requires no embedding", () => {
     // FTS-only path skips the embedding call; should work even if the
     // OpenAI key were missing. We just verify it doesn't crash and the
     // result list is JSON-parseable.

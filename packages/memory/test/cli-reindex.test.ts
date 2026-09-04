@@ -8,7 +8,9 @@
  * Live tests probe-and-skip on Supabase reachability.
  */
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect } from "bun:test";
+
+import { liveTest } from "./_live-test.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -44,7 +46,7 @@ const probe = run(["project", "list", "--json"]);
 const LIVE_OK = probe.status === 0;
 
 describe("cerefox reindex CLI", () => {
-  test("--help advertises the v0.7 flags", () => {
+  liveTest("--help advertises the v0.7 flags", () => {
     const { stdout, status } = run(["server", "reindex", "--help"]);
     expect(status).toBe(0);
     expect(stdout).toContain("Re-embed existing");
@@ -54,7 +56,7 @@ describe("cerefox reindex CLI", () => {
     expect(stdout).toContain("--document-id");
   });
 
-  test("invalid --batch errors out", () => {
+  liveTest("invalid --batch errors out", () => {
     if (!LIVE_OK) {
       console.log("(skipped: Supabase unreachable)");
       return;
@@ -68,7 +70,7 @@ describe("cerefox reindex CLI", () => {
     expect(stderr).toContain("Invalid --batch");
   });
 
-  test("--dry-run runs without writing (live)", () => {
+  liveTest("--dry-run runs without writing (live)", () => {
     if (!LIVE_OK) {
       console.log("(skipped: Supabase unreachable)");
       return;
@@ -80,7 +82,7 @@ describe("cerefox reindex CLI", () => {
     expect(stdout).toMatch(/Reindexing \d+ chunk|nothing to reindex/);
   });
 
-  test(
+  liveTest(
     "--all + --dry-run reports all chunks",
     () => {
       if (!LIVE_OK) return;
@@ -95,7 +97,7 @@ describe("cerefox reindex CLI", () => {
     30_000,
   );
 
-  test("--document-id with a fake UUID returns 'nothing to reindex'", () => {
+  liveTest("--document-id with a fake UUID returns 'nothing to reindex'", () => {
     if (!LIVE_OK) return;
     const { stdout, status } = run([
       "server", "reindex",

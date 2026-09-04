@@ -539,6 +539,48 @@ This is the default state -- no configuration needed for backward compatibility.
 
 ---
 
+## Review Workflow
+
+Cerefox can queue agent-authored writes for a person to approve: with the
+workflow **on**, a document written with `author_type: agent` lands as
+`pending_review`, a human write lands as `approved`, and every surface shows the
+status (a pill on the document page, badges on the dashboard, a search filter,
+a `status` column in the CLI, the field in API and MCP output). Review status
+never gates retrieval — a pending document is exactly as searchable as an
+approved one — it is a governance signal, nothing more.
+
+Since v1.13.0 the workflow is a store-level switch, `review_workflow_enabled`,
+kept in `cerefox_config` like every other store setting so two clients on one
+database cannot disagree about whether it exists:
+
+| Situation | Value |
+|---|---|
+| Fresh install (v1.13.0+) | **`false`** — most single-operator stores never review anything |
+| Upgraded from an earlier version | **`true`** — an upgrade never changes what your store does |
+
+```bash
+cerefox config get review_workflow_enabled
+cerefox config set review_workflow_enabled true    # or false; also in Settings → Governance
+cerefox doctor                                      # prints "review workflow  ON …" / "OFF …"
+```
+
+**With the workflow off, the feature is absent, not dimmed.** Every write lands
+`approved` whoever wrote it — the decision is made once, inside the
+`cerefox_ingest_document` RPC, so every access path (CLI, local and remote MCP,
+Edge Functions, web) obeys the same setting, including older clients. No surface
+shows a `review_status`: the web pill, badges and search chip do not render;
+the CLI drops its `status` column; API, MCP and Edge Function rows carry no
+`review_status` key; `GET /api/v1/search?review_status=…` is a `400`; and
+`POST /api/v1/documents/{id}/review-status` is a `404`.
+
+**Toggling never touches stored data.** Flipping the flag off does not approve
+anything and flipping it on does not queue anything; documents that were
+`pending_review` are still pending, and are shown as such the moment the flag
+is on again. Attribution and the audit log are unaffected in both states — who
+wrote what is always recorded. Config changes are audited too.
+
+Design: [`docs/specs/review-workflow-toggle.md`](../specs/review-workflow-toggle.md).
+
 ## Checking Your Configuration
 
 Run the doctor to verify everything is connected (credentials, DB reachability, schema version):

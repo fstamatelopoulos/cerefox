@@ -28,6 +28,32 @@
 ---
 ## Current Focus
 
+**2026-09-04 — Iteration 44 IMPLEMENTATION COMPLETE, verified on staging,
+awaiting review + release as v1.13.0** (branch
+`design/review-workflow-toggle`, to be squash-merged). The review workflow
+becomes optional: a store-level `review_workflow_enabled` flag — **false on a
+fresh install, true on an upgraded store** (migration 0031) — decided ONCE in
+`cerefox_ingest_document`, with the six client-side copies of the rule
+removed. With it off, `review_status` is absent from every surface (API, MCP,
+CLI, Edge Function, web UI); the search filter is a 400 and the review-status
+endpoint a 404; stored rows are never touched. Also closes #240 (filter moved
+into the search RPCs), #239 (`config list` derives from `CONFIG_CATALOG`) and
+#235 (`liveTest` 60 s budget + guard). Schema **0.16.0**, **`minSchema` raised
+to 0.16.0** (redeploy required). Staging: package suite 303/0, Playwright
+20/20 in both flag states, EF suite 10/10. Detail:
+[iteration 44](plans/iteration-44-review-workflow-toggle.md); spec:
+[`specs/review-workflow-toggle.md`](specs/review-workflow-toggle.md).
+
+**Next session, after the maintainer merges + cuts**: `cerefox server deploy`
+on staging then production (schema + functions), confirm `doctor` prints
+`review workflow ON` on both, decide whether production flips it off,
+announce. **#154** (Node baseline) slips to the next minor — third move, same
+reasoning.
+
+**2026-09-03 — v1.12.2 SHIPPED** (iteration 43, #237: the false container
+warning). Iterations 40–43 are closed; see below and
+[history](plans/history.md).
+
 **2026-09-02 — v1.11.0 SHIPPED and verified on ALL THREE instances**
 (staging, production, Cerefox Local). Iteration 40 delivered optional
 `author`/`requestor`/`author_type` on `/api/v1` (#226), the `doctor` config-dir
@@ -162,13 +188,22 @@ one:
 
 ## Active iteration
 
+**[Iteration 44 — the review workflow becomes optional](plans/iteration-44-review-workflow-toggle.md)**
+— ⏳ **IMPLEMENTATION COMPLETE, verified on staging, awaiting review + release**
+(2026-09-04), target v1.13.0. Schema 0.16.0, migration 0031, `minSchema`
+0.16.0. Closes #241, #240, #239, #235.
+
+**[Iteration 43 — say the true thing](plans/iteration-43-warning-clarity.md)**
+— ✅ **CLOSED, shipped v1.12.2** (2026-09-03). #237.
+
+**[Iteration 42 — container loopback](plans/iteration-42-container-loopback.md)**
+— ✅ **CLOSED, shipped v1.12.1** (2026-09-03).
+
+**[Iteration 41 — API auth](plans/iteration-41-api-auth.md)**
+— ✅ **CLOSED, shipped v1.12.0** (2026-09-02). #229, #232, #230.
+
 **[Iteration 40 — API attribution and environment honesty](plans/iteration-40-api-attribution.md)**
-— ⏳ **IMPLEMENTATION COMPLETE, awaiting review + release** (2026-09-01), target
-v1.11.0. **No schema change.** Closes #225, #226, #227, and #228 (found in
-flight). Verified on staging (215 pass / 0 fail) and in a throwaway Cerefox
-Local container. The find that outlived the feature: the web-integration suite
-had been skipping since v0.9.0 on a renamed probe verb, which is how #228
-survived eleven releases.
+— ✅ **CLOSED, shipped v1.11.0** (2026-09-02). #225, #226, #227, #228.
 
 **[Iteration 39 — Audit consistency: the web save on shared cores](plans/iteration-39-audit-consistency.md)**
 — ✅ **CLOSED, shipped v1.10.0 + v1.10.1** (2026-08-22; schema 0.15.0,

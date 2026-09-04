@@ -16,7 +16,9 @@
  * Self-cleaning via the `[E2E web-attr]` title prefix.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect } from "bun:test";
+
+import { liveTest } from "../_live-test.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { probeSupabase, spawnWebServer, type SpawnedServer } from "./_helpers.js";
@@ -137,7 +139,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     return (data ?? []) as UsageRow[];
   }
 
-  test.skipIf(!LIVE_OK)(
+  liveTest.skipIf(!LIVE_OK)(
     "no identity supplied writes exactly the pre-#226 row",
     async () => {
       if (!server) return;
@@ -174,7 +176,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     },
   );
 
-  test.skipIf(!LIVE_OK)(
+  liveTest.skipIf(!LIVE_OK)(
     "a named caller is recorded as itself, on the api path",
     async () => {
       if (!server) return;
@@ -194,17 +196,21 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
       }
 
       // The documented consequence of author_type=agent, identical to MCP:
-      // an agent-authored ingest lands in pending_review rather than approved.
-      // Asserted because it is the behaviour most likely to surprise someone,
-      // and because it is the proof that "matches MCP semantics" is real
-      // rather than aspirational.
+      // an agent-authored ingest lands in pending_review rather than approved
+      // — while the review workflow is on (#241). Asserted because it is the
+      // behaviour most likely to surprise someone, and because it is the
+      // proof that "matches MCP semantics" is real rather than aspirational.
+      const { data: flag } = await admin!.rpc("cerefox_get_config", {
+        p_key: "review_workflow_enabled",
+      });
+      const workflowOn = String(flag ?? "").toLowerCase() === "true";
       const { data: doc } = await admin!
         .from("cerefox_documents")
         .select("review_status")
         .eq("id", id)
         .maybeSingle();
       expect((doc as { review_status: string } | null)?.review_status).toBe(
-        "pending_review",
+        workflowOn ? "pending_review" : "approved",
       );
 
       if (usageTracked) {
@@ -218,7 +224,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     },
   );
 
-  test.skipIf(!LIVE_OK)("identity can also travel in the JSON body", async () => {
+  liveTest.skipIf(!LIVE_OK)("identity can also travel in the JSON body", async () => {
     if (!server) return;
     const title = `${TITLE_PREFIX} body ${RUN_TAG}`;
     const { status, body } = await ingest(title, {}, { author: "e2e-body-bot" });
@@ -228,7 +234,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     for (const row of audit) expect(row.author).toBe("e2e-body-bot");
   });
 
-  test.skipIf(!LIVE_OK)("an invalid author_type is a 400, not a 500", async () => {
+  liveTest.skipIf(!LIVE_OK)("an invalid author_type is a 400, not a 500", async () => {
     if (!server) return;
     // Without boundary validation this reaches the cerefox_audit_log CHECK and
     // surfaces as a raw Postgres error, i.e. a 500 for a caller mistake.
@@ -249,7 +255,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     expect(body.detail).toContain("author_type");
   });
 
-  test.skipIf(!LIVE_OK)(
+  liveTest.skipIf(!LIVE_OK)(
     "an identified caller must present the hash to delete",
     async () => {
       if (!server) return;
@@ -289,7 +295,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     30_000,
   );
 
-  test.skipIf(!LIVE_OK)(
+  liveTest.skipIf(!LIVE_OK)(
     "an anonymous delete still works exactly as before",
     async () => {
       if (!server) return;
@@ -305,7 +311,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
     30_000,
   );
 
-  test.skipIf(!LIVE_OK)("a read logs the requestor that asked for it", async () => {
+  liveTest.skipIf(!LIVE_OK)("a read logs the requestor that asked for it", async () => {
     if (!server) return;
     if (!usageTracked) return; // nothing to assert with tracking off
     const title = `${TITLE_PREFIX} read ${RUN_TAG}`;

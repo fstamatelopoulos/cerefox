@@ -527,8 +527,9 @@ describe("author_type is derived from the access path (bug_001)", () => {
       .catch(() => {});
     expect(captured.args).toBeDefined();
     expect(captured.args!.p_author_type).toBe("user");
-    // Agent writes land in review; a human at a shell is the reviewer.
-    expect(captured.args!.p_review_status).toBe("approved");
+    // The status decision moved into cerefox_ingest_document (#241): the
+    // client sends the author type and nothing else about review.
+    expect(captured.args!.p_review_status).toBeUndefined();
   });
 
   test("an agent cannot claim to be a user", async () => {

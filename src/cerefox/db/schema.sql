@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.15.0
+-- @version: 0.16.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -55,7 +55,10 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     total_chars     INT         NOT NULL DEFAULT 0,
     -- review_status: human governance flag. 'approved' = validated by human,
     -- 'pending_review' = modified by agent, not yet reviewed.
-    -- Content is searchable in both states.
+    -- Content is searchable in both states. Written ONLY by
+    -- cerefox_ingest_document, which consults `review_workflow_enabled`
+    -- (#241): with the workflow off every write lands 'approved' and every
+    -- surface hides the column; existing values are left as they are.
     review_status   TEXT        NOT NULL DEFAULT 'approved',
     -- lifecycle_status: where this document stands relative to the graph —
     -- 'active' | 'superseded' | 'stale' | 'archived'. Distinct from
@@ -401,6 +404,14 @@ ON CONFLICT (key) DO NOTHING;
 -- deployment opts in (iteration 29).
 INSERT INTO cerefox_config (key, value)
 VALUES ('relations_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;
+-- The review workflow (agent writes land pending_review, a person approves)
+-- is OFF on a fresh install (#241): most stores have no reviewer, and a queue
+-- nobody drains is noise. Migration 0031 seeds TRUE on stores that predate the
+-- flag, so an upgrade never changes behaviour. Only this seed and that
+-- migration ever write the value; the toggle itself is `cerefox config set`.
+INSERT INTO cerefox_config (key, value)
+VALUES ('review_workflow_enabled', 'false')
 ON CONFLICT (key) DO NOTHING;
 
 

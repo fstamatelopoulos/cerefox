@@ -76,6 +76,11 @@ DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOO
 DROP FUNCTION IF EXISTS cerefox_fts_search(TEXT, INT, UUID, JSONB);
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB);
 
+-- Iteration 44 (0.16.0, #240): p_review_status added to the two search RPCs
+-- so a review-status filter applies before the limit. Old overloads out.
+DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOOLEAN, UUID, FLOAT, JSONB, FLOAT);
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB, FLOAT);
+
 -- ── Shared return type note ────────────────────────────────────────────────────
 -- All chunk-level search RPCs return the same shape for consistency:
 --   chunk_id, document_id, chunk_index, title, content, heading_path,
@@ -113,7 +118,11 @@ CREATE OR REPLACE FUNCTION cerefox_hybrid_search(
     -- meant 100% of terms — the pass this gate generalizes. Chunks below the
     -- bar can still pass via the vector threshold, else they are
     -- below-confidence material. 0 restores the pre-gate OR behavior.
-    p_min_term_coverage FLOAT DEFAULT NULL
+    p_min_term_coverage FLOAT DEFAULT NULL,
+    -- #240: 'approved' | 'pending_review' restricts the candidate pool BEFORE
+    -- the limit, so a filtered page is a full page. NULL = no filter. Applied
+    -- here, in the CTEs, rather than by the caller on the returned page.
+    p_review_status   TEXT    DEFAULT NULL
 )
 RETURNS TABLE (
     chunk_id        UUID,
@@ -204,6 +213,7 @@ BEGIN
                       WHERE dp.document_id = d.id AND dp.project_id = p_project_id
                   ))
               AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
+              AND (p_review_status IS NULL OR d.review_status = p_review_status)
         ) INTO and_matches;
     END IF;
 
@@ -239,6 +249,7 @@ BEGIN
                       WHERE dp.document_id = d.id AND dp.project_id = p_project_id
                   ))
               AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
+              AND (p_review_status IS NULL OR d.review_status = p_review_status)
             ORDER BY fts_score DESC
             LIMIT candidate_count
         ),
@@ -260,6 +271,7 @@ BEGIN
                       WHERE dp.document_id = d.id AND dp.project_id = p_project_id
                   ))
               AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
+              AND (p_review_status IS NULL OR d.review_status = p_review_status)
             ORDER BY
                 CASE
                     WHEN p_use_upgrade AND c.embedding_upgrade IS NOT NULL
@@ -724,7 +736,9 @@ CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_metadata_filter        JSONB DEFAULT NULL,
     -- NULL flows through to cerefox_hybrid_search, which resolves the
     -- caller > cerefox_config > built-in chain in one place (#133).
-    p_min_term_coverage      FLOAT DEFAULT NULL
+    p_min_term_coverage      FLOAT DEFAULT NULL,
+    -- #240: optional review-status filter, applied inside cerefox_hybrid_search.
+    p_review_status          TEXT  DEFAULT NULL
 )
 RETURNS TABLE (
     document_id              UUID,
@@ -765,7 +779,8 @@ AS $$
             p_project_id      := p_project_id,
             p_min_score       := p_min_score,
             p_metadata_filter := p_metadata_filter,
-            p_min_term_coverage := p_min_term_coverage
+            p_min_term_coverage := p_min_term_coverage,
+            p_review_status   := p_review_status
         )
     ),
     best_per_doc AS (
@@ -1379,7 +1394,11 @@ $$;
 --   p_metadata        : JSONB metadata. NULL = "not provided" → create uses '{}',
 --                       update keeps the existing metadata (v0.11.1). Pass '{}'
 --                       explicitly to clear all metadata.
---   p_review_status   : 'approved' or 'pending_review' (based on author_type)
+--   p_review_status   : ACCEPTED AND IGNORED since 0.16.0 (#241). The status is
+--                       decided here from p_author_type and the store's
+--                       `review_workflow_enabled` flag, so every transport
+--                       behaves the same and a toggle needs no client change.
+--                       Kept in the signature so no caller breaks.
 --   p_chunks          : JSONB array of chunk objects, each with:
 --                        chunk_index, heading_path, heading_level, title,
 --                        content, char_count, embedding (float[]), embedder (text)
@@ -1564,9 +1583,18 @@ BEGIN
             USING ERRCODE = '22023';  -- deterministic; never a retryable SQLSTATE
     END IF;
 
-    -- Validate review_status
-    v_status := CASE WHEN p_review_status IN ('approved', 'pending_review')
-                     THEN p_review_status ELSE 'approved' END;
+    -- Review status is decided HERE, not by the caller (#241). With the
+    -- workflow on, an agent write is queued for a person to look at; with it
+    -- off, every write lands approved and no surface shows the column. The
+    -- fallback FALSE matches the fresh-install seed; migration 0031 seeds TRUE
+    -- on stores that predate the flag, so it only applies if the row is gone.
+    -- p_review_status is deliberately not consulted — six clients used to
+    -- compute it and they could not have agreed on a store-level policy.
+    v_status := CASE
+                    WHEN NOT cerefox_config_bool('review_workflow_enabled', FALSE) THEN 'approved'
+                    WHEN p_author_type = 'agent' THEN 'pending_review'
+                    ELSE 'approved'
+                END;
 
     -- Count chunks and total chars from the input
     v_chunk_count := jsonb_array_length(p_chunks);
@@ -2704,6 +2732,9 @@ DECLARE
         'version_retention_hours', 'version_cleanup_enabled',
         -- Optional features, off by default (iteration 29).
         'relations_enabled',
+        -- #241: the review workflow. Off on fresh installs, on for stores that
+        -- predate the flag. Read by cerefox_ingest_document on every write.
+        'review_workflow_enabled',
         -- Iteration 33: flag writes that push a document past this many chars
         -- (0 = off). Partial edits make writes cheap, so an insert-only agent
         -- never assembles the document and never sees it grow past its split
@@ -3057,6 +3088,13 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.16.0 (#241, #240): `review_workflow_enabled` config key (seeded false
+    -- on fresh installs, true by migration 0031 on existing ones);
+    -- cerefox_ingest_document decides review_status itself from author_type
+    -- + the flag, p_review_status is ignored; p_review_status filter on
+    -- cerefox_hybrid_search / cerefox_search_docs, applied before the limit.
+    -- 0.15.0 (iteration 39): cerefox_rename_document.
+    -- 0.14.0 (#147/#219): store-level writes audited in-RPC.
     -- 0.13.0 (#216): archived chunks carry no search artifacts —
     -- cerefox_snapshot_version nulls embedding_primary/embedding_upgrade/fts
     -- at archive time; embedding_primary becomes nullable; migration 0027
@@ -3079,7 +3117,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.15.0'::TEXT;
+    SELECT '0.16.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { fetchSearch, type SearchParams } from "../api/search";
 import type { SearchMode } from "../api/types";
+import { useReviewWorkflow } from "./useReviewWorkflow";
 
 /** Parse metadata filters from URL: mf=key1:val1,key2:val2 */
 function parseMfParam(mf: string): Record<string, string> {
@@ -48,13 +49,16 @@ export function useSearchState(): SearchState {
 
 export function useSearchQuery(state: SearchState) {
   const hasQuery = !!state.q;
+  // With the workflow off the server answers 400 to a review_status filter;
+  // a bookmarked ?review_status=… should degrade to an unfiltered search.
+  const reviewWorkflow = useReviewWorkflow();
 
   const params: SearchParams = {
     q: state.q || undefined,
     mode: state.mode,
     project_id: state.projectId || undefined,
     count: state.count,
-    review_status: state.reviewStatus || undefined,
+    review_status: reviewWorkflow ? state.reviewStatus || undefined : undefined,
     metadata_filter:
       Object.keys(state.metadataFilter).length > 0
         ? state.metadataFilter

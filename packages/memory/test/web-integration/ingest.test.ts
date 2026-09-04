@@ -10,7 +10,9 @@
  * Self-cleaning via `[E2E web-ingest]` title prefix + final purge.
  */
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect } from "bun:test";
+
+import { liveTest } from "../_live-test.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -73,7 +75,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     if (server) await server.stop();
   });
 
-  test("setup", () => {
+  liveTest("setup", () => {
     if (!LIVE_OK) {
       console.log("(skipped: Supabase + OpenAI not both available)");
       return;
@@ -81,7 +83,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     expect(server).not.toBeNull();
   });
 
-  test("POST /api/v1/ingest (paste) creates a new doc", async () => {
+  liveTest("POST /api/v1/ingest (paste) creates a new doc", async () => {
     if (!server) return;
     const title = `${TITLE_PREFIX} paste-${RUN_TAG}`;
     const text =
@@ -114,7 +116,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     created.push(body.document_id);
   });
 
-  test("POST /api/v1/ingest with same content returns success+skipped", async () => {
+  liveTest("POST /api/v1/ingest with same content returns success+skipped", async () => {
     if (!server) return;
     const text = `# Dedup-web\n\nWeb-ingest dedup test ${RUN_TAG}.\n`;
     const titleA = `${TITLE_PREFIX} dedup-A-${RUN_TAG}`;
@@ -148,7 +150,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     expect(secondBody.document_id).toBe(firstBody.document_id);
   });
 
-  test("POST /api/v1/ingest/file (multipart) creates a new doc", async () => {
+  liveTest("POST /api/v1/ingest/file (multipart) creates a new doc", async () => {
     if (!server) return;
     const text = `# File ingest\n\nMultipart upload test ${RUN_TAG}.\n`;
     const filename = `web-ingest-file-${RUN_TAG}.md`;
@@ -173,7 +175,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     created.push(body.document_id);
   });
 
-  test("POST /documents/{id}/upload (replace) updates content", async () => {
+  liveTest("POST /documents/{id}/upload (replace) updates content", async () => {
     if (!server) return;
     // First create a doc.
     const title = `${TITLE_PREFIX} upload-replace-${RUN_TAG}`;

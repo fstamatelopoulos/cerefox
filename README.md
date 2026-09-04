@@ -77,7 +77,7 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Backup and restore** | JSON snapshots, optional git commit |
 | **Small-to-big retrieval** | `cerefox_context_expand` RPC returns chunk neighbours for richer context |
 | **Audit log** | Immutable, append-only log of all write operations (create, update, delete, restore, status change). Author attribution with `author_type` ('user' or 'agent'). Browsable via web UI, queryable via MCP tool and Edge Function |
-| **Review status** | Schema-level `review_status` on documents (`approved` / `pending_review`). Auto-transitions based on author_type. Filterable on search |
+| **Review workflow** (optional) | Store-level switch `review_workflow_enabled` (off on a fresh install). On: agent writes land `pending_review` for a person to approve; filterable on search. Off: every write is approved and no surface shows a review status. Never gates retrieval |
 | **Version governance** | Version archival (protect specific versions from cleanup), configurable retention (`cerefox config set version_cleanup_enabled`), version diff viewer |
 | **Lean version storage** | Archived chunks keep their content (the safety copy) but carry no embeddings or FTS (v1.8.0) — typically 30–45% of chunk storage reclaimed |
 | **Usage tracking** | Opt-in logging of all operations (reads and writes) across all access paths. Tracks operation type, access path (remote-mcp, local-mcp, edge-function, webapp, cli), requestor identity, query text, and result count. Controlled via `cerefox config set usage_tracking_enabled true/false` -- no redeploy needed |

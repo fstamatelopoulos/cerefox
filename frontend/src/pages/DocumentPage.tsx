@@ -34,6 +34,7 @@ import { purgeDocument, restoreDocument } from "../api/trash";
 import { DiffViewer } from "../components/DiffViewer";
 import { MarkdownLink } from "../components/MarkdownLink";
 import { useProjects } from "../hooks/useProjects";
+import { useReviewWorkflow } from "../hooks/useReviewWorkflow";
 import { formatDateTime } from "../utils/dates";
 import { invalidateDocumentViews } from "../lib/invalidate";
 import { showError, showSuccess } from "../utils/notifications";
@@ -114,6 +115,7 @@ export function DocumentPage() {
   const versionParam = searchParams.get("version");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const reviewWorkflow = useReviewWorkflow();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [view, setView] = useState<View>("rendered");
@@ -248,7 +250,7 @@ export function DocumentPage() {
   }
 
   const metaEntries = Object.entries(doc.doc_metadata || {});
-  const approved = doc.review_status === "approved";
+  const approved = doc.review_status !== "pending_review";
   const chip = originChip(doc.doc_source);
   const ChipIcon = chip.icon;
 
@@ -312,8 +314,9 @@ export function DocumentPage() {
               <span className={`${ui.mono} ${ui.faint}`}>updated {formatDateTime(doc.updated_at)}</span>
             )}
             {/* Review status is an optional gate — irrelevant for a trashed doc or an
-                archived-version snapshot, so hide the pill + toggle there. */}
-            {!doc.deleted_at && !isVersionView && (
+                archived-version snapshot, so hide the pill + toggle there; and
+                absent altogether while the review workflow is off (#241). */}
+            {reviewWorkflow && !doc.deleted_at && !isVersionView && (
               <button
                 type="button"
                 className={styles.reviewPill}

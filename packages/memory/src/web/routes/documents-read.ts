@@ -20,6 +20,7 @@
 
 import { Hono } from "hono";
 
+import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
 import { resolveCallerIdentity } from "../identity.ts";
@@ -153,6 +154,7 @@ export function registerDocumentReadRoutes(app: Hono, ctx: WebContext): void {
     }
     const meta = await getDocumentRow(ctx, documentId);
     const projectIds = await listDocumentProjectIds(ctx, documentId);
+    const showReview = await reviewWorkflowEnabled(ctx.supabase);
     const versions = await listDocumentVersions(ctx, documentId);
 
     // Reads are header-only: a GET carries no body (#226).
@@ -178,9 +180,10 @@ export function registerDocumentReadRoutes(app: Hono, ctx: WebContext): void {
       total_chars: doc.total_chars ?? 0,
       chunk_count: doc.chunk_count ?? 0,
       project_ids: projectIds,
-      review_status: meta
-        ? ((meta.review_status as string) ?? "approved")
-        : "approved",
+      // Absent when the review workflow is off (#241).
+      ...(showReview
+        ? { review_status: meta ? ((meta.review_status as string) ?? "approved") : "approved" }
+        : {}),
       created_at: meta ? ((meta.created_at as string | null) ?? null) : null,
       updated_at: meta ? ((meta.updated_at as string | null) ?? null) : null,
       deleted_at: meta ? ((meta.deleted_at as string | null) ?? null) : null,

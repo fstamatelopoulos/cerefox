@@ -638,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 3.3.0
+  version: 3.4.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -798,8 +798,10 @@ paths:
                   default: agent
                   description: >
                     Whether this write is from a human user or an AI agent.
-                    Controls review_status auto-transition: agent writes set
-                    the document to pending_review, user writes set it to approved.
+                    Always recorded for attribution. While the store's review
+                    workflow is on (review_workflow_enabled), agent writes land
+                    pending_review and user writes approved; with it off every
+                    write lands approved.
       responses:
         '200':
           description: >
@@ -1033,9 +1035,11 @@ paths:
         '200':
           description: >
             Array of matching documents:
-            [{ document_id, title, doc_metadata, review_status, source, created_at,
+            [{ document_id, title, doc_metadata, source, created_at,
                updated_at, total_chars, chunk_count, project_ids, project_names,
-               version_count, content_hash, content }].
+               version_count, content_hash, content }], plus review_status
+            only while the store's review workflow is on (the key is absent
+            when it is off).
             content_hash is the concurrency token — pass it back as
             expected_content_hash when updating via ingestNote.
 ```

@@ -15,6 +15,7 @@ import { useCallback, useState } from "react";
 
 import type { SearchMode } from "../api/types";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
+import { useReviewWorkflow } from "../hooks/useReviewWorkflow";
 import ui from "../styles/redesign.module.css";
 import styles from "../pages/SearchPage.module.css";
 
@@ -78,6 +79,7 @@ export function SearchControls({
 
   const { data: projects } = useProjects();
   const { data: metadataKeys } = useMetadataKeys();
+  const reviewWorkflow = useReviewWorkflow();
 
   const buildMf = useCallback(() => {
     const mf: Record<string, string> = {};
@@ -243,14 +245,16 @@ export function SearchControls({
             <IconChevronDown size={14} />
           </span>
 
-          <button
-            type="button"
-            className={`${ui.chip} ${localReviewStatus === "pending_review" ? ui.chipOn : ""}`}
-            onClick={togglePending}
-          >
-            <IconCheck size={13} />
-            Pending review
-          </button>
+          {reviewWorkflow && (
+            <button
+              type="button"
+              className={`${ui.chip} ${localReviewStatus === "pending_review" ? ui.chipOn : ""}`}
+              onClick={togglePending}
+            >
+              <IconCheck size={13} />
+              Pending review
+            </button>
+          )}
 
           <button
             type="button"

@@ -576,7 +576,7 @@ If you're using Cerefox via the local CLI (Path C from `connect-agents.md`), the
 
 ## Governance
 
-- **Review status**: agent writes set `pending_review`; human edits set `approved`. Both are searchable.
+- **Review status** (only while the store's `review_workflow_enabled` flag is on): agent writes set `pending_review`; human edits set `approved`. Both are searchable. When the workflow is off — the default on a fresh install — every write lands `approved` and no tool output mentions a review status; do not look for one.
 - **Soft delete**: deleted documents go to trash (recoverable). They are excluded from search. Delete via `cerefox_delete_document` (MCP, v1.7.0+ — requires the document's `content_hash` as you read it), the CLI (`cerefox document delete --yes --author <you> --author-type agent`), or the web UI.
 - **Restore is agent-reachable; permanent purge is web-UI-only.** A mistaken soft-delete can be undone with `cerefox_restore_document` (or `cerefox document restore`), fully audited (#210, v1.7.0). Purge — the only action that actually destroys data — keeps its human-in-the-loop confirmation in the web UI. If you delete or restore something, **tell the user explicitly** so they can follow it in the audit trail. See [`docs/guides/access-paths.md` → Destructive operations and the trust model](docs/guides/access-paths.md#destructive-operations-and-the-trust-model).
 - **Versioning**: every update via `update_if_exists` creates an archived version. Old content is always recoverable.
@@ -622,7 +622,7 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 
 You **MUST** identify yourself on every CLI invocation, exactly as you do via MCP:
 
-- **Writes** (`document ingest`, `document ingest-dir`): set `--author "<your-agent-name>" --author-type "agent"`. The `author_type=agent` value auto-routes the write to `pending_review` (governance signal), matching the MCP path.
+- **Writes** (`document ingest`, `document ingest-dir`): set `--author "<your-agent-name>" --author-type "agent"`. The `author_type=agent` value routes the write to `pending_review` while the review workflow is on (governance signal), matching the MCP path; with it off the write lands `approved` and attribution is still recorded.
 - **Reads** (`search`, `document get`, `document version list`, `project list`, `metadata search`, `audit list`): set `--requestor "<your-agent-name>"`.
 
 Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `CEREFOX_REQUESTOR_NAME` in their `.env` once. The CLI picks them up automatically — see [`docs/guides/cli.md`](docs/guides/cli.md) for the precedence rules.

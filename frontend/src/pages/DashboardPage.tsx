@@ -302,7 +302,7 @@ export function DashboardPage() {
                       }
                     : sourceChip(doc.source);
                   const ChipIcon = chip.icon;
-                  const pending = doc.review_status !== "approved";
+                  const pending = doc.review_status === "pending_review";
                   return (
                     <tr key={doc.id} data-testid="recent-doc-row" onClick={() => navigate(`/document/${doc.id}`)}>
                       <td>

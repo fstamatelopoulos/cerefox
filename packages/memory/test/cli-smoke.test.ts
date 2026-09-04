@@ -196,6 +196,21 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(status).toBe(0);
     expect(stdout).toContain("usage_tracking_enabled");
     expect(stdout).toContain("require_requestor_identity");
+    // #239: the list is derived from CONFIG_CATALOG, so the keys the old
+    // hand-written mirror had dropped are back, and the new flag is there.
+    for (const key of [
+      "version_retention_hours",
+      "version_cleanup_enabled",
+      "document_size_warning_chars",
+      "review_workflow_enabled",
+    ]) {
+      expect(stdout).toContain(key);
+    }
+    const json = run(["config", "list", "--json"]);
+    expect(json.status).toBe(0);
+    const parsed = JSON.parse(json.stdout) as { keys: string[]; catalog: Array<{ key: string }> };
+    expect(parsed.keys).toContain("review_workflow_enabled");
+    expect(parsed.catalog.map((k) => k.key)).toEqual(parsed.keys);
   });
 
   test("`cerefox search --help` advertises --only-metadata", () => {

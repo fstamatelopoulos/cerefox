@@ -9,7 +9,75 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **The review workflow is now optional (#241).** A new store-level flag,
+  `review_workflow_enabled`, governs whether agent-authored writes are queued
+  as `pending_review` for a person to approve. It is **off on a fresh
+  install** — most single-operator stores never review anything, and a queue
+  that is never drained is worse than no queue — and **on for every upgraded
+  store**, seeded by migration 0031, so upgrading changes nothing until you
+  flip it (`cerefox config set review_workflow_enabled true|false`, or
+  Settings → Governance, which asks for confirmation first). `cerefox doctor`
+  always prints a `review workflow` line saying which state the store is in.
+
+  With the workflow **off the feature is absent, not dimmed**: every write
+  lands `approved` whoever wrote it, and no surface shows a `review_status` —
+  the web pill, badges and search chip do not render; `document list` and
+  `metadata search` drop their `status` column (and the `review_status` key
+  from `--json`); API, MCP and `cerefox-metadata-search` Edge Function rows
+  carry no `review_status` key; `GET /api/v1/search?review_status=…` is a
+  `400`; `POST /api/v1/documents/{id}/review-status` is a `404`. Stored rows
+  are never touched by a toggle in either direction — turning it back on
+  shows exactly what was there. Attribution and the audit log are unaffected
+  in both states; review status has never gated retrieval and still does not.
+
+  Under the hood the decision moved to where it belonged: `cerefox_ingest_document`
+  now reads the flag itself, and the six client-side copies of the
+  "agent → pending" rule (local MCP, remote MCP, CLI pipeline, Edge Function,
+  partial edits, client bridge) are gone. Every access path — including
+  clients that predate this release — obeys the one store setting. The RPC's
+  `p_review_status` parameter is still accepted, now ignored, and deprecated.
+  Spec: `docs/specs/review-workflow-toggle.md`. Schema 0.15.0 → **0.16.0**,
+  migration 0031; GPT Actions OpenAPI block 3.3.0 → 3.4.0.
+
+  **Redeploy required**: `minSchema` is raised to **0.16.0**. This client no
+  longer decides the review status itself, so against an older server every
+  agent write would silently land `approved` — a behaviour change, not a
+  missing feature — and the new search-filter overloads would fail outright.
+  After `self-update`, run `cerefox server deploy`; until then `cerefox web`
+  refuses to start and `doctor` says exactly why.
+
+### Fixed
+
+- **A review-status-filtered search under-returned (#240).** The filter ran in
+  TypeScript *after* the RPC had already applied `count`, so asking for ten
+  approved documents could return three while more existed. The filter is now
+  a parameter of `cerefox_hybrid_search` / `cerefox_search_docs` and is
+  applied before the limit. Invalid values are a `400` instead of being
+  silently ignored.
+- **`cerefox config list` hid three working keys (#239).** The CLI kept a
+  hand-written copy of the server's allow-list and had drifted:
+  `version_retention_hours`, `version_cleanup_enabled` and
+  `document_size_warning_chars` were settable but unlisted. The list is now
+  derived from the shared `CONFIG_CATALOG` (the same source the Settings page
+  renders), grouped, with each key's kind and default, and a unit test pins
+  the catalog to the RPC's allow-list so a third copy cannot drift again.
+  `--json` gains a `catalog` array; `keys` keeps its shape.
+- **Live tests no longer fail on bun's 5 s default timeout (#235).** Every
+  live test is declared through a `liveTest` helper carrying a 60 s budget —
+  `bunfig.toml`'s `[test] timeout` is not honoured by the pinned bun — and a
+  guard test fails the suite if a live file declares a bare `test(`. The
+  destructive web suite also gained the production-write guard the other
+  write suites already had; it had been missing it, masked only by the
+  server refusing to start against an out-of-date schema.
+
+### Added (tests)
+
+- `web-integration/review-workflow.test.ts` flips the flag itself through the
+  config API and asserts both contracts live on every run, then restores the
+  value it found. The attribution, destructive, pipeline and Edge Function
+  suites branch on the store's current setting.
 
 ---
 
