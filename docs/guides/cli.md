@@ -506,6 +506,8 @@ cerefox metadata search --metadata-filter '{"type":"decision-log"}' --updated-si
 cerefox metadata search --metadata-filter '{"status":"active"}' --project-name "research" --include-content
 ```
 
+**Output**: a `## title [id: …]` block per document with its metadata, projects, size, review status and update date (plus content with `--include-content`), or JSON with `--json`. As with `document list`, the review status (and the `review_status` key in `--json`) is present only while the review workflow is on — see `review_workflow_enabled` in [configuration.md](configuration.md#review-workflow).
+
 **MCP equivalent**: [`cerefox_metadata_search`](../../AGENT_GUIDE.md).
 
 ---
@@ -771,7 +773,7 @@ These flat commands handle install, configuration, and health. Run any with `--h
 | Command | Purpose |
 |---|---|
 | `cerefox init` | Interactive first-run setup; writes `~/.cerefox/.env`, offers `server deploy` + self-docs ingest. |
-| `cerefox doctor` | Diagnose the install (credentials, DB reachability, schema version). |
+| `cerefox doctor` | Diagnose the install (credentials, DB reachability, schema version, whether the review workflow is on). |
 | `cerefox status` | Show connection + schema status. |
 | `cerefox configure-agent --tool <client>` | Write MCP client config (`claude-code`, `claude-desktop`, `cursor`, `codex`, `gemini`). |
 | `cerefox token generate` / `rotate` / `list` | Manage the Cerefox access token (`cfx_pat_…`) — the Edge Function Bearer credential (remote MCP, GPT Actions, curl). See the [`cerefox token`](#cerefox-token-generate--cerefox-token-rotate--cerefox-token-list) section above. |

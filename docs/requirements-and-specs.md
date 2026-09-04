@@ -181,7 +181,7 @@ As multiple agents write to the same knowledge base, trust requires clear attrib
 | FR-10.2 | Agent-authored documents include `agent_name` and optional `agent_session_id` in metadata | P1 |
 | FR-10.3 | `created_at` and `updated_at` timestamps on all documents | P0 (done) |
 | FR-10.4 | Implicit document versioning — see FR-11 for detailed spec | P1 |
-| FR-10.5 | Review status flag — lightweight indicator of whether a human has validated agent-written content | P2 |
+| FR-10.5 | Review status flag — lightweight indicator of whether a human has validated agent-written content. Optional per store since v1.13.0 (`review_workflow_enabled`): off on a fresh install, on for upgraded stores; with it off the field is absent everywhere | P2 (done) |
 
 ### FR-8: Backup & Export
 
@@ -294,7 +294,7 @@ FTS — versions exist for recovery purposes only, and restore is manual re-inge
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `version_retention_hours` | `48` | Hours to retain all versions before lazy cleanup. Set via `cerefox config set version_retention_hours` (the `CEREFOX_VERSION_RETENTION_HOURS` env var was retired at v1.1.0 — retention lives in `cerefox_config`) |
+| `version_retention_hours` | `120` | Hours to retain all versions before lazy cleanup. Set via `cerefox config set version_retention_hours` (the `CEREFOX_VERSION_RETENTION_HOURS` env var was retired at v1.1.0 — retention lives in `cerefox_config`) |
 
 ---
 

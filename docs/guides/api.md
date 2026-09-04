@@ -62,7 +62,8 @@ By default every call is recorded as the web app: author `web-ui`, author type
 **This identity is declared, not verified.** It is a label the caller chooses,
 recorded for attribution and record-keeping: so the audit trail says which
 harness wrote a document, so usage analytics can tell your bot's reads from the
-web app's, and so an agent-authored ingest is queued for review. It is not a
+web app's, and so an agent-authored ingest is queued for review (while the
+review workflow is on). It is not a
 credential, it grants nothing, and nothing checks it. See
 [Attribution is not authentication](#attribution-is-not-authentication) below
 before relying on it for anything else.
@@ -137,7 +138,7 @@ another client uses.
 
 They exist for **attribution and record-keeping**: a legible audit trail, usage
 analytics that can tell callers apart, and the review-queue behaviour of
-`author_type: agent`. They are not a security measure, they do not establish an
+`author_type: agent` while the review workflow is on. They are not a security measure, they do not establish an
 authenticated identity, and no access decision is made on them. Treat a name in
 the audit log as "what the caller said", never as "who the caller was".
 

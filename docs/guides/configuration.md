@@ -378,9 +378,13 @@ enable it.
 ### How it works
 
 A `cerefox_config` table in Postgres stores runtime configuration as key-value
-pairs. The allow-list lives in the `cerefox_set_config` RPC; run `cerefox config
-list` (or open **Settings** in the web UI) for the current set — today that is
-usage tracking, the two requestor-identity keys, three retrieval tunables, and
+pairs. Every key is declared once in the shared catalog
+(`_shared/config-catalog/index.ts`: kind, default, group, description); the
+`cerefox_set_config` RPC's allow-list stays authoritative for writes and a unit
+test pins the two together. Run `cerefox config list` (or open **Settings** in
+the web UI) for the current set — today that is usage tracking, the two
+requestor-identity keys, three retrieval tunables, two version-retention keys,
+the document-size warning threshold, `review_workflow_enabled` and
 `relations_enabled`. Usage logging is the illustrative case below: every logging
 call goes through the
 `cerefox_log_usage` RPC, which checks this config value first:
@@ -414,15 +418,17 @@ cerefox config get usage_tracking_enabled
 
 **Via the web UI:** `cerefox web` → **Settings**. Every runtime key is listed
 with its description, current value and default, grouped into Retrieval,
-Governance and Features.
+Retention, Governance and Features.
 
 Two things the page does deliberately:
 
 - **Keys that change what agents see require confirmation.** Turning on
-  `relations_enabled` adds four tools to every connected agent's tool list, and
+  `relations_enabled` adds four tools to every connected agent's tool list,
   `require_requestor_identity` starts rejecting agents that don't identify
-  themselves. Neither is a bare toggle — you get a dialog naming the
-  consequence first.
+  themselves, `review_workflow_enabled` hides or reveals the review status on
+  every surface, and `version_cleanup_enabled` decides whether old versions are
+  pruned. None is a bare toggle — you get a dialog naming the consequence
+  first.
 - **Retired `.env` lines are flagged.** If a variable that used to control a
   setting is still present in the server's environment, the row says so — it no
   longer does anything, and the value shown is what actually runs. The page
@@ -583,7 +589,7 @@ Design: [`docs/specs/review-workflow-toggle.md`](../specs/review-workflow-toggle
 
 ## Checking Your Configuration
 
-Run the doctor to verify everything is connected (credentials, DB reachability, schema version):
+Run the doctor to verify everything is connected (credentials, DB reachability, schema version, review workflow on/off):
 
 ```bash
 cerefox doctor       # or: cerefox status

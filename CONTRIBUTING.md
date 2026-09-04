@@ -74,6 +74,12 @@ cd packages/memory && bun run build && bun test         # CLI/MCP smokes + live 
 # scratch environment:
 CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test
 
+# Writing a live test? Declare it with `liveTest(...)` from
+# `packages/memory/test/_live-test.ts` (60 s budget), never a bare `test(`:
+# bun ignores bunfig's [test] timeout and a real embedding + Data API round
+# trip does not fit the 5 s default. `live-test-budget.test.ts` fails the
+# suite otherwise. A suite that WRITES also gates on `mayWriteToLiveTarget()`.
+
 # UI end-to-end (Playwright). Deliberately NOT in CI: it needs live Supabase and
 # OpenAI credentials plus a labelled target, and putting those in repository
 # secrets is a bigger exposure than the coverage is worth. So it is a local step
@@ -140,7 +146,7 @@ Cerefox splits into a **client** (the `@cerefox/memory` npm package: CLI, MCP, w
 
 ```ts
 export const COMPATIBILITY = {
-  minSchema: "0.3.1",         // min deployed Postgres schema version
+  minSchema: "0.16.0",        // min deployed Postgres schema version
   minEdgeFunctions: "0.6.0",  // min deployed Edge Function version
 };
 ```

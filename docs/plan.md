@@ -121,8 +121,10 @@ idempotency design; guides re-synced 17/17; acceptance 15/15 on prod; #222
 warning verified firing on prod CLI and quiet on clean writes). #222 closed.
 The 1.10.x line was announced in Discord `#announcements` on 2026-08-22.
 
-Schema is at 0.15.0 (shipped in v1.10.0); `minSchema` is **0.14.0**, raised
-in v1.9.0 — the FIRST raise since the policy was written (see iteration 38).
+Schema is at 0.16.0 (v1.13.0, migration 0031); `minSchema` is **0.16.0**,
+raised in v1.13.0 — the second raise since the policy was written (the first
+was v1.9.0, iteration 38; the rationale for this one is in
+`specs/review-workflow-toggle.md`).
 The tool surface is 15 core + 4 dormant relation tools (delete/restore
 joined in v1.7.0).
 

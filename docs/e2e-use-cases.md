@@ -121,7 +121,8 @@ frontend built (`cd frontend && bun run build`). Tests target the React SPA at
 | `TestSearch` | `test_search_returns_results` | Search query returns "results found" text | Done |
 | `TestProjects` | `test_project_crud` | Create project via UI form, verify it appears, cleanup | Done |
 | `TestDocumentView` | `test_document_page_loads` | Navigate from dashboard to document detail, verify Edit/Download buttons | Done |
-| `TestDocumentView` | `test_review_status_toggle_visible` | Document detail shows review status (Approved badge) | Done |
+| `TestDocumentView` | `review status toggle follows review_workflow_enabled` | Document detail shows the review toggle only while `review_workflow_enabled` is on; asserts it is absent (count 0) when off | Done — both states verified on staging (v1.13.0) |
+| `Settings` | `page loads and lists config groups` | Settings renders `relations_enabled`, `review_workflow_enabled` and `min_search_score` rows from the shared catalog | Done (v1.13.0) |
 | `Dashboard recent docs` | `project selector scopes the tile and refetches` | Recent-docs tile scoped by project via server refetch (`/dashboard/recent-docs?project_id=`), "All projects" default | Done — verified on staging (v1.7.1, 2026-08-14) |
 | `Dashboard recent docs` | `the misleading View all link is gone` | "View all" (which just opened search) removed from the recent-docs tile | Done — verified on staging (v1.7.1, 2026-08-14) |
 | `TestAuditLog` | `test_audit_log_page_loads` | Audit log page renders with heading | Done |

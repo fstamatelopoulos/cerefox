@@ -11,7 +11,7 @@ cerefox guides ingest    # 3. the bundled guides, into your KB
 ```
 
 The order matters: a release may require its own schema (the version notes
-say so — v1.9.x is one), and until `server deploy` runs, the freshly updated
+say so — v1.9.x and v1.13.0 are two), and until `server deploy` runs, the freshly updated
 client is talking to the previous release's server. That is why
 `self-update` no longer runs the guides sync automatically — it used to fire
 at the one moment in the upgrade where it cannot succeed against a
@@ -59,6 +59,24 @@ schema-requiring release.
 > moving tag by design (#100).
 
 ## End-user upgrade
+
+> ### Upgrading to v1.13.0 — `cerefox server deploy` is required
+>
+> v1.13.0 makes the review workflow optional and moves the "agent writes land
+> `pending_review`" decision out of the clients and into the
+> `cerefox_ingest_document` RPC (#241). A v1.13.0 client no longer decides
+> the status itself, so against an older server every agent write would
+> silently land `approved` — a behaviour change, not a missing feature — and
+> the new review-status search filter would fail outright. The **minimum
+> supported schema is therefore `0.16.0`**: until you run `cerefox server
+> deploy`, `cerefox web` refuses to start and `doctor` says exactly why.
+>
+> Migration 0031 seeds `review_workflow_enabled = true` on every existing
+> store, so **your store keeps behaving exactly as before**. The flag now
+> exists and `cerefox doctor` prints its state; flip it with
+> `cerefox config set review_workflow_enabled false` (or Settings → Governance)
+> if nobody reviews the queue. See
+> [configuration.md → Review Workflow](configuration.md#review-workflow).
 
 > ### Upgrading to v1.1.0 — `cerefox server deploy` is required
 >
@@ -166,6 +184,8 @@ knowing about:
   that ingested fine before now need deduplication, or are refused on edit.
 - **v1.7.0 — trashed documents refuse content updates.** A soft-deleted
   document must be restored before its content can be updated.
+- **v1.13.0 — the review workflow is a store setting.** Upgraded stores keep
+  it on; fresh installs start with it off. See the callout above.
 
 ## Notable: v1.8.0 storage reclaim (migration 0027)
 

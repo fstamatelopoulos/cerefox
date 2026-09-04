@@ -41,7 +41,7 @@ const GROUP_ORDER = ["Retrieval", "Retention", "Governance", "Features"] as cons
 
 const GROUP_BLURB: Record<string, string> = {
   Retrieval: "How search ranks and filters results.",
-  Governance: "Attribution and audit requirements for agent calls.",
+  Governance: "What agent writes must carry, and whether they queue for review.",
   Retention: "How long document version history is kept.",
   Features: "Optional capabilities, off until you turn them on.",
 };
