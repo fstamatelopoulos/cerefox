@@ -77,6 +77,14 @@ schema-requiring release.
 > `cerefox config set review_workflow_enabled false` (or Settings → Governance)
 > if nobody reviews the queue. See
 > [configuration.md → Review Workflow](configuration.md#review-workflow).
+>
+> **v1.13.1** (schema 0.16.1) corrects one thing in the above: the flag
+> governs only what is *shown*. v1.13.0 also stored `approved` for every
+> write while the flag was off; v1.13.1 records agent writes as
+> `pending_review` regardless, so turning the workflow back on shows the
+> statuses the store would have had all along. It is an RPC-only change —
+> `cerefox server deploy` (or `--schema-only`) picks it up; nothing refuses
+> to run until you do, but a 0.16.0 server keeps the v1.13.0 write behaviour.
 
 > ### Upgrading to v1.1.0 — `cerefox server deploy` is required
 >
@@ -186,6 +194,9 @@ knowing about:
   document must be restored before its content can be updated.
 - **v1.13.0 — the review workflow is a store setting.** Upgraded stores keep
   it on; fresh installs start with it off. See the callout above.
+- **v1.13.1 — the flag hides, it does not rewrite.** Agent writes are
+  recorded `pending_review` whether or not the workflow is shown (v1.13.0
+  stored `approved` while off). Redeploy to pick it up.
 
 ## Notable: v1.8.0 storage reclaim (migration 0027)
 

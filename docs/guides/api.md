@@ -105,19 +105,20 @@ still has its reads attributed correctly.
 
 ### Two consequences worth knowing before you use it
 
-**`author_type: agent` queues your documents for review — when the review
-workflow is on.** With `review_workflow_enabled` set to `true` on the store, an
-agent-authored ingest lands in `pending_review` rather than `approved`, exactly
-as it does over MCP. That equivalence is the point of the feature: the same
-actor is recorded, and treated, identically whichever transport it used. If you
-want your writes approved on arrival, send `user` (or send nothing).
+**`author_type: agent` marks your documents as pending review.** An
+agent-authored ingest is recorded `pending_review` rather than `approved`,
+exactly as it is over MCP. That equivalence is the point of the feature: the
+same actor is recorded, and treated, identically whichever transport it used.
+If you want your writes approved on arrival, send `user` (or send nothing).
 
-With the workflow **off** (the default on a fresh v1.13.0+ install) every
-write lands `approved`, and the API does not expose review status at all: no
-row carries a `review_status` key, `GET /search?review_status=…` is a `400`,
-and `POST /documents/{id}/review-status` is a `404`. Read the flag from
-`GET /config/review_workflow_enabled` if your client needs to know. Attribution
-is unaffected either way. See
+Whether anyone *sees* that status is the store's `review_workflow_enabled`
+flag. With the workflow **off** (the default on a fresh v1.13.0+ install) the
+API does not expose review status at all: no row carries a `review_status`
+key, `GET /search?review_status=…` is a `400`, and
+`POST /documents/{id}/review-status` is a `404`. The status is still recorded
+(v1.13.1), so turning the workflow on later shows exactly what the store would
+have had all along. Read the flag from `GET /config/review_workflow_enabled`
+if your client needs to know. Attribution is unaffected either way. See
 [configuration.md → Review Workflow](configuration.md#review-workflow).
 
 **Identifying yourself changes the access path.** There is deliberately no way

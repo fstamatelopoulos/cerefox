@@ -508,7 +508,7 @@ export async function checkReviewWorkflow(): Promise<CheckResult> {
     status: "ok",
     detail: on
       ? "ON — agent writes land pending_review; review_status is shown everywhere"
-      : "OFF — every write lands approved; review_status is hidden everywhere",
+      : "OFF — review_status is hidden everywhere (still recorded from author_type)",
     hint: on
       ? undefined
       : "Turn it on with `cerefox config set review_workflow_enabled true`.",

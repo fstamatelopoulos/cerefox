@@ -50,7 +50,7 @@ cerefox document ingest --paste --title "<title>" [OPTIONS]   # stdin
 | `--last-write-wins` | — | flag | off | Skip the concurrency check and overwrite regardless of concurrent changes. For re-sync flows where an external source of truth makes conflicts meaningless. Recorded in the audit log. |
 | `--source` | — | str | `paste` / `file` | Source label recorded on the document. |
 | `--author` | — | str | `CEREFOX_AUTHOR_NAME` or `unknown` | Audit-log author identity. |
-| `--author-type` | — | `user`\|`agent` | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. Agent writes land `pending_review` while the review workflow is on (`review_workflow_enabled`); `approved` otherwise. |
+| `--author-type` | — | `user`\|`agent` | `CEREFOX_AUTHOR_TYPE` or `user` | Caller type. Agent writes are recorded `pending_review`, user writes `approved`; the store's `review_workflow_enabled` flag decides whether that status is shown. |
 
 **Examples**:
 ```bash

@@ -570,20 +570,23 @@ cerefox config set review_workflow_enabled true    # or false; also in Settings 
 cerefox doctor                                      # prints "review workflow  ON …" / "OFF …"
 ```
 
-**With the workflow off, the feature is absent, not dimmed.** Every write lands
-`approved` whoever wrote it — the decision is made once, inside the
-`cerefox_ingest_document` RPC, so every access path (CLI, local and remote MCP,
-Edge Functions, web) obeys the same setting, including older clients. No surface
-shows a `review_status`: the web pill, badges and search chip do not render;
-the CLI drops its `status` column; API, MCP and Edge Function rows carry no
-`review_status` key; `GET /api/v1/search?review_status=…` is a `400`; and
-`POST /api/v1/documents/{id}/review-status` is a `404`.
+**With the workflow off, the feature is hidden, not dimmed.** No surface
+shows or enforces a `review_status`: the web pill, badges and search chip do
+not render; the CLI drops its `status` column; API, MCP and Edge Function rows
+carry no `review_status` key; `GET /api/v1/search?review_status=…` is a `400`;
+and `POST /api/v1/documents/{id}/review-status` is a `404`.
 
-**Toggling never touches stored data.** Flipping the flag off does not approve
-anything and flipping it on does not queue anything; documents that were
-`pending_review` are still pending, and are shown as such the moment the flag
-is on again. Attribution and the audit log are unaffected in both states — who
-wrote what is always recorded. Config changes are audited too.
+**The flag hides; it never rewrites.** Writes are recorded the same way in
+both states — agent writes `pending_review`, user writes `approved`, decided
+once inside the `cerefox_ingest_document` RPC so every access path (CLI, local
+and remote MCP, Edge Functions, web) behaves alike, including older clients.
+Flipping the flag off does not approve anything and flipping it on does not
+queue anything; documents that were `pending_review` are still pending, and a
+document an agent wrote while the workflow was off is pending too, shown as
+such the moment the flag is on again. (v1.13.0 stored `approved` for every
+write while off; v1.13.1 corrected that.) Attribution and the audit log are
+unaffected in both states — who wrote what is always recorded. Config changes
+are audited too.
 
 Design: [`docs/specs/review-workflow-toggle.md`](../specs/review-workflow-toggle.md).
 

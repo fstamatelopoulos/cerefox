@@ -9,7 +9,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **The review-workflow flag no longer changes what a write stores.** In
+  v1.13.0, `cerefox_ingest_document` read `review_workflow_enabled` on the
+  write path and stored `approved` for *every* author while the workflow was
+  off. That was never the intent — the flag is a view/hide switch, the rule
+  underneath keeps running — and it quietly made a stored `approved` mean two
+  different things depending on when it was written: a document an agent
+  wrote during an "off" month came back `approved` once the flag was on
+  again, indistinguishable from one a person had actually approved. The RPC
+  now decides from `author_type` alone (agent → `pending_review`, user →
+  `approved`) whatever the flag says; the flag governs only what surfaces
+  show and enforce, exactly as documented. Turning it off and later back on
+  shows the statuses the store would have had all along. The Settings
+  confirmation text, `cerefox doctor`'s OFF line and the guides say so now.
+  Schema 0.16.0 → **0.16.1** (RPC-only, no migration; `cerefox server
+  deploy` re-applies it). `minSchema` is unchanged: a 0.16.0 server merely
+  keeps the v1.13.0 write behaviour until redeployed. GPT Actions OpenAPI
+  3.4.0 → 3.4.1 (description text only).
 
 ---
 

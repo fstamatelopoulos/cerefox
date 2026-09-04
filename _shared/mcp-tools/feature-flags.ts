@@ -13,9 +13,10 @@
  * - **The review workflow** (#241): agent writes land `pending_review` and a
  *   person approves them. Gated on `review_workflow_enabled` (**false** on a
  *   fresh install, **true** on a store that predates the flag). The write-side
- *   decision lives in `cerefox_ingest_document`; this reader is for the
- *   presentation side — every surface that would show a `review_status` asks
- *   here first and omits it when the workflow is off.
+ *   decision lives in `cerefox_ingest_document` and does NOT read the flag
+ *   (author_type alone, v1.13.1); this reader is for the presentation side —
+ *   every surface that would show a `review_status` asks here first and omits
+ *   it when the workflow is off. The flag hides, it never rewrites.
  *
  * Both are read through the same RPC as every other setting, so turning one
  * on is one command: `cerefox config set <key> true`.

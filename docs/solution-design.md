@@ -57,7 +57,7 @@ Key design properties:
 - **Document-level metadata**: tags, project, source — live on the document, not duplicated per chunk
 - **Deduplication**: content hash on documents prevents re-ingesting the same file
 - **Versioning is additive**: the search path (documents -> current chunks) is unchanged; archived chunks are invisible to search
-- **Governance**: `review_status` on documents (`approved` / `pending_review`), decided once in `cerefox_ingest_document` from `author_type` **and** the store-level `review_workflow_enabled` flag (v1.13.0; off on a fresh install, on for upgraded stores — with it off every write is approved and no surface exposes the field; spec: `docs/specs/review-workflow-toggle.md`). Audit log provides full accountability trail regardless.
+- **Governance**: `review_status` on documents (`approved` / `pending_review`), decided once in `cerefox_ingest_document` from `author_type` alone; the store-level `review_workflow_enabled` flag (v1.13.0; off on a fresh install, on for upgraded stores) governs only whether any surface exposes or enforces the field — it is not consulted on write (v1.13.1), so a toggle never changes what a stored value means (spec: `docs/specs/review-workflow-toggle.md`). Audit log provides full accountability trail regardless.
 
 ### 2.2 Schema
 

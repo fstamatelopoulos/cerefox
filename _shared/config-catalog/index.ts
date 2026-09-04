@@ -138,13 +138,13 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
   {
     key: "review_workflow_enabled",
     description:
-      "Queue agent-authored writes as 'pending review' for a person to approve. Off: every write lands approved and no surface shows a review status. Off on a fresh install; on for stores that predate the flag.",
+      "Show and enforce the review status of documents: agent-authored writes are marked 'pending review' for a person to approve. Off: no surface shows a review status and nothing enforces it; the status is still recorded and reappears unchanged when turned back on. Off on a fresh install; on for stores that predate the flag.",
     kind: "boolean",
     defaultValue: "false",
     group: "Governance",
     highImpact: true,
     impactNote:
-      "Turning this OFF hides the review badges, the approve control and the search filter everywhere (web, API, MCP, CLI), and every new write lands approved whoever wrote it. Nothing stored is changed: turning it back ON shows exactly what was there, including documents still marked pending.",
+      "Turning this OFF hides the review badges, the approve control and the search filter everywhere (web, API, MCP, CLI). It changes nothing stored and nothing about how writes are recorded: agent writes are still marked pending behind the scenes, so turning it back ON shows exactly the statuses the store would have had all along.",
   },
 ];
 

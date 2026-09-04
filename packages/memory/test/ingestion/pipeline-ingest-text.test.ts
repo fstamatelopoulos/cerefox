@@ -190,15 +190,12 @@ describe("IngestionPipeline.ingestText (live)", () => {
     expect(names).toEqual(projectNames.slice().sort());
   });
 
-  liveTest("ingestText with authorType='agent' lands per review_workflow_enabled", async () => {
+  liveTest("ingestText with authorType='agent' sets review_status='pending_review'", async () => {
     if (!pipeline || !supabase) return;
-    // The decision is the RPC's (#241): pending_review only while the review
-    // workflow is on. Read the flag rather than set it — the suite must not
-    // change an operator's store to make itself pass.
-    const { data: flag } = await supabase.rpc("cerefox_get_config", {
-      p_key: "review_workflow_enabled",
-    });
-    const workflowOn = String(flag ?? "").toLowerCase() === "true";
+    // The decision is the RPC's (#241), from author_type alone. The store's
+    // review_workflow_enabled flag governs what surfaces SHOW, not what is
+    // stored (v1.13.1) — so this reads the column directly and expects the
+    // same value whatever the flag says. (1.13.0 stored 'approved' while off.)
     const title = `${TITLE_PREFIX} agent-write-${RUN_TAG}`;
     const result = await pipeline.ingestText({
       text:
@@ -215,7 +212,7 @@ describe("IngestionPipeline.ingestText (live)", () => {
       .select("review_status")
       .eq("id", result.documentId)
       .maybeSingle();
-    expect(data?.review_status).toBe(workflowOn ? "pending_review" : "approved");
+    expect(data?.review_status).toBe("pending_review");
   });
 
   liveTest("ingestText with authorType='user' sets review_status='approved'", async () => {

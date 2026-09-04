@@ -7,8 +7,10 @@
 -- write ever overrides a value an operator has set (ON CONFLICT DO NOTHING).
 --
 -- The decision "agent write → pending_review" moves out of the six client call
--- sites and into cerefox_ingest_document, which reads this flag. That RPC
--- lives in rpcs.sql, which `cerefox server deploy` re-applies.
+-- sites and into cerefox_ingest_document. That RPC lives in rpcs.sql, which
+-- `cerefox server deploy` re-applies. (0.16.0 also had the RPC read this flag
+-- on write and store 'approved' for everyone while off; 0.16.1 removed that —
+-- the flag governs visibility only, the stored value follows author_type.)
 --
 -- #240: cerefox_hybrid_search / cerefox_search_docs gain p_review_status so a
 -- filtered search is applied before the limit, not after. A new argument is a

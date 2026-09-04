@@ -1395,9 +1395,10 @@ $$;
 --                       update keeps the existing metadata (v0.11.1). Pass '{}'
 --                       explicitly to clear all metadata.
 --   p_review_status   : ACCEPTED AND IGNORED since 0.16.0 (#241). The status is
---                       decided here from p_author_type and the store's
---                       `review_workflow_enabled` flag, so every transport
---                       behaves the same and a toggle needs no client change.
+--                       decided here from p_author_type alone (agent →
+--                       pending_review, user → approved), so every transport
+--                       behaves the same. The `review_workflow_enabled` flag
+--                       only governs what surfaces show (0.16.1).
 --                       Kept in the signature so no caller breaks.
 --   p_chunks          : JSONB array of chunk objects, each with:
 --                        chunk_index, heading_path, heading_level, title,
@@ -1583,15 +1584,17 @@ BEGIN
             USING ERRCODE = '22023';  -- deterministic; never a retryable SQLSTATE
     END IF;
 
-    -- Review status is decided HERE, not by the caller (#241). With the
-    -- workflow on, an agent write is queued for a person to look at; with it
-    -- off, every write lands approved and no surface shows the column. The
-    -- fallback FALSE matches the fresh-install seed; migration 0031 seeds TRUE
-    -- on stores that predate the flag, so it only applies if the row is gone.
-    -- p_review_status is deliberately not consulted — six clients used to
-    -- compute it and they could not have agreed on a store-level policy.
+    -- Review status is decided HERE, not by the caller (#241), from the
+    -- author type alone: an agent write is 'pending_review', a person's is
+    -- 'approved'. The `review_workflow_enabled` flag is deliberately NOT
+    -- consulted (0.16.1): it governs what the surfaces show and enforce, not
+    -- what is stored, so a store that turns the workflow off and later back on
+    -- sees exactly the statuses it would have had all along. 0.16.0 wrote
+    -- 'approved' for every author while the flag was off; that made a stored
+    -- 'approved' mean two different things depending on when it was written.
+    -- p_review_status is not consulted either — six clients used to compute
+    -- it and they could not have agreed on a store-level policy.
     v_status := CASE
-                    WHEN NOT cerefox_config_bool('review_workflow_enabled', FALSE) THEN 'approved'
                     WHEN p_author_type = 'agent' THEN 'pending_review'
                     ELSE 'approved'
                 END;
@@ -3088,6 +3091,10 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.16.1 (v1.13.1): cerefox_ingest_document no longer consults
+    -- `review_workflow_enabled` — review_status follows author_type whatever
+    -- the flag says; the flag governs visibility/enforcement only. RPC-only,
+    -- no migration (server deploy re-applies rpcs.sql).
     -- 0.16.0 (#241, #240): `review_workflow_enabled` config key (seeded false
     -- on fresh installs, true by migration 0031 on existing ones);
     -- cerefox_ingest_document decides review_status itself from author_type
@@ -3117,7 +3124,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.16.0'::TEXT;
+    SELECT '0.16.1'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────
