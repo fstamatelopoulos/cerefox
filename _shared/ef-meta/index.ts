@@ -18,7 +18,7 @@
  * doesn't touch `supabase/functions/` leaves it alone).
  */
 
-export const EF_VERSION = "1.12.2";
+export const EF_VERSION = "1.13.0";
 
 /**
  * The Cerefox RELEASE version — what `cerefox --version` reports and what npm
@@ -36,7 +36,7 @@ export const EF_VERSION = "1.12.2";
  * is imported by the Deno Edge Functions, which cannot reach into the npm
  * package.
  */
-export const CEREFOX_VERSION = "1.12.2";
+export const CEREFOX_VERSION = "1.13.0";
 
 /**
  * The most recent version whose EF-side SOURCE actually changed (#127).
@@ -46,7 +46,7 @@ export const CEREFOX_VERSION = "1.12.2";
  * `cut_release.ts` ONLY when EF source changed since the last tag; doctor
  * uses it to stay silent on label-only drift.
  */
-export const EF_LAST_CHANGED = "1.11.0";
+export const EF_LAST_CHANGED = "1.13.0";
 
 /**
  * The 8 peer EFs the cerefox-mcp aggregator probes (excludes cerefox-mcp

@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.13.0] -- 2026-09-04
+
 ### Added
 
 - **The review workflow is now optional (#241).** A new store-level flag,
