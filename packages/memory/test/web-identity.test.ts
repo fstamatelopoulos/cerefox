@@ -84,15 +84,15 @@ describe("resolveCallerIdentity — the unchanged default", () => {
 
 describe("resolveCallerIdentity — a caller that names itself", () => {
   test("a header author is recorded and flips the access path", () => {
-    const id = unwrap(resolveCallerIdentity(ctxWith({ "X-Cerefox-Author": "cerefox-bot" })));
-    expect(id.author).toBe("cerefox-bot");
+    const id = unwrap(resolveCallerIdentity(ctxWith({ "X-Cerefox-Author": "example-bot" })));
+    expect(id.author).toBe("example-bot");
     expect(id.accessPath).toBe("api");
     expect(id.named).toBe(true);
   });
 
   test("a body author works too", () => {
-    const id = unwrap(resolveCallerIdentity(ctxWith(), { author: "cerefox-bot" }));
-    expect(id.author).toBe("cerefox-bot");
+    const id = unwrap(resolveCallerIdentity(ctxWith(), { author: "example-bot" }));
+    expect(id.author).toBe("example-bot");
     expect(id.accessPath).toBe("api");
   });
 
