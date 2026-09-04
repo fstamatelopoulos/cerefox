@@ -137,57 +137,66 @@ Three things follow, and they are the argument for doing it this way:
 keeping the parameter, ignoring the value, and documenting it as deprecated —
 removing a parameter is a breaking RPC signature change for the sake of tidiness.
 
-### What happens to documents already pending
+### What "off" means: the feature disappears completely
 
-**Nothing. They are not touched.**
+Decided 2026-09-03. When the flag is off, review status is **not a concept the
+system exposes** — not in the UI, not in the API, not in agent-facing output.
+Not dimmed, not empty, not "0 pending". Absent.
 
-Mass-approving hundreds of rows because someone flipped a switch is a
-destructive, surprising, and effectively unauditable act, and it is irreversible
-— the previous state is gone. The flag changes what happens to *new* writes;
-history stays as it was written.
+The alternative considered and rejected was a partial state — keeping the review
+UI visible while a legacy queue still had entries, so it could be drained. It is
+more informative and it is worse: a feature that is "off" but still visible for
+some users, in some stores, until some condition clears, is a feature nobody can
+form a mental model of.
 
-But leaving them silently would strand a queue nobody can see. So:
+**The worry that made me propose the partial state was overblown, and the
+reason matters.** I argued that hiding a non-empty queue strands it. But
+`review_status` gates nothing — no RPC filters on it — so a hidden
+`pending_review` value has **zero functional effect**. It is a dormant label on
+a row. Nothing is stranded because nothing was ever waiting.
 
-> **The review UI appears when the workflow is enabled OR when pending
-> documents still exist.**
+### Stored data is not touched
 
-With the flag off and a non-empty queue, the UI stays visible so the queue can
-be drained, with a banner explaining that no new documents will be added to it.
-As the operator approves them the queue empties, and the UI disappears on its
-own. Nothing is stranded, nothing is mutated behind anyone's back, and the end
-state is clean.
+Turning the flag off changes no rows. Two reasons:
 
-Draining should not require clicking N times, so a bulk action is part of this:
-`cerefox document approve-all --yes` (and a UI equivalent), writing one audit
-entry per document, explicit and opt-in. Never automatic.
+- **Re-enabling must be a perfect restore.** A store that toggles off, runs for
+  a month, and toggles back on should see exactly the review state it left. A
+  mass `UPDATE` on config change is irreversible and destroys that.
+- **A config toggle should not rewrite hundreds of documents.** Even audited,
+  that is a surprising amount of writing for flipping a switch, and it makes
+  the toggle something people are afraid to touch.
 
-**Manual review-status setting keeps working when the flag is off.** Disabling
-the automatic flagging must not remove the ability to clear the backlog.
+So the stored value and the exposed value can differ while the flag is off. That
+is the one wart in this design and it is worth stating plainly in the docs: the
+database may hold `pending_review` on rows the API reports as `approved`.
 
-### Client behaviour when disabled
+**`approve-all` is therefore not needed.** It existed in the previous draft to
+drain a queue that was visible; with nothing visible, there is nothing to drain.
+Dropping it also removes the only destructive command this feature would have
+introduced. If someone later wants stored state to match exposed state, that is
+a one-off maintenance command, not part of this.
 
-- **Web UI**, five surfaces, all subject to the "or pending documents exist"
-  rule above: the clickable approve/re-queue pill (`DocumentPage.tsx:314-333`),
-  read-only badges on the dashboard (`DashboardPage.tsx:332-342`) and project
-  documents (`ProjectDocumentsPage.tsx:101-107`), and the "Pending review"
-  search chip (`SearchControls.tsx:246-253`). The Settings page needs **no
-  work** — it renders from the config catalog, so adding the entry surfaces the
-  toggle automatically.
-- **CLI**: nothing to remove. There is no `review` verb and no
-  `--review-status` filter — the CLI only *displays* the column
-  (`list-docs.ts:118`, `metadata-search.ts:133`) and includes it in backups
-  (`backup.ts:159`), all of which stay correct. `cerefox doctor` should gain one
-  line when the workflow is off, so the state is discoverable without hunting
-  through `config list`: a governance feature that is silently off is worse than
-  one that is loudly off.
-- **Agents**: write responses stop mentioning review, and
-  `metadata-search.ts:112` renders the status into the agent-facing result line.
-  `AGENT_GUIDE.md:579,625`, the bundled `cerefox_get_help` content, and the
-  guides listed at the end of this doc all describe the workflow as
-  unconditional; they need a note that it is per-store. If a TypeScript-side
-  gate is wanted, `_shared/mcp-tools/feature-flags.ts:44-59` (`relationsEnabled()`,
-  60-second TTL, fails closed) is the established template — but see below for
-  why the RPC should be the enforcement point regardless.
+### How each surface hides it
+
+| Surface | With the flag off |
+|---|---|
+| Web UI | The pill, both badges and the search chip do not render. Settings still shows the flag itself. |
+| `GET` document / search / dashboard / metadata-search | `review_status` reports **`approved`** |
+| `POST /documents/{id}/review-status` | **`404`** with a message saying the workflow is disabled |
+| MCP / agent output | The status column and any review mention are omitted |
+| CLI | The `status` column is dropped from `document list` and `metadata search` output |
+
+**On the API: report `approved`, do not omit the field.** Omitting looks tidier
+and breaks things — `_shared/schemas/discovery.ts:88,107` declare
+`review_status: z.string()` as **required**, so a missing field fails client
+validation. Reporting `approved` keeps every schema valid, every existing client
+working, and is semantically defensible: with no review workflow, nothing is
+awaiting review. This is the cheap answer to "unless the API is really difficult
+to do" — it is not difficult, and it costs no compatibility.
+
+The write route returning `404` rather than silently accepting is deliberate: a
+disabled feature should refuse, not pretend. A client that still calls it has a
+bug and should hear about it.
 
 ### What does NOT change
 
@@ -200,6 +209,60 @@ Stated explicitly because the blast radius is the first thing to establish:
 - **Versioning and retention.** Untouched.
 - **The column and its CHECK.** Both stay. This is a behaviour switch, not a
   schema removal, and re-enabling must be a clean no-op.
+
+## The curator question — what this flag should not foreclose
+
+Raised by the maintainer 2026-09-03, and it reframes the feature usefully:
+
+> There is no real approval process, unless we want to introduce one at the doc
+> level. For example, if we introduce a curator agent, we could use this flag
+> for the curator indicating that this doc is scanned and "review/curated".
+
+That is a sharper reading of what `review_status` is than the one it shipped
+with. v0.1.8 framed it as **human-on-the-loop governance**: a person validates
+what an agent wrote. That framing is why it has never been used — it presumes a
+reviewer who does not exist on most installs, and "approved" has to mean "a
+human looked at this", which nobody did.
+
+Reframed as a **curation signal** — "something has assessed this document" —
+the same column becomes useful in an agent-first system, and the reviewer can
+be a curator agent rather than a person.
+
+**This does not change the design, and that is the point.** Three properties
+of what is proposed above keep the door open:
+
+- **The column, its CHECK, and the write path all survive.** This is a
+  behaviour switch, not a removal. A curator would use exactly the same storage.
+- **The flag governs the *automatic flagging*, not the concept.** That is
+  precisely why it is named `review_workflow_enabled` and not, say,
+  `review_status_enabled`. What gets turned off is the rule "an agent write
+  becomes pending"; what remains available is the ability for something to set
+  a status deliberately.
+- **The RPC becomes the single decision point**, so adding a third mode later
+  is a change in one function rather than in six clients.
+
+**What a curator would need that does not exist today**, recorded so it is not
+rediscovered:
+
+1. **A real `cerefox_set_review_status` RPC.** There is none. The only writer
+   is a direct PostgREST table `UPDATE` in the web route
+   (`documents-write.ts:437-441`). An agent-driven curator needs an RPC and an
+   MCP tool, not a web-only path.
+2. **A third mode rather than a boolean**, most likely: `off` / `agent_writes`
+   (today's rule) / `curated` (nothing is auto-flagged; a curator sets status
+   explicitly). A boolean stored in `cerefox_config` widens to an enum without
+   a data migration — the column is `TEXT` and `validateConfigValue` is
+   per-key — so choosing a boolean now costs nothing later.
+3. **A vocabulary decision.** `approved` / `pending_review` are human-review
+   words. A curator signal may want `curated`, or a separate column, precisely
+   so that "a human blessed this" and "a bot scanned this" are not conflated.
+   That is a bigger conversation than this flag and should not be settled by
+   accident here.
+
+**Recommendation: ship the boolean, do not build for the curator yet.** The
+curator is a real idea with no design behind it, and the flag as specified
+neither blocks it nor pretends to anticipate it. Revisit when there is an actual
+curator to serve.
 
 ## Versioning
 
@@ -244,17 +307,27 @@ settled against in v1.1.0 for the same reason.
 
 ## Open questions
 
-1. **Name.** `review_workflow_enabled` vs `agent_writes_require_review`.
-2. **Scope of "disabled".** This design says the flag governs only the
-   *automatic flagging*. Should it also hide the manual approve action once the
-   queue is empty, or is that just the UI rule above?
-3. **`approve-all`**: worth building now, or is draining a queue by hand
-   acceptable for the first version? It is the one piece here with real
-   destructive potential.
-4. **Default for fresh installs.** `true` preserves today's behaviour for
-   everyone. Should a *brand new* store default to `false` instead, on the
-   argument that most single-operator installs never review? That would make
-   the default differ between new and upgraded stores, which is a real cost.
+**Decided 2026-09-03**: the name is `review_workflow_enabled`; "off" means the
+feature is hidden everywhere, including the API; stored data is untouched; and
+`approve-all` is dropped, since there is no visible queue to drain.
+
+Still open:
+
+1. **Default for fresh installs.** `true` preserves today's behaviour for
+   everyone and is the safe answer for upgrades. Should a *brand new* store
+   default to `false`, on the argument that most single-operator installs never
+   review anything? The cost is that the default then differs between new and
+   upgraded stores, which is a thing to explain forever. Weak preference for
+   `true` everywhere.
+2. **Whether the CLI should drop the `status` column or keep it.** Dropping is
+   consistent with hiding everywhere. Keeping it costs nothing and avoids a
+   column appearing and disappearing in scripted output. Weak preference for
+   dropping, for consistency.
+3. **Whether `cerefox doctor` should mention the workflow is off.** It makes an
+   invisible governance setting discoverable, which is usually right — but "the
+   feature disappears completely" argues the other way. Suggest one line only
+   when the flag is off, since silence about a *disabled* governance feature is
+   the failure mode worth avoiding.
 
 ## Testing
 
