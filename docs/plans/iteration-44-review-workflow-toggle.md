@@ -23,6 +23,25 @@ discussion doc and the implementation — the spec had the stored-rows rule but
 not the stored-*writes* rule, and nobody noticed until the confirmation
 dialog spelled it out.
 
+**Folded into the same patch — one identity name on the MCP tools.** A new
+agent, asked why it had not attributed its partial edits, produced a table of
+which tools take `author` and which take `requestor`, and it was right: since
+v1.3.0 ingest and set_document_projects said `author`, the reads and the
+partial edits said `requestor`, and delete/restore/set_document_metadata
+listed both. Not a regression, just never reconciled. Fix: every schema lists
+`author` only (`_shared/mcp-tools/identity.ts` — `callerIdentity()` reads
+`author`, then `requestor` as the pre-1.13.1 alias; blank counts as absent;
+`author` wins when both are passed). No exception: on `cerefox_get_audit_log`,
+where `author` had been the entries filter, the filter became `by_author` so
+the rule holds without an asterisk — the maintainer chose uniformity over
+sparing the few MCP callers that filtered with `author` (a silent change for
+them, called out in the CHANGELOG). `cerefox-mcp`'s `require_requestor_identity` check accepts
+either name. Deliberately untouched: CLI flags (`--author` on writes,
+`--requestor` on reads — renaming is breaking) and the primitive Edge Function
+bodies that GPT Actions use, so the OpenAPI block did not change. Guides,
+quick reference (rebundled into `cerefox_get_help`) and the parity test's
+`NOT_FLAGS` updated.
+
 Closes [#241](https://github.com/fstamatelopoulos/cerefox/issues/241) (the
 toggle), [#240](https://github.com/fstamatelopoulos/cerefox/issues/240)
 (filtered search under-returned),

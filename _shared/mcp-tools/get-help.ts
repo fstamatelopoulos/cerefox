@@ -26,6 +26,7 @@ import {
   HELP_SECTIONS,
 } from "./get-help-content.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
 /**
  * The operations `cerefox_edit` actually registers, read from its own schema
@@ -85,7 +86,7 @@ async function handler(
   logUsage(supabase, {
     operation: "get_help",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     query_text: topic ?? null,
     result_count: 1,
   });
@@ -156,11 +157,7 @@ export const getHelpTool: ToolDefinition = {
         description:
           'Optional. Case-insensitive substring against H2 headings (e.g. "links", "update", "metadata"). Omit for the full reference.',
       },
-      requestor: {
-        type: "string",
-        description:
-          'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent".',
-      },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler,

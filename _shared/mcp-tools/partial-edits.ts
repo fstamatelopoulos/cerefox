@@ -38,6 +38,7 @@ import {
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
 import { extractConflictHashes, isMissingFunctionError, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type MCPSupabaseClient, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
 /**
  * Who to record as the author. Derived from the access path rather than taken
@@ -440,7 +441,7 @@ async function insertHandler(
     documentId,
     operations,
     expectedHash,
-    requestor: (args.requestor as string | undefined) ?? defaultRequestor(ctx),
+    requestor: callerIdentity(args) ?? defaultRequestor(ctx),
     toolLabel: "insert",
     authorType: resolveAuthorType(ctx, args),
   });
@@ -493,10 +494,7 @@ export const insertTool: ToolDefinition = {
         description:
           "content_hash of the version you are basing this on. Required — no last-write-wins.",
       },
-      requestor: {
-        type: "string",
-        description: 'Agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent".',
-      },
+      author: AUTHOR_PARAM_WRITE,
       author_type: {
         type: "string",
         enum: ["user", "agent"],
@@ -538,7 +536,7 @@ async function editHandler(
     documentId,
     operations,
     expectedHash,
-    requestor: (args.requestor as string | undefined) ?? defaultRequestor(ctx),
+    requestor: callerIdentity(args) ?? defaultRequestor(ctx),
     toolLabel: "edit",
     authorType: resolveAuthorType(ctx, args),
   });
@@ -618,10 +616,7 @@ export const editTool: ToolDefinition = {
         description:
           "content_hash of the version you are basing these edits on. Required — no last-write-wins.",
       },
-      requestor: {
-        type: "string",
-        description: 'Agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent".',
-      },
+      author: AUTHOR_PARAM_WRITE,
       author_type: {
         type: "string",
         enum: ["user", "agent"],

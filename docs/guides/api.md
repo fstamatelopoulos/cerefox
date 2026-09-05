@@ -98,10 +98,11 @@ curl http://127.0.0.1:8000/api/v1/documents/<uuid> \
   -H 'X-Cerefox-Requestor: my-bot'
 ```
 
-`author` and `requestor` stand in for each other. They name one actor; MCP
-splits them only because reads and writes log to different tables. Supplying
-either identifies you for both, so a client that only sets `X-Cerefox-Author`
-still has its reads attributed correctly.
+`author` and `requestor` stand in for each other. They name one actor; the
+split is historical (the MCP tools used `requestor` on reads and `author` on
+writes until v1.13.1, which collapsed them to `author` with `requestor` kept as
+an alias). Supplying either identifies you for both, so a client that only sets
+`X-Cerefox-Author` still has its reads attributed correctly.
 
 ### Two consequences worth knowing before you use it
 
@@ -237,7 +238,7 @@ practical differences:
 |---|---|---|
 | Transport | Plain HTTP | stdio or Streamable HTTP |
 | Client needs | An HTTP client | An MCP client |
-| Identity | Optional, defaults to `web-ui` | Per-call `author`/`requestor` |
+| Identity | Optional, defaults to `web-ui` | Per-call `author` |
 | Partial edits | `POST /documents/{id}/edit` | `cerefox_insert`, `cerefox_edit` |
 | Guidance for agents | This guide | `cerefox_get_help()`, in-band |
 | Authentication | None on loopback; API key otherwise | None locally; token or OAuth remotely |

@@ -22,6 +22,7 @@ import { applyByteBudget, getConfiguredMinSearchScore, getConfiguredSearchAlpha,
   getMaxResponseBytes, getMinTermCoverage, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -135,7 +136,7 @@ async function handler(
   logUsage(supabase, {
     operation: "search",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     query_text: query,
     project_id: projectId,
     result_count: accepted.length,
@@ -244,11 +245,7 @@ export const searchTool: ToolDefinition = {
         description:
           "Optional response size budget in bytes. Results are dropped whole until the budget is satisfied; a truncated flag is set when results are dropped. Defaults to the server maximum (200000). Pass a smaller value if your context window is limited. Values above the server maximum are silently capped.",
       },
-      requestor: {
-        type: "string",
-        description:
-          'Name of the agent or user making this request (e.g., "Claude Code", "archiver"). Recorded in the usage log for attribution. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler,

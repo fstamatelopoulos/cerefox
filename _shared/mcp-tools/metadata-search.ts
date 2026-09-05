@@ -11,6 +11,7 @@ import { applyByteBudget, getMaxResponseBytes, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { reviewWorkflowEnabled } from "./feature-flags.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -86,7 +87,7 @@ async function handler(
   logUsage(supabase, {
     operation: "metadata_search",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     query_text: JSON.stringify(metadata_filter ?? {}),
     project_id: projectId,
     result_count: rows.length,
@@ -164,11 +165,7 @@ export const metadataSearchTool: ToolDefinition = {
         description:
           "Soft cap on total response bytes when include_content is true. Defaults to server maximum (200000).",
       },
-      requestor: {
-        type: "string",
-        description:
-          'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler,

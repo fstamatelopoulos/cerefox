@@ -221,7 +221,7 @@ You have access to a personal knowledge base via Cerefox MCP tools.
 When answering questions, always call cerefox_search first with a relevant query.
 Cite doc_title for every claim drawn from the knowledge base.
 Use cerefox_ingest to save anything the user asks you to remember.
-Always set your requestor/author parameter to identify yourself.
+Always set the author parameter to identify yourself.
 For the full tool reference, search Cerefox for "How AI Agents Use Cerefox".
 ```
 

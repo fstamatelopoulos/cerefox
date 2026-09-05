@@ -480,14 +480,20 @@ cerefox config get usage_tracking_enabled
 
 ## Requestor Identity Enforcement
 
-By default, the `requestor` parameter on MCP read tools (and `author` on ingest) is
-optional. When omitted, it defaults to `"mcp-agent"`. This means the usage log shows
-`"mcp-agent"` for all calls that don't explicitly identify themselves, making analytics
-less useful in multi-agent setups.
+By default, the `author` parameter on the MCP tools is optional. When omitted, it
+defaults to `"mcp-agent"`. This means the usage log shows `"mcp-agent"` for all calls
+that don't explicitly identify themselves, making analytics less useful in
+multi-agent setups.
 
-You can optionally enforce caller identification so that MCP tool calls must include
-a requestor/author identity. Calls without identity receive a JSON-RPC `-32602` error
-with a helpful message telling the agent what to provide.
+Since v1.13.1 every MCP tool takes the caller's identity as **`author`**, reads and
+writes alike; `requestor` (the pre-1.13.1 name on most tools) is still accepted as
+a silent alias. (On `cerefox_get_audit_log` the entries filter, formerly `author`,
+is now `by_author`.) The primitive Edge Functions used by GPT Actions keep their
+original body fields (`requestor` on reads, `author` on ingest).
+
+You can optionally enforce caller identification so that tool calls must include
+an identity. Calls without one receive a JSON-RPC `-32602` error with a helpful
+message telling the agent what to provide.
 
 ### What it actually covers
 
@@ -516,7 +522,7 @@ tenth copy of the same block. Raise an issue rather than assuming it is there.
 ### Enabling enforcement
 
 ```bash
-# Require all MCP tool calls to include requestor/author
+# Require all MCP tool calls to include author (or the requestor alias)
 cerefox config set require_requestor_identity true
 
 # Optionally override the default naming format (regex)
@@ -532,7 +538,7 @@ cerefox config set requestor_identity_format "^[a-z]+:[a-z]+$"
 | `^[a-z]+:[a-z]+$` | `conclave:agent` format only | Multi-conclave setups (e.g., `personal:steward`) |
 | (empty string) | Any non-empty string | No format restriction |
 
-The format is applied to both `requestor` (read tools) and `author` (ingest).
+The format is applied to whichever identity field the call carries (`author`, or the `requestor` alias).
 
 ### Disabling enforcement
 
@@ -540,7 +546,7 @@ The format is applied to both `requestor` (read tools) and `author` (ingest).
 cerefox config set require_requestor_identity false
 ```
 
-When disabled, the requestor parameter remains optional with the `"mcp-agent"` default.
+When disabled, the identity parameter remains optional with the `"mcp-agent"` default.
 This is the default state -- no configuration needed for backward compatibility.
 
 ---

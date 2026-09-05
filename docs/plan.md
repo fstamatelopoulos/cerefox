@@ -29,12 +29,18 @@
 ## Current Focus
 
 **2026-09-04 — v1.13.1 IN PROGRESS** (branch
-`fix/review-status-write-semantics`): one low-risk correction to v1.13.0's
-write semantics. The flag was meant to hide/show the review workflow, not
-change what a write stores; v1.13.0's RPC stored `approved` for everyone while
-off. Now `cerefox_ingest_document` decides from `author_type` alone and the
-flag is presentation-only. Schema 0.16.0 → **0.16.1**, RPC-only, no migration,
-`minSchema` unchanged. Next: maintainer merges + cuts 1.13.1, upgrades
+`fix/review-status-write-semantics`, PR #243): two low-risk fixes. (a) The
+flag was meant to hide/show the review workflow, not change what a write
+stores; v1.13.0's RPC stored `approved` for everyone while off. Now
+`cerefox_ingest_document` decides from `author_type` alone and the flag is
+presentation-only. Schema 0.16.0 → **0.16.1**, RPC-only, no migration,
+`minSchema` unchanged. (b) One caller-identity name on every MCP tool:
+`author` (reads and writes), with `requestor` kept as a silent alias; the
+audit-log filter formerly called `author` is now `by_author` (the one real
+behaviour change, called out in the CHANGELOG). Found when a new agent read the schemas literally and
+concluded the partial-edit tools had no author. `cerefox-mcp` enforcement
+takes either name (redeploy of that EF is part of the upgrade). CLI flags and
+primitive-EF bodies unchanged. Next: maintainer merges + cuts 1.13.1, upgrades
 staging; validate there (doctor, package suite incl. the review-workflow
 suite in both flag states, Playwright), then production + Cerefox Local; then
 one combined Discord announcement for 1.13.0 + 1.13.1. Detail:

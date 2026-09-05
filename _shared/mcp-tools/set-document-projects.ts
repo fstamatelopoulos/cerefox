@@ -13,6 +13,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { replaceDocumentProjects } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -21,7 +22,7 @@ async function handler(
 ): Promise<string> {
   const document_id = (args.document_id as string | undefined)?.trim();
   const project_names_raw = args.project_names;
-  const author = (args.author as string | undefined) ?? "mcp-agent";
+  const author = callerIdentity(args) ?? DEFAULT_IDENTITY;
 
   if (!document_id) {
     throw new McpInvalidParams(
@@ -96,11 +97,7 @@ export const setDocumentProjectsTool: ToolDefinition = {
         description:
           "Explicit list of project names. Each created if absent. Order is preserved. Empty list = remove from all projects.",
       },
-      author: {
-        type: "string",
-        description:
-          'Agent or tool name recorded in the audit log. Defaults to "mcp-agent". May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_WRITE,
     },
   },
   handler,

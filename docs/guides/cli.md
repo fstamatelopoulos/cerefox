@@ -811,21 +811,21 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, requestor)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --requestor <name>` |
+| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --requestor <name>` |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type <t>` |
 | `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>"` (same flags) |
-| `cerefox_get_document(document_id, version_id, outline, requestor)` | `cerefox document get <id> --version-id <vid> --outline --requestor <name>` |
-| `cerefox_insert(document_id, text, position, anchor_heading, section_part, expected_content_hash, requestor)` | `cerefox document insert <id> -t <text\|-\|@file> -p <position> -a <anchor> --section-part <part> --expected-hash <hash> --requestor <name>` |
-| `cerefox_edit(document_id, operations, expected_content_hash, requestor)` | `cerefox document edit-parts <id> -o <json\|-\|@file> --expected-hash <hash> --requestor <name>` |
-| `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <id> --requestor <name>` |
-| `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
+| `cerefox_get_document(document_id, version_id, outline, author)` | `cerefox document get <id> --version-id <vid> --outline --requestor <name>` |
+| `cerefox_insert(document_id, text, position, anchor_heading, section_part, expected_content_hash, author)` | `cerefox document insert <id> -t <text\|-\|@file> -p <position> -a <anchor> --section-part <part> --expected-hash <hash> --requestor <name>` |
+| `cerefox_edit(document_id, operations, expected_content_hash, author)` | `cerefox document edit-parts <id> -o <json\|-\|@file> --expected-hash <hash> --requestor <name>` |
+| `cerefox_list_versions(document_id, author)` | `cerefox document version list <id> --requestor <name>` |
+| `cerefox_list_projects(author)` | `cerefox project list --requestor <name>` |
 | `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <id> <name...> --author <a> --author-type <t>` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
-| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
-| `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --requestor <name>` |
+| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, author)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
+| `cerefox_get_audit_log(document_id, by_author, operation, since, until, limit, author)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --requestor <name>` |
 | `cerefox_set_document_metadata(document_id, metadata, replace, author)` | `cerefox document set-metadata <id> --set key=value` (also `--remove key`, `--json '<json>'`, `--replace`) |
-| `cerefox_delete_document(document_id, expected_content_hash, reason, author, requestor)` | `cerefox document delete <id> --reason <text> --author <a> --author-type <t> --yes` (confirms interactively instead of requiring the hash) |
-| `cerefox_restore_document(document_id, reason, author, requestor)` | `cerefox document restore <id> --reason <text> --author <a> --author-type <t>` |
+| `cerefox_delete_document(document_id, expected_content_hash, reason, author)` | `cerefox document delete <id> --reason <text> --author <a> --author-type <t> --yes` (confirms interactively instead of requiring the hash) |
+| `cerefox_restore_document(document_id, reason, author)` | `cerefox document restore <id> --reason <text> --author <a> --author-type <t>` |
 
 ## CLI ↔ MCP parity matrix
 

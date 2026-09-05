@@ -29,6 +29,7 @@ import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddin
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
 import { extractConflictHashes, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
 /**
  * Agent-first instructions for an optimistic-concurrency conflict (iter-32).
@@ -108,7 +109,7 @@ async function handler(
     );
   }
   const update_if_exists = (args.update_if_exists as boolean | undefined) ?? false;
-  const author = (args.author as string | undefined) ?? "mcp-agent";
+  const author = callerIdentity(args) ?? DEFAULT_IDENTITY;
   const author_type = "agent"; // MCP path is always agent
   const expected_content_hash = (args.expected_content_hash as string | undefined)?.trim() || null;
   const last_write_wins = (args.last_write_wins as boolean | undefined) ?? false;
@@ -475,11 +476,7 @@ export const ingestTool: ToolDefinition = {
           "Explicitly skip the concurrency check and overwrite regardless of concurrent changes (default: false). Use ONLY when an external source of truth makes conflicts meaningless (e.g. re-syncing from files). Recorded in the audit log.",
       },
       metadata: { type: "object", description: "Arbitrary JSON metadata (optional)" },
-      author: {
-        type: "string",
-        description:
-          'Name of the agent or tool performing the ingestion (e.g., "Claude Code", "archiver"). Recorded in the audit log for attribution. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_WRITE,
     },
   },
   handler,

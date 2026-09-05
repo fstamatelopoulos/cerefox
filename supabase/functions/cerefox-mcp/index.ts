@@ -105,12 +105,12 @@ async function handleToolsCall(
 
   // Configurable caller identity enforcement.
   // When require_requestor_identity is "true" in cerefox_config, all tool calls
-  // must include a requestor (reads) or author (writes) parameter.
-  // When requestor_identity_format is set, the value must match the regex.
-  const identityParam = toolName === "cerefox_ingest" || toolName === "cerefox_set_document_projects"
-    ? "author"
-    : "requestor";
-  const identityValue = args[identityParam] as string | undefined;
+  // must include the caller's identity; when requestor_identity_format is set,
+  // the value must match the regex. Since v1.13.1 every tool takes `author`
+  // and silently accepts `requestor` as the pre-1.13.1 alias (mirrors
+  // `callerIdentity()` in _shared/mcp-tools/identity.ts).
+  const identityParam = "author";
+  const identityValue = (args.author ?? args.requestor) as string | undefined;
 
   // deno-lint-ignore no-explicit-any
   const supabase: any = makeSupabaseClient();

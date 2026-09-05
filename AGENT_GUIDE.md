@@ -47,7 +47,7 @@ Find documents using hybrid search (full-text + semantic vector similarity).
 | `project_name` | No | Filter to a specific project by name. |
 | `metadata_filter` | No | JSON object for filtering by metadata (AND semantics). Example: `{"type": "decision-log"}` |
 | `max_bytes` | No | Response size budget in bytes (default 200000). |
-| `requestor` | No | Your agent name for attribution. Always set this. |
+| `author` | No | Your agent name for attribution. Always set this. |
 
 **Results format**: Each result shows `## Title [id: <uuid>] (score: X.XXX)` followed by content.
 Save the `document_id` from `[id: ...]` -- you need it for `cerefox_get_document` and `cerefox_ingest` updates.
@@ -122,7 +122,7 @@ Retrieve the complete text of a document by its UUID.
 | `document_id` | Yes | UUID from search results `[id: ...]`. |
 | `version_id` | No | UUID of an archived version (from `cerefox_list_versions`). |
 | `outline` | No | `true` returns the document's **structure instead of its content**: heading paths, levels, per-section sizes, plus `content_hash` and total size. Much cheaper than a full read. The paths are exactly what the edit tools take as `anchor_heading`. |
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 Use this when search returns partial results, or to read a previous version before restoring it. Pass `outline: true` for the heading structure without the body, or `section: "## Heading"` for one section's text — which is exactly what a `replace_section` on that anchor would overwrite, so read it before replacing a section you did not write yourself. The response header includes the document's current `content_hash` — pass it back as `expected_content_hash` when updating via `cerefox_ingest` or editing via `cerefox_insert` / `cerefox_edit`.
 
@@ -142,7 +142,7 @@ Add text to a document **without resending it**. Purely additive: this tool cann
 | `anchor_heading` | Unless `end_of_document` | The exact heading line (`## Intake`) or a ` > ` parent path (`## Intake > ### Notes`) when a heading appears more than once. |
 | `section_part` | Sometimes | Required when the target section **has child sections** (whether or not it also has its own body): `own_body` (before the first child) or `subtree` (after everything nested under it). These can be far apart, so the tool refuses rather than choosing; the error lists both options. |
 | `expected_content_hash` | **Yes** | The hash of the version you are basing this on. There is **no `last_write_wins` on this tool**. |
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 Returns the **new `content_hash` and size — not the document**. Chain edits by passing each response's hash into the next call.
 
@@ -159,7 +159,7 @@ Change parts of a document: **one to many operations applied atomically in a sin
 | `document_id` | Yes | UUID of the document. |
 | `operations` | Yes | Array of operations, applied **in order, all-or-nothing**. Each is `{op, ...}` with `op` one of `insert` (same fields as `cerefox_insert`), `replace_section` (`anchor_heading`, `text`; swaps the body, keeps the heading), `delete_section` (`anchor_heading`, optional `scope`: `body_only` default keeps the heading, `heading_and_body` removes it too), `rename_section` (`anchor_heading`, `new_heading`; changes the heading TEXT only — body and position untouched, and the level must stay the same, since changing it would re-parent everything nested underneath). |
 | `expected_content_hash` | **Yes** | One token for the whole call. No `last_write_wins`. |
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 **Put changes that belong together in ONE call.** Operations apply in order against the evolving document (op 2 sees op 1's result), and a half-applied state is impossible — so a table row and the running total it feeds cannot end up disagreeing. If any operation fails (bad anchor, ambiguity), nothing at all is written and the error names the failing operation.
 
@@ -200,7 +200,7 @@ The audit trail records each operation distinctly (`insert` / `replace-section` 
 | `document_id` | Yes | UUID of the document to soft-delete. |
 | `expected_content_hash` | **Yes** | The `content_hash` of the document **as you read it**. A delete must follow a read: if you have not read the document, read it first. A stale hash fails with a conflict — re-read, reconsider, retry. There is deliberately no `last_write_wins`. |
 | `reason` | No | Why the document is being deleted. Recorded in the audit-log entry — it is the main thing the human reviewing the trash has to go on. Short and specific. |
-| `author` / `requestor` | No | Your agent name (audit / usage log). |
+| `author` | No | Your agent name (audit + usage log). |
 
 **The hash requirement is the point, not a formality.** The CLI's delete asks a human "Continue? y/N"; an agent has no prompt, so its proof-of-intent is evidence that it read what it is deleting. If the document changed between your read and your delete, the conflict is information: someone wrote to a document you were about to discard — look before deciding again.
 
@@ -218,7 +218,7 @@ Restore a soft-deleted document from the trash — the audited inverse of `ceref
 |-----------|----------|-------------|
 | `document_id` | Yes | UUID of the soft-deleted document. |
 | `reason` | No | Why it is being restored. Recorded in the audit-log entry. |
-| `author` / `requestor` | No | Your agent name (audit / usage log). |
+| `author` | No | Your agent name (audit + usage log). |
 
 No `expected_content_hash`: a trashed document cannot be concurrently edited, so there is no read-freshness to prove. Restoring a document that is not deleted is a reported no-op. **Purge remains the one action with no agent surface** — once a human purges from the web UI, the document is gone and cannot be restored.
 
@@ -233,7 +233,7 @@ Show version history of a document.
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `document_id` | Yes | UUID of the document. |
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 Returns: version_number, version_id, source, chunk_count, total_chars, created_at.
 
@@ -247,7 +247,7 @@ Discover which metadata keys are in use across the knowledge base.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 Returns each key with document count and example values. Call this before constructing `metadata_filter` for search.
 
@@ -266,7 +266,7 @@ Find documents by metadata criteria without a text search query.
 | `updated_since` | No† | ISO-8601 timestamp. Only docs updated on/after. |
 | `created_since` | No† | ISO-8601 timestamp. Only docs created on/after. |
 | `max_bytes` | No | Response size budget when include_content is true. |
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 † **At least one** of `metadata_filter`, `project_name`, `updated_since`, or `created_since` must be supplied (so this never becomes an unbounded whole-KB dump). An empty `metadata_filter` plus `project_name` lists that project's documents.
 
@@ -280,7 +280,7 @@ List all projects with names, IDs, and descriptions.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 Call once per session to discover available projects before filtering search results by `project_name`.
 
@@ -295,7 +295,7 @@ Change a document's metadata (tags) **without resending its content** (v1.6.0, #
 | `document_id` | Yes | UUID of the document to tag. |
 | `metadata` | Yes | Keys to set. Values are JSON strings by convention (a `metadata_filter` matches JSONB as strings). A `null` value REMOVES that key. Keys you do not mention are left alone unless `replace` is true. |
 | `replace` | No | Set the metadata to EXACTLY this object, discarding any key not listed. Rare — the same destructive contract as `cerefox_set_document_projects`. |
-| `author` / `requestor` | No | Your agent name (audit / usage log). |
+| `author` | No | Your agent name (audit + usage log). |
 
 Content, chunks and embeddings are untouched; no new version is created. The response reports what *changed* (keys set / removed), not what was asked for. Use this instead of `cerefox_ingest` whenever only the tags are changing.
 
@@ -330,11 +330,11 @@ Query the immutable audit log of all write operations.
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `document_id` | No | Filter by document UUID. |
-| `author` | No | Filter by author name. |
+| `by_author` | No | Filter: only entries written by this author name. |
 | `operation` | No | Filter by type: create, update-content, update-metadata, delete, restore. |
 | `since` | No | ISO timestamp lower bound. |
 | `limit` | No | Max entries (default 50, max 200). |
-| `requestor` | No | Your agent name. |
+| `author` | No | Your agent name. |
 
 ---
 
@@ -345,7 +345,7 @@ Retrieve Cerefox conventions and quick reference content over MCP — the same c
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `topic` | No | Case-insensitive substring match against `## H2` section titles. Omit to get the full reference plus a section index. |
-| `requestor` | No | Your agent name (recorded with `access_path = "remote-mcp"` or `"local-mcp"`). |
+| `author` | No | Your agent name (recorded with `access_path = "remote-mcp"` or `"local-mcp"`). |
 
 **Behaviour:**
 - No `topic` → full quick-reference markdown + an `## Available topics` index.
@@ -467,7 +467,7 @@ changing.
 
 1. **Always search before ingesting.** Check for existing documents on the topic.
 2. **Prefer `document_id` for updates** -- pass the UUID from search results to update a specific document. Use `update_if_exists: true` as a fallback when you don't have the ID.
-3. **Always set `author`/`requestor`** to your agent name for attribution.
+3. **Always set `author`** to your agent name for attribution, on reads and writes alike. Every tool takes the same `author` parameter, no exceptions. (`requestor` is still accepted on every tool as the pre-1.13.1 alias, so older configurations keep working.)
 4. **Use the `document_id` from search results** for `cerefox_get_document`, `cerefox_list_versions`, and targeted `cerefox_ingest` updates.
 5. **Add metadata**: at minimum `type` (e.g., "research", "decision-log") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings. The chunker uses heading structure.
@@ -602,19 +602,19 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, requestor)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (also `--mode`, `--alpha`, `--min-score`, `--only-metadata` — CLI-only) |
+| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (also `--mode`, `--alpha`, `--min-score`, `--only-metadata` — CLI-only) |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest(...)` (paste) | `printf '%s' "<content>" \| cerefox document ingest --paste --title "<title>"` (same flags) |
-| `cerefox_get_document(document_id, version_id, requestor)` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
-| `cerefox_list_versions(document_id, requestor)` | `cerefox document version list <document-id> --requestor <name>` |
-| `cerefox_list_projects(requestor)` | `cerefox project list --requestor <name>` |
+| `cerefox_get_document(document_id, version_id, author)` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
+| `cerefox_list_versions(document_id, author)` | `cerefox document version list <document-id> --requestor <name>` |
+| `cerefox_list_projects(author)` | `cerefox project list --requestor <name>` |
 | `cerefox_set_document_metadata(document_id, metadata, replace, author)` | `cerefox document set-metadata <document-id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
-| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, requestor)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
-| `cerefox_get_audit_log(document_id, author, operation, since, until, limit, requestor)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
-| `cerefox_delete_document(document_id, expected_content_hash, reason, author, requestor)` | `cerefox document delete <document-id> --reason <text> --author <a> --author-type user\|agent --yes` (the CLI confirms interactively instead of requiring the hash) |
-| `cerefox_restore_document(document_id, reason, author, requestor)` | `cerefox document restore <document-id> --reason <text> --author <a> --author-type user\|agent` |
+| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, author)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
+| `cerefox_get_audit_log(document_id, by_author, operation, since, until, limit, author)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
+| `cerefox_delete_document(document_id, expected_content_hash, reason, author)` | `cerefox document delete <document-id> --reason <text> --author <a> --author-type user\|agent --yes` (the CLI confirms interactively instead of requiring the hash) |
+| `cerefox_restore_document(document_id, reason, author)` | `cerefox document restore <document-id> --reason <text> --author <a> --author-type user\|agent` |
 
 > Other CLI verbs with no MCP equivalent: `cerefox document edit` (title/metadata patch), `cerefox project create` / `cerefox project edit`, `cerefox config list/get/set`, `cerefox server reindex`, `cerefox guides list/show`.
 
@@ -623,7 +623,7 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 You **MUST** identify yourself on every CLI invocation, exactly as you do via MCP:
 
 - **Writes** (`document ingest`, `document ingest-dir`): set `--author "<your-agent-name>" --author-type "agent"`. The `author_type=agent` value marks the write `pending_review` (governance signal), matching the MCP path; the store's review-workflow flag only decides whether anyone sees that status. Attribution is recorded either way.
-- **Reads** (`search`, `document get`, `document version list`, `project list`, `metadata search`, `audit list`): set `--requestor "<your-agent-name>"`.
+- **Reads** (`search`, `document get`, `document version list`, `project list`, `metadata search`, `audit list`): set `--requestor "<your-agent-name>"`. (The CLI kept the `--requestor` spelling for reads; on MCP the same value is the `author` parameter since v1.13.1.)
 
 Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `CEREFOX_REQUESTOR_NAME` in their `.env` once. The CLI picks them up automatically — see [`docs/guides/cli.md`](docs/guides/cli.md) for the precedence rules.
 

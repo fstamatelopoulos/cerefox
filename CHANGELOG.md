@@ -28,6 +28,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   deploy` re-applies it). `minSchema` is unchanged: a 0.16.0 server merely
   keeps the v1.13.0 write behaviour until redeployed. GPT Actions OpenAPI
   3.4.0 → 3.4.1 (description text only).
+- **One name for the caller on every MCP tool: `author`.** The tools had
+  named the caller's identity inconsistently since v1.3.0 — `author` on
+  ingest and set_document_projects, `requestor` on the reads and on the
+  partial edits, both on delete/restore/set_document_metadata — and an agent
+  reading the schemas literally concluded, correctly, that `cerefox_insert`
+  and `cerefox_edit` had no author at all. Every tool now lists a single
+  `author` parameter (reads included: it is the name recorded in the usage
+  log). `requestor` is accepted silently on every tool as a compatibility
+  alias, so nothing written against the old schemas breaks; when both are
+  passed, `author` wins. **One real behaviour change**, stated because it is
+  the only call that cannot be made invisible: on `cerefox_get_audit_log`,
+  `author` used to be the entries *filter*; that filter is now `by_author`,
+  and `author` is your identity there as everywhere else. An MCP caller that
+  filtered the audit log with `author: "X"` now gets the unfiltered log
+  (and is logged as "X") until it switches to `by_author`. The CLI's
+  `audit list --author` filter and the `cerefox-get-audit-log` Edge Function
+  body are separate surfaces and did not change. The remote MCP transport's
+  `require_requestor_identity` enforcement accepts either name. The CLI flags
+  (`--author` on writes, `--requestor` on reads) and the primitive Edge
+  Function bodies used by GPT Actions are unchanged. `AGENT_GUIDE.md`,
+  `AGENT_QUICK_REFERENCE.md` (and so `cerefox_get_help`) name the parameter
+  consistently now.
 
 ---
 
