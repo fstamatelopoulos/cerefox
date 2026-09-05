@@ -9,18 +9,22 @@
  * per-document `DELETE /documents/{id}/purge`. Each purge is audited on its
  * own, exactly as if the user had clicked it.
  *
- * The loop is pure (dependencies injected) so it can be unit-tested without
- * a browser, and so the modal only renders what it reports.
+ * What gets purged is what the human confirmed. The rows listed when the
+ * count was shown are the run's set; a document trashed AFTER that moment
+ * (an agent's soft-delete while the run is going) is never touched, because
+ * nobody looked at it. The listing is capped server-side (500), so the loop
+ * re-lists after each pass, but only rows trashed no later than the newest
+ * confirmed one are eligible, and an id is never attempted twice, so a
+ * document that refuses to purge cannot make the loop spin.
  *
- * Termination: the trash listing is capped server-side (500), so the loop
- * re-lists after each pass until nothing it has not already attempted comes
- * back. Ids it has attempted are never retried within one run, so a
- * document that fails to purge cannot make the loop spin.
+ * Pure (dependencies injected) so it is tested without a browser, and so the
+ * modal only renders what it reports.
  */
 
 export interface TrashEntry {
   id: string;
   title: string;
+  deleted_at: string | null;
 }
 
 export interface EmptyTrashFailure {
@@ -30,40 +34,59 @@ export interface EmptyTrashFailure {
 }
 
 export interface EmptyTrashProgress {
-  /** Documents attempted so far (purged + failed). */
+  /** Documents attempted so far (purged + restored-meanwhile + failed). */
   done: number;
-  /** Best current estimate: attempted + still listed. Grows if a re-list finds more. */
+  /** Attempted + still eligible in the current pass. Grows if a re-list finds more. */
   total: number;
-  /** Title of the document being purged right now, or null between passes. */
+  /** Title of the document being purged right now, or null between purges. */
   current: string | null;
   purged: number;
   failures: EmptyTrashFailure[];
 }
 
 export interface EmptyTrashResult {
+  /** True purges: the document is gone. */
   purged: number;
+  /** Listed at confirmation, but restored before their turn: still live, untouched. */
+  restored: TrashEntry[];
   failures: EmptyTrashFailure[];
-  /** True when `shouldStop()` ended the run before the trash was empty. */
+  /** True when `shouldStop()` ended the run before the set was exhausted. */
   stopped: boolean;
+  /** Set when the run ended early on a systemic error; what remains is still in the trash. */
+  aborted: string | null;
 }
 
 export interface EmptyTrashDeps {
-  /** The current trash listing (server caps it; the loop re-lists as needed). */
+  /** The rows the user saw when confirming. The run's set, and its cutoff. */
+  confirmed: TrashEntry[];
+  /** The current trash listing, for passes beyond the server's cap. */
   listTrash: () => Promise<TrashEntry[]>;
-  /** One permanent delete. Rejects on failure; the loop records it and moves on. */
-  purge: (id: string) => Promise<void>;
+  /**
+   * One permanent delete. Resolves `{ purged: false }` when the document was
+   * no longer in the trash (restored meanwhile); rejects on failure.
+   */
+  purge: (id: string) => Promise<{ purged: boolean }>;
   onProgress?: (progress: EmptyTrashProgress) => void;
   /** Polled before every purge; true ends the run after the current one. */
   shouldStop?: () => boolean;
+  /** A purge error that means every further call would fail too (auth, outage). Aborts the run. */
+  isFatal?: (err: unknown) => boolean;
 }
 
+const stamp = (d: TrashEntry) => Date.parse(d.deleted_at ?? "") || 0;
+const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
 export async function emptyTrash(deps: EmptyTrashDeps): Promise<EmptyTrashResult> {
+  const cutoff = deps.confirmed.reduce((max, d) => Math.max(max, stamp(d)), 0);
   const attempted = new Set<string>();
+  const restored: TrashEntry[] = [];
   const failures: EmptyTrashFailure[] = [];
   let purged = 0;
   let stopped = false;
+  let aborted: string | null = null;
 
-  const report = (current: string | null, remaining: number) => {
+  const eligible = (d: TrashEntry) => !attempted.has(d.id) && stamp(d) <= cutoff;
+  const report = (current: string | null, remaining: number) =>
     deps.onProgress?.({
       done: attempted.size,
       total: attempted.size + remaining,
@@ -71,31 +94,37 @@ export async function emptyTrash(deps: EmptyTrashDeps): Promise<EmptyTrashResult
       purged,
       failures: [...failures],
     });
-  };
 
-  for (;;) {
-    const pending = (await deps.listTrash()).filter((d) => !attempted.has(d.id));
-    if (pending.length === 0) break;
-    report(null, pending.length);
-
+  let pending = deps.confirmed.filter(eligible);
+  outer: while (pending.length > 0) {
     for (let i = 0; i < pending.length; i++) {
       if (deps.shouldStop?.()) {
         stopped = true;
-        break;
+        break outer;
       }
       const doc = pending[i]!;
       report(doc.title, pending.length - i);
       try {
-        await deps.purge(doc.id);
-        purged += 1;
+        const outcome = await deps.purge(doc.id);
+        if (outcome.purged) purged += 1;
+        else restored.push(doc);
       } catch (err) {
-        failures.push({ id: doc.id, title: doc.title, error: err instanceof Error ? err.message : String(err) });
+        if (deps.isFatal?.(err)) {
+          aborted = message(err);
+          break outer;
+        }
+        failures.push({ id: doc.id, title: doc.title, error: message(err) });
       }
       attempted.add(doc.id);
       report(null, pending.length - i - 1);
     }
-    if (stopped) break;
+    try {
+      pending = (await deps.listTrash()).filter(eligible);
+    } catch (err) {
+      aborted = `Could not list the trash: ${message(err)}`;
+      break;
+    }
   }
 
-  return { purged, failures, stopped };
+  return { purged, restored, failures, stopped, aborted };
 }

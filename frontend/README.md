@@ -29,7 +29,7 @@ frontend from source.
 ```bash
 bun run lint       # eslint
 bunx playwright install chromium
-bun run test:unit  # bun test: browser-free logic (tests/unit)
+bun test src/      # browser-free unit tests beside their modules (CI runs these)
 bun run test:e2e   # Playwright browser tests against a local `cerefox web`
 ```
 

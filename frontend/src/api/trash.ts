@@ -22,6 +22,14 @@ export async function restoreDocument(documentId: string): Promise<void> {
   await apiFetch(`/documents/${documentId}/restore`, { method: "POST" });
 }
 
-export async function purgeDocument(documentId: string): Promise<void> {
-  await apiFetch(`/documents/${documentId}/purge`, { method: "DELETE" });
+/**
+ * Permanent delete. `purged: false` means the document was no longer in the
+ * trash when the call landed (restored meanwhile) and is still live. A server
+ * older than v1.14.0 omits the field; treated as purged.
+ */
+export async function purgeDocument(documentId: string): Promise<{ purged: boolean }> {
+  const r = await apiFetch<{ success: boolean; purged?: boolean }>(`/documents/${documentId}/purge`, {
+    method: "DELETE",
+  });
+  return { purged: r.purged ?? true };
 }

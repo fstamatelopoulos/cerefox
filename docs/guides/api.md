@@ -227,9 +227,15 @@ Purge (`DELETE /documents/{id}/purge`) is irreversible and takes no token. It is
 reachable by anything that can reach the port, which is another reason the
 warning at the top of this guide is not boilerplate.
 
+The response is `{ "success": true, "purged": <bool> }` (v1.14.0): `purged` is
+`false` when the document was no longer in the trash when the call landed (a
+restore raced it) and is still live; the RPC is a silent no-op in that case.
+
 **There is no bulk purge.** The web UI's "Empty trash" (v1.14.0) is a loop in
 the browser over this per-document endpoint, one call and one audit entry per
-document, with a confirmation and a Stop button in front of it. A single
+document, with a confirmation and a Stop button in front of it. It purges only
+the documents listed when the count was confirmed; anything trashed afterwards
+stays in the trash. A single
 request that emptied the trash would be a footgun on a surface anything with
 the key can reach, so it was not added and should not be.
 

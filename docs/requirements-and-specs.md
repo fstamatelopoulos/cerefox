@@ -345,6 +345,11 @@ The post-v1.3 read/edit surface features, numbered in the FR-11.x series:
   content). Restoring a non-deleted document is a reported no-op.
 - Permanent purge MUST NOT be exposed on any agent surface: destroying data
   outright keeps its human-in-the-loop confirmation (web UI only).
+- "Empty trash" (web UI, v1.14.0) MUST be driven from the browser one document
+  at a time through the per-document purge; there is no bulk-purge endpoint.
+  It MUST purge only what the human confirmed: the documents listed when the
+  count was shown. Anything trashed after that moment stays in the trash. A
+  document restored before its turn is reported, not counted as purged.
 - Deleting an already-deleted document MUST be a reported no-op — the original
   deletion time is preserved and no duplicate audit or usage entries are
   written — but the read-hash is validated first: a stale or garbage hash is a

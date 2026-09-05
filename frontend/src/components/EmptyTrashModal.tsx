@@ -1,13 +1,25 @@
 import { Alert, Button, Group, Modal, Progress, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { ApiError } from "../api/client";
 import { fetchTrash, purgeDocument } from "../api/trash";
 import { emptyTrash, type EmptyTrashProgress, type EmptyTrashResult } from "../lib/emptyTrash";
 
 /** The server caps the trash listing at this many rows. */
 const LIST_CAP = 500;
+
+/**
+ * One run per tab. The loop outlives a component that unmounts mid-run (it
+ * is a promise, not a subscription), so a second Purge click after Back /
+ * Forward must be refused rather than raced against the first.
+ */
+let runInFlight = false;
+
+/** A purge error after which every further call would fail the same way. */
+const isFatal = (err: unknown) =>
+  (err instanceof ApiError && [401, 403, 503].includes(err.status)) || err instanceof TypeError;
 
 type Phase =
   | { kind: "confirm" }
@@ -15,62 +27,87 @@ type Phase =
   | { kind: "done"; result: EmptyTrashResult };
 
 interface Props {
-  opened: boolean;
   onClose: () => void;
-  /** Called once a run has ended (purged something, failed, or was stopped). */
+  /** Called once a run has ended (purged something, failed, stopped or aborted). */
   onFinished: (result: EmptyTrashResult) => void;
 }
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 /**
- * Confirmation + progress for "Empty trash". Purges are issued one at a time
- * from the browser through the per-document endpoint (see lib/emptyTrash.ts
- * for why there is no bulk endpoint). Closing is blocked while a run is in
- * flight; Stop ends it after the purge in progress.
+ * Confirmation + progress for "Empty trash". Mounted only while open, so
+ * every open starts clean: fresh count, confirm phase, no stale state. Purges
+ * are issued one at a time from the browser through the per-document endpoint
+ * (see lib/emptyTrash.ts for why there is no bulk endpoint). Closing is
+ * blocked while a run is in flight; Stop ends it after the purge in progress.
  */
-export function EmptyTrashModal({ opened, onClose, onFinished }: Props) {
+export function EmptyTrashModal({ onClose, onFinished }: Props) {
   const [phase, setPhase] = useState<Phase>({ kind: "confirm" });
   // The loop polls the ref (no re-render needed); the button renders the state.
   const stopRef = useRef(false);
   const [stopping, setStopping] = useState(false);
+  const [refused, setRefused] = useState(false);
 
-  // Count what is actually in the trash (the page may be showing a slice).
-  // Fetched fresh on every open; never served from cache.
-  const { data: count } = useQuery({
-    queryKey: ["trash-count"],
-    queryFn: async () => (await fetchTrash(LIST_CAP)).length,
-    enabled: opened && phase.kind === "confirm",
+  // What the user is confirming: the rows actually in the trash right now (the
+  // page may be showing a slice). These rows ARE the run's set; a document
+  // trashed after this listing is never touched.
+  const listing = useQuery({
+    queryKey: ["trash", "count"],
+    queryFn: () => fetchTrash(LIST_CAP),
+    enabled: phase.kind === "confirm",
     staleTime: 0,
     gcTime: 0,
+    refetchOnWindowFocus: false,
   });
+  const rows = listing.data;
+  const count = rows?.length;
 
   const running = phase.kind === "running";
 
-  // The modal can only close from the confirm or done phase, so resetting on
-  // close is enough to start the next open clean.
-  const close = () => {
-    setPhase({ kind: "confirm" });
-    stopRef.current = false;
-    setStopping(false);
-    onClose();
-  };
+  // While a run is going: warn on reload / tab close, and if the component
+  // unmounts anyway (browser Back), stop the loop after the purge in flight.
+  useEffect(() => {
+    if (!running) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      stopRef.current = true;
+    };
+  }, [running]);
 
   const start = async () => {
-    const result = await emptyTrash({
-      listTrash: () => fetchTrash(LIST_CAP),
-      purge: purgeDocument,
-      onProgress: (progress) => setPhase({ kind: "running", progress }),
-      shouldStop: () => stopRef.current,
-    });
-    setPhase({ kind: "done", result });
-    onFinished(result);
+    if (!rows || rows.length === 0) return;
+    if (runInFlight) {
+      setRefused(true);
+      return;
+    }
+    runInFlight = true;
+    try {
+      const result = await emptyTrash({
+        confirmed: rows,
+        listTrash: () => fetchTrash(LIST_CAP),
+        purge: purgeDocument,
+        onProgress: (progress) => setPhase({ kind: "running", progress }),
+        shouldStop: () => stopRef.current,
+        isFatal,
+      });
+      setPhase({ kind: "done", result });
+      onFinished(result);
+    } finally {
+      runInFlight = false;
+    }
   };
 
   const countLabel = (n: number) => (n >= LIST_CAP ? `${LIST_CAP} or more` : String(n));
 
   return (
     <Modal
-      opened={opened}
-      onClose={running ? () => {} : close}
+      opened
+      onClose={running ? () => {} : onClose}
       closeOnClickOutside={!running}
       closeOnEscape={!running}
       withCloseButton={!running}
@@ -79,7 +116,13 @@ export function EmptyTrashModal({ opened, onClose, onFinished }: Props) {
     >
       {phase.kind === "confirm" && (
         <Stack gap="sm" data-testid="empty-trash-confirm">
-          {count === undefined ? (
+          {listing.isError ? (
+            <Alert icon={<IconAlertTriangle size={16} />} color="red">
+              <Text size="sm">
+                Could not read the trash: {listing.error.message}. Nothing was purged.
+              </Text>
+            </Alert>
+          ) : count === undefined ? (
             <Text size="sm" c="dimmed">
               Counting…
             </Text>
@@ -96,14 +139,19 @@ export function EmptyTrashModal({ opened, onClose, onFinished }: Props) {
                 </Text>
               </Alert>
               <Text size="xs" c="dimmed">
-                Documents are purged one at a time, each recorded in the audit log. You can stop
-                part-way; what was purged stays purged.
+                Only what is in the trash right now is purged, one document at a time, each
+                recorded in the audit log. You can stop part-way; what was purged stays purged.
               </Text>
             </>
           )}
+          {refused && (
+            <Text size="xs" c="red">
+              A run is already in progress in this tab. Wait for it to finish.
+            </Text>
+          )}
           <Group justify="flex-end">
-            <Button variant="default" onClick={close}>
-              {count === 0 ? "Close" : "Cancel"}
+            <Button variant="default" onClick={onClose}>
+              {count === 0 || listing.isError ? "Close" : "Cancel"}
             </Button>
             {count !== undefined && count > 0 && (
               <Button color="red" data-testid="empty-trash-start" onClick={() => void start()}>
@@ -157,10 +205,26 @@ export function EmptyTrashModal({ opened, onClose, onFinished }: Props) {
             {phase.result.purged === 1 ? "document" : "documents"}
             {phase.result.stopped ? " before you stopped" : ""}.
           </Text>
+          {phase.result.aborted && (
+            <Alert icon={<IconAlertTriangle size={16} />} color="red">
+              <Text size="sm">
+                Stopped early: {phase.result.aborted}. Whatever was not purged is still in the
+                trash.
+              </Text>
+            </Alert>
+          )}
+          {phase.result.restored.length > 0 && (
+            <Text size="sm">
+              {plural(phase.result.restored.length, "document")}{" "}
+              {phase.result.restored.length === 1 ? "was" : "were"} restored while this ran and{" "}
+              {phase.result.restored.length === 1 ? "is" : "are"} live again, untouched:{" "}
+              {phase.result.restored.map((d) => d.title).join(", ")}.
+            </Text>
+          )}
           {phase.result.failures.length > 0 && (
             <Alert icon={<IconAlertTriangle size={16} />} color="yellow">
               <Text size="sm">
-                {phase.result.failures.length} could not be purged and{" "}
+                {plural(phase.result.failures.length, "document")} could not be purged and{" "}
                 {phase.result.failures.length === 1 ? "is" : "are"} still in the trash:
               </Text>
               <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
@@ -175,7 +239,7 @@ export function EmptyTrashModal({ opened, onClose, onFinished }: Props) {
             </Alert>
           )}
           <Group justify="flex-end">
-            <Button data-testid="empty-trash-close" onClick={close}>
+            <Button data-testid="empty-trash-close" onClick={onClose}>
               Close
             </Button>
           </Group>

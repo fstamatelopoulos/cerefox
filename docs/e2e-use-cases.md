@@ -126,12 +126,14 @@ frontend built (`cd frontend && bun run build`). Tests target the React SPA at
 | `Dashboard recent docs` | `project selector scopes the tile and refetches` | Recent-docs tile scoped by project via server refetch (`/dashboard/recent-docs?project_id=`), "All projects" default | Done — verified on staging (v1.7.1, 2026-08-14) |
 | `Dashboard recent docs` | `the misleading View all link is gone` | "View all" (which just opened search) removed from the recent-docs tile | Done — verified on staging (v1.7.1, 2026-08-14) |
 | `TestAuditLog` | `test_audit_log_page_loads` | Audit log page renders with heading | Done |
-| `Trash` | `Empty trash asks first, purges one by one, and leaves the trash empty` | Three API-trashed docs; button → confirmation (count) → done summary; trash empty, each doc 404 (#247, v1.14.0). Empties the whole staging trash | Done |
+| `Trash` | `Empty trash asks first, purges one by one, and leaves the trash empty` | Three API-trashed docs; button → confirmation (count) → done summary; trash empty, each doc 404 (#247, v1.14.0). Empties the whole staging trash; skips if the trash holds anything not `[E2E`-prefixed; fixtures purged in `finally` | Done |
 | `Trash` | `Cancel in the confirmation purges nothing` | Cancel leaves the trashed doc in place | Done |
 
-The loop behind "Empty trash" (`frontend/src/lib/emptyTrash.ts`: re-list past the
-500-row cap, never retry an id, stop after the purge in flight, progress snapshots)
-is unit-tested without a browser: `cd frontend && bun run test:unit`.
+The loop behind "Empty trash" (`frontend/src/lib/emptyTrash.ts`: confirmed set with a
+`deleted_at` cutoff, re-list past the 500-row cap, never retry an id, restored-meanwhile
+reported not counted, fatal errors abort, stop after the purge in flight) is unit-tested
+beside the module, `frontend/src/lib/emptyTrash.test.ts`, by `cd frontend && bun test src/`
+(CI's frontend step).
 
 ### 6B. ID-Based Ingest (17B)
 

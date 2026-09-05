@@ -10,7 +10,7 @@ import { EmptyTrashModal } from "../components/EmptyTrashModal";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { useProjects } from "../hooks/useProjects";
 import { invalidateDocumentViews } from "../lib/invalidate";
-import { showError, showSuccess } from "../utils/notifications";
+import { showError, showInfo, showSuccess } from "../utils/notifications";
 import ui from "../styles/redesign.module.css";
 
 const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
@@ -48,9 +48,10 @@ export function TrashPage() {
   });
   const purgeMut = useMutation({
     mutationFn: purgeDocument,
-    onSuccess: () => {
+    onSuccess: ({ purged }) => {
       invalidate();
-      showSuccess("Permanently deleted");
+      if (purged) showSuccess("Permanently deleted");
+      else showInfo("Not purged", "The document was restored in the meantime and is live again.");
     },
     onError: (e) => showError("Purge failed", String(e)),
   });
@@ -165,21 +166,27 @@ export function TrashPage() {
             <IconTrashX size={14} />
             Empty trash
           </button>
-          <EmptyTrashModal
-            opened={emptyOpen}
-            onClose={() => setEmptyOpen(false)}
-            onFinished={(result) => {
-              invalidate();
-              if (result.failures.length === 0 && !result.stopped) {
-                showSuccess("Trash emptied", `${result.purged} permanently deleted`);
-              } else {
-                showError(
-                  result.stopped ? "Stopped emptying the trash" : "Trash not fully emptied",
-                  `${result.purged} purged, ${result.failures.length} failed`,
-                );
-              }
-            }}
-          />
+          {emptyOpen && (
+            <EmptyTrashModal
+              onClose={() => setEmptyOpen(false)}
+              onFinished={(result) => {
+                invalidate();
+                const clean = result.failures.length === 0 && !result.stopped && !result.aborted;
+                if (clean) {
+                  showSuccess("Trash emptied", `${result.purged} permanently deleted`);
+                } else {
+                  showError(
+                    result.aborted
+                      ? "Emptying the trash stopped early"
+                      : result.stopped
+                        ? "Stopped emptying the trash"
+                        : "Trash not fully emptied",
+                    `${result.purged} purged, ${result.failures.length} failed`,
+                  );
+                }
+              }}
+            />
+          )}
         </>
       }
       columns={columns}

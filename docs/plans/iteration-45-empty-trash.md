@@ -19,6 +19,11 @@ adding a server endpoint that deletes everything.
 | More than the listing cap (500) | The loop re-lists after each pass until nothing it has not already attempted comes back. |
 | Concurrency | None. One request at a time, as asked ("one by one"); the store gets the same load as a person clicking. |
 | CLI | No `document purge`, bulk or otherwise. The guarded property in `access-paths.md` ("no agent path to permanent purge") is untouched. |
+| What exactly is purged (review finding) | **Only what the human confirmed.** The rows listed when the count was shown are the run's set and its cutoff (newest `deleted_at` among them); a document trashed after that moment is never touched, so "seen before destroyed" holds. First draft re-listed without a cutoff and would have purged an agent's mid-run soft-delete. |
+| Restored mid-run (review finding) | The purge RPC is a silent no-op on a live row. The route now answers `purged: false` (one `select id` after the RPC, no schema change); the loop reports those as "restored, still live" instead of counting them. |
+| Systemic errors (review finding) | A 401/403/503 or a network error on a purge aborts the run rather than failing every remaining document one round-trip at a time; a failed re-list ends the run with a message instead of stranding the modal in the running phase. |
+| Leaving the page (review finding) | `beforeunload` warns while a run is going; unmount (browser Back) stops the loop after the purge in flight; a second Purge click while a run is in flight in the same tab is refused. |
+| Where the unit test lives (review finding) | Beside the module, `frontend/src/lib/emptyTrash.test.ts`, because CI's frontend step is `bun test src/`; a `tests/unit/` suite would never have run. |
 
 ## What was built
 
@@ -44,7 +49,9 @@ adding a server endpoint that deletes everything.
   pre-existing hook warnings in the chart components are untouched);
   `test:unit` 6/6.
 - Playwright against staging: **22/22** (20 existing + the two Trash tests);
-  the run emptied the staging trash, as designed. Package suite not affected
+  the run emptied the staging trash, as designed. Re-run after the review
+  fixes: 22/22, frontend unit 19/19 (`bun test src/`), `destructive.test.ts`
+  5/5 with the route's new `purged` field. Package suite not affected
   (frontend-only); the web static-resolution and smoke files re-run green on
   the rebundled `dist`.
 
