@@ -213,9 +213,10 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(parsed.catalog.map((k) => k.key)).toEqual(parsed.keys);
   });
 
-  // v1.13.2 (#244): one identity flag on every command, reads included.
-  test("every read command takes --author and hides --requestor", () => {
-    const READS: string[][] = [
+  // v1.13.2 (#244): one identity flag on every command, reads included
+  // (the partial edits are writes; they had `--requestor` too).
+  test("every command that said --requestor takes --author and hides --requestor", () => {
+    const COMMANDS: string[][] = [
       ["search"],
       ["document", "get"],
       ["document", "version", "list"],
@@ -226,7 +227,7 @@ describe("cerefox CLI smoke (built bin)", () => {
       ["document", "insert"],
       ["document", "edit-parts"],
     ];
-    for (const cmd of READS) {
+    for (const cmd of COMMANDS) {
       const { stdout, status } = run([...cmd, "--help"]);
       expect(status).toBe(0);
       expect(stdout).toContain("--author <name>");
@@ -249,6 +250,15 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(status).toBe(0);
     expect(stdout).toContain("--by-author <name>");
     expect(stdout).toMatch(/--author <name>\s+Your name/);
+    // The old `-a` (the filter) is gone rather than reused, so a script that
+    // passes `-a alice` fails loudly instead of silently returning everything.
+    expect(stdout).not.toContain("-a, --author");
+  });
+
+  test("`audit list --author` alone gets a note pointing at --by-author", () => {
+    // No DB needed: the note is printed before the client is built.
+    const { stderr } = run(["audit", "list", "--author", "alice"]);
+    expect(stderr).toContain("--by-author");
   });
 
   test("`cerefox search --help` advertises --only-metadata", () => {

@@ -14,7 +14,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
-import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
+import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface ProjectRow {
   id: string;
@@ -73,7 +73,7 @@ export function registerListProjects(program: Command): void {
   program
     .command("list-projects")
     .description("List all projects in the knowledge base.")
-    .addOption(authorReadOption())
+    .addOption(authorOption("read"))
     .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);

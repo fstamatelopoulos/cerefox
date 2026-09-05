@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
-import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
+import { auditLogIdentity } from "../../../_shared/mcp-tools/identity.ts";
 
 /**
  * cerefox-get-audit-log -- Supabase Edge Function
@@ -64,7 +64,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Configurable caller-identity enforcement: `author`, or `requestor` as the pre-1.13.2 alias (#244)
     const identityField = "author";
-    const identityValue = callerIdentity(body as Record<string, unknown>);
+    // The pre-4.0.0 GPT Actions shape (requestor + author-as-filter) keeps its meaning.
+    const { identity: identityValue, byAuthor } = auditLogIdentity(body as Record<string, unknown>);
     const { data: reqConfig } = await supabase.rpc("cerefox_get_config", { p_key: "require_requestor_identity" });
     if (reqConfig === "true") {
       if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {
@@ -87,7 +88,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const params: Record<string, unknown> = {};
     if (body.document_id) params.p_document_id = body.document_id;
     // v1.13.2: the entries filter is `by_author`; `author` is the caller's identity (#244).
-    if (body.by_author) params.p_author = body.by_author;
+    if (byAuthor) params.p_author = byAuthor;
     if (body.operation) params.p_operation = body.operation;
     if (body.since) params.p_since = body.since;
     if (body.until) params.p_until = body.until;

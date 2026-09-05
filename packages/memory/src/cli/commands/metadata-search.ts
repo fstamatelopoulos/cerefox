@@ -21,7 +21,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import { getClient } from "../util/client.ts";
-import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
+import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface MetadataSearchRow {
   document_id: string;
@@ -167,7 +167,7 @@ export function registerMetadataSearch(program: Command): void {
     .option("--include-content", "Include full document text in results.")
     .option("-l, --limit <n>", "Maximum docs to return.", "10")
     .option("--max-bytes <n>", "Response size budget in bytes (with --include-content).", "200000")
-    .addOption(authorReadOption())
+    .addOption(authorOption("read"))
     .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);

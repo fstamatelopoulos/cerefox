@@ -35,6 +35,7 @@ import {
 } from "./oauth.ts";
 import type { AuthResult, McpAuthenticator } from "../../../_shared/mcp-auth/index.ts";
 import type { MCPSupabaseClient } from "../../../_shared/mcp-tools/types.ts";
+import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
 import { checkAccessToken, parseAccessTokens } from "../../../_shared/ef-auth/index.ts";
 import {
   ALL_TOOLS,
@@ -107,10 +108,10 @@ async function handleToolsCall(
   // When require_requestor_identity is "true" in cerefox_config, all tool calls
   // must include the caller's identity; when requestor_identity_format is set,
   // the value must match the regex. Since v1.13.1 every tool takes `author`
-  // and silently accepts `requestor` as the pre-1.13.1 alias (mirrors
-  // `callerIdentity()` in _shared/mcp-tools/identity.ts).
+  // and silently accepts `requestor` as the pre-1.13.1 alias, through the
+  // same callerIdentity() the tool handlers use (blank counts as absent).
   const identityParam = "author";
-  const identityValue = (args.author ?? args.requestor) as string | undefined;
+  const identityValue = callerIdentity(args);
 
   // deno-lint-ignore no-explicit-any
   const supabase: any = makeSupabaseClient();

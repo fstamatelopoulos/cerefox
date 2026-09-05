@@ -9,7 +9,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Follow-ups from the v1.13.2 review that missed the cut** (#244). The
+  identity rename shipped in 1.13.2 as first written; the review fixes were
+  committed to the branch after the squash-merge and are here. The audit-log
+  request shape from before the rename (`requestor` present, no `by_author`)
+  is recognised on both the primitive Edge Function and the MCP tool and
+  keeps its meaning: `author` the filter, `requestor` the identity. Without
+  this, a Custom GPT still on the 3.x OpenAPI block had its filter value
+  logged as the reader and, with `requestor_identity_format` set, rejected.
+  `cerefox audit list` drops the filter's old short form `-a` instead of
+  reusing it for the identity, so `-a alice` fails loudly rather than
+  returning everything, and `--author` without `--by-author` prints a
+  one-line note on stderr. `document insert` / `edit-parts` / `set-metadata`
+  resolve `--author` like every other write (flag, then `CEREFOX_AUTHOR_NAME`,
+  then `unknown`) instead of a fixed `cli-user`; their help text says the
+  value lands in the audit log. `cerefox-mcp` uses the shared
+  `callerIdentity()` (blank counts as absent, as everywhere else). Stale
+  `--requestor` mentions in the quick reference, `cli.md` and `.env.example`
+  are gone. Edge Functions to redeploy: `cerefox-get-audit-log`,
+  `cerefox-ingest`, `cerefox-mcp`.
 
 ---
 

@@ -540,7 +540,7 @@ cerefox audit list [OPTIONS]
 cerefox audit list --since 2026-05-11
 
 # All edits by a specific agent
-cerefox audit list --author "claude-code" --operation update-content
+cerefox audit list --by-author "claude-code" --operation update-content
 
 # JSON output, piped to jq
 cerefox audit list --json --limit 1000 | jq 'select(.author_type == "agent")'
@@ -791,7 +791,7 @@ The CLI reads its own runtime config from environment (or `.env`). See [`configu
 |---|---|---|
 | `CEREFOX_AUTHOR_NAME` | `unknown` | Default for `--author` on `ingest` / `ingest-dir`. |
 | `CEREFOX_AUTHOR_TYPE` | `user` | Default for `--author-type`. |
-| `CEREFOX_REQUESTOR_NAME` | `user` | Default for `--author` on read commands (falls back to `CEREFOX_AUTHOR_NAME`). |
+| `CEREFOX_REQUESTOR_NAME` | `unknown` | Default for `--author` on read commands (falls back to `CEREFOX_AUTHOR_NAME`, then `unknown`). |
 
 Precedence: **CLI flag > env var > built-in default**.
 

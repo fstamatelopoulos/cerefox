@@ -355,6 +355,39 @@ describe("Edge Functions (live HTTP)", () => {
       })) as unknown[];
       expect(nobody).toEqual([]);
     });
+
+    liveTest("the pre-4.0.0 shape (requestor + author-as-filter) keeps its meaning", async () => {
+      // A Custom GPT still on the 3.x OpenAPI block sends `requestor` as its
+      // identity and `author` as the filter. `author: undefined` drops the
+      // tag invoke() adds, so the body is exactly that shape.
+      const title = uniqueTitle("Audit Legacy");
+      const r = await invokeOk("cerefox-ingest", {
+        title,
+        content: uniqueContent(),
+        author: "e2e-ef-test",
+        author_type: "agent",
+      });
+      track(r.document_id);
+      const mine = (await invokeOk("cerefox-get-audit-log", {
+        author: "e2e-ef-test",
+        requestor: "e2e-test",
+        document_id: r.document_id,
+        limit: 50,
+      })) as Array<{ author: string }>;
+      expect(mine.length).toBeGreaterThanOrEqual(1);
+      const nobody = (await invokeOk("cerefox-get-audit-log", {
+        author: "e2e-ef-test-nobody",
+        requestor: "e2e-test",
+        document_id: r.document_id,
+        limit: 50,
+      })) as unknown[];
+      expect(nobody).toEqual([]);
+    });
+
+    liveTest("requestor alone is still accepted on a primitive EF (alias)", async () => {
+      const result = await invokeOk("cerefox-list-projects", { author: undefined, requestor: "e2e-test" });
+      expect(Array.isArray(result)).toBe(true);
+    });
   });
 
   // ── cerefox-metadata-search ────────────────────────────────────────────────

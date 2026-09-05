@@ -7,7 +7,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { logUsage, auditDocLabel, AUDIT_OPERATIONS } from "./_utils.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
-import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
+import { AUTHOR_PARAM_READ, auditLogIdentity } from "./identity.ts";
 
 /**
  * A timestamp an agent cannot mistake for local time (#199).
@@ -27,11 +27,13 @@ async function handler(
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {
+  // v1.13.1: the filter is `by_author`; `author` is the caller's identity here
+  // as on every other tool. The pre-1.13.1 shape (requestor + author-as-filter)
+  // is recognised and keeps its meaning — see auditLogIdentity().
+  const { identity, byAuthor } = auditLogIdentity(args);
   const params: Record<string, unknown> = {};
   if (args.document_id) params.p_document_id = args.document_id;
-  // v1.13.1: the filter is `by_author`; `author` is the caller's identity here
-  // as on every other tool (it was the filter until 1.13.1).
-  if (args.by_author) params.p_author = args.by_author;
+  if (byAuthor) params.p_author = byAuthor;
   if (args.operation) params.p_operation = args.operation;
   if (args.since) params.p_since = args.since;
   if (args.until) params.p_until = args.until;
@@ -57,7 +59,7 @@ async function handler(
   logUsage(supabase, {
     operation: "get_audit_log",
     accessPath: ctx.accessPath,
-    requestor: callerIdentity(args),
+    requestor: identity,
     result_count: entries.length,
   });
 

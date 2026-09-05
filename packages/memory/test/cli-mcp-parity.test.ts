@@ -133,7 +133,7 @@ describe("get_document read modes reach both surfaces (#201)", () => {
   test("the identity flag comes from the shared helper (author, requestor hidden)", () => {
     // One name on every surface (#244): the read commands do not declare the
     // flag by hand, they add the same Option the other reads add.
-    expect(CLI_SRC).toContain("authorReadOption()");
+    expect(CLI_SRC).toContain('authorOption("read")');
     expect(CLI_SRC).toContain("requestorAliasOption()");
     expect(CLI_SRC).not.toContain("--requestor");
   });

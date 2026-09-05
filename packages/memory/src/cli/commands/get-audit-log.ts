@@ -18,7 +18,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
-import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
+import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface AuditRow {
   id: string;
@@ -45,6 +45,15 @@ async function action(options: {
   requestor?: string;
   json?: boolean;
 }): Promise<void> {
+  // Until v1.13.2 `--author` was this command's entries FILTER; it is now the
+  // caller's identity, as on every other command. A script that still passes
+  // it alone almost certainly meant the filter, so say so (stderr, exit code
+  // untouched) rather than returning every entry in silence.
+  if (options.author && !options.byAuthor) {
+    process.stderr.write(
+      "note: --author is your own name since v1.13.2; to list entries written by someone, use --by-author <name>.\n",
+    );
+  }
   const limit = parsePositiveInt(options.limit, "--limit", 50);
   const client = getClient();
 
@@ -111,7 +120,7 @@ export function registerGetAuditLog(program: Command): void {
     .option("--since <iso>", "Lower-bound ISO timestamp.")
     .option("--until <iso>", "Upper-bound ISO timestamp.")
     .option("-l, --limit <n>", "Maximum entries (max 200).", "50")
-    .addOption(authorReadOption())
+    .addOption(authorOption("read", { short: false }))
     .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);

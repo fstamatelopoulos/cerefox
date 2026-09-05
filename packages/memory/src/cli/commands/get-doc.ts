@@ -19,7 +19,7 @@ import {
 import { c } from "../../../../../_shared/cli-core/index.ts";
 import { extractSection, parseOutline } from "../../../../../_shared/partial-edits/index.ts";
 import { getClient } from "../util/client.ts";
-import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
+import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface DocPayload {
   document_id: string;
@@ -37,7 +37,7 @@ async function action(
   options: {
     versionId?: string;
     author?: string;
-  requestor?: string;
+    requestor?: string;
     json?: boolean;
     outline?: boolean;
     section?: string;
@@ -196,7 +196,7 @@ export function registerGetDoc(program: Command): void {
     .description("Retrieve the full content of a document by ID.")
     .argument("<document-id>", "UUID of the document.")
     .option("--version-id <uuid>", "Specific archived version (default: current).")
-    .addOption(authorReadOption())
+    .addOption(authorOption("read"))
     .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .option(

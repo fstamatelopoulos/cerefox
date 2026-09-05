@@ -19,6 +19,7 @@ import {
   notFound,
   printJson,
   println,
+  resolveAuthor,
   systemError,
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
@@ -114,7 +115,7 @@ async function action(
       p_document_id: documentId,
       p_metadata: patch,
       p_replace: Boolean(options.replace),
-      p_author: options.author ?? "cli-user",
+      p_author: resolveAuthor(options.author),
       p_author_type: options.authorType === "agent" ? "agent" : "user",
     });
   } catch (err) {

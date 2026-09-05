@@ -20,12 +20,12 @@ import { readFileSync } from "node:fs";
 
 import type { Command } from "commander";
 
-import { c, println, userError } from "../../../../../_shared/cli-core/index.ts";
+import { c, println, resolveAuthor, userError } from "../../../../../_shared/cli-core/index.ts";
 import { TOOLS_BY_NAME } from "../../../../../_shared/mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../../../../../_shared/mcp-tools/types.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { getClient } from "../util/client.ts";
-import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
+import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
 
 /** Read a value given literally, or from a file, or from stdin when `-`. */
 function resolveText(value: string | undefined, what: string): string {
@@ -91,7 +91,7 @@ export function registerDocumentInsert(program: Command): void {
       "-e, --expected-content-hash <hash>",
       "content_hash you are basing this on (cerefox document get --outline shows it)",
     )
-    .addOption(authorReadOption({ short: false }))
+    .addOption(authorOption("write", { short: false }))
     .addOption(requestorAliasOption())
     .option(
       "--author-type <type>",
@@ -106,7 +106,7 @@ export function registerDocumentInsert(program: Command): void {
         ...(options.anchorHeading ? { anchor_heading: options.anchorHeading } : {}),
         ...(options.sectionPart ? { section_part: options.sectionPart } : {}),
         expected_content_hash: options.expectedContentHash,
-        author: options.author ?? options.requestor ?? "cli-user",
+        author: resolveAuthor(options.author ?? options.requestor),
         ...(options.authorType ? { author_type: options.authorType } : {}),
       });
     });
@@ -129,7 +129,7 @@ export function registerDocumentEditParts(program: Command): void {
       "JSON array of operations. Use '-' for stdin or '@path' for a file.",
     )
     .requiredOption("-e, --expected-content-hash <hash>", "content_hash you are basing these edits on")
-    .addOption(authorReadOption({ short: false }))
+    .addOption(authorOption("write", { short: false }))
     .addOption(requestorAliasOption())
     .option(
       "--author-type <type>",
@@ -153,7 +153,7 @@ export function registerDocumentEditParts(program: Command): void {
         document_id: documentId,
         operations,
         expected_content_hash: options.expectedContentHash,
-        author: options.author ?? options.requestor ?? "cli-user",
+        author: resolveAuthor(options.author ?? options.requestor),
         ...(options.authorType ? { author_type: options.authorType } : {}),
       });
     });

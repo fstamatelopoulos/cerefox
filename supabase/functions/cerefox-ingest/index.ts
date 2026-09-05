@@ -279,7 +279,8 @@ Deno.serve(async (req: Request) => {
   // update and uses {} on create (v0.11.1; a `= {}` default here used to wipe
   // a document's tags on every content update that didn't re-pass them).
   const { title, content, document_id = null, project_name, source = "agent", metadata = null, update_if_exists = false, author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
-  const author = callerIdentity(body as unknown as Record<string, unknown>) ?? "agent";
+  const callerName = callerIdentity(body as unknown as Record<string, unknown>);
+  const author = callerName ?? "agent";
 
   // metadata must be a plain JSON object (or absent). A scalar/array stored in
   // the JSONB column poisons cerefox_list_metadata_keys for the whole dataset
@@ -310,7 +311,7 @@ Deno.serve(async (req: Request) => {
   // Configurable caller-identity enforcement: `author`, or `requestor` as the alias (#244)
   {
     const identityField = "author";
-    const identityValue = callerIdentity(body as unknown as Record<string, unknown>);
+    const identityValue = callerName;
     const { data: reqConfig } = await supabase.rpc("cerefox_get_config", { p_key: "require_requestor_identity" });
     if (reqConfig === "true") {
       if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {
