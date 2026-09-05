@@ -212,7 +212,7 @@ to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
 | Suite | Test | Use Case | Status |
 |-------|------|----------|--------|
 | attribution | default | No identity → audit `author='web-ui'`, `author_type='user'`, usage `access_path='webapp'`; the pre-#226 row byte for byte | Done |
-| attribution | named | `X-Cerefox-Author` + `X-Cerefox-Author-Type: agent` → recorded as itself, `access_path='api'`, document lands `pending_review` (workflow on) / `approved` (off) | Done |
+| attribution | named | `X-Cerefox-Author` + `X-Cerefox-Author-Type: agent` → recorded as itself, `access_path='api'`, document lands `pending_review` (visible while the workflow is on) | Done |
 | attribution | body | Identity as JSON body fields is honoured | Done |
 | attribution | invalid type | `author_type: robot` → 400 naming the field, nothing stored | Done |
 | attribution | delete | Identified caller without hash → 400 `CEREFOX_TOKEN_REQUIRED`, document intact; with hash → 200 | Done |
@@ -221,8 +221,8 @@ to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
 | ingest | upload | `POST /documents/{id}/upload` without token → 400 `CEREFOX_TOKEN_REQUIRED`; with `expected_content_hash` → replaced (#228, broken since v0.11.0) | Done |
 | destructive | fixture | Fixtures ingested over HTTP with `author_type: agent`, no Edge Function calls | Done |
 | destructive | review-status | Workflow on: `pending_review` → POST review-status → `approved` in GET. Off: field absent, POST → 404 | Done |
-| review-workflow | off | Flag set `false` via `PUT /config`: agent write lands approved; `review_status` absent from document GET, recent-docs, metadata-search, trash; `?review_status=` → 400; POST review-status → 404 (#241) | Done |
-| review-workflow | on | Flag set `true`: agent write lands `pending_review`; present on GET + metadata-search; `?review_status=pending_review` returns it and `=approved` does not (#240, filter applied before `LIMIT`); bogus value → 400; POST flips to approved | Done |
+| review-workflow | off | Flag set `false` via `PUT /config`: `review_status` absent from document GET, recent-docs, metadata-search, trash; `?review_status=` → 400; POST review-status → 404 (#241). The agent write is still recorded `pending_review`, asserted by the `on` case below (v1.13.1) | Done |
+| review-workflow | on | Flag set `true`: the document written while off reads back `pending_review` (the flag hid it, it did not rewrite it); a new agent write lands `pending_review`; present on GET + metadata-search; `?review_status=pending_review` returns it and `=approved` does not (#240, filter applied before `LIMIT`); bogus value → 400; POST flips to approved | Done |
 | review-workflow | flip | A `PUT /config` flip is visible on the very next request (cache bust, no TTL wait); flag restored to the value found | Done |
 
 ### 7. Governance Features (future e2e)
@@ -248,6 +248,7 @@ to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
 | 8.7 | MCP `cerefox_delete_document` tool -- read-hash guard, stale-hash conflict deletes nothing, reason in audit, idempotent re-delete | DONE -- `release-acceptance.test.ts`, verified live on production (v1.7.0, 2026-08-13) |
 | 8.8 | MCP `cerefox_restore_document` tool -- delete/restore roundtrip, not-deleted no-op, CLI restore parity | DONE -- `release-acceptance.test.ts`, verified live on production (v1.7.0, 2026-08-13) |
 | 8.9 | Dead-link sweep (#214 phase 2) -- purged target found by `document dead-links`, pre-existing dead link does not block edits; skips gracefully pre-0.12.2 | Added -- `release-acceptance.test.ts` (runs after the v1.7.1 deploy) |
+| 8.10 | Caller identity (v1.13.1) -- `author` on every tool, `requestor` alias, blank = absent; audit-log `by_author` filter proven with a negative case over remote MCP | DONE -- `_shared/__tests__/identity.test.ts` (unit), `mcp-remote.test.ts` (live, verified on staging 2026-09-04) |
 
 ---
 

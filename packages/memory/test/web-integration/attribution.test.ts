@@ -197,20 +197,18 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
 
       // The documented consequence of author_type=agent, identical to MCP:
       // an agent-authored ingest lands in pending_review rather than approved
-      // — while the review workflow is on (#241). Asserted because it is the
-      // behaviour most likely to surprise someone, and because it is the
-      // proof that "matches MCP semantics" is real rather than aspirational.
-      const { data: flag } = await admin!.rpc("cerefox_get_config", {
-        p_key: "review_workflow_enabled",
-      });
-      const workflowOn = String(flag ?? "").toLowerCase() === "true";
+      // (#241). Asserted because it is the behaviour most likely to surprise
+      // someone, and because it is the proof that "matches MCP semantics" is
+      // real rather than aspirational. Read straight from the column: the
+      // review_workflow_enabled flag decides whether surfaces show the value,
+      // never what is stored (v1.13.1).
       const { data: doc } = await admin!
         .from("cerefox_documents")
         .select("review_status")
         .eq("id", id)
         .maybeSingle();
       expect((doc as { review_status: string } | null)?.review_status).toBe(
-        workflowOn ? "pending_review" : "approved",
+        "pending_review",
       );
 
       if (usageTracked) {

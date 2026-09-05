@@ -8,6 +8,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
 /**
  * Version timestamps carried only a DATE (`slice(0, 10)`), which is
@@ -46,7 +47,7 @@ async function handler(
   logUsage(supabase, {
     operation: "list_versions",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     document_id,
     result_count: versions.length,
   });
@@ -79,11 +80,7 @@ export const listVersionsTool: ToolDefinition = {
         type: "string",
         description: "UUID of the document whose version history to list",
       },
-      requestor: {
-        type: "string",
-        description:
-          'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler,

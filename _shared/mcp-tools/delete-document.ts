@@ -27,6 +27,7 @@ import {
   logUsage,
 } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
 /** Agent-first instructions for a stale-hash conflict on delete. */
 function conflictError(documentId: string, expectedHash: string, currentHash: string): Error {
@@ -65,7 +66,7 @@ async function handler(
     );
   }
 
-  const author = (args.author as string | undefined) ?? (args.requestor as string | undefined);
+  const author = callerIdentity(args);
   // Derived from the transport, never taken from the caller: an agent must not
   // be able to record itself as a user. Matches the partial-edit handlers.
   const authorType = ctx.accessPath === "cli" ? "user" : "agent";
@@ -122,7 +123,7 @@ async function handler(
   logUsage(supabase, {
     operation: "delete",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: author,
     document_id,
     result_count: 1,
   });
@@ -167,14 +168,7 @@ export const deleteDocumentTool: ToolDefinition = {
         description:
           "Why this document is being deleted. Recorded in the audit log entry, where it is the main thing the human reviewing the trash has to go on. Short and specific beats long.",
       },
-      author: {
-        type: "string",
-        description: "Who is making this change. Recorded in the audit log.",
-      },
-      requestor: {
-        type: "string",
-        description: "Name of the agent or user making this request. Recorded in the usage log.",
-      },
+      author: AUTHOR_PARAM_WRITE,
     },
   },
   handler,

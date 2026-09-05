@@ -221,7 +221,7 @@ You have access to a personal knowledge base via Cerefox MCP tools.
 When answering questions, always call cerefox_search first with a relevant query.
 Cite doc_title for every claim drawn from the knowledge base.
 Use cerefox_ingest to save anything the user asks you to remember.
-Always set your requestor/author parameter to identify yourself.
+Always set the author parameter to identify yourself.
 For the full tool reference, search Cerefox for "How AI Agents Use Cerefox".
 ```
 
@@ -638,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 3.4.0
+  version: 3.4.1
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -798,10 +798,10 @@ paths:
                   default: agent
                   description: >
                     Whether this write is from a human user or an AI agent.
-                    Always recorded for attribution. While the store's review
-                    workflow is on (review_workflow_enabled), agent writes land
-                    pending_review and user writes approved; with it off every
-                    write lands approved.
+                    Always recorded for attribution. Agent writes are recorded
+                    pending_review and user writes approved; the store's review
+                    workflow flag (review_workflow_enabled) only decides whether
+                    that status is shown.
       responses:
         '200':
           description: >

@@ -21,6 +21,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { isDocumentNotFoundError, isMissingFunctionError, logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -32,7 +33,7 @@ async function handler(
 
   if (!document_id) throw new McpInvalidParams("document_id is required");
 
-  const author = (args.author as string | undefined) ?? (args.requestor as string | undefined);
+  const author = callerIdentity(args);
   // Derived from the transport, never taken from the caller: an agent must not
   // be able to record itself as a user. Matches the delete handler.
   const authorType = ctx.accessPath === "cli" ? "user" : "agent";
@@ -81,7 +82,7 @@ async function handler(
   logUsage(supabase, {
     operation: "restore",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: author,
     document_id,
     result_count: 1,
   });
@@ -116,14 +117,7 @@ export const restoreDocumentTool: ToolDefinition = {
         description:
           "Why this document is being restored. Recorded in the audit-log entry. Short and specific beats long.",
       },
-      author: {
-        type: "string",
-        description: "Who is making this change. Recorded in the audit log.",
-      },
-      requestor: {
-        type: "string",
-        description: "Name of the agent or user making this request. Recorded in the usage log.",
-      },
+      author: AUTHOR_PARAM_WRITE,
     },
   },
   handler,

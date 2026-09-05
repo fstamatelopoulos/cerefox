@@ -21,6 +21,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -48,7 +49,7 @@ async function handler(
     );
   }
 
-  const author = (args.author as string | undefined) ?? (args.requestor as string | undefined);
+  const author = callerIdentity(args);
   // Derived from the transport, never taken from the caller: an agent must not
   // be able to record itself as a user. Matches the partial-edit handlers.
   const authorType = ctx.accessPath === "cli" ? "user" : "agent";
@@ -71,7 +72,7 @@ async function handler(
   logUsage(supabase, {
     operation: "update_metadata",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: author,
     document_id,
     result_count: 1,
   });
@@ -119,14 +120,7 @@ export const setDocumentMetadataTool: ToolDefinition = {
         description:
           "Set the metadata to EXACTLY this object, discarding any key not listed. Defaults to false (merge). Use only when you mean to reset a document's tags wholesale.",
       },
-      author: {
-        type: "string",
-        description: "Who is making this change. Recorded in the audit log.",
-      },
-      requestor: {
-        type: "string",
-        description: "Name of the agent or user making this request. Recorded in the usage log.",
-      },
+      author: AUTHOR_PARAM_WRITE,
     },
   },
   handler,

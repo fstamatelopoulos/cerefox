@@ -39,7 +39,10 @@ const CLI_SRC = readFileSync(
 const NOT_FLAGS = new Set([
   // Positional `<document-id>` on the CLI.
   "document_id",
-  // Present, but spelled `-r, --requestor`; asserted separately below.
+  // Present, but spelled `-r, --requestor`; asserted separately below. (The
+  // MCP schema names the caller `author` since v1.13.1; the CLI read flag
+  // kept its spelling — a rename there would be a breaking change.)
+  "author",
   "requestor",
 ]);
 

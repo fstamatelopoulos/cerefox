@@ -44,8 +44,9 @@
  * ## `author_type` has consequences
  *
  * `author_type: "agent"` makes an ingest land in `pending_review` rather than
- * `approved` while the store's review workflow is on (decided inside the
- * `cerefox_ingest_document` RPC, #241), exactly as it does on the MCP path.
+ * `approved` (decided inside the `cerefox_ingest_document` RPC, #241; the
+ * review-workflow flag only decides whether anyone sees it), exactly as it
+ * does on the MCP path.
  * That equivalence is the feature: the same actor is recorded, and treated,
  * identically whichever transport it used. It is not a side effect to be
  * engineered away, and it is documented in the API guide so nobody discovers

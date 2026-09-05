@@ -15,6 +15,7 @@
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import type { MCPSupabaseClient } from "./types.ts";
+import { AUTHOR_PARAM_READ, AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
 /** Relation types that carry behaviour; any other string is accepted too. */
 const KNOWN_TYPES =
@@ -44,7 +45,7 @@ async function setHandler(
     p_source_id: source,
     p_target_id: target,
     p_rel_type: relType,
-    p_author: (args.author as string | undefined) ?? "mcp-agent",
+    p_author: callerIdentity(args) ?? DEFAULT_IDENTITY,
     p_author_type: "agent",
     p_metadata: (args.metadata as Record<string, unknown> | undefined) ?? {},
   });
@@ -57,7 +58,7 @@ async function setHandler(
   logUsage(supabase, {
     operation: "set_relation",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     document_id: source,
   });
 
@@ -103,8 +104,7 @@ export const setRelationTool: ToolDefinition = {
         type: "object",
         description: "Optional JSON context for the edge (note, confidence, …)",
       },
-      author: { type: "string", description: "Who is creating this relation" },
-      requestor: { type: "string", description: "Name of the agent making this request" },
+      author: AUTHOR_PARAM_WRITE,
     },
   },
   handler: setHandler,
@@ -126,7 +126,7 @@ async function deleteHandler(
     p_source_id: source,
     p_target_id: target,
     p_rel_type: relType,
-    p_author: (args.author as string | undefined) ?? "mcp-agent",
+    p_author: callerIdentity(args) ?? DEFAULT_IDENTITY,
     p_author_type: "agent",
   });
   if (error) throw new Error(`RPC error: ${error.message}`);
@@ -135,7 +135,7 @@ async function deleteHandler(
   logUsage(supabase, {
     operation: "delete_relation",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     document_id: source,
   });
 
@@ -166,8 +166,7 @@ export const deleteRelationTool: ToolDefinition = {
       source_id: { type: "string", description: "UUID of the source document" },
       target_id: { type: "string", description: "UUID of the target document" },
       rel_type: { type: "string", description: "Relation type to remove" },
-      author: { type: "string", description: "Who is removing this relation" },
-      requestor: { type: "string", description: "Name of the agent making this request" },
+      author: AUTHOR_PARAM_WRITE,
     },
   },
   handler: deleteHandler,
@@ -197,7 +196,7 @@ async function getRelationsHandler(
   logUsage(supabase, {
     operation: "get_relations",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     document_id: docId,
     result_count: rows.length,
   });
@@ -231,7 +230,7 @@ export const getRelationsTool: ToolDefinition = {
     required: ["document_id"],
     properties: {
       document_id: { type: "string", description: "UUID of the document" },
-      requestor: { type: "string", description: "Name of the agent making this request" },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler: getRelationsHandler,
@@ -268,7 +267,7 @@ async function getNeighborsHandler(
   logUsage(supabase, {
     operation: "get_neighbors",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     document_id: docId,
     result_count: rows.length,
   });
@@ -307,7 +306,7 @@ export const getNeighborsTool: ToolDefinition = {
       from_time: { type: "string", description: "ISO-8601: only neighbours created on/after" },
       to_time: { type: "string", description: "ISO-8601: only neighbours created on/before" },
       limit: { type: "integer", description: "Max documents to return (default 50, max 200)" },
-      requestor: { type: "string", description: "Name of the agent making this request" },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler: getNeighborsHandler,

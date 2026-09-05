@@ -28,9 +28,27 @@
 ---
 ## Current Focus
 
-**2026-09-04 — Iteration 44 IMPLEMENTATION COMPLETE, verified on staging,
-awaiting review + release as v1.13.0** (branch
-`design/review-workflow-toggle`, to be squash-merged). The review workflow
+**2026-09-04 — v1.13.1 IN PROGRESS** (branch
+`fix/review-status-write-semantics`, PR #243): two low-risk fixes. (a) The
+flag was meant to hide/show the review workflow, not change what a write
+stores; v1.13.0's RPC stored `approved` for everyone while off. Now
+`cerefox_ingest_document` decides from `author_type` alone and the flag is
+presentation-only. Schema 0.16.0 → **0.16.1**, RPC-only, no migration,
+`minSchema` unchanged. (b) One caller-identity name on every MCP tool:
+`author` (reads and writes), with `requestor` kept as a silent alias; the
+audit-log filter formerly called `author` is now `by_author` (the one real
+behaviour change, called out in the CHANGELOG). Found when a new agent read the schemas literally and
+concluded the partial-edit tools had no author. `cerefox-mcp` enforcement
+takes either name (redeploy of that EF is part of the upgrade). CLI flags and
+primitive-EF bodies unchanged. Next: maintainer merges + cuts 1.13.1, upgrades
+staging; validate there (doctor, package suite incl. the review-workflow
+suite in both flag states, Playwright), then production + Cerefox Local; then
+one combined Discord announcement for 1.13.0 + 1.13.1. Detail:
+[iteration 44](plans/iteration-44-review-workflow-toggle.md) (v1.13.1
+follow-up block).
+
+**2026-09-04 — v1.13.0 SHIPPED** (PR #242; deployed and verified on staging,
+production and Cerefox Local). The review workflow
 becomes optional: a store-level `review_workflow_enabled` flag — **false on a
 fresh install, true on an upgraded store** (migration 0031) — decided ONCE in
 `cerefox_ingest_document`, with the six client-side copies of the rule
@@ -44,11 +62,10 @@ to 0.16.0** (redeploy required). Staging: package suite 303/0, Playwright
 [iteration 44](plans/iteration-44-review-workflow-toggle.md); spec:
 [`specs/review-workflow-toggle.md`](specs/review-workflow-toggle.md).
 
-**Next session, after the maintainer merges + cuts**: `cerefox server deploy`
-on staging then production (schema + functions), confirm `doctor` prints
-`review workflow ON` on both, decide whether production flips it off,
-announce. **#154** (Node baseline) slips to the next minor — third move, same
-reasoning.
+Post-release: `doctor` prints `review workflow ON` on staging and production
+(upgrade seed); the maintainer flipped it off on Cerefox Local only, which is
+what surfaced the v1.13.1 correction above. **#154** (Node baseline) slips to
+the next minor — third move, same reasoning.
 
 **2026-09-03 — v1.12.2 SHIPPED** (iteration 43, #237: the false container
 warning). Iterations 40–43 are closed; see below and

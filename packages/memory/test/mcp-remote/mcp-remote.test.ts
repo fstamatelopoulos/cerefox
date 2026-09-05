@@ -289,9 +289,19 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
         author,
       });
       track(extractId(t1));
-      const text = await toolText("cerefox_get_audit_log", { author, limit: 50 });
+      // v1.13.1: the filter is `by_author`; `author` is the caller's identity on
+      // this tool too. Filtering with `author` would pass vacuously here (the
+      // unfiltered log contains the name anyway), so the negative case below is
+      // what proves the filter is applied.
+      const text = await toolText("cerefox_get_audit_log", { by_author: author, limit: 50 });
       expect(text).not.toContain("No audit log entries");
       expect(text).toContain(author);
+      const none = await toolText("cerefox_get_audit_log", {
+        by_author: `${author}-nobody`,
+        author: "e2e-test",
+        limit: 50,
+      });
+      expect(none).toContain("No audit log entries");
     });
 
     liveTest("cerefox_list_metadata_keys returns keys or empty message", async () => {

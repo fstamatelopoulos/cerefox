@@ -57,7 +57,7 @@ Key design properties:
 - **Document-level metadata**: tags, project, source — live on the document, not duplicated per chunk
 - **Deduplication**: content hash on documents prevents re-ingesting the same file
 - **Versioning is additive**: the search path (documents -> current chunks) is unchanged; archived chunks are invisible to search
-- **Governance**: `review_status` on documents (`approved` / `pending_review`), decided once in `cerefox_ingest_document` from `author_type` **and** the store-level `review_workflow_enabled` flag (v1.13.0; off on a fresh install, on for upgraded stores — with it off every write is approved and no surface exposes the field; spec: `docs/specs/review-workflow-toggle.md`). Audit log provides full accountability trail regardless.
+- **Governance**: `review_status` on documents (`approved` / `pending_review`), decided once in `cerefox_ingest_document` from `author_type` alone; the store-level `review_workflow_enabled` flag (v1.13.0; off on a fresh install, on for upgraded stores) governs only whether any surface exposes or enforces the field — it is not consulted on write (v1.13.1), so a toggle never changes what a stored value means (spec: `docs/specs/review-workflow-toggle.md`). Audit log provides full accountability trail regardless.
 
 ### 2.2 Schema
 
@@ -1082,7 +1082,7 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_get_document` | Read | Retrieve complete document text by ID. Bypasses threshold logic. Optionally specify a version_id for historical content. |
 | `cerefox_list_versions` | Read | List available versions for a document (version_number, size, timestamp, source). |
 | `cerefox_list_metadata_keys` | Read | Discover metadata keys in use across the knowledge base (key, doc_count, example values). |
-| `cerefox_get_audit_log` | Read | Query audit log entries with filters (document, author, operation type, time range). |
+| `cerefox_get_audit_log` | Read | Query audit log entries with filters (document, `by_author`, operation type, time range). |
 | `cerefox_list_projects` | Read | List all projects with names, IDs, and descriptions for agent discovery. |
 | `cerefox_metadata_search` | Read | Find documents by metadata key-value criteria without a text search term. |
 | `cerefox_set_document_projects` | Write | Set (replace) the set of projects a document belongs to. |
@@ -1096,6 +1096,19 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 | `cerefox_delete_relation` ⚑ | Write (destructive) | Remove a relation. |
 | `cerefox_get_relations` ⚑ | Read | All relations touching a document, both directions. |
 | `cerefox_get_neighbors` ⚑ | Read | Walk the graph along one relation type, cycle-safe. |
+
+**Caller identity (v1.13.1).** Every tool takes the caller's name as one
+parameter, `author`, on reads and writes alike: it is recorded as the author
+in the audit log on writes and as the requestor in the usage log on every
+call. The tools had disagreed about the name since v1.3.0 (`requestor` on
+reads and the partial edits, `author` on the other writes, both on a few),
+and an agent following "author on writes" found no `author` on
+`cerefox_insert`/`cerefox_edit` and passed nothing. `callerIdentity()` in
+`_shared/mcp-tools/identity.ts` reads `author`, then `requestor` as a silent
+alias; schemas list `author` only. On `cerefox_get_audit_log` the entries
+filter is `by_author` (it was `author`), so the rule has no exception. The CLI
+keeps `--author` (writes) / `--requestor` (reads) and the primitive Edge
+Functions keep their body fields; those are separate surfaces.
 
 ⚑ **Dormant by default.** The four relation tools (iteration 29) are hidden from
 every agent until an operator opts in with `cerefox config set relations_enabled

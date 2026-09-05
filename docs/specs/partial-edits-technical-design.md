@@ -155,7 +155,8 @@ additive tool cannot drift from the batch's insert semantics.
 - `cerefox_insert` — annotations `{readOnlyHint: false, destructiveHint: false,
   idempotentHint: false, openWorldHint: false}`. Args: `document_id`, `text`,
   `position`, `anchor_heading?`, `section_part?`, `expected_content_hash`,
-  `requestor?`.
+  `requestor?` (renamed `author` in v1.13.1, when every tool converged on that
+  one name; `requestor` is still accepted as an alias).
 - `cerefox_edit` — `destructiveHint: true`. Args: `document_id`, `operations[]`
   (each `{op, text?, position?, anchor_heading?, section_part?, scope?}`),
   `expected_content_hash`, `requestor?`. Validation: non-empty array, per-op

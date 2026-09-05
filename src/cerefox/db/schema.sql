@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.16.0
+-- @version: 0.16.1
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -56,9 +56,9 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     -- review_status: human governance flag. 'approved' = validated by human,
     -- 'pending_review' = modified by agent, not yet reviewed.
     -- Content is searchable in both states. Written ONLY by
-    -- cerefox_ingest_document, which consults `review_workflow_enabled`
-    -- (#241): with the workflow off every write lands 'approved' and every
-    -- surface hides the column; existing values are left as they are.
+    -- cerefox_ingest_document, from author_type alone. The store-level
+    -- `review_workflow_enabled` flag (#241) governs whether any surface shows
+    -- or enforces the column; it never changes what is stored (0.16.1).
     review_status   TEXT        NOT NULL DEFAULT 'approved',
     -- lifecycle_status: where this document stands relative to the graph —
     -- 'active' | 'superseded' | 'stale' | 'archived'. Distinct from

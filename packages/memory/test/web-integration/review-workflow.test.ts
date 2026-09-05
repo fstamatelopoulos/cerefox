@@ -4,9 +4,14 @@
  * to and branch on it; this one flips the flag itself so every run covers
  * the off contract AND the on contract, regardless of the target's setting.
  *
- * Off contract: an agent write lands `approved`; `review_status` is absent
- * from every read (document GET, list, dashboard, metadata-search, trash);
- * `?review_status=` on /search is a 400; POST …/review-status is a 404.
+ * Off contract: `review_status` is absent from every read (document GET,
+ * list, dashboard, metadata-search, trash); `?review_status=` on /search is a
+ * 400; POST …/review-status is a 404. The write side is NOT affected: an
+ * agent write made while off is still recorded `pending_review`, which the
+ * ON test below checks by reading that same document back once the flag is
+ * on (v1.13.1 — 1.13.0 stored `approved` for everyone while off, so a
+ * stored `approved` meant two different things depending on when it was
+ * written).
  * On contract: the agent write lands `pending_review`, the field is present
  * everywhere, the filter works, and the endpoint flips the status.
  *
@@ -33,6 +38,8 @@ describe("review workflow toggle (HTTP boundary, #241)", () => {
   let server: SpawnedServer | null = null;
   let originalFlag: string | null = null;
   const created: string[] = [];
+  /** The document written while the flag was OFF; read back once it is ON. */
+  let offDocId = "";
 
   const json = async (path: string, init?: RequestInit) => {
     const resp = await fetch(`${server!.base}${path}`, init);
@@ -94,10 +101,11 @@ describe("review workflow toggle (HTTP boundary, #241)", () => {
     }
   });
 
-  liveTest("OFF: agent write lands approved and review_status is absent everywhere", async () => {
+  liveTest("OFF: review_status is absent everywhere (write still recorded)", async () => {
     if (!LIVE_OK || !server) return;
     await setFlag("false");
     const id = await ingestAsAgent("off");
+    offDocId = id;
 
     const doc = await json(`/api/v1/documents/${id}`);
     expect(doc.status).toBe(200);
@@ -137,6 +145,19 @@ describe("review workflow toggle (HTTP boundary, #241)", () => {
   liveTest("ON: agent write lands pending_review; filter + endpoint work", async () => {
     if (!LIVE_OK || !server) return;
     await setFlag("true");
+
+    // The flag hides, it never rewrites: the agent write made while OFF above
+    // was recorded pending_review all along and surfaces as such now. (It is
+    // in the trash since the OFF test's last step; the trash listing carries
+    // the field while the workflow is on.)
+    if (offDocId) {
+      const trash = await json("/api/v1/documents/trash");
+      const rows = trash.body as unknown as Array<Record<string, unknown>>;
+      const offDoc = Array.isArray(rows) ? rows.find((r) => r.id === offDocId) : undefined;
+      expect(offDoc).toBeDefined();
+      expect(offDoc!.review_status).toBe("pending_review");
+    }
+
     const id = await ingestAsAgent("on");
 
     const doc = await json(`/api/v1/documents/${id}`);

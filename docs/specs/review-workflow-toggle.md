@@ -1,10 +1,23 @@
 # The review workflow toggle (`review_workflow_enabled`)
 
-**Status: BUILT — v1.13.0 (schema 0.16.0, migration 0031, #241).** Started as
-a discussion document (2026-09-03); the decisions below were taken with the
-maintainer on 2026-09-03/04 and this file now records what shipped. Companion
-fixes shipped in the same release: #240 (filtered search under-returned), #239
-(`config list` hid working keys), #235 (live-test timeouts).
+**Status: BUILT — v1.13.0 (schema 0.16.0, migration 0031, #241), amended in
+v1.13.1 (schema 0.16.1).** Started as a discussion document (2026-09-03); the
+decisions below were taken with the maintainer on 2026-09-03/04 and this file
+now records what shipped. Companion fixes shipped in the same release: #240
+(filtered search under-returned), #239 (`config list` hid working keys), #235
+(live-test timeouts).
+
+**v1.13.1 amendment (2026-09-04).** v1.13.0 had the ingest RPC read the flag
+on the write path and store `approved` for every author while off. That was
+never the ask — the ask was a view/hide switch with the underlying logic left
+running — and it made a stored `approved` mean two different things depending
+on when it was written. v1.13.1 removes the flag from the write path: the RPC
+decides from `author_type` alone (agent → `pending_review`, user →
+`approved`) whatever the flag says, and the flag governs only what surfaces
+show and enforce. Turning it off and later back on therefore shows exactly the
+statuses the store would have had all along. Sections below are updated to the
+shipped behaviour; where the original reasoning is kept for the record, the
+change is marked.
 
 ## The request
 
@@ -22,9 +35,9 @@ and that means nothing. Those installs want the workflow off.
 | Key | `review_workflow_enabled` (`cerefox_config`, group Governance, high-impact) |
 | Fresh install | **`false`** — seeded by `schema.sql` |
 | Upgrade | **`true`** — seeded by migration 0031, so nothing changes until the operator flips it |
-| Decision point | `cerefox_ingest_document` reads the flag; the six client-side copies of the rule are gone |
-| Off contract | `review_status` is **absent** from every read on every surface; `?review_status=` on search is a `400`; `POST …/review-status` is a `404`; every write lands `approved` |
-| Stored rows | Never touched by a toggle in either direction |
+| Decision point | `cerefox_ingest_document`, from `author_type` alone; the six client-side copies of the rule are gone. The flag is **not** consulted on write (v1.13.1) |
+| Off contract | `review_status` is **absent** from every read on every surface; `?review_status=` on search is a `400`; `POST …/review-status` is a `404`. Writes are recorded exactly as when on |
+| Stored rows | Never touched by a toggle in either direction, and never written differently because of it |
 | `minSchema` | Raised to **0.16.0** (see Versioning) |
 
 ## What the review system was before this change
@@ -136,14 +149,16 @@ key after release is a migration.
 deleted:
 
 ```sql
-v_review_on BOOLEAN := cerefox_config_bool('review_workflow_enabled', FALSE);
-
 v_status := CASE
-    WHEN NOT v_review_on            THEN 'approved'
     WHEN p_author_type = 'agent'    THEN 'pending_review'
     ELSE 'approved'
 END;
 ```
+
+(v1.13.0 shipped this with a leading `WHEN NOT
+cerefox_config_bool('review_workflow_enabled', FALSE) THEN 'approved'` arm.
+v1.13.1 removed it: the flag is a presentation switch and has no business on
+the write path. See the amendment note at the top.)
 
 Three things follow, and they are the argument for doing it this way:
 
@@ -152,9 +167,9 @@ Three things follow, and they are the argument for doing it this way:
   RPC. Contrast `require_requestor_identity`, which is nine near-identical
   copies and consequently does not apply to the local MCP server, `/api/v1`, or
   the CLI. `CLAUDE.md` already records that as the thing not to repeat.
-- **Old clients get the new behaviour for free.** A v1.12 client talking to a
-  server with the flag off gets approved documents without being upgraded,
-  because it no longer decides. That is worth a lot for a fleet of agents.
+- **Old clients get the one rule for free.** A v1.12 client no longer decides;
+  whatever it passes as `p_review_status` is ignored and the store's rule
+  applies. That is worth a lot for a fleet of agents.
 - **It fixes a pre-existing duplication** rather than adding a fifth copy.
 
 `p_review_status` is kept on the RPC signature, **accepted and ignored**, and
@@ -163,9 +178,10 @@ change for the sake of tidiness, and an out-of-tree caller that still passes it
 must keep working. The `cerefox-ingest` Edge Function's request body is
 unchanged for the same reason.
 
-The fallback is `FALSE` rather than `TRUE`: a store whose config row is missing
-(a schema behind this one) behaves as a fresh install would. `cerefox doctor`
-warns in that state and points at `cerefox server deploy --schema-only`.
+The reader's fallback is `FALSE` rather than `TRUE`: a store whose config row
+is missing (a schema behind this one) presents as a fresh install would.
+`cerefox doctor` warns in that state and points at
+`cerefox server deploy --schema-only`.
 
 ### What "off" means: the feature disappears completely
 
@@ -196,10 +212,15 @@ Turning the flag off changes no rows. Two reasons:
   that is a surprising amount of writing for flipping a switch, and it makes
   the toggle something people are afraid to touch.
 
-So a row may still hold `pending_review` while the flag is off. Because the
+So a row may still hold `pending_review` while the flag is off, and — since
+v1.13.1 — a new agent write made while the flag is off is *recorded*
+`pending_review` too, exactly as it would be with the flag on. Because the
 field is not exposed at all in that state (next section), no surface ever
 *reports* something different from what is stored — the label is simply not
-shown. Turning the flag back on shows exactly what was there.
+shown. Turning the flag back on shows exactly what the store would have had all
+along. The v1.13.0 behaviour (store `approved` for everyone while off) broke
+that: a document written during an "off" month came back `approved` once the
+flag was on again, indistinguishable from one a person had actually approved.
 
 **`approve-all` is therefore not needed.** It existed in the previous draft to
 drain a queue that was visible; with nothing visible, there is nothing to drain.
@@ -358,6 +379,11 @@ settled against in v1.1.0 for the same reason.
    mode worth avoiding, and a line that only appears when off is easy to miss.
 7. The curator is a future idea; nothing here anticipates it beyond keeping
    the column and making the RPC the single decision point.
+8. (v1.13.1, 2026-09-04) The flag governs visibility and enforcement only.
+   The write path decides from `author_type` alone and never reads the flag;
+   an "off" store records the same statuses an "on" store would. Schema
+   0.16.0 → 0.16.1, RPC-only, no migration, `minSchema` unchanged (a 0.16.0
+   server merely writes `approved` while off — old, not wrong).
 
 ## Testing (as shipped)
 
@@ -367,8 +393,10 @@ settled against in v1.1.0 for the same reason.
   asserts the full off contract (field absent on document GET, recent-docs,
   metadata-search and trash; search filter `400`; review-status `404`) and the
   on contract (`pending_review`, filter honoured server-side, endpoint flips),
-  plus that a flip takes effect on the very next request. Restores the flag it
-  found and purges its fixtures.
+  plus that a flip takes effect on the very next request. Since v1.13.1 the ON
+  test also reads back the document written while OFF and asserts it is
+  `pending_review` — the flag hid it, it did not rewrite it. Restores the flag
+  it found and purges its fixtures.
 - **Flag-aware suites** (branch on the store's current value):
   `pipeline-ingest-text`, `web-integration/attribution`,
   `web-integration/destructive`, `edge-functions` (metadata-search row).

@@ -6,24 +6,24 @@ Cerefox is a persistent, shared knowledge base. You have **15 core MCP tools** (
 
 | Tool | Purpose | Key params |
 |------|---------|------------|
-| `cerefox_search` | Find documents (hybrid FTS + semantic) | `query` (required), `project_name`, `metadata_filter`, `requestor` |
+| `cerefox_search` | Find documents (hybrid FTS + semantic) | `query` (required), `project_name`, `metadata_filter`, `author` |
 | `cerefox_ingest` | Save or update a document | `title`, `content` (required), `document_id` (update by ID), `expected_content_hash` (**required on content updates** — see rule 9), `last_write_wins`, `update_if_exists`, `project_name` (single, non-destructive add on update), `project_names` (list, destructive replace on update), `metadata` (omit on update to keep existing tags; `{}` clears), `author` |
-| `cerefox_insert` | **Add** to a document without resending it. Cannot destroy content. | `document_id`, `text`, `position` (`end_of_document`/`end_of_section`/`after_heading`/`before_heading`), `expected_content_hash` (required), `anchor_heading` (unless `end_of_document`), `section_part` |
-| `cerefox_edit` | **Change** parts of a document: 1..n operations applied atomically | `document_id`, `operations` (`insert`/`replace_section`/`delete_section`/`rename_section`), `expected_content_hash` (required) |
+| `cerefox_insert` | **Add** to a document without resending it. Cannot destroy content. | `document_id`, `text`, `position` (`end_of_document`/`end_of_section`/`after_heading`/`before_heading`), `expected_content_hash` (required), `anchor_heading` (unless `end_of_document`), `section_part`, `author` |
+| `cerefox_edit` | **Change** parts of a document: 1..n operations applied atomically | `document_id`, `operations` (`insert`/`replace_section`/`delete_section`/`rename_section`), `expected_content_hash` (required), `author` |
 | `cerefox_delete_document` | **Soft**-delete a document (to trash; excluded from search; permanent purge is human-only) | `document_id`, `expected_content_hash` (**required** — a delete must follow a read), `reason` (recorded in the audit log — give one), `author` |
 | `cerefox_restore_document` | Restore a soft-deleted document from the trash (audited inverse of delete; no-op if not deleted) | `document_id` (required), `reason` (recorded in the audit log), `author` |
-| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token), or with `outline: true` just its heading paths, sizes and hash, or with `section: "## Heading"` one section's text | `document_id` (required), `outline`, `section`, `section_part` |
-| `cerefox_list_versions` | Version history of a document | `document_id` (required) |
+| `cerefox_get_document` | Get full document by ID (header includes `content_hash` — the update token), or with `outline: true` just its heading paths, sizes and hash, or with `section: "## Heading"` one section's text | `document_id` (required), `outline`, `section`, `section_part`, `author` |
+| `cerefox_list_versions` | Version history of a document | `document_id` (required), `author` |
 | `cerefox_set_relation` ⚑ | Link two documents (`source --rel_type--> target`) | `source_id`, `target_id`, `rel_type` (required), `metadata`, `author` |
-| `cerefox_delete_relation` ⚑ | Remove a relation | `source_id`, `target_id`, `rel_type` |
+| `cerefox_delete_relation` ⚑ | Remove a relation | `source_id`, `target_id`, `rel_type`, `author` |
 | `cerefox_get_relations` ⚑ | All relations touching a document, both directions | `document_id` |
 | `cerefox_get_neighbors` ⚑ | Walk the graph along ONE relation type | `document_id`, `rel_type` (required), `depth`, `from_time`, `to_time`, `limit` |
 | `cerefox_metadata_search` | Find or list docs by metadata, project, or time (no text query) | `metadata_filter`, `project_name` (list a project's docs), `updated_since`, `include_content` — **at least one** of metadata_filter/project_name/updated_since/created_since |
 | `cerefox_list_metadata_keys` | Discover available metadata keys | (none required) |
 | `cerefox_list_projects` | List all projects | (none required) |
 | `cerefox_set_document_metadata` | Change tags WITHOUT resending content. **Merges** by default; a `null` value removes a key | `document_id`, `metadata` (required), `replace` (rare: set exactly this object), `author` |
-| `cerefox_set_document_projects` | Set doc's project memberships to exactly the given list (destructive replace; metadata-only, no content change) | `document_id`, `project_names` (required) |
-| `cerefox_get_audit_log` | Query write operation history | `document_id`, `author`, `operation`, `since` |
+| `cerefox_set_document_projects` | Set doc's project memberships to exactly the given list (destructive replace; metadata-only, no content change) | `document_id`, `project_names` (required), `author` |
+| `cerefox_get_audit_log` | Query write operation history | `document_id`, `by_author` (filter), `operation`, `since`, `author` |
 | `cerefox_get_help` | Retrieve Cerefox conventions (this reference) over MCP. **Call this whenever uncertain.** | `topic` (optional, case-insensitive H2 substring match) |
 
 ⚑ **Opt-in — usually absent.** The four relation tools are hidden unless the
@@ -74,7 +74,7 @@ recoverable answer, not a failure: retry with what it gave you.
 
 1. **Search before ingesting** -- check if the document exists first.
 2. **Prefer ID-based updates** -- pass `document_id` from search results for deterministic updates. Falls back to title-matching with `update_if_exists: true`.
-3. **Set `author`/`requestor`** to your name on every call (e.g., "Claude Code", "archiver"). On MCP, pass as parameters. On CLI, pass `--author`/`--author-type`/`--requestor` flags, or rely on `CEREFOX_AUTHOR_NAME`/`CEREFOX_AUTHOR_TYPE`/`CEREFOX_REQUESTOR_NAME` env vars set in the user's `.env`.
+3. **Set `author`** to your name on every call, reads and writes alike (e.g., "Claude Code", "archiver"). Same parameter on every tool. (`requestor` is still accepted everywhere as the pre-1.13.1 alias.) On CLI, pass `--author`/`--author-type` on writes and `--requestor` on reads, or rely on `CEREFOX_AUTHOR_NAME`/`CEREFOX_AUTHOR_TYPE`/`CEREFOX_REQUESTOR_NAME` env vars set in the user's `.env`.
 4. **Use `document_id` from search results** `[id: uuid]` for get_document and list_versions.
 5. **Add metadata** -- at minimum `type` ("decision-log", "research", "design-doc") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings for good chunking and search.

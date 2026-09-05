@@ -7,6 +7,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { logUsage, auditDocLabel, AUDIT_OPERATIONS } from "./_utils.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
 /**
  * A timestamp an agent cannot mistake for local time (#199).
@@ -28,7 +29,9 @@ async function handler(
 ): Promise<string> {
   const params: Record<string, unknown> = {};
   if (args.document_id) params.p_document_id = args.document_id;
-  if (args.author) params.p_author = args.author;
+  // v1.13.1: the filter is `by_author`; `author` is the caller's identity here
+  // as on every other tool (it was the filter until 1.13.1).
+  if (args.by_author) params.p_author = args.by_author;
   if (args.operation) params.p_operation = args.operation;
   if (args.since) params.p_since = args.since;
   if (args.until) params.p_until = args.until;
@@ -54,7 +57,7 @@ async function handler(
   logUsage(supabase, {
     operation: "get_audit_log",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     result_count: entries.length,
   });
 
@@ -89,7 +92,10 @@ export const auditLogTool: ToolDefinition = {
     required: [],
     properties: {
       document_id: { type: "string", description: "Filter by document UUID (optional)" },
-      author: { type: "string", description: "Filter by author name (optional)" },
+      by_author: {
+        type: "string",
+        description: "Filter: only entries written by this author name (optional)",
+      },
       operation: {
         type: "string",
         description: `Filter by operation type: ${AUDIT_OPERATIONS.join(", ")} (optional)`,
@@ -102,11 +108,7 @@ export const auditLogTool: ToolDefinition = {
         type: "integer",
         description: "Maximum number of entries to return (default: 50, max: 200)",
       },
-      requestor: {
-        type: "string",
-        description:
-          'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler,

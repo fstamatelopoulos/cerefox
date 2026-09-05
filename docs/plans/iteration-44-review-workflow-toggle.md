@@ -1,9 +1,46 @@
-# Iteration 44 — the review workflow becomes optional (v1.13.0)
+# Iteration 44 — the review workflow becomes optional (v1.13.0, +v1.13.1)
 
-**Status: IMPLEMENTATION COMPLETE, verified on staging, awaiting review +
-release** (2026-09-04). Branch: `design/review-workflow-toggle` (squash-merge;
-the branch is deleted after). Target: **v1.13.0**. Schema **0.15.0 → 0.16.0**,
-migration 0031, **`minSchema` raised to 0.16.0** (redeploy required).
+**Status: v1.13.0 SHIPPED 2026-09-04** (PR #242, squash `91ec3fd`; cut
+`b3b3e9a`; npm + ghcr published; deployed to staging, production and Cerefox
+Local, `doctor` green on all three). Schema **0.15.0 → 0.16.0**, migration
+0031, **`minSchema` raised to 0.16.0** (redeploy required).
+
+**v1.13.1 follow-up (2026-09-04, branch `fix/review-status-write-semantics`):**
+the maintainer tried the toggle on Cerefox Local and the Settings confirmation
+said every new write would land `approved` while off. That was the write-side
+rule as built, and it was not the ask: the ask was a view/hide switch with the
+logic underneath left running, so that off-then-on changes nothing about the
+data or its meaning. The `NOT review_workflow_enabled → 'approved'` arm was
+removed from `cerefox_ingest_document`; the RPC decides from `author_type`
+alone. Schema **0.16.0 → 0.16.1**, RPC-only, no migration, `minSchema`
+unchanged. Catalog strings, `doctor` OFF text, the spec (amendment note +
+decision 8), every guide that said "lands approved", and the three live tests
+that read the stored column were updated; the review-workflow suite's ON test
+now reads back the document written while OFF and asserts `pending_review`.
+Lesson recorded in the spec: the write-side semantics were agreed in
+conversation ("hide, don't change the data") and then lost between the
+discussion doc and the implementation — the spec had the stored-rows rule but
+not the stored-*writes* rule, and nobody noticed until the confirmation
+dialog spelled it out.
+
+**Folded into the same patch — one identity name on the MCP tools.** A new
+agent, asked why it had not attributed its partial edits, produced a table of
+which tools take `author` and which take `requestor`, and it was right: since
+v1.3.0 ingest and set_document_projects said `author`, the reads and the
+partial edits said `requestor`, and delete/restore/set_document_metadata
+listed both. Not a regression, just never reconciled. Fix: every schema lists
+`author` only (`_shared/mcp-tools/identity.ts` — `callerIdentity()` reads
+`author`, then `requestor` as the pre-1.13.1 alias; blank counts as absent;
+`author` wins when both are passed). No exception: on `cerefox_get_audit_log`,
+where `author` had been the entries filter, the filter became `by_author` so
+the rule holds without an asterisk — the maintainer chose uniformity over
+sparing the few MCP callers that filtered with `author` (a silent change for
+them, called out in the CHANGELOG). `cerefox-mcp`'s `require_requestor_identity` check accepts
+either name. Deliberately untouched: CLI flags (`--author` on writes,
+`--requestor` on reads — renaming is breaking) and the primitive Edge Function
+bodies that GPT Actions use, so the OpenAPI block did not change. Guides,
+quick reference (rebundled into `cerefox_get_help`) and the parity test's
+`NOT_FLAGS` updated.
 
 Closes [#241](https://github.com/fstamatelopoulos/cerefox/issues/241) (the
 toggle), [#240](https://github.com/fstamatelopoulos/cerefox/issues/240)

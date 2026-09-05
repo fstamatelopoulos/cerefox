@@ -9,6 +9,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { logUsage } from "./_utils.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -28,7 +29,7 @@ async function handler(
   logUsage(supabase, {
     operation: "list_projects",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     result_count: projects.length,
   });
 
@@ -55,11 +56,7 @@ export const listProjectsTool: ToolDefinition = {
   inputSchema: {
     type: "object",
     properties: {
-      requestor: {
-        type: "string",
-        description:
-          'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler,

@@ -9,6 +9,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 import { extractSection, parseOutline } from "../partial-edits/index.ts";
 import { logUsage } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
+import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
 async function handler(
   supabase: MCPSupabaseClient,
@@ -56,7 +57,7 @@ async function handler(
   logUsage(supabase, {
     operation: "get_document",
     accessPath: ctx.accessPath,
-    requestor: args.requestor as string | undefined,
+    requestor: callerIdentity(args),
     document_id,
     result_count: 1,
   });
@@ -179,11 +180,7 @@ export const getDocumentTool: ToolDefinition = {
         description:
           "Only when the target section HAS CHILD SECTIONS, and it means the same here as on the edit tools: own_body = up to the first child, subtree = everything nested underneath. The read refuses without it for exactly the cases the write refuses, so that what you read is what you would replace. Omit it otherwise; you will be told (with both options) whenever it is needed.",
       },
-      requestor: {
-        type: "string",
-        description:
-          'Name of the agent or user making this request. Recorded in the usage log. Defaults to "mcp-agent" if not provided. May be enforced via server config.',
-      },
+      author: AUTHOR_PARAM_READ,
     },
   },
   handler,

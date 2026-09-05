@@ -480,14 +480,20 @@ cerefox config get usage_tracking_enabled
 
 ## Requestor Identity Enforcement
 
-By default, the `requestor` parameter on MCP read tools (and `author` on ingest) is
-optional. When omitted, it defaults to `"mcp-agent"`. This means the usage log shows
-`"mcp-agent"` for all calls that don't explicitly identify themselves, making analytics
-less useful in multi-agent setups.
+By default, the `author` parameter on the MCP tools is optional. When omitted, it
+defaults to `"mcp-agent"`. This means the usage log shows `"mcp-agent"` for all calls
+that don't explicitly identify themselves, making analytics less useful in
+multi-agent setups.
 
-You can optionally enforce caller identification so that MCP tool calls must include
-a requestor/author identity. Calls without identity receive a JSON-RPC `-32602` error
-with a helpful message telling the agent what to provide.
+Since v1.13.1 every MCP tool takes the caller's identity as **`author`**, reads and
+writes alike; `requestor` (the pre-1.13.1 name on most tools) is still accepted as
+a silent alias. (On `cerefox_get_audit_log` the entries filter, formerly `author`,
+is now `by_author`.) The primitive Edge Functions used by GPT Actions keep their
+original body fields (`requestor` on reads, `author` on ingest).
+
+You can optionally enforce caller identification so that tool calls must include
+an identity. Calls without one receive a JSON-RPC `-32602` error with a helpful
+message telling the agent what to provide.
 
 ### What it actually covers
 
@@ -516,7 +522,7 @@ tenth copy of the same block. Raise an issue rather than assuming it is there.
 ### Enabling enforcement
 
 ```bash
-# Require all MCP tool calls to include requestor/author
+# Require all MCP tool calls to include author (or the requestor alias)
 cerefox config set require_requestor_identity true
 
 # Optionally override the default naming format (regex)
@@ -532,7 +538,7 @@ cerefox config set requestor_identity_format "^[a-z]+:[a-z]+$"
 | `^[a-z]+:[a-z]+$` | `conclave:agent` format only | Multi-conclave setups (e.g., `personal:steward`) |
 | (empty string) | Any non-empty string | No format restriction |
 
-The format is applied to both `requestor` (read tools) and `author` (ingest).
+The format is applied to whichever identity field the call carries (`author`, or the `requestor` alias).
 
 ### Disabling enforcement
 
@@ -540,7 +546,7 @@ The format is applied to both `requestor` (read tools) and `author` (ingest).
 cerefox config set require_requestor_identity false
 ```
 
-When disabled, the requestor parameter remains optional with the `"mcp-agent"` default.
+When disabled, the identity parameter remains optional with the `"mcp-agent"` default.
 This is the default state -- no configuration needed for backward compatibility.
 
 ---
@@ -570,20 +576,23 @@ cerefox config set review_workflow_enabled true    # or false; also in Settings 
 cerefox doctor                                      # prints "review workflow  ON …" / "OFF …"
 ```
 
-**With the workflow off, the feature is absent, not dimmed.** Every write lands
-`approved` whoever wrote it — the decision is made once, inside the
-`cerefox_ingest_document` RPC, so every access path (CLI, local and remote MCP,
-Edge Functions, web) obeys the same setting, including older clients. No surface
-shows a `review_status`: the web pill, badges and search chip do not render;
-the CLI drops its `status` column; API, MCP and Edge Function rows carry no
-`review_status` key; `GET /api/v1/search?review_status=…` is a `400`; and
-`POST /api/v1/documents/{id}/review-status` is a `404`.
+**With the workflow off, the feature is hidden, not dimmed.** No surface
+shows or enforces a `review_status`: the web pill, badges and search chip do
+not render; the CLI drops its `status` column; API, MCP and Edge Function rows
+carry no `review_status` key; `GET /api/v1/search?review_status=…` is a `400`;
+and `POST /api/v1/documents/{id}/review-status` is a `404`.
 
-**Toggling never touches stored data.** Flipping the flag off does not approve
-anything and flipping it on does not queue anything; documents that were
-`pending_review` are still pending, and are shown as such the moment the flag
-is on again. Attribution and the audit log are unaffected in both states — who
-wrote what is always recorded. Config changes are audited too.
+**The flag hides; it never rewrites.** Writes are recorded the same way in
+both states — agent writes `pending_review`, user writes `approved`, decided
+once inside the `cerefox_ingest_document` RPC so every access path (CLI, local
+and remote MCP, Edge Functions, web) behaves alike, including older clients.
+Flipping the flag off does not approve anything and flipping it on does not
+queue anything; documents that were `pending_review` are still pending, and a
+document an agent wrote while the workflow was off is pending too, shown as
+such the moment the flag is on again. (v1.13.0 stored `approved` for every
+write while off; v1.13.1 corrected that.) Attribution and the audit log are
+unaffected in both states — who wrote what is always recorded. Config changes
+are audited too.
 
 Design: [`docs/specs/review-workflow-toggle.md`](../specs/review-workflow-toggle.md).
 
