@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.13.1] -- 2026-09-05
+
 ### Fixed
 
 - **The review-workflow flag no longer changes what a write stores.** In
