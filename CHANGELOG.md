@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.14.0] -- 2026-09-05
+
 ### Added
 
 - **Empty trash** (web UI, #247). A button on the Trash page purges every
