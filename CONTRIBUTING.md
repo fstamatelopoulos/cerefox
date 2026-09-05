@@ -85,6 +85,8 @@ CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test
 # secrets is a bigger exposure than the coverage is worth. So it is a local step
 # — run it before pushing anything that touches `frontend/`:
 cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e
+# Add CEREFOX_E2E_EMPTY_TRASH=1 to include the test that empties the trash
+# (it also skips if the trash holds anything not [E2E-prefixed).
 
 # Playwright starts its OWN `cerefox web` on port 8123 from packages/memory/dist,
 # so a run always tests the build in this repo. `CEREFOX_E2E_PORT` picks the

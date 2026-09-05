@@ -38,7 +38,9 @@ adding a server endpoint that deletes everything.
   re-listing, failure not retried, stop, progress snapshots, empty no-op) via
   the new `bun run test:unit`; two Playwright tests (full run to empty; Cancel
   purges nothing). **The Playwright test empties the whole trash of the target
-  store**, which the production guard makes acceptable and staging exists for.
+  store**, so it is triple-guarded: production guard, explicit opt-in
+  (`CEREFOX_E2E_EMPTY_TRASH=1`), and a skip if the trash holds anything not
+  `[E2E`-prefixed.
 - Docs: `api.md` ("There is no bulk purge"), `access-paths.md` (why this does
   not weaken the web-UI-only rule), `solution-design.md`, `e2e-use-cases.md`,
   `CLAUDE.md` (test table), `frontend/README.md`, `CONTRIBUTING.md`, CHANGELOG.

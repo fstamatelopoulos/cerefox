@@ -386,12 +386,17 @@ test.describe("Settings", () => {
 
 // ── Trash: Empty trash (v1.14.0, #247) ─────────────────────────────────────
 test.describe("Trash", () => {
-  // Both tests empty or touch the WHOLE trash of the target store, including
-  // anything trashed by hand. That is the feature. The production guard at the
-  // top of this file is what makes it acceptable; staging exists to be broken.
+  // The first test empties the WHOLE trash of the target store. Three guards,
+  // all of which must pass: the production guard at the top of this file; an
+  // explicit opt-in, CEREFOX_E2E_EMPTY_TRASH=1, so a routine run never does it
+  // by accident; and a check that the trash holds nothing but [E2E fixtures,
+  // so a hand-trashed reproduction on staging is never destroyed. Fixtures are
+  // purged in `finally` either way.
   test("Empty trash asks first, purges one by one, and leaves the trash empty", async ({ page, request }) => {
-    // Never destroy someone's hand-trashed reproduction: only run against a
-    // trash that holds nothing but test fixtures.
+    test.skip(
+      process.env.CEREFOX_E2E_EMPTY_TRASH !== "1",
+      "empties the target's trash; run with CEREFOX_E2E_EMPTY_TRASH=1 to include it",
+    );
     const before = (await (await request.get("/api/v1/documents/trash?limit=500")).json()) as Array<{ title: string }>;
     const foreign = before.filter((d) => !d.title.startsWith("[E2E"));
     test.skip(foreign.length > 0, `trash holds ${foreign.length} non-fixture document(s); not emptying it`);
