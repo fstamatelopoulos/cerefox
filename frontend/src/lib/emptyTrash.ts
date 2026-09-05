@@ -12,10 +12,13 @@
  * What gets purged is what the human confirmed. The rows listed when the
  * count was shown are the run's set; a document trashed AFTER that moment
  * (an agent's soft-delete while the run is going) is never touched, because
- * nobody looked at it. The listing is capped server-side (500), so the loop
- * re-lists after each pass, but only rows trashed no later than the newest
- * confirmed one are eligible, and an id is never attempted twice, so a
- * document that refuses to purge cannot make the loop spin.
+ * nobody looked at it. The listing is capped server-side (500) and ordered
+ * newest-deleted first, so with more than 500 in the trash the confirmed
+ * page holds the newest entries and its cutoff is the trash's newest entry:
+ * the loop re-lists after each pass and every older row is eligible, until
+ * everything trashed before the confirmation is gone. An id is never
+ * attempted twice, so a document that refuses to purge cannot make the loop
+ * spin.
  *
  * Pure (dependencies injected) so it is tested without a browser, and so the
  * modal only renders what it reports.

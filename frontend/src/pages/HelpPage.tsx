@@ -45,7 +45,7 @@ export function HelpPage() {
     staleTime: Infinity,
   });
 
-  const docs = indexQuery.data ?? [];
+  const docs = useMemo(() => indexQuery.data ?? [], [indexQuery.data]);
   const [filter, setFilter] = useState("");
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();

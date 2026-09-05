@@ -46,9 +46,13 @@ Playwright 20/20). **The review fixes missed the cut**: the squash took the
 branch's first commit only, the second (`/code-review` follow-ups) landed on
 the branch after the merge and was orphaned when the branch was deleted.
 Recovered by cherry-pick onto `fix/identity-review-followups` as its own PR
-(CHANGELOG `[Unreleased]` describes them; ship as 1.13.3 or fold into the
-next minor, maintainer's call). Lesson for the hand-off: after "merged",
-check `git log origin/main` contains the branch's last commit before
+(#246, merged 2026-09-05; ships in 1.14.0). Root cause: a `/code-review`
+run checked out the PR's remote ref in this worktree and left HEAD detached;
+the fix commit landed on the detached HEAD, and a quiet push of the unmoved
+branch pushed nothing. Lesson for the hand-off: `git status` must show a
+branch, not a detached HEAD, before every commit, and the push output must
+be read; after "merged", check `git log origin/main` contains the branch's
+last commit before
 deleting anything. What shipped in 1.13.2 (#244): the caller-identity name is uniform on
 the last two surfaces. The CLI takes `--author <name>` on every command, reads
 included (`--requestor` a hidden alias; `audit list` filters with
