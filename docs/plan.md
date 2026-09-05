@@ -28,24 +28,29 @@
 ---
 ## Current Focus
 
-**2026-09-04 — v1.13.1 IN PROGRESS** (branch
-`fix/review-status-write-semantics`, PR #243): two low-risk fixes. (a) The
-flag was meant to hide/show the review workflow, not change what a write
-stores; v1.13.0's RPC stored `approved` for everyone while off. Now
+**2026-09-04 — v1.13.1 SHIPPED** (PR #243, squash `a92c151`; npm + ghcr
+published; **verified on staging**: client 1.13.1, schema 0.16.1, EF v1.13.1,
+package suite 303 pass / 2 skip / 0 fail with the flag ON and OFF, Playwright
+20/20, remote-MCP live suite 26/26 incl. the `by_author` negative case; flag
+restored to `true`, no fixtures left). Two low-risk fixes. (a) The flag was
+meant to hide/show the review workflow, not change what a write stores;
+v1.13.0's RPC stored `approved` for everyone while off. Now
 `cerefox_ingest_document` decides from `author_type` alone and the flag is
 presentation-only. Schema 0.16.0 → **0.16.1**, RPC-only, no migration,
 `minSchema` unchanged. (b) One caller-identity name on every MCP tool:
 `author` (reads and writes), with `requestor` kept as a silent alias; the
 audit-log filter formerly called `author` is now `by_author` (the one real
-behaviour change, called out in the CHANGELOG). Found when a new agent read the schemas literally and
-concluded the partial-edit tools had no author. `cerefox-mcp` enforcement
-takes either name (redeploy of that EF is part of the upgrade). CLI flags and
-primitive-EF bodies unchanged. Next: maintainer merges + cuts 1.13.1, upgrades
-staging; validate there (doctor, package suite incl. the review-workflow
-suite in both flag states, Playwright), then production + Cerefox Local; then
-one combined Discord announcement for 1.13.0 + 1.13.1. Detail:
-[iteration 44](plans/iteration-44-review-workflow-toggle.md) (v1.13.1
-follow-up block).
+behaviour change, called out in the CHANGELOG). Found when a new agent read
+the schemas literally and concluded the partial-edit tools had no author.
+`cerefox-mcp` enforcement takes either name. CLI flags and primitive-EF
+bodies unchanged. **Pending (maintainer)**: `cerefox server deploy` on
+production (client 1.13.1 sees schema 0.16.0 / EF 1.13.0 as warnings, not
+gates), `cerefox-local upgrade` (Local is healthy at 1.13.0), then one
+combined Discord announcement for 1.13.0 + 1.13.1. A post-cut test-only
+commit (`65b28a7`) gave the review-workflow suite's hooks the `liveTest`
+budget: its afterAll tripped bun's 5 s hook default under a full parallel
+run. Detail: [iteration 44](plans/iteration-44-review-workflow-toggle.md)
+(v1.13.1 follow-up block).
 
 **2026-09-04 — v1.13.0 SHIPPED** (PR #242; deployed and verified on staging,
 production and Cerefox Local). The review workflow

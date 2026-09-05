@@ -5,7 +5,7 @@
 Local, `doctor` green on all three). Schema **0.15.0 → 0.16.0**, migration
 0031, **`minSchema` raised to 0.16.0** (redeploy required).
 
-**v1.13.1 follow-up (2026-09-04, branch `fix/review-status-write-semantics`):**
+**v1.13.1 follow-up (2026-09-04, PR #243, squash `a92c151`; SHIPPED, verified on staging — production + Local redeploy pending):**
 the maintainer tried the toggle on Cerefox Local and the Settings confirmation
 said every new write would land `approved` while off. That was the write-side
 rule as built, and it was not the ask: the ask was a view/hide switch with the
@@ -134,6 +134,21 @@ Settings test asserts the Governance row.
   metadata-search row assertion re-run with it off.
 - CLI: `document list --json` / `metadata search --json` carry
   `review_status` only when on; `config list` shows the Governance entry.
+
+## Verification of v1.13.1 (staging, 2026-09-04, after the cut)
+
+- `cerefox self-update` → 1.13.1; `doctor` → schema 0.16.1 (bundled 0.16.1),
+  EF v1.13.1, `review workflow ON`.
+- Package suite: **303 pass / 2 skip / 0 fail** with the flag on, and again
+  with it off; flag restored to `true`. Playwright 20/20. Remote-MCP live
+  suite against the redeployed `cerefox-mcp`: 26/26, including the
+  `by_author` negative case.
+- One full parallel run failed once in the review-workflow suite's afterAll
+  (purge + restore flag + stop server) at bun's 5 s hook default; fixed on
+  `main` after the cut by giving the hooks `LIVE_TEST_BUDGET_MS` (`65b28a7`).
+  Other live suites' hooks were not audited; do the same if one trips.
+- 0 `[E2E` documents left on staging (one stale trashed fixture from an
+  earlier session purged).
 
 ## Release notes for the cut
 
