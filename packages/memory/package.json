@@ -62,7 +62,7 @@
     "@types/cli-progress": "^3.11.5",
     "@types/node": "^20.0.0",
     "@types/prompts": "^2.4.9",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "scripts": {
     "build": "bun run bundle-server-assets && bun build src/bin/cerefox.ts --outdir dist/bin --target node --format esm --external @huggingface/transformers --external onnxruntime-node",
