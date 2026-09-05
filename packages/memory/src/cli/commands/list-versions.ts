@@ -16,7 +16,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
-import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
+import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface VersionRow {
   version_id: string;
@@ -94,7 +94,7 @@ export function registerListVersions(program: Command): void {
     .command("list-versions")
     .description("List archived versions of a document.")
     .argument("<document-id>", "UUID of the document.")
-    .addOption(authorReadOption())
+    .addOption(authorOption("read"))
     .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);

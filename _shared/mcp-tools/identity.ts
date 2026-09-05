@@ -28,6 +28,27 @@ export function callerIdentity(args: Record<string, unknown>): string | undefine
   return undefined;
 }
 
+/**
+ * The audit log is the one tool where `author` used to mean something else:
+ * the entries FILTER (until v1.13.1 on MCP, v1.13.2 on the primitive Edge
+ * Function). A caller still on that shape sends `requestor` (its identity)
+ * and, optionally, `author` (its filter), and never `by_author`. That shape is
+ * unambiguous, so it keeps its meaning instead of turning the filter into a
+ * phantom reader in the usage log. Everything else is the current shape:
+ * identity from callerIdentity(), filter from `by_author`.
+ */
+export function auditLogIdentity(
+  args: Record<string, unknown>,
+): { identity: string | undefined; byAuthor: string | undefined } {
+  const str = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v : undefined);
+  const requestor = str(args.requestor);
+  const byAuthor = str(args.by_author);
+  if (requestor !== undefined && byAuthor === undefined) {
+    return { identity: requestor, byAuthor: str(args.author) };
+  }
+  return { identity: callerIdentity(args), byAuthor };
+}
+
 const EXAMPLE = 'e.g. "Claude Code", "archiver"';
 
 /** Schema entry for tools that write (audit log + usage log). */

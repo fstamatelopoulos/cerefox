@@ -28,8 +28,16 @@
 ---
 ## Current Focus
 
-**2026-09-05 — v1.13.2 IN PROGRESS** (branch
-`fix/identity-author-everywhere`, #244): the caller-identity name is uniform on
+**2026-09-05 — v1.13.2 SHIPPED** (PR #245, squash `ceb4a0b`, cut `dbd1def`;
+verified on staging: package suite 306/2/0, live EF + remote MCP 46/0,
+Playwright 20/20). **The review fixes missed the cut**: the squash took the
+branch's first commit only, the second (`/code-review` follow-ups) landed on
+the branch after the merge and was orphaned when the branch was deleted.
+Recovered by cherry-pick onto `fix/identity-review-followups` as its own PR
+(CHANGELOG `[Unreleased]` describes them; ship as 1.13.3 or fold into the
+next minor, maintainer's call). Lesson for the hand-off: after "merged",
+check `git log origin/main` contains the branch's last commit before
+deleting anything. What shipped in 1.13.2 (#244): the caller-identity name is uniform on
 the last two surfaces. The CLI takes `--author <name>` on every command, reads
 included (`--requestor` a hidden alias; `audit list` filters with
 `--by-author`), through one helper in `cli/util/identity-flags.ts`. The eight

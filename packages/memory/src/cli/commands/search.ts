@@ -34,7 +34,7 @@ import {
 } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
-import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
+import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface DocResult {
   document_id: string;
@@ -340,7 +340,7 @@ export function registerSearch(program: Command): void {
     .option("--min-score <float>", "Minimum cosine similarity threshold (default: CEREFOX_MIN_SEARCH_SCORE; else 0.5, or 0.6 with the local embedder).")
     .option("--min-term-coverage <float>", "OR-fallback keyword matches must cover at least this fraction of the query's meaningful terms to count as confident hits (default: CEREFOX_MIN_TERM_COVERAGE; else the server default 0.5; needs schema ≥ 0.9.1).")
     .option("--max-bytes <n>", "Response size budget in bytes (default: CEREFOX_MAX_RESPONSE_BYTES or 200000).")
-    .addOption(authorReadOption())
+    .addOption(authorOption("read"))
     .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON instead of the default text.")
     .option(

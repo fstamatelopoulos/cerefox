@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { callerIdentity, DEFAULT_IDENTITY } from "../mcp-tools/identity.ts";
+import { auditLogIdentity, callerIdentity, DEFAULT_IDENTITY } from "../mcp-tools/identity.ts";
 
 describe("callerIdentity", () => {
   test("author is the canonical name", () => {
@@ -33,5 +33,27 @@ describe("callerIdentity", () => {
 
   test("the default identity is the historical one", () => {
     expect(DEFAULT_IDENTITY).toBe("mcp-agent");
+  });
+});
+
+describe("auditLogIdentity", () => {
+  test("current shape: author is the caller, by_author the filter", () => {
+    expect(auditLogIdentity({ author: "me", by_author: "alice" })).toEqual({ identity: "me", byAuthor: "alice" });
+    expect(auditLogIdentity({ author: "me" })).toEqual({ identity: "me", byAuthor: undefined });
+  });
+
+  test("legacy shape (requestor + author-as-filter) keeps its meaning", () => {
+    // A pre-1.13.1 MCP client or a pre-4.0.0 GPT Actions block sends this.
+    // The filter must not become a phantom reader in the usage log.
+    expect(auditLogIdentity({ requestor: "ChatGPT", author: "alice" })).toEqual({ identity: "ChatGPT", byAuthor: "alice" });
+    expect(auditLogIdentity({ requestor: "ChatGPT" })).toEqual({ identity: "ChatGPT", byAuthor: undefined });
+  });
+
+  test("by_author present means the current shape, whatever else is sent", () => {
+    expect(auditLogIdentity({ requestor: "old", author: "me", by_author: "alice" })).toEqual({ identity: "me", byAuthor: "alice" });
+  });
+
+  test("blank values count as absent", () => {
+    expect(auditLogIdentity({ author: " ", by_author: "" })).toEqual({ identity: undefined, byAuthor: undefined });
   });
 });

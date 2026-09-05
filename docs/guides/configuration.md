@@ -492,7 +492,8 @@ is now `by_author`.) Since v1.13.2 the CLI (`--author` on every command,
 `--requestor` a hidden alias, `--by-author` the audit-list filter) and the
 primitive Edge Functions used by GPT Actions (`author` in every request body,
 `requestor` an alias, `by_author` on `cerefox-get-audit-log`) follow the same
-rule, so there is one name on every surface.
+rule. (The HTTP API's headers are documented in [`api.md`](api.md): there
+`X-Cerefox-Author` and `X-Cerefox-Requestor` name the same actor.)
 
 You can optionally enforce caller identification so that tool calls must include
 an identity. Calls without one receive a JSON-RPC `-32602` error with a helpful

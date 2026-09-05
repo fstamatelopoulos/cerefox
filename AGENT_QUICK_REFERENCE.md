@@ -74,7 +74,7 @@ recoverable answer, not a failure: retry with what it gave you.
 
 1. **Search before ingesting** -- check if the document exists first.
 2. **Prefer ID-based updates** -- pass `document_id` from search results for deterministic updates. Falls back to title-matching with `update_if_exists: true`.
-3. **Set `author`** to your name on every call, reads and writes alike (e.g., "Claude Code", "archiver"). Same parameter on every tool. (`requestor` is still accepted everywhere as the pre-1.13.1 alias.) On CLI, pass `--author`/`--author-type` on writes and `--requestor` on reads, or rely on `CEREFOX_AUTHOR_NAME`/`CEREFOX_AUTHOR_TYPE`/`CEREFOX_REQUESTOR_NAME` env vars set in the user's `.env`.
+3. **Set `author`** to your name on every call, reads and writes alike (e.g., "Claude Code", "archiver"). Same parameter on every tool. (`requestor` is still accepted everywhere as the pre-1.13.1 alias.) On the CLI it is `--author` on every command too (plus `--author-type` on writes); or rely on `CEREFOX_AUTHOR_NAME`/`CEREFOX_AUTHOR_TYPE` env vars set in the user's `.env`.
 4. **Use `document_id` from search results** `[id: uuid]` for get_document and list_versions.
 5. **Add metadata** -- at minimum `type` ("decision-log", "research", "design-doc") and `status` ("active", "draft").
 6. **Write structured Markdown** with H1/H2/H3 headings for good chunking and search.
