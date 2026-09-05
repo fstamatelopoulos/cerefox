@@ -19,6 +19,7 @@ import {
 import { c } from "../../../../../_shared/cli-core/index.ts";
 import { extractSection, parseOutline } from "../../../../../_shared/partial-edits/index.ts";
 import { getClient } from "../util/client.ts";
+import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface DocPayload {
   document_id: string;
@@ -35,7 +36,8 @@ async function action(
   documentId: string,
   options: {
     versionId?: string;
-    requestor?: string;
+    author?: string;
+  requestor?: string;
     json?: boolean;
     outline?: boolean;
     section?: string;
@@ -79,7 +81,7 @@ async function action(
 
   const doc = rows[0];
 
-  const requestor = resolveRequestor(options.requestor);
+  const requestor = resolveRequestor(options.author ?? options.requestor);
   client.raw
     .rpc("cerefox_log_usage", {
       p_operation: "get_document",
@@ -194,7 +196,8 @@ export function registerGetDoc(program: Command): void {
     .description("Retrieve the full content of a document by ID.")
     .argument("<document-id>", "UUID of the document.")
     .option("--version-id <uuid>", "Specific archived version (default: current).")
-    .option("-r, --requestor <name>", "Agent / user name (usage log).")
+    .addOption(authorReadOption())
+    .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .option(
       "--outline",

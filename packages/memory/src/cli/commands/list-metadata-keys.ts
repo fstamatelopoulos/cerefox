@@ -14,6 +14,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
+import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface MetadataKeyRow {
   key: string;
@@ -21,7 +22,7 @@ interface MetadataKeyRow {
   example_values: string[];
 }
 
-async function action(options: { requestor?: string; json?: boolean }): Promise<void> {
+async function action(options: { author?: string; requestor?: string; json?: boolean }): Promise<void> {
   const client = getClient();
   const data = await client.rpc<MetadataKeyRow[]>("cerefox_list_metadata_keys");
   if (data === null) {
@@ -31,7 +32,7 @@ async function action(options: { requestor?: string; json?: boolean }): Promise<
     );
   }
 
-  const requestor = resolveRequestor(options.requestor);
+  const requestor = resolveRequestor(options.author ?? options.requestor);
   client.raw
     .rpc("cerefox_log_usage", {
       p_operation: "list_metadata_keys",
@@ -63,7 +64,8 @@ export function registerListMetadataKeys(program: Command): void {
   program
     .command("list-metadata-keys")
     .description("List all metadata keys with document counts and example values.")
-    .option("-r, --requestor <name>", "Agent / user name (usage log).")
+    .addOption(authorReadOption())
+    .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);
 }

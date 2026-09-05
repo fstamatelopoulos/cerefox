@@ -149,14 +149,14 @@ cerefox search [OPTIONS] QUERY
 | `--metadata-filter <json>` (`-f`) | JSON | _none_ | JSONB metadata containment filter, e.g. `'{"type":"decision"}'`. |
 | `--max-bytes <n>` | int | `200000` | Response size budget in bytes. |
 | `--only-metadata` | flag | off | List matching docs (id, score, chunks, chars) without content — a compact listing. |
-| `--requestor <name>` (`-r`) | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
+| `--author <name>` (`-a`) | str | `CEREFOX_REQUESTOR_NAME`, then `CEREFOX_AUTHOR_NAME`, else `unknown` | Your name (agent or user), recorded in the usage log. `--requestor` (`-r`) still works as a hidden alias (v1.13.2). |
 | `--json` | flag | off | Machine-readable JSON output. |
 
 **Examples**:
 ```bash
 cerefox search "OAuth design"
 cerefox search "decisions" --metadata-filter '{"type":"decision-log"}' --match-count 5
-cerefox search "what we tried" --mode hybrid --requestor "claude-code"
+cerefox search "what we tried" --mode hybrid --author "claude-code"
 cerefox search "design docs" --only-metadata
 ```
 
@@ -182,7 +182,7 @@ cerefox document get [OPTIONS] DOCUMENT_ID
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--version-id <uuid>` | UUID | _none_ (current) | Archived version UUID — get from `cerefox document version list`. |
-| `--requestor <name>` (`-r`) | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
+| `--author <name>` (`-a`) | str | `CEREFOX_REQUESTOR_NAME`, then `CEREFOX_AUTHOR_NAME`, else `unknown` | Your name (agent or user), recorded in the usage log. `--requestor` (`-r`) still works as a hidden alias (v1.13.2). |
 | `--json` | flag | off | Machine-readable JSON output. |
 
 **Examples**:
@@ -394,7 +394,7 @@ cerefox document version list [OPTIONS] DOCUMENT_ID
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
+| `--author TEXT` (`-a`) | str | `CEREFOX_REQUESTOR_NAME`, then `CEREFOX_AUTHOR_NAME`, else `unknown` | Your name (agent or user), recorded in the usage log. `--requestor` (`-r`) still works as a hidden alias (v1.13.2). |
 
 **Output**: table with version number, created timestamp, source, chunk/char counts, and version UUID. Pass the UUID to `cerefox document get --version-id <uuid>` to retrieve the archived content.
 
@@ -429,7 +429,7 @@ cerefox project list [OPTIONS]
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
+| `--author TEXT` (`-a`) | str | `CEREFOX_REQUESTOR_NAME`, then `CEREFOX_AUTHOR_NAME`, else `unknown` | Your name (agent or user), recorded in the usage log. `--requestor` (`-r`) still works as a hidden alias (v1.13.2). |
 
 **MCP equivalent**: [`cerefox_list_projects`](../../AGENT_GUIDE.md).
 
@@ -498,7 +498,7 @@ cerefox metadata search --metadata-filter '<json>' [OPTIONS]
 | `--created-since TEXT` | ISO-8601 | _none_ | Documents created after this timestamp. |
 | `--limit INTEGER` | int | `10` | Max results. |
 | `--include-content` | flag | off | Include full document content (slower; subject to byte budget). |
-| `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
+| `--author TEXT` (`-a`) | str | `CEREFOX_REQUESTOR_NAME`, then `CEREFOX_AUTHOR_NAME`, else `unknown` | Your name (agent or user), recorded in the usage log. `--requestor` (`-r`) still works as a hidden alias (v1.13.2). |
 
 **Examples**:
 ```bash
@@ -526,13 +526,13 @@ cerefox audit list [OPTIONS]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--document-id TEXT` | UUID | _none_ | Filter to a single document. |
-| `--author TEXT` | str | _none_ | Filter by author name (exact match). |
+| `--by-author TEXT` | str | _none_ | Filter: only entries written by this author name (exact match). Until v1.13.2 this filter was `--author`; `--author` is now the caller identity here, as on every other command. |
 | `--operation TEXT` | choice | _none_ | Filter by operation type: `create`, `update-content`, `update-metadata`, `insert`, `replace-section`, `delete-section`, `rename-section`, `delete`, `restore`, `status-change`, `archive`, `unarchive`, `config-change`, `project-create`, `project-edit`, `project-delete`. |
 | `--since TEXT` | ISO-8601 | _none_ | Lower bound on `created_at`. |
 | `--until TEXT` | ISO-8601 | _none_ | Upper bound on `created_at`. |
 | `--limit INTEGER` | int | `50` | Max rows. |
 | `--json` | flag | off | Emit one JSON object per line (for piping to `jq` / scripts). |
-| `--requestor TEXT` | str | `CEREFOX_REQUESTOR_NAME` or `user` | Identity recorded in the usage log. |
+| `--author TEXT` (`-a`) | str | `CEREFOX_REQUESTOR_NAME`, then `CEREFOX_AUTHOR_NAME`, else `unknown` | Your name (agent or user), recorded in the usage log. `--requestor` (`-r`) still works as a hidden alias (v1.13.2). |
 
 **Examples**:
 ```bash
@@ -791,7 +791,7 @@ The CLI reads its own runtime config from environment (or `.env`). See [`configu
 |---|---|---|
 | `CEREFOX_AUTHOR_NAME` | `unknown` | Default for `--author` on `ingest` / `ingest-dir`. |
 | `CEREFOX_AUTHOR_TYPE` | `user` | Default for `--author-type`. |
-| `CEREFOX_REQUESTOR_NAME` | `user` | Default for `--requestor` on read commands. |
+| `CEREFOX_REQUESTOR_NAME` | `user` | Default for `--author` on read commands (falls back to `CEREFOX_AUTHOR_NAME`). |
 
 Precedence: **CLI flag > env var > built-in default**.
 
@@ -811,18 +811,18 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --requestor <name>` |
+| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --author <name>` |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type <t>` |
 | `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>"` (same flags) |
-| `cerefox_get_document(document_id, version_id, outline, author)` | `cerefox document get <id> --version-id <vid> --outline --requestor <name>` |
-| `cerefox_insert(document_id, text, position, anchor_heading, section_part, expected_content_hash, author)` | `cerefox document insert <id> -t <text\|-\|@file> -p <position> -a <anchor> --section-part <part> --expected-hash <hash> --requestor <name>` |
-| `cerefox_edit(document_id, operations, expected_content_hash, author)` | `cerefox document edit-parts <id> -o <json\|-\|@file> --expected-hash <hash> --requestor <name>` |
-| `cerefox_list_versions(document_id, author)` | `cerefox document version list <id> --requestor <name>` |
-| `cerefox_list_projects(author)` | `cerefox project list --requestor <name>` |
+| `cerefox_get_document(document_id, version_id, outline, author)` | `cerefox document get <id> --version-id <vid> --outline --author <name>` |
+| `cerefox_insert(document_id, text, position, anchor_heading, section_part, expected_content_hash, author)` | `cerefox document insert <id> -t <text\|-\|@file> -p <position> -a <anchor> --section-part <part> --expected-hash <hash> --author <name>` |
+| `cerefox_edit(document_id, operations, expected_content_hash, author)` | `cerefox document edit-parts <id> -o <json\|-\|@file> --expected-hash <hash> --author <name>` |
+| `cerefox_list_versions(document_id, author)` | `cerefox document version list <id> --author <name>` |
+| `cerefox_list_projects(author)` | `cerefox project list --author <name>` |
 | `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <id> <name...> --author <a> --author-type <t>` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
-| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, author)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
-| `cerefox_get_audit_log(document_id, by_author, operation, since, until, limit, author)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --requestor <name>` |
+| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, author)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --author <name>` |
+| `cerefox_get_audit_log(document_id, by_author, operation, since, until, limit, author)` | `cerefox audit list --document-id <id> --by-author <a> --operation <op> --since <iso> --until <iso> --limit N --author <name>` |
 | `cerefox_set_document_metadata(document_id, metadata, replace, author)` | `cerefox document set-metadata <id> --set key=value` (also `--remove key`, `--json '<json>'`, `--replace`) |
 | `cerefox_delete_document(document_id, expected_content_hash, reason, author)` | `cerefox document delete <id> --reason <text> --author <a> --author-type <t> --yes` (confirms interactively instead of requiring the hash) |
 | `cerefox_restore_document(document_id, reason, author)` | `cerefox document restore <id> --reason <text> --author <a> --author-type <t>` |

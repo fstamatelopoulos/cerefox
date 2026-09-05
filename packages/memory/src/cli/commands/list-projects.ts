@@ -14,6 +14,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
+import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface ProjectRow {
   id: string;
@@ -22,7 +23,7 @@ interface ProjectRow {
   created_at?: string;
 }
 
-async function action(options: { requestor?: string; json?: boolean }): Promise<void> {
+async function action(options: { author?: string; requestor?: string; json?: boolean }): Promise<void> {
   const client = getClient();
   const { data, error } = await client.raw
     .from("cerefox_projects")
@@ -37,7 +38,7 @@ async function action(options: { requestor?: string; json?: boolean }): Promise<
   }
 
   // Best-effort usage log (don't block on it).
-  const requestor = resolveRequestor(options.requestor);
+  const requestor = resolveRequestor(options.author ?? options.requestor);
   client.raw
     .rpc("cerefox_log_usage", {
       p_operation: "list_projects",
@@ -72,7 +73,8 @@ export function registerListProjects(program: Command): void {
   program
     .command("list-projects")
     .description("List all projects in the knowledge base.")
-    .option("-r, --requestor <name>", "Agent / user name (usage log).")
+    .addOption(authorReadOption())
+    .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);
 }

@@ -21,6 +21,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import { getClient } from "../util/client.ts";
+import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface MetadataSearchRow {
   document_id: string;
@@ -47,6 +48,7 @@ async function action(options: {
   includeContent?: boolean;
   limit?: string;
   maxBytes?: string;
+  author?: string;
   requestor?: string;
   json?: boolean;
 }): Promise<void> {
@@ -100,7 +102,7 @@ async function action(options: {
     throw systemError("cerefox_metadata_search: RPC returned no data.");
   }
 
-  const requestor = resolveRequestor(options.requestor);
+  const requestor = resolveRequestor(options.author ?? options.requestor);
   client.raw
     .rpc("cerefox_log_usage", {
       p_operation: "metadata_search",
@@ -165,7 +167,8 @@ export function registerMetadataSearch(program: Command): void {
     .option("--include-content", "Include full document text in results.")
     .option("-l, --limit <n>", "Maximum docs to return.", "10")
     .option("--max-bytes <n>", "Response size budget in bytes (with --include-content).", "200000")
-    .option("-r, --requestor <name>", "Agent / user name (usage log).")
+    .addOption(authorReadOption())
+    .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);
 }

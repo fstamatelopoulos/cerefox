@@ -113,30 +113,30 @@ metadata_search(metadata_filter={"type": "decision-log"}, updated_since="2026-03
 
 If `cerefox_search` is not in your tool list, your user has likely installed the Cerefox CLI. The canonical invocation is plain **`cerefox <subcommand>`** (the TypeScript CLI, installed via `npm install -g @cerefox/memory`). It uses a resource-verb shape (`cerefox document get`, `cerefox project list`, …).
 
-Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md). CLI flag names match MCP parameter names exactly (e.g. `metadata_filter` ↔ `--metadata-filter`); common flags also have single-letter short forms (`-f`, `-p`, `-c`, `-m`, `-u`, `-a`, `-r`). Use the canonical long name (what `--help` shows) or its short form — there are no long-form aliases like `--filter` or `--count`.
+Same operations, same conventions. Full reference: [`docs/guides/cli.md`](docs/guides/cli.md). CLI flag names match MCP parameter names exactly (e.g. `metadata_filter` ↔ `--metadata-filter`); common flags also have single-letter short forms (`-f`, `-p`, `-c`, `-m`, `-u`, `-a`). Use the canonical long name (what `--help` shows) or its short form — there are no long-form aliases like `--filter` or `--count`.
 
 | MCP tool | CLI |
 |---|---|
-| `cerefox_search` | `cerefox search "<q>" --requestor "<your-name>"` |
+| `cerefox_search` | `cerefox search "<q>" --author "<your-name>"` |
 | `cerefox_ingest` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>" --author "<your-name>" --author-type agent` |
 | `cerefox_ingest` (update by ID) | `printf '...' \| cerefox document ingest --paste --title "<t>" --document-id "<uuid>" --expected-content-hash "<hash>" --author "<your-name>" --author-type agent` |
-| `cerefox_get_document` | `cerefox document get <id> --version-id <vid> --requestor "<your-name>"` |
-| `cerefox_list_versions` | `cerefox document version list <id> --requestor "<your-name>"` |
-| `cerefox_list_projects` | `cerefox project list --requestor "<your-name>"` |
+| `cerefox_get_document` | `cerefox document get <id> --version-id <vid> --author "<your-name>"` |
+| `cerefox_list_versions` | `cerefox document version list <id> --author "<your-name>"` |
+| `cerefox_list_projects` | `cerefox project list --author "<your-name>"` |
 | `cerefox_list_metadata_keys` | `cerefox metadata keys` |
-| `cerefox_insert` | `cerefox document insert <id> -t "<text>" -p <position> -a "<anchor-heading>" -e "<hash>" --requestor "<your-name>" --author-type agent` |
-| `cerefox_edit` | `cerefox document edit-parts <id> --operations '<json>' -e "<hash>" --requestor "<your-name>" --author-type agent` |
+| `cerefox_insert` | `cerefox document insert <id> -t "<text>" -p <position> -a "<anchor-heading>" -e "<hash>" --author "<your-name>" --author-type agent` |
+| `cerefox_edit` | `cerefox document edit-parts <id> --operations '<json>' -e "<hash>" --author "<your-name>" --author-type agent` |
 | `cerefox_delete_document` | `cerefox document delete <id> --reason "<why>" --author "<your-name>" --author-type agent --yes` (confirms interactively instead of requiring the hash) |
 | `cerefox_restore_document` | `cerefox document restore <id> --reason "<why>" --author "<your-name>" --author-type agent` |
-| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --requestor "<your-name>"` (list a project: `cerefox document list --project <name>`) |
+| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --author "<your-name>"` (list a project: `cerefox document list --project <name>`) |
 | `cerefox_set_document_metadata` | `cerefox document set-metadata <id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects` | `cerefox document set-projects <id> <name...> --author "<your-name>" --author-type agent` (or `--clear` to remove all) |
-| `cerefox_get_audit_log` | `cerefox audit list --requestor "<your-name>"` (add `--json` for scripted access) |
+| `cerefox_get_audit_log` | `cerefox audit list --author "<your-name>"` (add `--json` for scripted access) |
 | `cerefox_get_help` | `cerefox guides show agent-quick-reference` (or `cerefox guides list` for the full bundled-docs index) |
 
 **Set identity on every call**, exactly as you would on MCP:
 - Writes (`document ingest`, `document ingest-dir`): `--author "<your-name>" --author-type agent`
-- Reads: `--requestor "<your-name>"`
+- Reads: `--author "<your-name>"` (the same flag; `--requestor` still works as a hidden alias)
 
 Or have your user set `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` in their `.env` to apply defaults once.
 

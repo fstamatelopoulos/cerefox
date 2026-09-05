@@ -28,6 +28,19 @@
 ---
 ## Current Focus
 
+**2026-09-05 — v1.13.2 IN PROGRESS** (branch
+`fix/identity-author-everywhere`, #244): the caller-identity name is uniform on
+the last two surfaces. The CLI takes `--author <name>` on every command, reads
+included (`--requestor` a hidden alias; `audit list` filters with
+`--by-author`), through one helper in `cli/util/identity-flags.ts`. The eight
+primitive Edge Functions read `author` (then `requestor`) via the shared
+`callerIdentity()`; `cerefox-get-audit-log` filters with `by_author`. GPT
+Actions OpenAPI block → 4.0.0. No schema change; EF redeploy is part of the
+upgrade. Tests: CLI help surface (smoke), parity test, EF live suite gains the
+`by_author` negative case. Next: staging EF deploy + live EF suite + package
+suite, PR, review, maintainer cuts 1.13.2. Detail:
+[iteration 44](plans/iteration-44-review-workflow-toggle.md) (v1.13.2 block).
+
 **2026-09-04 — v1.13.1 SHIPPED** (PR #243, squash `a92c151`; npm + ghcr
 published; **verified on staging**: client 1.13.1, schema 0.16.1, EF v1.13.1,
 package suite 303 pass / 2 skip / 0 fail with the flag ON and OFF, Playwright

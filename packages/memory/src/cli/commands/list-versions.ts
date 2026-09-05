@@ -16,6 +16,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
+import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface VersionRow {
   version_id: string;
@@ -29,7 +30,7 @@ interface VersionRow {
 
 async function action(
   documentId: string,
-  options: { requestor?: string; json?: boolean },
+  options: { author?: string; requestor?: string; json?: boolean },
 ): Promise<void> {
   const client = getClient();
   const data = await client.rpc<VersionRow[]>("cerefox_list_document_versions", {
@@ -55,7 +56,7 @@ async function action(
     }
   }
 
-  const requestor = resolveRequestor(options.requestor);
+  const requestor = resolveRequestor(options.author ?? options.requestor);
   client.raw
     .rpc("cerefox_log_usage", {
       p_operation: "list_versions",
@@ -93,7 +94,8 @@ export function registerListVersions(program: Command): void {
     .command("list-versions")
     .description("List archived versions of a document.")
     .argument("<document-id>", "UUID of the document.")
-    .option("-r, --requestor <name>", "Agent / user name (usage log).")
+    .addOption(authorReadOption())
+    .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);
 }

@@ -18,6 +18,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
+import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
 
 interface AuditRow {
   id: string;
@@ -35,11 +36,12 @@ interface AuditRow {
 
 async function action(options: {
   documentId?: string;
-  author?: string;
+  byAuthor?: string;
   operation?: string;
   since?: string;
   until?: string;
   limit?: string;
+  author?: string;
   requestor?: string;
   json?: boolean;
 }): Promise<void> {
@@ -48,7 +50,7 @@ async function action(options: {
 
   const data = await client.rpc<AuditRow[]>("cerefox_list_audit_entries", {
     p_document_id: options.documentId ?? null,
-    p_author: options.author ?? null,
+    p_author: options.byAuthor ?? null,
     p_operation: options.operation ?? null,
     p_since: options.since ?? null,
     p_until: options.until ?? null,
@@ -62,7 +64,7 @@ async function action(options: {
     );
   }
 
-  const requestor = resolveRequestor(options.requestor);
+  const requestor = resolveRequestor(options.author ?? options.requestor);
   client.raw
     .rpc("cerefox_log_usage", {
       p_operation: "get_audit_log",
@@ -101,7 +103,7 @@ export function registerGetAuditLog(program: Command): void {
     .command("get-audit-log")
     .description("Query the audit log with optional filters.")
     .option("-d, --document-id <uuid>", "Filter by document.")
-    .option("-a, --author <name>", "Filter by author.")
+    .option("--by-author <name>", "Filter: only entries written by this author name.")
     .option(
       "-o, --operation <type>",
       `Filter by operation: ${AUDIT_OPERATIONS.join(", ")}.`,
@@ -109,7 +111,8 @@ export function registerGetAuditLog(program: Command): void {
     .option("--since <iso>", "Lower-bound ISO timestamp.")
     .option("--until <iso>", "Upper-bound ISO timestamp.")
     .option("-l, --limit <n>", "Maximum entries (max 200).", "50")
-    .option("-r, --requestor <name>", "Agent / user name (usage log).")
+    .addOption(authorReadOption())
+    .addOption(requestorAliasOption())
     .option("--json", "Emit machine-readable JSON.")
     .action(action);
 }

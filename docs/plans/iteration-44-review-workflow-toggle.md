@@ -42,6 +42,27 @@ bodies that GPT Actions use, so the OpenAPI block did not change. Guides,
 quick reference (rebundled into `cerefox_get_help`) and the parity test's
 `NOT_FLAGS` updated.
 
+**v1.13.2 (2026-09-05, #244, branch `fix/identity-author-everywhere`) —
+the same rule on the CLI and the primitive Edge Functions.** The maintainer
+read the 1.13.1 close-out ("deliberately untouched: CLI flags and primitive
+EF bodies") and asked, fairly, how "one identity name" could be true on one
+surface out of three. It could not. The rename is not breaking when it ships
+with an alias, which is exactly how MCP did it, so: every CLI command takes
+`--author <name>` (`packages/memory/src/cli/util/identity-flags.ts` adds the
+visible `-a, --author` and a hidden `-r, --requestor` to the eight read
+commands; `document insert` keeps `-a` for its anchor and takes the long
+form); `audit list` filters with `--by-author`. The eight primitive Edge
+Functions import `callerIdentity()` from `_shared/mcp-tools/identity.ts`
+(author, then requestor; blank = absent) for both the enforcement check and
+the usage-log row; `cerefox-ingest` resolves its `author` the same way;
+`cerefox-get-audit-log` filters on `by_author`. GPT Actions OpenAPI block
+3.4.1 → **4.0.0** (the filter rename is the breaking part for a Custom GPT).
+No schema change, `minSchema` unchanged, EF redeploy required. Tests: three
+CLI help-surface tests in `cli-smoke` (every read shows `--author`, none shows
+`--requestor`, the alias still parses; `--by-author` on audit list), the
+parity test asserts the helper rather than a literal flag, the live EF suite
+gains a `by_author` negative case, the acceptance harness tags with `author`.
+
 Closes [#241](https://github.com/fstamatelopoulos/cerefox/issues/241) (the
 toggle), [#240](https://github.com/fstamatelopoulos/cerefox/issues/240)
 (filtered search under-returned),
