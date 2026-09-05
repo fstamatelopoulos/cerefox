@@ -1106,9 +1106,12 @@ and an agent following "author on writes" found no `author` on
 `cerefox_insert`/`cerefox_edit` and passed nothing. `callerIdentity()` in
 `_shared/mcp-tools/identity.ts` reads `author`, then `requestor` as a silent
 alias; schemas list `author` only. On `cerefox_get_audit_log` the entries
-filter is `by_author` (it was `author`), so the rule has no exception. The CLI
-keeps `--author` (writes) / `--requestor` (reads) and the primitive Edge
-Functions keep their body fields; those are separate surfaces.
+filter is `by_author` (it was `author`), so the rule has no exception. v1.13.2
+(#244) extended it to the other two surfaces: the CLI takes `--author` on every
+command (`--requestor` a hidden alias; `audit list` filters with `--by-author`)
+and the primitive Edge Functions read `author` from every body through the
+same `callerIdentity()` (`requestor` an alias; `by_author` on
+`cerefox-get-audit-log`).
 
 ⚑ **Dormant by default.** The four relation tools (iteration 29) are hidden from
 every agent until an operator opts in with `cerefox config set relations_enabled
@@ -1124,8 +1127,8 @@ exposed identically over both transports
 permanent purge stays web-UI-only by design (see
 `docs/guides/access-paths.md` → Destructive operations and the trust model).
 
-All read tools accept an optional `requestor` parameter for usage log attribution.
-The `cerefox_ingest` tool uses `author` for the same purpose on writes.
+Every tool accepts an optional `author` parameter for usage-log (and, on
+writes, audit-log) attribution; see "Caller identity" above.
 
 **How `cerefox_search` works internally:**
 1. Embeds the query with `CloudEmbedder` (OpenAI `text-embedding-3-small`)

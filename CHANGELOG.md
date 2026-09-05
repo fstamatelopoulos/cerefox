@@ -9,7 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **One identity name on the CLI and the primitive Edge Functions too** (#244).
+  v1.13.1 collapsed the caller-identity parameter to `author` on every MCP
+  tool; the other two surfaces still carried the old split. Now the CLI takes
+  `--author <name>` on every command, reads included (`--requestor` keeps
+  working as a hidden alias, so nothing that ran yesterday stops), and every
+  primitive Edge Function reads `author` from the request body, with
+  `requestor` accepted as an alias. The one real change, the same trade as on
+  MCP: the audit-log **filter** formerly called `author` is now `by_author`,
+  on `cerefox audit list` (`--by-author`) and on `cerefox-get-audit-log`. A
+  script that filtered with `--author X` / `{"author": "X"}` now gets every
+  entry (logged as X) until it switches. The GPT Actions OpenAPI block is at
+  **4.0.0** for that rename; redeploying the Edge Functions is part of the
+  upgrade. `author_type` and the `require_requestor_identity` config key are
+  unchanged.
 
 ---
 

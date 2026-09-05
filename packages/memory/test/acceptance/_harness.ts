@@ -133,7 +133,7 @@ export class Acceptance {
   async mcp(name: string, args: Record<string, unknown>): Promise<{ isError: boolean; text: string }> {
     const m = await this.rpc("tools/call", {
       name,
-      arguments: { requestor: "acceptance", ...args },
+      arguments: { author: "acceptance", ...args },
     });
     const result = m.result as { isError?: boolean; content?: Array<{ text?: string }> } | undefined;
     return { isError: result?.isError ?? false, text: result?.content?.[0]?.text ?? JSON.stringify(m) };

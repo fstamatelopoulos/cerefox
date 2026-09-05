@@ -18,7 +18,7 @@
  *
  * So this guards the flag-declared surface specifically. It is deliberately
  * narrow: a general "every MCP parameter needs a CLI flag" rule would be wrong
- * (`requestor` is shared, `document_id` is a positional argument), and a rule
+ * (`author` is shared, `document_id` is a positional argument), and a rule
  * with false positives is one people learn to suppress.
  *
  * Pure text analysis. No network.
@@ -39,9 +39,9 @@ const CLI_SRC = readFileSync(
 const NOT_FLAGS = new Set([
   // Positional `<document-id>` on the CLI.
   "document_id",
-  // Present, but spelled `-r, --requestor`; asserted separately below. (The
-  // MCP schema names the caller `author` since v1.13.1; the CLI read flag
-  // kept its spelling — a rename there would be a breaking change.)
+  // Present on every read command as `-a, --author` (v1.13.2, #244), added
+  // through the shared identity-flags helper rather than a literal `--author`
+  // in this file; asserted separately below. `requestor` is its hidden alias.
   "author",
   "requestor",
 ]);
@@ -130,8 +130,12 @@ describe("get_document read modes reach both surfaces (#201)", () => {
     expect(params).toContain("outline");
   });
 
-  test("requestor is present under its own spelling", () => {
-    expect(CLI_SRC).toContain("--requestor");
+  test("the identity flag comes from the shared helper (author, requestor hidden)", () => {
+    // One name on every surface (#244): the read commands do not declare the
+    // flag by hand, they add the same Option the other reads add.
+    expect(CLI_SRC).toContain("authorReadOption()");
+    expect(CLI_SRC).toContain("requestorAliasOption()");
+    expect(CLI_SRC).not.toContain("--requestor");
   });
 
   test("the CLI refuses the same combinations the MCP tool refuses", () => {

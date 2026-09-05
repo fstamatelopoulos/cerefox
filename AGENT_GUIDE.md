@@ -602,17 +602,17 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (also `--mode`, `--alpha`, `--min-score`, `--only-metadata` — CLI-only) |
+| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (also `--mode`, `--alpha`, `--min-score`, `--only-metadata` — CLI-only) |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest(...)` (paste) | `printf '%s' "<content>" \| cerefox document ingest --paste --title "<title>"` (same flags) |
-| `cerefox_get_document(document_id, version_id, author)` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
-| `cerefox_list_versions(document_id, author)` | `cerefox document version list <document-id> --requestor <name>` |
-| `cerefox_list_projects(author)` | `cerefox project list --requestor <name>` |
+| `cerefox_get_document(document_id, version_id, author)` | `cerefox document get <document-id> --version-id <vid> --author <name>` |
+| `cerefox_list_versions(document_id, author)` | `cerefox document version list <document-id> --author <name>` |
+| `cerefox_list_projects(author)` | `cerefox project list --author <name>` |
 | `cerefox_set_document_metadata(document_id, metadata, replace, author)` | `cerefox document set-metadata <document-id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects(document_id, project_names, author)` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear` to remove all) |
 | `cerefox_list_metadata_keys()` | `cerefox metadata keys` |
-| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, author)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --requestor <name>` |
-| `cerefox_get_audit_log(document_id, by_author, operation, since, until, limit, author)` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
+| `cerefox_metadata_search(metadata_filter, project_name, updated_since, created_since, limit, include_content, author)` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --updated-since <iso> --created-since <iso> --limit N --include-content --author <name>` |
+| `cerefox_get_audit_log(document_id, by_author, operation, since, until, limit, author)` | `cerefox audit list --document-id <id> --by-author <a> --operation <op> --since <iso> --until <iso> --limit N --json --author <name>` |
 | `cerefox_delete_document(document_id, expected_content_hash, reason, author)` | `cerefox document delete <document-id> --reason <text> --author <a> --author-type user\|agent --yes` (the CLI confirms interactively instead of requiring the hash) |
 | `cerefox_restore_document(document_id, reason, author)` | `cerefox document restore <document-id> --reason <text> --author <a> --author-type user\|agent` |
 
@@ -623,7 +623,7 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 You **MUST** identify yourself on every CLI invocation, exactly as you do via MCP:
 
 - **Writes** (`document ingest`, `document ingest-dir`): set `--author "<your-agent-name>" --author-type "agent"`. The `author_type=agent` value marks the write `pending_review` (governance signal), matching the MCP path; the store's review-workflow flag only decides whether anyone sees that status. Attribution is recorded either way.
-- **Reads** (`search`, `document get`, `document version list`, `project list`, `metadata search`, `audit list`): set `--requestor "<your-agent-name>"`. (The CLI kept the `--requestor` spelling for reads; on MCP the same value is the `author` parameter since v1.13.1.)
+- **Reads** (`search`, `document get`, `document version list`, `project list`, `metadata search`, `audit list`): set `--author "<your-agent-name>"`, the same flag as on writes (v1.13.2; `--requestor` still works as a hidden alias).
 
 Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `CEREFOX_REQUESTOR_NAME` in their `.env` once. The CLI picks them up automatically — see [`docs/guides/cli.md`](docs/guides/cli.md) for the precedence rules.
 
@@ -631,7 +631,7 @@ Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `C
 
 1. **CLI output is human-formatted by default.** In the default `docs` mode, `cerefox search` prints, per match, a header line `## <title> [id: <uuid>] · score · N chunks · M chars · partial|full` followed by the document body. Grab the document ID from the `[id: <uuid>]` tag, or use `cerefox document list` for a clean tabular listing. For structured output, `cerefox search --json` and `cerefox audit list --json` emit machine-readable JSON (the latter one object per line, ideal for `jq`). `cerefox document get <id>` prints raw Markdown to stdout.
 
-2. **Every invocation is independent.** With MCP, your tool framework can pass `requestor` once per session. With the CLI, every command is a separate process — pass `--requestor` / `--author` / `--author-type` on every relevant invocation, or set the env-var defaults once at the start.
+2. **Every invocation is independent.** With MCP, your tool framework can pass `author` once per session. With the CLI, every command is a separate process — pass `--author` / `--author-type` on every relevant invocation, or set the env-var defaults once at the start.
 
 3. **Errors come back on stderr with a non-zero exit code.** Check both — a successful command prints results on stdout and exits 0; a failure prints to stderr and exits non-zero.
 
@@ -639,14 +639,14 @@ Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `C
 
 **Search before answering:**
 ```bash
-cerefox search "OAuth design notes" --match-count 5 --requestor "claude-code"
+cerefox search "OAuth design notes" --match-count 5 --author "claude-code"
 ```
 
 **Search then read full content of a hit:**
 ```bash
-cerefox search "OAuth design" --match-count 3 --requestor "claude-code"
+cerefox search "OAuth design" --match-count 3 --author "claude-code"
 # Note the [n] entries. Pick one and grab the doc id from `cerefox document list` or the result preview.
-cerefox document get <document-id> --requestor "claude-code"
+cerefox document get <document-id> --author "claude-code"
 ```
 
 **Ingest a note (agent identity):**
@@ -662,10 +662,10 @@ printf '# Title\n\nBody markdown with H2s for chunking.\n' \
 **ID-based update (preferred — deterministic):**
 ```bash
 # Step 1: search and note the [id: abc12345-...] in the result
-cerefox search "the exact doc" --match-count 1 --requestor "claude-code"
+cerefox search "the exact doc" --match-count 1 --author "claude-code"
 
 # Step 2: read it — the header shows `content_hash:` (the concurrency token)
-cerefox document get "abc12345-..." --requestor "claude-code"
+cerefox document get "abc12345-..." --author "claude-code"
 
 # Step 3: update by ID, proving freshness with the hash from step 2
 printf '...new content...' \
@@ -687,7 +687,7 @@ printf '...new content...' \
 
 **Audit-log access (scripted, JSON):**
 ```bash
-cerefox audit list --json --limit 1000 --requestor "claude-code" \
+cerefox audit list --json --limit 1000 --author "claude-code" \
   | jq 'select(.author_type == "agent")'
 ```
 

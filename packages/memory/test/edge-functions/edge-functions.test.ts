@@ -72,11 +72,12 @@ async function invoke(fn: string, body: Record<string, unknown> = {}): Promise<I
       apikey: accessToken,
       "Content-Type": "application/json",
     },
-    // Tag every call with a `requestor` so usage-log rows from the test suite
+    // Tag every call with an `author` so usage-log rows from the test suite
     // are attributable to "e2e-test" rather than NULL → "Unknown" in the
-    // Analytics word cloud. The primitive EFs log `body.requestor ?? null`.
+    // Analytics word cloud. Since v1.13.2 (#244) the primitive EFs read
+    // `author` (then `requestor` as the alias) through callerIdentity().
     // Individual bodies can still override it.
-    body: JSON.stringify({ requestor: "e2e-test", ...body }),
+    body: JSON.stringify({ author: "e2e-test", ...body }),
   });
   let parsed: unknown = null;
   try {
@@ -325,6 +326,34 @@ describe("Edge Functions (live HTTP)", () => {
         limit: 50,
       });
       expect(Array.isArray(entries)).toBe(true);
+    });
+
+    liveTest("by_author is the entries filter; author is the caller (#244)", async () => {
+      // The one behaviour change of v1.13.2 on this surface, proven with a
+      // negative case: a name that wrote nothing gets nothing back, while the
+      // name that did write gets its entry, whatever `author` (the caller's
+      // identity, tagged by invoke()) says.
+      const title = uniqueTitle("Audit ByAuthor");
+      const r = await invokeOk("cerefox-ingest", {
+        title,
+        content: uniqueContent(),
+        author: "e2e-ef-test",
+        author_type: "agent",
+      });
+      track(r.document_id);
+      const mine = (await invokeOk("cerefox-get-audit-log", {
+        document_id: r.document_id,
+        by_author: "e2e-ef-test",
+        limit: 50,
+      })) as Array<{ author: string }>;
+      expect(mine.length).toBeGreaterThanOrEqual(1);
+      for (const e of mine) expect(e.author).toBe("e2e-ef-test");
+      const nobody = (await invokeOk("cerefox-get-audit-log", {
+        document_id: r.document_id,
+        by_author: "e2e-ef-test-nobody",
+        limit: 50,
+      })) as unknown[];
+      expect(nobody).toEqual([]);
     });
   });
 

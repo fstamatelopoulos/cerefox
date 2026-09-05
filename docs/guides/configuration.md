@@ -488,8 +488,11 @@ multi-agent setups.
 Since v1.13.1 every MCP tool takes the caller's identity as **`author`**, reads and
 writes alike; `requestor` (the pre-1.13.1 name on most tools) is still accepted as
 a silent alias. (On `cerefox_get_audit_log` the entries filter, formerly `author`,
-is now `by_author`.) The primitive Edge Functions used by GPT Actions keep their
-original body fields (`requestor` on reads, `author` on ingest).
+is now `by_author`.) Since v1.13.2 the CLI (`--author` on every command,
+`--requestor` a hidden alias, `--by-author` the audit-list filter) and the
+primitive Edge Functions used by GPT Actions (`author` in every request body,
+`requestor` an alias, `by_author` on `cerefox-get-audit-log`) follow the same
+rule, so there is one name on every surface.
 
 You can optionally enforce caller identification so that tool calls must include
 an identity. Calls without one receive a JSON-RPC `-32602` error with a helpful

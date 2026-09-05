@@ -213,6 +213,44 @@ describe("cerefox CLI smoke (built bin)", () => {
     expect(parsed.catalog.map((k) => k.key)).toEqual(parsed.keys);
   });
 
+  // v1.13.2 (#244): one identity flag on every command, reads included.
+  test("every read command takes --author and hides --requestor", () => {
+    const READS: string[][] = [
+      ["search"],
+      ["document", "get"],
+      ["document", "version", "list"],
+      ["project", "list"],
+      ["metadata", "keys"],
+      ["metadata", "search"],
+      ["audit", "list"],
+      ["document", "insert"],
+      ["document", "edit-parts"],
+    ];
+    for (const cmd of READS) {
+      const { stdout, status } = run([...cmd, "--help"]);
+      expect(status).toBe(0);
+      expect(stdout).toContain("--author <name>");
+      // Hidden, not gone: the alias still parses (next test), it is just not
+      // advertised, so a new reader learns one name.
+      expect(stdout).not.toContain("--requestor");
+    }
+  });
+
+  test("--requestor still parses as the hidden alias", () => {
+    // No DB: the command fails on the missing required options, never on an
+    // unknown flag. commander reports an unknown option before anything else.
+    const { stderr } = run(["document", "insert", "00000000-0000-0000-0000-000000000000", "--requestor", "old-script"]);
+    expect(stderr).not.toContain("unknown option");
+    expect(stderr).not.toContain("--requestor");
+  });
+
+  test("`cerefox audit list` filters with --by-author; --author is the caller", () => {
+    const { stdout, status } = run(["audit", "list", "--help"]);
+    expect(status).toBe(0);
+    expect(stdout).toContain("--by-author <name>");
+    expect(stdout).toMatch(/--author <name>\s+Your name/);
+  });
+
   test("`cerefox search --help` advertises --only-metadata", () => {
     const { stdout, status } = run(["search", "--help"]);
     expect(status).toBe(0);

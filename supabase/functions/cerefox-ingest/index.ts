@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
+import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
 import {
   ensureDocumentInProject,
@@ -52,6 +53,8 @@ interface IngestRequest {
   metadata?: Record<string, unknown>;
   update_if_exists?: boolean;
   author?: string;
+  /** Alias of `author` (#244). */
+  requestor?: string;
   author_type?: string; // 'user' | 'agent'
   // Optimistic concurrency (iter-32): REQUIRED on content updates — the
   // content_hash of the version this edit was based on. Conflict → HTTP 409.
@@ -275,7 +278,8 @@ Deno.serve(async (req: Request) => {
   // metadata: null = "not provided" — the RPC keeps existing metadata on
   // update and uses {} on create (v0.11.1; a `= {}` default here used to wipe
   // a document's tags on every content update that didn't re-pass them).
-  const { title, content, document_id = null, project_name, source = "agent", metadata = null, update_if_exists = false, author = "agent", author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
+  const { title, content, document_id = null, project_name, source = "agent", metadata = null, update_if_exists = false, author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
+  const author = callerIdentity(body as unknown as Record<string, unknown>) ?? "agent";
 
   // metadata must be a plain JSON object (or absent). A scalar/array stored in
   // the JSONB column poisons cerefox_list_metadata_keys for the whole dataset
@@ -303,10 +307,10 @@ Deno.serve(async (req: Request) => {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // Configurable requestor enforcement
+  // Configurable caller-identity enforcement: `author`, or `requestor` as the alias (#244)
   {
     const identityField = "author";
-    const identityValue = body[identityField as keyof IngestRequest] as string | undefined;
+    const identityValue = callerIdentity(body as unknown as Record<string, unknown>);
     const { data: reqConfig } = await supabase.rpc("cerefox_get_config", { p_key: "require_requestor_identity" });
     if (reqConfig === "true") {
       if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {

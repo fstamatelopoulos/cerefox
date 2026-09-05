@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
+import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
 
 /**
  * cerefox-get-document — Supabase Edge Function
@@ -67,9 +68,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Configurable requestor enforcement
-    const identityField = "requestor";
-    const identityValue = body[identityField];
+    // Configurable caller-identity enforcement: `author`, or `requestor` as the pre-1.13.2 alias (#244)
+    const identityField = "author";
+    const identityValue = callerIdentity(body as Record<string, unknown>);
     const { data: reqConfig } = await supabase.rpc("cerefox_get_config", { p_key: "require_requestor_identity" });
     if (reqConfig === "true") {
       if (!identityValue || (typeof identityValue === "string" && identityValue.trim() === "")) {
@@ -120,7 +121,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     Promise.resolve(supabase.rpc("cerefox_log_usage", {
       p_operation: "get_document",
       p_access_path: "edge-function",
-      p_requestor: body.requestor ?? null,
+      p_requestor: identityValue ?? null,
       p_document_id: document_id,
       p_result_count: 1,
     })).catch(() => {});

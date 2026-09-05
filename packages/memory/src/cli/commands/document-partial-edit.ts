@@ -25,6 +25,7 @@ import { TOOLS_BY_NAME } from "../../../../../_shared/mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../../../../../_shared/mcp-tools/types.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { getClient } from "../util/client.ts";
+import { authorReadOption, requestorAliasOption } from "../util/identity-flags.js";
 
 /** Read a value given literally, or from a file, or from stdin when `-`. */
 function resolveText(value: string | undefined, what: string): string {
@@ -66,6 +67,7 @@ interface InsertOptions {
   anchorHeading?: string;
   sectionPart?: string;
   expectedContentHash?: string;
+  author?: string;
   requestor?: string;
   authorType?: string;
 }
@@ -89,7 +91,8 @@ export function registerDocumentInsert(program: Command): void {
       "-e, --expected-content-hash <hash>",
       "content_hash you are basing this on (cerefox document get --outline shows it)",
     )
-    .option("--requestor <name>", "Recorded in the usage log", "cli-user")
+    .addOption(authorReadOption({ short: false }))
+    .addOption(requestorAliasOption())
     .option(
       "--author-type <type>",
       "user (default for the CLI) or agent, when scripting on an agent's behalf",
@@ -103,7 +106,7 @@ export function registerDocumentInsert(program: Command): void {
         ...(options.anchorHeading ? { anchor_heading: options.anchorHeading } : {}),
         ...(options.sectionPart ? { section_part: options.sectionPart } : {}),
         expected_content_hash: options.expectedContentHash,
-        requestor: options.requestor,
+        author: options.author ?? options.requestor ?? "cli-user",
         ...(options.authorType ? { author_type: options.authorType } : {}),
       });
     });
@@ -112,6 +115,7 @@ export function registerDocumentInsert(program: Command): void {
 interface EditPartsOptions {
   operations?: string;
   expectedContentHash?: string;
+  author?: string;
   requestor?: string;
   authorType?: string;
 }
@@ -125,7 +129,8 @@ export function registerDocumentEditParts(program: Command): void {
       "JSON array of operations. Use '-' for stdin or '@path' for a file.",
     )
     .requiredOption("-e, --expected-content-hash <hash>", "content_hash you are basing these edits on")
-    .option("--requestor <name>", "Recorded in the usage log", "cli-user")
+    .addOption(authorReadOption({ short: false }))
+    .addOption(requestorAliasOption())
     .option(
       "--author-type <type>",
       "user (default for the CLI) or agent, when scripting on an agent's behalf",
@@ -148,7 +153,7 @@ export function registerDocumentEditParts(program: Command): void {
         document_id: documentId,
         operations,
         expected_content_hash: options.expectedContentHash,
-        requestor: options.requestor,
+        author: options.author ?? options.requestor ?? "cli-user",
         ...(options.authorType ? { author_type: options.authorType } : {}),
       });
     });

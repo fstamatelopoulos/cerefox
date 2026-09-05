@@ -638,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 3.4.1
+  version: 4.0.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -698,11 +698,12 @@ paths:
                     Whole results are dropped (never truncated mid-document) until
                     the budget is met; the response sets `truncated: true` when this
                     happens. Advanced; leave unset for the default.
-                requestor:
+                author:
                   type: string
                   description: >
-                    Name of the agent making this request (e.g., "ChatGPT").
-                    Recorded in the usage log for attribution. Optional.
+                    Your name (agent or user), e.g. "ChatGPT". Recorded in the
+                    usage log for attribution. Optional. `requestor` is still
+                    accepted as an alias.
       responses:
         '200':
           description: >
@@ -847,9 +848,11 @@ paths:
             schema:
               type: object
               properties:
-                requestor:
+                author:
                   type: string
-                  description: Name of the agent making this request. Optional.
+                  description: >
+                    Your name (agent or user). Recorded in the usage log.
+                    Optional. `requestor` is still accepted as an alias.
       responses:
         '200':
           description: Array of metadata keys with doc_count and example_values
@@ -875,9 +878,11 @@ paths:
                   description: >
                     UUID of a specific archived version to retrieve. Omit (or pass null)
                     for the current version. Version UUIDs are returned by listVersions.
-                requestor:
+                author:
                   type: string
-                  description: Name of the agent making this request. Optional.
+                  description: >
+                    Your name (agent or user). Recorded in the usage log.
+                    Optional. `requestor` is still accepted as an alias.
       responses:
         '200':
           description: >
@@ -905,9 +910,11 @@ paths:
                 document_id:
                   type: string
                   description: UUID of the document whose version history to list
-                requestor:
+                author:
                   type: string
-                  description: Name of the agent making this request. Optional.
+                  description: >
+                    Your name (agent or user). Recorded in the usage log.
+                    Optional. `requestor` is still accepted as an alias.
       responses:
         '200':
           description: >
@@ -929,9 +936,12 @@ paths:
                 document_id:
                   type: string
                   description: Filter by document UUID (optional)
-                author:
+                by_author:
                   type: string
-                  description: Filter by author name (optional)
+                  description: >
+                    Filter: only entries written by this author name (optional).
+                    Was `author` before v1.13.2; `author` is now the caller's
+                    identity here, as on every other operation.
                 operation:
                   type: string
                   description: >
@@ -949,9 +959,11 @@ paths:
                   type: integer
                   default: 50
                   description: Max entries to return (max 200)
-                requestor:
+                author:
                   type: string
-                  description: Name of the agent making this request. Optional.
+                  description: >
+                    Your name (agent or user). Recorded in the usage log.
+                    Optional. `requestor` is still accepted as an alias.
       responses:
         '200':
           description: >
@@ -969,9 +981,11 @@ paths:
             schema:
               type: object
               properties:
-                requestor:
+                author:
                   type: string
-                  description: Name of the agent making this request. Optional.
+                  description: >
+                    Your name (agent or user). Recorded in the usage log.
+                    Optional. `requestor` is still accepted as an alias.
       responses:
         '200':
           description: >
@@ -1028,9 +1042,11 @@ paths:
                   description: >
                     Response size budget in bytes when include_content is true
                     (whole results dropped to fit). Advanced; leave unset for the default.
-                requestor:
+                author:
                   type: string
-                  description: Name of the agent making this request. Optional.
+                  description: >
+                    Your name (agent or user). Recorded in the usage log.
+                    Optional. `requestor` is still accepted as an alias.
       responses:
         '200':
           description: >
@@ -1258,7 +1274,7 @@ You have access to a personal Cerefox knowledge base via a local CLI.
 Identify yourself on every call:
 - Writes (document ingest, document ingest-dir): pass --author "<your-name>" --author-type agent
 - Reads (search, document get, document version list, project list,
-  metadata search, audit list): pass --requestor "<your-name>"
+  metadata search, audit list): pass --author "<your-name>" (the same flag as on writes)
 
 When answering questions, search Cerefox first. When the user asks you to
 remember something, ingest it. Cite document titles for every claim drawn
@@ -1271,17 +1287,17 @@ The agent docs are written around MCP tool names. **CLI flag names match MCP par
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --requestor <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`, `--only-metadata`) |
+| `cerefox_search` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`, `--only-metadata`) |
 | `cerefox_ingest` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest` (paste) | `printf '...' \| cerefox document ingest --paste --title "<title>"` (same flags) |
-| `cerefox_get_document` | `cerefox document get <document-id> --version-id <vid> --requestor <name>` |
-| `cerefox_list_versions` | `cerefox document version list <document-id> --requestor <name>` |
-| `cerefox_list_projects` | `cerefox project list --requestor <name>` |
+| `cerefox_get_document` | `cerefox document get <document-id> --version-id <vid> --author <name>` |
+| `cerefox_list_versions` | `cerefox document version list <document-id> --author <name>` |
+| `cerefox_list_projects` | `cerefox project list --author <name>` |
 | `cerefox_set_document_metadata` | `cerefox document set-metadata <document-id> --set key=value` (also `--remove key`, `--json '{...}'`, `--replace`) |
 | `cerefox_set_document_projects` | `cerefox document set-projects <document-id> <name...> --author <a> --author-type user\|agent` (or `--clear`) |
 | `cerefox_list_metadata_keys` | `cerefox metadata keys` |
-| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --requestor <name>` |
-| `cerefox_get_audit_log` | `cerefox audit list --document-id <id> --author <a> --operation <op> --since <iso> --until <iso> --limit N --json --requestor <name>` |
+| `cerefox_metadata_search` | `cerefox metadata search --metadata-filter '<json>' --project-name <n> --author <name>` |
+| `cerefox_get_audit_log` | `cerefox audit list --document-id <id> --by-author <a> --operation <op> --since <iso> --until <iso> --limit N --json --author <name>` |
 
 > CLI verbs with no MCP equivalent: `cerefox document edit`, `cerefox project create` / `cerefox project edit`, `cerefox config list`.
 
@@ -1301,7 +1317,7 @@ After pointing your agent at the repo, ask it:
 ### Caveats
 
 - **Privilege level**: the CLI uses the **service-role key** (`CEREFOX_SUPABASE_KEY`), which bypasses Row Level Security. An agent with Bash access has the same full read/write power you do. Only enable Path C for agents you trust to act on your behalf — the same trust level you'd grant Cursor/Claude Code for editing your source code.
-- **Audit attribution**: Path C records `access_path = "cli"` in usage logs, distinct from `"local-mcp"` / `"remote-mcp"`. **Agents must set `--author <name> --author-type agent` on writes and `--requestor <name>` on reads** (or rely on `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` env vars). Without these flags, writes attribute to `"unknown"` / `"user"`, which under-reports agent activity. See the 2026-05-18 Decision Log Q2 entry for the design rationale (`author_type` is caller-declared on ambiguous channels — CLI and Edge Functions — but `access_path` is always derived from the code layer).
+- **Audit attribution**: Path C records `access_path = "cli"` in usage logs, distinct from `"local-mcp"` / `"remote-mcp"`. **Agents must set `--author <name> --author-type agent` on writes and `--author <name>` on reads** (or rely on `CEREFOX_AUTHOR_NAME` / `CEREFOX_AUTHOR_TYPE` / `CEREFOX_REQUESTOR_NAME` env vars). Without these flags, writes attribute to `"unknown"` / `"user"`, which under-reports agent activity. See the 2026-05-18 Decision Log Q2 entry for the design rationale (`author_type` is caller-declared on ambiguous channels — CLI and Edge Functions — but `access_path` is always derived from the code layer).
 - **Soft-delete and restore are reachable; permanent purge is not** — by design. `cerefox document delete` / `cerefox document restore` on the CLI, `cerefox_delete_document` / `cerefox_restore_document` over MCP (v1.7.0, #208/#210): both audited with author attribution. **Permanent purge** (irreversible) stays web-UI-only with human-in-the-loop confirmation. If an agent deletes or restores content, it should surface that to the user explicitly so they can follow it in the audit trail. See [`access-paths.md` → Destructive operations and the trust model](access-paths.md#destructive-operations-and-the-trust-model) for the full rationale and contributor guidance.
 - **Cross-doc links in content you ingest** become clickable when the user views them in the Cerefox web UI. **Always author them as `[Text](uuid)`** — the server validates these on every write (v1.7.0) and rejects links to nonexistent ids, which catches mangled UUIDs at write time. `[Text](docs/path.md)` exists for repo-ingested files; do not write title-based links (fragile, and `AGENT_GUIDE.md` says never in agent-authored content). See [`AGENT_GUIDE.md` → "Writing linkable content"](../../AGENT_GUIDE.md#writing-linkable-content) for the full set of rules.
 - **CLI install per machine**: the agent needs the `cerefox` binary installed (`npm install -g @cerefox/memory`) with a resolvable `.env`. If you skip the local install entirely, Path A-Remote or Path B is the only option.
