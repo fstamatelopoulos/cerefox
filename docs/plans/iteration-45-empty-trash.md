@@ -111,4 +111,10 @@ sweep, every document trashed more than N days ago is purged."
 the Supabase-only case and for scripts. Batches of 100 per call so a first
 sweep over a large backlog cannot hold a request. The sweep-on-list trigger
 answers the listing AFTER the sweep, so the page never shows a row that is
-about to vanish. Not built; awaiting the maintainer's pick.
+about to vanish.
+
+**Decision (maintainer, 2026-09-05): backlog, and when built, trigger on a
+document delete** (#251). "The write that adds to the trash also sweeps it":
+not elegant, but predictable, simple to build and to document, and the same
+shape as version retention. Not scheduled; the use case is harnesses with
+several roles writing and deleting frequently.
