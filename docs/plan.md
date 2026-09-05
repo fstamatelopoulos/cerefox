@@ -43,10 +43,10 @@ audit-log filter formerly called `author` is now `by_author` (the one real
 behaviour change, called out in the CHANGELOG). Found when a new agent read
 the schemas literally and concluded the partial-edit tools had no author.
 `cerefox-mcp` enforcement takes either name. CLI flags and primitive-EF
-bodies unchanged. **Pending (maintainer)**: `cerefox server deploy` on
-production (client 1.13.1 sees schema 0.16.0 / EF 1.13.0 as warnings, not
-gates), `cerefox-local upgrade` (Local is healthy at 1.13.0), then one
-combined Discord announcement for 1.13.0 + 1.13.1. A post-cut test-only
+bodies unchanged. **Deployed everywhere 2026-09-05**: production
+(`cerefox server deploy` by the maintainer; `doctor` all green, schema 0.16.1,
+EF v1.13.1), Cerefox Local (`cerefox-local upgrade`, green), staging. One
+combined 1.13.0 + 1.13.1 announcement posted to Discord. A post-cut test-only
 commit (`65b28a7`) gave the review-workflow suite's hooks the `liveTest`
 budget: its afterAll tripped bun's 5 s hook default under a full parallel
 run. Detail: [iteration 44](plans/iteration-44-review-workflow-toggle.md)

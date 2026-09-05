@@ -5,7 +5,7 @@
 Local, `doctor` green on all three). Schema **0.15.0 → 0.16.0**, migration
 0031, **`minSchema` raised to 0.16.0** (redeploy required).
 
-**v1.13.1 follow-up (2026-09-04, PR #243, squash `a92c151`; SHIPPED, verified on staging — production + Local redeploy pending):**
+**v1.13.1 follow-up (2026-09-04, PR #243, squash `a92c151`; SHIPPED; verified on staging, production and Cerefox Local, `doctor` green on all three, 2026-09-05; announced on Discord together with 1.13.0):**
 the maintainer tried the toggle on Cerefox Local and the Settings confirmation
 said every new write would land `approved` while off. That was the write-side
 rule as built, and it was not the ask: the ask was a view/hide switch with the
