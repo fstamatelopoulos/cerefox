@@ -227,6 +227,12 @@ Purge (`DELETE /documents/{id}/purge`) is irreversible and takes no token. It is
 reachable by anything that can reach the port, which is another reason the
 warning at the top of this guide is not boilerplate.
 
+**There is no bulk purge.** The web UI's "Empty trash" (v1.14.0) is a loop in
+the browser over this per-document endpoint, one call and one audit entry per
+document, with a confirmation and a Stop button in front of it. A single
+request that emptied the trash would be a footgun on a surface anything with
+the key can reach, so it was not added and should not be.
+
 ---
 
 ## Choosing between this and MCP

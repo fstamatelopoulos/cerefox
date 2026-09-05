@@ -382,3 +382,75 @@ test.describe("Settings", () => {
     expect(await resp.text()).toContain("min_search_score");
   });
 });
+
+// ── Trash: Empty trash (v1.14.0, #247) ─────────────────────────────────────
+test.describe("Trash", () => {
+  // Both tests empty or touch the WHOLE trash of the target store, including
+  // anything trashed by hand. That is the feature. The production guard at the
+  // top of this file is what makes it acceptable; staging exists to be broken.
+  test("Empty trash asks first, purges one by one, and leaves the trash empty", async ({ page, request }) => {
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const title = uniqueTitle(`Empty Trash ${i}`);
+      const r = await request.post("/api/v1/ingest", {
+        data: {
+          title,
+          content: `# Trash fixture ${i}\n\nPurged by the Empty-trash e2e.`,
+          author: "e2e-ui",
+          author_type: "user",
+        },
+      });
+      expect(r.ok()).toBeTruthy();
+      const { document_id } = (await r.json()) as { document_id: string };
+      ids.push(document_id);
+      const del = await request.delete(`/api/v1/documents/${document_id}`);
+      expect(del.ok()).toBeTruthy();
+    }
+
+    await page.goto(`${APP}/trash`);
+    await expect(page.getByTestId("page-title")).toHaveText(/Trash/i);
+    const button = page.getByTestId("empty-trash-button");
+    await expect(button).toBeEnabled();
+    await button.click();
+
+    // Confirmation first: nothing is purged until the red button is clicked.
+    const start = page.getByTestId("empty-trash-start");
+    await expect(start).toBeVisible();
+    await expect(page.getByTestId("empty-trash-confirm")).toContainText(/Permanently delete/);
+    expect(((await (await request.get("/api/v1/documents/trash")).json()) as unknown[]).length).toBeGreaterThanOrEqual(3);
+
+    await start.click();
+    const done = page.getByTestId("empty-trash-done");
+    await expect(done).toBeVisible({ timeout: 60_000 });
+    await expect(done).toContainText(/Purged \d+ documents?/);
+    await expect(done).not.toContainText(/could not be purged/);
+    await page.getByTestId("empty-trash-close").click();
+
+    await expect(page.getByText("Trash is empty.")).toBeVisible();
+    await expect(button).toBeDisabled();
+    for (const id of ids) {
+      expect((await request.get(`/api/v1/documents/${id}`)).status()).toBe(404);
+    }
+    expect((await (await request.get("/api/v1/documents/trash")).json()) as unknown[]).toEqual([]);
+  });
+
+  test("Cancel in the confirmation purges nothing", async ({ page, request }) => {
+    const title = uniqueTitle("Empty Trash Cancel");
+    const r = await request.post("/api/v1/ingest", {
+      data: { title, content: "# Kept\n\nCancel must leave this in the trash.", author: "e2e-ui", author_type: "user" },
+    });
+    const { document_id } = (await r.json()) as { document_id: string };
+    expect((await request.delete(`/api/v1/documents/${document_id}`)).ok()).toBeTruthy();
+
+    await page.goto(`${APP}/trash`);
+    await page.getByTestId("empty-trash-button").click();
+    await expect(page.getByTestId("empty-trash-start")).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("empty-trash-modal")).toBeHidden();
+
+    const trash = (await (await request.get("/api/v1/documents/trash")).json()) as Array<{ id: string }>;
+    expect(trash.some((d) => d.id === document_id)).toBe(true);
+
+    await request.delete(`/api/v1/documents/${document_id}/purge`);
+  });
+});

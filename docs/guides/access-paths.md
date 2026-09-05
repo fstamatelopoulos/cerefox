@@ -289,6 +289,12 @@ So the access model is:
    version, every chunk, every audit entry. The "I made a mistake; recover this" workflow
    is therefore always possible until the human explicitly chooses purge.
 
+"Empty trash" (web UI, v1.14.0) does not weaken this. It is a loop in the browser
+that calls the per-document purge once per document after one confirmation that
+states the count, with a Stop button and a per-document audit entry; there is no
+server-side "purge everything" endpoint, on purpose, because `/api/v1` is
+reachable by anything holding the local key.
+
 A `cerefox purge-doc` CLI command, a `cerefox_purge_document` MCP tool, or a
 `/documents/{id}/purge` HTTP endpoint accessible via the Cerefox token would each break this
 property. **Do not add them without a governance design that replaces the human-in-the-

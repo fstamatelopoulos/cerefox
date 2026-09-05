@@ -1,11 +1,12 @@
 import { Select } from "@mantine/core";
-import { IconArrowBackUp, IconTrash } from "@tabler/icons-react";
+import { IconArrowBackUp, IconTrash, IconTrashX } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchTrash, purgeDocument, restoreDocument, type DeletedDocument } from "../api/trash";
 import { CliCard } from "../components/CliCard";
+import { EmptyTrashModal } from "../components/EmptyTrashModal";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { useProjects } from "../hooks/useProjects";
 import { invalidateDocumentViews } from "../lib/invalidate";
@@ -28,6 +29,7 @@ export function TrashPage() {
   const [limit, setLimit] = useState("50");
   const [query, setQuery] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [emptyOpen, setEmptyOpen] = useState(false);
 
   const { data: docs, isLoading } = useQuery({
     queryKey: ["trash", limit],
@@ -143,14 +145,42 @@ export function TrashPage() {
       searchPlaceholder="Filter trashed documents…"
       searchText={(d) => d.title}
       toolbarExtra={
-        <Select
-          data={["50", "100", "200", "500"]}
-          value={limit}
-          onChange={(v) => setLimit(v || "50")}
-          size="sm"
-          w={110}
-          aria-label="Max rows"
-        />
+        <>
+          <Select
+            data={["50", "100", "200", "500"]}
+            value={limit}
+            onChange={(v) => setLimit(v || "50")}
+            size="sm"
+            w={110}
+            aria-label="Max rows"
+          />
+          <button
+            type="button"
+            className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
+            title="Permanently delete every document in the trash (asks first)"
+            data-testid="empty-trash-button"
+            disabled={isLoading || !docs || docs.length === 0}
+            onClick={() => setEmptyOpen(true)}
+          >
+            <IconTrashX size={14} />
+            Empty trash
+          </button>
+          <EmptyTrashModal
+            opened={emptyOpen}
+            onClose={() => setEmptyOpen(false)}
+            onFinished={(result) => {
+              invalidate();
+              if (result.failures.length === 0 && !result.stopped) {
+                showSuccess("Trash emptied", `${result.purged} permanently deleted`);
+              } else {
+                showError(
+                  result.stopped ? "Stopped emptying the trash" : "Trash not fully emptied",
+                  `${result.purged} purged, ${result.failures.length} failed`,
+                );
+              }
+            }}
+          />
+        </>
       }
       columns={columns}
       rows={docs ?? []}

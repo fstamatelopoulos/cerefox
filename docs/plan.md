@@ -28,6 +28,18 @@
 ---
 ## Current Focus
 
+**2026-09-05 — v1.14.0 IN PROGRESS** (branch `feat/empty-trash`, #247):
+"Empty trash" in the web UI. Decision (maintainer): **no bulk-purge endpoint**;
+the browser loops over the existing per-document purge, one audited call each,
+behind a confirmation that states the count, with a progress bar and Stop.
+Built: `frontend/src/lib/emptyTrash.ts` (pure loop: re-list past the 500 cap,
+never retry an id, stop after the purge in flight, progress snapshots),
+`EmptyTrashModal`, the button on `TrashPage`, `bun test` unit suite
+(`frontend/tests/unit/`, new `test:unit` script), two Playwright tests. Docs:
+api.md, access-paths.md, solution-design.md, e2e matrix, CLAUDE.md test table,
+CHANGELOG. **#154** (Node baseline) moves to the minor after this one, for the
+usual reason. Detail: [iteration 45](plans/iteration-45-empty-trash.md).
+
 **2026-09-05 — v1.13.2 SHIPPED** (PR #245, squash `ceb4a0b`, cut `dbd1def`;
 verified on staging: package suite 306/2/0, live EF + remote MCP 46/0,
 Playwright 20/20). **The review fixes missed the cut**: the squash took the

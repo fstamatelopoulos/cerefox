@@ -1124,7 +1124,9 @@ exposed identically over both transports
 (remote `cerefox-mcp` Edge Function and local `cerefox mcp`), via the shared
 `_shared/mcp-tools/` handlers. Note: document delete on MCP is **soft-only**
 (v1.7.0, #208) with `cerefox_restore_document` as its audited inverse (#210) —
-permanent purge stays web-UI-only by design (see
+permanent purge stays web-UI-only by design, and the web UI's "Empty trash"
+(v1.14.0) is a browser-side loop over the per-document purge rather than a
+bulk endpoint (see
 `docs/guides/access-paths.md` → Destructive operations and the trust model).
 
 Every tool accepts an optional `author` parameter for usage-log (and, on
