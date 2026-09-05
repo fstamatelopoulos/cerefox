@@ -401,7 +401,15 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       p_author_type: who.identity.authorType,
     });
     if (error) return c.json({ detail: error.message }, 500);
-    return c.json({ success: true });
+    // The RPC is a silent no-op when the row is no longer soft-deleted (a
+    // restore raced this call). Say so: the web UI's Empty-trash summary
+    // counts only true purges (#247). A row still present means not purged.
+    const { data: still } = await ctx.supabase
+      .from("cerefox_documents")
+      .select("id")
+      .eq("id", documentId)
+      .maybeSingle();
+    return c.json({ success: true, purged: !still });
   });
 
   // ── POST /documents/{id}/review-status ─────────────────────────────────────

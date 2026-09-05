@@ -8,7 +8,8 @@
  * reuses) `cerefox web` at :8000.
  *
  * Created docs/projects are [E2E-UI]-prefixed and hard-deleted via the
- * service client.
+ * service client. Exception: the Trash tests EMPTY THE TARGET'S TRASH (the
+ * feature under test); they skip if it holds anything not [E2E-prefixed.
  */
 
 import { expect, test } from "@playwright/test";
@@ -52,7 +53,7 @@ test.beforeAll(() => {
   if (!mayWriteToLiveTarget()) {
     throw new Error(
       "Refusing to run UI e2e against an unlabelled (production) target. " +
-        "These tests create real documents and projects. Point them at a labelled " +
+        "These tests create real documents and projects, and the Trash tests empty the whole trash. Point them at a labelled " +
         "environment — CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e — " +
         "or set CEREFOX_ALLOW_PROD_WRITE_TESTS=1 if you truly mean production.",
     );
@@ -380,5 +381,93 @@ test.describe("Settings", () => {
     });
     expect(resp.status()).toBe(400);
     expect(await resp.text()).toContain("min_search_score");
+  });
+});
+
+// ── Trash: Empty trash (v1.14.0, #247) ─────────────────────────────────────
+test.describe("Trash", () => {
+  // The first test empties the WHOLE trash of the target store. Three guards,
+  // all of which must pass: the production guard at the top of this file; an
+  // explicit opt-in, CEREFOX_E2E_EMPTY_TRASH=1, so a routine run never does it
+  // by accident; and a check that the trash holds nothing but [E2E fixtures,
+  // so a hand-trashed reproduction on staging is never destroyed. Fixtures are
+  // purged in `finally` either way.
+  test("Empty trash asks first, purges one by one, and leaves the trash empty", async ({ page, request }) => {
+    test.skip(
+      process.env.CEREFOX_E2E_EMPTY_TRASH !== "1",
+      "empties the target's trash; run with CEREFOX_E2E_EMPTY_TRASH=1 to include it",
+    );
+    const before = (await (await request.get("/api/v1/documents/trash?limit=500")).json()) as Array<{ title: string }>;
+    const foreign = before.filter((d) => !d.title.startsWith("[E2E"));
+    test.skip(foreign.length > 0, `trash holds ${foreign.length} non-fixture document(s); not emptying it`);
+
+    const ids: string[] = [];
+    try {
+    for (let i = 0; i < 3; i++) {
+      const title = uniqueTitle(`Empty Trash ${i}`);
+      const r = await request.post("/api/v1/ingest", {
+        data: {
+          title,
+          content: `# Trash fixture ${i}\n\nPurged by the Empty-trash e2e.`,
+          author: "e2e-ui",
+          author_type: "user",
+        },
+      });
+      expect(r.ok()).toBeTruthy();
+      const { document_id } = (await r.json()) as { document_id: string };
+      ids.push(document_id);
+      const del = await request.delete(`/api/v1/documents/${document_id}`);
+      expect(del.ok()).toBeTruthy();
+    }
+
+    await page.goto(`${APP}/trash`);
+    await expect(page.getByTestId("page-title")).toHaveText(/Trash/i);
+    const button = page.getByTestId("empty-trash-button");
+    await expect(button).toBeEnabled();
+    await button.click();
+
+    // Confirmation first: nothing is purged until the red button is clicked.
+    const start = page.getByTestId("empty-trash-start");
+    await expect(start).toBeVisible();
+    await expect(page.getByTestId("empty-trash-confirm")).toContainText(/Permanently delete/);
+    expect(((await (await request.get("/api/v1/documents/trash")).json()) as unknown[]).length).toBeGreaterThanOrEqual(3);
+
+    await start.click();
+    const done = page.getByTestId("empty-trash-done");
+    await expect(done).toBeVisible({ timeout: 60_000 });
+    await expect(done).toContainText(/Purged \d+ documents?/);
+    await expect(done).not.toContainText(/could not be purged/);
+    await page.getByTestId("empty-trash-close").click();
+
+    await expect(page.getByText("Trash is empty.")).toBeVisible();
+    await expect(button).toBeDisabled();
+    for (const id of ids) {
+      expect((await request.get(`/api/v1/documents/${id}`)).status()).toBe(404);
+    }
+    expect((await (await request.get("/api/v1/documents/trash")).json()) as unknown[]).toEqual([]);
+    } finally {
+      // On an assertion failure the fixtures are still in the trash.
+      for (const id of ids) await request.delete(`/api/v1/documents/${id}/purge`);
+    }
+  });
+
+  test("Cancel in the confirmation purges nothing", async ({ page, request }) => {
+    const title = uniqueTitle("Empty Trash Cancel");
+    const r = await request.post("/api/v1/ingest", {
+      data: { title, content: "# Kept\n\nCancel must leave this in the trash.", author: "e2e-ui", author_type: "user" },
+    });
+    const { document_id } = (await r.json()) as { document_id: string };
+    expect((await request.delete(`/api/v1/documents/${document_id}`)).ok()).toBeTruthy();
+
+    await page.goto(`${APP}/trash`);
+    await page.getByTestId("empty-trash-button").click();
+    await expect(page.getByTestId("empty-trash-start")).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByTestId("empty-trash-modal")).toBeHidden();
+
+    const trash = (await (await request.get("/api/v1/documents/trash")).json()) as Array<{ id: string }>;
+    expect(trash.some((d) => d.id === document_id)).toBe(true);
+
+    expect((await request.delete(`/api/v1/documents/${document_id}/purge`)).ok()).toBeTruthy();
   });
 });

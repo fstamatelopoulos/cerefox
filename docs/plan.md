@@ -28,15 +28,31 @@
 ---
 ## Current Focus
 
+**2026-09-05 — v1.14.0 IN PROGRESS** (branch `feat/empty-trash`, #247):
+"Empty trash" in the web UI. Decision (maintainer): **no bulk-purge endpoint**;
+the browser loops over the existing per-document purge, one audited call each,
+behind a confirmation that states the count, with a progress bar and Stop.
+Built: `frontend/src/lib/emptyTrash.ts` (pure loop: re-list past the 500 cap,
+never retry an id, stop after the purge in flight, progress snapshots),
+`EmptyTrashModal`, the button on `TrashPage`, `bun test` unit suite
+(`frontend/tests/unit/`, new `test:unit` script), two Playwright tests. Docs:
+api.md, access-paths.md, solution-design.md, e2e matrix, CLAUDE.md test table,
+CHANGELOG. **#154** (Node baseline) moves to the minor after this one, for the
+usual reason. Detail: [iteration 45](plans/iteration-45-empty-trash.md).
+
 **2026-09-05 — v1.13.2 SHIPPED** (PR #245, squash `ceb4a0b`, cut `dbd1def`;
 verified on staging: package suite 306/2/0, live EF + remote MCP 46/0,
 Playwright 20/20). **The review fixes missed the cut**: the squash took the
 branch's first commit only, the second (`/code-review` follow-ups) landed on
 the branch after the merge and was orphaned when the branch was deleted.
 Recovered by cherry-pick onto `fix/identity-review-followups` as its own PR
-(CHANGELOG `[Unreleased]` describes them; ship as 1.13.3 or fold into the
-next minor, maintainer's call). Lesson for the hand-off: after "merged",
-check `git log origin/main` contains the branch's last commit before
+(#246, merged 2026-09-05; ships in 1.14.0). Root cause: a `/code-review`
+run checked out the PR's remote ref in this worktree and left HEAD detached;
+the fix commit landed on the detached HEAD, and a quiet push of the unmoved
+branch pushed nothing. Lesson for the hand-off: `git status` must show a
+branch, not a detached HEAD, before every commit, and the push output must
+be read; after "merged", check `git log origin/main` contains the branch's
+last commit before
 deleting anything. What shipped in 1.13.2 (#244): the caller-identity name is uniform on
 the last two surfaces. The CLI takes `--author <name>` on every command, reads
 included (`--requestor` a hidden alias; `audit list` filters with

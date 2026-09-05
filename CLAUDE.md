@@ -174,7 +174,7 @@ Setup and the parallel-environment convention: [`docs/guides/staging-env.md`](do
 
 ### Testing
 - **`bun test` is the only test runner as of v0.9.0** — `pytest` is retired and `tests/**/*.py` is deleted. Write TS tests alongside new TS code.
-- TS tests live in `packages/memory/test/`, `_shared/__tests__/`, and `frontend/tests/e2e/` (Playwright).
+- TS tests live in `packages/memory/test/`, `_shared/__tests__/`, `frontend/src/lib/*.test.ts` (unit, beside the module) and `frontend/tests/e2e/` (Playwright).
 - Use mocked clients for unit tests — never hit a real database in unit tests. Live suites are probe-and-skip + self-cleaning.
 - **Live tests use `liveTest(...)`, not bare `test(...)`** (`packages/memory/test/_live-test.ts`, v1.13.0, #235): it carries a 60 s budget because bun 1.3.x ignores `bunfig.toml`'s `[test] timeout` and a real embedding + Data API round trip does not fit 5 s. `live-test-budget.test.ts` fails the suite if a file that touches a live target declares a bare `test(`. Any suite that **writes** also gates on `mayWriteToLiveTarget()` from `_live-target-guard.ts` (the destructive web suite was the one that didn't, until v1.13.0).
 - Test at least: happy path, edge cases (empty input, max size, malformed input), error conditions.
@@ -185,7 +185,8 @@ Setup and the parallel-environment convention: [`docs/guides/staging-env.md`](do
 |-------|---------|-------------|
 | TS unit tests (`_shared/`) | `cd _shared && bun test` | Fast, mocked, no network |
 | Package suite (built bin) | `cd packages/memory && bun run build && bun test` | CLI smoke, MCP stdio handshake, + live read/write commands (probe-and-skip when Supabase isn't reachable); needs `.env` for the live ones. **The write-bearing suites refuse to run against an unlabelled (production) target** — prefix with `CEREFOX_CONFIG_DIR=~/.cerefox/staging` to actually exercise them. |
-| UI e2e (Playwright) | `cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e` | Browser tests. Playwright starts its **own** `cerefox web` on port 8123 from `packages/memory/dist`, so a run always tests the build in this repo. It **creates real documents and projects**, so it refuses an unlabelled (production) target. `CEREFOX_E2E_PORT` picks the port; `CEREFOX_E2E_REUSE=1` tests a server already running there instead of starting one — a post-deploy smoke test, never a regression run. Needs `bunx playwright install chromium`. |
+| Frontend unit (`bun test`) | `cd frontend && bun test src/` | Browser-free logic beside its module (`frontend/src/lib/*.test.ts`: the dashboard arithmetic, the "Empty trash" loop). No network. This is CI's frontend test step; a test under `frontend/tests/` is one CI never runs. |
+| UI e2e (Playwright) | `cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e` | Browser tests. Playwright starts its **own** `cerefox web` on port 8123 from `packages/memory/dist`, so a run always tests the build in this repo. It **creates real documents and projects**, so it refuses an unlabelled (production) target. The Empty-trash test **empties the target's trash**: it runs only with `CEREFOX_E2E_EMPTY_TRASH=1`, and even then skips if the trash holds anything not `[E2E`-prefixed. `CEREFOX_E2E_PORT` picks the port; `CEREFOX_E2E_REUSE=1` tests a server already running there instead of starting one — a post-deploy smoke test, never a regression run. Needs `bunx playwright install chromium`. |
 | Live EF e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts` | Hits the deployed Edge Functions. Skipped by default. |
 | Live remote-MCP e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts` | Hits the deployed `cerefox-mcp` EF over JSON-RPC. Skipped by default. |
 

@@ -1,7 +1,7 @@
 import { useMantineColorScheme } from "@mantine/core";
 import { Text } from "@mantine/core";
 import * as d3 from "d3";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 interface UsageEntry {
   requestor: string | null;
@@ -25,21 +25,27 @@ export function HEBOperationChart({ usageLog, width = 400, height = 400 }: HEBOp
   const { colorScheme } = useMantineColorScheme();
   const dark = colorScheme === "dark";
 
-  // Build requestor -> operation links with counts
-  const links: Link[] = [];
-  const linkMap = new Map<string, number>();
-  for (const entry of usageLog) {
-    if (!entry.requestor) continue;
-    const key = `${entry.requestor}|||${entry.operation}`;
-    linkMap.set(key, (linkMap.get(key) ?? 0) + 1);
-  }
-  for (const [key, count] of linkMap) {
-    const [requestor, operation] = key.split("|||");
-    links.push({ requestor, operation, count });
-  }
-
-  const requestors = [...new Set(links.map((l) => l.requestor))];
-  const operations = [...new Set(links.map((l) => l.operation))];
+  // Build requestor -> operation links with counts. Memoised: the draw effect
+  // below depends on these arrays, and rebuilding them on every render made
+  // it redraw the chart on every render.
+  const { links, requestors, operations } = useMemo(() => {
+    const links: Link[] = [];
+    const linkMap = new Map<string, number>();
+    for (const entry of usageLog) {
+      if (!entry.requestor) continue;
+      const key = `${entry.requestor}|||${entry.operation}`;
+      linkMap.set(key, (linkMap.get(key) ?? 0) + 1);
+    }
+    for (const [key, count] of linkMap) {
+      const [requestor, operation] = key.split("|||");
+      links.push({ requestor, operation, count });
+    }
+    return {
+      links,
+      requestors: [...new Set(links.map((l) => l.requestor))],
+      operations: [...new Set(links.map((l) => l.operation))],
+    };
+  }, [usageLog]);
 
   useEffect(() => {
     if (!svgRef.current || links.length === 0) return;

@@ -85,6 +85,8 @@ CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test
 # secrets is a bigger exposure than the coverage is worth. So it is a local step
 # — run it before pushing anything that touches `frontend/`:
 cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e
+# Add CEREFOX_E2E_EMPTY_TRASH=1 to include the test that empties the trash
+# (it also skips if the trash holds anything not [E2E-prefixed).
 
 # Playwright starts its OWN `cerefox web` on port 8123 from packages/memory/dist,
 # so a run always tests the build in this repo. `CEREFOX_E2E_PORT` picks the
@@ -92,6 +94,7 @@ cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e
 # starting one — a post-deploy smoke test, never a regression run. Those were one
 # setting until v1.5.0, and the coupling is what made #155 look like eight broken
 # tests when the suite was simply pointed at a developer's own daemon.
+cd frontend && bun test src/                            # frontend unit (bun test, no network; CI runs it)
 cd frontend && bun run test:e2e                         # UI e2e (Playwright)
 CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote  # live EF e2e (opt-in)
 

@@ -9,6 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **Empty trash** (web UI, #247). A button on the Trash page purges every
+  soft-deleted document after one confirmation that states the count, with a
+  progress bar, the title being purged, a running failure count and a Stop
+  button that ends the run after the purge in flight; the summary lists
+  anything that could not be purged. **There is no new endpoint.** The loop
+  runs in the browser and calls the existing per-document
+  `DELETE /api/v1/documents/{id}/purge` once per document, so each purge is
+  audited on its own and a single request can never empty the trash: purge is
+  the one irreversible operation and `/api/v1` is reachable by anything
+  holding the local key. The loop re-lists past the server's 500-row cap and
+  never retries an id within a run; it is a pure module with a `bun test`
+  suite (`cd frontend && bun run test:unit`, new).
+
 ### Fixed
 
 - **Follow-ups from the v1.13.2 review that missed the cut** (#244). The

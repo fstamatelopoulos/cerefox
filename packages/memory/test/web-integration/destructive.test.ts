@@ -210,7 +210,7 @@ describe("destructive web endpoints (HTTP boundary)", () => {
       { method: "DELETE" },
     );
     expect(purge.ok).toBe(true);
-    expect(await purge.json()).toEqual({ success: true });
+    expect(await purge.json()).toEqual({ success: true, purged: true });
 
     // GET should now 404.
     const getResp = await fetch(`${server.base}/api/v1/documents/${docId}`);
