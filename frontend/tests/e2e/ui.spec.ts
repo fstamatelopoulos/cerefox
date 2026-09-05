@@ -429,7 +429,8 @@ test.describe("Trash", () => {
     // Confirmation first: nothing is purged until the red button is clicked.
     const start = page.getByTestId("empty-trash-start");
     await expect(start).toBeVisible();
-    await expect(page.getByTestId("empty-trash-confirm")).toContainText(/Permanently delete/);
+    // The exact number (#249): the non-fixture guard above means exactly ours.
+    await expect(page.getByTestId("empty-trash-confirm")).toContainText("Permanently delete 3 documents");
     expect(((await (await request.get("/api/v1/documents/trash")).json()) as unknown[]).length).toBeGreaterThanOrEqual(3);
 
     await start.click();

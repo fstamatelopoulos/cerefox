@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchResponse } from "./client";
 
 export interface DeletedDocument {
   id: string;
@@ -14,8 +14,22 @@ export interface DeletedDocument {
   project_ids: string[];
 }
 
-export async function fetchTrash(limit = 50): Promise<DeletedDocument[]> {
-  return apiFetch<DeletedDocument[]>(`/documents/trash?limit=${limit}`);
+/** The server caps a trash listing at this many rows; `total` is exact regardless. */
+export const TRASH_LIST_CAP = 500;
+
+export interface TrashPage {
+  /** The `limit` most recently deleted documents. */
+  rows: DeletedDocument[];
+  /** How many documents are in the trash in total (`X-Total-Count`). */
+  total: number;
+}
+
+export async function fetchTrash(limit = TRASH_LIST_CAP): Promise<TrashPage> {
+  const resp = await apiFetchResponse(`/documents/trash?limit=${limit}`);
+  const rows = (await resp.json()) as DeletedDocument[];
+  const header = Number(resp.headers.get("X-Total-Count"));
+  // A server older than v1.14.1 sends no header: the page is all we know.
+  return { rows, total: Number.isFinite(header) && header >= rows.length ? header : rows.length };
 }
 
 export async function restoreDocument(documentId: string): Promise<void> {

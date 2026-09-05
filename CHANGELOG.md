@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **The Trash page now says how many documents are in the trash** (#249).
+  With 569 trashed documents it showed 50 (its selector's default) and
+  nothing said more existed, so Empty trash's "500 or more" read as a bug.
+  `GET /api/v1/documents/trash` now returns the exact total in an
+  `X-Total-Count` header; the page drops the 50/100/200/500 selector, always
+  lists the 500 most recently deleted, and says "Showing the 500 most
+  recently deleted of 569" when capped; the Empty-trash confirmation states
+  the exact number and its progress total starts there instead of growing
+  pass by pass. No schema change.
 
 ---
 

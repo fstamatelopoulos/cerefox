@@ -4,11 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError } from "../api/client";
-import { fetchTrash, purgeDocument } from "../api/trash";
+import { fetchTrash, purgeDocument, TRASH_LIST_CAP } from "../api/trash";
 import { emptyTrash, type EmptyTrashProgress, type EmptyTrashResult } from "../lib/emptyTrash";
-
-/** The server caps the trash listing at this many rows. */
-const LIST_CAP = 500;
 
 /**
  * One run per tab. The loop outlives a component that unmounts mid-run (it
@@ -48,19 +45,20 @@ export function EmptyTrashModal({ onClose, onFinished }: Props) {
   const [stopping, setStopping] = useState(false);
   const [refused, setRefused] = useState(false);
 
-  // What the user is confirming: the rows actually in the trash right now (the
-  // page may be showing a slice). These rows ARE the run's set; a document
-  // trashed after this listing is never touched.
+  // What the user is confirming: the trash as it is right now, exact total
+  // from the server and the (up to 500) most recently deleted rows. Those rows
+  // ARE the run's set; a document trashed after this listing is never touched,
+  // and anything beyond the 500 is reached by re-listing under their cutoff.
   const listing = useQuery({
     queryKey: ["trash", "count"],
-    queryFn: () => fetchTrash(LIST_CAP),
+    queryFn: () => fetchTrash(TRASH_LIST_CAP),
     enabled: phase.kind === "confirm",
     staleTime: 0,
     gcTime: 0,
     refetchOnWindowFocus: false,
   });
-  const rows = listing.data;
-  const count = rows?.length;
+  const rows = listing.data?.rows;
+  const count = listing.data?.total;
 
   const running = phase.kind === "running";
 
@@ -89,11 +87,12 @@ export function EmptyTrashModal({ onClose, onFinished }: Props) {
     try {
       const result = await emptyTrash({
         confirmed: rows,
-        listTrash: () => fetchTrash(LIST_CAP),
+        listTrash: async () => (await fetchTrash(TRASH_LIST_CAP)).rows,
         purge: purgeDocument,
         onProgress: (progress) => setPhase({ kind: "running", progress }),
         shouldStop: () => stopRef.current,
         isFatal,
+        totalHint: count,
       });
       setPhase({ kind: "done", result });
       onFinished(result);
@@ -101,8 +100,6 @@ export function EmptyTrashModal({ onClose, onFinished }: Props) {
       runInFlight = false;
     }
   };
-
-  const countLabel = (n: number) => (n >= LIST_CAP ? `${LIST_CAP} or more` : String(n));
 
   return (
     <Modal
@@ -132,7 +129,7 @@ export function EmptyTrashModal({ onClose, onFinished }: Props) {
             <>
               <Alert icon={<IconAlertTriangle size={16} />} color="red">
                 <Text size="sm">
-                  Permanently delete <strong>{countLabel(count)}</strong>{" "}
+                  Permanently delete <strong>{count}</strong>{" "}
                   {count === 1 ? "document" : "documents"}? This cannot be undone: their
                   content, chunks and version history are removed. Restore anything you still
                   want first.
@@ -155,7 +152,7 @@ export function EmptyTrashModal({ onClose, onFinished }: Props) {
             </Button>
             {count !== undefined && count > 0 && (
               <Button color="red" data-testid="empty-trash-start" onClick={() => void start()}>
-                Purge {countLabel(count)} {count === 1 ? "document" : "documents"}
+                Purge {plural(count, "document")}
               </Button>
             )}
           </Group>

@@ -74,6 +74,8 @@ export interface EmptyTrashDeps {
   shouldStop?: () => boolean;
   /** A purge error that means every further call would fail too (auth, outage). Aborts the run. */
   isFatal?: (err: unknown) => boolean;
+  /** The trash's exact size at confirmation, so progress reports it from the first purge. */
+  totalHint?: number;
 }
 
 const stamp = (d: TrashEntry) => Date.parse(d.deleted_at ?? "") || 0;
@@ -92,7 +94,7 @@ export async function emptyTrash(deps: EmptyTrashDeps): Promise<EmptyTrashResult
   const report = (current: string | null, remaining: number) =>
     deps.onProgress?.({
       done: attempted.size,
-      total: attempted.size + remaining,
+      total: Math.max(attempted.size + remaining, deps.totalHint ?? 0),
       current,
       purged,
       failures: [...failures],

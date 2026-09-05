@@ -171,7 +171,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `GET /documents/{id}/chunks` | The document's chunks. |
 | `GET /documents/{id}/versions` | Version history. |
 | `GET /documents/{id}/download` | Raw markdown. |
-| `GET /documents/trash` | Soft-deleted documents. |
+| `GET /documents/trash` | Soft-deleted documents, newest first, `limit` ≤ 500. The exact total is in the `X-Total-Count` response header (v1.14.1). |
 | `POST /documents/metadata-search` | Query by metadata / project / time, no text query. |
 | `GET /metadata-keys` | Metadata keys with counts and example values. |
 | `GET /resolve-link`, `GET /check-filename` | Link and title resolution helpers. |
