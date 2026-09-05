@@ -21,7 +21,7 @@
 
 import { afterAll, beforeAll, describe, expect } from "bun:test";
 
-import { liveTest } from "../_live-test.ts";
+import { LIVE_TEST_BUDGET_MS, liveTest } from "../_live-test.ts";
 import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
 
 import { probeSupabase, spawnWebServer, type SpawnedServer } from "./_helpers.js";
@@ -78,7 +78,7 @@ describe("review workflow toggle (HTTP boundary, #241)", () => {
     if (!server) return;
     const { body } = await json(`/api/v1/config/${FLAG}`);
     originalFlag = body.value == null ? null : String(body.value);
-  });
+  }, LIVE_TEST_BUDGET_MS);
 
   afterAll(async () => {
     if (server) {
@@ -99,7 +99,10 @@ describe("review workflow toggle (HTTP boundary, #241)", () => {
       }
       await server.stop();
     }
-  });
+    // The hooks get the same budget as the tests: this one purges the
+    // fixtures, restores the flag and stops the server, and under a full
+    // parallel run that tripped bun's 5 s hook default (v1.13.1 validation).
+  }, LIVE_TEST_BUDGET_MS);
 
   liveTest("OFF: review_status is absent everywhere (write still recorded)", async () => {
     if (!LIVE_OK || !server) return;
