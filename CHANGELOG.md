@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.13.2] -- 2026-09-05
+
 ### Changed
 
 - **One identity name on the CLI and the primitive Edge Functions too** (#244).
