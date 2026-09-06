@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.14.1] -- 2026-09-06
+
 ### Fixed
 
 - **The Trash page now says how many documents are in the trash** (#249).
