@@ -28,10 +28,15 @@
 ---
 ## Current Focus
 
-**2026-09-05 — v1.14.1 IN PROGRESS** (branch `fix/trash-count`, #249): the
-Trash page states the exact total (`X-Total-Count` on the listing), drops the
-row-limit selector, and Empty trash says the real number. Found on Cerefox
-Local right after 1.14.0: 569 in the trash, the page showed 50. Opt-in auto-purge
+**2026-09-05 — v1.14.1 SHIPPED** (PR #250, cut `6c879fe`; staging verified
+after the maintainer's deploy: `_shared` 610, package suite 307/2/0, live EF +
+remote MCP 48/0, Playwright 22/22 with the trash test opted in; Local
+upgraded and Empty trash run by the maintainer on a real 569-document trash,
+worked; production pending the maintainer's `self-update`). Combined
+1.13.2 + 1.14.0 + 1.14.1 announcement posted to Discord. The Trash page
+states the exact total (`X-Total-Count` on the listing), drops the row-limit
+selector, and Empty trash says the real number. Found on Cerefox Local right
+after 1.14.0: 569 in the trash, the page showed 50. Opt-in auto-purge
 of trash older than N days is **backlogged** (#251): trigger on a document
 delete when built; options table in the iteration doc.
 

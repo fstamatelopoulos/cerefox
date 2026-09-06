@@ -1,7 +1,9 @@
 # Iteration 45 — Empty trash (v1.14.0)
 
-**Status: v1.14.0 SHIPPED 2026-09-05** (PR #248, cut `8e91cc4`; staging verified
-after the release deploy). **v1.14.1 in progress** (branch `fix/trash-count`, #249).
+**Status: DONE. v1.14.0 SHIPPED 2026-09-05** (PR #248, cut `8e91cc4`) **and
+v1.14.1 SHIPPED 2026-09-05** (PR #250, cut `6c879fe`); both verified on staging
+after the release deploys, 1.14.1 also on Cerefox Local by the maintainer (a
+real 569-document Empty-trash run). Auto-purge of old trash is backlogged (#251).
 
 **v1.14.1 (2026-09-05, #249).** Right after the upgrade the maintainer saw
 "Permanently delete 500 or more documents?" on a Local store they believed
