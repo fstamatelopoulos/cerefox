@@ -182,6 +182,16 @@ describe("emptyTrash", () => {
     expect(seen[0]!.failures).toEqual([]);
   });
 
+  test("totalHint makes progress report the full size from the first purge", async () => {
+    const ids = Array.from({ length: 5 }, (_, i) => `d${i}`);
+    const t = fakeTrash(ids, { cap: 2 });
+    const confirmed = await t.listTrash();
+    const totals: number[] = [];
+    await emptyTrash({ ...t.deps, confirmed, totalHint: 5, onProgress: (p) => totals.push(p.total) });
+    expect(totals[0]).toBe(5);
+    expect(new Set(totals)).toEqual(new Set([5]));
+  });
+
   test("an empty confirmed set is a no-op with no listing at all", async () => {
     const t = fakeTrash([]);
     expect(await emptyTrash({ ...t.deps, confirmed: [] })).toEqual({ purged: 0, ...NONE });

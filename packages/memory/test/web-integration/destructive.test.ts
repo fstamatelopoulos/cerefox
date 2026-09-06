@@ -216,11 +216,14 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     const getResp = await fetch(`${server.base}/api/v1/documents/${docId}`);
     expect(getResp.status).toBe(404);
 
-    // Trash should not include it.
-    const trashed = (await (
-      await fetch(`${server.base}/api/v1/documents/trash?limit=20`)
-    ).json()) as Array<{ id: string }>;
+    // Trash should not include it, and the listing carries the exact total
+    // (#249): a number, never below the rows returned.
+    const trashResp = await fetch(`${server.base}/api/v1/documents/trash?limit=20`);
+    const trashed = (await trashResp.json()) as Array<{ id: string }>;
     expect(trashed.some((d) => d.id === docId)).toBe(false);
+    const totalHeader = Number(trashResp.headers.get("x-total-count"));
+    expect(Number.isInteger(totalHeader)).toBe(true);
+    expect(totalHeader).toBeGreaterThanOrEqual(trashed.length);
 
     // Clear the cleanup target so afterAll doesn't double-purge.
     docId = null;

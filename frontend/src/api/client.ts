@@ -86,6 +86,15 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  const response = await apiFetchResponse(path, options);
+  return response.json() as Promise<T>;
+}
+
+/** `apiFetch` without the JSON step, for callers that also need a header. */
+export async function apiFetchResponse(
+  path: string,
+  options?: RequestInit,
+): Promise<Response> {
   const url = `${BASE_URL}${path}`;
   const response = await fetch(url, {
     ...options,
@@ -104,7 +113,7 @@ export async function apiFetch<T>(
     throw new ApiError(response.status, response.statusText, body);
   }
 
-  return response.json() as Promise<T>;
+  return response;
 }
 
 /**

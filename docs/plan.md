@@ -28,7 +28,17 @@
 ---
 ## Current Focus
 
-**2026-09-05 — v1.14.0 IN PROGRESS** (branch `feat/empty-trash`, #247):
+**2026-09-05 — v1.14.1 IN PROGRESS** (branch `fix/trash-count`, #249): the
+Trash page states the exact total (`X-Total-Count` on the listing), drops the
+row-limit selector, and Empty trash says the real number. Found on Cerefox
+Local right after 1.14.0: 569 in the trash, the page showed 50. Opt-in auto-purge
+of trash older than N days is **backlogged** (#251): trigger on a document
+delete when built; options table in the iteration doc.
+
+**2026-09-05 — v1.14.0 SHIPPED** (PR #248, cut `8e91cc4`; verified on staging
+after the maintainer's deploy: package suite 307/2/0, live EF + remote MCP
+48/0, Playwright 22/22 with the trash test opted in). What it was, as planned
+(#247):
 "Empty trash" in the web UI. Decision (maintainer): **no bulk-purge endpoint**;
 the browser loops over the existing per-document purge, one audited call each,
 behind a confirmation that states the count, with a progress bar and Stop.

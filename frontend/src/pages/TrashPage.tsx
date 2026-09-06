@@ -1,10 +1,9 @@
-import { Select } from "@mantine/core";
 import { IconArrowBackUp, IconTrash, IconTrashX } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { fetchTrash, purgeDocument, restoreDocument, type DeletedDocument } from "../api/trash";
+import { fetchTrash, purgeDocument, restoreDocument, TRASH_LIST_CAP, type DeletedDocument } from "../api/trash";
 import { CliCard } from "../components/CliCard";
 import { EmptyTrashModal } from "../components/EmptyTrashModal";
 import { ListPage, type ListColumn } from "../components/ListPage";
@@ -26,16 +25,20 @@ export function TrashPage() {
   const { data: projects } = useProjects();
   const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
 
-  const [limit, setLimit] = useState("50");
   const [query, setQuery] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [emptyOpen, setEmptyOpen] = useState(false);
 
-  const { data: docs, isLoading } = useQuery({
-    queryKey: ["trash", limit],
-    queryFn: () => fetchTrash(Number(limit)),
+  // Always the 500 most recently deleted (the server's cap) plus the exact
+  // total, so the page can say when there is more than it shows (#249). The
+  // 50/100/200/500 selector that used to sit here made 569 look like 50.
+  const { data: page, isLoading } = useQuery({
+    queryKey: ["trash", "page"],
+    queryFn: () => fetchTrash(TRASH_LIST_CAP),
     staleTime: 10_000,
   });
+  const docs = page?.rows;
+  const total = page?.total ?? 0;
 
   const invalidate = () => invalidateDocumentViews(queryClient);
   const restoreMut = useMutation({
@@ -147,14 +150,11 @@ export function TrashPage() {
       searchText={(d) => d.title}
       toolbarExtra={
         <>
-          <Select
-            data={["50", "100", "200", "500"]}
-            value={limit}
-            onChange={(v) => setLimit(v || "50")}
-            size="sm"
-            w={110}
-            aria-label="Max rows"
-          />
+          {docs && total > docs.length && (
+            <span className={ui.faint} style={{ fontSize: 12 }} data-testid="trash-count">
+              Showing the {docs.length} most recently deleted of {total}
+            </span>
+          )}
           <button
             type="button"
             className={`${ui.btn} ${ui.btnGhost} ${ui.btnDanger}`}
