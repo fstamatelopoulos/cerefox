@@ -20,6 +20,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the basis of content the caller never received. Present since the handlers
   moved into `_shared/mcp-tools/`; it survived because `docs` is the default
   mode and the CLI and web UI each render chunks correctly on their own.
+- **The search byte budget is now measured in the units the caller receives**
+  (#265). `max_bytes` was enforced against `JSON.stringify(row)` while the tool
+  returns rendered markdown, so nothing was ever truly bounded — the root cause
+  under three fixes in this release that each treated a symptom. The
+  below-confidence preamble was counted by nothing and overran the budget even
+  without a truncation. The reply is now assembled and measured as text, taking
+  as many results as the whole message can carry, and the invariant test varies
+  row shape as well as size and count (502 cases): chunk rows, document rows,
+  below-confidence rows, and rows that are small as JSON and wide as markdown.
+  Also: the usage row is written after the final fit, so it cannot overstate
+  what was returned, and a dropped document keeps its id in the footer where
+  that is the only way to tell two same-titled documents apart.
 - **A truncated search reply now fits inside `max_bytes`** (#263). The footer
   that explains a truncation was appended after the budget had been spent, and
   it had grown twice in this release — naming the dropped documents (#257),

@@ -51,6 +51,59 @@ function chunk(doc: string, section: string, index: number, chars: number, score
   };
 }
 
+/** A docs-mode row: no section, no chunk index, `full_content` not `content`. */
+function doc(title: string, chars: number, score: number) {
+  return {
+    document_id: "550e8400-e29b-41d4-a716-446655440001",
+    doc_title: title,
+    full_content: "z".repeat(chars),
+    best_score: score,
+    chunk_count: 3,
+    total_chars: chars,
+    content_hash: "a".repeat(64),
+  };
+}
+
+/**
+ * The shapes, not just the sizes.
+ *
+ * A grid over one row shape is still one example, which is the failure this
+ * file exists to close. Each of these adds bytes to the reply that the naive
+ * accounting missed: the 28I preamble is ~185 bytes nothing counted; a docs
+ * row carries a 64-character hash and an id in the footer; a sparse row is
+ * tiny as JSON and not as markdown, which is exactly where a JSON-measured
+ * budget under-reserves.
+ */
+const SHAPES: Array<{
+  name: string;
+  make: (i: number, chars: number) => Record<string, unknown>;
+}> = [
+  { name: "chunk", make: (i, c) => chunk("Cerefox Implementation Plan", `23D: Server ${i}`, i, c, 1 - i / 100) },
+  {
+    name: "chunk below-confidence",
+    make: (i, c) => ({
+      ...chunk("Cerefox Implementation Plan", `23D: Server ${i}`, i, c, 1 - i / 100),
+      below_confidence: true,
+    }),
+  },
+  { name: "docs", make: (i, c) => doc(`Release Process ${i}`, c, 1 - i / 100) },
+  {
+    name: "docs below-confidence",
+    make: (i, c) => ({ ...doc(`Release Process ${i}`, c, 1 - i / 100), below_confidence: true }),
+  },
+  {
+    name: "sparse (small json, wide render)",
+    make: (i, c) => ({
+      document_id: "550e8400-e29b-41d4-a716-446655440002",
+      doc_title: "T",
+      chunk_index: i,
+      heading_path: [],
+      content: "z".repeat(c),
+      score: 1 - i / 100,
+    }),
+  },
+];
+
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 describe("a search reply never exceeds max_bytes", () => {
@@ -60,19 +113,12 @@ describe("a search reply never exceeds max_bytes", () => {
   const rowSizes = [50, 400, 1_500, 9_000, 40_000];
   const counts = [1, 3, 12, 40];
 
-  for (const budget of budgets) {
-    for (const size of rowSizes) {
-      for (const count of counts) {
-        test(`budget ${budget}, ${count} row(s) of ${size} chars`, async () => {
-          const rows = Array.from({ length: count }, (_, i) =>
-            chunk(
-              "Cerefox Implementation Plan",
-              `23D: Server + ops commands ${i}`,
-              i,
-              size,
-              1 - i / 100,
-            ),
-          );
+  for (const shape of SHAPES) {
+    for (const budget of budgets) {
+      for (const size of rowSizes) {
+        for (const count of counts) {
+        test(`${shape.name}: budget ${budget}, ${count} row(s) of ${size} chars`, async () => {
+          const rows = Array.from({ length: count }, (_, i) => shape.make(i, size));
           const out = await search.handler(
             client(rows),
             { query: "q", mode: "fts", max_bytes: budget, author: "t" },
@@ -91,6 +137,7 @@ describe("a search reply never exceeds max_bytes", () => {
             expect(out).not.toContain("z".repeat(200));
           }
         });
+        }
       }
     }
   }

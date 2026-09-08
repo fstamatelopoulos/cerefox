@@ -92,7 +92,27 @@ function shortLabel(row: SearchRow): string {
   if (path.length > 0 && path[0] === doc) path.shift();
   const leaf = path.filter(Boolean).at(-1) ?? (row.title && row.title !== doc ? row.title : "");
   const chunk = row.chunk_index != null ? ` (chunk ${row.chunk_index})` : "";
-  return `${leaf ? `${doc} › ${leaf}` : doc}${chunk}`;
+  // A docs-mode row has neither a section nor a chunk index, so the id is the
+  // only thing telling two same-titled documents apart — and the only way to
+  // fetch either of them (#265). Chunk rows skip it: they are usually chunks
+  // of ONE document, so the same uuid would repeat down the list.
+  const id = !leaf && !chunk && row.document_id ? ` [id: ${row.document_id}]` : "";
+  return `${leaf ? `${doc} › ${leaf}` : doc}${chunk}${id}`;
+}
+
+/** One rendered result: heading, score, then the row's text. */
+function renderRow(row: SearchRow): string {
+  const raw = row.best_score ?? row.score;
+  const score = raw != null ? ` (score: ${raw.toFixed(3)})` : "";
+  const partial = row.is_partial
+    ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
+    : "";
+  // content_hash = the concurrency token for cerefox_ingest updates (iter-32).
+  const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
+  // Whichever column this mode returns (#259): `cerefox_search_docs` gives
+  // `full_content`, the chunk RPCs give `content`, and reading only the first
+  // rendered every hybrid/fts result as a title with an empty body.
+  return `## ${rowHeading(row)}${score}${partial}${hash}\n\n${rowContent(row)}`;
 }
 
 /** `## Title [id: …] (score: …) -- 20,297 chars` — everything but the content. */
@@ -254,7 +274,82 @@ async function handler(
   if (error) throw new Error(`RPC error: ${error.message}`);
 
   const matched = (data ?? []) as SearchRow[];
-  let { accepted, dropped, truncated, usedBytes } = applyByteBudget(matched, max_bytes);
+
+  // 28I: nothing cleared the relevance threshold, so the server returned its
+  // best-effort candidates flagged below_confidence rather than an empty set
+  // (which agents misread as "this knowledge does not exist"). The flag is
+  // all-or-nothing per response, so it is read from what MATCHED.
+  const belowConfidence = matched.length > 0 && matched.every((r) => r.below_confidence === true);
+
+  if (matched.length === 0) {
+    logUsage(supabase, {
+      operation: "search",
+      accessPath: ctx.accessPath,
+      requestor: callerIdentity(args),
+      query_text: query,
+      project_id: projectId,
+      result_count: 0,
+    });
+    return "No results found.";
+  }
+
+  // ── Fit the reply to max_bytes, in the units the caller receives ──────────
+  //
+  // The budget is spent on RENDERED text, not on the JSON the RPC returned:
+  // `applyByteBudget` measures `JSON.stringify(row)`, which is the right unit
+  // for the Edge Function (it ships JSON) and the wrong one here (this returns
+  // markdown). Reserving rendered bytes out of a JSON-measured budget
+  // guaranteed nothing, and neither the below-confidence preamble (~185 bytes)
+  // nor the footer was counted by anything (#265).
+  //
+  // So: render, then take as many rows as the whole assembled reply can carry.
+  // Assembling and measuring is the only way to be sure, because the preamble
+  // and the footer both depend on how many rows were kept.
+  const rendered = matched.map(renderRow);
+  const size = (t: string) => new TextEncoder().encode(t).length;
+  const SEP = "\n\n---\n\n";
+
+  /** The whole reply for a given number of rows, footer sized to what is left. */
+  const assemble = (take: number): string => {
+    const head = belowConfidence
+      ? `⚠ No results cleared the confidence threshold. Showing the closest ${take} ` +
+        `candidate(s) with scores — judge relevance yourself; a low score means weak ` +
+        `signal, not necessarily absent knowledge.\n\n`
+      : "";
+    const body = head + rendered.slice(0, take).join(SEP);
+    if (take >= matched.length) return body;
+
+    const dropped = matched.slice(take);
+    const footer = (named: number) => {
+      const labels = dropped.slice(0, named).map(shortLabel);
+      const rest = dropped.length - labels.length;
+      const naming = labels.length
+        ? `: ${labels.join(", ")}${rest > 0 ? ` and ${rest} more` : ""}`
+        : "";
+      return (
+        `\n\n[${take} of ${matched.length} result(s) shown; ${dropped.length} did not fit ` +
+        `max_bytes=${max_bytes}${naming}. Raise max_bytes, narrow the query, or lower ` +
+        `match_count.]`
+      );
+    };
+    // The most informative footer that still fits; the bare one is the floor,
+    // and the loop below drops a row if even that overflows.
+    const room = max_bytes - size(body);
+    for (let named = Math.min(5, dropped.length); named >= 1; named--) {
+      const candidate = footer(named);
+      if (size(candidate) <= room) return body + candidate;
+    }
+    return body + footer(0);
+  };
+
+  // Start from what could fit at best, then shrink until the ASSEMBLED reply
+  // is within budget. Bounded by matched.length (≤ match_count, ≤ 200).
+  let take = matched.length;
+  let output = assemble(take);
+  while (take > 0 && size(output) > max_bytes) {
+    take -= 1;
+    output = assemble(take);
+  }
 
   logUsage(supabase, {
     operation: "search",
@@ -262,110 +357,17 @@ async function handler(
     requestor: callerIdentity(args),
     query_text: query,
     project_id: projectId,
-    // What the QUERY matched, not what survived the byte budget. The two
-    // differ only when rows were dropped, and recording 0 there made a
-    // budget-wiped search look like an empty knowledge base in analytics too.
+    // What the QUERY matched, not what survived the budget: recording the
+    // latter made a budget-wiped search look like an empty store in analytics.
     result_count: matched.length,
-    ...(truncated ? { extra: { returned: accepted.length, truncated: true } } : {}),
+    ...(take < matched.length ? { extra: { returned: take, truncated: true } } : {}),
   });
 
-  // Nothing matched: the honest empty answer.
-  if (matched.length === 0) return "No results found.";
+  // Not one row fits (#254). "No results found." here is the most damaging
+  // answer this tool can give: an agent stops looking and recreates what it
+  // could not find. The header list names what exists and how to read it.
+  if (take === 0) return degradedToHeaders(matched, max_bytes, belowConfidence);
 
-  // Something matched but none of it fit the budget (#254). Reporting "no
-  // results" here is the most damaging answer the tool can give: an agent
-  // stops looking and often recreates the document it failed to find. Show
-  // the headers instead — a few hundred bytes that name what exists and how
-  // to read it.
-  if (accepted.length === 0) {
-    return degradedToHeaders(
-      matched,
-      max_bytes,
-      matched.every((r) => r.below_confidence === true),
-    );
-  }
-
-  // 28I: nothing cleared the relevance threshold, so the server returned its
-  // best-effort top candidates flagged below_confidence instead of an empty
-  // set (which agents misread as "this knowledge does not exist").
-  const belowConfidence =
-    accepted.length > 0 && (accepted as SearchRow[]).every((r) => r.below_confidence === true);
-
-  const render = (rows: SearchRow[]): string => {
-  const parts: string[] = rows.map((row) => {
-    const heading = rowHeading(row);
-    const rawScore = row.best_score ?? row.score;
-    const score = rawScore != null ? ` (score: ${rawScore.toFixed(3)})` : "";
-    const partial = row.is_partial
-      ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
-      : "";
-    // content_hash = the concurrency token for cerefox_ingest updates (iter-32).
-    const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
-    // Whichever column this mode returns (#259). `cerefox_search_docs` gives
-    // `full_content`; `cerefox_hybrid_search` and `cerefox_fts_search` give
-    // `content`, and reading only the first rendered every hybrid/fts result
-    // as a title with an empty body.
-    return `## ${heading}${score}${partial}${hash}\n\n${rowContent(row)}`;
-  });
-
-  const body = parts.join("\n\n---\n\n");
-  return belowConfidence
-    ? `⚠ No results cleared the confidence threshold. Showing the closest ${rows.length} ` +
-        `candidate(s) with scores — judge relevance yourself; a low score means weak signal, ` +
-        `not necessarily absent knowledge.\n\n` + body
-    : body;
-  };
-
-  let output = render(accepted as SearchRow[]);
-
-  if (truncated) {
-    // Name what was held back, boundedly (#257) and by section rather than by
-    // a repeated document title (#261) — then shrink the list until the whole
-    // reply fits the budget the footer is describing (#263).
-    const footer = (named: number) => {
-      const titles = dropped.slice(0, named).map((r) => shortLabel(r as SearchRow));
-      const rest = dropped.length - titles.length;
-      const naming = titles.length
-        ? `: ${titles.join(", ")}${rest > 0 ? ` and ${rest} more` : ""}`
-        : "";
-      return (
-        `\n\n[${accepted.length} of ${matched.length} result(s) shown; truncated at ` +
-        `${usedBytes} bytes. ${dropped.length} did not fit${naming}. ` +
-        `Raise max_bytes, narrow the query, or lower match_count.]`
-      );
-    };
-    // The footer is part of what the caller receives, so it comes out of the
-    // budget rather than on top of it (#263). Held back adaptively: only when
-    // the bare explanation would not fit is a row dropped to make room, so a
-    // small budget still returns the content it can carry.
-    const size = (t: string) => new TextEncoder().encode(t).length;
-    if (size(output) + size(footer(0)) > max_bytes) {
-      const refit = applyByteBudget(matched, Math.max(max_bytes - size(footer(0)), 1));
-      if (refit.accepted.length === 0) {
-        // Making room for the explanation left nothing to explain: the honest
-        // answer is the header list (#254), which is bounded by itself.
-        return degradedToHeaders(
-          matched,
-          max_bytes,
-          matched.every((r) => r.below_confidence === true),
-        );
-      }
-      accepted = refit.accepted;
-      dropped = refit.dropped;
-      usedBytes = refit.usedBytes;
-      output = render(accepted as SearchRow[]);
-    }
-    const room = max_bytes - size(output);
-    let chosen = footer(0);
-    for (let named = Math.min(5, dropped.length); named >= 1; named--) {
-      const candidate = footer(named);
-      if (size(candidate) <= room) {
-        chosen = candidate;
-        break;
-      }
-    }
-    output += chosen;
-  }
   return output;
 }
 
