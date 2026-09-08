@@ -198,6 +198,20 @@ describe("a search reply never exceeds max_bytes", () => {
     expect(out).toContain("Huge"); // named as held back
   });
 
+  test("a zero or negative max_bytes still means almost no budget (#267)", async () => {
+    // Falling back to the ceiling here would hand the largest possible reply
+    // to a caller whose remaining allowance had run out.
+    for (const budget of [0, -1]) {
+      const out = await search.handler(
+        client([chunk("Doc", "S", 0, 5_000, 0.9)]),
+        { query: "q", mode: "fts", max_bytes: budget, author: "t" },
+        ctx,
+      );
+      expect(bytes(out)).toBeLessThan(2_000);
+      expect(out).toContain("none fit max_bytes");
+    }
+  });
+
   test("a non-numeric max_bytes cannot bypass the ceiling (#266)", async () => {
     // NaN compares false against every budget check, so the ceiling vanished.
     const rows = Array.from({ length: 5 }, (_, i) => chunk("Doc", `S${i}`, i, 5_000, 0.9));

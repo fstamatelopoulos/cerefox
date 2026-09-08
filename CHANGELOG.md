@@ -20,6 +20,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the basis of content the caller never received. Present since the handlers
   moved into `_shared/mcp-tools/`; it survived because `docs` is the default
   mode and the CLI and web UI each render chunks correctly on their own.
+- **`cerefox_metadata_search` gets the same guards as the search tool** (#267).
+  A non-numeric `max_bytes` became `NaN`, reached the RPC as null, and
+  `p_max_bytes NULL` means no limit, so one word instead of a number returned
+  the full content of every matching document; `limit` had no clamp at all.
+  Both are sanitised now. On the search tool and the Edge Function, a numeric
+  `max_bytes` of zero or less means a tiny budget again rather than the
+  ceiling: a caller whose allowance had run out was being handed the largest
+  possible reply.
 - **A search reply never hides that it held results back** (#266). When the
   truncation footer did not fit, the reply came back as content with no notice
   at all, so a caller who received one of five results had no way to know the

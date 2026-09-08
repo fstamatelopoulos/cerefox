@@ -30,8 +30,13 @@ agent's context window matters. Callers always choose whether to apply a limit.
 
 ## How limits are applied
 
-Truncation is always **whole-document**: results are dropped in full once adding the next
-document would exceed the budget. Cerefox never cuts a document mid-content.
+Truncation is always **whole-document**: a result is returned in full or not at all.
+Cerefox never cuts a document mid-content.
+
+A result that does not fit is **skipped**, not treated as the end of the list, so the
+returned set is not necessarily the top N by rank: one oversized document ranked first
+does not hide the smaller results behind it (v1.14.3). Anything skipped is named in the
+footer, so what is missing is always visible.
 
 When truncation occurs:
 - The MCP tool appends a footer naming what was held back:

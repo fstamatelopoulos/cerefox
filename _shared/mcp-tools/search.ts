@@ -210,9 +210,13 @@ async function handler(
   // Sanitised before clamping, for the reason `match_count` is: `NaN` makes
   // every `> max_bytes` comparison below false, so a non-numeric value emitted
   // every row unbounded — the ceiling bypassed by passing it a word (#266).
+  // A NUMBER of 0 or less still means "almost no budget", as it always did:
+  // falling back to the ceiling there would hand a caller whose remaining
+  // allowance ran out the largest possible reply (#267). Only a missing or
+  // non-numeric value defaults to the ceiling.
   const requestedBytes = Math.floor(Number(requested_max_bytes));
   const max_bytes = Math.min(
-    Number.isFinite(requestedBytes) && requestedBytes > 0 ? requestedBytes : ceiling,
+    Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : ceiling,
     ceiling,
   );
 
