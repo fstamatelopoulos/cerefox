@@ -33,7 +33,7 @@ import {
   compareSemver,
 } from "../../../../../_shared/compatibility/index.ts";
 import { resolveServerAssets } from "../../../../../_shared/server-assets/index.ts";
-import { statusDaemon } from "../../web/daemon.ts";
+import { restartCommand, statusDaemon } from "../../web/daemon.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 
@@ -727,11 +727,14 @@ export async function checkWebDaemon(): Promise<CheckResult> {
     return { name: "web server", status: "skipped", detail: "no background daemon running" };
   }
   if (status.kind === "stale") {
+    // Not "warn": a pidfile outlives a reboot or a kill -9 and says nothing
+    // about the health of the install, and `doctor --strict` (used in release
+    // verification) fails on any warning.
     return {
       name: "web server",
-      status: "warn",
-      detail: `stale pidfile — process ${status.info.pid} is not running.`,
-      hint: `Clean it up: cerefox web stop`,
+      status: "skipped",
+      detail: `no daemon running (stale pidfile for process ${status.info.pid}).`,
+      hint: "Clean it up: cerefox web stop",
     };
   }
   if (!status.responding) {
@@ -739,7 +742,7 @@ export async function checkWebDaemon(): Promise<CheckResult> {
       name: "web server",
       status: "warn",
       detail: `process ${status.info.pid} is alive but not answering on :${status.info.port}.`,
-      hint: "Check the log, then: cerefox web stop && cerefox web start",
+      hint: `Check the log, then: ${restartCommand(status.info.host, status.info.port)}`,
     };
   }
   if (status.version && status.version !== PKG_VERSION) {
@@ -749,13 +752,25 @@ export async function checkWebDaemon(): Promise<CheckResult> {
       detail:
         `running v${status.version} on :${status.info.port}, but this client is v${PKG_VERSION} ` +
         `— it is still serving the previous build.`,
-      hint: "Restart it: cerefox web stop && cerefox web start",
+      hint: `Restart it: ${restartCommand(status.info.host, status.info.port)}`,
+    };
+  }
+  if (!status.version) {
+    // A 200 with no parseable version is not proof it is this build: the port
+    // may have been recycled by another service. Never print the client's own
+    // version as if the server had reported it — that is the one number this
+    // check exists to compare.
+    return {
+      name: "web server",
+      status: "warn",
+      detail: `responding on :${status.info.port} (pid ${status.info.pid}) but did not report a version.`,
+      hint: `Confirm it is Cerefox: curl http://${status.info.host}:${status.info.port}/api/v1/version`,
     };
   }
   return {
     name: "web server",
     status: "ok",
-    detail: `v${status.version ?? PKG_VERSION} on :${status.info.port} (pid ${status.info.pid})`,
+    detail: `v${status.version} on :${status.info.port} (pid ${status.info.pid})`,
   };
 }
 

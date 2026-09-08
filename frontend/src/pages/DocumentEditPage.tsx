@@ -38,6 +38,29 @@ function displayMetaValue(value: unknown): string {
   }
 }
 
+/** Order-insensitive equality: reordering project chips is not a change. */
+function sameStrings(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((v, i) => v === right[i]);
+}
+
+/**
+ * The edited metadata rows against what was loaded, compared the way the form
+ * displays them (`displayMetaValue`), so an untouched document is never dirty.
+ */
+function sameMetaPairs(
+  pairs: { key: string; value: string }[],
+  loaded: Record<string, unknown>,
+): boolean {
+  const entries = Object.entries(loaded);
+  const filled = pairs.filter((p) => p.key.trim() !== "");
+  if (filled.length !== entries.length) return false;
+  const asMap = new Map(filled.map((p) => [p.key, p.value]));
+  return entries.every(([k, v]) => asMap.has(k) && asMap.get(k) === displayMetaValue(v));
+}
+
 export function DocumentEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -60,9 +83,16 @@ export function DocumentEditPage() {
   );
   const [initialized, setInitialized] = useState(false);
   // Editing is a mode, so the tab says so; the leading dot marks unsaved work
-  // the way an editor does.
+  // the way an editor does. Every editable field counts: a metadata-only or
+  // membership-only change is still unsaved work, and the dot is the page's
+  // one signal that it exists.
   const dirty =
-    initialized && doc != null && (title !== (doc.doc_title ?? "") || content !== (doc.full_content ?? ""));
+    initialized &&
+    doc != null &&
+    (title !== (doc.doc_title ?? "") ||
+      content !== (doc.full_content ?? "") ||
+      !sameStrings(projectIds, doc.project_ids ?? []) ||
+      !sameMetaPairs(metaPairs, doc.doc_metadata ?? {}));
   usePageTitle(doc?.doc_title ? `Editing: ${doc.doc_title}` : "Editing", { dirty });
 
   const [contentView, setContentView] = useState<string>("edit");

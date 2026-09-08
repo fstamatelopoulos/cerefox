@@ -22,6 +22,7 @@ import { buildWebServer, CompatibilityError } from "../../web/server.ts";
 import {
   daemonPaths,
   startDaemon,
+  restartCommand,
   statusDaemon,
   stopDaemon,
 } from "../../web/daemon.ts";
@@ -215,7 +216,10 @@ export function registerWeb(program: Command): void {
                   ),
                 );
                 println(
-                  c.dim("  Restart to pick up the new build: cerefox web stop && cerefox web start"),
+                  c.dim(
+                    "  Restart to pick up the new build: " +
+                      restartCommand(status.info.host, status.info.port),
+                  ),
                 );
               }
             } else {

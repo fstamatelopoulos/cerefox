@@ -27,7 +27,7 @@ import {
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { PKG_VERSION } from "../../meta.ts";
-import { statusDaemon } from "../../web/daemon.ts";
+import { restartCommand, statusDaemon } from "../../web/daemon.ts";
 
 interface SelfUpdateOptions {
   check?: boolean;
@@ -174,7 +174,10 @@ async function action(options: SelfUpdateOptions): Promise<void> {
   // (#252): the upgrade replaced the package under it, so its SPA bundle and
   // its API are the old ones. Say so here, where the user is looking.
   const daemon = await statusDaemon().catch(() => null);
-  if (daemon?.kind === "running") {
+  // Only when it is actually behind: the user may have restarted it in another
+  // terminal between the install and this probe, and telling someone to fix
+  // something that is already correct teaches them to ignore the warning.
+  if (daemon?.kind === "running" && daemon.version !== target) {
     println("");
     println(
       c.yellow(
@@ -183,7 +186,10 @@ async function action(options: SelfUpdateOptions): Promise<void> {
           `${daemon.version ? `, v${daemon.version}` : ""}).`,
       ),
     );
-    println("  Restart it: " + c.bold("cerefox web stop && cerefox web start"));
+    // Carry its host and port: `web start` defaults to 127.0.0.1:8000, so a
+    // bare restart command silently MOVES a daemon that was listening
+    // anywhere else, and the bookmark or reverse proxy in front of it breaks.
+    println("  Restart it: " + c.bold(restartCommand(daemon.info.host, daemon.info.port)));
   }
 
   println("");

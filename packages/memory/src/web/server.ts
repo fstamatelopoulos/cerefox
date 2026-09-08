@@ -193,20 +193,32 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
     // one stat() per request, and an upgrade is picked up without a restart.
     const indexPath = join(spaDist, "index.html");
     if (existsSync(indexPath)) {
-      let cached: { mtimeMs: number; html: string } | null = null;
-      const readIndex = (): string => {
+      // Keyed on mtime AND size: npm and tar preserve tarball mtimes and some
+      // filesystems store whole seconds, so a same-mtime replacement is not
+      // hypothetical — and it would resurrect exactly the bug this fixes.
+      let cached: { mtimeMs: number; size: number; html: string } | null = null;
+      const readIndex = (): string | null => {
         try {
-          const { mtimeMs } = statSync(indexPath);
-          if (!cached || cached.mtimeMs !== mtimeMs) {
-            cached = { mtimeMs, html: readFileSync(indexPath, "utf8") };
+          const { mtimeMs, size } = statSync(indexPath);
+          if (!cached || cached.mtimeMs !== mtimeMs || cached.size !== size) {
+            cached = { mtimeMs, size, html: readFileSync(indexPath, "utf8") };
           }
         } catch {
           // Mid-upgrade the file can briefly vanish; serve the last good copy.
         }
-        return cached?.html ?? "";
+        return cached?.html ?? null;
       };
       readIndex();
-      app.get("/app/*", (c) => c.html(readIndex()));
+      app.get("/app/*", (c) => {
+        const html = readIndex();
+        // An empty 200 is the same class of lie as the wrong-typed 200 above:
+        // the browser renders a blank page and the log says success. If the
+        // shell cannot be read at all, say so with a status that means it.
+        if (html === null) {
+          return c.text("The web UI could not be read from disk. Restart the server.", 503);
+        }
+        return c.html(html);
+      });
     }
   }
 

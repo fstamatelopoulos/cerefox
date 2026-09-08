@@ -70,6 +70,30 @@ truncated at 60 characters.
 - Playwright: static page titles, the dashboard, a search query, a document's
   own title, and the environment prefix.
 
+## Review follow-ups (all applied)
+
+- **The restart remedy carried no host or port.** `cerefox web start` defaults
+  to 127.0.0.1:8000, so the printed command would have MOVED any daemon bound
+  elsewhere — the maintainer's staging daemon listens on :8030, and following
+  the advice would have replaced a blank page with a connection refused. One
+  `restartCommand(host, port)` in `daemon.ts` now serves all three call sites.
+- **An unreadable `index.html` answered `200` with an empty body**, which is
+  the same lie as the wrong-typed 200 this iteration exists to remove. It is a
+  503 with a sentence.
+- **The mtime-only cache key** could miss a same-mtime replacement (npm and tar
+  preserve tarball mtimes; some filesystems store whole seconds), resurrecting
+  the bug. Keyed on mtime AND size.
+- **`doctor` printed the client's version when the server reported none**, i.e.
+  the check invented the very number it exists to compare. Now a warning.
+- **A stale pidfile was a warning**, so a leftover file from a reboot failed
+  `doctor --strict` during release verification. Now `skipped`.
+- **`self-update` warned even when the daemon was already current.** Gated on
+  the version actually differing.
+- **The SPA test wrote into the shipped build artifact** with only `afterAll`
+  to restore it. Restored in a `finally` plus signal handlers.
+- **`dirty` on the edit page ignored metadata and project membership**, so the
+  tab's one unsaved-work signal said "saved" during a metadata-only edit.
+
 ## Verification (staging, 2026-09-08)
 
 - `bun run typecheck` clean; frontend lint clean; `_shared` 610 pass.

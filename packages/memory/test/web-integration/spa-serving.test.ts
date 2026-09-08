@@ -43,16 +43,29 @@ describe("SPA serving after an in-place upgrade (#252)", () => {
   const indexPath = resolveIndexHtml();
   let original: string | null = null;
 
+  /** Restore the artifact even if the runner is interrupted mid-test. */
+  const restore = () => {
+    if (indexPath && original !== null) {
+      try {
+        writeFileSync(indexPath, original);
+      } catch {
+        /* best effort */
+      }
+    }
+  };
+
   beforeAll(async () => {
     if (!indexPath) return;
     original = readFileSync(indexPath, "utf8");
+    for (const sig of ["SIGINT", "SIGTERM"] as const) process.once(sig, restore);
+    process.once("exit", restore);
     server = await spawnWebServer();
   }, LIVE_TEST_BUDGET_MS);
 
   afterAll(async () => {
     // Restore the build artifact before anything else, so a failure mid-test
     // cannot leave a marker in a bundle someone later ships.
-    if (indexPath && original !== null) writeFileSync(indexPath, original);
+    restore();
     if (server) await server.stop();
   }, LIVE_TEST_BUDGET_MS);
 
@@ -75,15 +88,22 @@ describe("SPA serving after an in-place upgrade (#252)", () => {
   liveTest("a rewritten index.html is picked up without restarting", async () => {
     if (!server || !indexPath || original === null) return;
     const marker = `<!-- upgraded ${Date.now()} -->`;
-    writeFileSync(indexPath, original.replace("</head>", `${marker}</head>`));
+    // This writes into the SHIPPED build artifact, so it is restored in a
+    // `finally` here (not only in afterAll, which a failed assertion would
+    // reach but a killed runner would not) and by the signal handlers
+    // registered above. A marker left inside dist/frontend/index.html would
+    // otherwise ride along into a published package.
+    try {
+      writeFileSync(indexPath, original.replace("</head>", `${marker}</head>`));
 
-    // This is the upgrade, simulated: the file changed under a running server.
-    const deep = await (await fetch(`${server.base}/app/settings`)).text();
-    expect(deep).toContain(marker);
-    const root = await (await fetch(`${server.base}/app/`)).text();
-    expect(root).toContain(marker);
-
-    writeFileSync(indexPath, original);
+      // This is the upgrade, simulated: the file changed under a running server.
+      const deep = await (await fetch(`${server.base}/app/settings`)).text();
+      expect(deep).toContain(marker);
+      const root = await (await fetch(`${server.base}/app/`)).text();
+      expect(root).toContain(marker);
+    } finally {
+      writeFileSync(indexPath, original);
+    }
     const afterRestore = await (await fetch(`${server.base}/app/settings`)).text();
     expect(afterRestore).not.toContain(marker);
   });

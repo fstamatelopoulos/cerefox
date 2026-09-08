@@ -257,6 +257,18 @@ export async function stopDaemon(): Promise<StopOutcome> {
   return { kind: "stopped", pid: info.pid, forced };
 }
 
+/**
+ * The exact command that restarts a daemon **where it is listening** (#252).
+ *
+ * `cerefox web start` defaults to 127.0.0.1:8000, so a bare
+ * "stop && start" moves any daemon bound elsewhere. Everything that prints
+ * this remedy uses this function, so the three call sites cannot drift.
+ */
+export function restartCommand(host: string, port: number): string {
+  const flags = `${host === "127.0.0.1" ? "" : ` --host ${host}`}${port === 8000 ? "" : ` --port ${port}`}`;
+  return `cerefox web stop && cerefox web start${flags}`;
+}
+
 export type DaemonStatus =
   | { kind: "stopped" }
   | { kind: "stale"; info: PidInfo }
