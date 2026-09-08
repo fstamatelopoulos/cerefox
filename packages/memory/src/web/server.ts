@@ -34,7 +34,7 @@ import {
   isLoopbackAddress,
 } from "./auth.ts";
 import { existsSync } from "node:fs";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
@@ -174,11 +174,39 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
       }),
     );
 
+    // (4b) A missing hashed asset is a 404, never the SPA shell (#252).
+    //
+    // serveStatic calls next() on a miss, so without this an absent
+    // /app/assets/<hash>.js fell through to the catch-all below and was
+    // answered `200 text/html`. The browser asked for a script, got HTML,
+    // executed nothing, and rendered a blank page — while the access log
+    // recorded a 200. A wrong-typed 200 is the worst answer for a script tag.
+    app.get("/app/assets/*", (c) => c.text("Not found", 404));
+
     // (5) SPA catch-all for client-side routing.
+    //
+    // Read per request, not once at startup (#252). `cerefox self-update`
+    // replaces the package in place while a daemon keeps running: a cached
+    // copy then served the PRE-upgrade index.html on every deep route (the
+    // root came from serveStatic, i.e. from disk), pointing the browser at a
+    // bundle the upgrade had deleted. Cached on mtime, so the common case is
+    // one stat() per request, and an upgrade is picked up without a restart.
     const indexPath = join(spaDist, "index.html");
     if (existsSync(indexPath)) {
-      const indexHtml = readFileSync(indexPath, "utf8");
-      app.get("/app/*", (c) => c.html(indexHtml));
+      let cached: { mtimeMs: number; html: string } | null = null;
+      const readIndex = (): string => {
+        try {
+          const { mtimeMs } = statSync(indexPath);
+          if (!cached || cached.mtimeMs !== mtimeMs) {
+            cached = { mtimeMs, html: readFileSync(indexPath, "utf8") };
+          }
+        } catch {
+          // Mid-upgrade the file can briefly vanish; serve the last good copy.
+        }
+        return cached?.html ?? "";
+      };
+      readIndex();
+      app.get("/app/*", (c) => c.html(readIndex()));
     }
   }
 

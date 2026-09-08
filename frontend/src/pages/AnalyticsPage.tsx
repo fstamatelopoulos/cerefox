@@ -36,6 +36,7 @@ import ui from "../styles/redesign.module.css";
 import { WordCloudChart } from "../components/WordCloudChart";
 import { HEBChart } from "../components/HEBChart";
 import { HEBOperationChart } from "../components/HEBOperationChart";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const DATE_PRESETS = [
   { value: "7", label: "Last 7 days" },
@@ -110,6 +111,7 @@ function buildFilters(
 }
 
 export function AnalyticsPage() {
+  usePageTitle("Analytics");
   const queryClient = useQueryClient();
 
   // ── Filter state ─────────────────────────────────────────────────────────

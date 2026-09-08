@@ -101,8 +101,19 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
-/** HTTP-probe the server's /version endpoint; true when it answers 200. */
-async function isResponding(host: string, port: number, timeoutMs = 1_500): Promise<boolean> {
+/**
+ * HTTP-probe the server's /version endpoint.
+ *
+ * Returns the version string the RUNNING process reports, which is not
+ * necessarily this binary's: an in-place `self-update` leaves the old server
+ * running until it is restarted (#252), and that mismatch is what callers
+ * want to surface.
+ */
+async function probeVersion(
+  host: string,
+  port: number,
+  timeoutMs = 1_500,
+): Promise<{ responding: boolean; version: string | null }> {
   const probeHost = host === "0.0.0.0" ? "127.0.0.1" : host;
   try {
     const ctrl = new AbortController();
@@ -111,13 +122,22 @@ async function isResponding(host: string, port: number, timeoutMs = 1_500): Prom
       const resp = await fetch(`http://${probeHost}:${port}/api/v1/version`, {
         signal: ctrl.signal,
       });
-      return resp.ok;
+      if (!resp.ok) return { responding: false, version: null };
+      const body = (await resp.json().catch(() => null)) as { version?: unknown } | null;
+      return {
+        responding: true,
+        version: typeof body?.version === "string" ? body.version : null,
+      };
     } finally {
       clearTimeout(timer);
     }
   } catch {
-    return false;
+    return { responding: false, version: null };
   }
+}
+
+async function isResponding(host: string, port: number, timeoutMs = 1_500): Promise<boolean> {
+  return (await probeVersion(host, port, timeoutMs)).responding;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -240,13 +260,13 @@ export async function stopDaemon(): Promise<StopOutcome> {
 export type DaemonStatus =
   | { kind: "stopped" }
   | { kind: "stale"; info: PidInfo }
-  | { kind: "running"; info: PidInfo; responding: boolean };
+  | { kind: "running"; info: PidInfo; responding: boolean; version: string | null };
 
 /** Report daemon status: stopped / stale-pidfile / running(+reachable). */
 export async function statusDaemon(): Promise<DaemonStatus> {
   const info = readPidFile();
   if (!info) return { kind: "stopped" };
   if (!isProcessAlive(info.pid)) return { kind: "stale", info };
-  const responding = await isResponding(info.host, info.port);
-  return { kind: "running", info, responding };
+  const { responding, version } = await probeVersion(info.host, info.port);
+  return { kind: "running", info, responding, version };
 }

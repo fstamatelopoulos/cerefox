@@ -23,6 +23,7 @@ import { MarkdownViewer } from "../components/MarkdownViewer";
 import { invalidateDocumentViews } from "../lib/invalidate";
 import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import { showSuccess, showError, showV07DeferredToast } from "../utils/notifications";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 /** Inverse of the parse-on-save: strings that JSON.parse would reinterpret
  * (numbers, booleans, quoted strings, JSON structures) render JSON-encoded
@@ -58,6 +59,11 @@ export function DocumentEditPage() {
     [],
   );
   const [initialized, setInitialized] = useState(false);
+  // Editing is a mode, so the tab says so; the leading dot marks unsaved work
+  // the way an editor does.
+  const dirty =
+    initialized && doc != null && (title !== (doc.doc_title ?? "") || content !== (doc.full_content ?? ""));
+  usePageTitle(doc?.doc_title ? `Editing: ${doc.doc_title}` : "Editing", { dirty });
 
   const [contentView, setContentView] = useState<string>("edit");
 

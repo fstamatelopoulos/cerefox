@@ -13,10 +13,12 @@ import { useProjects } from "../hooks/useProjects";
 import { showError, showSuccess } from "../utils/notifications";
 import { ApiError } from "../api/client";
 import ui from "../styles/redesign.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
 
 export function ProjectsPage() {
+  usePageTitle("Projects");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: projects, isLoading } = useProjects();

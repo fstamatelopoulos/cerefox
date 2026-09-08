@@ -33,6 +33,7 @@ import {
   compareSemver,
 } from "../../../../../_shared/compatibility/index.ts";
 import { resolveServerAssets } from "../../../../../_shared/server-assets/index.ts";
+import { statusDaemon } from "../../web/daemon.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 
@@ -707,6 +708,57 @@ function hasCerefoxInJsonFile(path: string): boolean {
   }
 }
 
+/**
+ * The running web daemon's build, compared with this CLI's (#252).
+ *
+ * `self-update` replaces the package in place; a daemon started before it
+ * keeps serving the old SPA bundle and the old API until it is restarted.
+ * The symptom is a blank page on a deep route after an upgrade, with a 200
+ * in the access log, so it is worth one line here.
+ */
+export async function checkWebDaemon(): Promise<CheckResult> {
+  let status: Awaited<ReturnType<typeof statusDaemon>>;
+  try {
+    status = await statusDaemon();
+  } catch {
+    return { name: "web server", status: "skipped", detail: "could not read the daemon pidfile" };
+  }
+  if (status.kind === "stopped") {
+    return { name: "web server", status: "skipped", detail: "no background daemon running" };
+  }
+  if (status.kind === "stale") {
+    return {
+      name: "web server",
+      status: "warn",
+      detail: `stale pidfile — process ${status.info.pid} is not running.`,
+      hint: `Clean it up: cerefox web stop`,
+    };
+  }
+  if (!status.responding) {
+    return {
+      name: "web server",
+      status: "warn",
+      detail: `process ${status.info.pid} is alive but not answering on :${status.info.port}.`,
+      hint: "Check the log, then: cerefox web stop && cerefox web start",
+    };
+  }
+  if (status.version && status.version !== PKG_VERSION) {
+    return {
+      name: "web server",
+      status: "warn",
+      detail:
+        `running v${status.version} on :${status.info.port}, but this client is v${PKG_VERSION} ` +
+        `— it is still serving the previous build.`,
+      hint: "Restart it: cerefox web stop && cerefox web start",
+    };
+  }
+  return {
+    name: "web server",
+    status: "ok",
+    detail: `v${status.version ?? PKG_VERSION} on :${status.info.port} (pid ${status.info.pid})`,
+  };
+}
+
 export function checkMcpConfigs(): CheckResult {
   // Walk known MCP client config locations and report which ones have
   // a `cerefox` server entry registered.
@@ -1035,6 +1087,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "metadata health", phase: "Checking metadata well-formedness", run: () => checkMetadataHealth() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
+    { name: "web server", phase: "Probing the web daemon", run: () => checkWebDaemon() },
     { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },
   ];
   return runSteps(steps, opts);

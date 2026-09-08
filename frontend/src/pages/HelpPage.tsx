@@ -20,6 +20,7 @@ import { fetchDocContent, fetchDocsIndex, type DocEntry } from "../api/docs";
 import { CliHint } from "../components/CliHint";
 import { MarkdownViewer } from "../components/MarkdownViewer";
 import ui from "../styles/redesign.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const CATEGORY_LABELS: Record<string, string> = {
   readme: "Project overview",
@@ -57,6 +58,8 @@ export function HelpPage() {
 
   // Default to README on first visit
   const selectedPath = docPath && docPath.length > 0 ? docPath : docs[0]?.path;
+  const selectedTitle = docs.find((d) => d.path === selectedPath)?.title;
+  usePageTitle(selectedTitle ? `Help: ${selectedTitle}` : "Help");
 
   const contentQuery = useQuery({
     queryKey: ["docs", "content", selectedPath],

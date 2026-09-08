@@ -25,6 +25,7 @@ import {
   statusDaemon,
   stopDaemon,
 } from "../../web/daemon.ts";
+import { PKG_VERSION } from "../../meta.ts";
 
 interface WebOptions {
   host: string;
@@ -206,6 +207,17 @@ export function registerWeb(program: Command): void {
                   `Cerefox web: running on :${status.info.port} (pid ${status.info.pid}, since ${status.info.startedAt}).`,
                 ),
               );
+              // An in-place upgrade leaves the old server running (#252).
+              if (status.version && status.version !== PKG_VERSION) {
+                println(
+                  c.yellow(
+                    `  ⚠ It is serving v${status.version}; this CLI is v${PKG_VERSION}.`,
+                  ),
+                );
+                println(
+                  c.dim("  Restart to pick up the new build: cerefox web stop && cerefox web start"),
+                );
+              }
             } else {
               println(
                 c.yellow(

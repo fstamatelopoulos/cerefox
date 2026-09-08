@@ -10,11 +10,13 @@ import { SearchResults } from "../components/SearchResults";
 import { serializeMfParam, useSearchQuery, useSearchState } from "../hooks/useSearch";
 import ui from "../styles/redesign.module.css";
 import styles from "./SearchPage.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 export function SearchPage() {
   const [, setSearchParams] = useSearchParams();
   const state = useSearchState();
   const { data, isLoading, error } = useSearchQuery(state);
+  usePageTitle(state.q ? `Search: ${state.q}` : "Search");
   const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDashboard() });
 
   const handleSearch = useCallback(

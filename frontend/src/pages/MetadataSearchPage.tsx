@@ -20,8 +20,10 @@ import type { MetadataSearchResult } from "../api/types";
 import { CliHint } from "../components/CliHint";
 import ui from "../styles/redesign.module.css";
 import lp from "../components/ListPage.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 export function MetadataSearchPage() {
+  usePageTitle("Metadata search");
   const navigate = useNavigate();
   const [filters, setFilters] = useState<Array<{ key: string; value: string }>>([{ key: "", value: "" }]);
   const [projectId, setProjectId] = useState<string>("");

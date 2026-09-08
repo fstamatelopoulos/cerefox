@@ -11,6 +11,7 @@ import { ListPage, type ListColumn } from "../components/ListPage";
 import { formatDateTime } from "../utils/dates";
 import { STORE_LEVEL_AUDIT_OPS } from "@cerefox/audit-ops";
 import ui from "../styles/redesign.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 // Membership is the SHARED definition (via the @cerefox/audit-ops alias, the
 // @cerefox/schemas pattern): a fifth store-level operation renders "(store)"
@@ -63,6 +64,7 @@ const OP_TONE: Record<string, string> = {
 };
 
 export function AuditLogPage() {
+  usePageTitle("Audit log");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 

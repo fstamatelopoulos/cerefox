@@ -472,3 +472,52 @@ test.describe("Trash", () => {
     expect((await request.delete(`/api/v1/documents/${document_id}/purge`)).ok()).toBeTruthy();
   });
 });
+
+// ── Browser tab titles (v1.14.2, #253) ─────────────────────────────────────
+test.describe("Tab titles", () => {
+  test("each page names itself in the tab, and a document names the document", async ({ page, request }) => {
+    // Static pages: the page's own name, no "Cerefox:" prefix (tabs truncate
+    // from the right, so a shared prefix would make every tab look alike).
+    for (const [path, expected] of [
+      ["/trash", "Trash"],
+      ["/projects", "Projects"],
+      ["/settings", "Settings"],
+      ["/audit-log", "Audit log"],
+    ] as const) {
+      await page.goto(`${APP}${path}`);
+      await expect(page).toHaveTitle(new RegExp(`(^|\\] )${expected}$`));
+    }
+
+    // The dashboard is the app name alone.
+    await page.goto(APP);
+    await expect(page).toHaveTitle(/(^|\] )Cerefox$/);
+
+    // A search names the query.
+    await page.goto(`${APP}/search?q=oauth+design`);
+    await expect(page).toHaveTitle(/Search: oauth design$/);
+
+    // A document names the document, once loaded.
+    const title = uniqueTitle("Tab Title");
+    const r = await request.post("/api/v1/ingest", {
+      data: { title, content: "# Tab title\n\nNames the browser tab.", author: "e2e-ui", author_type: "user" },
+    });
+    expect(r.ok()).toBeTruthy();
+    const { document_id } = (await r.json()) as { document_id: string };
+    try {
+      await page.goto(`${APP}/document/${document_id}`);
+      await expect(page).toHaveTitle(new RegExp(`${title.replace(/[[\]()]/g, "\\$&")}$`));
+    } finally {
+      await request.delete(`/api/v1/documents/${document_id}`);
+      await request.delete(`/api/v1/documents/${document_id}/purge`);
+    }
+  });
+
+  test("a labelled environment is named in the tab, ahead of the page", async ({ page, request }) => {
+    // Production and Cerefox Local report no label and stay clean; a staging
+    // tab says so, because picking the wrong tab is the costly mistake.
+    const info = (await (await request.get("/api/v1/version")).json()) as { env_label?: string | null };
+    const label = (info.env_label ?? "").trim();
+    await page.goto(`${APP}/trash`);
+    await expect(page).toHaveTitle(label ? `[${label}] Trash` : "Trash");
+  });
+});

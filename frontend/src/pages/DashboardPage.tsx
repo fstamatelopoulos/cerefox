@@ -28,6 +28,7 @@ import type { DashboardDoc } from "../api/types";
 import ui from "../styles/redesign.module.css";
 import { formatDateTime } from "../utils/dates";
 import styles from "./DashboardPage.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
 
@@ -67,6 +68,7 @@ function sourceChip(source: string | null): { icon: typeof IconMapPin; label: st
 const SINCE_30D = new Date(Date.now() - 30 * 864e5).toISOString();
 
 export function DashboardPage() {
+  usePageTitle();
   const navigate = useNavigate();
   const [quick, setQuick] = useState("");
   // The aggregate dashboard keeps its plain (shared) cache key — SearchPage
