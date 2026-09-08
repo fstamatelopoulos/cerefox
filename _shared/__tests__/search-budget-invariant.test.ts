@@ -128,19 +128,73 @@ describe("a search reply never exceeds max_bytes", () => {
           // Never the answer that made an agent conclude the store was empty.
           expect(out).not.toBe("No results found.");
 
-          const overBudget = bytes(out) > budget;
-          if (overBudget) {
-            // Only the documented exception may exceed it: nothing fit at all,
-            // so the reply is the explanation rather than results.
-            expect(out).toContain("none fit max_bytes");
-            // And it is an explanation, not smuggled content.
-            expect(out).not.toContain("z".repeat(200));
+          // "None fit" must be TRUE when claimed: the earlier version of this
+          // grid accepted a reply saying nothing fit a 1,649-byte budget when
+          // the largest result rendered to 1,617 bytes, which is how content
+          // that fit was lost to a footer (#265).
+          const degraded = out.includes("none fit max_bytes");
+          if (degraded) {
+            const largest = Number(
+              /largest is ([\d,]+) bytes/.exec(out)?.[1]?.replace(/,/g, "") ?? 0,
+            );
+            expect(largest).toBeGreaterThan(budget);
+            expect(out).not.toContain("z".repeat(200)); // an explanation, not content
+          }
+
+          if (bytes(out) > budget) {
+            // Two documented exceptions, and no others: nothing fit at all, or
+            // a single result plus the shortest possible advisory.
+            const lastResort =
+              degraded || (out.startsWith("⚠ Below the confidence threshold") && !out.includes("did not fit"));
+            expect(lastResort).toBe(true);
           }
         });
         }
       }
     }
   }
+
+  test("content that fits is never dropped so a footer can fit (#265)", async () => {
+    // Five rows whose bodies fit but whose footer does not: the reply must be
+    // the content, without a footer, not "none fit" about content that did.
+    const rows = Array.from({ length: 5 }, (_, i) => chunk("Doc", `S${i}`, i, 90, 0.9 - i / 10));
+    const out = await search.handler(
+      client(rows),
+      { query: "q", mode: "fts", max_bytes: 600, author: "t" },
+      ctx,
+    );
+    expect(out).not.toContain("none fit max_bytes");
+    expect(out).toContain("z".repeat(90));
+    expect(bytes(out)).toBeLessThanOrEqual(600);
+  });
+
+  test("a near-ceiling document is still returned (#265)", async () => {
+    // At the server ceiling, "raise max_bytes" is not a remedy the caller has.
+    // Dropping the document there turned a small overrun into total loss.
+    const rows = [doc("Big", 195_000, 0.9), doc("Small", 500, 0.4)];
+    const out = await search.handler(
+      client(rows),
+      { query: "q", mode: "fts", max_bytes: 200_000, author: "t" },
+      ctx,
+    );
+    expect(out).toContain("## Big");
+    expect(out).toContain("z".repeat(1_000));
+    expect(bytes(out)).toBeLessThanOrEqual(200_000);
+  });
+
+  test("a non-numeric match_count cannot become an unbounded query (#265)", async () => {
+    // NaN serialises to JSON null, and `LIMIT NULL` in Postgres is no limit.
+    const seen: Array<Record<string, unknown>> = [];
+    const spy = {
+      rpc: async (name: string, params: Record<string, unknown>) => {
+        if (name === "cerefox_log_usage") return { data: null, error: null };
+        seen.push(params);
+        return { data: [chunk("Doc", "S", 0, 50, 0.9)], error: null };
+      },
+    } as unknown as MCPSupabaseClient;
+    await search.handler(spy, { query: "q", mode: "fts", match_count: "many", author: "t" }, ctx);
+    expect(seen[0]!.p_match_count).toBe(5);
+  });
 
   test("the below-confidence banner never displaces the answer it warns about", async () => {
     // #265: the ~190-byte advisory was charged to the budget but could not be

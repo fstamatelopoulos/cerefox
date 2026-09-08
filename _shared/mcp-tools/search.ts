@@ -78,13 +78,16 @@ function rowHeading(row: SearchRow): string {
 }
 
 /**
- * A short label for a row in the truncation footer: the leaf section and the
- * chunk index, without the document id.
+ * A short label for a row in the truncation footer: the leaf section, the
+ * chunk index, and the document id.
  *
- * The footer names what did not fit, and in chunk modes those rows are usually
- * chunks of ONE document, so a full heading would repeat the same 36-character
- * uuid five times and push the reply over the very budget the footer is
- * reporting on (#263).
+ * Shorter than the rendered heading, which carries the whole breadcrumb — the
+ * footer names up to five rows, and full headings pushed the reply over the
+ * budget it was reporting on (#263). The id stays, because chunk modes span
+ * documents too and two documents sharing a title and a section name are
+ * otherwise indistinguishable, with no way to fetch either (#265). The footer
+ * is inside the budget and drops names it cannot afford, so it is accounted
+ * for either way.
  */
 function shortLabel(row: SearchRow): string {
   const doc = row.doc_title ?? "Untitled";
@@ -135,15 +138,16 @@ function headerLine(row: SearchRow): string {
  */
 function degradedToHeaders(
   matched: SearchRow[],
+  rendered: string[],
   maxBytes: number,
   belowConfidence: boolean,
 ): string {
   // Rendered bytes, not JSON: the fit decision that reaches here is made in
   // rendered bytes, and quoting a JSON size produced messages saying the
   // largest result was 490 bytes and did not fit a 600-byte budget (#265).
-  const biggest = Math.max(
-    ...matched.map((r) => new TextEncoder().encode(renderRow(r)).length),
-  );
+  // Sizes come from the render the caller already paid for — re-rendering
+  // whole documents here just to measure them tripled peak memory.
+  const biggest = Math.max(...rendered.map((t) => new TextEncoder().encode(t).length));
   // A degraded response must not silently promote 28I's weak-signal
   // candidates into real matches: an agent told "N result(s) matched" about
   // rows that cleared no threshold would trust them.
@@ -177,10 +181,12 @@ async function handler(
 ): Promise<string> {
   const query = args.query as string;
   const project_name = args.project_name as string | undefined;
-  // Clamped, as the Edge Function has always clamped it: `match_count` is
-  // caller-supplied and reaches the fitting loop below, so an unbounded value
-  // is unbounded work on a single-threaded isolate (#265).
-  const match_count = Math.min(Math.max(1, (args.match_count as number | undefined) ?? 5), 200);
+  // Sanitised, then clamped, exactly as the Edge Function does it. Clamping
+  // alone left `NaN` for a non-numeric value, which serialises to JSON null,
+  // and `LIMIT NULL` in Postgres means NO limit — the unbounded work the
+  // clamp exists to prevent, reachable because the local MCP server passes
+  // tool arguments through unvalidated (#265).
+  const match_count = Math.min(Math.max(1, Math.floor(Number(args.match_count)) || 5), 200);
   const mode = (args.mode as string | undefined) ?? "docs";
   // #133: omit unconfigured tunables so the server resolves them from
   // cerefox_config (one setting governs every access path).
@@ -331,11 +337,17 @@ async function handler(
           `candidate(s) with scores — judge relevance yourself; a low score means weak ` +
           `signal, not necessarily absent knowledge.\n\n`;
 
-  /** The whole reply for a given number of rows, footer sized to what is left. */
-  const assemble = (take: number, short = false): string => {
-    const head = banner(take, short);
-    const body = head + rendered.slice(0, take).join(SEP);
-    if (take >= matched.length) return body;
+  /**
+   * The whole reply for a given number of rows.
+   *
+   * Everything but the results is optional, and that ordering is the point:
+   * when the budget is tight the framing gives way, never the answer. Dropping
+   * a row because the FOOTER would not fit lost content that fit comfortably,
+   * and then reported "none fit" about it (#265).
+   */
+  const assemble = (take: number, short: boolean, withFooter: boolean): string => {
+    const body = banner(take, short) + rendered.slice(0, take).join(SEP);
+    if (take >= matched.length || !withFooter) return body;
 
     const dropped = matched.slice(take);
     const footer = (named: number) => {
@@ -350,20 +362,18 @@ async function handler(
         `match_count.]`
       );
     };
-    // The most informative footer that still fits; the bare one is the floor,
-    // and the loop below drops a row if even that overflows.
     const room = max_bytes - size(body);
     for (let named = Math.min(5, dropped.length); named >= 1; named--) {
       const candidate = footer(named);
       if (size(candidate) <= room) return body + candidate;
     }
-    return body + footer(0);
+    const bare = footer(0);
+    return size(bare) <= room ? body + bare : body;
   };
 
-  // Start from the most rows the BODY alone can carry — one linear pass over
-  // the rendered sizes — rather than from `matched.length`, which made the
-  // loop below O(n²) on a single-threaded isolate (#265). From there only the
-  // banner and the footer can still overflow, so the shrink is a step or two.
+  // How many rows the BODY alone can carry: one linear pass over the rendered
+  // sizes. Starting from `matched.length` instead made the fit loop quadratic
+  // on a caller-controlled count (#265).
   const sepBytes = size(SEP);
   let take = 0;
   let acc = 0;
@@ -374,18 +384,36 @@ async function handler(
     take += 1;
   }
 
+  // Not one result fits (#254) — the only case that may answer with no content.
+  if (take === 0) {
+    logUsage(supabase, {
+      operation: "search",
+      accessPath: ctx.accessPath,
+      requestor: callerIdentity(args),
+      query_text: query,
+      project_id: projectId,
+      result_count: matched.length,
+      extra: { returned: 0, truncated: true, degraded: true },
+    });
+    return degradedToHeaders(matched, rendered, max_bytes, belowConfidence);
+  }
+
+  // Give up the framing before the content: the long advisory first, then the
+  // footer, and only then a result. `take` never returns to 0 here — the pass
+  // above already proved one body fits, and losing it to a footer is how a
+  // near-ceiling document disappeared entirely (#265).
   let short = false;
-  let output = assemble(take, short);
-  while (take > 0 && size(output) > max_bytes) {
-    // Shorten the advisory before giving up a result: content the caller can
-    // use beats a longer warning about content they no longer have.
-    if (belowConfidence && !short) {
-      short = true;
-    } else {
+  let withFooter = true;
+  let output = assemble(take, short, withFooter);
+  while (size(output) > max_bytes) {
+    if (belowConfidence && !short) short = true;
+    else if (withFooter) withFooter = false;
+    else if (take > 1) {
       take -= 1;
-      short = false;
-    }
-    output = assemble(take, short);
+      short = belowConfidence;
+      withFooter = true;
+    } else break; // one result, no footer, shortest advisory: this is the floor
+    output = assemble(take, short, withFooter);
   }
 
   logUsage(supabase, {
@@ -399,11 +427,6 @@ async function handler(
     result_count: matched.length,
     ...(take < matched.length ? { extra: { returned: take, truncated: true } } : {}),
   });
-
-  // Not one row fits (#254). "No results found." here is the most damaging
-  // answer this tool can give: an agent stops looking and recreates what it
-  // could not find. The header list names what exists and how to read it.
-  if (take === 0) return degradedToHeaders(matched, max_bytes, belowConfidence);
 
   return output;
 }
@@ -426,7 +449,7 @@ export const searchTool: ToolDefinition = {
       query: { type: "string", description: "Natural-language search query" },
       match_count: {
         type: "integer",
-        description: "Maximum number of documents to return (default: 5)",
+        description: "Maximum number of documents to return (default: 5, maximum: 200)",
       },
       project_name: {
         type: "string",

@@ -34,8 +34,22 @@ Truncation is always **whole-document**: results are dropped in full once adding
 document would exceed the budget. Cerefox never cuts a document mid-content.
 
 When truncation occurs:
-- The local MCP server appends `[Results truncated at N bytes — ...]` to the response text.
+- The MCP tool appends a footer naming what was held back:
+  `[3 of 12 result(s) shown; 9 did not fit max_bytes=8000: Plan › Rollout (chunk 4) [id: …] and 8 more. Raise max_bytes, narrow the query, or lower match_count.]`
 - The Edge Function includes `"truncated": true` and `"response_bytes": N` in the JSON response.
+
+**The reply as a whole stays inside the budget**, footer and warnings included:
+they are measured in the same rendered bytes the caller receives (v1.14.3).
+When the budget is tight the framing gives way before the results do.
+
+**When nothing fits at all** — the smallest matching document is larger than
+the whole budget — the reply is NOT "no results found", which an agent acts on
+as "this knowledge does not exist". It is a header list naming what matched,
+its size and its id, prefixed with a warning and the remedy. The same case on
+the Edge Function sets `"degraded": true`, returns items with no content, and
+reports `"matched"`: read that, not `results.length`, to know what the query
+found. Only in that case, and only for a single result plus the shortest
+possible warning, may a reply exceed `max_bytes`: silence would be worse.
 
 ---
 
