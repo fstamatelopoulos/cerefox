@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.14.2] -- 2026-09-08
+
 ### Fixed
 
 - **Search no longer reports an empty knowledge base when results did not fit
