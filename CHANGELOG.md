@@ -31,9 +31,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the tab, a search shows its query, the edit page marks unsaved changes with
   a leading dot, and every other page carries its own name. The app name is
   not repeated in front, because tabs truncate from the right and a shared
-  prefix makes every tab look alike. When the server reports an environment
-  label the tab is prefixed with it, so a staging tab is distinguishable from
-  production at a glance.
+  prefix makes every tab look alike.
 
 ---
 

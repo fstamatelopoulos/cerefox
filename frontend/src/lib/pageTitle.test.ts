@@ -1,9 +1,8 @@
 /**
  * Browser tab titles (#253), tested without a browser.
  *
- * The rule the tests encode: the distinguishing text comes first, the app
- * name is dropped, and the environment label is the only thing allowed to
- * push it right.
+ * The rule the tests encode: the page's own name IS the title, and the app
+ * name is not repeated in front of it.
  */
 import { describe, expect, test } from "bun:test";
 
@@ -23,18 +22,9 @@ describe("pageTitle", () => {
     expect(pageTitle({ page: "   " })).toBe("Cerefox");
   });
 
-  test("an environment label is prefixed, because picking the wrong tab is the costly mistake", () => {
-    expect(pageTitle({ page: "Trash", envLabel: "staging" })).toBe("[staging] Trash");
-    // Production and Cerefox Local report no label and stay clean.
-    expect(pageTitle({ page: "Trash", envLabel: null })).toBe("Trash");
-    expect(pageTitle({ page: "Trash", envLabel: "  " })).toBe("Trash");
-  });
-
-  test("unsaved changes show a leading dot, outside the label", () => {
+  test("unsaved changes show a leading dot", () => {
     expect(pageTitle({ page: "Editing: Notes", dirty: true })).toBe("• Editing: Notes");
-    expect(pageTitle({ page: "Editing: Notes", dirty: true, envLabel: "staging" })).toBe(
-      "• [staging] Editing: Notes",
-    );
+    expect(pageTitle({ page: "Editing: Notes" })).toBe("Editing: Notes");
   });
 
   test("long titles are truncated, so the tab never carries a whole heading", () => {

@@ -50,11 +50,11 @@ The tab said `Cerefox` on every page. Now each page sets its own, through
 
 **Decisions.** The app name is *not* prefixed: tabs truncate from the right, so
 `Cerefox: <x>` would make every tab look alike, and the favicon already
-identifies the app. The one thing allowed to push the title right is the
-**environment label** (`[staging] Trash`), because someone with production,
-staging and a local container open needs to see which tab they are about to act
-in; production and Cerefox Local report no label and stay clean. Titles are
-truncated at 60 characters.
+identifies the app. Titles are truncated at 60 characters. An environment-label
+prefix (`[staging] Trash`) was built and then **removed on the maintainer's
+call**: running several instances side by side is their own setup rather than a
+general one, and the environment banner already names it on every page. Nothing
+in the title depends on the server now, so the hook makes no request.
 
 ## Tests
 

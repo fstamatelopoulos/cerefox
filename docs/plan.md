@@ -34,8 +34,7 @@ stale-SPA bug found on production after `self-update`: `index.html` is now read
 per request (mtime-cached), a missing `/app/assets/*` is a 404 instead of the
 shell with a `200 text/html`, `self-update` warns when a daemon is still on the
 previous build, and `web status` + `doctor` compare the running server's
-version with the client's. (b) Per-page browser tab titles, environment label
-prefixed when the server reports one. Frontend + web server only: no schema, no
+version with the client's. (b) Per-page browser tab titles. Frontend + web server only: no schema, no
 Edge Function, no `minSchema` change. Also filed while investigating: **#254**,
 `cerefox_search` reports "No results found." when the top hit exceeds
 `max_bytes` — a false negative agents act on, not in this branch.

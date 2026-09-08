@@ -485,16 +485,16 @@ test.describe("Tab titles", () => {
       ["/audit-log", "Audit log"],
     ] as const) {
       await page.goto(`${APP}${path}`);
-      await expect(page).toHaveTitle(new RegExp(`(^|\\] )${expected}$`));
+      await expect(page).toHaveTitle(expected);
     }
 
     // The dashboard is the app name alone.
     await page.goto(APP);
-    await expect(page).toHaveTitle(/(^|\] )Cerefox$/);
+    await expect(page).toHaveTitle("Cerefox");
 
     // A search names the query.
     await page.goto(`${APP}/search?q=oauth+design`);
-    await expect(page).toHaveTitle(/Search: oauth design$/);
+    await expect(page).toHaveTitle("Search: oauth design");
 
     // A document names the document, once loaded.
     const title = uniqueTitle("Tab Title");
@@ -512,12 +512,4 @@ test.describe("Tab titles", () => {
     }
   });
 
-  test("a labelled environment is named in the tab, ahead of the page", async ({ page, request }) => {
-    // Production and Cerefox Local report no label and stay clean; a staging
-    // tab says so, because picking the wrong tab is the costly mistake.
-    const info = (await (await request.get("/api/v1/version")).json()) as { env_label?: string | null };
-    const label = (info.env_label ?? "").trim();
-    await page.goto(`${APP}/trash`);
-    await expect(page).toHaveTitle(label ? `[${label}] Trash` : "Trash");
-  });
 });
