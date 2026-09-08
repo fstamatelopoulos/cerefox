@@ -397,14 +397,18 @@ describe("Edge Functions (live HTTP)", () => {
       // alone: hybrid and fts return a `content` column, so the degraded
       // response shipped tens of KB of chunk text while claiming content was
       // omitted, against a budget of a few KB.
-      const title = uniqueTitle("Degraded Modes");
-      const r = await invokeOk("cerefox-ingest", {
-        title,
-        content: `# Degraded\n\n${"lorem ipsum dolor sit amet ".repeat(400)}`,
-        author: "e2e-ef-test",
-        author_type: "agent",
-      });
-      track(r.document_id);
+      // TWO oversized fixtures, so `matched >= 2` and the budget assertion
+      // below actually runs: with a single match the list can only ever be
+      // the one-row fallback, which is exempt (#261).
+      for (const n of [1, 2]) {
+        const r = await invokeOk("cerefox-ingest", {
+          title: uniqueTitle(`Degraded Modes ${n}`),
+          content: `# Degraded ${n}\n\n${"lorem ipsum dolor sit amet ".repeat(400)}`,
+          author: "e2e-ef-test",
+          author_type: "agent",
+        });
+        track(r.document_id);
+      }
 
       for (const mode of ["docs", "hybrid", "fts"]) {
         const body = (await invokeOk("cerefox-search", {
@@ -427,10 +431,12 @@ describe("Edge Functions (live HTTP)", () => {
         // exception: a single header is returned even when it does not fit,
         // because an empty `results` is the "nothing was found" shape (#261).
         const listed = body.results ?? [];
+        // Never empty: that is the "nothing was found" shape (#254). Within
+        // budget whenever more than the exempt single fallback row came back.
+        expect(listed.length).toBeGreaterThan(0);
         if (listed.length > 1) {
           expect(JSON.stringify(listed).length).toBeLessThanOrEqual(3000);
         }
-        expect(listed.length).toBeGreaterThan(0);
       }
     });
   });

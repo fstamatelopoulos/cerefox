@@ -125,6 +125,38 @@ describe("every search mode renders its own content column (#259)", () => {
     expect(rowContent({})).toBe("");
   });
 
+  test("only the LEADING path element is dropped when it repeats the title", async () => {
+    // A section legitimately named after its document must still appear:
+    // dropping every matching element produced a breadcrumb that did not
+    // match the document's structure (#261).
+    const out = await search.handler(
+      supabase([
+        {
+          ...chunkRow("Release Process", "BODY", 0.9),
+          heading_path: ["Release Process", "Release Process", "Steps"],
+          chunk_index: 2,
+        },
+      ]),
+      args({ mode: "fts" }),
+      ctx,
+    );
+    expect(out).toContain("## Release Process › Release Process › Steps");
+  });
+
+  test("the degraded path names sections too, since it is the whole answer", async () => {
+    // Five chunks of one document, none fitting: without the section each
+    // header line would be the same string (#261).
+    const chunks = [0, 1, 2].map((i) => ({
+      ...chunkRow("Doc", "z".repeat(20_000), 0.9 - i / 10),
+      heading_path: ["Doc", `Section ${i}`],
+      chunk_index: i,
+    }));
+    const out = await search.handler(supabase(chunks), args({ mode: "fts", max_bytes: 2_000 }), ctx);
+    expect(out).toContain("Doc › Section 0");
+    expect(out).toContain("Doc › Section 1");
+    expect(out).toContain("Doc › Section 2");
+  });
+
   test("a chunk result names its section, not just the document", async () => {
     // Chunk RPCs return several chunks OF THE SAME document, so identical
     // headings would leave an agent unable to tell them apart (#261).

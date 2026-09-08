@@ -106,20 +106,24 @@ async function handler(
     // without content before reporting nothing: an agent that is told "no
     // documents" stops looking, and here that would be false.
     if (include_content && max_bytes !== null) {
-      // A failure here must not swallow the usage row: deferring the log so
-      // it can carry the real count meant a rejected fallback left no trace of
-      // the call at all, and that is the hardest failure to diagnose later
-      // (#261).
-      let headers: unknown;
-      try {
-        ({ data: headers } = await supabase.rpc("cerefox_metadata_search", {
-          ...params,
-          p_include_content: false,
-          p_max_bytes: null,
-        }));
-      } catch (err) {
+      // supabase-js RESOLVES with `{ data: null, error }` for PostgREST
+      // failures and for network errors; it does not throw. A try/catch here
+      // was dead code, and worse: `headers` came back null, the branch below
+      // was skipped, and the handler answered "No documents match the given
+      // criteria" — the exact false-empty this branch exists to prevent
+      // (#261). Read the error, and say what is actually known.
+      const { data: headers, error: probeError } = await supabase.rpc(
+        "cerefox_metadata_search",
+        { ...params, p_include_content: false, p_max_bytes: null },
+      );
+      if (probeError) {
         log(0, { degraded_probe_failed: true });
-        throw err;
+        return (
+          `⚠ Nothing fit max_bytes=${max_bytes} with include_content, and the ` +
+          `follow-up query that lists what matched failed: ${probeError.message}. ` +
+          `This is NOT a confirmed empty result — retry with a larger max_bytes, ` +
+          `or with include_content: false.`
+        );
       }
       const headerRows = (headers ?? []) as Array<{ document_id: string; title: string }>;
       if (headerRows.length > 0) {
