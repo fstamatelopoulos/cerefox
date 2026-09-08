@@ -697,7 +697,10 @@ paths:
                     Response size budget in bytes (server hard ceiling 200000).
                     Whole results are dropped (never truncated mid-document) until
                     the budget is met; the response sets `truncated: true` when this
-                    happens. Advanced; leave unset for the default.
+                    happens. One exception: when nothing fits at all, a single
+                    content-free header is returned even if it exceeds the budget,
+                    because an empty results array would read as "nothing was found"
+                    (see degraded). Advanced; leave unset for the default.
                 author:
                   type: string
                   description: >
@@ -1132,7 +1135,7 @@ If the same content was already ingested (SHA-256 hash match), returns `"skipped
 | `mode` | string | `"docs"` | `"docs"` = full document results (recommended) |
 | `alpha` | number | 0.7 | Semantic weight (0 = FTS only, 1 = semantic only) |
 | `min_score` | number | 0.5 | Minimum cosine similarity threshold |
-| `max_bytes` | number | 200000 | Response size budget in bytes. Results are dropped whole (never truncated mid-document) once the budget is reached. The response includes `truncated: true` and `response_bytes` when the limit was hit. See "Response size limit" below. |
+| `max_bytes` | number | 200000 | Response size budget in bytes. Results are dropped whole (never truncated mid-document) once the budget is reached. The response includes `truncated: true` and `response_bytes` when the limit was hit. When nothing fits, `degraded: true` and a content-free header list come back instead of an empty `results` — always at least one item, even if it exceeds the budget. See "Response size limit" below. |
 
 **Response envelope fields:**
 

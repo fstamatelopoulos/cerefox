@@ -42,8 +42,10 @@ import { applyByteBudget } from "../../../_shared/mcp-tools/_utils.ts";
  * `matched` is how many results the query found, before the byte budget.
  * `degraded` is true when everything that matched was larger than max_bytes:
  * the items then carry NO content, they name what exists so the caller can
- * re-ask with a larger budget. An empty `results` with `degraded: true` is
- * never "nothing was found" — that is `matched: 0` (#254, #257).
+ * re-ask with a larger budget. That header list is capped to max_bytes and so
+ * may be a SUBSET of `matched`, except that one item is always returned even
+ * if it exceeds the budget — an empty `results` would read as "nothing was
+ * found", which is `matched: 0` and nothing else (#254, #257, #261).
  *
  * Example agent prompt:
  *   "Invoke the cerefox-search edge function with query='knowledge management'

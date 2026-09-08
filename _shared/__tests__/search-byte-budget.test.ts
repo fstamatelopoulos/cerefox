@@ -19,6 +19,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { applyByteBudget } from "../mcp-tools/_utils.ts";
+import { rowContent } from "../mcp-tools/search.ts";
 import { TOOLS_BY_NAME } from "../mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../mcp-tools/types.ts";
 
@@ -113,9 +114,72 @@ describe("every search mode renders its own content column (#259)", () => {
     expect(out).toContain("CHUNK BODY TEXT");
   });
 
-  test("docs mode is unchanged", async () => {
-    const out = await search.handler(supabase([row("Doc", 40, 1)]), args(), ctx);
-    expect(out).toContain("x".repeat(40));
+  test("the resolver reads either column, and prefers the document one", () => {
+    // `args()` pins mode "fts" (every other mode needs an embedder), so the
+    // docs-mode branch cannot be exercised through the handler here. Assert
+    // the resolver itself rather than a test that only looks like it covers
+    // both shapes (#261).
+    expect(rowContent({ full_content: "DOC BODY" })).toBe("DOC BODY");
+    expect(rowContent({ content: "CHUNK BODY" })).toBe("CHUNK BODY");
+    expect(rowContent({ full_content: "DOC", content: "CHUNK" })).toBe("DOC");
+    expect(rowContent({})).toBe("");
+  });
+
+  test("only the LEADING path element is dropped when it repeats the title", async () => {
+    // A section legitimately named after its document must still appear:
+    // dropping every matching element produced a breadcrumb that did not
+    // match the document's structure (#261).
+    const out = await search.handler(
+      supabase([
+        {
+          ...chunkRow("Release Process", "BODY", 0.9),
+          heading_path: ["Release Process", "Release Process", "Steps"],
+          chunk_index: 2,
+        },
+      ]),
+      args({ mode: "fts" }),
+      ctx,
+    );
+    expect(out).toContain("## Release Process › Release Process › Steps");
+  });
+
+  test("the degraded path names sections too, since it is the whole answer", async () => {
+    // Five chunks of one document, none fitting: without the section each
+    // header line would be the same string (#261).
+    const chunks = [0, 1, 2].map((i) => ({
+      ...chunkRow("Doc", "z".repeat(20_000), 0.9 - i / 10),
+      heading_path: ["Doc", `Section ${i}`],
+      chunk_index: i,
+    }));
+    const out = await search.handler(supabase(chunks), args({ mode: "fts", max_bytes: 2_000 }), ctx);
+    expect(out).toContain("Doc › Section 0");
+    expect(out).toContain("Doc › Section 1");
+    expect(out).toContain("Doc › Section 2");
+  });
+
+  test("a chunk result names its section, not just the document", async () => {
+    // Chunk RPCs return several chunks OF THE SAME document, so identical
+    // headings would leave an agent unable to tell them apart (#261).
+    const out = await search.handler(
+      supabase([
+        // heading_path as the RPC returns it: document title first.
+        { ...chunkRow("Doc", "FIRST", 0.9), heading_path: ["Doc", "Intro"], chunk_index: 0 },
+        { ...chunkRow("Doc", "SECOND", 0.8), heading_path: ["Doc", "Details"], chunk_index: 4 },
+        // No heading at all: the index is what tells the two apart.
+        { ...chunkRow("Doc", "THIRD", 0.7), heading_path: [], title: "", chunk_index: 9 },
+      ]),
+      args({ mode: "fts" }),
+      ctx,
+    );
+    // The document title is not repeated, and each block names its section.
+    expect(out).toContain("## Doc › Intro");
+    expect(out).toContain("## Doc › Details");
+    expect(out).not.toContain("Doc › Doc");
+    expect(out).toContain("(chunk 0)");
+    expect(out).toContain("(chunk 9)");
+    expect(out).toContain("FIRST");
+    expect(out).toContain("SECOND");
+    expect(out).toContain("THIRD");
   });
 
   test("a chunk row too large for the budget degrades instead of vanishing", async () => {

@@ -31,6 +31,12 @@ interface SearchRow {
   full_content?: string;
   /** …while `hybrid` and `fts` return the chunk text under this name. */
   content?: string;
+  /** Chunk-mode identity: the RPCs return several chunks OF THE SAME document. */
+  chunk_id?: string;
+  chunk_index?: number;
+  /** The chunk's own heading, and its full path from the document root. */
+  title?: string;
+  heading_path?: string[];
   best_score?: number;
   score?: number;
   is_partial?: boolean;
@@ -45,15 +51,39 @@ export function rowContent(row: SearchRow): string {
   return row.full_content ?? row.content ?? "";
 }
 
+/**
+ * `Document Title › Section` for a chunk row, `Document Title` for a document
+ * row, plus the ids that identify it.
+ *
+ * The chunk RPCs return several chunks OF THE SAME document, so without the
+ * section and the index those results are indistinguishable (#261). Shared by
+ * the rendered path and the degraded one, where identical headings would be
+ * the entire answer.
+ */
+function rowHeading(row: SearchRow): string {
+  const doc = row.doc_title ?? "Untitled";
+  // `heading_path` normally opens with the document's own H1, so the FIRST
+  // element is dropped when it repeats the title. Only the first: a section
+  // legitimately named after the document must still appear (#261).
+  const path = [...(row.heading_path ?? [])];
+  if (path.length > 0 && path[0] === doc) path.shift();
+  const section = path.length
+    ? path.filter(Boolean).join(" › ")
+    : row.title && row.title !== doc
+      ? row.title
+      : "";
+  const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
+  const chunk = row.chunk_index != null ? ` (chunk ${row.chunk_index})` : "";
+  return `${doc}${section ? ` › ${section}` : ""}${docId}${chunk}`;
+}
+
 /** `## Title [id: …] (score: …) -- 20,297 chars` — everything but the content. */
 function headerLine(row: SearchRow): string {
-  const title = row.doc_title ?? "Untitled";
-  const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
   const raw = row.best_score ?? row.score;
   const score = raw != null ? ` (score: ${raw.toFixed(3)})` : "";
   const size = row.total_chars != null ? ` -- ${row.total_chars.toLocaleString()} chars` : "";
   const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
-  return `## ${title}${docId}${score}${size}${hash}`;
+  return `## ${rowHeading(row)}${score}${size}${hash}`;
 }
 
 /**
@@ -245,8 +275,7 @@ async function handler(
   const belowConfidence = rows.length > 0 && rows.every((r) => r.below_confidence === true);
 
   const parts: string[] = rows.map((row) => {
-    const title = row.doc_title ?? "Untitled";
-    const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
+    const heading = rowHeading(row);
     const rawScore = row.best_score ?? row.score;
     const score = rawScore != null ? ` (score: ${rawScore.toFixed(3)})` : "";
     const partial = row.is_partial
@@ -258,7 +287,7 @@ async function handler(
     // `full_content`; `cerefox_hybrid_search` and `cerefox_fts_search` give
     // `content`, and reading only the first rendered every hybrid/fts result
     // as a title with an empty body.
-    return `## ${title}${docId}${score}${partial}${hash}\n\n${rowContent(row)}`;
+    return `## ${heading}${score}${partial}${hash}\n\n${rowContent(row)}`;
   });
 
   let output = parts.join("\n\n---\n\n");
@@ -273,7 +302,9 @@ async function handler(
     // made the footer grow with match_count and overrun the very budget it
     // was reporting on (#257).
     const NAMED = 5;
-    const titles = dropped.slice(0, NAMED).map((r) => (r as SearchRow).doc_title ?? "Untitled");
+    // The section too, for the same reason: five lines of the same document
+    // title tell the caller nothing about what was held back (#261).
+    const titles = dropped.slice(0, NAMED).map((r) => rowHeading(r as SearchRow));
     const rest = dropped.length - titles.length;
     output +=
       `\n\n[${accepted.length} of ${matched.length} result(s) shown; truncated at ` +
