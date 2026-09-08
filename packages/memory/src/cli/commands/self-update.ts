@@ -27,6 +27,7 @@ import {
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { PKG_VERSION } from "../../meta.ts";
+import { restartCommand, statusDaemon } from "../../web/daemon.ts";
 
 interface SelfUpdateOptions {
   check?: boolean;
@@ -169,6 +170,28 @@ async function action(options: SelfUpdateOptions): Promise<void> {
   // earlier releases did not hard-require their schema at ingest time.
   // The sync belongs AFTER the server update; `cerefox server deploy` prints
   // the pointer, and `cerefox guides ingest` remains the standalone command.
+  // A running daemon keeps serving the PREVIOUS build until it is restarted
+  // (#252): the upgrade replaced the package under it, so its SPA bundle and
+  // its API are the old ones. Say so here, where the user is looking.
+  const daemon = await statusDaemon().catch(() => null);
+  // Only when it is actually behind: the user may have restarted it in another
+  // terminal between the install and this probe, and telling someone to fix
+  // something that is already correct teaches them to ignore the warning.
+  if (daemon?.kind === "running" && daemon.version !== target) {
+    println("");
+    println(
+      c.yellow(
+        `⚠ The web server is still running the previous build ` +
+          `(pid ${daemon.info.pid} on :${daemon.info.port}` +
+          `${daemon.version ? `, v${daemon.version}` : ""}).`,
+      ),
+    );
+    // Carry its host and port: `web start` defaults to 127.0.0.1:8000, so a
+    // bare restart command silently MOVES a daemon that was listening
+    // anywhere else, and the bookmark or reverse proxy in front of it breaks.
+    println("  Restart it: " + c.bold(restartCommand(daemon.info.host, daemon.info.port)));
+  }
+
   println("");
   println("Next steps:");
   println("  1. " + c.bold("cerefox server deploy") + "   apply this release's schema/RPC/EF updates");

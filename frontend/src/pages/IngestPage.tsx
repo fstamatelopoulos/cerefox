@@ -14,12 +14,14 @@ import { useMetadataKeys, useProjects } from "../hooks/useProjects";
 import { showError, showV07DeferredToast } from "../utils/notifications";
 import ui from "../styles/redesign.module.css";
 import styles from "./IngestPage.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
 
 type Tab = "paste" | "file";
 
 export function IngestPage() {
+  usePageTitle("Ingest");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: projects } = useProjects();

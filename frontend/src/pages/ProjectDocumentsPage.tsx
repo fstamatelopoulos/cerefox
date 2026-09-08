@@ -13,6 +13,7 @@ import { useRowsPerPage } from "../hooks/useRowsPerPage";
 import { formatDate } from "../utils/dates";
 import ui from "../styles/redesign.module.css";
 import lp from "../components/ListPage.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 export function ProjectDocumentsPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +21,7 @@ export function ProjectDocumentsPage() {
   const { data: projects } = useProjects();
 
   const project = projects?.find((p) => p.id === id);
+  usePageTitle(project?.name ?? null);
   const projectMap = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
 
   const [page, setPage] = useState(1);

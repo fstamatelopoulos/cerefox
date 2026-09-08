@@ -41,6 +41,7 @@ import { showError, showSuccess } from "../utils/notifications";
 import md from "../components/MarkdownViewer.module.css";
 import ui from "../styles/redesign.module.css";
 import styles from "./DocumentPage.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 type View = "rendered" | "source" | "chunks";
 
@@ -125,6 +126,8 @@ export function DocumentPage() {
     queryFn: () => fetchDocument(id!, versionParam ?? undefined),
     enabled: !!id,
   });
+  // The document's own title names the tab; "Document" only while it loads.
+  usePageTitle(doc?.doc_title ?? null);
   const { data: chunks, isLoading: chunksLoading } = useQuery({
     queryKey: ["document-chunks", id],
     queryFn: () => fetchChunks(id!),

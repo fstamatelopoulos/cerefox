@@ -9,7 +9,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **A running web server no longer serves a stale app after an in-place
+  upgrade** (#252). `cerefox self-update` replaces the package while the
+  daemon keeps running, and the daemon had read `index.html` once at startup
+  for client-side routes while serving the root from disk. After an upgrade it
+  therefore handed the browser the new shell at `/app/` and the pre-upgrade
+  shell on every deep route, pointing it at a hashed bundle the upgrade had
+  deleted. That bundle then fell through to the SPA catch-all and came back as
+  `200 text/html`, so the browser received HTML where it asked for a script and
+  rendered a blank page, with a 200 in the access log. Now: `index.html` is
+  read per request (cached on mtime), a missing `/app/assets/*` is a real
+  `404`, `self-update` says when a daemon is still running the previous build
+  and prints the restart command, and both `cerefox web status` and `doctor`
+  compare the running server's version with the client's.
+
+### Added
+
+- **The browser tab says what you are looking at** (#253). A document names
+  the tab, a search shows its query, the edit page marks unsaved changes with
+  a leading dot, and every other page carries its own name. The app name is
+  not repeated in front, because tabs truncate from the right and a shared
+  prefix makes every tab look alike.
 
 ---
 

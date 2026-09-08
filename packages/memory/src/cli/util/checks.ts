@@ -33,6 +33,7 @@ import {
   compareSemver,
 } from "../../../../../_shared/compatibility/index.ts";
 import { resolveServerAssets } from "../../../../../_shared/server-assets/index.ts";
+import { restartCommand, statusDaemon } from "../../web/daemon.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 
@@ -707,6 +708,72 @@ function hasCerefoxInJsonFile(path: string): boolean {
   }
 }
 
+/**
+ * The running web daemon's build, compared with this CLI's (#252).
+ *
+ * `self-update` replaces the package in place; a daemon started before it
+ * keeps serving the old SPA bundle and the old API until it is restarted.
+ * The symptom is a blank page on a deep route after an upgrade, with a 200
+ * in the access log, so it is worth one line here.
+ */
+export async function checkWebDaemon(): Promise<CheckResult> {
+  let status: Awaited<ReturnType<typeof statusDaemon>>;
+  try {
+    status = await statusDaemon();
+  } catch {
+    return { name: "web server", status: "skipped", detail: "could not read the daemon pidfile" };
+  }
+  if (status.kind === "stopped") {
+    return { name: "web server", status: "skipped", detail: "no background daemon running" };
+  }
+  if (status.kind === "stale") {
+    // Not "warn": a pidfile outlives a reboot or a kill -9 and says nothing
+    // about the health of the install, and `doctor --strict` (used in release
+    // verification) fails on any warning.
+    return {
+      name: "web server",
+      status: "skipped",
+      detail: `no daemon running (stale pidfile for process ${status.info.pid}).`,
+      hint: "Clean it up: cerefox web stop",
+    };
+  }
+  if (!status.responding) {
+    return {
+      name: "web server",
+      status: "warn",
+      detail: `process ${status.info.pid} is alive but not answering on :${status.info.port}.`,
+      hint: `Check the log, then: ${restartCommand(status.info.host, status.info.port)}`,
+    };
+  }
+  if (status.version && status.version !== PKG_VERSION) {
+    return {
+      name: "web server",
+      status: "warn",
+      detail:
+        `running v${status.version} on :${status.info.port}, but this client is v${PKG_VERSION} ` +
+        `— it is still serving the previous build.`,
+      hint: `Restart it: ${restartCommand(status.info.host, status.info.port)}`,
+    };
+  }
+  if (!status.version) {
+    // A 200 with no parseable version is not proof it is this build: the port
+    // may have been recycled by another service. Never print the client's own
+    // version as if the server had reported it — that is the one number this
+    // check exists to compare.
+    return {
+      name: "web server",
+      status: "warn",
+      detail: `responding on :${status.info.port} (pid ${status.info.pid}) but did not report a version.`,
+      hint: `Confirm it is Cerefox: curl http://${status.info.host}:${status.info.port}/api/v1/version`,
+    };
+  }
+  return {
+    name: "web server",
+    status: "ok",
+    detail: `v${status.version} on :${status.info.port} (pid ${status.info.pid})`,
+  };
+}
+
 export function checkMcpConfigs(): CheckResult {
   // Walk known MCP client config locations and report which ones have
   // a `cerefox` server entry registered.
@@ -1035,6 +1102,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "metadata health", phase: "Checking metadata well-formedness", run: () => checkMetadataHealth() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
     { name: "postgres", phase: "Probing Postgres DDL endpoint", run: () => checkPostgres() },
+    { name: "web server", phase: "Probing the web daemon", run: () => checkWebDaemon() },
     { name: "mcp clients", phase: "Scanning MCP client configs", run: () => checkMcpConfigs() },
   ];
   return runSteps(steps, opts);

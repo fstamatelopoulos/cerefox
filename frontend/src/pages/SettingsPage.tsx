@@ -20,6 +20,7 @@ import { useState } from "react";
 import { fetchConfig, setConfigValue, type ConfigEntry } from "../api/config";
 import { CliCard } from "../components/CliCard";
 import { showError, showSuccess } from "../utils/notifications";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 /**
  * Runtime settings — the web face of `cerefox config get/set`.
@@ -47,6 +48,7 @@ const GROUP_BLURB: Record<string, string> = {
 };
 
 export function SettingsPage() {
+  usePageTitle("Settings");
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
 

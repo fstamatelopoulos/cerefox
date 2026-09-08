@@ -34,7 +34,7 @@ import {
   isLoopbackAddress,
 } from "./auth.ts";
 import { existsSync } from "node:fs";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
@@ -174,11 +174,51 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
       }),
     );
 
+    // (4b) A missing hashed asset is a 404, never the SPA shell (#252).
+    //
+    // serveStatic calls next() on a miss, so without this an absent
+    // /app/assets/<hash>.js fell through to the catch-all below and was
+    // answered `200 text/html`. The browser asked for a script, got HTML,
+    // executed nothing, and rendered a blank page — while the access log
+    // recorded a 200. A wrong-typed 200 is the worst answer for a script tag.
+    app.get("/app/assets/*", (c) => c.text("Not found", 404));
+
     // (5) SPA catch-all for client-side routing.
+    //
+    // Read per request, not once at startup (#252). `cerefox self-update`
+    // replaces the package in place while a daemon keeps running: a cached
+    // copy then served the PRE-upgrade index.html on every deep route (the
+    // root came from serveStatic, i.e. from disk), pointing the browser at a
+    // bundle the upgrade had deleted. Cached on mtime, so the common case is
+    // one stat() per request, and an upgrade is picked up without a restart.
     const indexPath = join(spaDist, "index.html");
     if (existsSync(indexPath)) {
-      const indexHtml = readFileSync(indexPath, "utf8");
-      app.get("/app/*", (c) => c.html(indexHtml));
+      // Keyed on mtime AND size: npm and tar preserve tarball mtimes and some
+      // filesystems store whole seconds, so a same-mtime replacement is not
+      // hypothetical — and it would resurrect exactly the bug this fixes.
+      let cached: { mtimeMs: number; size: number; html: string } | null = null;
+      const readIndex = (): string | null => {
+        try {
+          const { mtimeMs, size } = statSync(indexPath);
+          if (!cached || cached.mtimeMs !== mtimeMs || cached.size !== size) {
+            cached = { mtimeMs, size, html: readFileSync(indexPath, "utf8") };
+          }
+        } catch {
+          // Mid-upgrade the file can briefly vanish; serve the last good copy.
+        }
+        return cached?.html ?? null;
+      };
+      readIndex();
+      app.get("/app/*", (c) => {
+        const html = readIndex();
+        // An empty 200 is the same class of lie as the wrong-typed 200 above:
+        // the browser renders a blank page and the log says success. If the
+        // shell cannot be read at all, say so with a status that means it.
+        if (html === null) {
+          return c.text("The web UI could not be read from disk. Restart the server.", 503);
+        }
+        return c.html(html);
+      });
     }
   }
 

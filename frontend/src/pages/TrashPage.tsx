@@ -11,6 +11,7 @@ import { useProjects } from "../hooks/useProjects";
 import { invalidateDocumentViews } from "../lib/invalidate";
 import { showError, showInfo, showSuccess } from "../utils/notifications";
 import ui from "../styles/redesign.module.css";
+import { usePageTitle } from "../hooks/usePageTitle";
 
 const PROJECT_COLORS = ["--primary", "--violet", "--blue", "--green", "--yellow", "--red"];
 function colorFor(name: string): string {
@@ -20,6 +21,7 @@ function colorFor(name: string): string {
 }
 
 export function TrashPage() {
+  usePageTitle("Trash");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: projects } = useProjects();
