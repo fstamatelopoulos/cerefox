@@ -145,22 +145,27 @@ export function getMinTermCoverage(): number | undefined {
 export function applyByteBudget(
   rows: unknown[],
   maxBytes: number,
-): { accepted: unknown[]; truncated: boolean; usedBytes: number } {
+): { accepted: unknown[]; dropped: unknown[]; truncated: boolean; usedBytes: number } {
   const accepted: unknown[] = [];
   let usedBytes = 0;
   let truncated = false;
+  let cut = rows.length;
 
-  for (const row of rows) {
+  for (const [i, row] of rows.entries()) {
     const rowBytes = new TextEncoder().encode(JSON.stringify(row)).length;
     if (usedBytes + rowBytes > maxBytes) {
       truncated = true;
+      cut = i;
       break;
     }
     accepted.push(row);
     usedBytes += rowBytes;
   }
 
-  return { accepted, truncated, usedBytes };
+  // What did not fit, so a caller can say so instead of reporting nothing
+  // (#254): a first row larger than the budget empties `accepted` entirely,
+  // and "no results" is the one answer an agent acts on irreversibly.
+  return { accepted, dropped: rows.slice(cut), truncated, usedBytes };
 }
 
 import type { AccessPath } from "./types.ts";

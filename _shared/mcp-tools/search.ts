@@ -24,6 +24,61 @@ import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 
+interface SearchRow {
+  document_id?: string;
+  doc_title?: string;
+  full_content?: string;
+  best_score?: number;
+  score?: number;
+  is_partial?: boolean;
+  chunk_count?: number;
+  total_chars?: number;
+  content_hash?: string;
+  below_confidence?: boolean;
+}
+
+/** `## Title [id: …] (score: …) -- 20,297 chars` — everything but the content. */
+function headerLine(row: SearchRow): string {
+  const title = row.doc_title ?? "Untitled";
+  const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
+  const raw = row.best_score ?? row.score;
+  const score = raw != null ? ` (score: ${raw.toFixed(3)})` : "";
+  const size = row.total_chars != null ? ` -- ${row.total_chars.toLocaleString()} chars` : "";
+  const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
+  return `## ${title}${docId}${score}${size}${hash}`;
+}
+
+/**
+ * What to say when results matched but none fit `max_bytes` (#254).
+ *
+ * Never "no results": that is the one answer an agent acts on irreversibly.
+ * The headers are listed while they fit the same budget, so the response
+ * still honours the limit the caller asked for; if even one header does not
+ * fit, the count and the remedy alone still beat silence.
+ */
+function degradedToHeaders(matched: SearchRow[], maxBytes: number): string {
+  const biggest = Math.max(
+    ...matched.map((r) => new TextEncoder().encode(JSON.stringify(r)).length),
+  );
+  const lead =
+    `⚠ ${matched.length} result(s) matched, but none fit max_bytes=${maxBytes} ` +
+    `(the largest is ${biggest.toLocaleString()} bytes). This is NOT an empty ` +
+    `knowledge base. Listing what matched, without content — raise max_bytes to ` +
+    `read it, or read one document with cerefox_get_document (outline: true for ` +
+    `structure, or section: "## Heading" for one part).`;
+
+  const lines: string[] = [];
+  let used = new TextEncoder().encode(lead).length;
+  for (const row of matched) {
+    const line = headerLine(row);
+    const size = new TextEncoder().encode(line).length + 2;
+    if (used + size > maxBytes) break;
+    lines.push(line);
+    used += size;
+  }
+  return lines.length > 0 ? `${lead}\n\n${lines.join("\n\n")}` : lead;
+}
+
 async function handler(
   supabase: MCPSupabaseClient,
   args: Record<string, unknown>,
@@ -131,7 +186,8 @@ async function handler(
 
   if (error) throw new Error(`RPC error: ${error.message}`);
 
-  const { accepted, truncated, usedBytes } = applyByteBudget(data ?? [], max_bytes);
+  const matched = (data ?? []) as SearchRow[];
+  const { accepted, dropped, truncated, usedBytes } = applyByteBudget(matched, max_bytes);
 
   logUsage(supabase, {
     operation: "search",
@@ -139,23 +195,26 @@ async function handler(
     requestor: callerIdentity(args),
     query_text: query,
     project_id: projectId,
-    result_count: accepted.length,
+    // What the QUERY matched, not what survived the byte budget. The two
+    // differ only when rows were dropped, and recording 0 there made a
+    // budget-wiped search look like an empty knowledge base in analytics too.
+    result_count: matched.length,
+    ...(truncated ? { extra: { returned: accepted.length, truncated: true } } : {}),
   });
 
-  if (accepted.length === 0) return "No results found.";
+  // Nothing matched: the honest empty answer.
+  if (matched.length === 0) return "No results found.";
 
-  const rows = accepted as Array<{
-    document_id?: string;
-    doc_title?: string;
-    full_content?: string;
-    best_score?: number;
-    score?: number;
-    is_partial?: boolean;
-    chunk_count?: number;
-    total_chars?: number;
-    content_hash?: string;
-    below_confidence?: boolean;
-  }>;
+  // Something matched but none of it fit the budget (#254). Reporting "no
+  // results" here is the most damaging answer the tool can give: an agent
+  // stops looking and often recreates the document it failed to find. Show
+  // the headers instead — a few hundred bytes that name what exists and how
+  // to read it.
+  if (accepted.length === 0) {
+    return degradedToHeaders(matched, max_bytes);
+  }
+
+  const rows = accepted as SearchRow[];
 
   // 28I: nothing cleared the relevance threshold, so the server returned its
   // best-effort top candidates flagged below_confidence instead of an empty
@@ -184,7 +243,10 @@ async function handler(
   }
   if (truncated) {
     output +=
-      `\n\n[Results truncated at ${usedBytes} bytes. Use a more specific query or a smaller match_count to see more.]`;
+      `\n\n[${accepted.length} of ${matched.length} result(s) shown; truncated at ` +
+      `${usedBytes} bytes. ${dropped.length} did not fit: ` +
+      `${dropped.map((r) => (r as SearchRow).doc_title ?? "Untitled").join(", ")}. ` +
+      `Raise max_bytes, narrow the query, or lower match_count.]`;
   }
   return output;
 }

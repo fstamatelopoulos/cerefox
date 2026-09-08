@@ -7,7 +7,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { applyByteBudget, getMaxResponseBytes, logUsage } from "./_utils.ts";
+import { getMaxResponseBytes, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { reviewWorkflowEnabled } from "./feature-flags.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
@@ -93,17 +93,39 @@ async function handler(
     result_count: rows.length,
   });
 
-  if (rows.length === 0) return "No documents match the given criteria.";
+  if (rows.length === 0) {
+    // The RPC applies the byte budget server-side by stopping at the first row
+    // that does not fit, so a single oversized document empties the result set
+    // the same way the search tool's client-side budget did (#254). Ask again
+    // without content before reporting nothing: an agent that is told "no
+    // documents" stops looking, and here that would be false.
+    if (include_content && max_bytes !== null) {
+      const { data: headers } = await supabase.rpc("cerefox_metadata_search", {
+        ...params,
+        p_include_content: false,
+        p_max_bytes: null,
+      });
+      const headerRows = (headers ?? []) as Array<{ document_id: string; title: string }>;
+      if (headerRows.length > 0) {
+        return (
+          `⚠ ${headerRows.length} document(s) match, but none fit max_bytes=${max_bytes} ` +
+          `with include_content. This is NOT an empty result. Listing them without ` +
+          `content — raise max_bytes, or read one with cerefox_get_document ` +
+          `(outline: true for structure).\n\n` +
+          headerRows.map((r) => `## ${r.title} [id: ${r.document_id}]`).join("\n")
+        );
+      }
+    }
+    return "No documents match the given criteria.";
+  }
 
   // The review status is a column of a feature that may be off (#241); when
   // it is, an agent should not see "approved" and wonder what it means.
   const showReview = await reviewWorkflowEnabled(supabase);
 
-  // Note: when include_content is true the RPC already respects p_max_bytes
-  // server-side. The applyByteBudget helper is retained here only for
-  // parity with the EF implementation and as a defensive trim — see the
-  // EF original for the same shape.
-  void applyByteBudget; // referenced for symmetry; kept for v0.5 work
+  // The byte budget is the RPC's job here (`p_max_bytes`), not this file's:
+  // it stops emitting rows once the accumulated content would exceed it. The
+  // empty-result branch above compensates for its one sharp edge (#254).
 
   const parts: string[] = rows.map((row) => {
     const projects = row.project_names?.length

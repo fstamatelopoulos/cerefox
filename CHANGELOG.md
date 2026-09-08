@@ -11,6 +11,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Search no longer reports an empty knowledge base when results did not fit
+  the byte budget** (#254). `cerefox_search` returns whole documents and drops
+  whole rows to honour `max_bytes`, so a top hit larger than the budget left
+  nothing and the tool answered `No results found.` — while the same query in
+  the web UI, which has no budget, showed that document at the top. An agent
+  reading "no results" stops looking and often re-creates what it could not
+  find. Now a budget miss returns the **headers** of what matched (title, id,
+  score, size, hash) with the reason and the remedy, and `No results found.`
+  is reserved for a query that genuinely matched nothing. A partial fit names
+  the documents that were held back instead of only counting them. The same
+  degradation is applied by the `cerefox-search` Edge Function (new `matched`
+  and `degraded` fields; GPT Actions OpenAPI block at **4.1.0**), and
+  `cerefox_metadata_search` re-asks without content before reporting nothing,
+  since its budget is enforced the same way inside the RPC. The usage log now
+  records how many results a query matched rather than how many survived the
+  budget, so this can no longer hide in analytics either.
 - **A running web server no longer serves a stale app after an in-place
   upgrade** (#252). `cerefox self-update` replaces the package while the
   daemon keeps running, and the daemon had read `index.html` once at startup
