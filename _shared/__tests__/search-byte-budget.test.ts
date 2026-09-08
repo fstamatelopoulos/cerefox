@@ -82,6 +82,55 @@ describe("applyByteBudget", () => {
   });
 });
 
+/** A chunk row, as `cerefox_hybrid_search` and `cerefox_fts_search` return one. */
+function chunkRow(title: string, text: string, score: number) {
+  return {
+    document_id: `id-${title}`,
+    chunk_id: `chunk-${title}`,
+    doc_title: title,
+    content: text, // NOT full_content: that column belongs to the docs-mode RPC
+    heading_path: [title, "Section"],
+    score,
+  };
+}
+
+describe("every search mode renders its own content column (#259)", () => {
+  test("a chunk row is not rendered as an empty body", async () => {
+    // The docs-mode RPC returns `full_content`; hybrid and fts return
+    // `content`. Reading only the first rendered every chunk result as a
+    // title with nothing under it, over both MCP transports, for as long as
+    // the shared handlers have existed.
+    //
+    // Only `fts` is exercised here: `hybrid` embeds the query first and would
+    // need a live embedder, but it renders through the same code path, and
+    // the live Edge Function suite covers all three modes.
+    const out = await search.handler(
+      supabase([chunkRow("Contact", "CHUNK BODY TEXT", 0.9)]),
+      args({ mode: "fts" }),
+      ctx,
+    );
+    expect(out).toContain("## Contact");
+    expect(out).toContain("CHUNK BODY TEXT");
+  });
+
+  test("docs mode is unchanged", async () => {
+    const out = await search.handler(supabase([row("Doc", 40, 1)]), args(), ctx);
+    expect(out).toContain("x".repeat(40));
+  });
+
+  test("a chunk row too large for the budget degrades instead of vanishing", async () => {
+    // The budget always measured `content`; only the renderer ignored it, so
+    // a big chunk could empty the result set AND print nothing.
+    const out = await search.handler(
+      supabase([chunkRow("Big", "y".repeat(30_000), 0.9)]),
+      args({ mode: "fts", max_bytes: 2_000 }),
+      ctx,
+    );
+    expect(out).not.toContain("No results found");
+    expect(out).toContain("Big");
+  });
+});
+
 describe("cerefox_search never reports an empty store for a budget miss", () => {
   test("matched but nothing fits: headers, not \"No results found.\"", async () => {
     const supabase = clientReturning([row("Contact - Josh Cohen", 20_000, 2.9)]);
