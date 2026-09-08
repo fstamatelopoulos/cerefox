@@ -152,3 +152,29 @@ longer reads as an empty store in analytics either.
 **Consequence for the release.** 1.14.2 now includes an Edge Function change,
 so the upgrade is `cerefox self-update` **plus** `cerefox server deploy
 --functions-only`, not the client-only story it was before.
+
+## #257 — the degraded response, reviewed after the cut (v1.14.3)
+
+The review of the #254 fix landed after 1.14.2 was already tagged, and it found
+a regression the fix had introduced. The Edge Function's degraded projection
+stripped `full_content`, which is a column of `cerefox_search_docs` (mode
+`docs`) only: `cerefox_hybrid_search` and the FTS path return `content`, so in
+those modes the rest-spread copied every matched chunk **with its text** while
+the response reported `degraded: true` and a note saying content was omitted.
+Measured on staging with `match_count: 20` and `max_bytes: 3000`: docs 14.7 KB,
+hybrid 69 KB, fts 83 KB — the last two carrying full content.
+
+The header list was never capped either, on any surface, so even the correct
+`docs` mode answered a 3 KB budget with 14.7 KB.
+
+Fixed: both content columns stripped, the degraded list held to `max_bytes`
+(Edge Function, `cerefox_search`, and the `cerefox_metadata_search` fallback),
+the 28I below-confidence flag carried into the degraded lead so weak candidates
+are never presented as confident matches, the truncation footer capped at five
+named documents plus a count, the metadata path logging what matched, and the
+Edge Function's orphaned JSDoc and stale response contract corrected.
+
+**Lesson.** The fix for a "reports nothing" bug is a new response shape, and a
+new response shape has to be checked in every mode the tool offers. The
+original change was verified in `docs` mode alone, which is the one mode where
+the column name made it correct.

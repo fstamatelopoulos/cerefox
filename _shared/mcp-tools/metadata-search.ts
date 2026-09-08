@@ -107,13 +107,34 @@ async function handler(
       });
       const headerRows = (headers ?? []) as Array<{ document_id: string; title: string }>;
       if (headerRows.length > 0) {
-        return (
+        // The caller asked for a budget; honour it in the answer that explains
+        // the budget. `limit` is caller-supplied, so an uncapped list could be
+        // tens of KB in reply to a 2 KB request (#257).
+        const lead =
           `⚠ ${headerRows.length} document(s) match, but none fit max_bytes=${max_bytes} ` +
           `with include_content. This is NOT an empty result. Listing them without ` +
           `content — raise max_bytes, or read one with cerefox_get_document ` +
-          `(outline: true for structure).\n\n` +
-          headerRows.map((r) => `## ${r.title} [id: ${r.document_id}]`).join("\n")
-        );
+          `(outline: true for structure).`;
+        const lines: string[] = [];
+        let used = new TextEncoder().encode(lead).length;
+        for (const r of headerRows) {
+          const line = `## ${r.title} [id: ${r.document_id}]`;
+          const size = new TextEncoder().encode(line).length + 1;
+          if (used + size > max_bytes) break;
+          lines.push(line);
+          used += size;
+        }
+        logUsage(supabase, {
+          operation: "metadata_search",
+          accessPath: ctx.accessPath,
+          requestor: callerIdentity(args),
+          query_text: JSON.stringify(metadata_filter ?? {}),
+          project_id: projectId,
+          // What matched, not what the budget allowed through (#257).
+          result_count: headerRows.length,
+          extra: { returned: lines.length, degraded: true },
+        });
+        return lines.length > 0 ? `${lead}\n${lines.join("\n")}` : lead;
       }
     }
     return "No documents match the given criteria.";

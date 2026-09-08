@@ -390,6 +390,45 @@ describe("Edge Functions (live HTTP)", () => {
     });
   });
 
+  // ── cerefox-search: the degraded response (#254, #257) ─────────────────────
+  describe("cerefox-search degraded response", () => {
+    liveTest("a budget miss omits content in EVERY mode and honours the budget (#257)", async () => {
+      // v1.14.2 stripped only `full_content`, which exists in "docs" mode
+      // alone: hybrid and fts return a `content` column, so the degraded
+      // response shipped tens of KB of chunk text while claiming content was
+      // omitted, against a budget of a few KB.
+      const title = uniqueTitle("Degraded Modes");
+      const r = await invokeOk("cerefox-ingest", {
+        title,
+        content: `# Degraded\n\n${"lorem ipsum dolor sit amet ".repeat(400)}`,
+        author: "e2e-ef-test",
+        author_type: "agent",
+      });
+      track(r.document_id);
+
+      for (const mode of ["docs", "hybrid", "fts"]) {
+        const body = (await invokeOk("cerefox-search", {
+          query: "lorem ipsum dolor",
+          mode,
+          match_count: 20,
+          max_bytes: 3000,
+        })) as {
+          degraded?: boolean;
+          matched?: number;
+          results?: Array<Record<string, unknown>>;
+        };
+        if (!body.degraded) continue; // nothing oversized in this store: nothing to assert
+        expect(body.matched ?? 0).toBeGreaterThan(0);
+        for (const row of body.results ?? []) {
+          expect(row.full_content).toBeUndefined();
+          expect(row.content).toBeUndefined();
+        }
+        // The answer that explains the budget must itself respect it.
+        expect(JSON.stringify(body.results ?? []).length).toBeLessThanOrEqual(3000);
+      }
+    });
+  });
+
   // ── cerefox-metadata-search ────────────────────────────────────────────────
   describe("cerefox-metadata-search", () => {
     liveTest("returns matches for a metadata filter", async () => {

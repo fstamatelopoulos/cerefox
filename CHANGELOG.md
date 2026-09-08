@@ -9,6 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **The degraded search response no longer leaks content or overruns the
+  budget** (#257, a regression in v1.14.2). v1.14.2 made a byte-budget miss
+  return what matched *without* content instead of reporting "no results", but
+  the `cerefox-search` Edge Function stripped only `full_content` — the column
+  `cerefox_search_docs` returns. `cerefox_hybrid_search` and the FTS path
+  return `content`, so in those modes every matched chunk came back with its
+  full text while the response claimed the content had been omitted: 83 KB
+  answered a 3 KB budget. Both columns are stripped now, and the degraded list
+  is held to `max_bytes` on every surface. Also fixed: the below-confidence
+  warning survives into the degraded path, so weak candidates are never
+  presented as confident matches; the truncation footer names at most five
+  held-back documents plus a count instead of all of them; the
+  `cerefox_metadata_search` fallback list is capped the same way and records
+  how many documents matched rather than zero.
 Open roadmap.
 
 ---

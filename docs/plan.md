@@ -28,7 +28,18 @@
 ---
 ## Current Focus
 
-**2026-09-08 — v1.14.2 IN PROGRESS** (#252 + #253 merged as PR #255; #254 on
+**2026-09-08 — v1.14.3 IN PROGRESS** (branch `fix/degraded-response-budget`,
+#257): the v1.14.2 degraded-response regression, found by review after the cut.
+The search EF stripped only `full_content`, so hybrid and fts returned full
+chunk text (83 KB against a 3 KB budget) while claiming content was omitted;
+the degraded list was never capped either. Both content columns stripped, the
+list held to the budget everywhere, below-confidence carried into the degraded
+lead, the truncation footer bounded, the metadata fallback capped and logged.
+Staging runs the fixed function; **1.14.3 needs `cerefox server deploy
+--functions-only`** like 1.14.2.
+
+**2026-09-08 — v1.14.2 SHIPPED** (cut `f18ccb0`; npm 1.14.2, ~8 min of CDN lag
+on the tarball after a successful publish). (#252 + #253 merged as PR #255; #254 on
 `fix/search-budget-false-negative`). Three items. (a) The
 stale-SPA bug found on production after `self-update`: `index.html` is now read
 per request (mtime-cached), a missing `/app/assets/*` is a 404 instead of the
