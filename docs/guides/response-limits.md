@@ -48,8 +48,11 @@ as "this knowledge does not exist". It is a header list naming what matched,
 its size and its id, prefixed with a warning and the remedy. The same case on
 the Edge Function sets `"degraded": true`, returns items with no content, and
 reports `"matched"`: read that, not `results.length`, to know what the query
-found. Only in that case, and only for a single result plus the shortest
-possible warning, may a reply exceed `max_bytes`: silence would be worse.
+found. A reply may exceed `max_bytes` only by the framing that cannot be dropped
+without misleading you: the notice that results were held back, or the
+below-confidence advisory. Both are a few dozen bytes, and neither is ever
+traded for content. Returning 1 of 5 results without saying so, or presenting
+weak candidates as confident ones, would be worse than a small overrun.
 
 ---
 

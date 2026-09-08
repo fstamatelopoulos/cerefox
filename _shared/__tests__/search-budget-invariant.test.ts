@@ -141,18 +141,74 @@ describe("a search reply never exceeds max_bytes", () => {
             expect(out).not.toContain("z".repeat(200)); // an explanation, not content
           }
 
-          if (bytes(out) > budget) {
-            // Two documented exceptions, and no others: nothing fit at all, or
-            // a single result plus the shortest possible advisory.
-            const lastResort =
-              degraded || (out.startsWith("⚠ Below the confidence threshold") && !out.includes("did not fit"));
-            expect(lastResort).toBe(true);
+          const over = bytes(out) - budget;
+          if (over > 0) {
+            // The contract, stated exactly: a reply stays inside the budget
+            // EXCEPT by at most the framing that cannot be dropped without
+            // lying — the notice that results were held back, or the
+            // below-confidence advisory. Losing either would mean silently
+            // returning 1 of 5 hits, or presenting weak candidates as
+            // confident ones. Bounded, and never an excuse for content.
+            const mustSay =
+              degraded ||
+              out.includes("shown; raise max_bytes") ||
+              out.includes("did not fit") ||
+              out.startsWith("⚠ Below the confidence threshold");
+            expect(mustSay).toBe(true);
+            expect(over).toBeLessThanOrEqual(400);
           }
         });
         }
       }
     }
   }
+
+  test("a reply that held results back always says so (#266)", async () => {
+    // Silent truncation is the same failure as a false empty: the caller
+    // believes they saw everything. The notice is the one thing never dropped.
+    const rows = [
+      chunk("Doc", "Fits", 0, 880, 0.99),
+      ...Array.from({ length: 4 }, (_, i) => chunk("Doc", `Big ${i}`, i + 1, 5_000, 0.5)),
+    ];
+    const out = await search.handler(
+      client(rows),
+      { query: "q", mode: "fts", max_bytes: 1_000, author: "t" },
+      ctx,
+    );
+    expect(out).toContain("z".repeat(880));
+    expect(out).toMatch(/did not fit|of 5 shown/);
+  });
+
+  test("an oversized top hit no longer suppresses the results behind it (#266)", async () => {
+    // One huge document ranked first used to end the scan, so smaller hits
+    // that fit were never returned and the reply claimed nothing fit.
+    const rows = [
+      chunk("Huge", "All", 0, 40_000, 0.99),
+      chunk("Small A", "Bit", 1, 200, 0.8),
+      chunk("Small B", "Bit", 2, 200, 0.7),
+    ];
+    const out = await search.handler(
+      client(rows),
+      { query: "q", mode: "fts", max_bytes: 5_000, author: "t" },
+      ctx,
+    );
+    expect(out).not.toContain("none fit max_bytes");
+    expect(out).toContain("Small A");
+    expect(out).toContain("Small B");
+    expect(out).toContain("Huge"); // named as held back
+  });
+
+  test("a non-numeric max_bytes cannot bypass the ceiling (#266)", async () => {
+    // NaN compares false against every budget check, so the ceiling vanished.
+    const rows = Array.from({ length: 5 }, (_, i) => chunk("Doc", `S${i}`, i, 5_000, 0.9));
+    const out = await search.handler(
+      client(rows),
+      { query: "q", mode: "fts", max_bytes: "lots" as unknown as number, author: "t" },
+      ctx,
+    );
+    // Falls back to the server ceiling rather than "no budget at all".
+    expect(bytes(out)).toBeLessThanOrEqual(200_000);
+  });
 
   test("content that fits is never dropped so a footer can fit (#265)", async () => {
     // Five rows whose bodies fit but whose footer does not: the reply must be

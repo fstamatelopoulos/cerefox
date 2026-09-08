@@ -207,7 +207,14 @@ async function handler(
   const requested_max_bytes = args.max_bytes as number | undefined;
 
   const ceiling = getMaxResponseBytes();
-  const max_bytes = Math.min(requested_max_bytes ?? ceiling, ceiling);
+  // Sanitised before clamping, for the reason `match_count` is: `NaN` makes
+  // every `> max_bytes` comparison below false, so a non-numeric value emitted
+  // every row unbounded — the ceiling bypassed by passing it a word (#266).
+  const requestedBytes = Math.floor(Number(requested_max_bytes));
+  const max_bytes = Math.min(
+    Number.isFinite(requestedBytes) && requestedBytes > 0 ? requestedBytes : ceiling,
+    ceiling,
+  );
 
   if (
     metadata_filter !== null &&
@@ -338,54 +345,60 @@ async function handler(
           `signal, not necessarily absent knowledge.\n\n`;
 
   /**
-   * The whole reply for a given number of rows.
+   * The whole reply for a set of kept rows.
    *
-   * Everything but the results is optional, and that ordering is the point:
-   * when the budget is tight the framing gives way, never the answer. Dropping
-   * a row because the FOOTER would not fit lost content that fit comfortably,
-   * and then reported "none fit" about it (#265).
+   * Everything but the results is optional, in this order: the long advisory
+   * gives way first, then the named list of what was dropped, then the bare
+   * footer. What is NOT optional is saying that results were dropped — a
+   * reply that quietly returns 1 of 5 hits leaves the caller believing they
+   * saw everything, which is the failure this whole file is about (#266).
    */
-  const assemble = (take: number, short: boolean, withFooter: boolean): string => {
-    const body = banner(take, short) + rendered.slice(0, take).join(SEP);
-    if (take >= matched.length || !withFooter) return body;
+  const assemble = (keptCount: number, short: boolean): string => {
+    const kept = keptIdx.slice(0, keptCount);
+    const body = banner(keptCount, short) + kept.map((i) => rendered[i]!).join(SEP);
+    if (kept.length === matched.length) return body;
 
-    const dropped = matched.slice(take);
+    const droppedRows = matched.filter((_, i) => !kept.includes(i));
+    const room = max_bytes - size(body);
     const footer = (named: number) => {
-      const labels = dropped.slice(0, named).map(shortLabel);
-      const rest = dropped.length - labels.length;
+      const labels = droppedRows.slice(0, named).map(shortLabel);
+      const rest = droppedRows.length - labels.length;
       const naming = labels.length
         ? `: ${labels.join(", ")}${rest > 0 ? ` and ${rest} more` : ""}`
         : "";
       return (
-        `\n\n[${take} of ${matched.length} result(s) shown; ${dropped.length} did not fit ` +
-        `max_bytes=${max_bytes}${naming}. Raise max_bytes, narrow the query, or lower ` +
-        `match_count.]`
+        `\n\n[${kept.length} of ${matched.length} result(s) shown; ${droppedRows.length} did ` +
+        `not fit max_bytes=${max_bytes}${naming}. Raise max_bytes, narrow the query, or ` +
+        `lower match_count.]`
       );
     };
-    const room = max_bytes - size(body);
-    for (let named = Math.min(5, dropped.length); named >= 1; named--) {
+    for (let named = Math.min(5, droppedRows.length); named >= 1; named--) {
       const candidate = footer(named);
       if (size(candidate) <= room) return body + candidate;
     }
     const bare = footer(0);
-    return size(bare) <= room ? body + bare : body;
+    if (size(bare) <= room) return body + bare;
+    // The floor, ~25 bytes, never dropped: the caller must know there is more.
+    return body + `\n\n[${kept.length} of ${matched.length} shown; raise max_bytes]`;
   };
 
-  // How many rows the BODY alone can carry: one linear pass over the rendered
-  // sizes. Starting from `matched.length` instead made the fit loop quadratic
-  // on a caller-controlled count (#265).
+  // Which rows the budget can carry, in rank order. Rows that do not fit are
+  // SKIPPED rather than ending the scan: one oversized top hit used to suppress
+  // every smaller result behind it, and the reply then claimed nothing fit when
+  // rows two and three would have fitted comfortably (#266).
   const sepBytes = size(SEP);
-  let take = 0;
+  const keptIdx: number[] = [];
   let acc = 0;
-  for (const text of rendered) {
-    const add = size(text) + (take > 0 ? sepBytes : 0);
-    if (acc + add > max_bytes) break;
+  for (let i = 0; i < rendered.length; i++) {
+    const add = size(rendered[i]!) + (keptIdx.length > 0 ? sepBytes : 0);
+    if (acc + add > max_bytes) continue;
     acc += add;
-    take += 1;
+    keptIdx.push(i);
   }
 
-  // Not one result fits (#254) — the only case that may answer with no content.
-  if (take === 0) {
+  // Not one result fits (#254) — the only case that answers with no content,
+  // and now the only case that can truthfully say so.
+  if (keptIdx.length === 0) {
     logUsage(supabase, {
       operation: "search",
       accessPath: ctx.accessPath,
@@ -398,23 +411,20 @@ async function handler(
     return degradedToHeaders(matched, rendered, max_bytes, belowConfidence);
   }
 
-  // Give up the framing before the content: the long advisory first, then the
-  // footer, and only then a result. `take` never returns to 0 here — the pass
-  // above already proved one body fits, and losing it to a footer is how a
-  // near-ceiling document disappeared entirely (#265).
+  // Give up the framing before the content, but never the fact of truncation:
+  // long advisory, then a result, and the "N of M shown" notice always stays.
+  let keptCount = keptIdx.length;
   let short = false;
-  let withFooter = true;
-  let output = assemble(take, short, withFooter);
+  let output = assemble(keptCount, short);
   while (size(output) > max_bytes) {
     if (belowConfidence && !short) short = true;
-    else if (withFooter) withFooter = false;
-    else if (take > 1) {
-      take -= 1;
+    else if (keptCount > 1) {
+      keptCount -= 1;
       short = belowConfidence;
-      withFooter = true;
-    } else break; // one result, no footer, shortest advisory: this is the floor
-    output = assemble(take, short, withFooter);
+    } else break; // one result plus the shortest possible framing: the floor
+    output = assemble(keptCount, short);
   }
+  const take = keptCount;
 
   logUsage(supabase, {
     operation: "search",

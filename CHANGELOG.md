@@ -20,6 +20,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the basis of content the caller never received. Present since the handlers
   moved into `_shared/mcp-tools/`; it survived because `docs` is the default
   mode and the CLI and web UI each render chunks correctly on their own.
+- **A search reply never hides that it held results back** (#266). When the
+  truncation footer did not fit, the reply came back as content with no notice
+  at all, so a caller who received one of five results had no way to know the
+  others matched — the same failure as a false empty, in a quieter form. A
+  minimal "N of M shown" notice is now never dropped. An oversized top hit no
+  longer suppresses the results behind it: rows that do not fit are skipped and
+  named, where before the scan stopped at the first one and the reply claimed
+  nothing fit. `max_bytes` is sanitised like `match_count`, since a
+  non-numeric value became `NaN`, compared false against every budget check,
+  and emitted every row unbounded — the server ceiling bypassed by passing it
+  a word. `docs/guides/response-limits.md` states the contract, including the
+  only overruns allowed and why.
 - **The search byte budget is now measured in the units the caller receives**
   (#265). `max_bytes` was enforced against `JSON.stringify(row)` while the tool
   returns rendered markdown, so nothing was ever truly bounded — the root cause
