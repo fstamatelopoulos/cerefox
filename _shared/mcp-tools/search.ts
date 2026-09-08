@@ -56,15 +56,26 @@ function headerLine(row: SearchRow): string {
  * still honours the limit the caller asked for; if even one header does not
  * fit, the count and the remedy alone still beat silence.
  */
-function degradedToHeaders(matched: SearchRow[], maxBytes: number): string {
+function degradedToHeaders(
+  matched: SearchRow[],
+  maxBytes: number,
+  belowConfidence: boolean,
+): string {
   const biggest = Math.max(
     ...matched.map((r) => new TextEncoder().encode(JSON.stringify(r)).length),
   );
+  // A degraded response must not silently promote 28I's weak-signal
+  // candidates into real matches: an agent told "N result(s) matched" about
+  // rows that cleared no threshold would trust them.
+  const confidence = belowConfidence
+    ? "None of these cleared the confidence threshold — they are the closest " +
+      "candidates, so judge relevance from the scores. "
+    : "";
   const lead =
     `⚠ ${matched.length} result(s) matched, but none fit max_bytes=${maxBytes} ` +
-    `(the largest is ${biggest.toLocaleString()} bytes). This is NOT an empty ` +
-    `knowledge base. Listing what matched, without content — raise max_bytes to ` +
-    `read it, or read one document with cerefox_get_document (outline: true for ` +
+    `(the largest is ${biggest.toLocaleString()} bytes). ${confidence}This is NOT an ` +
+    `empty knowledge base. Listing what matched, without content — raise max_bytes ` +
+    `to read it, or read one document with cerefox_get_document (outline: true for ` +
     `structure, or section: "## Heading" for one part).`;
 
   const lines: string[] = [];
@@ -211,7 +222,11 @@ async function handler(
   // the headers instead — a few hundred bytes that name what exists and how
   // to read it.
   if (accepted.length === 0) {
-    return degradedToHeaders(matched, max_bytes);
+    return degradedToHeaders(
+      matched,
+      max_bytes,
+      matched.every((r) => r.below_confidence === true),
+    );
   }
 
   const rows = accepted as SearchRow[];
@@ -242,10 +257,16 @@ async function handler(
       `not necessarily absent knowledge.\n\n` + output;
   }
   if (truncated) {
+    // Name what was held back, but boundedly: listing every dropped title
+    // made the footer grow with match_count and overrun the very budget it
+    // was reporting on (#257).
+    const NAMED = 5;
+    const titles = dropped.slice(0, NAMED).map((r) => (r as SearchRow).doc_title ?? "Untitled");
+    const rest = dropped.length - titles.length;
     output +=
       `\n\n[${accepted.length} of ${matched.length} result(s) shown; truncated at ` +
-      `${usedBytes} bytes. ${dropped.length} did not fit: ` +
-      `${dropped.map((r) => (r as SearchRow).doc_title ?? "Untitled").join(", ")}. ` +
+      `${usedBytes} bytes. ${dropped.length} did not fit: ${titles.join(", ")}` +
+      `${rest > 0 ? ` and ${rest} more` : ""}. ` +
       `Raise max_bytes, narrow the query, or lower match_count.]`;
   }
   return output;

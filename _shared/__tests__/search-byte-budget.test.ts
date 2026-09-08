@@ -122,6 +122,31 @@ describe("cerefox_search never reports an empty store for a budget miss", () => 
     expect(out).toContain("Huge");
   });
 
+  test("a degraded response keeps the below-confidence warning (#257)", async () => {
+    // 28I exists so weak candidates are not read as real matches. Losing that
+    // flag in the degraded path would tell an agent "3 results matched" about
+    // rows that cleared no threshold.
+    const weak = [row("Maybe Related", 30_000, 0.2)].map((r) => ({
+      ...r,
+      below_confidence: true,
+    }));
+    const out = await search.handler(supabase(weak), args({ max_bytes: 1_200 }), ctx);
+    expect(out).toContain("confidence threshold");
+    expect(out).toContain("Maybe Related");
+    expect(out).not.toContain("No results found");
+  });
+
+  test("the truncation footer names a bounded number of dropped documents (#257)", async () => {
+    // Listing every dropped title made the footer grow with match_count and
+    // overrun the budget it was reporting on.
+    const rows = [row("Fits", 50, 9), ...Array.from({ length: 40 }, (_, i) => row(`Dropped ${i}`, 9_000, 1))];
+    const out = await search.handler(supabase(rows), args({ max_bytes: 3_000 }), ctx);
+    expect(out).toContain("1 of 41 result(s) shown");
+    expect(out).toContain("and 35 more");
+    // Bounded: the footer must not carry all forty titles.
+    expect(out).not.toContain("Dropped 39");
+  });
+
   test("everything fitting is unchanged: full content, no notice", async () => {
     const out = await search.handler(supabase([row("Small", 50, 1)]), args(), ctx);
     expect(out).toContain("## Small");

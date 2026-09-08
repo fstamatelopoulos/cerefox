@@ -36,7 +36,14 @@ import { applyByteBudget } from "../../../_shared/mcp-tools/_utils.ts";
  *                                      `truncated` flag when results were dropped.
  *
  * Response: { results: [...], query, mode, match_count, project_name?,
- *             truncated: boolean, response_bytes: number }
+ *             truncated: boolean, response_bytes: number,
+ *             matched: number, degraded: boolean, note?: string }
+ *
+ * `matched` is how many results the query found, before the byte budget.
+ * `degraded` is true when everything that matched was larger than max_bytes:
+ * the items then carry NO content, they name what exists so the caller can
+ * re-ask with a larger budget. An empty `results` with `degraded: true` is
+ * never "nothing was found" — that is `matched: 0` (#254, #257).
  *
  * Example agent prompt:
  *   "Invoke the cerefox-search edge function with query='knowledge management'
@@ -150,14 +157,6 @@ async function lookupProjectId(
   return data[0].id;
 }
 
-/**
- * Apply a byte budget to an array of result rows.
- *
- * Each row is serialised to JSON to measure its size. Rows are included in
- * order until the next row would push the running total over `maxBytes`.
- * Rows are always kept or dropped whole — content is never truncated
- * mid-document. Returns the accepted rows and a `truncated` flag.
- */
 const headers = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -362,10 +361,20 @@ Deno.serve(async (req: Request) => {
   // knowledge does not exist" to whatever is on the other end, so send the
   // rows WITHOUT their content instead: the caller learns what matched, how
   // big it is, and can re-ask with a larger budget or fetch one document.
+  //
+  // Both content columns have to go: `cerefox_search_docs` (mode "docs")
+  // returns `full_content`, while `cerefox_hybrid_search` and the FTS RPC
+  // return `content`. Stripping one of them shipped in v1.14.2 and returned
+  // 83 KB of chunk text against a 3 KB budget while the response claimed the
+  // content had been omitted (#257).
   const degraded = accepted.length === 0 && matched.length > 0;
-  const results = degraded
-    ? matched.map(({ full_content: _omitted, ...header }) => header)
-    : accepted;
+  const headerRows = matched.map(
+    ({ full_content: _full, content: _chunk, ...header }) => header,
+  );
+  // And the headers themselves are held to the budget the caller asked for:
+  // a `match_count` of 200 makes even a content-free list large.
+  const listed = degraded ? applyByteBudget(headerRows, max_bytes).accepted : [];
+  const results = degraded ? listed : accepted;
 
   // Fire-and-forget usage logging (never blocks the response)
   Promise.resolve(supabase.rpc("cerefox_log_usage", {
@@ -395,7 +404,13 @@ Deno.serve(async (req: Request) => {
         ? {
             note:
               `${matched.length} result(s) matched but none fit max_bytes=${max_bytes}; ` +
-              `content omitted. Raise max_bytes, or fetch one document with cerefox-get-document.`,
+              `content omitted${
+                listed.length < matched.length
+                  ? `, and only ${listed.length} of them are listed here` +
+                    " (the rest did not fit either)"
+                  : ""
+              }. This is NOT an empty result. Raise max_bytes, or fetch one ` +
+              `document with cerefox-get-document.`,
           }
         : {}),
     }),
