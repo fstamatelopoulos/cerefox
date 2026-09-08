@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.14.3] -- 2026-09-08
+
 ### Fixed
 
 - **Search modes `hybrid` and `fts` returned titles with empty bodies over
@@ -103,8 +109,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   held-back documents plus a count instead of all of them; the
   `cerefox_metadata_search` fallback list is capped the same way and records
   how many documents matched rather than zero.
-
-Open roadmap.
 
 ---
 
