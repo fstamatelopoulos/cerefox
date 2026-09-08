@@ -110,3 +110,45 @@ in the title depends on the server now, so the hook makes no request.
 - **#154** (Node baseline) moves again, same reasoning as the last four times.
 - Filed but not fixed here: **#254** (`cerefox_search` reports "No results
   found." when the top hit exceeds `max_bytes`).
+
+## #254 — search reported an empty store when nothing fit the budget
+
+**How it surfaced.** An agent searched for a contact document it had every
+reason to expect, got `No results found.`, and told the maintainer the store
+did not have it. The maintainer ran the identical query in the web UI and got
+the document at the top. The agent then produced a matrix of its own calls and
+correctly picked `max_bytes` as the suspect.
+
+**Cause.** `cerefox_search` returns whole documents. `applyByteBudget` walks
+the rows in rank order and stops at the first that does not fit, so a top hit
+larger than the budget empties the result set, and the handler's next line
+returned `No results found.` The `truncated` flag was computed correctly and
+never reached the caller, because the empty check returned first. The web UI
+has no byte budget, which is why the same query looked fine there: the RPC and
+the ranking were never in question.
+
+Reproduced on staging before the fix: the same query returned 30,731 chars with
+no budget, and the literal string `No results found.` at 15,000, 6,000 and 400.
+
+**Why it ranks above a formatting bug.** "No results found." is the one answer
+an agent acts on irreversibly: it stops searching, tells the user the knowledge
+is absent, and often re-creates the document. Iteration 28I added
+`below_confidence` for exactly this reason from the other direction — a weak
+match must not be reported as an empty set. This was the same failure through a
+different door.
+
+**Fix.** Degrade instead of vanishing. When results matched but none fit, the
+tool returns their headers (title, id, score, size, hash), the reason, and the
+remedy; the header list is itself held to the same budget. A partial fit now
+names the documents held back rather than only counting bytes. `No results
+found.` is reserved for a genuinely empty match. The same treatment is applied
+in the `cerefox-search` Edge Function (`matched` and `degraded` fields, so
+GPT Actions sees the difference too; OpenAPI block 4.0.0 → 4.1.0), and
+`cerefox_metadata_search` re-asks without content before reporting nothing,
+because the RPC enforces its budget with the same stop-at-first-oversized-row
+shape. The usage log records the matched count, so a budget-wiped search no
+longer reads as an empty store in analytics either.
+
+**Consequence for the release.** 1.14.2 now includes an Edge Function change,
+so the upgrade is `cerefox self-update` **plus** `cerefox server deploy
+--functions-only`, not the client-only story it was before.

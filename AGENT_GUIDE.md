@@ -226,6 +226,17 @@ No `expected_content_hash`: a trashed document cannot be concurrently edited, so
 
 ---
 
+### A note on `max_bytes` and search
+
+`cerefox_search` returns **complete documents**, so `max_bytes` has to be
+large enough for the biggest one you might match. A budget smaller than the
+top hit fits nothing, and you will get a header-only list that names what
+matched, its size and its id, prefixed with a warning. That list is not an
+empty result: raise `max_bytes`, or read a single document with
+`cerefox_get_document` (`outline: true` for structure, `section` for one
+part). **"No results found." is reserved for a query that genuinely matched
+nothing** (v1.14.2, #254 — before that, a budget miss reported it too).
+
 ### cerefox_list_versions
 
 Show version history of a document.

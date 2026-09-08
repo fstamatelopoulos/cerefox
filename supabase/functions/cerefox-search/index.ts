@@ -4,6 +4,8 @@ import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/inde
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
+// One implementation of the byte budget, shared with the MCP tools (#254).
+import { applyByteBudget } from "../../../_shared/mcp-tools/_utils.ts";
 
 /**
  * cerefox-search — Supabase Edge Function
@@ -156,27 +158,6 @@ async function lookupProjectId(
  * Rows are always kept or dropped whole — content is never truncated
  * mid-document. Returns the accepted rows and a `truncated` flag.
  */
-function applyByteBudget(
-  rows: unknown[],
-  maxBytes: number,
-): { accepted: unknown[]; truncated: boolean; usedBytes: number } {
-  const accepted: unknown[] = [];
-  let usedBytes = 0;
-  let truncated = false;
-
-  for (const row of rows) {
-    const rowBytes = new TextEncoder().encode(JSON.stringify(row)).length;
-    if (usedBytes + rowBytes > maxBytes) {
-      truncated = true;
-      break;
-    }
-    accepted.push(row);
-    usedBytes += rowBytes;
-  }
-
-  return { accepted, truncated, usedBytes };
-}
-
 const headers = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -374,7 +355,17 @@ Deno.serve(async (req: Request) => {
 
   // Apply byte budget — drop whole results (never truncate mid-doc) to stay
   // under the limit. This mirrors the local MCP server's truncation behaviour.
-  const { accepted, truncated, usedBytes } = applyByteBudget(data ?? [], max_bytes);
+  const matched = (data ?? []) as Array<Record<string, unknown>>;
+  const { accepted, truncated, usedBytes } = applyByteBudget(matched, max_bytes);
+
+  // Nothing fit the budget (#254). Returning an empty `results` reads as "this
+  // knowledge does not exist" to whatever is on the other end, so send the
+  // rows WITHOUT their content instead: the caller learns what matched, how
+  // big it is, and can re-ask with a larger budget or fetch one document.
+  const degraded = accepted.length === 0 && matched.length > 0;
+  const results = degraded
+    ? matched.map(({ full_content: _omitted, ...header }) => header)
+    : accepted;
 
   // Fire-and-forget usage logging (never blocks the response)
   Promise.resolve(supabase.rpc("cerefox_log_usage", {
@@ -382,13 +373,15 @@ Deno.serve(async (req: Request) => {
     p_access_path: "edge-function",
     p_requestor: identityValue ?? null,
     p_query_text: query,
-    p_result_count: accepted.length,
+    // What the query matched, not what survived the budget: recording 0 for a
+    // budget-wiped search made it look like an empty knowledge base here too.
+    p_result_count: matched.length,
     p_project_id: projectId,
   })).catch(() => {});
 
   return new Response(
     JSON.stringify({
-      results: accepted,
+      results,
       query,
       mode,
       match_count,
@@ -396,6 +389,15 @@ Deno.serve(async (req: Request) => {
       metadata_filter: metadata_filter ?? null,
       truncated,
       response_bytes: usedBytes,
+      matched: matched.length,
+      degraded,
+      ...(degraded
+        ? {
+            note:
+              `${matched.length} result(s) matched but none fit max_bytes=${max_bytes}; ` +
+              `content omitted. Raise max_bytes, or fetch one document with cerefox-get-document.`,
+          }
+        : {}),
     }),
     { headers },
   );

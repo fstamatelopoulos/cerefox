@@ -28,16 +28,18 @@
 ---
 ## Current Focus
 
-**2026-09-08 — v1.14.2 IN PROGRESS** (branch
-`fix/spa-stale-index-and-tab-titles`, #252 + #253). Two web-app items. (a) The
+**2026-09-08 — v1.14.2 IN PROGRESS** (#252 + #253 merged as PR #255; #254 on
+`fix/search-budget-false-negative`). Three items. (a) The
 stale-SPA bug found on production after `self-update`: `index.html` is now read
 per request (mtime-cached), a missing `/app/assets/*` is a 404 instead of the
 shell with a `200 text/html`, `self-update` warns when a daemon is still on the
 previous build, and `web status` + `doctor` compare the running server's
-version with the client's. (b) Per-page browser tab titles. Frontend + web server only: no schema, no
-Edge Function, no `minSchema` change. Also filed while investigating: **#254**,
-`cerefox_search` reports "No results found." when the top hit exceeds
-`max_bytes` — a false negative agents act on, not in this branch.
+version with the client's. (b) Per-page browser tab titles. Frontend + web server only for (a) and (b). (c) **#254**: `cerefox_search` reported "No results found." when the top hit
+exceeded `max_bytes` — the false negative an agent acts on irreversibly. Found
+in a real agent transcript, reproduced on staging, fixed by degrading to
+headers instead of vanishing (MCP, the search EF, and the metadata-search RPC's
+equivalent). **This adds an Edge Function change**, so 1.14.2 needs
+`cerefox server deploy --functions-only` as well as `self-update`.
 
 **2026-09-05 — v1.14.1 SHIPPED** (PR #250, cut `6c879fe`; staging verified
 after the maintainer's deploy: `_shared` 610, package suite 307/2/0, live EF +
