@@ -77,6 +77,24 @@ function rowHeading(row: SearchRow): string {
   return `${doc}${section ? ` › ${section}` : ""}${docId}${chunk}`;
 }
 
+/**
+ * A short label for a row in the truncation footer: the leaf section and the
+ * chunk index, without the document id.
+ *
+ * The footer names what did not fit, and in chunk modes those rows are usually
+ * chunks of ONE document, so a full heading would repeat the same 36-character
+ * uuid five times and push the reply over the very budget the footer is
+ * reporting on (#263).
+ */
+function shortLabel(row: SearchRow): string {
+  const doc = row.doc_title ?? "Untitled";
+  const path = [...(row.heading_path ?? [])];
+  if (path.length > 0 && path[0] === doc) path.shift();
+  const leaf = path.filter(Boolean).at(-1) ?? (row.title && row.title !== doc ? row.title : "");
+  const chunk = row.chunk_index != null ? ` (chunk ${row.chunk_index})` : "";
+  return `${leaf ? `${doc} › ${leaf}` : doc}${chunk}`;
+}
+
 /** `## Title [id: …] (score: …) -- 20,297 chars` — everything but the content. */
 function headerLine(row: SearchRow): string {
   const raw = row.best_score ?? row.score;
@@ -236,7 +254,7 @@ async function handler(
   if (error) throw new Error(`RPC error: ${error.message}`);
 
   const matched = (data ?? []) as SearchRow[];
-  const { accepted, dropped, truncated, usedBytes } = applyByteBudget(matched, max_bytes);
+  let { accepted, dropped, truncated, usedBytes } = applyByteBudget(matched, max_bytes);
 
   logUsage(supabase, {
     operation: "search",
@@ -267,13 +285,13 @@ async function handler(
     );
   }
 
-  const rows = accepted as SearchRow[];
-
   // 28I: nothing cleared the relevance threshold, so the server returned its
   // best-effort top candidates flagged below_confidence instead of an empty
   // set (which agents misread as "this knowledge does not exist").
-  const belowConfidence = rows.length > 0 && rows.every((r) => r.below_confidence === true);
+  const belowConfidence =
+    accepted.length > 0 && (accepted as SearchRow[]).every((r) => r.below_confidence === true);
 
+  const render = (rows: SearchRow[]): string => {
   const parts: string[] = rows.map((row) => {
     const heading = rowHeading(row);
     const rawScore = row.best_score ?? row.score;
@@ -290,27 +308,63 @@ async function handler(
     return `## ${heading}${score}${partial}${hash}\n\n${rowContent(row)}`;
   });
 
-  let output = parts.join("\n\n---\n\n");
-  if (belowConfidence) {
-    output =
-      `⚠ No results cleared the confidence threshold. Showing the closest ${rows.length} ` +
-      `candidate(s) with scores — judge relevance yourself; a low score means weak signal, ` +
-      `not necessarily absent knowledge.\n\n` + output;
-  }
+  const body = parts.join("\n\n---\n\n");
+  return belowConfidence
+    ? `⚠ No results cleared the confidence threshold. Showing the closest ${rows.length} ` +
+        `candidate(s) with scores — judge relevance yourself; a low score means weak signal, ` +
+        `not necessarily absent knowledge.\n\n` + body
+    : body;
+  };
+
+  let output = render(accepted as SearchRow[]);
+
   if (truncated) {
-    // Name what was held back, but boundedly: listing every dropped title
-    // made the footer grow with match_count and overrun the very budget it
-    // was reporting on (#257).
-    const NAMED = 5;
-    // The section too, for the same reason: five lines of the same document
-    // title tell the caller nothing about what was held back (#261).
-    const titles = dropped.slice(0, NAMED).map((r) => rowHeading(r as SearchRow));
-    const rest = dropped.length - titles.length;
-    output +=
-      `\n\n[${accepted.length} of ${matched.length} result(s) shown; truncated at ` +
-      `${usedBytes} bytes. ${dropped.length} did not fit: ${titles.join(", ")}` +
-      `${rest > 0 ? ` and ${rest} more` : ""}. ` +
-      `Raise max_bytes, narrow the query, or lower match_count.]`;
+    // Name what was held back, boundedly (#257) and by section rather than by
+    // a repeated document title (#261) — then shrink the list until the whole
+    // reply fits the budget the footer is describing (#263).
+    const footer = (named: number) => {
+      const titles = dropped.slice(0, named).map((r) => shortLabel(r as SearchRow));
+      const rest = dropped.length - titles.length;
+      const naming = titles.length
+        ? `: ${titles.join(", ")}${rest > 0 ? ` and ${rest} more` : ""}`
+        : "";
+      return (
+        `\n\n[${accepted.length} of ${matched.length} result(s) shown; truncated at ` +
+        `${usedBytes} bytes. ${dropped.length} did not fit${naming}. ` +
+        `Raise max_bytes, narrow the query, or lower match_count.]`
+      );
+    };
+    // The footer is part of what the caller receives, so it comes out of the
+    // budget rather than on top of it (#263). Held back adaptively: only when
+    // the bare explanation would not fit is a row dropped to make room, so a
+    // small budget still returns the content it can carry.
+    const size = (t: string) => new TextEncoder().encode(t).length;
+    if (size(output) + size(footer(0)) > max_bytes) {
+      const refit = applyByteBudget(matched, Math.max(max_bytes - size(footer(0)), 1));
+      if (refit.accepted.length === 0) {
+        // Making room for the explanation left nothing to explain: the honest
+        // answer is the header list (#254), which is bounded by itself.
+        return degradedToHeaders(
+          matched,
+          max_bytes,
+          matched.every((r) => r.below_confidence === true),
+        );
+      }
+      accepted = refit.accepted;
+      dropped = refit.dropped;
+      usedBytes = refit.usedBytes;
+      output = render(accepted as SearchRow[]);
+    }
+    const room = max_bytes - size(output);
+    let chosen = footer(0);
+    for (let named = Math.min(5, dropped.length); named >= 1; named--) {
+      const candidate = footer(named);
+      if (size(candidate) <= room) {
+        chosen = candidate;
+        break;
+      }
+    }
+    output += chosen;
   }
   return output;
 }

@@ -20,6 +20,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the basis of content the caller never received. Present since the handlers
   moved into `_shared/mcp-tools/`; it survived because `docs` is the default
   mode and the CLI and web UI each render chunks correctly on their own.
+- **A truncated search reply now fits inside `max_bytes`** (#263). The footer
+  that explains a truncation was appended after the budget had been spent, and
+  it had grown twice in this release — naming the dropped documents (#257),
+  then naming them with full section breadcrumbs and ids (#261) — so a
+  2,000-byte budget could produce a 2,830-byte reply. The footer now uses a
+  compact label and comes out of the budget rather than on top of it, dropping
+  a row only when the bare explanation would not otherwise fit. An invariant
+  test covers budgets against row sizes and counts, because three
+  example-based tests passed through all three versions of this bug.
 - **A chunk-mode result now names its section** (#261). `hybrid` and `fts`
   return several chunks of the same document, which arrived as identical
   headings with different bodies once the bodies started printing; the heading
