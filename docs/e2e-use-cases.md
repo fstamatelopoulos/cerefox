@@ -258,6 +258,7 @@ to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
 | 8.9 | Dead-link sweep (#214 phase 2) -- purged target found by `document dead-links`, pre-existing dead link does not block edits; skips gracefully pre-0.12.2 | Added -- `release-acceptance.test.ts` (runs after the v1.7.1 deploy) |
 | 8.10 | Caller identity (v1.13.1) -- `author` on every tool, `requestor` alias, blank = absent; audit-log `by_author` filter proven with a negative case over remote MCP | DONE -- `_shared/__tests__/identity.test.ts` (unit), `mcp-remote.test.ts` (live, verified on staging 2026-09-04) |
 | 8.11 | Caller identity on the CLI and the primitive EFs (v1.13.2, #244) -- `--author` on every read command, `--requestor` hidden but parsed, `--by-author` on `audit list`; EF bodies take `author`, `by_author` filter proven with a negative case | DONE -- `packages/memory/test/cli-smoke.test.ts` (help surface), `test/edge-functions/edge-functions.test.ts` (live, opt-in) |
+| 8.12 | Search response contract (v1.14.3, #254-#267) -- never empty when rows matched; never a silent hold-back; the reply within `max_bytes` but for undroppable framing; an oversized top hit does not suppress the rest; every mode renders its own content column | DONE -- `_shared/__tests__/search-budget-invariant.test.ts` (517 cases, budgets x sizes x counts x row shapes), `search-byte-budget.test.ts`, `metadata-search-limits.test.ts`; live: `edge-functions.test.ts` degraded-modes case |
 
 ---
 

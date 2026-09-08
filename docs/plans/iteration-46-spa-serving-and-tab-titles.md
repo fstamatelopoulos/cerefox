@@ -178,3 +178,61 @@ Edge Function's orphaned JSDoc and stale response contract corrected.
 new response shape has to be checked in every mode the tool offers. The
 original change was verified in `docs` mode alone, which is the one mode where
 the column name made it correct.
+
+## v1.14.3 — one subject, seven review rounds
+
+What began as #254 (a search that reported "No results found." when the top
+hit exceeded `max_bytes`) turned into the longest review thread of the project.
+Recording it in full, because the *shape* of the sequence is the lesson.
+
+| # | Found | The defect |
+|---|---|---|
+| #257 | review, after 1.14.2 was cut | The degraded reply stripped `full_content` only. `cerefox_search_docs` returns that column; the chunk RPCs return `content`, so `hybrid`/`fts` shipped 83 KB of chunk text against a 3 KB budget while the response said content had been omitted. |
+| #259 | review of the #257 fix | The same asymmetry in the renderer: `hybrid` and `fts` had been returning **titles with empty bodies** over MCP since the handlers moved into `_shared/`. |
+| #261 | review of the #259 fix | Chunk results were indistinguishable — several chunks of one document rendered identical headings, visible only once bodies printed. |
+| #263 | review of the #261 fix | The truncation footer, now informative, was appended *over* the budget it reported on: 2,830 bytes against 2,000. |
+| #265 | review of the #263 fix | **The root cause.** The budget was measured in `JSON.stringify(row)` bytes while the tool returns rendered markdown, so reserving rendered bytes from a JSON budget guaranteed nothing. The below-confidence preamble was counted by nothing at all and overran even without truncation. |
+| #266 | review of the #265 fix | A reply could hold results back **silently** when the footer did not fit; an oversized top hit ended the scan and suppressed smaller results that fit; `max_bytes` was unsanitised, so `NaN` bypassed every check. |
+| #267 | review of the #266 fix | The same two holes in `cerefox_metadata_search`, which shares the unvalidated stdio transport, plus a zero-budget flip introduced by the previous fix. |
+
+**Why it went so deep.** Four of these were defects in the *correction*, not in
+the original code. Each fix added something to the response — a footer, a
+section path, an id, a warning — and nothing measured what the response
+actually was. The example-based tests passed through all seven, every time,
+because each used inputs where the extra bytes happened to fit.
+
+**What ends it.** `_shared/__tests__/search-budget-invariant.test.ts` asserts
+the property rather than the examples: budgets × row sizes × row counts ×
+**row shapes** (chunk, docs, below-confidence, and rows that are small as JSON
+and wide as markdown), 517 cases. Each round made it stricter, and each
+stricter version caught the next round's bug in advance. The seventh review
+independently fuzzed the fitting loop with 10,000 randomised cases and found
+no silent truncation, no mis-stated counts, and no overrun outside the
+documented exception.
+
+**The contract, now written down** (`docs/guides/response-limits.md`):
+
+1. A reply is never "no results" when results matched. If nothing fits, it
+   lists what matched, without content.
+2. A reply never hides that results were held back.
+3. A reply stays inside `max_bytes`, except by the framing that cannot be
+   dropped without misleading the caller (the "N of M shown" notice, the
+   below-confidence advisory). That framing is never traded for content.
+4. A result that does not fit is skipped, not treated as the end of the list,
+   so the returned set is not necessarily a rank prefix.
+
+**Also in 1.14.3**: the 2026-09-08 dependency advisories. `hono` → `^4.13.7`
+and `js-yaml` → `^4.3.2` by override (the hono set includes a `parseBody()`
+advisory, and the web server reaches `parseBody`); `adm-zip` and `sharp`
+accepted with reasoning in `docs/specs/security-audit-1.0.md`, since the
+former has no fixed release and the latter's fix is outside the range
+`@huggingface/transformers` pins.
+
+## Release notes for the cut (v1.14.3)
+
+- `cerefox self-update` **and** `cerefox server deploy --functions-only`: the
+  `cerefox-search` Edge Function changed. No schema change, no `minSchema`
+  change.
+- Staging already runs the fixed function (deployed from the branch during
+  verification), so it is ahead of `main` until the cut.
+- **#154** (Node baseline) moves again, for the sixth time.

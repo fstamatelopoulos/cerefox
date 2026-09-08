@@ -96,6 +96,18 @@ the Bearer token is the gate); the #110 query is parameterized.
 - `react-router` RSC-mode advisory: fixed only in v8; Cerefox's SPA does not
   use RSC/SSR, so the affected code never runs. Revisit at a react-router v8
   migration.
+- **2026-09-08 addendum.** Four advisories were published upstream in one day
+  and broke the audit gate on every branch. Two were **fixed rather than
+  accepted**, by overrides in the root `package.json`: `hono` to `^4.13.7`
+  (three advisories, one of them in `parseBody()`, which the web server does
+  reach) and `js-yaml` to `^4.3.2` (a frontend lint-time dependency). Two are
+  accepted, and they are the same two packages and the same reasoning as
+  above: `adm-zip` GHSA-vwc7-r8mq-g2x9, where **no fixed release exists** —
+  0.6.0 is the newest and is itself affected — and `sharp`
+  GHSA-rgj7-g3m4-5g8c, whose fix (0.35.4) is outside the `^0.34.5` that
+  `@huggingface/transformers` pins. Both remain confined to the local ONNX
+  embedder's install-time and vision paths. Revisit `adm-zip` when a fixed
+  release ships and `sharp` at the next `@huggingface/transformers` bump.
 - The container-minted `service_role` JWT has no expiry; it never leaves the
   container, and rotating it is deleting `.cerefox_jwt_secret` from the data
   volume.

@@ -22,7 +22,11 @@ async function handler(
   const project_name = args.project_name as string | undefined;
   const updated_since = args.updated_since as string | undefined;
   const created_since = args.created_since as string | undefined;
-  const limit = (args.limit as number | undefined) ?? 10;
+  // Sanitised and clamped, like `match_count` on the search tool: the local
+  // stdio server passes tool arguments through unvalidated, so a caller could
+  // ask for a million rows (#267). 500 matches the largest listing the web
+  // API serves, so no legitimate enumeration is cut short.
+  const limit = Math.min(Math.max(1, Math.floor(Number(args.limit)) || 10), 500);
   const include_content = (args.include_content as boolean | undefined) ?? false;
   const requested_max_bytes = args.max_bytes as number | undefined;
 
@@ -47,10 +51,20 @@ async function handler(
     if (!projectId) throw new Error(`Project not found: ${project_name}`);
   }
 
-  // Enforce byte ceiling for content mode
+  // Enforce byte ceiling for content mode.
+  //
+  // Sanitised first: a non-numeric `max_bytes` became `NaN`, which reaches the
+  // RPC as JSON null, and `p_max_bytes NULL` means NO limit — so one word
+  // instead of a number returned every matching document's full content, with
+  // the in-process guard below disabled too (#267). Same hole as the search
+  // tool's, in the sibling that shares its transport.
   const ceiling = getMaxResponseBytes();
+  const requestedBytes = Math.floor(Number(requested_max_bytes));
   const max_bytes = include_content
-    ? Math.min(requested_max_bytes ?? ceiling, ceiling)
+    ? Math.min(
+        Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : ceiling,
+        ceiling,
+      )
     : null;
 
   const params: Record<string, unknown> = {

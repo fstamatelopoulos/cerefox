@@ -215,7 +215,15 @@ Deno.serve(async (req: Request) => {
   } = body;
 
   // Enforce ceiling: agents may request less but never more than MAX_BYTES.
-  const max_bytes = Math.min(requested_max_bytes ?? MAX_BYTES, MAX_BYTES);
+  // Sanitised before clamping: `NaN` compares false against every budget
+  // check, so a non-numeric value bypassed the ceiling entirely (#266).
+  // A number of 0 or less still means "almost no budget"; only a missing or
+  // non-numeric value falls back to the ceiling (#267).
+  const requestedBytes = Math.floor(Number(requested_max_bytes));
+  const max_bytes = Math.min(
+    Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : MAX_BYTES,
+    MAX_BYTES,
+  );
   // Clamp match_count to [1, MAX_MATCH_COUNT] (bounds query work; see MAX_MATCH_COUNT).
   const match_count = Math.min(Math.max(1, Math.floor(Number(raw_match_count)) || 5), MAX_MATCH_COUNT);
 

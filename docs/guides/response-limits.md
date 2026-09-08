@@ -30,12 +30,34 @@ agent's context window matters. Callers always choose whether to apply a limit.
 
 ## How limits are applied
 
-Truncation is always **whole-document**: results are dropped in full once adding the next
-document would exceed the budget. Cerefox never cuts a document mid-content.
+Truncation is always **whole-document**: a result is returned in full or not at all.
+Cerefox never cuts a document mid-content.
+
+A result that does not fit is **skipped**, not treated as the end of the list, so the
+returned set is not necessarily the top N by rank: one oversized document ranked first
+does not hide the smaller results behind it (v1.14.3). Anything skipped is named in the
+footer, so what is missing is always visible.
 
 When truncation occurs:
-- The local MCP server appends `[Results truncated at N bytes — ...]` to the response text.
+- The MCP tool appends a footer naming what was held back:
+  `[3 of 12 result(s) shown; 9 did not fit max_bytes=8000: Plan › Rollout (chunk 4) [id: …] and 8 more. Raise max_bytes, narrow the query, or lower match_count.]`
 - The Edge Function includes `"truncated": true` and `"response_bytes": N` in the JSON response.
+
+**The reply as a whole stays inside the budget**, footer and warnings included:
+they are measured in the same rendered bytes the caller receives (v1.14.3).
+When the budget is tight the framing gives way before the results do.
+
+**When nothing fits at all** — the smallest matching document is larger than
+the whole budget — the reply is NOT "no results found", which an agent acts on
+as "this knowledge does not exist". It is a header list naming what matched,
+its size and its id, prefixed with a warning and the remedy. The same case on
+the Edge Function sets `"degraded": true`, returns items with no content, and
+reports `"matched"`: read that, not `results.length`, to know what the query
+found. A reply may exceed `max_bytes` only by the framing that cannot be dropped
+without misleading you: the notice that results were held back, or the
+below-confidence advisory. Both are a few dozen bytes, and neither is ever
+traded for content. Returning 1 of 5 results without saying so, or presenting
+weak candidates as confident ones, would be worse than a small overrun.
 
 ---
 

@@ -49,7 +49,7 @@ Find documents using hybrid search (full-text + semantic vector similarity).
 | `max_bytes` | No | Response size budget in bytes (default 200000). |
 | `author` | No | Your agent name for attribution. Always set this. |
 
-**Results format**: Each result shows `## Title [id: <uuid>] (score: X.XXX)` followed by content.
+**Results format**: Each result shows `## Title [id: <uuid>] (score: X.XXX)` followed by content (in `hybrid` and `fts` modes the heading also carries the section path and the chunk index: `## Title › Section › Subsection [id: <uuid>] (chunk 4) (score: …)`).
 Save the `document_id` from `[id: ...]` -- you need it for `cerefox_get_document` and `cerefox_ingest` updates.
 
 For large documents, results may be partial (`is_partial` flag). Use `cerefox_get_document` with the ID to get the full text.

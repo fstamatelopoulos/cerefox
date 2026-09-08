@@ -20,6 +20,55 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the basis of content the caller never received. Present since the handlers
   moved into `_shared/mcp-tools/`; it survived because `docs` is the default
   mode and the CLI and web UI each render chunks correctly on their own.
+- **Dependency advisories published 2026-09-08.** `hono` moves to `^4.13.7`
+  (three advisories, one in `parseBody()`, which the web server reaches) and
+  `js-yaml` to `^4.3.2`, both by override so the whole tree resolves clean.
+  Two more are accepted with reasoning in
+  `docs/specs/security-audit-1.0.md`: `adm-zip` has no fixed release at all,
+  and `sharp`'s fix is outside the range `@huggingface/transformers` pins.
+  Both stay confined to the local ONNX embedder's install-time and vision
+  paths, as their earlier advisories already were.
+- **`cerefox_metadata_search` gets the same guards as the search tool** (#267).
+  A non-numeric `max_bytes` became `NaN`, reached the RPC as null, and
+  `p_max_bytes NULL` means no limit, so one word instead of a number returned
+  the full content of every matching document; `limit` had no clamp at all.
+  Both are sanitised now. On the search tool and the Edge Function, a numeric
+  `max_bytes` of zero or less means a tiny budget again rather than the
+  ceiling: a caller whose allowance had run out was being handed the largest
+  possible reply.
+- **A search reply never hides that it held results back** (#266). When the
+  truncation footer did not fit, the reply came back as content with no notice
+  at all, so a caller who received one of five results had no way to know the
+  others matched — the same failure as a false empty, in a quieter form. A
+  minimal "N of M shown" notice is now never dropped. An oversized top hit no
+  longer suppresses the results behind it: rows that do not fit are skipped and
+  named, where before the scan stopped at the first one and the reply claimed
+  nothing fit. `max_bytes` is sanitised like `match_count`, since a
+  non-numeric value became `NaN`, compared false against every budget check,
+  and emitted every row unbounded — the server ceiling bypassed by passing it
+  a word. `docs/guides/response-limits.md` states the contract, including the
+  only overruns allowed and why.
+- **The search byte budget is now measured in the units the caller receives**
+  (#265). `max_bytes` was enforced against `JSON.stringify(row)` while the tool
+  returns rendered markdown, so nothing was ever truly bounded — the root cause
+  under three fixes in this release that each treated a symptom. The
+  below-confidence preamble was counted by nothing and overran the budget even
+  without a truncation. The reply is now assembled and measured as text, taking
+  as many results as the whole message can carry, and the invariant test varies
+  row shape as well as size and count (502 cases): chunk rows, document rows,
+  below-confidence rows, and rows that are small as JSON and wide as markdown.
+  Also: the usage row is written after the final fit, so it cannot overstate
+  what was returned, and a dropped document keeps its id in the footer where
+  that is the only way to tell two same-titled documents apart.
+- **A truncated search reply now fits inside `max_bytes`** (#263). The footer
+  that explains a truncation was appended after the budget had been spent, and
+  it had grown twice in this release — naming the dropped documents (#257),
+  then naming them with full section breadcrumbs and ids (#261) — so a
+  2,000-byte budget could produce a 2,830-byte reply. The footer now uses a
+  compact label and comes out of the budget rather than on top of it, dropping
+  a row only when the bare explanation would not otherwise fit. An invariant
+  test covers budgets against row sizes and counts, because three
+  example-based tests passed through all three versions of this bug.
 - **A chunk-mode result now names its section** (#261). `hybrid` and `fts`
   return several chunks of the same document, which arrived as identical
   headings with different bodies once the bodies started printing; the heading

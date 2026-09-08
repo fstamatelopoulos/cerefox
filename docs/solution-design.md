@@ -1132,6 +1132,19 @@ bulk endpoint (see
 Every tool accepts an optional `author` parameter for usage-log (and, on
 writes, audit-log) attribution; see "Caller identity" above.
 
+**What a search reply guarantees (v1.14.3).** Four rules, each of which was a
+bug first: a reply is never "no results" when results matched (if nothing fits
+the byte budget, it lists what matched without content); it never hides that
+results were held back; it stays inside `max_bytes` except by framing that
+cannot be dropped without misleading the caller, and that framing is never
+traded for content; and a result that does not fit is skipped rather than
+ending the list, so the returned set is not necessarily a rank prefix. The
+budget is measured in the units the caller receives — rendered text for the
+MCP tools, JSON for the `cerefox-search` Edge Function — and confusing the two
+is what made the first three fixes ineffective. Guarded by
+`_shared/__tests__/search-budget-invariant.test.ts`; user-facing statement in
+`docs/guides/response-limits.md`.
+
 **How `cerefox_search` works internally:**
 1. Embeds the query with `CloudEmbedder` (OpenAI `text-embedding-3-small`)
 2. Calls `cerefox_hybrid_search` RPC — FTS + pgvector cosine similarity
