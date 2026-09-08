@@ -28,15 +28,38 @@
 ---
 ## Current Focus
 
-**2026-09-08 — v1.14.3 IN PROGRESS** (branch `fix/degraded-response-budget`,
-#257): the v1.14.2 degraded-response regression, found by review after the cut.
-The search EF stripped only `full_content`, so hybrid and fts returned full
-chunk text (83 KB against a 3 KB budget) while claiming content was omitted;
-the degraded list was never capped either. Both content columns stripped, the
-list held to the budget everywhere, below-confidence carried into the degraded
-lead, the truncation footer bounded, the metadata fallback capped and logged.
-Staging runs the fixed function; **1.14.3 needs `cerefox server deploy
---functions-only`** like 1.14.2.
+**2026-09-08 — v1.14.3 IN PROGRESS** (branch `fix/footer-budget-invariant`;
+PRs #256, #258, #260, #262, #264). One subject, seven review rounds: **what
+`cerefox_search` returns and how much of it**. It began as a false empty (an
+agent was told the store had nothing when the top hit simply exceeded
+`max_bytes`, #254, shipped in 1.14.2) and each round found the next layer:
+
+- **#257** the degraded reply leaked chunk content in `hybrid`/`fts` (83 KB
+  against a 3 KB budget) because only `full_content` was stripped;
+- **#259** those same modes had been returning **titles with empty bodies**
+  over MCP since the handlers moved into `_shared/` — the renderer read
+  `full_content`, which the chunk RPCs do not return;
+- **#261** chunk results were indistinguishable from one another (no section,
+  no index) once the bodies started printing;
+- **#263** the truncation footer was appended over the budget it reported on;
+- **#265** the ROOT: the budget was measured in `JSON.stringify` bytes while
+  the tool returns rendered markdown, so nothing was ever truly bounded, and
+  the below-confidence preamble was counted by nothing at all;
+- **#266** a reply could hold results back **silently**, an oversized top hit
+  suppressed every smaller result behind it, and `max_bytes` was unsanitised
+  (`NaN` bypassed every check);
+- **#267** the same holes in `cerefox_metadata_search`, which shares the
+  transport.
+
+The durable outcome is `_shared/__tests__/search-budget-invariant.test.ts`:
+the property, over budgets × row sizes × row counts × **row shapes** (517
+cases). The example-based tests passed through every one of the bugs above.
+The contract is written down in `docs/guides/response-limits.md`. Also here:
+the 2026-09-08 dependency advisories (hono → ^4.13.7 by override, one of the
+three is in `parseBody()` which the web server reaches; js-yaml → ^4.3.2; two
+accepted in the audit doc). Staging runs the fixed Edge Function; **1.14.3
+needs `cerefox server deploy --functions-only`.** Detail:
+[iteration 46](plans/iteration-46-spa-serving-and-tab-titles.md).
 
 **2026-09-08 — v1.14.2 SHIPPED** (cut `f18ccb0`; npm 1.14.2, ~8 min of CDN lag
 on the tarball after a successful publish). (#252 + #253 merged as PR #255; #254 on
