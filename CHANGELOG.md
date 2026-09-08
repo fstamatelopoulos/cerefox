@@ -20,6 +20,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the basis of content the caller never received. Present since the handlers
   moved into `_shared/mcp-tools/`; it survived because `docs` is the default
   mode and the CLI and web UI each render chunks correctly on their own.
+- **Dependency advisories published 2026-09-08.** `hono` moves to `^4.13.7`
+  (three advisories, one in `parseBody()`, which the web server reaches) and
+  `js-yaml` to `^4.3.2`, both by override so the whole tree resolves clean.
+  Two more are accepted with reasoning in
+  `docs/specs/security-audit-1.0.md`: `adm-zip` has no fixed release at all,
+  and `sharp`'s fix is outside the range `@huggingface/transformers` pins.
+  Both stay confined to the local ONNX embedder's install-time and vision
+  paths, as their earlier advisories already were.
 - **`cerefox_metadata_search` gets the same guards as the search tool** (#267).
   A non-numeric `max_bytes` became `NaN`, reached the RPC as null, and
   `p_max_bytes NULL` means no limit, so one word instead of a number returned
