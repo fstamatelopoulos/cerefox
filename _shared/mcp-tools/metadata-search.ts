@@ -106,11 +106,21 @@ async function handler(
     // without content before reporting nothing: an agent that is told "no
     // documents" stops looking, and here that would be false.
     if (include_content && max_bytes !== null) {
-      const { data: headers } = await supabase.rpc("cerefox_metadata_search", {
-        ...params,
-        p_include_content: false,
-        p_max_bytes: null,
-      });
+      // A failure here must not swallow the usage row: deferring the log so
+      // it can carry the real count meant a rejected fallback left no trace of
+      // the call at all, and that is the hardest failure to diagnose later
+      // (#261).
+      let headers: unknown;
+      try {
+        ({ data: headers } = await supabase.rpc("cerefox_metadata_search", {
+          ...params,
+          p_include_content: false,
+          p_max_bytes: null,
+        }));
+      } catch (err) {
+        log(0, { degraded_probe_failed: true });
+        throw err;
+      }
       const headerRows = (headers ?? []) as Array<{ document_id: string; title: string }>;
       if (headerRows.length > 0) {
         // The caller asked for a budget; honour it in the answer that explains

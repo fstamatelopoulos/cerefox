@@ -19,6 +19,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { applyByteBudget } from "../mcp-tools/_utils.ts";
+import { rowContent } from "../mcp-tools/search.ts";
 import { TOOLS_BY_NAME } from "../mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../mcp-tools/types.ts";
 
@@ -113,9 +114,40 @@ describe("every search mode renders its own content column (#259)", () => {
     expect(out).toContain("CHUNK BODY TEXT");
   });
 
-  test("docs mode is unchanged", async () => {
-    const out = await search.handler(supabase([row("Doc", 40, 1)]), args(), ctx);
-    expect(out).toContain("x".repeat(40));
+  test("the resolver reads either column, and prefers the document one", () => {
+    // `args()` pins mode "fts" (every other mode needs an embedder), so the
+    // docs-mode branch cannot be exercised through the handler here. Assert
+    // the resolver itself rather than a test that only looks like it covers
+    // both shapes (#261).
+    expect(rowContent({ full_content: "DOC BODY" })).toBe("DOC BODY");
+    expect(rowContent({ content: "CHUNK BODY" })).toBe("CHUNK BODY");
+    expect(rowContent({ full_content: "DOC", content: "CHUNK" })).toBe("DOC");
+    expect(rowContent({})).toBe("");
+  });
+
+  test("a chunk result names its section, not just the document", async () => {
+    // Chunk RPCs return several chunks OF THE SAME document, so identical
+    // headings would leave an agent unable to tell them apart (#261).
+    const out = await search.handler(
+      supabase([
+        // heading_path as the RPC returns it: document title first.
+        { ...chunkRow("Doc", "FIRST", 0.9), heading_path: ["Doc", "Intro"], chunk_index: 0 },
+        { ...chunkRow("Doc", "SECOND", 0.8), heading_path: ["Doc", "Details"], chunk_index: 4 },
+        // No heading at all: the index is what tells the two apart.
+        { ...chunkRow("Doc", "THIRD", 0.7), heading_path: [], title: "", chunk_index: 9 },
+      ]),
+      args({ mode: "fts" }),
+      ctx,
+    );
+    // The document title is not repeated, and each block names its section.
+    expect(out).toContain("## Doc › Intro");
+    expect(out).toContain("## Doc › Details");
+    expect(out).not.toContain("Doc › Doc");
+    expect(out).toContain("(chunk 0)");
+    expect(out).toContain("(chunk 9)");
+    expect(out).toContain("FIRST");
+    expect(out).toContain("SECOND");
+    expect(out).toContain("THIRD");
   });
 
   test("a chunk row too large for the budget degrades instead of vanishing", async () => {

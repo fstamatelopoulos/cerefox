@@ -20,6 +20,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the basis of content the caller never received. Present since the handlers
   moved into `_shared/mcp-tools/`; it survived because `docs` is the default
   mode and the CLI and web UI each render chunks correctly on their own.
+- **A chunk-mode result now names its section** (#261). `hybrid` and `fts`
+  return several chunks of the same document, which arrived as identical
+  headings with different bodies once the bodies started printing; the heading
+  now carries the section path and the chunk index, as the CLI and web UI
+  already did. Also from that review: the metadata-search usage row survives a
+  failing fallback probe, the search Edge Function's docblock and the OpenAPI
+  request-side text match the one-header fallback, and a unit test that claimed
+  to cover `docs` mode (it could not: the shared helper pins `fts`) now asserts
+  the column resolver directly.
 - **A capped degraded reply can no longer come back empty** (#259): at least
   one header always survives, since an empty `results` is the "nothing was
   found" shape #254 exists to prevent. `response_bytes` now measures what is
@@ -27,8 +36,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   not contain, `cerefox_metadata_search` writes one usage-log row carrying the
   matched count instead of two, and the GPT Actions OpenAPI block (**4.2.0**)
   says to read `matched`, not `results.length`.
-
-### Fixed
 
 - **The degraded search response no longer leaks content or overruns the
   budget** (#257, a regression in v1.14.2). v1.14.2 made a byte-budget miss

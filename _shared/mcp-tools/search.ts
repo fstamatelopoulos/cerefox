@@ -31,6 +31,12 @@ interface SearchRow {
   full_content?: string;
   /** …while `hybrid` and `fts` return the chunk text under this name. */
   content?: string;
+  /** Chunk-mode identity: the RPCs return several chunks OF THE SAME document. */
+  chunk_id?: string;
+  chunk_index?: number;
+  /** The chunk's own heading, and its full path from the document root. */
+  title?: string;
+  heading_path?: string[];
   best_score?: number;
   score?: number;
   is_partial?: boolean;
@@ -245,8 +251,21 @@ async function handler(
   const belowConfidence = rows.length > 0 && rows.every((r) => r.below_confidence === true);
 
   const parts: string[] = rows.map((row) => {
-    const title = row.doc_title ?? "Untitled";
+    // Name the section for a chunk result. The chunk RPCs do NOT dedupe by
+    // document, so several chunks of one document would otherwise arrive as
+    // identical headings with different bodies, and an agent could not tell
+    // which section it got, or that they were one document (#261). Both other
+    // renderers already carry this; the MCP one was the exception.
+    //
+    // `heading_path` starts WITH the document title, so it is dropped here
+    // rather than printed twice. The chunk index disambiguates the case that
+    // is left: several untitled chunks of one document.
+    const doc = row.doc_title ?? "Untitled";
+    const path = (row.heading_path ?? []).filter((h) => h && h !== doc);
+    const section = path.length ? path.join(" › ") : row.title && row.title !== doc ? row.title : "";
+    const title = `${doc}${section ? ` › ${section}` : ""}`;
     const docId = row.document_id ? ` [id: ${row.document_id}]` : "";
+    const chunk = row.chunk_index != null ? ` (chunk ${row.chunk_index})` : "";
     const rawScore = row.best_score ?? row.score;
     const score = rawScore != null ? ` (score: ${rawScore.toFixed(3)})` : "";
     const partial = row.is_partial
@@ -258,7 +277,7 @@ async function handler(
     // `full_content`; `cerefox_hybrid_search` and `cerefox_fts_search` give
     // `content`, and reading only the first rendered every hybrid/fts result
     // as a title with an empty body.
-    return `## ${title}${docId}${score}${partial}${hash}\n\n${rowContent(row)}`;
+    return `## ${title}${docId}${chunk}${score}${partial}${hash}\n\n${rowContent(row)}`;
   });
 
   let output = parts.join("\n\n---\n\n");

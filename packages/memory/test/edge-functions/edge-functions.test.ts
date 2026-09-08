@@ -423,8 +423,14 @@ describe("Edge Functions (live HTTP)", () => {
           expect(row.full_content).toBeUndefined();
           expect(row.content).toBeUndefined();
         }
-        // The answer that explains the budget must itself respect it.
-        expect(JSON.stringify(body.results ?? []).length).toBeLessThanOrEqual(3000);
+        // The answer that explains the budget respects it, with one deliberate
+        // exception: a single header is returned even when it does not fit,
+        // because an empty `results` is the "nothing was found" shape (#261).
+        const listed = body.results ?? [];
+        if (listed.length > 1) {
+          expect(JSON.stringify(listed).length).toBeLessThanOrEqual(3000);
+        }
+        expect(listed.length).toBeGreaterThan(0);
       }
     });
   });
