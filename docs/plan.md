@@ -28,8 +28,10 @@
 ---
 ## Current Focus
 
-**2026-09-08 — v1.14.3 IN PROGRESS** (branch `fix/footer-budget-invariant`;
-PRs #256, #258, #260, #262, #264). One subject, seven review rounds: **what
+**2026-09-08 — v1.14.3 SHIPPED** (PRs #256, #258, #260, #262, #264; cut
+`d4d53c3`, npm 1.14.3 published, CI green). **Staging verification pending**
+until the maintainer upgrades it: `cerefox self-update` **and**
+`cerefox server deploy --functions-only` (the `cerefox-search` EF changed). One subject, seven review rounds: **what
 `cerefox_search` returns and how much of it**. It began as a false empty (an
 agent was told the store had nothing when the top hit simply exceeded
 `max_bytes`, #254, shipped in 1.14.2) and each round found the next layer:
