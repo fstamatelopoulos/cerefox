@@ -11,6 +11,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Search modes `hybrid` and `fts` returned titles with empty bodies over
+  MCP** (#259). `cerefox_search_docs` returns `full_content`; the two chunk
+  RPCs return `content`, and the shared renderer read only the first, so every
+  chunk-mode result arrived as a heading with nothing under it (218 bytes
+  against 22,689 for the same query in `docs` mode). The byte budget measured
+  the text it then declined to print, so oversized chunk rows were dropped on
+  the basis of content the caller never received. Present since the handlers
+  moved into `_shared/mcp-tools/`; it survived because `docs` is the default
+  mode and the CLI and web UI each render chunks correctly on their own.
+- **A capped degraded reply can no longer come back empty** (#259): at least
+  one header always survives, since an empty `results` is the "nothing was
+  found" shape #254 exists to prevent. `response_bytes` now measures what is
+  actually returned rather than the content-bearing set a degraded reply does
+  not contain, `cerefox_metadata_search` writes one usage-log row carrying the
+  matched count instead of two, and the GPT Actions OpenAPI block (**4.2.0**)
+  says to read `matched`, not `results.length`.
+
+### Fixed
+
 - **The degraded search response no longer leaks content or overruns the
   budget** (#257, a regression in v1.14.2). v1.14.2 made a byte-budget miss
   return what matched *without* content instead of reporting "no results", but
@@ -25,6 +44,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   held-back documents plus a count instead of all of them; the
   `cerefox_metadata_search` fallback list is capped the same way and records
   how many documents matched rather than zero.
+
 Open roadmap.
 
 ---

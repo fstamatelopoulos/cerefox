@@ -84,14 +84,20 @@ async function handler(
     content: string | null;
   }>;
 
-  logUsage(supabase, {
-    operation: "metadata_search",
-    accessPath: ctx.accessPath,
-    requestor: callerIdentity(args),
-    query_text: JSON.stringify(metadata_filter ?? {}),
-    project_id: projectId,
-    result_count: rows.length,
-  });
+  // Logged once, AFTER the degraded branch below may have found the real
+  // count: firing here unconditionally wrote a `result_count: 0` row for
+  // every budget-wiped search, and adding a second row in the branch made
+  // analytics double-count them (#259).
+  const log = (result_count: number, extra?: Record<string, unknown>) =>
+    logUsage(supabase, {
+      operation: "metadata_search",
+      accessPath: ctx.accessPath,
+      requestor: callerIdentity(args),
+      query_text: JSON.stringify(metadata_filter ?? {}),
+      project_id: projectId,
+      result_count,
+      ...(extra ? { extra } : {}),
+    });
 
   if (rows.length === 0) {
     // The RPC applies the byte budget server-side by stopping at the first row
@@ -124,21 +130,15 @@ async function handler(
           lines.push(line);
           used += size;
         }
-        logUsage(supabase, {
-          operation: "metadata_search",
-          accessPath: ctx.accessPath,
-          requestor: callerIdentity(args),
-          query_text: JSON.stringify(metadata_filter ?? {}),
-          project_id: projectId,
-          // What matched, not what the budget allowed through (#257).
-          result_count: headerRows.length,
-          extra: { returned: lines.length, degraded: true },
-        });
+        // What matched, not what the budget allowed through (#257).
+        log(headerRows.length, { returned: lines.length, degraded: true });
         return lines.length > 0 ? `${lead}\n${lines.join("\n")}` : lead;
       }
     }
+    log(0);
     return "No documents match the given criteria.";
   }
+  log(rows.length);
 
   // The review status is a column of a feature that may be off (#241); when
   // it is, an agent should not see "approved" and wonder what it means.

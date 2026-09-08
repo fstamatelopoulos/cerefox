@@ -27,7 +27,10 @@ import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
 interface SearchRow {
   document_id?: string;
   doc_title?: string;
+  /** Document-level modes (`docs`) return this… */
   full_content?: string;
+  /** …while `hybrid` and `fts` return the chunk text under this name. */
+  content?: string;
   best_score?: number;
   score?: number;
   is_partial?: boolean;
@@ -35,6 +38,11 @@ interface SearchRow {
   total_chars?: number;
   content_hash?: string;
   below_confidence?: boolean;
+}
+
+/** The row's text, under whichever column name this search mode returns. */
+export function rowContent(row: SearchRow): string {
+  return row.full_content ?? row.content ?? "";
 }
 
 /** `## Title [id: …] (score: …) -- 20,297 chars` — everything but the content. */
@@ -246,7 +254,11 @@ async function handler(
       : "";
     // content_hash = the concurrency token for cerefox_ingest updates (iter-32).
     const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
-    return `## ${title}${docId}${score}${partial}${hash}\n\n${row.full_content ?? ""}`;
+    // Whichever column this mode returns (#259). `cerefox_search_docs` gives
+    // `full_content`; `cerefox_hybrid_search` and `cerefox_fts_search` give
+    // `content`, and reading only the first rendered every hybrid/fts result
+    // as a title with an empty body.
+    return `## ${title}${docId}${score}${partial}${hash}\n\n${rowContent(row)}`;
   });
 
   let output = parts.join("\n\n---\n\n");

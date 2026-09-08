@@ -368,13 +368,26 @@ Deno.serve(async (req: Request) => {
   // 83 KB of chunk text against a 3 KB budget while the response claimed the
   // content had been omitted (#257).
   const degraded = accepted.length === 0 && matched.length > 0;
-  const headerRows = matched.map(
-    ({ full_content: _full, content: _chunk, ...header }) => header,
-  );
   // And the headers themselves are held to the budget the caller asked for:
-  // a `match_count` of 200 makes even a content-free list large.
-  const listed = degraded ? applyByteBudget(headerRows, max_bytes).accepted : [];
+  // a `match_count` of 200 makes even a content-free list large. At least one
+  // survives regardless: an empty `results` is the "nothing was found" shape
+  // #254 exists to prevent, and a header row can exceed a very small budget
+  // on its own (#259).
+  const listed = degraded
+    ? (() => {
+        const headerRows = matched.map(
+          ({ full_content: _full, content: _chunk, ...header }) => header,
+        );
+        const fitted = applyByteBudget(headerRows, max_bytes).accepted;
+        return fitted.length > 0 ? fitted : headerRows.slice(0, 1);
+      })()
+    : [];
   const results = degraded ? listed : accepted;
+  // What is actually being returned, which on a degraded response is the
+  // header list rather than the (empty) content-bearing set.
+  const responseBytes = degraded
+    ? new TextEncoder().encode(JSON.stringify(results)).length
+    : usedBytes;
 
   // Fire-and-forget usage logging (never blocks the response)
   Promise.resolve(supabase.rpc("cerefox_log_usage", {
@@ -397,7 +410,7 @@ Deno.serve(async (req: Request) => {
       project_name: project_name ?? null,
       metadata_filter: metadata_filter ?? null,
       truncated,
-      response_bytes: usedBytes,
+      response_bytes: responseBytes,
       matched: matched.length,
       degraded,
       ...(degraded

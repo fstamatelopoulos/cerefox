@@ -638,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 4.1.0
+  version: 4.2.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -713,9 +713,11 @@ paths:
             chunk_count, total_chars, best_score, is_partial.
             matched is how many results the query found, before the byte budget.
             When degraded is true, everything that matched was larger than max_bytes, so the
-            items carry NO full_content — they name what exists so you can re-ask with a
-            larger max_bytes or fetch one document. An empty results array with degraded
-            true is never "nothing was found"; results is empty only when matched is 0.
+            items carry NO content of any kind — they name what exists so you can re-ask with
+            a larger max_bytes or fetch one document. That header list is itself capped to
+            max_bytes, so it may be a SUBSET of matched (at least one item is always
+            returned). Read matched, never results.length, to know how much the query found:
+            "nothing was found" is matched == 0.
             is_partial is true when the document exceeded the small-to-big threshold — in that
             case full_content contains matched chunks plus their neighbours rather than the
             complete document, and total_chars still reflects the full document size.
