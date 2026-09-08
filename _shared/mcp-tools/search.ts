@@ -18,7 +18,7 @@
 import type { MCPSupabaseClient } from "./types.ts";
 
 import { getEmbedding, resolveEmbedderKind } from "../embeddings/index.ts";
-import { applyByteBudget, getConfiguredMinSearchScore, getConfiguredSearchAlpha,
+import { getConfiguredMinSearchScore, getConfiguredSearchAlpha,
   getMaxResponseBytes, getMinTermCoverage, logUsage } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
@@ -92,11 +92,12 @@ function shortLabel(row: SearchRow): string {
   if (path.length > 0 && path[0] === doc) path.shift();
   const leaf = path.filter(Boolean).at(-1) ?? (row.title && row.title !== doc ? row.title : "");
   const chunk = row.chunk_index != null ? ` (chunk ${row.chunk_index})` : "";
-  // A docs-mode row has neither a section nor a chunk index, so the id is the
-  // only thing telling two same-titled documents apart — and the only way to
-  // fetch either of them (#265). Chunk rows skip it: they are usually chunks
-  // of ONE document, so the same uuid would repeat down the list.
-  const id = !leaf && !chunk && row.document_id ? ` [id: ${row.document_id}]` : "";
+  // Always the id. Chunk modes are not single-document either, so two
+  // documents sharing a title and a section name would otherwise produce
+  // byte-identical entries with no way to fetch either (#265). The footer is
+  // inside the budget now and drops names it cannot afford, so carrying the
+  // id costs nothing that is not accounted for.
+  const id = row.document_id ? ` [id: ${row.document_id}]` : "";
   return `${leaf ? `${doc} › ${leaf}` : doc}${chunk}${id}`;
 }
 
@@ -137,8 +138,11 @@ function degradedToHeaders(
   maxBytes: number,
   belowConfidence: boolean,
 ): string {
+  // Rendered bytes, not JSON: the fit decision that reaches here is made in
+  // rendered bytes, and quoting a JSON size produced messages saying the
+  // largest result was 490 bytes and did not fit a 600-byte budget (#265).
   const biggest = Math.max(
-    ...matched.map((r) => new TextEncoder().encode(JSON.stringify(r)).length),
+    ...matched.map((r) => new TextEncoder().encode(renderRow(r)).length),
   );
   // A degraded response must not silently promote 28I's weak-signal
   // candidates into real matches: an agent told "N result(s) matched" about
@@ -173,7 +177,10 @@ async function handler(
 ): Promise<string> {
   const query = args.query as string;
   const project_name = args.project_name as string | undefined;
-  const match_count = (args.match_count as number | undefined) ?? 5;
+  // Clamped, as the Edge Function has always clamped it: `match_count` is
+  // caller-supplied and reaches the fitting loop below, so an unbounded value
+  // is unbounded work on a single-threaded isolate (#265).
+  const match_count = Math.min(Math.max(1, (args.match_count as number | undefined) ?? 5), 200);
   const mode = (args.mode as string | undefined) ?? "docs";
   // #133: omit unconfigured tunables so the server resolves them from
   // cerefox_config (one setting governs every access path).
@@ -309,13 +316,24 @@ async function handler(
   const size = (t: string) => new TextEncoder().encode(t).length;
   const SEP = "\n\n---\n\n";
 
+  // The 28I advisory, long and short. It is charged to the budget like
+  // everything else, but it must never displace the answer it is advising
+  // about: a ~190-byte banner that pushes the only result out of a small reply
+  // leaves the caller with a warning and no content (#265). The short form is
+  // the floor — the contract is that weak candidates are never presented as
+  // confident ones, and that survives in six words.
+  const banner = (take: number, short: boolean) =>
+    !belowConfidence
+      ? ""
+      : short
+        ? `⚠ Below the confidence threshold — judge relevance from the scores.\n\n`
+        : `⚠ No results cleared the confidence threshold. Showing the closest ${take} ` +
+          `candidate(s) with scores — judge relevance yourself; a low score means weak ` +
+          `signal, not necessarily absent knowledge.\n\n`;
+
   /** The whole reply for a given number of rows, footer sized to what is left. */
-  const assemble = (take: number): string => {
-    const head = belowConfidence
-      ? `⚠ No results cleared the confidence threshold. Showing the closest ${take} ` +
-        `candidate(s) with scores — judge relevance yourself; a low score means weak ` +
-        `signal, not necessarily absent knowledge.\n\n`
-      : "";
+  const assemble = (take: number, short = false): string => {
+    const head = banner(take, short);
     const body = head + rendered.slice(0, take).join(SEP);
     if (take >= matched.length) return body;
 
@@ -342,13 +360,32 @@ async function handler(
     return body + footer(0);
   };
 
-  // Start from what could fit at best, then shrink until the ASSEMBLED reply
-  // is within budget. Bounded by matched.length (≤ match_count, ≤ 200).
-  let take = matched.length;
-  let output = assemble(take);
+  // Start from the most rows the BODY alone can carry — one linear pass over
+  // the rendered sizes — rather than from `matched.length`, which made the
+  // loop below O(n²) on a single-threaded isolate (#265). From there only the
+  // banner and the footer can still overflow, so the shrink is a step or two.
+  const sepBytes = size(SEP);
+  let take = 0;
+  let acc = 0;
+  for (const text of rendered) {
+    const add = size(text) + (take > 0 ? sepBytes : 0);
+    if (acc + add > max_bytes) break;
+    acc += add;
+    take += 1;
+  }
+
+  let short = false;
+  let output = assemble(take, short);
   while (take > 0 && size(output) > max_bytes) {
-    take -= 1;
-    output = assemble(take);
+    // Shorten the advisory before giving up a result: content the caller can
+    // use beats a longer warning about content they no longer have.
+    if (belowConfidence && !short) {
+      short = true;
+    } else {
+      take -= 1;
+      short = false;
+    }
+    output = assemble(take, short);
   }
 
   logUsage(supabase, {

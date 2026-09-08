@@ -142,6 +142,45 @@ describe("a search reply never exceeds max_bytes", () => {
     }
   }
 
+  test("the below-confidence banner never displaces the answer it warns about", async () => {
+    // #265: the ~190-byte advisory was charged to the budget but could not be
+    // shortened, so a result that fit on its own was dropped in favour of a
+    // LONGER message carrying no content.
+    const row = { ...chunk("Doc", "Setup", 0, 400, 0.4), below_confidence: true };
+    const out = await search.handler(
+      client([row]),
+      { query: "q", mode: "fts", max_bytes: 600, author: "t" },
+      ctx,
+    );
+    expect(bytes(out)).toBeLessThanOrEqual(600);
+    expect(out).toContain("z".repeat(400)); // the content survived
+    expect(out.toLowerCase()).toContain("confidence"); // and so did the warning
+  });
+
+  test("the degraded message quotes a size in the same unit as the budget", async () => {
+    // #265: it quoted JSON bytes, producing "the largest is 490 bytes" against
+    // a 600-byte budget — a remedy the caller cannot act on.
+    const out = await search.handler(
+      client([chunk("Doc", "Setup", 0, 5_000, 0.9)]),
+      { query: "q", mode: "fts", max_bytes: 600, author: "t" },
+      ctx,
+    );
+    const quoted = Number(/largest is ([\d,]+) bytes/.exec(out)?.[1]?.replace(/,/g, "") ?? 0);
+    expect(quoted).toBeGreaterThan(600);
+  });
+
+  test("a large match_count is clamped, so fitting cannot be made unbounded work", async () => {
+    const rows = Array.from({ length: 400 }, (_, i) => chunk("Doc", `S${i}`, i, 200, 1 - i / 1000));
+    const started = Date.now();
+    const out = await search.handler(
+      client(rows),
+      { query: "q", mode: "fts", match_count: 100_000, max_bytes: 200_000, author: "t" },
+      ctx,
+    );
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(bytes(out)).toBeLessThanOrEqual(200_000);
+  });
+
   test("the truncation footer is inside the budget, not appended over it", async () => {
     // #263 exactly: rows that fill the budget, plus enough dropped rows for a
     // long footer. The footer must fit, which means the content had to leave
