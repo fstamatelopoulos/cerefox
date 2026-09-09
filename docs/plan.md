@@ -28,10 +28,38 @@
 ---
 ## Current Focus
 
+**2026-09-08 — v1.14.4 IN PROGRESS** (branch `fix/metadata-search-contract`;
+#268). Post-release verification of 1.14.3 on staging: every suite green
+(`_shared` 1143, package 313/2/0, live EF 23, remote MCP 26, Playwright 23/23)
+and the contract probed live — four modes × six budgets × hostile inputs, on
+the local MCP, the remote MCP and the search Edge Function, with a constructed
+fixture for rule 4 because staging's corpus ranks its smallest document first.
+**1.14.3 is sound.** What the seven rounds never swept is the *metadata-search*
+pair, which answers the same question and had none of the guarantees:
+
+- the Edge Function returned a bare `[]` when the budget stopped at the first
+  document, and silently returned 3 of 5 on its **default** path;
+- the MCP tool's degraded branch fires only at zero rows, so a partial cut
+  (1 returned, 5 matched) was reported as a complete answer;
+- `max_bytes` was unsanitised on the Edge Function — #267's `NaN` →
+  `p_max_bytes NULL` → *no limit* hole, returning 298,602 bytes against a
+  200,000 ceiling, in the file whose `limit` **was** sanitised.
+
+Fixed by making the Edge Function's array *complete* (every match listed,
+`content_omitted: true` where content was dropped) rather than by adding an
+envelope, which would break Custom GPTs configured against the documented
+shape. Plus a **derived** guard test over every surface that reads a budget
+from caller input, proven to fire by reverting the real fix. Also: the CLI now
+skips an oversized result instead of stopping at it, and
+`docs/guides/response-limits.md` — stale since **v0.10.2** — no longer claims
+the CLI never truncates. Detail:
+[iteration 46](plans/iteration-46-spa-serving-and-tab-titles.md).
+
 **2026-09-08 — v1.14.3 SHIPPED** (PRs #256, #258, #260, #262, #264; cut
-`d4d53c3`, npm 1.14.3 published, CI green). **Staging verification pending**
-until the maintainer upgrades it: `cerefox self-update` **and**
-`cerefox server deploy --functions-only` (the `cerefox-search` EF changed). One subject, seven review rounds: **what
+`d4d53c3`, npm 1.14.3 published, CI green). **Verified on staging 2026-09-08**
+after the maintainer's upgrade — all suites green and the contract probed live;
+see the v1.14.4 block above for what that verification then found *next door*.
+One subject, seven review rounds: **what
 `cerefox_search` returns and how much of it**. It began as a false empty (an
 agent was told the store had nothing when the top hit simply exceeded
 `max_bytes`, #254, shipped in 1.14.2) and each round found the next layer:

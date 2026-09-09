@@ -8,11 +8,18 @@ explains how response size limits work and how to tune them.
 
 ## The key principle: opt-in limits, never truncate the web UI
 
-The web UI and CLI never truncate results. They have no size limit — the browser or terminal
-can handle arbitrarily large responses and there is no LLM context window to worry about.
+The web UI never truncates results. It has no size limit — the browser can handle
+arbitrarily large responses and there is no LLM context window to worry about.
 
-Limits are **opt-in per call**, used only on the MCP and Edge Function paths where an AI
-agent's context window matters. Callers always choose whether to apply a limit.
+Limits apply on the MCP, Edge Function **and CLI** paths. On MCP and the Edge Functions
+they exist because an AI agent's context window matters; the CLI applies the same default
+so that one setting (`CEREFOX_MAX_RESPONSE_BYTES`) governs every non-browser path, and
+raises or lowers it per call with `--max-bytes`.
+
+> **Changed in v0.10.2.** The CLI originally returned everything, like the web UI. It now
+> honours `CEREFOX_MAX_RESPONSE_BYTES` (200 000 default) and prints
+> `(results truncated at N bytes; use --max-bytes to raise)` when results are dropped.
+> This guide described the pre-v0.10.2 behaviour until v1.14.4.
 
 ---
 
@@ -21,7 +28,7 @@ agent's context window matters. Callers always choose whether to apply a limit.
 | Path | Limit behaviour |
 |------|----------------|
 | Web UI (`/search`) | **No limit** — all results returned |
-| CLI (`cerefox search`) | **No limit** — all results returned |
+| CLI (`cerefox search`) | Defaults to `CEREFOX_MAX_RESPONSE_BYTES` (200 000); raise or lower per call with `--max-bytes`. Announces truncation. |
 | Local MCP server (`cerefox mcp`) | Defaults to `CEREFOX_MAX_RESPONSE_BYTES` (200 000); agent can request less |
 | Edge Function (`cerefox-search`) | Defaults to 200 000 bytes; agent can request less via `max_bytes` body param |
 | Remote MCP (`cerefox-mcp` Edge Function) | Defaults to 200 000 bytes; agent can request less via `max_bytes` tool param |
@@ -58,6 +65,27 @@ without misleading you: the notice that results were held back, or the
 below-confidence advisory. Both are a few dozen bytes, and neither is ever
 traded for content. Returning 1 of 5 results without saying so, or presenting
 weak candidates as confident ones, would be worse than a small overrun.
+
+### Metadata search follows the same rules (v1.14.4)
+
+`cerefox_metadata_search` and the `cerefox-metadata-search` Edge Function apply
+`max_bytes` only when `include_content: true`, and the budget is applied by the
+database, which stops at the first document whose content does not fit. That
+made two silent failures possible until v1.14.4, and both are now closed:
+
+- **The reply is never empty when documents matched.** If the first document is
+  the oversized one, the budget used to empty the result set — the MCP tool
+  returned "No documents match", the Edge Function returned `[]`. Both now say
+  what matched: the tool with a warning and a header list, the Edge Function by
+  listing every matching document with content omitted.
+- **Documents are never held back silently.** The MCP tool appends
+  `[2 of 7 document(s) shown; 5 did not fit max_bytes=20000. …]`. The Edge
+  Function keeps its array shape and lists **every** matching document, marking
+  the ones whose content did not fit with `"content_omitted": true` — so
+  `results.length` is always the true match count and only content is dropped.
+
+Passing a non-numeric `max_bytes` (`"lots"`) is treated as "unset" and falls
+back to the server ceiling; it does not disable the limit.
 
 ---
 
@@ -164,7 +192,7 @@ threshold (it is a SQL DEFAULT in `rpcs.sql`, changed via `cerefox server deploy
 | Question | Answer |
 |----------|--------|
 | Does the web UI truncate results? | No — unlimited |
-| Does the CLI truncate results? | No — unlimited |
+| Does the CLI truncate results? | Yes — at `CEREFOX_MAX_RESPONSE_BYTES`, or `--max-bytes`. It says so when it does. |
 | What is the default MCP response limit? | 200 000 bytes |
 | Can an agent request a smaller limit? | Yes — `max_bytes` tool parameter |
 | Can an agent exceed the server ceiling? | No — always capped |

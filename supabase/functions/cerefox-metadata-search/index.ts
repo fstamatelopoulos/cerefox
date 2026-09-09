@@ -103,8 +103,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const include_content = body.include_content ?? false;
     const requested_max_bytes = body.max_bytes;
 
+    // Sanitised before clamping, exactly as `cerefox-search` and the MCP tools
+    // do it (#268). `Math.min("lots", MAX_BYTES)` is `NaN`, which serialises to
+    // JSON null, and `p_max_bytes NULL` means NO limit — so a non-numeric value
+    // returned every matching document's full content, above the very ceiling
+    // this parameter exists to enforce. `limit` below was already sanitised;
+    // this was its unhardened neighbour. A NUMBER of 0 or less still means
+    // "almost no budget": falling back to the ceiling would hand a caller whose
+    // allowance ran out the largest possible reply (#267).
+    const requestedBytes = Math.floor(Number(requested_max_bytes));
     const max_bytes = include_content
-      ? Math.min(requested_max_bytes ?? MAX_BYTES, MAX_BYTES)
+      ? Math.min(
+          Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : MAX_BYTES,
+          MAX_BYTES,
+        )
       : null;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -154,18 +166,59 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Fire-and-forget usage logging
+    let rows = (data ?? []) as Array<Record<string, unknown>>;
+
+    // Never answer with a shorter list than what matched (#268).
+    //
+    // The RPC applies `p_max_bytes` server-side by stopping at the first row
+    // whose content does not fit, so this list has two indistinguishable
+    // causes: fewer documents matched, or the budget cut it short. When the
+    // first row is the oversized one the array comes back EMPTY, and a caller
+    // reads `[]` as "this knowledge does not exist" and stops looking — the
+    // false negative #254 exists to prevent, reached here through a sibling
+    // that never got the guard.
+    //
+    // The response shape stays a bare array, because Custom GPTs are
+    // configured against it: every matching document is listed, and only
+    // CONTENT is negotiable. Rows the budget could not afford come back
+    // content-free and marked, so `results.length` is always the true count
+    // and nothing is held back silently.
+    if (include_content && max_bytes !== null && rows.length < limit) {
+      const { data: headerData, error: probeError } = await supabase.rpc(
+        "cerefox_metadata_search",
+        { ...params, p_include_content: false, p_max_bytes: null },
+      );
+      // supabase-js RESOLVES with `{ data: null, error }` for PostgREST and
+      // network failures rather than throwing, so a probe failure must be read
+      // from the error, not inferred from an empty list — reading it as "no
+      // documents" is the very false empty this branch prevents (#261).
+      if (!probeError) {
+        const headers = (headerData ?? []) as Array<Record<string, unknown>>;
+        if (headers.length > rows.length) {
+          const withContent = new Map(rows.map((r) => [r.document_id as string, r]));
+          // The probe carries the full, correctly ordered match set; the
+          // content-bearing rows are folded into it by id so ordering is the
+          // RPC's, not an artefact of which rows happened to fit.
+          rows = headers.map(
+            (h) => withContent.get(h.document_id as string) ?? { ...h, content_omitted: true },
+          );
+        }
+      }
+    }
+
+    // Fire-and-forget usage logging. Counts what MATCHED, not what the budget
+    // allowed through: a budget-wiped search logging `0` misreports the store
+    // as empty in analytics (#259).
     Promise.resolve(supabase.rpc("cerefox_log_usage", {
       p_operation: "metadata_search",
       p_access_path: "edge-function",
       p_requestor: identityValue ?? null,
       p_query_text: JSON.stringify(metadata_filter),
-      p_result_count: (data ?? []).length,
+      p_result_count: rows.length,
       p_project_id: project_id,
     })).catch(() => {});
 
     // Presentation only: the same shared reader every other surface uses.
-    const rows = (data ?? []) as Array<Record<string, unknown>>;
     const showReview = await reviewWorkflowEnabled(supabase);
     const out = showReview
       ? rows

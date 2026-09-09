@@ -236,3 +236,68 @@ former has no fixed release and the latter's fix is outside the range
 - Staging already runs the fixed function (deployed from the branch during
   verification), so it is ahead of `main` until the cut.
 - **#154** (Node baseline) moves again, for the sixth time.
+
+---
+
+## v1.14.4 — finishing the sweep the reviews stopped short of (#268)
+
+The seven review rounds behind 1.14.3 were stopped by decision, not because
+they had converged. Post-release verification against staging asked the
+obvious follow-up question — *which surfaces were never swept?* — and found
+two, both reachable by an agent and both silent.
+
+**What the release verification actually covered.** All suites green
+(`_shared` 1143, package 313/2/0, live EF 23, remote MCP 26, Playwright
+23/23), plus live probes of the contract on real data: four modes × six
+budgets × hostile inputs, on the local MCP, the remote MCP and the search
+Edge Function. Rule 4 needed a constructed fixture, because staging's own
+corpus ranks its smallest document first and so cannot exercise a skip; with
+one oversized document ranked above two tiny ones, the two small rows came
+back and the big one was named as skipped. 1.14.3 itself is sound.
+
+**What was missed.** `cerefox_metadata_search` and its Edge Function answer
+the same question — *which documents match?* — and neither had the guarantees
+the search path now has. The database applies `p_max_bytes` by stopping at the
+first document whose content does not fit, so an oversized first row emptied
+the reply: `[]` from the Edge Function, "No documents match" from the tool.
+The tool's degraded branch fires only on `rows.length === 0`, so a *partial*
+cut — one document returned where five matched — was reported as a complete
+answer. And `max_bytes` was unsanitised on the Edge Function, the same
+`NaN` → `p_max_bytes NULL` → *no limit* hole #267 closed on the search tool,
+in the file whose `limit` two lines above **was** sanitised.
+
+**Decisions.**
+
+- **The Edge Function keeps its bare-array shape.** An envelope would match
+  `cerefox-search` and carry a notice field, but Custom GPTs are configured
+  against the documented array, and a shape change is not a patch-release
+  matter. Instead the array is made *complete*: every matching document is
+  listed and only content is negotiable, marked `content_omitted: true`. The
+  count is then structural — `results.length` is the truth — and no notice
+  field is needed.
+- **The partial case costs one extra probe, and only when it can say
+  something.** The count is resolved with the same content-free query the
+  empty branch already used, skipped when the page is full or no budget was
+  set.
+- **The guard is derived, not a list.** Surfaces are found by how each layer
+  reads caller input (`args` / `body` / `options`), so a new one is policed on
+  the day it is written. Proven to fire by reverting the real fix, not only
+  against a synthetic string — two static checks in this project once passed
+  vacuously.
+
+**Checked before fixing** (the maintainer asked, and it changed the write-up):
+the Decision Log records `p_max_bytes` on metadata search as using "the same
+whole-row-drop model as `cerefox_search_docs`", so parity with the search path
+was always the intent. The 2026-03-20 entry does say "Web UI/CLI = no
+truncation" — but **v0.10.2** deliberately reversed that for the CLI and
+corrected `CLAUDE.md`, leaving `docs/guides/response-limits.md` stale for three
+months until 1.14.3 cited it as the contract. The guide was the drift, not the
+code.
+
+### Release notes for the cut (v1.14.4)
+
+- `cerefox self-update` **and** `cerefox server deploy --functions-only` — the
+  `cerefox-metadata-search` Edge Function changed. No schema change, no
+  `minSchema` / `minEdgeFunctions` change.
+- GPT Actions OpenAPI block → **4.3.0** (additive response field).
+- **#154** (Node baseline) still waiting; seventh deferral.

@@ -198,9 +198,13 @@ async function action(
   let truncated = false;
   for (const row of results) {
     const rowBytes = Buffer.byteLength(JSON.stringify(row), "utf8");
+    // Skipped, not the end of the list (#266, #268): one oversized result used
+    // to suppress every smaller one behind it, so a raised --max-bytes could
+    // show FEWER documents than a lower one. The first row is always kept, so
+    // a budget smaller than any result still answers with something.
     if (usedBytes + rowBytes > maxBytes && accepted.length > 0) {
       truncated = true;
-      break;
+      continue;
     }
     accepted.push(row);
     usedBytes += rowBytes;

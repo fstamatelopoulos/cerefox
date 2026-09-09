@@ -166,7 +166,29 @@ async function handler(
     log(0);
     return "No documents match the given criteria.";
   }
-  log(rows.length);
+  // How many documents actually matched, as opposed to how many the budget
+  // let through (#268). The RPC applies `p_max_bytes` by stopping at the first
+  // row that does not fit, so a short list has two indistinguishable causes:
+  // fewer documents matched, or the budget cut the list. Only the caller's
+  // side knows which, and only after asking — so ask, with the same
+  // content-free probe the empty branch above uses.
+  //
+  // Cheap by construction: a full page (`rows.length === limit`) cannot have
+  // been cut short by the budget in a way this would reveal, and without a
+  // budget there is nothing to reveal, so neither case pays for the probe.
+  let matched = rows.length;
+  if (include_content && max_bytes !== null && rows.length < limit) {
+    const { data: headers, error: probeError } = await supabase.rpc(
+      "cerefox_metadata_search",
+      { ...params, p_include_content: false, p_max_bytes: null },
+    );
+    // A failed probe must not invent a count. supabase-js resolves with
+    // `{ data: null, error }` rather than throwing (#261), so read the error:
+    // leaving `matched` at `rows.length` states only what is known.
+    if (!probeError) matched = Math.max(rows.length, ((headers ?? []) as unknown[]).length);
+  }
+
+  log(matched, matched > rows.length ? { returned: rows.length, truncated: true } : undefined);
 
   // The review status is a column of a feature that may be off (#241); when
   // it is, an agent should not see "approved" and wonder what it means.
@@ -193,6 +215,19 @@ async function handler(
     }
     return header;
   });
+
+  // Never hold results back silently (#268). A caller who receives 1 of 5 and
+  // is told nothing believes they saw everything — the same failure as a false
+  // empty, in a quieter form. This notice is framing that is never dropped.
+  if (matched > rows.length) {
+    const held = matched - rows.length;
+    return (
+      `${parts.join("\n\n---\n\n")}\n\n` +
+      `[${rows.length} of ${matched} document(s) shown; ${held} did not fit ` +
+      `max_bytes=${max_bytes}. Raise max_bytes, lower limit, or use ` +
+      `include_content: false to list them all.]`
+    );
+  }
 
   return parts.join("\n\n---\n\n");
 }
