@@ -429,9 +429,23 @@ test.describe("Trash", () => {
     // Confirmation first: nothing is purged until the red button is clicked.
     const start = page.getByTestId("empty-trash-start");
     await expect(start).toBeVisible();
-    // The exact number (#249): the non-fixture guard above means exactly ours.
-    await expect(page.getByTestId("empty-trash-confirm")).toContainText("Permanently delete 3 documents");
-    expect(((await (await request.get("/api/v1/documents/trash")).json()) as unknown[]).length).toBeGreaterThanOrEqual(3);
+    // The exact number (#249) — derived, not hardcoded. The guard above only
+    // skips on FOREIGN documents, so anything `[E2E`-prefixed already in the
+    // trash (a fixture from an earlier run, or from probing a release against
+    // staging) passed it and then broke a hardcoded `3`, turning this red for
+    // a reason that has nothing to do with the code under test. Deriving the
+    // total still asserts what #249 is about — that the modal states the exact
+    // number it is about to purge — and now it asserts it for a trash whose
+    // contents the test does not control.
+    const expected = before.length + 3;
+    await expect(page.getByTestId("empty-trash-confirm")).toContainText(
+      `Permanently delete ${expected} document${expected === 1 ? "" : "s"}`,
+    );
+    // Same page size as the `before` fetch, or the two disagree on a trash
+    // larger than one default page and the comparison is meaningless.
+    expect(
+      ((await (await request.get("/api/v1/documents/trash?limit=500")).json()) as unknown[]).length,
+    ).toBe(expected);
 
     await start.click();
     const done = page.getByTestId("empty-trash-done");

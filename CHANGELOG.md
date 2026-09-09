@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **The Empty-trash e2e test failed on a trash it did not control.** Its guard
+  skips only when the trash holds a document whose title is not `[E2E`-prefixed,
+  and it then asserted the confirmation said exactly "3 documents". So any
+  `[E2E`-prefixed fixture already in the trash — left by an earlier run, or by
+  probing a release against staging — passed the guard and turned the test red
+  for a reason unrelated to the code under test (seen as "Expected 3, received
+  12" while verifying v1.14.4). The expected total is derived from what the
+  trash actually holds, so it still asserts what #249 is about, that the modal
+  states the exact number it is about to purge. Test-only; no runtime change.
 
 ---
 
