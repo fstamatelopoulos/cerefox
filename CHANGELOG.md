@@ -9,7 +9,73 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **The metadata-search surfaces could report an empty store, or hold documents
+  back without saying so** (#268). The v1.14.x work fixed the search response
+  contract on the search tool and `cerefox-search`; the two surfaces answering
+  the same question by metadata were never swept. `p_max_bytes` is applied by
+  the database, which stops at the first document whose content does not fit, so
+  when that was the first row the result set came back **empty** — the MCP tool
+  said "No documents match", the Edge Function returned `[]`, and an agent that
+  reads either stops looking. Both now report what matched. When only some
+  documents fit, the MCP tool appends `[2 of 7 document(s) shown; 5 did not fit
+  max_bytes=…]`, and the Edge Function lists **every** matching document,
+  marking those whose content was dropped with `"content_omitted": true`, so
+  `results.length` is always the true match count. The array shape is unchanged,
+  so existing Custom GPTs keep working.
+- **`max_bytes` was not sanitised on `cerefox-metadata-search`** (#268) — the
+  hole #267 closed on the search tool, still open on its sibling.
+  `Math.min("lots", MAX_BYTES)` is `NaN`, which serialises to JSON null, and
+  `p_max_bytes NULL` means *no limit*: one word instead of a number returned
+  298,602 bytes, above the ceiling the parameter exists to enforce. `limit` two
+  lines above was already sanitised. A derived guard test now walks every
+  surface that reads a budget out of caller input — MCP tool `args`, Edge
+  Function `body`, CLI `options` — and fails if any of them skips the check, so
+  a new surface is policed the day it is written rather than the day it is
+  reported.
+- **The CLI stopped at the first oversized result instead of skipping it**
+  (#268), the same shape as #266: one large document suppressed every smaller
+  one behind it, so raising `--max-bytes` could show *fewer* results than a
+  lower value. It now skips and continues, as the MCP path does, and its
+  truncation line names the counts (`3 of 8 result(s) shown`) rather than
+  saying only that something was cut.
+- **`cerefox-search` did the same thing** (#268). `applyByteBudget` — the
+  helper the Edge Function shares — still stopped at the first row over
+  budget, so an oversized top hit emptied the result set, flipped the reply to
+  the degraded shape and stripped content from results 2 and 3 that would have
+  fitted. Rows are now skipped and reported, matching the MCP tool since #266.
+- **An explicit `max_bytes: null` meant a ONE-BYTE budget, not the default**
+  (#268). `Number(null)` is `0`, which is finite, so the clamp to at least 1
+  turned "unset" into "almost nothing": a client that serialises optional
+  fields as `null` asked for content and received none. The budget arithmetic
+  now lives in one shared `resolveByteBudget()` rather than being written out
+  by hand on four surfaces — where each hand-written copy was wrong
+  differently — and treats `null`, `undefined`, `""` and non-numeric values
+  alike as unset, while still honouring a real number of zero or less as a
+  tiny budget.
+- **`cerefox metadata search` had the same false empty** (#268), on the surface
+  a human reads: with `--include-content`, an oversized first document made it
+  print "No documents match the metadata filter." It now lists every match,
+  omits only content, and says how many were left without it.
+- **A failed follow-up probe no longer ships an unqualified empty array**
+  (#268). If the query that establishes what matched fails, the
+  metadata-search Edge Function answers `502` with the reason instead of
+  `200 []` — an error says the question was not resolved, where an empty array
+  answers it wrongly. The merge also appends rather than discards any document
+  the content query returned but the probe did not, since the two calls can
+  disagree under a `LIMIT` with no tiebreaker.
+
+### Documentation
+
+- **`docs/guides/response-limits.md` said the CLI never truncates.** It has
+  truncated since **v0.10.2**, which made the CLI honour
+  `CEREFOX_MAX_RESPONSE_BYTES` and corrected `CLAUDE.md` — but not this guide,
+  which then became v1.14.3's statement of the response contract while still
+  describing the pre-v0.10.2 behaviour. Corrected, with the changed-in note, and
+  extended with the metadata-search guarantees above.
+- GPT Actions OpenAPI block bumped to **4.3.0**: the metadata-search response
+  documents `content_omitted` and the completeness guarantee.
 
 ---
 

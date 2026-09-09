@@ -7,7 +7,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { getMaxResponseBytes, logUsage } from "./_utils.ts";
+import { getMaxResponseBytes, logUsage, resolveByteBudget } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { reviewWorkflowEnabled } from "./feature-flags.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
@@ -51,20 +51,14 @@ async function handler(
     if (!projectId) throw new Error(`Project not found: ${project_name}`);
   }
 
-  // Enforce byte ceiling for content mode.
-  //
-  // Sanitised first: a non-numeric `max_bytes` became `NaN`, which reaches the
-  // RPC as JSON null, and `p_max_bytes NULL` means NO limit — so one word
-  // instead of a number returned every matching document's full content, with
-  // the in-process guard below disabled too (#267). Same hole as the search
-  // tool's, in the sibling that shares its transport.
+  // Enforce byte ceiling for content mode, via the one shared resolver every
+  // budget-taking surface uses (#268). It was written out by hand here and on
+  // three other surfaces, and each copy was wrong differently: a non-numeric
+  // value became `NaN` and disabled the limit entirely (#267), and an explicit
+  // `null` coerced to 0 and became a ONE-BYTE budget.
   const ceiling = getMaxResponseBytes();
-  const requestedBytes = Math.floor(Number(requested_max_bytes));
   const max_bytes = include_content
-    ? Math.min(
-        Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : ceiling,
-        ceiling,
-      )
+    ? resolveByteBudget(requested_max_bytes, ceiling)
     : null;
 
   const params: Record<string, unknown> = {
@@ -166,7 +160,33 @@ async function handler(
     log(0);
     return "No documents match the given criteria.";
   }
-  log(rows.length);
+  // How many documents actually matched, as opposed to how many the budget
+  // let through (#268). The RPC applies `p_max_bytes` by stopping at the first
+  // row that does not fit, so a short list has two indistinguishable causes:
+  // fewer documents matched, or the budget cut the list. Only the caller's
+  // side knows which, and only after asking — so ask, with the same
+  // content-free probe the empty branch above uses.
+  //
+  // Cost, stated honestly: this is a second RPC round-trip, and it fires
+  // whenever a content-bearing search returns less than a full page — which is
+  // the COMMON case, not a rare one, since `limit` defaults to 10. A full page
+  // and a budget-free call both skip it, but nothing else does. The RPC gives
+  // no "there was more" signal, and the alternative to asking is guessing:
+  // a short list is indistinguishable from a cut list from here, and guessing
+  // wrong is the bug (#268). Worth revisiting if the RPC ever returns a total.
+  let matched = rows.length;
+  if (include_content && max_bytes !== null && rows.length < limit) {
+    const { data: headers, error: probeError } = await supabase.rpc(
+      "cerefox_metadata_search",
+      { ...params, p_include_content: false, p_max_bytes: null },
+    );
+    // A failed probe must not invent a count. supabase-js resolves with
+    // `{ data: null, error }` rather than throwing (#261), so read the error:
+    // leaving `matched` at `rows.length` states only what is known.
+    if (!probeError) matched = Math.max(rows.length, ((headers ?? []) as unknown[]).length);
+  }
+
+  log(matched, matched > rows.length ? { returned: rows.length, truncated: true } : undefined);
 
   // The review status is a column of a feature that may be off (#241); when
   // it is, an agent should not see "approved" and wonder what it means.
@@ -193,6 +213,19 @@ async function handler(
     }
     return header;
   });
+
+  // Never hold results back silently (#268). A caller who receives 1 of 5 and
+  // is told nothing believes they saw everything — the same failure as a false
+  // empty, in a quieter form. This notice is framing that is never dropped.
+  if (matched > rows.length) {
+    const held = matched - rows.length;
+    return (
+      `${parts.join("\n\n---\n\n")}\n\n` +
+      `[${rows.length} of ${matched} document(s) shown; ${held} did not fit ` +
+      `max_bytes=${max_bytes}. Raise max_bytes, lower limit, or use ` +
+      `include_content: false to list them all.]`
+    );
+  }
 
   return parts.join("\n\n---\n\n");
 }

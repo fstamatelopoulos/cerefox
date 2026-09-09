@@ -638,7 +638,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 4.2.0
+  version: 4.3.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -1051,8 +1051,10 @@ paths:
                   type: integer
                   default: 200000
                   description: >
-                    Response size budget in bytes when include_content is true
-                    (whole results dropped to fit). Advanced; leave unset for the default.
+                    Response size budget in bytes when include_content is true.
+                    Content is dropped whole, never truncated mid-document, and a
+                    document whose content is dropped is still listed with
+                    content_omitted: true. Advanced; leave unset for the default.
                 author:
                   type: string
                   description: >
@@ -1067,6 +1069,12 @@ paths:
                version_count, content_hash, content }], plus review_status
             only while the store's review workflow is on (the key is absent
             when it is off).
+            The array lists EVERY matching document, so its length is the true
+            match count. When include_content is true and max_bytes cannot
+            carry a document's text, that document is still listed, with its
+            content omitted and "content_omitted": true set on the item — the
+            list is never silently shortened, and an empty array always means
+            nothing matched.
             content_hash is the concurrency token — pass it back as
             expected_content_hash when updating via ingestNote.
 ```

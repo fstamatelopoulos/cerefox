@@ -147,25 +147,32 @@ export function applyByteBudget(
   maxBytes: number,
 ): { accepted: unknown[]; dropped: unknown[]; truncated: boolean; usedBytes: number } {
   const accepted: unknown[] = [];
+  const dropped: unknown[] = [];
   let usedBytes = 0;
   let truncated = false;
-  let cut = rows.length;
 
-  for (const [i, row] of rows.entries()) {
+  for (const row of rows) {
     const rowBytes = new TextEncoder().encode(JSON.stringify(row)).length;
+    // Skipped, not the end of the list (#266, #268). This used to `break`, so
+    // one oversized top hit suppressed every smaller result behind it: the
+    // Edge Function answered with an empty `accepted`, flipped to the degraded
+    // shape and stripped content from results 2 and 3 that would have fitted
+    // comfortably. The MCP tool has skipped since #266; this is the same rule
+    // reaching the surface GPT Actions and direct HTTP callers use.
     if (usedBytes + rowBytes > maxBytes) {
       truncated = true;
-      cut = i;
-      break;
+      dropped.push(row);
+      continue;
     }
     accepted.push(row);
     usedBytes += rowBytes;
   }
 
   // What did not fit, so a caller can say so instead of reporting nothing
-  // (#254): a first row larger than the budget empties `accepted` entirely,
+  // (#254): every row larger than the budget lands here — they are no longer
+  // a contiguous tail, because the scan no longer stops at the first one —
   // and "no results" is the one answer an agent acts on irreversibly.
-  return { accepted, dropped: rows.slice(cut), truncated, usedBytes };
+  return { accepted, dropped, truncated, usedBytes };
 }
 
 import type { AccessPath } from "./types.ts";
@@ -292,4 +299,29 @@ export function logUsage(supabase: MCPSupabaseClient, params: LogUsageParams): v
       p_extra: params.extra ?? {},
     }),
   ).catch(() => {});
+}
+
+/**
+ * Resolve a caller-supplied byte budget against the server ceiling.
+ *
+ * One implementation, because this arithmetic was written out by hand on four
+ * surfaces and each hand-written copy was wrong in its own way (#267, #268):
+ *
+ * - **Non-numeric means unset, not unbounded.** `Math.min("lots", CEILING)` is
+ *   `NaN`; `NaN` compares false against every `>` check and serialises to JSON
+ *   `null`, and `p_max_bytes NULL` means NO limit in Postgres. So the one
+ *   parameter that exists to bound a reply, handed a word, removed the bound.
+ * - **`null` and `undefined` mean unset too.** `Number(null)` is `0`, which is
+ *   finite, so a clamp to `>= 1` turned an explicitly-null budget into a
+ *   ONE-BYTE budget — a client that serialises optional fields as `null` asked
+ *   for content and got none.
+ * - **A real number of zero or less means "almost nothing", and is honoured.**
+ *   Falling back to the ceiling there would hand a caller whose allowance had
+ *   run out the largest possible reply.
+ */
+export function resolveByteBudget(requested: unknown, ceiling: number): number {
+  if (requested === null || requested === undefined || requested === "") return ceiling;
+  const n = Math.floor(Number(requested));
+  if (!Number.isFinite(n)) return ceiling;
+  return Math.min(Math.max(n, 1), ceiling);
 }

@@ -56,12 +56,29 @@ const args = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("applyByteBudget", () => {
-  test("reports what it dropped, so callers can say so", () => {
+  test("an oversized top hit is skipped, not the end of the list", () => {
     const rows = [row("big", 5_000, 1), row("small", 10, 0.5)];
     const out = applyByteBudget(rows, 1_000);
-    expect(out.accepted).toEqual([]);
+    // Until #268 this returned NOTHING: the scan stopped at the first row that
+    // did not fit, so one oversized top hit suppressed every smaller result
+    // behind it and the Edge Function then reported that nothing fitted. The
+    // MCP tool has skipped since #266; this is the same rule on the surface
+    // GPT Actions and direct HTTP callers use.
+    expect((out.accepted as Array<{ doc_title: string }>).map((r) => r.doc_title)).toEqual([
+      "small",
+    ]);
     // Before #254 this information did not exist and the caller could only
     // see an empty array.
+    expect((out.dropped as Array<{ doc_title: string }>).map((r) => r.doc_title)).toEqual([
+      "big",
+    ]);
+    expect(out.truncated).toBe(true);
+  });
+
+  test("nothing fits at all: everything is dropped, and said so", () => {
+    const rows = [row("big", 5_000, 1), row("bigger", 6_000, 0.5)];
+    const out = applyByteBudget(rows, 1_000);
+    expect(out.accepted).toEqual([]);
     expect(out.dropped).toEqual(rows);
     expect(out.truncated).toBe(true);
   });

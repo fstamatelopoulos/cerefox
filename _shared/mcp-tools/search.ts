@@ -19,7 +19,7 @@ import type { MCPSupabaseClient } from "./types.ts";
 
 import { getEmbedding, resolveEmbedderKind } from "../embeddings/index.ts";
 import { getConfiguredMinSearchScore, getConfiguredSearchAlpha,
-  getMaxResponseBytes, getMinTermCoverage, logUsage } from "./_utils.ts";
+  getMaxResponseBytes, getMinTermCoverage, logUsage , resolveByteBudget } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
@@ -214,11 +214,7 @@ async function handler(
   // falling back to the ceiling there would hand a caller whose remaining
   // allowance ran out the largest possible reply (#267). Only a missing or
   // non-numeric value defaults to the ceiling.
-  const requestedBytes = Math.floor(Number(requested_max_bytes));
-  const max_bytes = Math.min(
-    Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : ceiling,
-    ceiling,
-  );
+  const max_bytes = resolveByteBudget(requested_max_bytes, ceiling);
 
   if (
     metadata_filter !== null &&

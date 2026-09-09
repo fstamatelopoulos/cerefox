@@ -198,9 +198,13 @@ async function action(
   let truncated = false;
   for (const row of results) {
     const rowBytes = Buffer.byteLength(JSON.stringify(row), "utf8");
+    // Skipped, not the end of the list (#266, #268): one oversized result used
+    // to suppress every smaller one behind it, so a raised --max-bytes could
+    // show FEWER documents than a lower one. The first row is always kept, so
+    // a budget smaller than any result still answers with something.
     if (usedBytes + rowBytes > maxBytes && accepted.length > 0) {
       truncated = true;
-      break;
+      continue;
     }
     accepted.push(row);
     usedBytes += rowBytes;
@@ -320,7 +324,17 @@ async function action(
   }
 
   if (truncated) {
-    println(c.dim(`(results truncated at ${usedBytes} bytes; use --max-bytes to raise)`));
+    // "N of M", not just "truncated": oversized rows are SKIPPED now, so what
+    // is missing sits in the middle of the ranking rather than after it, and a
+    // bare "truncated" leaves the reader unable to tell how much they are not
+    // seeing (contract rule 2).
+    const held = results.length - accepted.length;
+    println(
+      c.dim(
+        `(${accepted.length} of ${results.length} result(s) shown; ${held} did not fit ` +
+          `${usedBytes} bytes used of --max-bytes ${maxBytes} — raise it to see the rest)`,
+      ),
+    );
   }
 }
 

@@ -4,6 +4,7 @@ import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/inde
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
 import { reviewWorkflowEnabled } from "../../../_shared/mcp-tools/feature-flags.ts";
+import { resolveByteBudget } from "../../../_shared/mcp-tools/_utils.ts";
 
 /**
  * cerefox-metadata-search -- Supabase Edge Function
@@ -103,8 +104,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const include_content = body.include_content ?? false;
     const requested_max_bytes = body.max_bytes;
 
+    // One implementation of this arithmetic, shared with every other surface
+    // that takes a budget (#268): non-numeric and null both mean "unset" and
+    // fall back to the ceiling, while a real number of zero or less is
+    // honoured as "almost no budget".
     const max_bytes = include_content
-      ? Math.min(requested_max_bytes ?? MAX_BYTES, MAX_BYTES)
+      ? resolveByteBudget(requested_max_bytes, MAX_BYTES)
       : null;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -154,18 +159,90 @@ Deno.serve(async (req: Request): Promise<Response> => {
       });
     }
 
-    // Fire-and-forget usage logging
+    let rows = (data ?? []) as Array<Record<string, unknown>>;
+
+    // Never answer with a shorter list than what matched (#268).
+    //
+    // The RPC applies `p_max_bytes` server-side by stopping at the first row
+    // whose content does not fit, so this list has two indistinguishable
+    // causes: fewer documents matched, or the budget cut it short. When the
+    // first row is the oversized one the array comes back EMPTY, and a caller
+    // reads `[]` as "this knowledge does not exist" and stops looking — the
+    // false negative #254 exists to prevent, reached here through a sibling
+    // that never got the guard.
+    //
+    // The response shape stays a bare array, because Custom GPTs are
+    // configured against it: every matching document is listed, and only
+    // CONTENT is negotiable. Rows the budget could not afford come back
+    // content-free and marked, so `results.length` is always the true count
+    // and nothing is held back silently.
+    //
+    // Cost: a second RPC round-trip whenever a content-bearing search returns
+    // less than a full page, which is the common case rather than a rare one.
+    // The RPC signals no total, so the only alternative to asking is guessing
+    // whether a short list was cut — and guessing wrong is the bug.
+    if (include_content && max_bytes !== null && rows.length < limit) {
+      const { data: headerData, error: probeError } = await supabase.rpc(
+        "cerefox_metadata_search",
+        { ...params, p_include_content: false, p_max_bytes: null },
+      );
+      // supabase-js RESOLVES with `{ data: null, error }` for PostgREST and
+      // network failures rather than throwing, so a probe failure must be read
+      // from the error, not inferred from an empty list — reading it as "no
+      // documents" is the very false empty this branch prevents (#261).
+      if (probeError && rows.length === 0) {
+        // Falling through here would ship exactly the false empty this block
+        // exists to prevent — `200 []`, which a caller reads as "no such
+        // knowledge". An error is the honest answer: it says the question was
+        // not resolved, rather than answering it wrongly.
+        return new Response(
+          JSON.stringify({
+            error:
+              `Nothing fit max_bytes=${max_bytes} with include_content, and the follow-up ` +
+              `query that lists what matched failed: ${probeError.message}. This is NOT a ` +
+              `confirmed empty result — retry with a larger max_bytes, or include_content: false.`,
+          }),
+          { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+        );
+      }
+      if (!probeError) {
+        const headers = (headerData ?? []) as Array<Record<string, unknown>>;
+        if (headers.length > rows.length) {
+          const withContent = new Map(rows.map((r) => [r.document_id as string, r]));
+          // The probe carries the full, correctly ordered match set; the
+          // content-bearing rows are folded into it by id so ordering is the
+          // RPC's, not an artefact of which rows happened to fit.
+          const merged = headers.map(
+            (h) => withContent.get(h.document_id as string) ?? { ...h, content_omitted: true },
+          );
+          // Two queries, two chances to disagree: the RPC orders by
+          // `updated_at DESC` with no tiebreaker under a LIMIT, and a
+          // concurrent write between the calls shifts the window. Anything the
+          // content query returned that the probe did not is APPENDED rather
+          // than dropped — losing a document we already hold, while fixing a
+          // bug about losing documents, would be its own joke.
+          const seen = new Set(merged.map((r) => r.document_id as string));
+          for (const r of rows) {
+            if (!seen.has(r.document_id as string)) merged.push(r);
+          }
+          rows = merged;
+        }
+      }
+    }
+
+    // Fire-and-forget usage logging. Counts what MATCHED, not what the budget
+    // allowed through: a budget-wiped search logging `0` misreports the store
+    // as empty in analytics (#259).
     Promise.resolve(supabase.rpc("cerefox_log_usage", {
       p_operation: "metadata_search",
       p_access_path: "edge-function",
       p_requestor: identityValue ?? null,
       p_query_text: JSON.stringify(metadata_filter),
-      p_result_count: (data ?? []).length,
+      p_result_count: rows.length,
       p_project_id: project_id,
     })).catch(() => {});
 
     // Presentation only: the same shared reader every other surface uses.
-    const rows = (data ?? []) as Array<Record<string, unknown>>;
     const showReview = await reviewWorkflowEnabled(supabase);
     const out = showReview
       ? rows

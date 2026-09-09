@@ -97,9 +97,32 @@ async function action(options: {
   };
   if (options.includeContent) params.p_max_bytes = maxBytes;
 
-  const rows = await client.rpc<MetadataSearchRow[]>("cerefox_metadata_search", params);
+  let rows = await client.rpc<MetadataSearchRow[]>("cerefox_metadata_search", params);
   if (rows === null) {
     throw systemError("cerefox_metadata_search: RPC returned no data.");
+  }
+
+  // The database applies `p_max_bytes` by stopping at the first document whose
+  // content does not fit, so a short list has two indistinguishable causes:
+  // fewer documents matched, or the budget cut it. When the FIRST document is
+  // the oversized one the list comes back empty and this command printed "No
+  // documents match the metadata filter." — the same false empty #254 fixed on
+  // the agent surfaces, on the one a human reads (#268). Ask before reporting.
+  let heldBack = 0;
+  if (options.includeContent && rows.length < limit) {
+    const all = await client.rpc<MetadataSearchRow[]>("cerefox_metadata_search", {
+      ...params,
+      p_include_content: false,
+      p_max_bytes: null,
+    });
+    if (all !== null && all.length > rows.length) {
+      const withContent = new Map(rows.map((r) => [r.document_id, r]));
+      heldBack = all.length - rows.length;
+      const merged = all.map((h) => withContent.get(h.document_id) ?? { ...h, content: null });
+      const seen = new Set(merged.map((r) => r.document_id));
+      for (const r of rows) if (!seen.has(r.document_id)) merged.push(r);
+      rows = merged;
+    }
   }
 
   const requestor = resolveRequestor(options.author ?? options.requestor);
@@ -126,6 +149,16 @@ async function action(options: {
   if (rows.length === 0) {
     println("No documents match the metadata filter.");
     return;
+  }
+
+  if (heldBack > 0) {
+    println(
+      c.dim(
+        `(${rows.length - heldBack} of ${rows.length} document(s) have content here; ` +
+          `${heldBack} did not fit --max-bytes ${maxBytes} and are listed without it)`,
+      ),
+    );
+    println("");
   }
 
   for (const row of rows) {
