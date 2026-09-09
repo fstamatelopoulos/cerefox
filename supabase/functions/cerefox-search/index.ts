@@ -5,7 +5,7 @@ import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
 // One implementation of the byte budget, shared with the MCP tools (#254).
-import { applyByteBudget } from "../../../_shared/mcp-tools/_utils.ts";
+import { applyByteBudget, resolveByteBudget } from "../../../_shared/mcp-tools/_utils.ts";
 
 /**
  * cerefox-search — Supabase Edge Function
@@ -219,11 +219,7 @@ Deno.serve(async (req: Request) => {
   // check, so a non-numeric value bypassed the ceiling entirely (#266).
   // A number of 0 or less still means "almost no budget"; only a missing or
   // non-numeric value falls back to the ceiling (#267).
-  const requestedBytes = Math.floor(Number(requested_max_bytes));
-  const max_bytes = Math.min(
-    Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : MAX_BYTES,
-    MAX_BYTES,
-  );
+  const max_bytes = resolveByteBudget(requested_max_bytes, MAX_BYTES);
   // Clamp match_count to [1, MAX_MATCH_COUNT] (bounds query work; see MAX_MATCH_COUNT).
   const match_count = Math.min(Math.max(1, Math.floor(Number(raw_match_count)) || 5), MAX_MATCH_COUNT);
 

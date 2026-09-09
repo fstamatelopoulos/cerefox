@@ -49,10 +49,23 @@ Fixed by making the Edge Function's array *complete* (every match listed,
 `content_omitted: true` where content was dropped) rather than by adding an
 envelope, which would break Custom GPTs configured against the documented
 shape. Plus a **derived** guard test over every surface that reads a budget
-from caller input, proven to fire by reverting the real fix. Also: the CLI now
-skips an oversized result instead of stopping at it, and
-`docs/guides/response-limits.md` — stale since **v0.10.2** — no longer claims
-the CLI never truncates. Detail:
+from caller input, proven to fire by reverting the real fix.
+
+The `/code-review` of PR #269 then found four more instances of the same two
+patterns, including one the fix itself introduced: an explicit
+`max_bytes: null` became a **one-byte** budget (`Number(null)` is 0, and the
+clamp then honoured it), `applyByteBudget` still stopped at the first oversized
+row so `cerefox-search` violated the rule the CLI had just adopted, the CLI's
+own `metadata search` still printed "No documents match", and a failed probe
+fell through to the false empty it exists to prevent. The budget arithmetic now
+lives in ONE `resolveByteBudget()` — it had four hand-written copies and each
+was wrong differently. `docs/guides/response-limits.md`, stale since
+**v0.10.2**, no longer claims the CLI never truncates.
+
+**Carry this**: the Edge Functions are in no `tsconfig` (they use `jsr:`
+specifiers), so a missing import there is invisible to `bun run typecheck` —
+this release shipped one for a deploy cycle, caught only by deploying to
+staging and probing. Deploy-and-probe is not optional for an EF change. Detail:
 [iteration 46](plans/iteration-46-spa-serving-and-tab-titles.md).
 
 **2026-09-08 — v1.14.3 SHIPPED** (PRs #256, #258, #260, #262, #264; cut

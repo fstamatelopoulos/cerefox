@@ -37,7 +37,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - **The CLI stopped at the first oversized result instead of skipping it**
   (#268), the same shape as #266: one large document suppressed every smaller
   one behind it, so raising `--max-bytes` could show *fewer* results than a
-  lower value. It now skips and continues, as the MCP path does.
+  lower value. It now skips and continues, as the MCP path does, and its
+  truncation line names the counts (`3 of 8 result(s) shown`) rather than
+  saying only that something was cut.
+- **`cerefox-search` did the same thing** (#268). `applyByteBudget` — the
+  helper the Edge Function shares — still stopped at the first row over
+  budget, so an oversized top hit emptied the result set, flipped the reply to
+  the degraded shape and stripped content from results 2 and 3 that would have
+  fitted. Rows are now skipped and reported, matching the MCP tool since #266.
+- **An explicit `max_bytes: null` meant a ONE-BYTE budget, not the default**
+  (#268). `Number(null)` is `0`, which is finite, so the clamp to at least 1
+  turned "unset" into "almost nothing": a client that serialises optional
+  fields as `null` asked for content and received none. The budget arithmetic
+  now lives in one shared `resolveByteBudget()` rather than being written out
+  by hand on four surfaces — where each hand-written copy was wrong
+  differently — and treats `null`, `undefined`, `""` and non-numeric values
+  alike as unset, while still honouring a real number of zero or less as a
+  tiny budget.
+- **`cerefox metadata search` had the same false empty** (#268), on the surface
+  a human reads: with `--include-content`, an oversized first document made it
+  print "No documents match the metadata filter." It now lists every match,
+  omits only content, and says how many were left without it.
+- **A failed follow-up probe no longer ships an unqualified empty array**
+  (#268). If the query that establishes what matched fails, the
+  metadata-search Edge Function answers `502` with the reason instead of
+  `200 []` — an error says the question was not resolved, where an empty array
+  answers it wrongly. The merge also appends rather than discards any document
+  the content query returned but the probe did not, since the two calls can
+  disagree under a `LIMIT` with no tiebreaker.
 
 ### Documentation
 

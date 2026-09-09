@@ -73,18 +73,75 @@ function budgetTakingSources(): Array<{ path: string; source: string }> {
 }
 
 /**
- * Does this source sanitise before clamping?
+ * Does this source sanitise the budget AT THE POINT IT READS IT?
  *
- * Two idioms are legitimate and both are proven safe against a non-numeric
- * value: the shared `Math.floor(Number(x))` + `Number.isFinite` pair used by
- * the tools and Edge Functions, and the CLI's `parseNonNegativeInt`, which
- * rejects the call outright rather than coercing.
+ * File-scoped matching is not enough, and the failure is easy to picture: a
+ * file that already sanitises one budget would pass while a second, unhardened
+ * read sat right beside it. That is the same "one list drifts from another"
+ * shape this whole test exists to prevent, so the check follows each read.
+ *
+ * Three idioms are legitimate:
+ *
+ * - `resolveByteBudget(...)` — the shared resolver, preferred, and the reason
+ *   this arithmetic is no longer written out by hand on four surfaces;
+ * - `Math.floor(Number(x))` guarded by `Number.isFinite` — the inline form it
+ *   replaced, still accepted so this test does not mandate a refactor;
+ * - `parseNonNegativeInt(...)` — the CLI boundary, which rejects the call
+ *   outright rather than coercing.
  */
-function sanitisesBudget(source: string): boolean {
-  const coercesThenChecksFinite =
-    /Math\.floor\(\s*Number\(/.test(source) && /Number\.isFinite\(/.test(source);
-  const rejectsAtTheBoundary = /parseNonNegativeInt\(/.test(source);
-  return coercesThenChecksFinite || rejectsAtTheBoundary;
+function sanitisesBudget(rawSource: string): boolean {
+  // Comments are stripped first, for two reasons: a `;` inside prose would
+  // split a statement in the wrong place, and — more to the point — the
+  // comments in these very files quote the sanitiser they describe, so an
+  // unstripped scan could be satisfied by an explanation of the fix rather
+  // than the fix.
+  const source = rawSource
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+
+  const reads = [
+    ...source.matchAll(/\bargs\.max_bytes\b/g),
+    ...source.matchAll(/\bbody\.max_bytes\b/g),
+    ...source.matchAll(/\boptions\.maxBytes\b/g),
+    ...source.matchAll(/max_bytes\s*:\s*(\w+)[\s\S]{0,400}?\}\s*=\s*body/g),
+  ];
+  if (reads.length === 0) return false;
+
+  const sanitisedIn = (text: string): boolean =>
+    /resolveByteBudget\s*\(/.test(text) ||
+    /parseNonNegativeInt\s*\(/.test(text) ||
+    (/Math\.floor\(\s*Number\(/.test(text) && /Number\.isFinite\(/.test(text));
+
+  /** The single statement containing an offset — the unit the check is scoped to. */
+  const statementAt = (idx: number): string => {
+    const from = source.lastIndexOf(";", idx) + 1;
+    const to = source.indexOf(";", idx);
+    return source.slice(from, to === -1 ? source.length : to + 1);
+  };
+
+  return reads.every((m) => {
+    const at = m.index ?? 0;
+    // The scope is THIS budget's statements: the one that reads it, plus the
+    // ones that use the local it binds. Not a byte window — a generous window
+    // let a correctly-sanitised read one line above vouch for an unsanitised
+    // one below it, the drift this test exists to catch. Not the whole file
+    // either, for the same reason.
+    const stmt = statementAt(at);
+    const binding = m[1] ?? stmt.match(/(?:const|let|var)\s+(\w+)[^=]*=/)?.[1];
+
+    const scope = [stmt];
+    if (binding) {
+      const from = at + m[0].length;
+      const after = source.slice(from);
+      for (const u of after.matchAll(new RegExp(`\\b${binding}\\b`, "g"))) {
+        scope.push(statementAt(from + (u.index ?? 0)));
+      }
+    }
+    // Joined, because the inline idiom is legitimately spread across two
+    // statements: `Math.floor(Number(x))` on one line, `Number.isFinite` on
+    // the next.
+    return sanitisedIn(scope.join("\n"));
+  });
 }
 
 describe("max_bytes is sanitised on every surface that accepts one", () => {
@@ -129,6 +186,17 @@ describe("max_bytes is sanitised on every surface that accepts one", () => {
       params.p_max_bytes = max_bytes;
     `;
     expect(sanitisesBudget(clampOnly)).toBe(false);
+
+    // A file that sanitises ONE budget must not pass with a second, unhardened
+    // read sitting beside it — the file-scoped version of this check did, and
+    // that is the same "one list drifts from another" failure the whole test
+    // exists to prevent.
+    const oneGoodOneBad = `
+      const good = resolveByteBudget(args.max_bytes, CEILING);
+      const alsoBudget = body.max_bytes ?? CEILING;
+      params.p_max_bytes = alsoBudget;
+    `;
+    expect(sanitisesBudget(oneGoodOneBad)).toBe(false);
 
     // The two accepted idioms must pass, or the guard is unsatisfiable.
     expect(

@@ -324,7 +324,17 @@ async function action(
   }
 
   if (truncated) {
-    println(c.dim(`(results truncated at ${usedBytes} bytes; use --max-bytes to raise)`));
+    // "N of M", not just "truncated": oversized rows are SKIPPED now, so what
+    // is missing sits in the middle of the ranking rather than after it, and a
+    // bare "truncated" leaves the reader unable to tell how much they are not
+    // seeing (contract rule 2).
+    const held = results.length - accepted.length;
+    println(
+      c.dim(
+        `(${accepted.length} of ${results.length} result(s) shown; ${held} did not fit ` +
+          `${usedBytes} bytes used of --max-bytes ${maxBytes} — raise it to see the rest)`,
+      ),
+    );
   }
 }
 

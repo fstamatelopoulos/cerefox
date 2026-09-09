@@ -42,8 +42,10 @@ Cerefox never cuts a document mid-content.
 
 A result that does not fit is **skipped**, not treated as the end of the list, so the
 returned set is not necessarily the top N by rank: one oversized document ranked first
-does not hide the smaller results behind it (v1.14.3). Anything skipped is named in the
-footer, so what is missing is always visible.
+does not hide the smaller results behind it (v1.14.3 on the MCP tool; v1.14.4 on the
+`cerefox-search` Edge Function and the CLI, which both still stopped at the first
+oversized row). Anything skipped is named in the footer, so what is missing is always
+visible.
 
 When truncation occurs:
 - The MCP tool appends a footer naming what was held back:
@@ -84,8 +86,11 @@ made two silent failures possible until v1.14.4, and both are now closed:
   the ones whose content did not fit with `"content_omitted": true` — so
   `results.length` is always the true match count and only content is dropped.
 
-Passing a non-numeric `max_bytes` (`"lots"`) is treated as "unset" and falls
-back to the server ceiling; it does not disable the limit.
+`max_bytes` is resolved the same way on every path: `null`, absent, empty or
+non-numeric all mean **unset** and fall back to the server ceiling, and none of
+them disables the limit. A real number of zero or less means "almost no
+budget" and is honoured as such — a caller whose allowance has run out is not
+handed the largest possible reply.
 
 ---
 

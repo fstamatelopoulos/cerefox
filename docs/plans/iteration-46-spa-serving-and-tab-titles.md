@@ -301,3 +301,37 @@ code.
   `minSchema` / `minEdgeFunctions` change.
 - GPT Actions OpenAPI block → **4.3.0** (additive response field).
 - **#154** (Node baseline) still waiting; seventh deferral.
+
+### What the review of #269 added
+
+`/code-review high` returned eight findings on the first cut, and the valuable
+ones were all the same lesson: **a sweep that stops at the surfaces you were
+looking at is not a sweep.** The first commit fixed the metadata-search pair
+and left four more instances of the very patterns it was fixing:
+
+- an explicit `max_bytes: null` became a ONE-BYTE budget, because `Number(null)`
+  is `0` and the clamp to `>= 1` then "honoured" it — a regression introduced by
+  the fix itself, and present on three other surfaces already;
+- `applyByteBudget`, shared with `cerefox-search`, still stopped at the first
+  oversized row, so the Edge Function violated the rule the CLI had just adopted;
+- `cerefox metadata search` — the third metadata surface, and a human-facing one
+  — still printed "No documents match" when the budget emptied the list;
+- a failed follow-up probe fell through and shipped the false empty the probe
+  exists to prevent.
+
+The durable fix is `resolveByteBudget()`: the arithmetic existed in four
+hand-written copies and **each copy was wrong differently**, which is the
+"derive it, don't repeat it" rule arriving a release late. The guard test was
+tightened in the same spirit — it now scopes to the statement that reads the
+budget (and the statements using the local it binds) with comments stripped,
+because the file-scoped version could be satisfied by a correctly sanitised
+read one line above an unsanitised one, and because these files' own comments
+quote the sanitiser they describe.
+
+**One thing typecheck cannot catch, worth carrying**: the Edge Functions are
+not in any `tsconfig` — they use `jsr:` specifiers Deno resolves — so a missing
+import in an Edge Function is invisible to `bun run typecheck` and to CI. This
+release shipped exactly that for one deploy cycle (`resolveByteBudget is not
+defined`), caught only because the function was deployed to staging and probed.
+The live EF suite would also have caught it. **Deploy-and-probe is not optional
+for an Edge Function change.**

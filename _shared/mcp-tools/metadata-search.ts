@@ -7,7 +7,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { getMaxResponseBytes, logUsage } from "./_utils.ts";
+import { getMaxResponseBytes, logUsage, resolveByteBudget } from "./_utils.ts";
 import { lookupProjectId } from "./_projects.ts";
 import { reviewWorkflowEnabled } from "./feature-flags.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
@@ -51,20 +51,14 @@ async function handler(
     if (!projectId) throw new Error(`Project not found: ${project_name}`);
   }
 
-  // Enforce byte ceiling for content mode.
-  //
-  // Sanitised first: a non-numeric `max_bytes` became `NaN`, which reaches the
-  // RPC as JSON null, and `p_max_bytes NULL` means NO limit — so one word
-  // instead of a number returned every matching document's full content, with
-  // the in-process guard below disabled too (#267). Same hole as the search
-  // tool's, in the sibling that shares its transport.
+  // Enforce byte ceiling for content mode, via the one shared resolver every
+  // budget-taking surface uses (#268). It was written out by hand here and on
+  // three other surfaces, and each copy was wrong differently: a non-numeric
+  // value became `NaN` and disabled the limit entirely (#267), and an explicit
+  // `null` coerced to 0 and became a ONE-BYTE budget.
   const ceiling = getMaxResponseBytes();
-  const requestedBytes = Math.floor(Number(requested_max_bytes));
   const max_bytes = include_content
-    ? Math.min(
-        Number.isFinite(requestedBytes) ? Math.max(requestedBytes, 1) : ceiling,
-        ceiling,
-      )
+    ? resolveByteBudget(requested_max_bytes, ceiling)
     : null;
 
   const params: Record<string, unknown> = {
@@ -173,9 +167,13 @@ async function handler(
   // side knows which, and only after asking — so ask, with the same
   // content-free probe the empty branch above uses.
   //
-  // Cheap by construction: a full page (`rows.length === limit`) cannot have
-  // been cut short by the budget in a way this would reveal, and without a
-  // budget there is nothing to reveal, so neither case pays for the probe.
+  // Cost, stated honestly: this is a second RPC round-trip, and it fires
+  // whenever a content-bearing search returns less than a full page — which is
+  // the COMMON case, not a rare one, since `limit` defaults to 10. A full page
+  // and a budget-free call both skip it, but nothing else does. The RPC gives
+  // no "there was more" signal, and the alternative to asking is guessing:
+  // a short list is indistinguishable from a cut list from here, and guessing
+  // wrong is the bug (#268). Worth revisiting if the RPC ever returns a total.
   let matched = rows.length;
   if (include_content && max_bytes !== null && rows.length < limit) {
     const { data: headers, error: probeError } = await supabase.rpc(
