@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.14.4] -- 2026-09-09
+
 ### Fixed
 
 - **The metadata-search surfaces could report an empty store, or hold documents
