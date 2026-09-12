@@ -481,7 +481,7 @@ changing.
 3. **Always set `author`** to your agent name for attribution, on reads and writes alike. Every tool takes the same `author` parameter, no exceptions. (`requestor` is still accepted on every tool as the pre-1.13.1 alias, so older configurations keep working.)
 4. **Use the `document_id` from search results** for `cerefox_get_document`, `cerefox_list_versions`, and targeted `cerefox_ingest` updates.
 5. **Add metadata**: at minimum `type` (e.g., "research", "decision-log") and `status` ("active", "draft").
-6. **Write structured Markdown** with H1/H2/H3 headings. The chunker uses heading structure.
+6. **Name the document for what it is about, then write structured Markdown** with H1/H2/H3 headings. The title is weighted more heavily than the body and reaches every chunk's embedding, so it is the single biggest lever on whether this document is found later. See "How titles affect search" below. The chunker uses heading structure.
 7. **Distill, don't dump.** Summaries > transcripts. Decisions > discussions. Insights > raw data.
 8. **Prove freshness on updates.** Pass `expected_content_hash` (the hash you read) on every content update. On conflict: re-read → merge → retry. Never `last_write_wins` your way out of a conflict.
 
@@ -497,6 +497,54 @@ changing.
 | `tags` | Topic keywords (JSON array string) | `["architecture", "MCP", "memory"]` |
 
 Call `cerefox_list_metadata_keys` for the current list -- conventions evolve.
+
+---
+
+## How titles affect search
+
+A Cerefox document's title is not just a label. It is indexed, and it is
+indexed **twice over**, which makes it the strongest single influence on
+whether a document is found later.
+
+**Keyword search.** When a document is written, each chunk's full-text vector
+is built from three parts at two weights: the **document title at weight A**,
+the **chunk's own heading at weight A**, and the **chunk body at weight B**.
+Postgres ranks weight-A matches above weight-B ones, so a query term that
+appears in the title lifts the whole document above one where the same term
+appears only in the prose.
+
+**Semantic search.** Every chunk is embedded as `# {document title}` followed
+by its heading breadcrumb and its text. The stored content is untouched, but
+the vector each chunk is retrieved by is coloured by the title. A document
+called "Notes" contributes nothing to any of its chunks' vectors; a document
+called "Postgres connection pooling limits on the free tier" contributes to
+all of them.
+
+### What to do about it
+
+- **Title with the words a future searcher would use.** Distinctive nouns over
+  generic labels. "Cerefox Response Size Limits" is findable; "Notes",
+  "Update 3", "Meeting" and "Misc" are not, and they dilute every chunk they
+  are attached to.
+- **Put the subject in the title, not only in the body.** If the document is
+  about one system, one decision or one incident, name it. Search cannot boost
+  a term that is not there.
+- **Do not stuff.** The title is also what a human reads in a result list and
+  in the web UI. A keyword-crammed title is worse than a clear one: relevance
+  is not the only thing a title has to do.
+- **Fixing a bad title is cheap.** Renaming a document re-computes the
+  full-text vectors and re-embeds its current chunks, so the improvement
+  applies to everything already stored. If you meet a document whose title
+  does not describe it, say so, or fix it.
+- **Titles cannot be changed by a partial edit.** `rename_section` changes a
+  heading inside the content; the stored title is a separate field and needs
+  `cerefox_ingest` (with `document_id` and `expected_content_hash`).
+
+### Why this matters more for you than for a human
+
+A person browsing a list can open three plausible documents and skim. An agent
+usually takes the top result, and is working against a byte budget that may
+admit only one. A precise title is what puts the right document in that slot.
 
 ---
 

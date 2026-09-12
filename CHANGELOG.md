@@ -9,6 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **Agents are now told that the title is indexed.** A document's title is
+  weighted above body text in the full-text vector (`A` against the body's `B`,
+  alongside the chunk's own heading) *and* is prepended to every chunk before it
+  is embedded, so it steers both halves of hybrid search for every chunk in the
+  document. That has been true since title boosting shipped, and it was recorded
+  only in `CLAUDE.md`, which agents never read: nothing in `AGENT_GUIDE.md`,
+  `AGENT_QUICK_REFERENCE.md` or `cerefox_get_help()` mentioned it, so an agent
+  naming a document had no way to know the title did any work at all. Quick
+  reference rule 7 now covers it (and therefore `get_help()`), with the full
+  mechanism and the naming advice that follows from it in `AGENT_GUIDE.md` →
+  "How titles affect search".
+
 ### Fixed
 
 - **The Empty-trash e2e test failed on a trash it did not control.** Its guard
@@ -20,6 +34,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   12" while verifying v1.14.4). The expected total is derived from what the
   trash actually holds, so it still asserts what #249 is about, that the modal
   states the exact number it is about to purge. Test-only; no runtime change.
+- **A stale cross-reference in the quick reference.** The `cerefox_ingest` row
+  pointed at "rule 9" for the concurrency token; rule 9 is cross-document links
+  and rule 10 is concurrency.
 
 ---
 
