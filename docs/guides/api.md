@@ -170,6 +170,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `GET /documents/{id}` | Full document, with metadata, projects and versions. |
 | `GET /documents/{id}/chunks` | The document's chunks. |
 | `GET /documents/{id}/versions` | Version history. |
+| `POST /documents/{id}/versions/{version_id}/archive` | Archive or unarchive one stored version (body `{ "archived": true\|false }`). Archiving strips a version's search artifacts; its content is kept as the safety copy. |
 | `GET /documents/{id}/download` | Raw markdown. |
 | `GET /documents/trash` | Soft-deleted documents, newest first, `limit` ≤ 500. The exact total is in the `X-Total-Count` response header (v1.14.1). |
 | `POST /documents/metadata-search` | Query by metadata / project / time, no text query. |
@@ -187,6 +188,8 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `GET /projects/{id}/documents` | A project's documents. |
 | `GET /config`, `GET /config/{key}`, `PUT /config/{key}` | Runtime config. |
 | `GET /audit-log` | Audit trail, filterable. |
+| `GET /preferences`, `PUT /preferences` | Web UI preferences (currently the colour scheme), stored in a file in the user-state dir, not the database. Registers even when Supabase is not configured. |
+| `GET /docs`, `GET /docs/{path}` | The guides bundled with this server: a listing, and one document's markdown. Serves the shipped copies, so it answers the same content regardless of what is in the knowledge base. |
 | `GET /usage-log`, `GET /usage-log/summary`, `GET /usage-log/export.csv` | Usage queries. |
 
 Paths are shown without the `/api/v1` prefix for width; every one carries it.

@@ -356,6 +356,25 @@ The migrate/deploy logic is shared with `scripts/db_migrate.ts` /
 
 **When you change an Edge Function's request body or response shape, update the GPT Actions OpenAPI block in `docs/guides/connect-agents.md` in the same PR, and bump its `info.version` per SemVer.** That block is what ChatGPT users paste into a Custom GPT's Actions config; if it drifts from what the EFs actually accept/return, those GPTs silently break. There is no CI gate for this (a path-diff heuristic was too lossy) — the discipline lives here + in the release playbook (`RELEASING.md`). When an EF's `EF_VERSION` surface changes, also consider whether the client compatibility matrix (`_shared/compatibility/index.ts`) needs a `minEdgeFunctions` bump (see CONTRIBUTING.md).
 
+### Rule: keep `docs/guides/api.md` in sync with the `/api/v1` routes
+
+**When you add, remove or rename an `/api/v1` route, update the endpoint table
+in `docs/guides/api.md` in the same PR.** That guide is the only reference for
+callers who use the HTTP API instead of MCP or the CLI (an embedder of Cerefox
+Local, say), and they cannot discover an endpoint by reading the route source.
+
+Unlike the GPT Actions block, this one **is** gated:
+`_shared/__tests__/api-routes-documented.test.ts` derives the route list from
+the registrations in `packages/memory/src/web/routes/` and fails in both
+directions — registered but undocumented, and documented but unregistered. The
+second matters as much as the first: a removed or renamed endpoint otherwise
+leaves the document pointing at a 404.
+
+The test compares **paths only**. Whether a description, a parameter or a
+response shape is still true is not checked, so changing a request or response
+shape still means editing the guide by hand. #270 tracks the machine-readable
+spec that would close that gap.
+
 ### Rule: bump `schema_version` on any `src/cerefox/db/` change
 
 **Whenever you change `schema.sql`, `rpcs.sql`, or add a migration, bump the

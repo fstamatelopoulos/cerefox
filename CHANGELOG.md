@@ -25,6 +25,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **`docs/guides/api.md` was missing five registered endpoints** — both
+  `/preferences` routes, both `/docs` routes, and
+  `POST /documents/{id}/versions/{version_id}/archive`. The guide is the only
+  reference for callers using the HTTP API rather than MCP or the CLI, so an
+  endpoint absent from it is an endpoint they cannot find. All five are
+  documented now, and the table can no longer drift quietly:
+  `_shared/__tests__/api-routes-documented.test.ts` derives the route list from
+  the registrations and fails in **both** directions, naming the route and the
+  file it came from. Documented-but-unregistered is checked too, since a
+  removed or renamed endpoint otherwise leaves the guide pointing at a 404.
+  The check compares paths only; request and response shapes remain a
+  discipline, with #270 tracking the machine-readable spec. (Part of #270.)
 - **The Empty-trash e2e test failed on a trash it did not control.** Its guard
   skips only when the trash holds a document whose title is not `[E2E`-prefixed,
   and it then asserted the confirmation said exactly "3 documents". So any
