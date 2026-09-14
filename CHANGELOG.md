@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.14.5] -- 2026-09-14
+
 ### Added
 
 - **Agents are now told that the title is indexed.** A document's title is
