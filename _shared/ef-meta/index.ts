@@ -36,7 +36,7 @@ export const EF_VERSION = "1.14.5";
  * is imported by the Deno Edge Functions, which cannot reach into the npm
  * package.
  */
-export const CEREFOX_VERSION = "1.14.5";
+export const CEREFOX_VERSION = "1.15.0-beta.1";
 
 /**
  * The most recent version whose EF-side SOURCE actually changed (#127).

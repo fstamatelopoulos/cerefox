@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.15.0-beta.1] -- 2026-09-23
+
 ### ⚠ BREAKING: the minimum Node version is now 24
 
 **Cerefox now requires Node >= 24** (or Bun >= 1.0), up from Node >= 20. If you
