@@ -11,6 +11,7 @@
 import { describe, expect } from "bun:test";
 
 import { liveTest } from "./_live-test.ts";
+import { probeSupabase } from "./_live-probe.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -42,8 +43,11 @@ function run(args: string[]): {
 }
 
 // Probe via list-projects (the canonical "is the backend reachable" smoke).
-const probe = run(["project", "list", "--json"]);
-const LIVE_OK = probe.status === 0;
+// Reachability comes from the ONE shared probe (`_live-probe.ts`). This file
+// used to spawn `project list --json` itself, which is the duplication that
+// caused the eleven-release silent skip: the verb was renamed in v0.9.0 and
+// each private copy read the husk's exit code as "backend unreachable".
+const LIVE_OK = probeSupabase();
 
 describe("cerefox reindex CLI", () => {
   liveTest("--help advertises the v0.7 flags", () => {

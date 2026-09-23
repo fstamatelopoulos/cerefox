@@ -29,6 +29,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   reasoning, and the one thing left unverified, are in
   `docs/specs/security-audit-1.0.md` (2026-09-22 addendum).
 
+### Fixed
+
+- **Live test suites failed instead of skipping when the store was
+  unreachable** (#275). With the staging project paused, `bun test` in
+  `packages/memory` returned 22 failures, all of them connection errors rather
+  than defects. Four suites decided whether to run from *configuration
+  presence* — a paused project still has every credential, so the gate passed,
+  every test ran and every one died on connect. They now ask
+  `probeSupabase()`, which asks the backend and throws (rather than skipping)
+  if the probe command itself is rejected, so a broken harness cannot look like
+  an absent store. `partial-edits-live` additionally probes **before** its
+  first network call, because opening with a `select` against an unreachable
+  host burned the whole `beforeAll` budget and failed on a 5 s hook timeout.
+  Against an unreachable target the suite is now 0 failures, 14 skips; against
+  a live one it still runs everything.
+- **Five suites carried private copies of the reachability probe** (#275), the
+  duplication `test/_live-probe.ts` exists to remove — the shape that let the
+  `web-integration` suite report success while running nothing for eleven
+  releases after a verb rename. They now call the shared probe. (The
+  npm-registry probe in `lifecycle-commands` is a different question and stays
+  local.) `live-test-budget.test.ts` grew a second guard: every live suite must
+  consult a reachability gate, and no suite may spawn its own copy of the probe
+  argv. Both are proven to fire on the shapes they exist to catch.
+
 ---
 
 ## [v1.14.5] -- 2026-09-14

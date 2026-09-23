@@ -12,6 +12,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { liveTest } from "./_live-test.ts";
+import { probeSupabase } from "./_live-probe.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -81,8 +82,11 @@ async function hardPurgeE2eDocs(): Promise<void> {
 }
 
 // Probe whether Supabase is reachable.
-const probe = run(["project", "list", "--json"]);
-const LIVE_REACHABLE = probe.status === 0;
+// Reachability comes from the ONE shared probe (`_live-probe.ts`). This file
+// used to spawn `project list --json` itself, which is the duplication that
+// caused the eleven-release silent skip: the verb was renamed in v0.9.0 and
+// each private copy read the husk's exit code as "backend unreachable".
+const LIVE_REACHABLE = probeSupabase();
 // Reachability is the wrong question — production is the most reachable
 // target there is. Gate on the environment LABEL instead.
 const LIVE_OK = LIVE_REACHABLE && mayWriteToLiveTarget();
@@ -113,7 +117,7 @@ describe("cerefox write commands (live)", () => {
     test.skip(
       LIVE_REACHABLE
         ? liveWriteSkipReason()
-        : `Supabase not reachable (probe exit ${probe.status}); skipping live tests`, () => {
+        : "Supabase not reachable; skipping live tests", () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       LIVE_OK;
     });

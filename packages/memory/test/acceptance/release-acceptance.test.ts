@@ -19,9 +19,14 @@ import { liveTest } from "../_live-test.ts";
 import { existsSync } from "node:fs";
 
 import { liveWriteSkipReason, mayWriteToLiveTarget } from "../_live-target-guard.ts";
+import { probeSupabase } from "../_live-probe.ts";
 import { Acceptance, BIN } from "./_harness.ts";
 
-const RUNNABLE = mayWriteToLiveTarget() && existsSync(BIN);
+// `mayWriteToLiveTarget()` answers "am I allowed to write here?", and
+// `existsSync(BIN)` answers "is there a bin to run?". Neither answers "is the
+// store actually up", which is why this suite failed instead of skipping
+// against a paused project. `probeSupabase()` is that third question.
+const RUNNABLE = mayWriteToLiveTarget() && existsSync(BIN) && probeSupabase();
 const A = new Acceptance();
 
 const DOC = [
