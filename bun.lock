@@ -16,7 +16,7 @@
         "@supabase/supabase-js": "^2.45.0",
         "picocolors": "^1.0.0",
         "prompts": "^2.4.2",
-        "zod": "^3.23.0",
+        "zod": "^4.6.5",
       },
       "devDependencies": {
         "@types/bun": "^1.1.0",
@@ -69,7 +69,7 @@
     },
     "packages/memory": {
       "name": "@cerefox/memory",
-      "version": "1.14.5",
+      "version": "1.15.0-beta.2",
       "bin": {
         "cerefox": "dist/bin/cerefox.js",
       },
@@ -86,7 +86,7 @@
         "postgres": "^3.4.9",
         "prompts": "^2.4.2",
         "smol-toml": "^1.6.1",
-        "zod": "^3.23.0",
+        "zod": "^4.6.5",
       },
       "devDependencies": {
         "@types/bun": "^1.3.14",
@@ -1388,7 +1388,7 @@
 
     "yoctocolors": ["yoctocolors@2.2.0", "", {}, "sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg=="],
 
-    "zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
+    "zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
 
     "zod-to-json-schema": ["zod-to-json-schema@3.25.2", "", { "peerDependencies": { "zod": "^3.25.28 || ^4" } }, "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA=="],
 
@@ -1405,6 +1405,8 @@
     "@huggingface/transformers/onnxruntime-node": ["onnxruntime-node@1.24.3", "", { "dependencies": { "adm-zip": "^0.5.16", "global-agent": "^3.0.0", "onnxruntime-common": "1.24.3" }, "os": [ "linux", "win32", "darwin", ] }, "sha512-JH7+czbc8ALA819vlTgcV+Q214/+VjGeBHDjX81+ZCD0PCVCIFGFNtT0V4sXG/1JXypKPgScQcB3ij/hk3YnTg=="],
 
     "@modelcontextprotocol/sdk/@hono/node-server": ["@hono/node-server@2.0.12", "", { "peerDependencies": { "hono": "^4" } }, "sha512-eWpQYr67tqJLeaSUl0Q+TquuYfUdTibpOJlUMV2FfUP7+KqCC5TufnwnlXL6mobZBJbGAYRd7ZvEBDCbLInjhg=="],
+
+    "@modelcontextprotocol/sdk/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "@nivo/axes/@types/d3-format": ["@types/d3-format@1.4.5", "", {}, "sha512-mLxrC1MSWupOSncXN/HOlWUAAIffAEBaI4+PKy2uMPsKe4FNZlk7qrbTjmzJXITQQqBHivaks4Td18azgqnotA=="],
 
@@ -1439,6 +1441,8 @@
     "d3-time-format/d3-time": ["d3-time@2.1.1", "", { "dependencies": { "d3-array": "2" } }, "sha512-/eIQe/eR4kCQwq7yxi7z4c6qEXf2IYGcjoWB5OOQy4Tq9Uv39/947qlDcN2TLkiTzQWzvnsuYPB9TrWaNfipKQ=="],
 
     "eslint/ajv": ["ajv@6.15.0", "", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw=="],
+
+    "eslint-plugin-react-hooks/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "mdast-util-find-and-replace/escape-string-regexp": ["escape-string-regexp@5.0.0", "", {}, "sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw=="],
 
