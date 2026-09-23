@@ -5,7 +5,7 @@
 #   curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh | sh
 #
 # Detects Bun first (faster, single-binary runtime, no extra Node
-# install); falls back to npm if Bun isn't available and Node ≥ 20 is.
+# install); falls back to npm if Bun isn't available and Node ≥ 24 is.
 # If neither runtime is found, prints clear next-step instructions and
 # exits 1.
 #
@@ -46,12 +46,13 @@ if command -v bun >/dev/null 2>&1; then
   INSTALLER="bun"
   INSTALLER_DESCRIPTION="Bun"
 elif command -v npm >/dev/null 2>&1; then
-  # npm needs Node ≥ 20 to publish/install ESM packages with the
-  # provenance attestations we ship. Cerefox itself only needs Node 20
-  # for the bin to run.
+  # Cerefox requires Node >= 24 (see engines in packages/memory). commander 15
+  # needs >= 22.12, and 24 is the LTS line we support; Node 20 and 22 are past
+  # or nearing end of life. Detect it here so the failure is a sentence rather
+  # than an npm resolution error.
   NODE_MAJOR=$(node -p "parseInt(process.versions.node.split('.')[0],10)" 2>/dev/null || echo "0")
-  if [ "${NODE_MAJOR}" -lt 20 ]; then
-    echo "✗ Detected npm with Node ${NODE_MAJOR}, but Cerefox requires Node ≥ 20."
+  if [ "${NODE_MAJOR}" -lt 24 ]; then
+    echo "✗ Detected npm with Node ${NODE_MAJOR}, but Cerefox requires Node ≥ 24."
     echo "  Upgrade Node (https://nodejs.org) or install Bun (https://bun.sh)."
     exit 1
   fi
@@ -64,7 +65,7 @@ fi
 #
 
 if [ -z "${INSTALLER}" ]; then
-  echo "ℹ No Bun or Node ≥ 20 detected. Installing Bun (https://bun.sh)…"
+  echo "ℹ No Bun or Node ≥ 24 detected. Installing Bun (https://bun.sh)…"
   echo ""
   curl -fsSL https://bun.sh/install | bash
   # Bun installs to ~/.bun/bin/bun; add it to PATH for the rest of this

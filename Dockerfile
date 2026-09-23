@@ -15,7 +15,7 @@
 # Schema + RPCs + Edge Functions are deployed separately (once), not by this
 # image: `cerefox server deploy` (or `bun scripts/db_deploy.ts` from a clone).
 
-FROM node:20-slim
+FROM node:24-slim
 
 # Install the Cerefox runtime globally. Pin a version for reproducibility, e.g.
 # `@cerefox/memory@0.9.3`; `@latest` (default) tracks the newest release.

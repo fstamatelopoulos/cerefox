@@ -44,7 +44,7 @@ where to find them, what each is for): [`setup-supabase.md`](setup-supabase.md).
 curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh | sh
 ```
 
-Uses Bun if it's already installed, otherwise npm (Node ≥ 20); if neither is
+Uses Bun if it's already installed, otherwise npm (Node ≥ 24); if neither is
 present, it bootstraps Bun. After install, `cerefox` is on your PATH.
 
 Direct alternatives:
