@@ -87,12 +87,13 @@ the Bearer token is the gate); the #110 query is parameterized.
 
 **Accepted (with reasoning)**:
 
-- `adm-zip` / `tar` / `sharp` advisories via the `onnxruntime-node` /
+- `tar` / `sharp` advisories via the `onnxruntime-node` /
   `@huggingface/transformers` tree: these libraries only unpack the runtimes'
-  own release artifacts at install time (adm-zip/tar) or serve vision-model
+  own release artifacts at install time (tar) or serve vision-model
   paths Cerefox never invokes (sharp — embeddings are text-only). No current
-  upstream release resolves them (`onnxruntime-node` pins `adm-zip ^0.5.x`
-  across all lines). Revisit on `@huggingface/transformers` major bumps.
+  upstream release resolves them. Revisit on `@huggingface/transformers` major
+  bumps. (**The `adm-zip` half of this entry is retired** — see the 2026-09-22
+  addendum: a fixed release shipped and is now pinned by override.)
 - `react-router` RSC-mode advisory: fixed only in v8; Cerefox's SPA does not
   use RSC/SSR, so the affected code never runs. Revisit at a react-router v8
   migration.
@@ -108,6 +109,34 @@ the Bearer token is the gate); the #110 query is parameterized.
   `@huggingface/transformers` pins. Both remain confined to the local ONNX
   embedder's install-time and vision paths. Revisit `adm-zip` when a fixed
   release ships and `sharp` at the next `@huggingface/transformers` bump.
+- **2026-09-22 addendum — the `adm-zip` acceptances are retired.** A third
+  advisory (GHSA-7q85-xj36-vmfc, high, uncontrolled memory allocation) was
+  published on 2026-09-21 and broke the audit gate on every branch, as the
+  2026-09-08 batch had. This time the premise of the acceptance had expired:
+  **`adm-zip@0.6.1` shipped**, where 0.6.0 had been the newest and affected.
+  An override to `^0.6.1` in the root `package.json` clears **all three**
+  adm-zip advisories at once, so GHSA-xcpc-8h2w-3j85 and GHSA-vwc7-r8mq-g2x9
+  were removed from the gate rather than a third being added to it.
+
+  The override forces `adm-zip` past the `^0.5.16` that `onnxruntime-node`
+  declares, which is worth stating plainly. The exposure is small and was
+  checked rather than assumed: `onnxruntime-node` uses `adm-zip` in exactly one
+  place, `script/install-utils.js`, to unpack a NuGet archive of **CUDA
+  execution-provider binaries** that are not bundled in the npm package because
+  of size. The default native binaries ship inside the package and are not
+  extracted at install. Cerefox never requests the CUDA provider, so that code
+  path does not run in any Cerefox deployment. What is **not** verified is a
+  clean install on a CUDA-enabled Linux host under 0.6.1; if Cerefox ever wants
+  the CUDA provider, re-test that path before relying on it.
+
+  Lesson worth keeping: an acceptance whose reason is "no fixed release exists"
+  has an expiry date that nothing checks. `adm-zip@0.6.1` was published
+  **2026-09-11**, three days after the 2026-09-08 acceptance was written, and
+  the acceptance stood unexamined until an unrelated advisory forced the issue
+  ten days later. Nobody was going to notice: the stated revisit trigger was
+  "when a fixed release ships", and no one watches for that. When accepting on
+  those grounds, the honest trigger is the next time the gate fails for any
+  reason — check whether the premise still holds before adding another id.
 - The container-minted `service_role` JWT has no expiry; it never leaves the
   container, and rotating it is deleting `.cerefox_jwt_secret` from the data
   volume.
