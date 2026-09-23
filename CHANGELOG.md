@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.15.0-beta.2] -- 2026-09-23
+
 ### Added
 
 - **The Node floor is pinned in one place and tested.** `checkRuntime()` and
