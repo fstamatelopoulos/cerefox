@@ -26,6 +26,16 @@ bullet.
 Nothing changes for Bun users, for Cerefox Local (the image moves to
 `node:24-slim` internally), or for anyone on Node 24+.
 
+### Added
+
+- **CI lints the frontend.** `bun run lint` existed and nothing ran it, so
+  eslint — the frontend's only static analysis — was a script nobody executed.
+  That gap is what made dependabot's TypeScript 7 bump (#161) look safe: it
+  passes typecheck, the frontend build and the package build, and then
+  `typescript-eslint` refuses to load against TS 7 at all, so linting would
+  have stopped working with every check green and stayed broken until someone
+  ran it by hand.
+
 ### Changed
 
 - **`commander` 14 → 15**, the upgrade the Node baseline existed to unblock. It
