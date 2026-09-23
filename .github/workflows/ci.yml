@@ -156,6 +156,19 @@ jobs:
         working-directory: frontend
         run: bun test src/
 
+      # eslint is the frontend's only static analysis, and until now NOTHING ran
+      # it: `bun run lint` existed and no job called it. That gap made a bad
+      # upgrade look clean. TypeScript 7 (#161) passes typecheck, the frontend
+      # build and the package build, and then `typescript-eslint` refuses to
+      # load against it at all — so linting would have stopped working with
+      # every check green, and stayed broken until somebody ran it by hand.
+      #
+      # Runs last because a lint failure is the least urgent of the three: a
+      # build or test failure should be the first thing reported.
+      - name: Lint the frontend
+        working-directory: frontend
+        run: bun run lint
+
   audit:
     name: Dependency audit (bun audit)
     runs-on: ubuntu-24.04

@@ -253,7 +253,7 @@ If something needs fixing after a tag is published, **cut a new patch version**.
 
 PRs must pass these jobs before merge. Cold-cache wall clock is ~60-90 seconds. Live e2e tests (`CEREFOX_LIVE_E2E=1 bun test test/edge-functions test/mcp-remote`, `scripts/check_ef_parity.ts`) need Supabase credentials and are run manually by the maintainer before each cut — see `docs/research/v0.7-manual-test-plan.md` (the rolling test plan that spans v0.5 → v0.7).
 
-**Type-checking**: `bun run typecheck` (`tsc --noEmit` across `_shared` and `packages/memory`, plus `tsc -b` for the frontend — a plain `tsc --noEmit` in `frontend/` checks nothing, because its `tsconfig.json` is `files: []` plus project references) is the TS quality gate. A dedicated formatter/linter (biome) is not yet wired.
+**Type-checking**: `bun run typecheck` (`tsc --noEmit` across `_shared` and `packages/memory`, plus `tsc -b` for the frontend — a plain `tsc --noEmit` in `frontend/` checks nothing, because its `tsconfig.json` is `files: []` plus project references) is the TS quality gate. **The frontend is also linted in CI** (`cd frontend && bun run lint`, eslint with the flat config in `frontend/eslint.config.js`); the script existed for a long time with nothing calling it, which is how an upgrade that breaks linting could pass every check. A repo-wide formatter/linter (biome) is still not wired.
 
 ---
 
