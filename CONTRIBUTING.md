@@ -52,7 +52,7 @@ under `src/cerefox/` is the SQL schema (`db/*.sql`), which the TS deploy bundles
 | Tool | Why | Install |
 |---|---|---|
 | **[Bun](https://bun.sh) 1.x** | The whole TS runtime + `scripts/*.ts` + tests (`bun test`) | `curl -fsSL https://bun.sh/install \| bash` |
-| **Node 20+** with `npm` | Frontend (React + Vite) build + npm publish; an alternative TS runtime | [nodejs.org](https://nodejs.org/) or `nvm install 20` |
+| **Node 24+** with `npm` | Frontend (React + Vite) build + npm publish; an alternative TS runtime | [nodejs.org](https://nodejs.org/) or `nvm install 24` |
 
 End users install via `npm`/`bun install -g @cerefox/memory` (or the one-liner installer) and
 need no clone. The **local / self-hosted (Docker) backend** is separate again
@@ -171,7 +171,7 @@ Two versions track the server side: the **schema version** (`@version:` marker i
 
 **Everything is TypeScript.** The Python → TypeScript strangler-fig migration (v0.2.0 →
 v1.0.0) is complete — the last Python was removed at v1.0.0. All scripts, CLI tools, and
-installer pieces are TypeScript (Bun-runnable, Node 20+ compatible); new scripts go in
+installer pieces are TypeScript (Bun-runnable, Node 24+ compatible); new scripts go in
 `scripts/*.ts`.
 
 Historical reasoning for the migration: [`docs/specs/polish-and-distribution-design.md` §12f](docs/specs/polish-and-distribution-design.md).

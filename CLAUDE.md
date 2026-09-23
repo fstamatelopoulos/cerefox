@@ -16,7 +16,7 @@ Single-user, open-source (Apache 2.0), designed to be cheap/free to operate. See
 - **Web framework**: Hono on Bun/Node (TypeScript), in `packages/memory` — served by `cerefox web`.
 - **Web UI**: React + TypeScript SPA (Mantine UI, TanStack Query, Vite); served at `/app/`
 - **CLI**: commander (TypeScript) in `@cerefox/memory`; resource-verb shape (v0.9.0).
-- **Local MCP server**: `@cerefox/memory` npm package (Node ≥20 / Bun ≥1.0); single artifact growing to host CLI + web server + ingestion in future iterations
+- **Local MCP server**: `@cerefox/memory` npm package (Node ≥24 / Bun ≥1.0); single artifact growing to host CLI + web server + ingestion in future iterations
 - **Shared TS modules**: `_shared/{config,db-client,db-status,embeddings,mcp-tools}/` — imported by both Edge Functions (Deno) and local server (Node/Bun) via structural typing
 - **Package management**: bun workspaces for TS
 - **Testing**: `bun test` (TypeScript) — the only test runner as of v0.9.0 (pytest retired; `tests/**/*.py` deleted)

@@ -1060,7 +1060,7 @@ flowchart TD
 ```
 
 Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
-subprocess via npx (Node ≥20 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
+subprocess via npx (Node ≥24 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Function, MCP
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
 as the local server, so both expose the identical 15 core tools. Path 3's primitive

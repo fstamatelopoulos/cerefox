@@ -32,7 +32,7 @@ either the Deno functions tree or the npm package.
 
 ## Running
 
-These modules run under [Bun](https://bun.sh) (preferred) or Node 20+. Bun is a
+These modules run under [Bun](https://bun.sh) (preferred) or Node 24+. Bun is a
 contributor prerequisite (see `CONTRIBUTING.md`).
 
 ```bash
