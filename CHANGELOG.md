@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.15.0-beta.3] -- 2026-09-23
+
 ### Changed
 
 - **`zod` 3 → 4** (#157). The only runtime dependency in this release train:
