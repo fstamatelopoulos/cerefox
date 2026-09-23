@@ -9,6 +9,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Changed
+
+- **TypeScript is normalised on 6.x across the workspace**, and the frontend's
+  `tsconfig` drops `baseUrl`. The three manifests had drifted apart
+  (`packages/memory` on `^6.0.3`, `_shared` on `^5.6.0`, `frontend` on
+  `~5.9.3`), so `bun run typecheck` was compiling the three projects with three
+  different compilers. TypeScript 6 deprecation-errors on `baseUrl`, so the
+  frontend config now uses relative `paths` instead, which is also the form
+  TypeScript 7 requires.
+
+  **TypeScript 7 is deliberately not taken yet** (#161). That config migration
+  is enough to make `tsc` itself pass under 7, but `typescript-eslint` 8.65
+  refuses to load against it ("typescript-eslint does not support TS 7.0"), so
+  linting breaks outright. CI does not run lint, so this would have gone
+  unnoticed. Revisit when typescript-eslint ships TS 7 support
+  (typescript-eslint#10940).
+
 ### Security
 
 - **The three `adm-zip` advisories are fixed rather than accepted.** A new one
