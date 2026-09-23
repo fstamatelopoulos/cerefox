@@ -7,7 +7,7 @@
 **User-owned shared memory for AI agents.** A persistent, curated knowledge layer that multiple AI tools can read and write, backed by Postgres + pgvector.
 
 [![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Node 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org)
+[![Node 24+](https://img.shields.io/badge/node-24+-green.svg)](https://nodejs.org)
 [![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/5dnBVeqs9c)
 
 ---
@@ -127,7 +127,7 @@ npm package. **No `git clone`, no Python, no build.**
 ```bash
 # 1. Install (one-liner; detects Bun, falls back to npm):
 curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install.sh | sh
-#    or: npm install -g @cerefox/memory     (Node ≥ 20)
+#    or: npm install -g @cerefox/memory     (Node ≥ 24)
 
 # 2. Configure + stand up the server side (against your own Supabase project):
 cerefox init             # interactive setup: Supabase URL/keys, embedding key
@@ -150,7 +150,7 @@ cerefox search "what did I decide about auth?"
 cerefox web              # web UI → http://localhost:8000/app/
 ```
 
-**Prerequisites:** Node 20+ or Bun 1.0+ · a Supabase account (free tier) · an
+**Prerequisites:** Node 24+ or Bun 1.0+ · a Supabase account (free tier) · an
 embedding API key (OpenAI `text-embedding-3-small`).
 
 > **Full walkthrough:** [`docs/guides/quickstart.md`](docs/guides/quickstart.md)

@@ -15,7 +15,7 @@ placeholders with your Supabase project values.
 | `claude-code-remote.json` | Claude Code | stdio via `mcp-remote` | Works. Claude Code also supports **native HTTP** — `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <your-cerefox-token>"`. Note: for local agents the **local MCP** (`local-stdio.json` / `configure-agent --tool claude-code`) is preferred; this remote form is an advanced/fallback path. |
 | `claude-desktop-remote.json` | Claude Desktop | stdio via `mcp-remote` | Requires Node.js. `supergateway` is the tested bridge (see connect-agents.md). |
 | `cursor-remote.json` | Cursor | native HTTP | Cursor supports remote MCP natively. |
-| `local-stdio.json` | Any stdio client | stdio via the `@cerefox/memory` npm package | Runs the MCP server locally (`npx --package=@cerefox/memory cerefox mcp`). Zero Edge Function cost, lower latency. Requires Node ≥ 20 or Bun — **no repo clone, no Python**. |
+| `local-stdio.json` | Any stdio client | stdio via the `@cerefox/memory` npm package | Runs the MCP server locally (`npx --package=@cerefox/memory cerefox mcp`). Zero Edge Function cost, lower latency. Requires Node ≥ 24 or Bun — **no repo clone, no Python**. |
 
 ## Setup
 

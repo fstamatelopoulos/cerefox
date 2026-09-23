@@ -9,7 +9,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### ⚠ BREAKING: the minimum Node version is now 24
+
+**Cerefox now requires Node >= 24** (or Bun >= 1.0), up from Node >= 20. If you
+run the npm package on Node 20 or 22, `cerefox` will not install until you
+upgrade Node, or install Bun instead. The one-line installer detects an
+unsupported Node and tells you so in a sentence rather than letting npm fail
+with a dependency-resolution error.
+
+Why now: Node 20 reached end of life in April 2026, Node 24 is the current LTS,
+and `commander` 15 requires >= 22.12. Choosing 24 rather than the bare minimum
+22.12 means one platform change instead of two. This was deferred seven times
+(#154) precisely because dropping a supported platform is not a dependency
+bullet.
+
+Nothing changes for Bun users, for Cerefox Local (the image moves to
+`node:24-slim` internally), or for anyone on Node 24+.
+
 ### Changed
+
+- **`commander` 14 → 15**, the upgrade the Node baseline existed to unblock. It
+  is ESM and relies on `require(esm)`, hence the >= 22.12 floor. Verified beyond
+  a typecheck, since it is a runtime dependency: the built bin dispatches,
+  `--version` and `--help` work, the resource-verb groups resolve, and the
+  hidden renamed-verb husks still exit with their pointer.
+- `@types/node` in `packages/memory` moves `^20` → `^24.13.3`, matching the new
+  runtime floor and the pin `frontend` already had. Types that run ahead of the
+  floor let `tsc` accept code that crashes on a supported platform, which is why
+  dependabot's bump to types 26 was declined (#163) rather than merged.
 
 - **TypeScript is normalised on 6.x across the workspace**, and the frontend's
   `tsconfig` drops `baseUrl`. The three manifests had drifted apart
