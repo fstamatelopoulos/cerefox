@@ -17,6 +17,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { liveTest } from "./_live-test.ts";
+import { probeSupabase } from "./_live-probe.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -44,12 +45,15 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
 
 // Probe once at module load. If Supabase isn't configured, skip the live
 // section instead of failing the whole suite.
-const probe = run(["project", "list", "--json"]);
-const LIVE_OK = probe.status === 0;
+// Reachability comes from the ONE shared probe (`_live-probe.ts`). This file
+// used to spawn `project list --json` itself, which is the duplication that
+// caused the eleven-release silent skip: the verb was renamed in v0.9.0 and
+// each private copy read the husk's exit code as "backend unreachable".
+const LIVE_OK = probeSupabase();
 
 describe("cerefox read commands (live)", () => {
   if (!LIVE_OK) {
-    test.skip(`Supabase not reachable (probe exit ${probe.status}); skipping live tests`, () => {
+    test.skip("Supabase not reachable; skipping live tests", () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       LIVE_OK;
     });

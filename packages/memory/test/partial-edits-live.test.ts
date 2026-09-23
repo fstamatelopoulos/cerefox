@@ -23,13 +23,14 @@
 
 import { afterAll, beforeAll, describe, expect } from "bun:test";
 
-import { liveTest } from "./_live-test.ts";
+import { LIVE_TEST_BUDGET_MS, liveTest } from "./_live-test.ts";
 
 import { loadSettings } from "../../../_shared/config/index.ts";
 import { createClient } from "../../../_shared/db-client/index.ts";
 import { TOOLS_BY_NAME } from "../../../_shared/mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../../../_shared/mcp-tools/types.ts";
 import { mayWriteToLiveTarget } from "./_live-target-guard.ts";
+import { probeSupabase } from "./_live-probe.ts";
 
 const settings = loadSettings();
 let supabase: MCPSupabaseClient;
@@ -101,6 +102,12 @@ async function fullText(id: string): Promise<string> {
 
 beforeAll(async () => {
   if (!settings.supabaseUrl || !settings.supabaseKey) return;
+  // Ask whether the store is UP before talking to it. This used to open with a
+  // `select` and a schema-version RPC against whatever the config named, so an
+  // unreachable target spent the hook's whole budget waiting and the suite
+  // failed on a 5 s hook timeout instead of skipping. The probe is a local
+  // subprocess with its own 10 s cap, so it cannot hang this hook.
+  if (!probeSupabase()) return;
   try {
     const client = createClient(settings);
     supabase = client.raw as unknown as MCPSupabaseClient;
@@ -128,12 +135,13 @@ beforeAll(async () => {
       return;
     }
     // Reachability is not permission: production is the most reachable
-    // target there is. Writing suites gate on the environment LABEL.
+    // target there is. Writing suites gate on the environment LABEL. The
+    // reachability half was settled by the probe at the top of this hook.
     reachable = mayWriteToLiveTarget();
   } catch {
     reachable = false;
   }
-});
+}, LIVE_TEST_BUDGET_MS);
 
 afterAll(async () => {
   if (!reachable || created.length === 0) return;

@@ -15,6 +15,7 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test";
 
 import { liveTest } from "../_live-test.ts";
+import { probeSupabase } from "../_live-probe.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { IngestionPipeline } from "../../src/ingestion/pipeline.ts";
@@ -28,11 +29,18 @@ const SUPABASE_KEY = process.env.CEREFOX_SUPABASE_KEY ?? "";
 const OPENAI_API_KEY =
   process.env.OPENAI_API_KEY || process.env.CEREFOX_OPENAI_API_KEY || "";
 
+// Configured is not the same as REACHABLE, and conflating them is what made
+// this suite FAIL rather than skip when the staging project was paused: the
+// credentials were all still present, so every test ran and died on a
+// connection error. `probeSupabase()` asks the backend, and it throws rather
+// than returning false if the probe command itself is rejected, so a broken
+// harness cannot masquerade as an absent store.
 const LIVE_OK =
   mayWriteToLiveTarget() &&
-  (SUPABASE_URL.length > 0 &&
+  SUPABASE_URL.length > 0 &&
   SUPABASE_KEY.length > 0 &&
-  OPENAI_API_KEY.length > 0);
+  OPENAI_API_KEY.length > 0 &&
+  probeSupabase();
 
 const TITLE_PREFIX = "[E2E pipeline-update]";
 const RUN_TAG = String(Date.now());

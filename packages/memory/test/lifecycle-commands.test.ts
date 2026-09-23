@@ -11,6 +11,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
 import { liveTest } from "./_live-test.ts";
+import { probeSupabase } from "./_live-probe.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -35,8 +36,11 @@ function run(args: string[]): { stdout: string; stderr: string; status: number }
   };
 }
 
-const liveProbe = run(["project", "list", "--json"]);
-const LIVE_OK = liveProbe.status === 0;
+// Reachability comes from the ONE shared probe (`_live-probe.ts`); this file
+// used to spawn the probe command itself, which is the duplication behind the
+// eleven-release silent skip. (The npm-registry probe further down is a
+// different question and stays local to the test that asks it.)
+const LIVE_OK = probeSupabase();
 
 /**
  * The cerefox MCP entry these tests just wrote, whatever it is keyed under.
