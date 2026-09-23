@@ -18,7 +18,8 @@
     "qs": "^6.16.0",
     "@xmldom/xmldom": "^0.8.15",
     "hono": "^4.13.7",
-    "js-yaml": "^4.3.2"
+    "js-yaml": "^4.3.2",
+    "adm-zip": "^0.6.1"
   },
   "scripts": {
     "test": "cd _shared && bun test",

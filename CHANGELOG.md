@@ -9,7 +9,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Security
+
+- **The three `adm-zip` advisories are fixed rather than accepted.** A new one
+  (GHSA-7q85-xj36-vmfc, high, uncontrolled memory allocation) was published
+  2026-09-21 and broke the `bun audit` gate on every branch, as the 2026-09-08
+  batch had. The two existing adm-zip advisories had been accepted on the
+  grounds that no fixed release existed, and that had stopped being true:
+  `adm-zip@0.6.1` shipped on 2026-09-11. An override to `^0.6.1` in the root
+  `package.json` clears **all three**, so the two accepted ids came out of the
+  gate instead of a third going in. `bun audit` goes from five findings to two,
+  both `sharp`, both still accepted for the documented reason.
+
+  The override forces `adm-zip` past the `^0.5.16` that `onnxruntime-node`
+  declares. Its only use of the library is unpacking a NuGet archive of CUDA
+  execution-provider binaries, which are not bundled in the npm package for
+  size reasons; the default native binaries ship inside the package and are not
+  extracted at install, and Cerefox never requests the CUDA provider. The
+  reasoning, and the one thing left unverified, are in
+  `docs/specs/security-audit-1.0.md` (2026-09-22 addendum).
 
 ---
 
