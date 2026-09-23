@@ -67,7 +67,7 @@ jobs:
             org.opencontainers.image.documentation=https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-local.md
 
       - name: Build + push (multi-arch)
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: docker/local/Dockerfile
