@@ -17,11 +17,15 @@ Open roadmap.
 
 ### ⚠ BREAKING: the minimum Node version is now 24
 
-**Cerefox now requires Node >= 24** (or Bun >= 1.0), up from Node >= 20. If you
-run the npm package on Node 20 or 22, `cerefox` will not install until you
-upgrade Node, or install Bun instead. The one-line installer detects an
-unsupported Node and tells you so in a sentence rather than letting npm fail
-with a dependency-resolution error.
+**Cerefox now requires Node >= 24** (or Bun >= 1.0), up from Node >= 20.
+
+What that means in practice, stated precisely because `engines` alone does not
+enforce much: the **one-line installer refuses** on Node 20 or 22 and tells you
+so in a sentence naming the fix. A direct `npm install -g @cerefox/memory`
+**succeeds with an `EBADENGINE` warning** — npm's default is
+`engine-strict=false`, so `engines` is advisory — and `cerefox doctor` then
+reports the runtime as an **error**, which is the check that will actually stop
+you. Upgrade Node, or install Bun, which is unaffected.
 
 Why now: Node 20 reached end of life in April 2026, Node 24 is the current LTS,
 and `commander` 15 requires >= 22.12. Choosing 24 rather than the bare minimum
@@ -29,11 +33,21 @@ and `commander` 15 requires >= 22.12. Choosing 24 rather than the bare minimum
 (#154) precisely because dropping a supported platform is not a dependency
 bullet.
 
-Nothing changes for Bun users, for Cerefox Local (the image moves to
-`node:24-slim` internally), or for anyone on Node 24+.
+Nothing changes for Bun users, for anyone already on Node 24+, or for
+**Cerefox Local**, whose image is built on `oven/bun:1` and runs the bin under
+Bun — it contains no Node at all and is untouched by this release. (The
+`node:20-slim` -> `node:24-slim` change is the root `Dockerfile`, a separate
+web-UI container that its own header marks as untested end to end.)
 
 ### Added
 
+- **The Node floor is pinned in one place and tested.** `checkRuntime()` and
+  `engines.node` stated it separately and drifted the moment it moved: the
+  baseline went to 24 while `cerefox doctor` still passed anything `>= 20`, so
+  a user on Node 22 got a green runtime line on a platform CI no longer tests.
+  The check now reads a single `MIN_NODE_MAJOR`, and
+  `packages/memory/test/runtime-floor.test.ts` fails if it, `engines.node` and
+  the `install.sh` literal disagree.
 - **CI lints the frontend.** `bun run lint` existed and nothing ran it, so
   eslint — the frontend's only static analysis — was a script nobody executed.
   That gap is what made dependabot's TypeScript 7 bump (#161) look safe: it
@@ -45,10 +59,15 @@ Nothing changes for Bun users, for Cerefox Local (the image moves to
 ### Changed
 
 - **`commander` 14 → 15**, the upgrade the Node baseline existed to unblock. It
-  is ESM and relies on `require(esm)`, hence the >= 22.12 floor. Verified beyond
-  a typecheck, since it is a runtime dependency: the built bin dispatches,
-  `--version` and `--help` work, the resource-verb groups resolve, and the
-  hidden renamed-verb husks still exit with their pointer.
+  declares `>= 22.12` because it is ESM and relies on `require(esm)`. Worth
+  being exact about what that constrains: `bun build` bundles commander into
+  `dist/bin/cerefox.js`, so the **published bin never executes `require(esm)`**
+  and that specific mechanism does not bind the shipped artifact. The floor is
+  justified by Node 20 being end-of-life and 24 being the current LTS, not by
+  commander alone. Verified beyond a typecheck, since it is a runtime
+  dependency: the built bin dispatches, `--version` and `--help` work, the
+  resource-verb groups resolve, and the hidden renamed-verb husks still exit
+  with their pointer.
 - `@types/node` in `packages/memory` moves `^20` → `^24.13.3`, matching the new
   runtime floor and the pin `frontend` already had. Types that run ahead of the
   floor let `tsc` accept code that crashes on a supported platform, which is why
@@ -133,6 +152,16 @@ Nothing changes for Bun users, for Cerefox Local (the image moves to
 
 ### Fixed
 
+- **Nine documents still told users Node 20 was supported** after the baseline
+  moved: the quickstart's prerequisites (contradicting its own installer
+  section thirty lines later), `setup-supabase.md`, both `Path A-Local` blocks
+  in `connect-agents.md`, `CONTRIBUTING.md`, `_shared/README.md`,
+  `docker/local/README.md`, `solution-design.md`, `CLAUDE.md`, and the
+  remediation text in `cerefox server deploy` that told users to install Node
+  20 when the CLI was about to refuse it. Found by a review of the baseline
+  change; the original sweep used a hand-picked file list and a narrow pattern,
+  which is the same drift-prone shape this project keeps writing guards
+  against.
 - **`docs/guides/api.md` was missing five registered endpoints** — both
   `/preferences` routes, both `/docs` routes, and
   `POST /documents/{id}/versions/{version_id}/archive`. The guide is the only

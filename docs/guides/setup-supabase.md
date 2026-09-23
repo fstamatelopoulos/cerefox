@@ -9,7 +9,7 @@ This guide walks you from a blank Supabase project to a fully deployed Cerefox s
 ## Prerequisites
 
 - The Cerefox CLI installed (`cerefox --version`) — see [`quickstart.md`](quickstart.md#1-install). End users do **not** need a source clone or Python.
-- **Node.js 20+** or **Bun 1.0+** (the CLI runtime; also used for `npx supabase`).
+- **Node.js 24+** or **Bun 1.0+** (the CLI runtime; also used for `npx supabase`).
 - A Supabase account (free tier is enough): [supabase.com](https://supabase.com)
 
 > Contributors with a repo clone use `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts` for the low-level schema path. (The former `python scripts/db_*.py` equivalents were removed at v1.0.0.)

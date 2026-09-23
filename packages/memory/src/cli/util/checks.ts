@@ -54,6 +54,16 @@ export function checkBinary(): CheckResult {
   };
 }
 
+/**
+ * The supported Node floor, as one value.
+ *
+ * It exists as a constant because it was previously a literal here and a
+ * separate string in `engines.node`, and the two drifted: the floor moved to 24
+ * while this check still passed anything >= 20, so `cerefox doctor` reported a
+ * green runtime on a platform CI no longer tests.
+ */
+export const MIN_NODE_MAJOR = 24;
+
 export function checkRuntime(): CheckResult {
   // Bun and Node both populate process.versions.
   const bun = (process.versions as Record<string, string | undefined>).bun;
@@ -63,12 +73,19 @@ export function checkRuntime(): CheckResult {
   }
   if (node) {
     const major = Number.parseInt(node.split(".")[0], 10);
-    if (major < 20) {
+    // Keep this in lockstep with `engines.node` in packages/memory/package.json
+    // (pinned by runtime-floor.test.ts). This is the ONLY runtime enforcement
+    // of the floor: npm's `engines` is advisory under the default
+    // `engine-strict=false`, so `npm install -g @cerefox/memory` on an
+    // unsupported Node succeeds with an EBADENGINE warning people scroll past.
+    // When this gate lagged the floor, `doctor` told those users their runtime
+    // was fine.
+    if (major < MIN_NODE_MAJOR) {
       return {
         name: "runtime",
         status: "error",
-        detail: `Node ${node} (< 20)`,
-        hint: "Cerefox requires Node 20+; upgrade or install Bun.",
+        detail: `Node ${node} (< ${MIN_NODE_MAJOR})`,
+        hint: `Cerefox requires Node ${MIN_NODE_MAJOR}+; upgrade or install Bun.`,
       };
     }
     return { name: "runtime", status: "ok", detail: `Node ${node}` };

@@ -17,7 +17,7 @@ the Cerefox install and setup below takes ~15 minutes.
 
 ## Prerequisites
 
-- **Node.js 20+** (`node --version`) or **Bun 1.0+** (`bun --version`)
+- **Node.js 24+** (`node --version`) or **Bun 1.0+** (`bun --version`)
 - A **Supabase account** -- [supabase.com](https://supabase.com) (free tier works). A fresh project is fine — `cerefox server deploy` (Step 2) deploys the schema for you.
 - An **OpenAI API key** -- [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 

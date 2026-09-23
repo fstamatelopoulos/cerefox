@@ -85,7 +85,7 @@ in the container.
 - Some content ingested (`cerefox document ingest my-notes.md`)
 
 **For Path A-Local only:**
-- [Node.js ≥20](https://nodejs.org) (for `npx --package=@cerefox/memory cerefox mcp`, or a
+- [Node.js ≥24](https://nodejs.org) (for `npx --package=@cerefox/memory cerefox mcp`, or a
   global `npm install -g @cerefox/memory`)
   + `.env` file in the working directory the client launches the server from (see "env block"
   in the per-client configs below if your client can't see the file)
@@ -1259,7 +1259,7 @@ When Path A is still better:
 
 Same as **Path A-Local**:
 
-- [Node.js ≥20](https://nodejs.org) + the CLI installed: `npm install -g @cerefox/memory`
+- [Node.js ≥24](https://nodejs.org) + the CLI installed: `npm install -g @cerefox/memory`
 - `.env` configured (resolved from the working directory) with `CEREFOX_SUPABASE_URL`, `CEREFOX_SUPABASE_KEY` (service-role / new secret key), and your embedding API key (`OPENAI_API_KEY`)
 
 Quick sanity check before pointing an agent at it:

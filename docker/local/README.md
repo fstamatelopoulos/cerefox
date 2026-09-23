@@ -162,7 +162,7 @@ How the image is built (reference):
   /usr/local/bin/postgrest` (arch-correct under buildx; matches the pinned version).
 - **App (build from source — includes the unreleased /rest/v1 proxy):** a builder
   stage runs `cd frontend && bun run build` + bundles docs/server-assets + the bin,
-  then copy into `/opt/cerefox`; install `bun` (or Node 20) in the final image.
+  then copy into `/opt/cerefox`; install `bun` (or Node 24) in the final image.
 - **Supervisor:** s6-overlay. Service order: `postgres` (base) → **`db-init` oneshot
   (`entrypoint.sh`)** → `postgrest` + `cerefox-server` (both depend on db-init; §5.6).
 - **Env:** `PGRST_JWT_SECRET` (installer-generated — P2); `PGRST_DB_URI` (authenticator);

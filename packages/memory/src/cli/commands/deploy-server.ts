@@ -182,7 +182,7 @@ async function action(options: DeployServerOptions): Promise<void> {
       label: "Supabase CLI reachable (`npx supabase --version`)",
       ok: commandSucceeds("npx", ["--yes", "supabase", "--version"]),
       remediation:
-        "Install Node 20+ (npx ships with it) from nodejs.org, then re-run. " +
+        "Install Node 24+ (npx ships with it) from nodejs.org, then re-run. " +
         "`cerefox server deploy` shells out to the Supabase CLI via npx.",
     });
     // Project ref: we pass it explicitly to `functions deploy`, so we DON'T
