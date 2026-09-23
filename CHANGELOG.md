@@ -9,7 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **`zod` 3 → 4** (#157). The only runtime dependency in this release train:
+  every `/api/v1` response shape is a zod schema in `_shared/schemas/`,
+  consumed by the CLI, the web server and the MCP tool handlers, so a
+  validation change would surface as "Cerefox rejects a document it used to
+  accept" rather than as a build error. No source changes were needed.
+
+  Validated against a live store rather than on a typecheck, and deliberately
+  after v1.15.0-beta.2 had been verified clean, so this was the only variable:
+  package suite 319 pass / 2 skip / 0 fail, live Edge Function e2e 23/0, remote
+  MCP e2e 26/0, plus the schema families exercised by hand through real
+  PostgREST responses — documents and search, projects, audit entries and
+  runtime config.
 
 ---
 
