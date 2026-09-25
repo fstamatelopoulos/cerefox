@@ -9,7 +9,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Security
+
+- **The Data API grant list is derived from the catalogue instead of listed by
+  hand** (#284, schema 0.16.2). `schema.sql` named its tables in an `ARRAY` that
+  had to match the set of `cerefox_*` tables, and it had already drifted:
+  `cerefox_document_relations` was never added. Three things hid it — upgrades
+  are covered by migration 0014's inline grant, the self-hosted stack is covered
+  by `roles.sql`, and `ALTER DEFAULT PRIVILEGES` only affects tables created
+  *after* it runs — so the gap existed only on a **fresh cloud deploy**.
+
+  That mattered because **Supabase stops granting Data API access to new
+  `public` tables automatically on 2026-10-30**; after that date a missing grant
+  returns `42501` instead of being masked by the implicit one. Impact today was
+  nil (relations are dormant and their RPCs are `SECURITY DEFINER`), but the
+  first Data API path to relations would have failed on fresh installs only.
+
+  `anon` and `authenticated` still receive nothing, deliberately: every Cerefox
+  client authenticates with a service-role-equivalent key. Supabase's note
+  suggests granting all three roles; that would widen the surface for no caller.
+
+  **No action needed for existing deployments** — `cerefox server deploy` applies
+  migration 0032, and existing tables keep the grants they already have.
 
 ---
 
