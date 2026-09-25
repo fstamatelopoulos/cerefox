@@ -158,6 +158,22 @@ this surface. They are enforced by the Edge Functions only. See
 
 ## Endpoints
 
+**A machine-readable OpenAPI 3.1 document lives at
+[`docs/api/openapi.json`](../api/openapi.json).** If you are generating a client
+or a tool set, read that rather than this table: it carries the request and
+response *shapes*, the path parameters and the error model, which a prose table
+cannot. Point any OpenAPI tool at it.
+
+It is **generated** (`bun scripts/gen_openapi.ts`) from three sources that are
+each kept honest on their own: the route registrations, the summaries in the
+table below, and the zod schemas in `_shared/schemas/`. Those schemas are
+asserted against a running server by `api-schema-truth.test.ts`, so the spec
+describes what the API returns rather than what someone believed it returned.
+
+Coverage is stated in the document itself under `x-cerefox-coverage`. Endpoints
+with no modelled shape are listed there and get no response schema rather than
+an invented one — a spec that guesses is worse than one that admits a gap.
+
 Base URL is wherever `cerefox web` is listening (`http://127.0.0.1:8000` by
 default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 

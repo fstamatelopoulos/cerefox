@@ -33,3 +33,12 @@ export const SchemaVersionResponse = z.object({
   mismatch: z.boolean(),
 });
 export type SchemaVersionResponse = z.infer<typeof SchemaVersionResponse>;
+
+// ── Preferences (#270) ───────────────────────────────────────────────────────
+// Machine-local web UI settings, stored in a file in the user-state dir rather
+// than the database — which is why this route works even with no DB configured.
+
+export const PreferencesResponse = z.object({
+  theme: z.string(),
+});
+export type PreferencesResponse = z.infer<typeof PreferencesResponse>;

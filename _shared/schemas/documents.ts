@@ -90,3 +90,65 @@ export const VersionArchiveRequest = z.object({
   archived: z.boolean(),
 });
 export type VersionArchiveRequest = z.infer<typeof VersionArchiveRequest>;
+
+// ── Write-path response shapes (#270) ────────────────────────────────────────
+//
+// These were modelled from live `/api/v1` responses and are asserted against a
+// running server by `api-schema-truth.test.ts`, not inferred from the handlers.
+// They exist so the OpenAPI document can describe the write surface an embedder
+// actually uses; before this, every write endpoint was listed with no body.
+
+export const IngestRequest = z.object({
+  title: z.string(),
+  content: z.string(),
+  /** Omit to create; pass to update a specific document. */
+  document_id: z.string().uuid().optional(),
+  /** REQUIRED on a content update: the hash you read the document at. */
+  expected_content_hash: z.string().optional(),
+  /** Skips the concurrency check. Only when an external source of truth makes conflicts meaningless. */
+  last_write_wins: z.boolean().optional(),
+  update_if_exists: z.boolean().optional(),
+  project_name: z.string().optional(),
+  project_names: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  source: z.string().optional(),
+  author: z.string().optional(),
+  author_type: z.enum(["user", "agent"]).optional(),
+});
+export type IngestRequest = z.infer<typeof IngestRequest>;
+
+export const IngestResponse = z.object({
+  success: z.boolean(),
+  document_id: z.string(),
+  title: z.string(),
+  /** True when the content hash matched and nothing was written. */
+  skipped: z.boolean(),
+  /** True when an existing document was updated rather than created. */
+  updated: z.boolean(),
+});
+export type IngestResponse = z.infer<typeof IngestResponse>;
+
+export const DeleteResponse = z.object({
+  success: z.boolean(),
+  /** True when the document was already in the trash, so this was a no-op. */
+  already_deleted: z.boolean(),
+});
+export type DeleteResponse = z.infer<typeof DeleteResponse>;
+
+export const RestoreResponse = z.object({
+  success: z.boolean(),
+  restored: z.boolean(),
+});
+export type RestoreResponse = z.infer<typeof RestoreResponse>;
+
+export const PurgeResponse = z.object({
+  success: z.boolean(),
+  /** False when the document was restored before the purge landed (v1.14.1). */
+  purged: z.boolean(),
+});
+export type PurgeResponse = z.infer<typeof PurgeResponse>;
+
+export const ReviewStatusResponse = z.object({
+  status: z.enum(["approved", "pending_review"]),
+});
+export type ReviewStatusResponse = z.infer<typeof ReviewStatusResponse>;

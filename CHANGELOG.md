@@ -9,6 +9,41 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **An OpenAPI 3.1 document for `/api/v1`** (#270), at `docs/api/openapi.json`.
+  Callers that embed Cerefox rather than using MCP or the CLI could previously
+  only read a prose table of endpoint *purposes*: no request or response shapes,
+  no parameters, no error model. Anyone wiring the API to their own tools had to
+  read the route source. The document carries all of it, and any OpenAPI tool can
+  generate a client or a tool set from it.
+
+  **It is generated, not written** (`bun scripts/gen_openapi.ts`). Paths come
+  from the route registrations, summaries from the endpoint table in
+  `docs/guides/api.md`, and shapes from the zod schemas in `_shared/schemas/` via
+  zod 4's native JSON Schema conversion — so nothing is authored twice, and the
+  usual failure of a hand-written spec drifting from the code cannot happen.
+  A test fails when the committed file is stale, or when the route→schema mapping
+  names a route that no longer exists.
+
+  **The shapes are verified against a running server**, which matters because the
+  zod schemas are consumed by the frontend and by tests and are *not* enforced by
+  the route handlers — they described intent, and intent can drift silently.
+  `api-schema-truth.test.ts` parses real responses with them and found two wrong
+  shapes the first time it ran. A spec that documents a field the server stopped
+  sending is worse than no spec: it looks authoritative and produces client code
+  that compiles and fails at runtime.
+
+  Coverage is stated in the document under `x-cerefox-coverage`: 30 of 39 routes
+  with a response schema, 2 that legitimately do not return JSON (a markdown
+  download and a CSV export) declared with their media type, and 7 listed as
+  unmodelled. Those 7 get **no** response schema rather than a guessed one.
+
+  Also added along the way, modelled from live responses: zod schemas for the
+  write surface (`IngestRequest`/`IngestResponse`, delete, restore, purge,
+  review-status) and for `GET /config`, which had none. The write endpoints an
+  embedder most needs were the least described.
+
 ### Security
 
 - **The Data API grant list is derived from the catalogue instead of listed by
