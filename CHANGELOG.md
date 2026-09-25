@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.15.0] -- 2026-09-25
+
 A dependency-compliance release: every outstanding upgrade taken or explicitly
 declined, the supported runtime moved to the current LTS, and four CI gates
 added so the same classes of drift fail loudly next time. One breaking change,
