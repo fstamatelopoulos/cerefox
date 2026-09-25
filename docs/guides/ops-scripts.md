@@ -230,6 +230,55 @@ The backup directory (`./backup-data/` by default) is gitignored. Back up the ba
 
 ---
 
+## cerefox_export.ts — Export every document as markdown files
+
+A one-way dump for local browsing, grepping and offline copies. **Not** a restore
+path: use `backup_create.ts` / `backup_restore.ts` for that.
+
+```bash
+bun scripts/cerefox_export.ts <target-folder>
+bun scripts/cerefox_export.ts <target-folder> --project "My Project"
+bun scripts/cerefox_export.ts <target-folder> --force          # allow a non-empty target
+bun scripts/cerefox_export.ts <target-folder> --no-metadata    # content only
+```
+
+Layout — one folder per project, documents with no project at the root:
+
+```
+<target>/<project-slug>/<title-slug>.md              the reconstructed markdown
+<target>/<project-slug>/<title-slug>-metadata.md     the metadata sidecar
+```
+
+A document in several projects is written **once per project** (copies), so each
+folder stands alone.
+
+### The metadata sidecar
+
+Each document gets a `-metadata.md` beside it, so an exported file is
+self-describing rather than anonymous prose. It carries the document id, source,
+**every** project membership (not just the folder that copy is in), created and
+updated timestamps, character and chunk counts, the metadata keys as a table, and
+the **`content_hash`** — the concurrency token, so an exported copy can be edited
+and re-ingested with `expected_content_hash`.
+
+`review_status` appears only when the store has the review workflow enabled; when
+it is off the field is absent from every other surface, and an export is not the
+place to resurrect it.
+
+Markdown rather than JSON so the sidecars are readable in the same editor as the
+documents. Pass `--no-metadata` for the older content-only behaviour.
+
+Two naming details worth knowing:
+
+- Title collisions get a numeric suffix (`doc-2.md`), and the sidecar follows the
+  file it describes (`doc-2-metadata.md`).
+- A document whose own title ends in "metadata" produces a content file named
+  exactly like another document's sidecar (`foo-metadata.md` is both the export
+  of "Foo Metadata" and the sidecar of "Foo"). Sidecar names share the same
+  uniqueness domain as content files, so whichever is written second gets the
+  numeric suffix and neither can overwrite the other. A real store contains such
+  a pair.
+
 ## sync_docs.ts — Sync project documentation into Cerefox
 
 Ingests `README.md`, `AGENT_GUIDE.md`, `AGENT_QUICK_REFERENCE.md`, and every Markdown file under `docs/` into your Cerefox knowledge base, updating existing documents in-place. Run this any time after editing documentation so AI agents always have access to the current state of the project.
