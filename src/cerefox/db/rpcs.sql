@@ -3091,6 +3091,11 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.16.2 (#26 follow-up): the Data API grant list is DERIVED from pg_class
+    -- rather than a hand-written array that has to match the set of tables. The
+    -- array had drifted (cerefox_document_relations), which only a FRESH cloud
+    -- deploy would have surfaced, and only after Supabase stops granting new
+    -- public tables automatically on 2026-10-30. Migration 0032.
     -- 0.16.1 (v1.13.1): cerefox_ingest_document no longer consults
     -- `review_workflow_enabled` — review_status follows author_type whatever
     -- the flag says; the flag governs visibility/enforcement only. RPC-only,
@@ -3124,7 +3129,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.16.1'::TEXT;
+    SELECT '0.16.2'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

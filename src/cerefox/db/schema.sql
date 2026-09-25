@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.16.1
+-- @version: 0.16.2
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -482,21 +482,29 @@ ALTER TABLE cerefox_document_relations    ENABLE ROW LEVEL SECURITY;
 -- Guarded: on the local (World B) stack this file deploys BEFORE roles.sql
 -- creates service_role, so missing-role must be a no-op (roles.sql re-runs the
 -- grants implicitly via its own PostgREST wiring; the next deploy picks them up).
+-- DERIVED from the catalogue, never listed. The list used to be a hand-written
+-- ARRAY and it drifted: cerefox_document_relations was added above and never
+-- added to the array, so a FRESH cloud deploy left that table with no Data API
+-- grant. Upgrades hid it (migration 0014 grants it inline) and the self-hosted
+-- stack hid it (roles.sql grants broadly), which is why it survived unnoticed.
+-- ALTER DEFAULT PRIVILEGES below cannot cover it either — that only affects
+-- tables created AFTER it runs. See migration 0032.
 DO $$
 DECLARE t TEXT;
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
         GRANT USAGE ON SCHEMA public TO service_role;
-        FOREACH t IN ARRAY ARRAY[
-            'cerefox_projects', 'cerefox_documents', 'cerefox_document_versions',
-            'cerefox_audit_log', 'cerefox_document_projects', 'cerefox_chunks',
-            'cerefox_migrations', 'cerefox_config', 'cerefox_usage_log'
-        ] LOOP
-            IF to_regclass('public.' || t) IS NOT NULL THEN
-                EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO service_role', t);
-            END IF;
+        FOR t IN
+            SELECT c.relname
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relkind = 'r'
+              AND c.relname LIKE 'cerefox\_%'
+        LOOP
+            EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO service_role', t);
         END LOOP;
-        -- Future cerefox_* tables created by the deploying role keep working.
+        -- Tables created LATER by the deploying role inherit the same grants.
         ALTER DEFAULT PRIVILEGES IN SCHEMA public
             GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO service_role;
     END IF;
