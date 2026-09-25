@@ -423,8 +423,14 @@ const UNRELEASED_PLACEHOLDER = "Open roadmap.";
  * This has happened three times (beta.3, beta.4, beta.6). The empty-[Unreleased]
  * gate catches the symptom; this catches the cause, and says where the text went.
  *
- * Only the most recent released section is checked: that is where a promoted
- * anchor lives, so it is where the misfiling always lands.
+ * EVERY released section is checked, not just the most recent one. The earlier
+ * version checked only the newest, reasoning that a promoted anchor lives there
+ * so that is where misfiling lands. That assumption was wrong: an entry for
+ * 1.15.0 was anchored on text describing `docs/guides/api.md`, which had
+ * shipped in **v1.14.5**, and landed two sections back where nothing looked at
+ * it. One `git show` of the newest tag is enough to catch all of them, because
+ * that file already contains the whole released history — so the comparison is
+ * "everything from the first released heading down", not section by section.
  */
 function checkReleasedSectionUnchanged(changelogText: string, acceptEditOf?: string): void {
   const m = changelogText.match(/^## \[(v[^\]]+)\][^\n]*$/m);
@@ -434,15 +440,15 @@ function checkReleasedSectionUnchanged(changelogText: string, acceptEditOf?: str
   const atTag = run("git", ["show", `${tag}:CHANGELOG.md`]);
   if (atTag.status !== 0) return;       // tag or file absent — nothing to compare
 
-  const sectionOf = (text: string): string | null => {
+  // Everything from the newest released heading down — i.e. the entire
+  // released history, which the tagged file already contains in full.
+  const releasedPortion = (text: string): string | null => {
     const start = text.indexOf(`## [${tag}]`);
-    if (start === -1) return null;
-    const next = text.indexOf("\n## [", start + 5);
-    return next === -1 ? text.slice(start) : text.slice(start, next);
+    return start === -1 ? null : text.slice(start);
   };
 
-  const released = sectionOf(atTag.stdout);
-  const current = sectionOf(changelogText);
+  const released = releasedPortion(atTag.stdout);
+  const current = releasedPortion(changelogText);
   if (released === null || current === null) return;
   if (released.trim() === current.trim()) return;
 
@@ -461,9 +467,10 @@ function checkReleasedSectionUnchanged(changelogText: string, acceptEditOf?: str
   die(
     `The ${tag} section of CHANGELOG.md has changed since that release was cut.\n` +
       `  A released section is history and should never move. This almost always means\n` +
-      `  notes meant for the NEXT release were inserted into the previous one — check\n` +
-      `  whether the ${tag} section contains entries that belong under [Unreleased],\n` +
-      `  and move them. Compare with:  git diff ${tag} -- CHANGELOG.md`,
+      `  notes meant for the NEXT release were inserted into an older one — an insert\n` +
+      `  anchored on text that has already shipped lands wherever that text now lives.\n` +
+      `  Check EVERY released section, not just ${tag}: the anchor may be several\n` +
+      `  releases back. Compare with:  git diff ${tag} -- CHANGELOG.md`,
   );
 }
 
