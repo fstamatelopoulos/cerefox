@@ -9,6 +9,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **`cerefox_export.ts` writes a metadata sidecar** (#286). Alongside each
+  `<title>.md` it now writes `<title>-metadata.md`: document id, source, every
+  project membership (not just the folder that copy landed in), created/updated
+  timestamps, character and chunk counts, the metadata keys as a table, and the
+  `content_hash` — so an exported copy can be edited and re-ingested with
+  `expected_content_hash`. Before this an export kept the prose and dropped every
+  fact *about* a document, which made it good for reading and not much else.
+  Markdown rather than JSON, because a sidecar you need a JSON viewer for defeats
+  the point of exporting to markdown. `--no-metadata` restores the old
+  content-only behaviour.
+
+  `review_status` appears only when the store has the review workflow on. With it
+  off the field is absent from every other surface, and an export should not be
+  the one place it reappears.
+
+  Two things found by running it against a real store rather than reasoning about
+  it: `cerefox_get_document` returns neither `updated_at` nor `review_status`, so
+  the first version rendered both rows blank (the listing query is widened
+  instead, at no extra cost); and a document whose own title ends in "metadata"
+  produces a content file named exactly like another document's sidecar. Sidecar
+  names now share the uniqueness domain with content files, so neither can
+  overwrite the other. The store contains such a document.
+
+- **`cerefox_export.ts` is documented** in `docs/guides/ops-scripts.md`, which
+  claimed to cover all of `scripts/` and had never mentioned it.
+
 ### Security
 
 - **The Data API grant list is derived from the catalogue instead of listed by
