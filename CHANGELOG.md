@@ -9,7 +9,90 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+A dependency-compliance release: every outstanding upgrade taken or explicitly
+declined, the supported runtime moved to the current LTS, and four CI gates
+added so the same classes of drift fail loudly next time. One breaking change,
+below. The three `1.15.0-beta.*` sections carry the development detail; this is
+the consolidated story for anyone coming from v1.14.5.
+
+### ⚠ BREAKING: the minimum Node version is now 24
+
+**Cerefox now requires Node >= 24** (or Bun >= 1.0), up from Node >= 20.
+
+What that means in practice, stated precisely because `engines` alone enforces
+little: the **one-line installer refuses** on Node 20 or 22 and names the fix. A
+direct `npm install -g @cerefox/memory` **succeeds with an `EBADENGINE`
+warning** — npm defaults to `engine-strict=false`, so `engines` is advisory —
+and `cerefox doctor` then reports the runtime as an **error**, which is the
+check that actually stops you. Upgrade Node, or install Bun.
+
+Why: Node 20 reached end of life in April 2026 and 24 is the current LTS.
+`commander` 15 needs >= 22.12, and choosing 24 rather than that bare minimum
+means one platform change for users instead of two inside a year. Deferred seven
+times (#154) precisely because dropping a platform is not a dependency bullet.
+
+**Unaffected:** Bun users, anyone already on Node 24+, and **Cerefox Local**,
+whose image is built on `oven/bun:1` and contains no Node at all.
+
+### Security
+
+- **Three `adm-zip` advisories fixed rather than accepted** (GHSA-xcpc-8h2w-3j85,
+  GHSA-vwc7-r8mq-g2x9, GHSA-7q85-xj36-vmfc). Two had been accepted on the
+  grounds that no fixed release existed; `adm-zip@0.6.1` shipped, so an override
+  clears all three and the accepted ids came **out** of the audit gate rather
+  than a third going in. `bun audit` drops from five findings to two, both
+  `sharp`, both still accepted for the documented reason.
+
+### Changed
+
+- **`commander` 14 → 15** — the upgrade the Node baseline existed to unblock.
+- **`zod` 3 → 4** — the only other runtime dependency here. Every `/api/v1`
+  response shape is a zod schema consumed by the CLI, web server and MCP
+  handlers, so it was validated against a live store rather than on a typecheck.
+  No source changes were needed.
+- **TypeScript normalised on 6.x** across the workspace (it had drifted to
+  `^6.0.3` / `^5.6.0` / `~5.9.3` in three manifests, so `typecheck` compiled the
+  three projects with three different compilers), and the frontend `tsconfig`
+  drops `baseUrl`, which TypeScript 6 deprecation-errors on and 7 removes.
+- **`eslint` 9 → 10**, **`@types/diff` 7 → 8**, and `@types/node` aligned to
+  `^24` to match the new runtime floor.
+- **CI actions:** `actions/checkout` 5 → 7, `gitleaks-action` 2 → 3 (a Node 20 →
+  24 runtime migration; GitHub removed Node 20 from hosted runners on
+  2026-09-16, so v2 was living on borrowed time), plus `docker/build-push-action`
+  7.4.0, `docker/setup-buildx-action` 4.4.1 and `docker/setup-qemu-action`
+  4.4.0. Every pinned SHA was verified against its upstream tag.
+- **TypeScript 7 is declined, not pending** (#161). `tsc` itself passes with the
+  `tsconfig` migration above, but `typescript-eslint` refuses to load against TS
+  7.0 and upstream targets >= 7.1, so linting would stop working. Revisit when
+  typescript-eslint ships support (their #10940). `@types/node` 26 is likewise
+  declined (#163): types must track the supported floor, not the newest
+  release, or `tsc` accepts code that crashes on a platform we support.
+
+### Added
+
+- **CI lints the frontend.** `bun run lint` existed and nothing ran it, so
+  eslint — the frontend's only static analysis — was a script nobody executed.
+  That gap is what made the TypeScript 7 bump look safe.
+- **The Node floor is pinned in one place and tested.** `checkRuntime()` and
+  `engines.node` stated it separately and drifted immediately: the baseline went
+  to 24 while `cerefox doctor` still passed anything `>= 20`, so a Node 22 user
+  got a green runtime line. One `MIN_NODE_MAJOR` now, and a test that fails if
+  it, `engines.node` and the `install.sh` literal disagree.
+
+### Fixed
+
+- **Live test suites failed instead of skipping when the store was unreachable**
+  (#275). With the staging project paused, `bun test` returned 22 failures, all
+  connection errors rather than defects. Four suites gated on *configuration
+  presence* — a paused project still has every credential — and five carried
+  private copies of the reachability probe, the duplication that once let a
+  suite report success while running nothing for eleven releases. All of them
+  use the one shared probe now, and a guard fails any live suite that decides to
+  run without asking whether the backend is up.
+- **Nine documents still said Node 20 was supported** after the baseline moved,
+  including the quickstart contradicting its own installer section thirty lines
+  later, and the remediation in `cerefox server deploy` telling users to install
+  a Node the CLI then refuses.
 
 ---
 
@@ -199,16 +282,6 @@ Nothing changes for Bun users, for Cerefox Local (the image moves to
 
 ### Fixed
 
-- **Nine documents still told users Node 20 was supported** after the baseline
-  moved: the quickstart's prerequisites (contradicting its own installer
-  section thirty lines later), `setup-supabase.md`, both `Path A-Local` blocks
-  in `connect-agents.md`, `CONTRIBUTING.md`, `_shared/README.md`,
-  `docker/local/README.md`, `solution-design.md`, `CLAUDE.md`, and the
-  remediation text in `cerefox server deploy` that told users to install Node
-  20 when the CLI was about to refuse it. Found by a review of the baseline
-  change; the original sweep used a hand-picked file list and a narrow pattern,
-  which is the same drift-prone shape this project keeps writing guards
-  against.
 - **`docs/guides/api.md` was missing five registered endpoints** — both
   `/preferences` routes, both `/docs` routes, and
   `POST /documents/{id}/versions/{version_id}/archive`. The guide is the only
