@@ -287,11 +287,14 @@ export function SearchControls({
               <TextInput
                 placeholder="Value"
                 value={pair.value}
-                onChange={(e) =>
+                onChange={(e) => {
+                  // Captured before the updater runs — `e.currentTarget` is null
+                  // by then, which blanked the whole app (#289).
+                  const next = e.currentTarget.value;
                   setFilterPairs((prev) =>
-                    prev.map((p, i) => (i === idx ? { ...p, value: e.currentTarget.value } : p)),
-                  )
-                }
+                    prev.map((p, i) => (i === idx ? { ...p, value: next } : p)),
+                  );
+                }}
                 size="xs"
                 w={190}
               />

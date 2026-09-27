@@ -290,22 +290,29 @@ export function IngestPage() {
                     list="cerefox-meta-keys"
                     placeholder="key"
                     value={p.key}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      // Read the value HERE, not inside the updater. React nulls
+                      // `currentTarget` as soon as the handler returns, and a
+                      // functional updater runs later, in the render phase — so
+                      // reading it in there threw DURING RENDER and unmounted the
+                      // whole app (#289).
+                      const next = e.currentTarget.value;
                       setMetaPairs((m) =>
-                        m.map((x, idx) => (idx === i ? { ...x, key: e.currentTarget.value } : x)),
-                      )
-                    }
+                        m.map((x, idx) => (idx === i ? { ...x, key: next } : x)),
+                      );
+                    }}
                   />
                   <input
                     className={styles.input}
                     style={{ flex: 1 }}
                     placeholder="value"
                     value={p.value}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const next = e.currentTarget.value;
                       setMetaPairs((m) =>
-                        m.map((x, idx) => (idx === i ? { ...x, value: e.currentTarget.value } : x)),
-                      )
-                    }
+                        m.map((x, idx) => (idx === i ? { ...x, value: next } : x)),
+                      );
+                    }}
                   />
                   <button
                     type="button"
