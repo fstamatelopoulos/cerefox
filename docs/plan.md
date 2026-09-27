@@ -26,329 +26,65 @@
 > **Approach**: iterative and agile — each iteration delivers working functionality.
 
 ---
+
 ## Current Focus
 
-**2026-09-08 — v1.14.4 IN PROGRESS** (branch `fix/metadata-search-contract`;
-#268). Post-release verification of 1.14.3 on staging: every suite green
-(`_shared` 1143, package 313/2/0, live EF 23, remote MCP 26, Playwright 23/23)
-and the contract probed live — four modes × six budgets × hostile inputs, on
-the local MCP, the remote MCP and the search Edge Function, with a constructed
-fixture for rule 4 because staging's corpus ranks its smallest document first.
-**1.14.3 is sound.** What the seven rounds never swept is the *metadata-search*
-pair, which answers the same question and had none of the guarantees:
+**2026-09-27 — v1.15.1 READY TO CUT.** `main` is green and clean: no open PRs,
+no feature branches, `[Unreleased]` populated with four entries. Every suite run
+against staging today — `_shared` 1169/0, frontend unit 31/0, package suite
+321 pass / 2 skip / 0 fail, Playwright 24 passed / 1 skipped (the Empty-trash
+test, which needs `CEREFOX_E2E_EMPTY_TRASH=1`).
 
-- the Edge Function returned a bare `[]` when the budget stopped at the first
-  document, and silently returned 3 of 5 on its **default** path;
-- the MCP tool's degraded branch fires only at zero rows, so a partial cut
-  (1 returned, 5 matched) was reported as a complete answer;
-- `max_bytes` was unsanitised on the Edge Function — #267's `NaN` →
-  `p_max_bytes NULL` → *no limit* hole, returning 298,602 bytes against a
-  200,000 ceiling, in the file whose `limit` **was** sanitised.
+**Why 1.15.1 and not 1.16.0.** Two of the four entries are new *capability*, but
+neither ships in the npm package or the container, so no user gains a feature:
 
-Fixed by making the Edge Function's array *complete* (every match listed,
-`content_omitted: true` where content was dropped) rather than by adding an
-envelope, which would break Custom GPTs configured against the documented
-shape. Plus a **derived** guard test over every surface that reads a budget
-from caller input, proven to fire by reverting the real fix.
+- `docs/api/openapi.json` (#270) is repo-only — `bundle_package_docs.ts` copies a
+  curated `docs/guides/*.md` subset and nothing from `docs/api/`.
+- `scripts/cerefox_export.ts` (#286) is a contributor script; `scripts/` is not in
+  the package's `files` list.
 
-The `/code-review` of PR #269 then found four more instances of the same two
-patterns, including one the fix itself introduced: an explicit
-`max_bytes: null` became a **one-byte** budget (`Number(null)` is 0, and the
-clamp then honoured it), `applyByteBudget` still stopped at the first oversized
-row so `cerefox-search` violated the rule the CLI had just adopted, the CLI's
-own `metadata search` still printed "No documents match", and a failed probe
-fell through to the false empty it exists to prevent. The budget arithmetic now
-lives in ONE `resolveByteBudget()` — it had four hand-written copies and each
-was wrong differently. `docs/guides/response-limits.md`, stale since
-**v0.10.2**, no longer claims the CLI never truncates.
+What the shipped artifact gains is two fixes — the web-UI blank-screen crash
+(#289) and the fresh-cloud-deploy grant gap (#284, schema 0.16.2) — plus a
+refreshed `ops-scripts.md`, which *is* bundled. That is a patch.
 
-**Carry this**: the Edge Functions are in no `tsconfig` (they use `jsr:`
-specifiers), so a missing import there is invisible to `bun run typecheck` —
-this release shipped one for a deploy cycle, caught only by deploying to
-staging and probing. Deploy-and-probe is not optional for an EF change. Detail:
-[iteration 46](plans/iteration-46-spa-serving-and-tab-titles.md).
+**Release-gate state** (checked, not assumed):
 
-**2026-09-08 — v1.14.3 SHIPPED** (PRs #256, #258, #260, #262, #264; cut
-`d4d53c3`, npm 1.14.3 published, CI green). **Verified on staging 2026-09-08**
-after the maintainer's upgrade — all suites green and the contract probed live;
-see the v1.14.4 block above for what that verification then found *next door*.
-One subject, seven review rounds: **what
-`cerefox_search` returns and how much of it**. It began as a false empty (an
-agent was told the store had nothing when the top hit simply exceeded
-`max_bytes`, #254, shipped in 1.14.2) and each round found the next layer:
+- `schema_version` **0.16.2** in both literals (`schema.sql` `-- @version:` and
+  `cerefox_schema_version()`); `cut_release.ts` gates the pair.
+- `minSchema` stays **0.16.0**. The derived grants only affect a *fresh* cloud
+  deploy, so a client on 1.15.1 against a 0.16.0 server behaves correctly — old,
+  not wrong, which is the distinction `minSchema` exists to draw.
+- **No Edge Function source changed** since v1.15.0 (`git diff --name-only
+  v1.15.0..main -- supabase/functions` is empty), so the GPT Actions OpenAPI block
+  needs no sync. `cut_release.ts` bumps `EF_VERSION` unconditionally at a stable
+  cut regardless.
 
-- **#257** the degraded reply leaked chunk content in `hybrid`/`fts` (83 KB
-  against a 3 KB budget) because only `full_content` was stripped;
-- **#259** those same modes had been returning **titles with empty bodies**
-  over MCP since the handlers moved into `_shared/` — the renderer read
-  `full_content`, which the chunk RPCs do not return;
-- **#261** chunk results were indistinguishable from one another (no section,
-  no index) once the bodies started printing;
-- **#263** the truncation footer was appended over the budget it reported on;
-- **#265** the ROOT: the budget was measured in `JSON.stringify` bytes while
-  the tool returns rendered markdown, so nothing was ever truly bounded, and
-  the below-confidence preamble was counted by nothing at all;
-- **#266** a reply could hold results back **silently**, an oversized top hit
-  suppressed every smaller result behind it, and `max_bytes` was unsanitised
-  (`NaN` bypassed every check);
-- **#267** the same holes in `cerefox_metadata_search`, which shares the
-  transport.
+**What #289 cost, and the lesson worth keeping.** A one-character edit in a
+metadata input blanked the entire web app, and the report read as "the web app is
+broken". Two causes, and the second is the one that generalises:
 
-The durable outcome is `_shared/__tests__/search-budget-invariant.test.ts`:
-the property, over budgets × row sizes × row counts × **row shapes** (517
-cases). The example-based tests passed through every one of the bugs above.
-The contract is written down in `docs/guides/response-limits.md`. Also here:
-the 2026-09-08 dependency advisories (hono → ^4.13.7 by override, one of the
-three is in `parseBody()` which the web server reaches; js-yaml → ^4.3.2; two
-accepted in the audit doc). Staging runs the fixed Edge Function; **1.14.3
-needs `cerefox server deploy --functions-only`.** Detail:
-[iteration 46](plans/iteration-46-spa-serving-and-tab-titles.md).
+1. Three `onChange` handlers read `e.currentTarget.value` *inside* a functional
+   `setState` updater. React nulls `currentTarget` when the handler returns and
+   the updater runs later, in the render phase — so the read threw **during
+   render**. It was on two independent screens (Ingest → Metadata, Search →
+   Filters), neither of which the report named; the second was found by scanning
+   for the pattern, not by following the repro.
+2. The frontend had **no error boundary anywhere**. Any render throw therefore
+   emptied `#root`: white page, no message, nothing to click, and the browser
+   console as the only diagnosis. The blast radius was out of all proportion to
+   the defect, and it applied to every future render bug equally.
 
-**2026-09-08 — v1.14.2 SHIPPED** (cut `f18ccb0`; npm 1.14.2, ~8 min of CDN lag
-on the tarball after a successful publish). (#252 + #253 merged as PR #255; #254 on
-`fix/search-budget-false-negative`). Three items. (a) The
-stale-SPA bug found on production after `self-update`: `index.html` is now read
-per request (mtime-cached), a missing `/app/assets/*` is a 404 instead of the
-shell with a `200 text/html`, `self-update` warns when a daemon is still on the
-previous build, and `web status` + `doctor` compare the running server's
-version with the client's. (b) Per-page browser tab titles. Frontend + web server only for (a) and (b). (c) **#254**: `cerefox_search` reported "No results found." when the top hit
-exceeded `max_bytes` — the false negative an agent acts on irreversibly. Found
-in a real agent transcript, reproduced on staging, fixed by degrading to
-headers instead of vanishing (MCP, the search EF, and the metadata-search RPC's
-equivalent). **This adds an Edge Function change**, so 1.14.2 needs
-`cerefox server deploy --functions-only` as well as `self-update`.
+Both are fixed, and the class is guarded twice — a browser-free source scan in CI
+(`frontend/src/lib/no-event-in-updater.test.ts`, asserted to fire on the verbatim
+handler that shipped) and a Playwright spec that types into all three fields and
+asserts `#root` still has children. The boundary was **proven** to catch by
+injecting a deliberate throw, not assumed.
 
-**2026-09-05 — v1.14.1 SHIPPED** (PR #250, cut `6c879fe`; staging verified
-after the maintainer's deploy: `_shared` 610, package suite 307/2/0, live EF +
-remote MCP 48/0, Playwright 22/22 with the trash test opted in; Local
-upgraded and Empty trash run by the maintainer on a real 569-document trash,
-worked; production pending the maintainer's `self-update`). Combined
-1.13.2 + 1.14.0 + 1.14.1 announcement posted to Discord. The Trash page
-states the exact total (`X-Total-Count` on the listing), drops the row-limit
-selector, and Empty trash says the real number. Found on Cerefox Local right
-after 1.14.0: 569 in the trash, the page showed 50. Opt-in auto-purge
-of trash older than N days is **backlogged** (#251): trigger on a document
-delete when built; options table in the iteration doc.
-
-**2026-09-05 — v1.14.0 SHIPPED** (PR #248, cut `8e91cc4`; verified on staging
-after the maintainer's deploy: package suite 307/2/0, live EF + remote MCP
-48/0, Playwright 22/22 with the trash test opted in). What it was, as planned
-(#247):
-"Empty trash" in the web UI. Decision (maintainer): **no bulk-purge endpoint**;
-the browser loops over the existing per-document purge, one audited call each,
-behind a confirmation that states the count, with a progress bar and Stop.
-Built: `frontend/src/lib/emptyTrash.ts` (pure loop: re-list past the 500 cap,
-never retry an id, stop after the purge in flight, progress snapshots),
-`EmptyTrashModal`, the button on `TrashPage`, `bun test` unit suite
-(`frontend/tests/unit/`, new `test:unit` script), two Playwright tests. Docs:
-api.md, access-paths.md, solution-design.md, e2e matrix, CLAUDE.md test table,
-CHANGELOG. **#154** (Node baseline) moves to the minor after this one, for the
-usual reason. Detail: [iteration 45](plans/iteration-45-empty-trash.md).
-
-**2026-09-05 — v1.13.2 SHIPPED** (PR #245, squash `ceb4a0b`, cut `dbd1def`;
-verified on staging: package suite 306/2/0, live EF + remote MCP 46/0,
-Playwright 20/20). **The review fixes missed the cut**: the squash took the
-branch's first commit only, the second (`/code-review` follow-ups) landed on
-the branch after the merge and was orphaned when the branch was deleted.
-Recovered by cherry-pick onto `fix/identity-review-followups` as its own PR
-(#246, merged 2026-09-05; ships in 1.14.0). Root cause: a `/code-review`
-run checked out the PR's remote ref in this worktree and left HEAD detached;
-the fix commit landed on the detached HEAD, and a quiet push of the unmoved
-branch pushed nothing. Lesson for the hand-off: `git status` must show a
-branch, not a detached HEAD, before every commit, and the push output must
-be read; after "merged", check `git log origin/main` contains the branch's
-last commit before
-deleting anything. What shipped in 1.13.2 (#244): the caller-identity name is uniform on
-the last two surfaces. The CLI takes `--author <name>` on every command, reads
-included (`--requestor` a hidden alias; `audit list` filters with
-`--by-author`), through one helper in `cli/util/identity-flags.ts`. The eight
-primitive Edge Functions read `author` (then `requestor`) via the shared
-`callerIdentity()`; `cerefox-get-audit-log` filters with `by_author`. GPT
-Actions OpenAPI block → 4.0.0. No schema change; EF redeploy is part of the
-upgrade. Tests: CLI help surface (smoke), parity test, EF live suite gains the
-`by_author` negative case. Next: staging EF deploy + live EF suite + package
-suite, PR, review, maintainer cuts 1.13.2. Detail:
-[iteration 44](plans/iteration-44-review-workflow-toggle.md) (v1.13.2 block).
-
-**2026-09-04 — v1.13.1 SHIPPED** (PR #243, squash `a92c151`; npm + ghcr
-published; **verified on staging**: client 1.13.1, schema 0.16.1, EF v1.13.1,
-package suite 303 pass / 2 skip / 0 fail with the flag ON and OFF, Playwright
-20/20, remote-MCP live suite 26/26 incl. the `by_author` negative case; flag
-restored to `true`, no fixtures left). Two low-risk fixes. (a) The flag was
-meant to hide/show the review workflow, not change what a write stores;
-v1.13.0's RPC stored `approved` for everyone while off. Now
-`cerefox_ingest_document` decides from `author_type` alone and the flag is
-presentation-only. Schema 0.16.0 → **0.16.1**, RPC-only, no migration,
-`minSchema` unchanged. (b) One caller-identity name on every MCP tool:
-`author` (reads and writes), with `requestor` kept as a silent alias; the
-audit-log filter formerly called `author` is now `by_author` (the one real
-behaviour change, called out in the CHANGELOG). Found when a new agent read
-the schemas literally and concluded the partial-edit tools had no author.
-`cerefox-mcp` enforcement takes either name. CLI flags and primitive-EF
-bodies unchanged. **Deployed everywhere 2026-09-05**: production
-(`cerefox server deploy` by the maintainer; `doctor` all green, schema 0.16.1,
-EF v1.13.1), Cerefox Local (`cerefox-local upgrade`, green), staging. One
-combined 1.13.0 + 1.13.1 announcement posted to Discord. A post-cut test-only
-commit (`65b28a7`) gave the review-workflow suite's hooks the `liveTest`
-budget: its afterAll tripped bun's 5 s hook default under a full parallel
-run. Detail: [iteration 44](plans/iteration-44-review-workflow-toggle.md)
-(v1.13.1 follow-up block).
-
-**2026-09-04 — v1.13.0 SHIPPED** (PR #242; deployed and verified on staging,
-production and Cerefox Local). The review workflow
-becomes optional: a store-level `review_workflow_enabled` flag — **false on a
-fresh install, true on an upgraded store** (migration 0031) — decided ONCE in
-`cerefox_ingest_document`, with the six client-side copies of the rule
-removed. With it off, `review_status` is absent from every surface (API, MCP,
-CLI, Edge Function, web UI); the search filter is a 400 and the review-status
-endpoint a 404; stored rows are never touched. Also closes #240 (filter moved
-into the search RPCs), #239 (`config list` derives from `CONFIG_CATALOG`) and
-#235 (`liveTest` 60 s budget + guard). Schema **0.16.0**, **`minSchema` raised
-to 0.16.0** (redeploy required). Staging: package suite 303/0, Playwright
-20/20 in both flag states, EF suite 10/10. Detail:
-[iteration 44](plans/iteration-44-review-workflow-toggle.md); spec:
-[`specs/review-workflow-toggle.md`](specs/review-workflow-toggle.md).
-
-Post-release: `doctor` prints `review workflow ON` on staging and production
-(upgrade seed); the maintainer flipped it off on Cerefox Local only, which is
-what surfaced the v1.13.1 correction above. **#154** (Node baseline) slips to
-the next minor — third move, same reasoning.
-
-**2026-09-03 — v1.12.2 SHIPPED** (iteration 43, #237: the false container
-warning). Iterations 40–43 are closed; see below and
-[history](plans/history.md).
-
-**2026-09-02 — v1.11.0 SHIPPED and verified on ALL THREE instances**
-(staging, production, Cerefox Local). Iteration 40 delivered optional
-`author`/`requestor`/`author_type` on `/api/v1` (#226), the `doctor` config-dir
-misreport (#225), the repo-root compose bind (#227), and #228 — `POST
-/documents/{id}/upload`, broken since v0.11.0 and found only because the same
-work revealed the web-integration suite had been skipping since v0.9.0. No
-schema change. #225–#228 closed by PR #231. Detail:
-[iteration 40](plans/iteration-40-api-attribution.md).
-
-**Live verification** (2026-09-02): production `doctor` all-green on EF v1.11.0;
-attributed reads confirmed logging `access_path=api` on the shared Cerefox Local
-instance (the bot harness's own backend); MCP read path unaffected. The
-production EF deploy first failed on an upstream registry race — JSR published
-`supabase-js@2.113.0` at 06:03:13Z, npm published its `auth-js` dependency at
-06:05:01Z, and the deploy landed in that 108-second window. Staging had deployed
-before 06:03 and resolved 2.112.4, which is why the same command worked there.
-Retrying after the window closed succeeded. **Pinning the `jsr:@supabase/
-supabase-js@2` specifier was considered and REJECTED** (2026-09-02): the failure
-is rare, loud, leaves the previous functions live, and self-heals on retry, so a
-permanent manual-bump burden across 9 files is the worse trade. What it does
-justify is a readable error message (see iteration 41).
-
-**2026-09-03 — v1.12.0 SHIPPED then IMMEDIATELY HOTFIXED. Iteration 42
-(v1.12.1) fixes a release-day break.** v1.12.0's #229 auth gate made Cerefox
-Local **completely inaccessible** — every request 401, web UI included —
-because Docker's port publishing rewrites the source address, so the loopback
-exemption never matched. Found live on the maintainer's instance by a demo
-agent, not by the suite. Detail:
-[iteration 42](plans/iteration-42-container-loopback.md).
-
-**The design correction, which matters beyond the bug**: inside a
-bridge-networked container the server CANNOT distinguish a host-loopback caller
-from a remote one (Docker NATs both to the same address), so the loopback-exempt
-middle ground is not implementable there. The container gate is now
-all-or-nothing, decided on the HOST from the publish address. Guarded by
-`docker/local/smoke-auth.sh`, which builds the real image and was verified to
-fail on the v1.12.0 behaviour.
-
-**Lesson**: a feature that depends on a property of the transport must be tested
-in every packaging that changes the transport. 17 unit tests, 8 HTTP-boundary
-tests and a real LAN verification all passed — every one of them against
-`cerefox web` running natively.
-
-**2026-09-02 — Iteration 41 CLOSED (v1.12.0).** Authentication for
-`/api/v1` (#229, design-first), the ingest routes' HTTP-status inconsistency
-(#232), live suites skipping in a full `bun test` (#230), and the deploy-error
-message above. Detail: [iteration 41](plans/iteration-41-api-auth.md).
-
-**Release lineage decided 2026-09-02**: v1.12.0 is this batch; **#154**
-(commander 15, Node ≥ 22.12, installer detection) moves to **v1.13.0**. Both are
-"your setup may need attention" releases, and landing an auth change and a
-platform-baseline drop together makes "what broke?" ambiguous for anyone who
-hits a problem. #154 has now moved twice (v1.11.0 → v1.12.0 → v1.13.0), which is
-acceptable because each move was made to protect a clearer announcement, not to
-avoid the work.
-
-**Unreleased on `main`**: `00e37ca` (test-only — the `ingest-dir` live test had
-no timeout and inherited bun's 5s default, failing at 22s during the v1.11.0
-staging pass). Rides the next cut.
-
-Previously: **v1.10.0 + v1.10.1 SHIPPED** (2026-08-22) and verified on BOTH
-staging and production. Production jumped 1.9.1 → 1.10.1 in one hop
-(migration 0030 ran clean; the interrupted-then-rerun deploy proved the
-idempotency design; guides re-synced 17/17; acceptance 15/15 on prod; #222
-warning verified firing on prod CLI and quiet on clean writes). #222 closed.
-The 1.10.x line was announced in Discord `#announcements` on 2026-08-22.
-
-Schema is at 0.16.0 (v1.13.0, migration 0031); `minSchema` is **0.16.0**,
-raised in v1.13.0 — the second raise since the policy was written (the first
-was v1.9.0, iteration 38; the rationale for this one is in
-`specs/review-workflow-toggle.md`).
-The tool surface is 15 core + 4 dormant relation tools (delete/restore
-joined in v1.7.0).
-
-**What shipped** — an agent's question ("why is there no delete in MCP?")
-grew into the release pair: `cerefox_delete_document` (requires the caller's
-read-hash; reason in audit) and `cerefox_restore_document` (#210 — restore
-moved out of the human-only tier; **permanent purge is the single
-web-UI-only action**); referential integrity for `](uuid)` links (#214, both
-phases: write-time guard + `document dead-links` sweep — mangled-UUID
-protection, LLMs corrupt long ids structurally, see
-`docs/guides/linking.md`); the #212 metadata-destruction fix (community
-report, guarded at every write path + table CHECK); trashed documents refuse
-content updates; dashboard recent-docs project selector; review-status-pill
-staleness fix. Five review rounds, 54 findings addressed.
-Details: [iteration 37](plans/iteration-37-mcp-delete-parity.md).
-
-**Open threads for a next session**: staging is UP and current (recovered
-8/14 after a Supabase-side transient; the maintainer leaves it running and
-pauses over the weekend if nothing is being built); the deferred-by-decision
-items below still stand.
-
-Previous state (v1.6.1, for context):
-
-Three releases went out in six days, all driven by agents using the previous
-one:
-
-- **v1.4.0** — section read (#198), `rename_section` (#197), loss reporting by
-  what was touched (#196), CLI provenance (#193), plus guard debt (#171, #194,
-  #168). Schema 0.11.1.
-- **v1.5.0** — CLI section read (#201), dashboard access paths (#195), UTC
-  timestamp markers (#199), `serverName` in JSON (#202), server identity in
-  `get_help`, the heading-duplication refusal, a committed acceptance harness,
-  **and an RLS security fix**: `cerefox_document_relations` had row-level
-  security disabled since iteration 29, found by Supabase's advisor rather than
-  by us. Schema 0.11.2.
-- **v1.6.0 / v1.6.1** — `cerefox_set_document_metadata` (#204): change tags
-  without resending a document, merging so concurrent agents cannot clobber each
-  other. Plus two dashboard fixes (#205, #206) and their follow-up. Schema
-  0.11.3.
-
-**Production is current**: schema 0.14.1, Edge Functions and web UI on 1.9.1+.
-
-### What is open
-
-- **#155 is closed.** The UI e2e suite was never broken: it defaulted to port
-  8000 and reused whatever `cerefox web` was already there, so it tested a
-  different build. It passes 18/18 against the build in the repo.
-- **Deferred by decision, with reasoning on the tickets** — do not re-derive
-  these as bugs: register row 22 (append a table row without resending its
-  section; observed and priced at 1,100 chars to add one row to a 4,164-char
-  section), and Playwright in CI (needs live credentials and a labelled target,
-  so it runs locally before pushing frontend changes).
-- **Unverified by execution**: the `self-update --check` tests now skip when the
-  npm registry is unreachable, but Bun's fetch ignores `npm_config_registry` and
-  the proxy variables, so that skip path was never exercised.
-
-- **Plans**: [iteration 35](plans/iteration-35-partial-edits-followups.md),
-  [iteration 36](plans/iteration-36-observability-and-parity.md). The v1.6.x work
-  was small enough to run without its own iteration plan; it is recorded in
-  `CHANGELOG.md` and in the issues it closed.
+**Next after the cut.** #251 (opt-in auto-purge of trash older than N days) is the
+only open non-backlog enhancement. It was deliberately *not* rushed into this
+release: it deletes user data on a timer, so it wants its own cycle with its own
+staging verification, not a slot in a patch. Everything else open (#129, #140-#149)
+is a backlog umbrella.
 
 ---
 
