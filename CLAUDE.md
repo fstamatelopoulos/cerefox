@@ -370,10 +370,25 @@ directions — registered but undocumented, and documented but unregistered. The
 second matters as much as the first: a removed or renamed endpoint otherwise
 leaves the document pointing at a 404.
 
-The test compares **paths only**. Whether a description, a parameter or a
-response shape is still true is not checked, so changing a request or response
-shape still means editing the guide by hand. #270 tracks the machine-readable
-spec that would close that gap.
+The test compares **paths only**. The response *shapes* are covered separately,
+and by generation rather than discipline: `docs/api/openapi.json` is built by
+`bun scripts/gen_openapi.ts` from the route registrations, the guide's summaries
+and the zod schemas in `_shared/schemas/`. Three consequences worth knowing:
+
+- **Regenerate after changing a route, a summary, or a schema.**
+  `_shared/__tests__/api-openapi-spec.test.ts` fails when the committed file is
+  stale, and also when a `ROUTE_SCHEMAS` entry points at a route that no longer
+  exists.
+- **The zod schemas are not enforced by the handlers** — they are consumed by
+  the frontend and by tests — so they can drift from reality.
+  `packages/memory/test/web-integration/api-schema-truth.test.ts` parses real
+  responses with them against a running server. It found two wrong shapes the
+  first time it ran; treat a failure there as the schema being wrong, not the
+  test.
+- **An unmodelled endpoint gets no response schema, deliberately.** Coverage
+  lives in `x-cerefox-coverage` inside the document. Do not paper a gap over with
+  a guessed shape: a consumer generating a client from it gets code that
+  compiles and fails at runtime.
 
 ### Rule: bump `schema_version` on any `src/cerefox/db/` change
 
