@@ -9,6 +9,34 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **The web UI went blank when you typed in a metadata key or value field**
+  (#289). Ingest → Metadata → Add field → click the key field → type one letter →
+  white page. Three `onChange` handlers read `e.currentTarget.value` *inside* a
+  functional `setState` updater. React nulls `currentTarget` the moment the
+  handler returns, and the updater runs later, in the render phase — so the read
+  threw **during render**, and React unmounted the whole tree.
+
+  The same defect was on a second screen, which nothing in the report pointed at:
+  **Search → Filters → + Add filter → Value** blanked the app identically. Both
+  are fixed by capturing the value before the updater runs.
+
+- **A render error no longer takes the whole app with it.** The frontend had no
+  error boundary anywhere, which is why a one-line bug in a text input presented
+  as a dead web app: `#root` emptied, and the only way to learn anything was the
+  browser console. There is now a boundary around the router that shows what
+  broke, keeps the message copyable for a bug report, and offers reload or a
+  return to the dashboard. It does not attempt to recover state — a component
+  that threw mid-render has none worth trusting.
+
+  Guarded two ways, because the shape is easy to reintroduce and hard to spot in
+  review: `frontend/src/lib/no-event-in-updater.test.ts` scans the frontend for
+  event reads inside lazy updaters (browser-free, runs in CI, asserted to fire on
+  the exact handler that shipped), and `frontend/tests/e2e/render-crash.spec.ts`
+  types into all three fields in a real browser and asserts the app is still
+  mounted.
+
 ### Added
 
 - **An OpenAPI 3.1 document for `/api/v1`** (#270), at `docs/api/openapi.json`.
