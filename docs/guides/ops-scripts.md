@@ -29,6 +29,16 @@ The canonical scripts are **TypeScript**, run with [Bun](https://bun.sh) (instal
 | `backup_create.ts` | `bun scripts/backup_create.ts` |
 | `backup_restore.ts` | `bun scripts/backup_restore.ts` |
 | `reindex_all.ts` | `bun scripts/reindex_all.ts` |
+| `cerefox_export.ts` | `bun scripts/cerefox_export.ts` |
+| `gen_openapi.ts` | `bun scripts/gen_openapi.ts` |
+| `cut_release.ts` | `bun scripts/cut_release.ts` (see [RELEASING.md](../../RELEASING.md)) |
+
+The remaining files under `scripts/` are not run by hand: `bundle_help.ts`,
+`bundle_package_docs.ts` and `bundle_server_assets.ts` are `prepublishOnly` steps,
+and `check_ef_parity.ts` and `check_help_bundle.ts` are CI checks.
+`_shared/__tests__/ops-scripts-documented.test.ts` holds that split, so a new
+script has to be either documented here or deliberately classified — it cannot be
+silently forgotten.
 
 Use the `.ts` scripts. The former `.py` equivalents were **removed at v1.0.0** — update any
 cron jobs / CI / make targets that still invoke a `python scripts/*.py` path.
@@ -278,6 +288,43 @@ Two naming details worth knowing:
   uniqueness domain as content files, so whichever is written second gets the
   numeric suffix and neither can overwrite the other. A real store contains such
   a pair.
+
+## gen_openapi.ts — Regenerate the OpenAPI document
+
+`docs/api/openapi.json` describes `/api/v1` in OpenAPI 3.1, for callers that embed
+Cerefox instead of using MCP or the CLI. Point any OpenAPI tool at it to generate
+a client or a tool set.
+
+```bash
+bun scripts/gen_openapi.ts             # write docs/api/openapi.json
+bun scripts/gen_openapi.ts --check     # fail if the committed file is stale (CI)
+bun scripts/gen_openapi.ts --stdout    # print, write nothing
+```
+
+**Run it after changing a route, a summary in [`api.md`](api.md), or a zod schema
+in `_shared/schemas/`.** You will not forget silently:
+`_shared/__tests__/api-openapi-spec.test.ts` fails when the committed artifact is
+not what the generator produces.
+
+It is assembled from three sources rather than written, so no fact about the API
+is authored twice:
+
+| Part of the spec | Comes from |
+|---|---|
+| paths and methods | the route registrations in `packages/memory/src/web/routes/` |
+| summaries | the endpoint table in `docs/guides/api.md` |
+| request/response shapes | the zod schemas in `_shared/schemas/` |
+
+Two things worth knowing about what it does *not* claim:
+
+- **Coverage is stated, not implied.** `x-cerefox-coverage` in the document lists
+  how many routes carry a response schema, which routes legitimately return
+  something other than JSON, and which are unmodelled. An unmodelled route gets
+  **no** schema rather than a guessed one.
+- **`info.version` is the API's, not the release's.** It moves when `/api/v1`
+  changes. Binding it to the package version made the committed artifact stale at
+  every release cut — which broke the v1.15.1 npm publish — and churned every
+  generated client on patch releases that did not touch the API.
 
 ## sync_docs.ts — Sync project documentation into Cerefox
 
