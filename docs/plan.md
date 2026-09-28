@@ -116,21 +116,24 @@ release picks it up.
 - **#251** (opt-in auto-purge of trash older than N days) is the only open non-backlog
   enhancement. It deletes user data on a timer, so it wants its own cycle with its own
   staging verification. Everything else open (#129, #140–#149) is a backlog umbrella.
-- **In flight at hand-off**: the maintainer is running the new
-  `cerefox_export.ts` against **production** into `~/cerefox-docs-backup-test`
-  (1,059 documents; the last export was 943 on 9/9) and will ask for a correctness
-  check of sampled documents against the prod KB. What to check: every content file
-  paired with a sidecar and no orphans; `content_hash` matching what
-  `cerefox_get_document` returns now; `Projects` listing *all* memberships rather than
-  just the folder the copy landed in; `Characters`/`Chunks` against the store; the
-  collision case (prod holds a document whose title ends in "Metadata", which is why
-  the old backup shows exactly 1 `-metadata.md` file); and `Review status` **present**,
-  since prod runs the review workflow **on**.
-  Two traps: `--force` only permits a non-empty target, it **never cleans**, so
-  exporting over an old backup leaves orphans indistinguishable from current files —
-  hence the fresh folder. And `/Users/fotis/src/cerefox/.env` points at the **same
-  project as production**, and `./.env` in the cwd outranks `~/.cerefox/.env`, so
-  always pass `CEREFOX_CONFIG_DIR` explicitly rather than relying on the default.
+- **The production export is verified and done** (#286's first real use). `cerefox_export.ts`
+  against prod produced **1,059 unique documents = exactly the 1,059 live documents in the
+  store**; 1,179 copies (102 documents in 2–3 projects), 1,179 sidecars, zero unpaired, zero
+  orphans, zero duplicate names within a folder, the 23 trashed documents correctly excluded.
+  30 random documents byte-identical to `full_content` with `content_hash` still current;
+  14 more matched on title, source, timestamps, review status, chunk count and **all** project
+  memberships. The 21 files present only in the older backup are 14 project-membership moves
+  and 7 retitles, all confirmed live — nothing lost.
+  Two open nits, neither blocking: the sidecar's `Characters` is the store's `total_chars`
+  (sum of chunk content), which differs from the exported file size by 0–228 chars depending
+  on how chunks rejoin — 1,017 of 1,179 match exactly, and relabelling it `Characters
+  (stored)` is a one-line change; and one production title holds a literal `&amp;`, which
+  matters because titles are boosted in search.
+  Operational notes for the next run: `--force` permits a non-empty target but **never
+  cleans**, so exporting over an old backup leaves orphans indistinguishable from current
+  files; `/Users/fotis/src/cerefox/.env` points at the **same project as production** and
+  `./.env` in the cwd outranks `~/.cerefox/.env`, so pass `CEREFOX_CONFIG_DIR` explicitly; and
+  a plain `mv` onto an existing directory **nests** it rather than replacing it.
 
 ---
 
