@@ -1,6 +1,6 @@
 # Iteration 46 — the SPA after an upgrade, and what the tab says (v1.14.2)
 
-**Status: IN PROGRESS (2026-09-08, branch `fix/spa-stale-index-and-tab-titles`).**
+**Status: CLOSED — shipped v1.14.2 (2026-09-08), verified on staging and production.**
 Closes [#252](https://github.com/fstamatelopoulos/cerefox/issues/252) and
 [#253](https://github.com/fstamatelopoulos/cerefox/issues/253).
 

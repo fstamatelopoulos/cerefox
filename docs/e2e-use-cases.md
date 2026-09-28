@@ -106,7 +106,8 @@ Two docs are ingested with different metadata; each test asserts only the matchi
 
 ### 6. Web UI (Playwright browser tests)
 
-TS suite: `frontend/tests/e2e/ui.spec.ts` (`@playwright/test`).
+TS suites: `frontend/tests/e2e/ui.spec.ts` and
+`frontend/tests/e2e/render-crash.spec.ts` (`@playwright/test`).
 
 Requires: web app running (`cerefox web`) at `http://127.0.0.1:8000/` and the
 frontend built (`cd frontend && bun run build`). Tests target the React SPA at
@@ -128,12 +129,22 @@ frontend built (`cd frontend && bun run build`). Tests target the React SPA at
 | `TestAuditLog` | `test_audit_log_page_loads` | Audit log page renders with heading | Done |
 | `Trash` | `Empty trash asks first, purges one by one, and leaves the trash empty` | Three API-trashed docs; button → confirmation (exact count, #249) → done summary; trash empty, each doc 404 (#247, v1.14.0). Empties the whole staging trash, so it is opt-in (`CEREFOX_E2E_EMPTY_TRASH=1`) and skips if the trash holds anything not `[E2E`-prefixed; fixtures purged in `finally` | Done (opt-in) |
 | `Trash` | `Cancel in the confirmation purges nothing` | Cancel leaves the trashed doc in place | Done |
+| `render crash` | `Ingest → Metadata → key and value fields` | Typing one character in a metadata key/value field must not throw or unmount the app; asserts `#root` still has children (#289, v1.15.1) | Done — reproduced before the fix, verified against the released 1.15.1 server |
+| `render crash` | `Search → Filters → Value field` | The same defect on a second screen the bug report never named; same assertions | Done — reproduced before the fix (v1.15.1) |
 
 The loop behind "Empty trash" (`frontend/src/lib/emptyTrash.ts`: confirmed set with a
 `deleted_at` cutoff, re-list past the 500-row cap, never retry an id, restored-meanwhile
 reported not counted, fatal errors abort, stop after the purge in flight) is unit-tested
 beside the module, `frontend/src/lib/emptyTrash.test.ts`, by `cd frontend && bun test src/`
 (CI's frontend step).
+
+`render-crash.spec.ts` is **read-only** — it types into inputs and never submits — so
+unlike `ui.spec.ts` it needs no write guard and is safe against any target, including a
+post-deploy smoke run with `CEREFOX_E2E_REUSE=1`. Its second assertion (`#root` still has
+children) is a regression test for the *blankness* rather than for the three handlers, so
+it fails for any render throw at that point. The source-level pattern is caught earlier and
+without a browser by `frontend/src/lib/no-event-in-updater.test.ts` in CI's frontend step;
+the Playwright spec is what proves the fix in a real browser, which no source scan can.
 
 ### 6B. ID-Based Ingest (17B)
 
