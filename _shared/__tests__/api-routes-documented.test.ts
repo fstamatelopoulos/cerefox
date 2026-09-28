@@ -23,9 +23,15 @@
  *     leaves a promise behind.
  *
  * Scope, stated so nobody expects more than it gives: this checks that the
- * PATHS agree. It cannot tell whether the description, the parameters or the
- * response shape are still true. Those stay a discipline (CLAUDE.md carries
- * the rule), and #270 tracks the machine-readable spec that would close it.
+ * PATHS agree. It cannot tell whether a description, a parameter or a response
+ * shape is still true.
+ *
+ * The shapes are covered separately, and by generation rather than discipline:
+ * `docs/api/openapi.json` is built from the route registrations, this guide's
+ * summaries and the zod schemas (#270, shipped in v1.15.1). Its own guards are
+ * `api-openapi-spec.test.ts` (the committed artifact is current) and
+ * `api-schema-truth.test.ts` (the schemas match what a live server returns).
+ * Descriptions remain a human judgement that nothing can check.
  */
 
 import { describe, expect, test } from "bun:test";

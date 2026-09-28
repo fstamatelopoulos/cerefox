@@ -134,7 +134,11 @@ Cerefox follows [Semantic Versioning](https://semver.org). Until **v1.0.0** the 
 - MCP tool signatures (names, parameters, return shapes)
 - Postgres RPC signatures (`cerefox_*`)
 - Edge Function HTTP paths and request/response shapes
-- `/api/v1/*` web API paths and shapes
+- `/api/v1/*` web API paths and shapes — and when you change one, **regenerate
+  the spec**: `bun scripts/gen_openapi.ts` (CI fails if `docs/api/openapi.json`
+  is stale) and update the endpoint table in
+  [`docs/guides/api.md`](docs/guides/api.md), which the spec draws its summaries
+  from
 - Database schema (table and column names, types)
 
 **Not under contract** (free to change at minor versions): internal module paths, helper functions, frontend component structure, log message formats, RPC bodies, build/test infrastructure.

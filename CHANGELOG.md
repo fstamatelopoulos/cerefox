@@ -9,6 +9,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Changed
+
+- **`docs/guides/ops-scripts.md` documents the scripts it claims to.** It
+  advertises covering all of `scripts/` and listed 7 of 15: `gen_openapi.ts` and
+  `cerefox_export.ts` had both shipped without an entry, and `cut_release.ts` never
+  had one. `gen_openapi.ts` now has a section of its own — what it assembles the
+  spec from, when to re-run it, and the two things the document deliberately does
+  not claim.
+
+  Guarded by `_shared/__tests__/ops-scripts-documented.test.ts`, which derives the
+  list from `scripts/*.ts`: a script must be documented, or named in an explicit
+  map **with a reason** it is not operator-facing (a `prepublishOnly` step, a CI
+  check). Checked in both directions, so a deleted script cannot leave a stale
+  excuse behind for a future script of the same name. This is the same
+  hand-maintained-list drift the route table, the Data API grants, the config
+  catalogue and the Node floor are all derived to avoid.
+
+- **Two stale pointers to #270 as future work**, now that it has shipped:
+  `api-routes-documented.test.ts` said the machine-readable spec was still
+  tracked, and `CONTRIBUTING.md` listed `/api/v1/*` as under contract without
+  saying the spec has to be regenerated when a route changes.
+
 Open roadmap.
 
 ---
