@@ -29,71 +29,129 @@
 
 ## Current Focus
 
-**2026-09-27 — v1.15.1 READY TO CUT.** `main` is green and clean: no open PRs,
-no feature branches, `[Unreleased]` populated with four entries. Every suite run
-against staging today — `_shared` 1169/0, frontend unit 31/0, package suite
-321 pass / 2 skip / 0 fail, Playwright 24 passed / 1 skipped (the Empty-trash
-test, which needs `CEREFOX_E2E_EMPTY_TRASH=1`).
+**2026-09-28 — v1.15.1 IS RELEASED AND VERIFIED.** npm, ghcr, the GitHub Release
+and the tag are all out and consistent. Staging, Cerefox Local and production are
+on it. `main` is `cf1f2d4`; no open PRs of ours, no feature branches.
 
-**Why 1.15.1 and not 1.16.0.** Two of the four entries are new *capability*, but
-neither ships in the npm package or the container, so no user gains a feature:
+### What shipped in v1.15.1
 
-- `docs/api/openapi.json` (#270) is repo-only — `bundle_package_docs.ts` copies a
-  curated `docs/guides/*.md` subset and nothing from `docs/api/`.
-- `scripts/cerefox_export.ts` (#286) is a contributor script; `scripts/` is not in
-  the package's `files` list.
+| # | Change | Reaches a user? |
+|---|---|---|
+| #289 | Web UI blanked when typing in a metadata key/value field | **Yes** — the reason this is a release |
+| #284 | Data API grant list derived from the catalogue (schema **0.16.2**, migration 0032) | Yes, on a fresh cloud deploy |
+| #270 | OpenAPI 3.1 document for `/api/v1` at `docs/api/openapi.json` | No — repo-only |
+| #286 | `cerefox_export.ts` writes a metadata sidecar | No — contributor script |
 
-What the shipped artifact gains is two fixes — the web-UI blank-screen crash
-(#289) and the fresh-cloud-deploy grant gap (#284, schema 0.16.2) — plus a
-refreshed `ops-scripts.md`, which *is* bundled. That is a patch.
+`scripts/` and `docs/api/` are **not** in the npm package (`files` is
+`dist, docs, AGENT_*, README, LICENSE, CHANGELOG`; the published tarball is 104
+files). So #270 and #286 are repo value, and that is why 1.15.1 was a patch rather
+than a minor. Verify this with `cd packages/memory && npm pack --dry-run` — running
+it from the repo root packs the `private: true` workspace root instead and misleads.
 
-**Release-gate state** (checked, not assumed):
+### The release had to be cut twice — read this before the next cut
 
-- `schema_version` **0.16.2** in both literals (`schema.sql` `-- @version:` and
-  `cerefox_schema_version()`); `cut_release.ts` gates the pair.
-- `minSchema` stays **0.16.0**. The derived grants only affect a *fresh* cloud
-  deploy, so a client on 1.15.1 against a 0.16.0 server behaves correctly — old,
-  not wrong, which is the distinction `minSchema` exists to draw.
-- **No Edge Function source changed** since v1.15.0 (`git diff --name-only
-  v1.15.0..main -- supabase/functions` is empty), so the GPT Actions OpenAPI block
-  needs no sync. `cut_release.ts` bumps `EF_VERSION` unconditionally at a stable
-  cut regardless.
+The first v1.15.1 attempt **tagged, released on GitHub and published its container
+image, but skipped npm.** `info.version` in the generated OpenAPI document was read
+from `packages/memory/package.json`, and the artifact is generated *and committed*
+with a byte-for-byte staleness guard — so `cut_release.ts` bumping the version made
+the cut commit itself stale, CI failed on the tag, and `Publish to npm` never ran.
 
-**What #289 cost, and the lesson worth keeping.** A one-character edit in a
-metadata input blanked the entire web app, and the report read as "the web app is
-broken". Two causes, and the second is the one that generalises:
+The guard was right and nothing a human had edited was wrong, which is the worst
+shape a release blocker can take. Fixed in #291 by making `info.version` the **API
+surface** version (`1.0.0`), with two guards: the package version must not appear
+anywhere in the artifact, and regeneration must be deterministic. Both proven to
+fire by reintroducing the coupling.
 
-1. Three `onChange` handlers read `e.currentTarget.value` *inside* a functional
-   `setState` updater. React nulls `currentTarget` when the handler returns and
-   the updater runs later, in the render phase — so the read threw **during
-   render**. It was on two independent screens (Ingest → Metadata, Search →
-   Filters), neither of which the report named; the second was found by scanning
-   for the pattern, not by following the repro.
-2. The frontend had **no error boundary anywhere**. Any render throw therefore
-   emptied `#root`: white page, no message, nothing to click, and the browser
-   console as the only diagnosis. The blast radius was out of all proportion to
-   the defect, and it applied to every future render bug equally.
+Because npm never received it, the tag was **re-cut** rather than superseded — this
+project's one sanctioned reason to move a tag (CONTRIBUTING.md: *"an objective
+failure of the release pipeline itself"*). The recipe, if it is ever needed again:
 
-Both are fixed, and the class is guarded twice — a browser-free source scan in CI
-(`frontend/src/lib/no-event-in-updater.test.ts`, asserted to fire on the verbatim
-handler that shipped) and a Playwright spec that types into all three fields and
-asserts `#root` still has children. The boundary was **proven** to catch by
-injecting a deliberate throw, not assumed.
+```bash
+gh release delete vX.Y.Z --yes --cleanup-tag   # release + remote tag
+git tag -d vX.Y.Z                             # may already be gone; harmless
+# then revert the cut commit's bookkeeping so the NORMAL path runs again:
+#   fold the [vX.Y.Z] heading back into [Unreleased]
+#   return VERSION, EF_VERSION, CEREFOX_VERSION, package.json, meta.ts to the prior release
+bun scripts/cut_release.ts X.Y.Z --npm-publish --docker-publish
+```
 
-**Next after the cut.** #251 (opt-in auto-purge of trash older than N days) is the
-only open non-backlog enhancement. It was deliberately *not* rushed into this
-release: it deletes user data on a timer, so it wants its own cycle with its own
-staging verification, not a slot in a patch. Everything else open (#129, #140-#149)
-is a backlog umbrella.
+`EF_VERSION` and friends are *assigned* the release version, not incremented, so a
+re-cut cannot double-bump them. Confirm the released changelog history is
+byte-identical to the previous tag before cutting, or `checkReleasedSectionUnchanged`
+will object.
+
+### Verified on 1.15.1
+
+Staging: `doctor` all-green (schema 0.16.2 deployed *and* bundled, EF 1.15.1),
+`_shared` 1171/0, frontend unit 31/0, package suite 321 pass / 2 skip / 0 fail,
+Playwright 24 passed / 1 skipped, plus `render-crash.spec.ts` against the **released**
+:8030 server. All 10 `cerefox_*` tables reachable over the Data API, including
+`cerefox_document_relations` — the one #284 was actually about. Cerefox Local
+(`cerefox-local`, :8010) on the published image: version 1.15.1, schema 0.16.2,
+bundled guides present, projects/search/metadata-keys/trash/get-document all good.
+
+**`cerefox-staging`, the second Local container, is still on v1.15.0.** Not upgraded;
+the maintainer has cfxbot for it.
+
+### In `[Unreleased]` now
+
+Only #292: `ops-scripts.md` documents the scripts it claims to (it listed 7 of 15 —
+`gen_openapi.ts` and `cerefox_export.ts` had both shipped without an entry), derived
+by `ops-scripts-documented.test.ts`; plus two stale pointers to #270 as future work.
+**None of it reaches a user, so there is deliberately no release for it** — the next
+release picks it up.
+
+### Open, and what I would do next
+
+- **Two dependabot PRs, both `CLEAN` but deliberately not merged** (the maintainer
+  asked to hold): **#293** the minor-and-patch group (26 updates, nothing crossing a
+  major; `onnxruntime-node` 1.27→1.30 and `@huggingface/transformers` 4.2→4.3 are the
+  only two worth real verification, because they are the **local ONNX embedder** and a
+  numerical change there would silently diverge from already-embedded chunks), and
+  **#294** `@types/node` **24 → 26**, which I would **decline**: the runtime floor,
+  CI, the release workflow and the maintainer's Node are all **24**, so typing against
+  26 lets `tsc` accept APIs that do not exist on the supported floor. Revisit when the
+  Node floor moves. Note they both touch `bun.lock`, so whichever merges second needs
+  a rebase.
+- **#251** (opt-in auto-purge of trash older than N days) is the only open non-backlog
+  enhancement. It deletes user data on a timer, so it wants its own cycle with its own
+  staging verification. Everything else open (#129, #140–#149) is a backlog umbrella.
+- **In flight at hand-off**: the maintainer is running the new
+  `cerefox_export.ts` against **production** into `~/cerefox-docs-backup-test`
+  (1,059 documents; the last export was 943 on 9/9) and will ask for a correctness
+  check of sampled documents against the prod KB. What to check: every content file
+  paired with a sidecar and no orphans; `content_hash` matching what
+  `cerefox_get_document` returns now; `Projects` listing *all* memberships rather than
+  just the folder the copy landed in; `Characters`/`Chunks` against the store; the
+  collision case (prod holds a document whose title ends in "Metadata", which is why
+  the old backup shows exactly 1 `-metadata.md` file); and `Review status` **present**,
+  since prod runs the review workflow **on**.
+  Two traps: `--force` only permits a non-empty target, it **never cleans**, so
+  exporting over an old backup leaves orphans indistinguishable from current files —
+  hence the fresh folder. And `/Users/fotis/src/cerefox/.env` points at the **same
+  project as production**, and `./.env` in the cwd outranks `~/.cerefox/.env`, so
+  always pass `CEREFOX_CONFIG_DIR` explicitly rather than relying on the default.
 
 ---
 
 ## Active iteration
 
+**No iteration is open.** Work since v1.13.0 has run as ticket-sized slices off
+`main` rather than as numbered iterations — #254–#267 (the search-response
+contract), the v1.15.0 dependency sweep, then #270/#284/#286/#289 in v1.15.1. Each
+is recorded in `CHANGELOG.md` and in the issue it closed. Open the next iteration
+when a body of work needs a plan of its own; #251 (timed trash auto-purge) is the
+first open candidate.
+
+**[Iteration 46 — the SPA after an upgrade, and what the tab says](plans/iteration-46-spa-serving-and-tab-titles.md)**
+— ✅ **CLOSED, shipped v1.14.2** (2026-09-08). #252, #253.
+
+**[Iteration 45 — Empty trash](plans/iteration-45-empty-trash.md)**
+— ✅ **CLOSED, shipped v1.14.0** (2026-09-05). #247, #249.
+
 **[Iteration 44 — the review workflow becomes optional](plans/iteration-44-review-workflow-toggle.md)**
-— ⏳ **IMPLEMENTATION COMPLETE, verified on staging, awaiting review + release**
-(2026-09-04), target v1.13.0. Schema 0.16.0, migration 0031, `minSchema`
-0.16.0. Closes #241, #240, #239, #235.
+— ✅ **CLOSED, shipped v1.13.0** (2026-09-04), verified on staging and production.
+Schema 0.16.0, migration 0031, `minSchema` 0.16.0. #241, #240, #239, #235.
 
 **[Iteration 43 — say the true thing](plans/iteration-43-warning-clarity.md)**
 — ✅ **CLOSED, shipped v1.12.2** (2026-09-03). #237.

@@ -26,6 +26,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   hand-maintained-list drift the route table, the Data API grants, the config
   catalogue and the Node floor are all derived to avoid.
 
+- **CLAUDE.md records the #289 lesson as a standing convention**: the web UI must
+  survive a render throw — keep the error boundary around the router, and never read
+  a React event inside a functional `setState` updater. The generalisable half was
+  not the typo; it was that the frontend had no boundary at all, so any render throw
+  anywhere emptied `#root` and presented as a dead web app.
+
+- **Hand-off documentation brought up to date after v1.15.1.** `docs/plan.md`'s
+  Current Focus — the artifact the next session reads first — still said "READY TO
+  CUT", and `## Active iteration` still listed Iteration 44 as awaiting a release it
+  shipped in at v1.13.0. It now records what 1.15.1 contains and which parts reach a
+  user, why the first cut skipped npm and the recipe for a re-cut, and the two
+  dependabot PRs with the reasoning for holding each. `docs/e2e-use-cases.md` gained
+  the two `render-crash.spec.ts` cases; CLAUDE.md requires that file to move whenever
+  an e2e test does, and it had not.
+
 - **Two stale pointers to #270 as future work**, now that it has shipped:
   `api-routes-documented.test.ts` said the machine-readable spec was still
   tracked, and `CONTRIBUTING.md` listed `/api/v1/*` as under contract without
