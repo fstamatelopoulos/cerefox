@@ -54,13 +54,29 @@ export const OUT_FILE = join(REPO_ROOT, "docs", "api", "openapi.json");
 
 const PREFIX = "/api/v1";
 
-/** Cerefox's own version, so the spec says what it was generated from. */
-function cerefoxVersion(): string {
-  const pkg = JSON.parse(
-    readFileSync(join(REPO_ROOT, "packages", "memory", "package.json"), "utf8"),
-  ) as { version: string };
-  return pkg.version;
-}
+/**
+ * `info.version` describes the **API surface**, not the shipping package.
+ *
+ * It used to be read from `packages/memory/package.json`, which was wrong twice
+ * over and broke the v1.15.1 release:
+ *
+ *   - The artifact is generated and committed, and the staleness guard compares
+ *     it byte for byte against what the generator produces. `cut_release.ts`
+ *     bumps the package version, so the cut commit itself made the committed
+ *     file stale — CI failed on the tag, and `Publish to npm` was skipped. The
+ *     guard fired correctly and for a reason no human had caused, which is the
+ *     worst kind: it blocks a release and points at nothing anyone can fix by
+ *     regenerating.
+ *   - It was also wrong for consumers. `info.version` is what a client
+ *     generator stamps into its output, so tying it to the package version
+ *     churned every downstream client on every patch release while the API it
+ *     describes had not changed at all.
+ *
+ * So it moves when `/api/v1` changes, and an incompatible change would be
+ * `/api/v2` and a new document. `api-openapi-spec.test.ts` asserts the package
+ * version is not embedded anywhere, so the coupling cannot come back.
+ */
+const API_VERSION = "1.0.0";
 
 // ── Paths, from the registrations ────────────────────────────────────────────
 
@@ -303,7 +319,7 @@ export function buildSpec(): Record<string, unknown> {
     openapi: "3.1.0",
     info: {
       title: "Cerefox /api/v1",
-      version: cerefoxVersion(),
+      version: API_VERSION,
       description: [
         "The HTTP API served by `cerefox web`. Intended for callers that embed Cerefox rather than",
         "using MCP or the CLI — MCP remains the recommended path for AI agents.",
