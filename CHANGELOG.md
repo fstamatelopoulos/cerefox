@@ -9,13 +9,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
-
----
-
-## [v1.15.1] -- 2026-09-28
-
 ### Fixed
+
+- **The OpenAPI artifact no longer goes stale at every release cut** (#270
+  follow-up). `info.version` was read from `packages/memory/package.json`, and
+  `cut_release.ts` bumps that — so the v1.15.1 cut commit made the committed
+  `docs/api/openapi.json` stale, the byte-for-byte staleness guard failed on the
+  tag, and **`Publish to npm` was skipped.** Nothing a human had edited was
+  wrong, and regenerating on the tag would only have moved the failure to the
+  next release.
+
+  `info.version` now describes the **API surface** (`1.0.0`), which is what the
+  field means and what a client generator stamps into its output — tying it to
+  the package version also churned every downstream client on every patch release
+  while the API had not changed. Guarded: one test asserts the package version is
+  not embedded anywhere in the artifact, another that regeneration is
+  deterministic. Both proven to fire by reintroducing the coupling.
+
+  Nothing shipped was ever wrong: `docs/api/` and `_shared/openapi/` are in
+  neither the container image nor the npm package, so the only casualty was the
+  gate. The tag was re-cut over the failed attempt — an objective failure of the
+  release pipeline, which is the single case where this project moves a tag
+  instead of shipping a new patch.
 
 - **The web UI went blank when you typed in a metadata key or value field**
   (#289). Ingest → Metadata → Add field → click the key field → type one letter →

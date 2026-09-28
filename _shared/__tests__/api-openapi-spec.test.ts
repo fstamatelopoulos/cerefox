@@ -22,6 +22,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import {
   OUT_FILE,
@@ -50,6 +51,40 @@ describe("the OpenAPI document for /api/v1", () => {
     // A mismatch means a route, a summary in api.md, or a zod schema moved
     // without regenerating. `bun scripts/gen_openapi.ts` fixes it.
     expect(onDisk).toBe(specJson(buildSpec()));
+  });
+
+  test("the artifact does not embed the package version", () => {
+    // This is what broke the v1.15.1 release. `info.version` was read from
+    // `packages/memory/package.json`; `cut_release.ts` bumps that, so the cut
+    // commit made the committed artifact stale, the staleness guard above failed
+    // on the tag, and `Publish to npm` was skipped.
+    //
+    // Nothing a human had edited was wrong, and regenerating on the tag would
+    // only have moved the problem to the next release. So the rule is that the
+    // generated artifact must not depend on the shipping version at all — and
+    // asserting it here is what stops the coupling being reintroduced by
+    // something that reads a package.json for an unrelated reason.
+    // Derived from OUT_FILE (docs/api/openapi.json) so the test needs no second
+    // notion of where the repo root is.
+    const repoRoot = join(dirname(OUT_FILE), "..", "..");
+    const pkg = JSON.parse(
+      readFileSync(join(repoRoot, "packages", "memory", "package.json"), "utf8"),
+    ) as { version: string };
+
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/); // the read worked
+    expect(specJson(buildSpec())).not.toContain(pkg.version);
+
+    // And the spec still declares a version — the point is that it is the API's
+    // own, not that the field went away.
+    const info = (buildSpec() as { info: { version: string } }).info;
+    expect(info.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  test("regenerating is deterministic", () => {
+    // The staleness guard is only meaningful if two runs over unchanged inputs
+    // agree. If anything in the pipeline were ordering-dependent or carried a
+    // timestamp, that guard would fail at random and get disabled.
+    expect(specJson(buildSpec())).toBe(specJson(buildSpec()));
   });
 
   test("every registered route appears in the spec", () => {
