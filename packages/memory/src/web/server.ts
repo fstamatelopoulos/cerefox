@@ -328,7 +328,16 @@ export async function buildWebServer(
 
   const app = buildApp();
 
-  const server = serve({ fetch: app.fetch, hostname: host, port });
+  // overrideGlobalObjects: false — by default @hono/node-server replaces the
+  // process-wide Request/Response with lightweight versions of its own. The
+  // local embedder downloads its model through transformers.js, which builds
+  // its file cache from those globals: with Hono's versions installed, the
+  // download "completed", cached nothing, and every write failed with "Unable to
+  // get model file path or buffer" on any store whose first model download
+  // happened inside this server (a fresh Local volume without the installer's
+  // warmup; npm + CEREFOX_EMBEDDER=local). Broken since v1.0.1; masked because
+  // the installer warms the model up in a separate process first.
+  const server = serve({ fetch: app.fetch, hostname: host, port, overrideGlobalObjects: false });
 
   return {
     host,

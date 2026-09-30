@@ -217,7 +217,7 @@ async function ensurePipeline(): Promise<FeaturePipeline> {
           ? `${fmtMb(prior.loaded)} MB`
           : info.total && info.total > 0
             ? `${fmtMb(info.total)} MB`
-            : "cached";
+            : "size not reported";
         process.stderr.write(`[cerefox-embed] ✓ ${file}  (${finalSize})\n`);
         if (prior) progressState.set(file, { ...prior, done: true });
       }
