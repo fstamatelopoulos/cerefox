@@ -18,6 +18,13 @@ updates:
     #   ignore:
     #     - dependency-name: "*"
     #       update-types: ["version-update:semver-major"]
+    ignore:
+      # @types/node tracks the RUNTIME FLOOR (Node 24: engines, CI, release
+      # workflow, runtime-floor.test.ts), not the newest Node. Typing against a
+      # newer major lets tsc accept APIs the supported floor does not have.
+      # Move this together with the floor. Declined in #294.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions — understands our SHA pins and bumps SHA + version comment.
   - package-ecosystem: "github-actions"
