@@ -29,6 +29,34 @@
 
 ## Current Focus
 
+**2026-09-29 — v1.15.2 IN PROGRESS: the `/api/v1` contract (#296).** An agent using
+the HTTP API met `400`s the published OpenAPI document did not explain. Branch
+`fix/api-contract-296` (PR open) fixes both halves:
+
+- **Handlers**: `POST /ingest` never read `expected_content_hash` / `last_write_wins`,
+  so an update by `document_id` could not succeed, and it silently dropped
+  `update_if_exists`, `project_name(s)` and `source` (all honoured now; unknown fields
+  are a `400`). A stale-hash delete was a `500` (now `409` + `current_hash`). `/edit`
+  ignored `last_write_wins` and skipped the hash on metadata-only saves. Archive of a
+  foreign/unknown version and purge of an unknown id both "succeeded". Web search
+  dropped `doc_project_names`, so UI result cards had no project chips.
+- **The document**: the generator emitted path parameters only. Query/header
+  parameters, form fields, response headers and error codes are now **derived from
+  the handler source**, pinned both ways by `api-request-contract.test.ts`; the live
+  truth test now fails on response fields a schema omits (it found `content_hash`,
+  `env_label`, `level`/`min`, and the edit route's `*Changed` flags). API document 1.1.0.
+- Verified on staging: package suite incl. the new live `api-write-contract.test.ts`,
+  web-integration 50/0, Playwright 24/1-skip.
+- **Filed, not fixed: #298** — the web UI's "Update existing" toggle is refused with
+  `CEREFOX_TOKEN_REQUIRED` whenever content changed (reproduced on 1.15.1). Needs a
+  semantics decision (send `last_write_wins`, or resolve the match and send its hash).
+- **#294 declined**; Dependabot now ignores `@types/node` majors until the Node floor
+  moves. **#293** (minor-and-patch group) is being verified: the local ONNX embedder's
+  runtime actually jumps `onnxruntime-node` 1.24.3 → 1.30.0 and the tokenizer 0.1.3 →
+  0.2.0, not the 1.27 → 1.30 the title suggests.
+- Plan: merge #296 and (if clean) #293, cut **v1.15.2**, verify on staging, then upgrade
+  Cerefox Local.
+
 **2026-09-28 — v1.15.1 IS RELEASED AND VERIFIED.** npm, ghcr, the GitHub Release
 and the tag are all out and consistent. Staging, Cerefox Local and production are
 on it. `main` is `cf1f2d4`; no open PRs of ours, no feature branches.
@@ -90,8 +118,8 @@ Playwright 24 passed / 1 skipped, plus `render-crash.spec.ts` against the **rele
 (`cerefox-local`, :8010) on the published image: version 1.15.1, schema 0.16.2,
 bundled guides present, projects/search/metadata-keys/trash/get-document all good.
 
-**`cerefox-staging`, the second Local container, is still on v1.15.0.** Not upgraded;
-the maintainer has cfxbot for it.
+**`cerefox-staging`, the second Local container, is still on v1.15.0.** Not upgraded
+here; the maintainer upgrades it separately.
 
 ### In `[Unreleased]` now
 
