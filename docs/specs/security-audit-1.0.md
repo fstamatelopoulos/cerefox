@@ -147,6 +147,17 @@ the Bearer token is the gate); the #110 query is parameterized.
   `@modelcontextprotocol/sdk` → `express-rate-limit`, whose `^10.2.0` already
   admits the fix, so an override to `^10.5.1` clears them rather than an
   acceptance. The only accepted advisory left is the `react-router` RSC one.
+- **2026-10-01 addendum: the Cerefox Local image's embedder runtime is audited,
+  and ships the two `sharp` advisories.** The image installed its runtime from
+  `^` ranges with no lockfile, so it sat outside every audit. It is now pinned in
+  `docker/local/runtime/` (#300) and audited in CI as its own step. That audit
+  finds GHSA-f88m-g3jw-g9cj and GHSA-rgj7-g3m4-5g8c: `@huggingface/transformers`
+  3.8.1 requires `sharp ^0.34`, the same two advisories retired from the main
+  audit on 2026-09-30 when the repo moved to transformers 4.3. They are
+  **accepted for the image only**, on the same reasoning as before: `sharp`
+  serves transformers' image-processing path, which a text embedding model never
+  loads. Moving the image to transformers 4.x retires both (the second half of
+  #300, which needs a measured embedding-compatibility decision first).
 - **2026-09-30 addendum (later the same day) — two more, both fixed by
   override.** `fast-uri` GHSA-hrr3-gc8f-f4qj (moderate; fixed in 3.1.8): the
   existing override moved from `^3.1.7` to `^3.1.8`. `brace-expansion`

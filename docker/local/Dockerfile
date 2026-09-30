@@ -65,9 +65,16 @@ RUN chmod +x /opt/cerefox/cerefox-local \
 # World-B image only — the cloud npm install never pulls them in. Model WEIGHTS
 # are NOT baked in (downloaded on first use into CEREFOX_MODELS_DIR, which the
 # env below points into the data volume so they survive recreate/upgrade).
+#
+# Pinned (#300): installed from a committed manifest + lockfile with
+# --frozen-lockfile, so every build of a tag embeds identically. It used to
+# write a package.json with ^ ranges and resolve them fresh on each build, which
+# also left these packages outside the repo's dependency audit (CI now audits
+# docker/local/runtime too). Changing the embedder runtime is a deliberate edit
+# of docker/local/runtime/, never a side effect of rebuilding.
+COPY docker/local/runtime/package.json docker/local/runtime/bun.lock /opt/cerefox/
 RUN cd /opt/cerefox \
- && printf '{"name":"cerefox-local-runtime","private":true,"dependencies":{"@huggingface/transformers":"^3.5.0","onnxruntime-node":"^1.21.0"}}\n' > package.json \
- && bun install --production \
+ && bun install --production --frozen-lockfile \
  && rm -rf /root/.bun/install/cache
 
 # s6 service tree: db-init (oneshot) → postgres / postgrest / cerefox-server (longruns).

@@ -11,6 +11,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Changed
 
+- **The Cerefox Local image's embedder runtime is pinned (#300, first half).** The
+  image resolved `^` ranges for `@huggingface/transformers` and `onnxruntime-node`
+  on every build, without a lockfile, so two builds of the same tag could embed
+  differently, and those packages sat outside the dependency audit. They are now
+  installed from a committed manifest and `bun.lock` in `docker/local/runtime/`
+  with `--frozen-lockfile`, pinned to exactly what the published images already ran
+  (transformers 3.8.1 with onnxruntime 1.21.0, now a single copy; an unused 1.30.0
+  copy is gone), and CI audits them. No change to embeddings. Moving the image to
+  transformers 4.x stays a separate, measured decision.
+
 - **An MCP write whose title contains HTML entities says so.** Agents sometimes
   send `&amp;` or `&lt;&gt;` instead of `&` or `<>` (the model encodes them inside
   its tool call), and nine such titles were found in one store, all written over
