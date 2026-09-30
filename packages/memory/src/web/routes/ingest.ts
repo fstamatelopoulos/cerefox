@@ -284,6 +284,15 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         updateExisting,
         author: who.identity.author,
         authorType: who.identity.authorType,
+        // Same contract as POST /ingest and /upload (#296): an update_existing
+        // that matches a document is a content update, and needs the hash or an
+        // explicit last_write_wins. Without these the route had no way to say
+        // either, so matching an existing document was always refused.
+        expectedContentHash:
+          typeof form.expected_content_hash === "string" && form.expected_content_hash.trim() !== ""
+            ? form.expected_content_hash.trim()
+            : null,
+        lastWriteWins: String(form.last_write_wins ?? "") === "true",
       });
       const skipped = result.action === "skipped";
       logWebUsage(ctx, {
