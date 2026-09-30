@@ -111,8 +111,15 @@ export type EditRequest = z.infer<typeof EditRequest>;
 
 export const EditResponse = z.object({
   success: z.boolean(),
+  /** True when the content changed and was re-chunked and re-embedded. */
   reindexed: z.boolean().default(false),
   error: z.string().nullable().optional(),
+  // On the metadata-only branch: which facets actually changed. A facet sent
+  // unchanged is skipped (and writes no audit entry), so these can be false
+  // for a field the request carried. camelCase for historical reasons.
+  titleChanged: z.boolean().optional(),
+  metadataChanged: z.boolean().optional(),
+  projectsChanged: z.boolean().optional(),
 });
 export type EditResponse = z.infer<typeof EditResponse>;
 

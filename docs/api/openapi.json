@@ -1762,6 +1762,15 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "titleChanged": {
+                      "type": "boolean"
+                    },
+                    "metadataChanged": {
+                      "type": "boolean"
+                    },
+                    "projectsChanged": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
