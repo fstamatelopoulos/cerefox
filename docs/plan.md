@@ -29,6 +29,21 @@
 
 ## Current Focus
 
+**2026-09-30 (later) — v1.16.1 IS RELEASED; staging and Cerefox Local are on it.**
+Fixes: (1) the local embedder could not download its model inside `cerefox web`
+(Hono replaced the global Request/Response; broken since v1.0.1, hidden by the
+installer's separate warmup; #309); (2) `cerefox-local <verb> --help` acted instead of
+printing help, and `uninstall --purge --help` would have deleted the data volume (#309);
+(3) `server deploy` from inside an npm workspace (#308). Verified: staging (installed
+1.16.1, `server deploy` from the package, 9 EFs, doctor green, smoke 37/37, Playwright
+27/1); the released image on a FRESH store with no warmup (model downloads, first write
+succeeds, search finds it); Local upgraded (backup in `~/.cerefox/local/backups/`,
+data identical, embedder runtime unchanged, auto-purge still ON at 60 days, refreshed
+host script refuses `stop now` and answers `--help` without acting). The agent's second
+Local container (`cerefox-staging`) is still on the 1.16.0 image and the maintainer's
+agent tests it. Production is still on 1.15.3; its upgrade can go straight to 1.16.1
+(it does not use the local embedder or cerefox-local, so either version is fine).
+
 **2026-09-30 — v1.16.0 IS RELEASED AND VERIFIED on staging and Cerefox Local;
 production (on 1.15.3) awaits the maintainer.** Headline: opt-in trash auto-purge
 (#251, iteration 47): the delete that adds to the trash also sweeps documents older than
