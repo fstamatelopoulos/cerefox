@@ -10,7 +10,7 @@ corrupting a long document id while rewriting content.
 Write a normal markdown link whose target is the document's UUID:
 
 ```markdown
-See the [Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d) for details.
+See the [Q3 Goals](3f2b9c1e-8a47-4d2e-9b6a-1c5e7d0a4f82) for details.
 ```
 
 The Cerefox web UI resolves these at click time — the stored markdown is
@@ -22,7 +22,7 @@ Four link forms are accepted; one is recommended:
 
 | Form | Example target | Use |
 |---|---|---|
-| **Document UUID** | `c937b70f-…` | **Always, for cross-references.** Stable, unambiguous, encoding-safe, validated (below). |
+| **Document UUID** | `3f2b9c1e-…` | **Always, for cross-references.** Stable, unambiguous, encoding-safe, validated (below). |
 | Repo-relative path | `docs/guides/quickstart.md` | Repo-ingested files only (their markdown naturally uses paths). |
 | Basename | `quickstart.md` | Best-effort fallback for the same. |
 | `[[Wikilink]]` | `[[Future Doc Name]]` | A deliberate **dangling** reference — "this document should exist someday." Never validated. |

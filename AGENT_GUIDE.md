@@ -557,7 +557,7 @@ Documents you ingest may contain markdown links to other Cerefox documents. The 
 **For any cross-reference you author, use the target document's UUID.** Period.
 
 ```markdown
-[Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d)
+[Q3 Goals](3f2b9c1e-8a47-4d2e-9b6a-1c5e7d0a4f82)
 ```
 
 **The server validates these links on every write (v1.7.0, #214).** A write
@@ -617,7 +617,7 @@ The `[Link Text](target)` syntax has two halves:
 - **Link text** (`[…]`): what the human reader sees. Use the actual title.
 - **Target** (`(…)`): what the resolver consumes. Always a UUID for agent-authored content.
 
-Bad: `[c937b70f-77af-...](c937b70f-77af-...)` — opaque to the reader.
+Bad: `[3f2b9c1e-8a47-...](3f2b9c1e-8a47-...)` — opaque to the reader.
 Good: `[Quarterly Planning - Q3 Goals](3f2b9c1e-8a47-4d2e-9b6a-1c5e7d0a4f82)`.
 
 ### What you don't need to do
