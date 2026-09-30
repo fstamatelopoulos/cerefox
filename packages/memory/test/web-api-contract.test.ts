@@ -414,3 +414,25 @@ describe("GET /openapi.json and the service-desc Link", () => {
     for (const r of [ok, notFound, bad]) expect(r.headers.get("link")).toBe(LINK);
   });
 });
+
+// ── GET /version: git_commit_short (post-1.15.3) ────────────────────────────
+
+describe("git_commit_short describes the running code, not the cwd", () => {
+  test("a directory outside any git work tree reports null, whatever the cwd", async () => {
+    const { resolveGitCommitShort } = await import("../src/web/routes/meta.ts");
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const outside = mkdtempSync(join(tmpdir(), "cfx-nogit-"));
+    const saved = process.env.CEREFOX_GIT_COMMIT;
+    delete process.env.CEREFOX_GIT_COMMIT;
+    try {
+      // The test process's cwd IS a checkout; the old code would have answered
+      // with its HEAD regardless of where the code lived.
+      expect(resolveGitCommitShort(outside)).toBeNull();
+      expect(resolveGitCommitShort(import.meta.dir)).toMatch(/^[0-9a-f]{7,}$/);
+    } finally {
+      if (saved !== undefined) process.env.CEREFOX_GIT_COMMIT = saved;
+      rmSync(outside, { recursive: true });
+    }
+  });
+});
