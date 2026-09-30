@@ -57,6 +57,19 @@ export interface IngestionPipelineDeps {
   settings?: Partial<PipelineSettings>;
 }
 
+/**
+ * The note on an update by document_id. Only when the caller explicitly SENT
+ * update_if_exists=false is there a flag that document_id overrode; an omitted
+ * flag overrode nothing, and the note on every update by id (the recommended
+ * workflow) read as a warning (#301). `undefined` means "not sent", which is
+ * why callers pass the flag through rather than coercing it to a boolean.
+ */
+export function updateByIdNote(updateExisting: boolean | undefined): string | undefined {
+  return updateExisting === false
+    ? "document_id provided; update_if_exists flag was overridden"
+    : undefined;
+}
+
 export class IngestionPipeline {
   readonly db: IngestionDbBridge;
   readonly apiKey: string;
@@ -149,13 +162,8 @@ export class IngestionPipeline {
           result.projectIds = await this.db.getDocumentProjectIds(documentId);
         }
       }
-      // Only when the caller explicitly SENT update_if_exists=false: that flag
-      // was then overridden. An omitted flag overrode nothing, and the note on
-      // every update-by-id (the recommended workflow) read as a warning.
-      if (opts.updateExisting === false) {
-        result.note =
-          "document_id provided; update_if_exists flag was overridden";
-      }
+      const note = updateByIdNote(opts.updateExisting);
+      if (note) result.note = note;
       return result;
     }
 
