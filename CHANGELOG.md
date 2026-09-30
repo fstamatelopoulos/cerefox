@@ -9,7 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`cerefox server deploy` works when run from inside an npm workspace.** The
+  Edge Function step ran `npx supabase functions deploy` in the right directory,
+  but inside a workspace `npx` moves to the workspace package's own directory
+  first, so every function failed with "entrypoint path does not exist" and a
+  stray `supabase/.temp` was left behind. Installed packages were never affected;
+  a repo checkout's own build was. The CLI is now told the directory explicitly
+  (`--workdir`).
 
 ---
 
