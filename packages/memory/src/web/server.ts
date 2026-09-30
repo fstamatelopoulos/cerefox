@@ -64,6 +64,9 @@ import {
   checkServerCompatibility,
 } from "../../../../_shared/compatibility/index.ts";
 
+/** Where this API describes itself; advertised in every response's Link header. */
+export const OPENAPI_PATH = "/api/v1/openapi.json";
+
 export interface BuildWebServerOptions {
   host?: string;
   port?: number;
@@ -97,6 +100,15 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   // affected (the CLI talks to the Supabase Data API directly and never to
   // this server), so the only caller a gate touches is a remote one — which is
   // the caller this exists to stop.
+  // RFC 8631 service description: every /api/v1 response, including a 401,
+  // points at the machine-readable contract, so a client that has called
+  // anything can find it without knowing the path (#303). Registered before
+  // the auth gate so it wraps the gate's refusals too; the document itself is
+  // behind the same gate as the rest of the API.
+  app.use("/api/v1/*", async (c, next) => {
+    await next();
+    c.res.headers.set("Link", `<${OPENAPI_PATH}>; rel="service-desc"`);
+  });
   app.use("/api/v1/*", apiAuth());
   app.use("/rest/v1/*", apiAuth());
 

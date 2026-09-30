@@ -402,7 +402,15 @@ const IDENTITY_HEADERS: Array<{ name: string } & ParamDoc> = [
   },
 ];
 
-/** Response headers, by name. */
+/** Set on every /api/v1 response by middleware in server.ts (RFC 8631). */
+const LINK_HEADER = {
+  Link: {
+    description: 'Always `</api/v1/openapi.json>; rel="service-desc"` (RFC 8631): where this API describes itself.',
+    schema: { type: "string" },
+  },
+};
+
+/** Response headers set by individual handlers, by name. */
 export const RESPONSE_HEADER_DOCS: Record<string, { description: string; schema: Record<string, unknown> }> = {
   "X-Total-Count": {
     description: "The exact number of rows matching, independent of `limit`.",
@@ -538,11 +546,16 @@ export function toJsonSchema(s: z.ZodType, io: "input" | "output"): Record<strin
 // ── Assembly ─────────────────────────────────────────────────────────────────
 
 /**
- * Endpoints that do NOT return JSON. Declaring a JSON schema for these would be
- * a lie of a different kind from an absent one, so they get their real media
- * type and no schema.
+ * Endpoints whose body is served verbatim rather than modelled: markdown, CSV,
+ * and this document itself. Declaring a zod-derived schema for these would be a
+ * lie of a different kind from an absent one, so they get their real media
+ * type and a plain schema.
  */
 const NON_JSON: Record<string, { mediaType: string; description: string }> = {
+  "GET /openapi.json": {
+    mediaType: "application/json",
+    description: "This document, byte-identical to docs/api/openapi.json for the running version.",
+  },
   "GET /documents/*/download": {
     mediaType: "text/markdown",
     description: "The document's reconstructed markdown, as a file download.",
@@ -661,7 +674,7 @@ export function buildSpec(): Record<string, unknown> {
           description:
             "Success. This endpoint has no zod schema in `_shared/schemas/`, so its body is not described here rather than guessed at — see docs/guides/api.md.",
         };
-    if (Object.keys(responseHeaders).length > 0) ok.headers = responseHeaders;
+    ok.headers = { ...LINK_HEADER, ...responseHeaders };
 
     // Every route sits behind the auth gate (401) and can fail unhandled (500).
     const codes = uniq([...inputs.statuses, "401", "500"]).sort();
@@ -724,6 +737,9 @@ export function buildSpec(): Record<string, unknown> {
         "too when you identify yourself, as `X-Cerefox-Expected-Content-Hash` or a query parameter.",
         "Neither is a 400 (`CEREFOX_TOKEN_REQUIRED`); a stale hash is a 409 carrying `current_hash`.",
         "Restore and purge take no hash.",
+        "",
+        "DISCOVERY: this document is served at `GET /api/v1/openapi.json` by the server it describes,",
+        "and every /api/v1 response carries `Link: </api/v1/openapi.json>; rel=\"service-desc\"` (RFC 8631).",
       ].join("\n"),
     },
     servers: [

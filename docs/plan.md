@@ -29,6 +29,15 @@
 
 ## Current Focus
 
+**2026-09-30 — v1.15.3 BEING CUT.** Carries #301 (update-by-id override note only for
+an explicit `false`; `/schema-version` reports the bundled version on every install and
+`mismatch` means deployed < bundled; cached model loads silently; the Local image sets
+`ORT_DISABLE_TELEMETRY`, since the in-process opt-out does not reach onnxruntime under
+Bun) and #303 (every guide ships; `GET /api/v1/openapi.json` plus an RFC 8631
+`Link: rel="service-desc"` on every `/api/v1` response). Plan: cut, verify staging
+(`server deploy` needed: the `cerefox-ingest` EF changed) and Local, then green-light
+production, which stayed on 1.15.1 to take 1.15.3 directly.
+
 **2026-09-30 — v1.15.2 IS RELEASED AND VERIFIED on staging and Cerefox Local;
 production is awaiting the maintainer's upgrade.** npm (`latest`, with provenance),
 ghcr `v1.15.2` = `latest`, and the GitHub Release are all out; the release workflow and

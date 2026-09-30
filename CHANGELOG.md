@@ -9,7 +9,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **A store now describes its own API (#303).** `GET /api/v1/openapi.json` serves
+  the OpenAPI 3.1 document for the version you are talking to, and every
+  `/api/v1` response carries `Link: </api/v1/openapi.json>; rel="service-desc"`
+  (RFC 8631), so a client can find it without knowing the path. Before this the
+  document existed only in the repo: an agent working against Cerefox Local had
+  no way to ask the store for its contract.
+
 ### Fixed
+
+- **Every guide ships with the package (#303).** The published package (and so
+  the Local image, and `GET /api/v1/docs`) carried a hand-written list of 15
+  guides, and every guide written after it was missing: `api.md`,
+  `securing-local-access.md`, `linking.md` and `staging-env.md`. All guides now
+  ship unless deliberately excluded with a reason, and a test checks the real
+  tarball.
 
 - **An update by `document_id` no longer warns about a flag you did not send.**
   Every such update (the recommended workflow) came back with "update_if_exists
