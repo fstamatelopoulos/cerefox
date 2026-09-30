@@ -162,7 +162,11 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     });
     expect(del.ok).toBe(true);
     // 0.12.0: the route passes through the RPC's honesty signal.
-    expect(await del.json()).toEqual({ success: true, already_deleted: false });
+    // `auto_purged` (#251, schema 0.17.0+) is additive: a number when the server
+    // has trash auto-purge, absent on an older one.
+    const body = (await del.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ success: true, already_deleted: false });
+    expect(body.auto_purged === undefined || typeof body.auto_purged === "number").toBe(true);
 
     const trashed = (await (
       await fetch(`${server.base}/api/v1/documents/trash?limit=20`)

@@ -55,7 +55,10 @@ export function SettingsPage() {
   const { data, isLoading } = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
 
   // Pending high-impact change awaiting explicit confirmation.
-  const [confirming, setConfirming] = useState<{ entry: ConfigEntry; value: string } | null>(
+  // `at`: the instant the confirmation opened. The purge preview counts
+  // against it; computing `now` per render gave the preview query a new key on
+  // every render, so it restarted forever and never left "Counting…".
+  const [confirming, setConfirming] = useState<{ entry: ConfigEntry; value: string; at: Date } | null>(
     null,
   );
   // Local edit buffer for text/number fields, so typing doesn't fire a write
@@ -86,7 +89,7 @@ export function SettingsPage() {
     // losing tools, calls starting to fail. Those get a confirmation naming the
     // consequence, never a bare toggle.
     if (entry.high_impact) {
-      setConfirming({ entry, value });
+      setConfirming({ entry, value, at: new Date() });
       return;
     }
     mutation.mutate({ key: entry.key, value });
@@ -103,7 +106,7 @@ export function SettingsPage() {
         value: confirming.value,
         currentEnabled: effective("trash_auto_purge_enabled"),
         currentDays: effective("trash_retention_days"),
-        now: new Date(),
+        now: confirming.at,
       })
     : null;
   const days =
