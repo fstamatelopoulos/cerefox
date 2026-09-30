@@ -57,7 +57,7 @@ for `trash-retention` entries after that date. Production stays OFF (maintainer
 decision); production is still on 1.15.3, and its 1.16.0 upgrade (backup first) is
 pending with the maintainer.
 
-Resolved after the release (next release, #308 area): `cerefox server deploy` run from the
+Resolved after the release (#308, next release): `cerefox server deploy` run from the
 repo's own build failed every Edge Function. Root cause: inside an npm workspace `npx`
 moves the child to the workspace package's directory (`packages/memory`) whatever `cwd`
 it is given, so the Supabase CLI looked for functions there. Now passes `--workdir`.
