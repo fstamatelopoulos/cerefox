@@ -9,7 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`/api/v1/version` reports the commit of the code that is running.** The
+  web server asked git about the directory the daemon was started from, so a
+  server started from inside a checkout reported that checkout's commit instead
+  of the one it runs, and the web UI's footer showed it. It now asks about its
+  own install directory: an installed package reports no commit (`null`), a
+  source checkout reports its own.
+- **Dependency advisories:** `fast-uri` raised to 3.1.8 and `brace-expansion` to
+  5.0.12 by override (the latter reaches only the frontend's lint tooling).
 
 ---
 

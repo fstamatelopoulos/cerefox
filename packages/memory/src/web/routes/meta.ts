@@ -9,6 +9,8 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 
 import { bundledSchemaVersion } from "../../../../../_shared/server-assets/index.ts";
@@ -20,11 +22,20 @@ import {
   COMPATIBILITY,
 } from "../../../../../_shared/compatibility/index.ts";
 
-function resolveGitCommitShort(): string | null {
+/**
+ * The commit of the RUNNING code: `CEREFOX_GIT_COMMIT` if set, else git asked
+ * about the directory this module lives in. It used to ask about the process's
+ * cwd, so a daemon started from inside some checkout reported THAT checkout's
+ * HEAD — production started from the repo showed whatever the repo was on,
+ * not the release it runs. An installed package is not a git work tree, so it
+ * now reports null; a source checkout reports its own commit.
+ */
+export function resolveGitCommitShort(dir: string = dirname(fileURLToPath(import.meta.url))): string | null {
   const env = process.env.CEREFOX_GIT_COMMIT;
   if (env) return env.slice(0, 7);
   try {
     const out = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      cwd: dir,
       timeout: 2_000,
       stdio: ["ignore", "pipe", "ignore"],
     })
