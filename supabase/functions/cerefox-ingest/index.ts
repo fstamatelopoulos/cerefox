@@ -374,7 +374,7 @@ Deno.serve(async (req: Request) => {
 
     // Content unchanged -- skip re-indexing
     if (existingDoc.content_hash === contentHash) {
-      const note = update_if_exists ? undefined : "update_if_exists flag was overridden by document_id";
+      const note = body.update_if_exists === false ? "update_if_exists flag was overridden by document_id" : undefined;
       return new Response(
         JSON.stringify({
           document_id: existingDoc.id,
@@ -462,7 +462,7 @@ Deno.serve(async (req: Request) => {
       await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
     }
 
-    const note = update_if_exists ? undefined : "update_if_exists flag was overridden by document_id";
+    const note = body.update_if_exists === false ? "update_if_exists flag was overridden by document_id" : undefined;
     return new Response(
       JSON.stringify({
         document_id: existingDoc.id,

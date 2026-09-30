@@ -11,6 +11,7 @@
 import { execFileSync } from "node:child_process";
 import { Hono } from "hono";
 
+import { bundledSchemaVersion } from "../../../../../_shared/server-assets/index.ts";
 import { PKG_VERSION } from "../../meta.ts";
 import type { WebContext } from "../context.ts";
 import { listBundledDocs, readDoc } from "../docs.ts";
@@ -41,8 +42,6 @@ const VERSION_INFO = {
   build_date: process.env.CEREFOX_BUILD_DATE ?? null,
 };
 
-const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
-
 export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
   // `env_label` is read per-request, not folded into the module-level
   // VERSION_INFO: the label comes from `.env`, which is loaded during server
@@ -70,30 +69,11 @@ export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
   });
 
   app.get("/api/v1/schema-version", async (c) => {
-    // bundled: read the @version marker from the in-package schema.sql
-    let bundled: string | null = null;
-    try {
-      const { readFileSync, existsSync } = await import("node:fs");
-      const { fileURLToPath } = await import("node:url");
-      const { dirname, join } = await import("node:path");
-      const here = dirname(fileURLToPath(import.meta.url));
-      // Resolver mirrors docs.ts: look under <pkg>/db/schema.sql, then the repo's
-      // src/cerefox/db/schema.sql as a source-mode fallback.
-      const candidates = [
-        join(here, "..", "..", "..", "db", "schema.sql"),
-        join(here, "..", "..", "..", "..", "..", "src", "cerefox", "db", "schema.sql"),
-      ];
-      for (const path of candidates) {
-        if (existsSync(path)) {
-          const sql = readFileSync(path, "utf8");
-          const match = sql.match(SCHEMA_VERSION_RE);
-          bundled = match ? match[1] : null;
-          break;
-        }
-      }
-    } catch {
-      bundled = null;
-    }
+    // The same reader `doctor` and the MCP server use. This route used to
+    // guess the path relative to its own source file, which is wrong once the
+    // code is bundled into dist/bin/cerefox.js: every published install
+    // answered `bundled: null`, so the UI's redeploy banner could never fire.
+    const bundled = bundledSchemaVersion();
 
     let deployed: string | null = null;
     if (ctx) {
@@ -124,11 +104,17 @@ export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
       }
     }
 
-    const mismatch = Boolean(bundled && deployed && bundled !== deployed);
     // iter-26 Part 26C: two-tier compatibility level so the banner can
     // distinguish a *blocking* outdated schema (below the client minimum,
     // red) from a *nudge* (older than bundled but still ≥ minimum, yellow).
     const level = classifyCompat(deployed, COMPATIBILITY.minSchema, bundled);
+    // True only when the deployed schema is OLDER than this client's: the one
+    // direction that needs `cerefox server deploy`, and the only one the web
+    // banner's text ("ships a newer schema than what is deployed") describes.
+    // It was `bundled !== deployed`, which would also fire for an older client
+    // pointed at a newer server. That never showed, because `bundled` was
+    // always null until the shared reader (#301).
+    const mismatch = level === "above-min-but-old";
     return c.json({
       bundled,
       deployed,

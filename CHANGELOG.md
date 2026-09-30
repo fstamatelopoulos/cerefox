@@ -9,7 +9,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **An update by `document_id` no longer warns about a flag you did not send.**
+  Every such update (the recommended workflow) came back with "update_if_exists
+  flag was overridden", on MCP, the CLI, `/api/v1/ingest` and the
+  `cerefox-ingest` Edge Function, because the note fired whenever the flag was
+  not `true`. It now appears only when the caller explicitly sent
+  `update_if_exists: false`, which is the case it was written for. The Edge
+  Function half takes effect after `cerefox server deploy`.
+- **The web UI can tell you when the server needs redeploying again (#301).**
+  `GET /api/v1/schema-version` answered `bundled: null` on every published
+  install: it looked for `schema.sql` relative to its own source file, which is
+  wrong once the code is bundled, so the "redeploy" banner could never appear.
+  It now uses the same reader as `cerefox doctor`. `mismatch` now means "the
+  deployed schema is older than this client's", the only case that needs
+  `cerefox server deploy`; it used to be any difference, which would have told
+  an older client pointed at a newer server to redeploy.
+- **The local embedder only announces a download when it downloads.** Every
+  process start printed `loading "nomic-embed-text-v1.5" from HuggingFace …
+  (first-run only)` plus a line per model file, so every CLI command inside
+  Cerefox Local began with five lines of noise although the model was cached.
+  A cached model now loads silently; the first download is narrated as before.
+- **The onnxruntime telemetry opt-out now also covers Bun.** v1.15.2's in-process
+  `ORT_DISABLE_TELEMETRY=1` reaches the runtime under Node (every npm install),
+  but not under Bun, which is what the Cerefox Local image runs. Today's image
+  uses an onnxruntime without telemetry, so nothing was sent from it; the image
+  now sets the variable in its environment so that stays true when its runtime
+  moves (#300). If you run Cerefox from source under Bun with
+  `CEREFOX_EMBEDDER=local`, export `ORT_DISABLE_TELEMETRY=1` yourself.
 
 ---
 

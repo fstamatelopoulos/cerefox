@@ -32,7 +32,7 @@ import {
   COMPATIBILITY,
   compareSemver,
 } from "../../../../../_shared/compatibility/index.ts";
-import { resolveServerAssets } from "../../../../../_shared/server-assets/index.ts";
+import { bundledSchemaVersion } from "../../../../../_shared/server-assets/index.ts";
 import { restartCommand, statusDaemon } from "../../web/daemon.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
@@ -383,20 +383,6 @@ export async function checkOpenAI(): Promise<CheckResult> {
   }
 }
 
-/** Matches the `-- @version: X.Y.Z` marker at the top of schema.sql. */
-const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
-
-/** Read the schema version this client bundles (from the schema.sql header). */
-function readBundledSchemaVersion(): string | null {
-  try {
-    const assets = resolveServerAssets();
-    if (!existsSync(assets.schemaFile)) return null;
-    const m = readFileSync(assets.schemaFile, "utf8").match(SCHEMA_VERSION_RE);
-    return m ? m[1] : null;
-  } catch {
-    return null;
-  }
-}
 
 const SCHEMA_CHECK_NAME = "schema + RPCs";
 
@@ -433,7 +419,7 @@ export async function checkSchemaVersion(): Promise<CheckResult> {
     // minimum (blocking) and bundled (informational) versions. The remediation
     // command is owned by the doctor footer, which consolidates schema + EF
     // suggestions into a single `cerefox deploy-server [--schema-only]` line.
-    const bundled = readBundledSchemaVersion();
+    const bundled = bundledSchemaVersion();
     const level = classifyCompat(deployed, COMPATIBILITY.minSchema, bundled);
     switch (level) {
       case "below-min":

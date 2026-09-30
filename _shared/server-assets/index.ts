@@ -34,7 +34,7 @@
  * `supabase functions deploy` runs from the bundled copy.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cwd as processCwd } from "node:process";
@@ -140,4 +140,29 @@ export function resolveServerAssets(
   // caller's existsSync check produces a clear error pointing at the
   // expected repo location.
   return sourceServerAssets(join(here, "..", ".."));
+}
+
+/** Matches the `-- @version: X.Y.Z` marker at the top of schema.sql. */
+export const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
+
+/**
+ * The schema version this client bundles: the `-- @version:` marker in the
+ * schema.sql that `resolveServerAssets()` finds. Null when no usable assets
+ * resolve (an unusual install layout); never throws.
+ *
+ * The ONE reader. `doctor`, the MCP server's startup banner and the web
+ * route `GET /api/v1/schema-version` each carried a copy; the web route's did
+ * its own path guessing relative to its source file, which is wrong once the
+ * code is bundled into `dist/bin/cerefox.js`, so it answered `bundled: null`
+ * on every published install and the web UI's redeploy banner could never
+ * compare versions.
+ */
+export function bundledSchemaVersion(opts: ResolveServerAssetsOptions = {}): string | null {
+  try {
+    const assets = resolveServerAssets(opts);
+    if (!existsSync(assets.schemaFile)) return null;
+    return readFileSync(assets.schemaFile, "utf8").match(SCHEMA_VERSION_RE)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }

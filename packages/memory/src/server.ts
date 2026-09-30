@@ -21,11 +21,10 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { existsSync, readFileSync } from "node:fs";
 
 import { compareSemver } from "../../../_shared/compatibility/index.ts";
 import { loadSettings } from "../../../_shared/config/index.ts";
-import { resolveServerAssets } from "../../../_shared/server-assets/index.ts";
+import { bundledSchemaVersion } from "../../../_shared/server-assets/index.ts";
 import {
   ALL_TOOLS,
   assertToolEnabled,
@@ -138,9 +137,6 @@ export function buildServer(): ServerHandle {
   };
 }
 
-/** Matches the `-- @version: X.Y.Z` marker at the top of the bundled schema.sql. */
-const SCHEMA_VERSION_RE = /^--\s*@version:\s*(\S+)/m;
-
 async function warnIfSchemaVersionMismatch(
   supabase: SharedSupabaseClient,
 ): Promise<void> {
@@ -153,16 +149,8 @@ async function warnIfSchemaVersionMismatch(
     // comparing against it made this banner a permanent false positive on every
     // healthy startup (issue #90). The bundled schema version is the same source
     // `cerefox doctor` uses: the `-- @version:` marker in the bundled schema.sql.
-    let bundled: string | null = null;
-    try {
-      const assets = resolveServerAssets();
-      if (existsSync(assets.schemaFile)) {
-        const m = readFileSync(assets.schemaFile, "utf8").match(SCHEMA_VERSION_RE);
-        bundled = m ? m[1] : null;
-      }
-    } catch {
-      /* assets unresolvable (unusual install layout) → skip the check */
-    }
+    // Null when assets are unresolvable (unusual install layout) → skip the check.
+    const bundled = bundledSchemaVersion();
     if (!bundled) return;
     // Warn only for the redeploy footgun: client bundles a NEWER schema than is
     // deployed (user upgraded npm, forgot `cerefox server deploy`). A deployed

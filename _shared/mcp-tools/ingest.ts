@@ -109,6 +109,11 @@ async function handler(
     );
   }
   const update_if_exists = (args.update_if_exists as boolean | undefined) ?? false;
+  // The override note is for a flag the caller actually SET to false. An
+  // omitted flag overrode nothing, and appending the note to every update by
+  // document_id (the recommended workflow) read as a warning.
+  const overrideNote =
+    args.update_if_exists === false ? " Note: update_if_exists flag was overridden by document_id." : "";
   const author = callerIdentity(args) ?? DEFAULT_IDENTITY;
   const author_type = "agent"; // MCP path is always agent
   const expected_content_hash = (args.expected_content_hash as string | undefined)?.trim() || null;
@@ -168,9 +173,7 @@ async function handler(
     }
 
     if (existingDoc.content_hash === contentHash) {
-      const note = update_if_exists
-        ? ""
-        : " Note: update_if_exists flag was overridden by document_id.";
+      const note = overrideNote;
       return `Document already up-to-date: "${existingDoc.title}" (id: ${existingDoc.id}). Content hash unchanged (${contentHash}).${note}`;
     }
 
@@ -229,9 +232,7 @@ async function handler(
       await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
     }
 
-    const note = update_if_exists
-      ? ""
-      : " Note: update_if_exists flag was overridden by document_id.";
+    const note = overrideNote;
     return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${note}${escapedContentNote(content)}`;
   }
 
