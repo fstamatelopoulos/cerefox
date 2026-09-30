@@ -26,7 +26,8 @@ export const DocSearchResult = z.object({
   doc_source: z.string().nullable(),
   doc_metadata: z.record(z.string(), z.unknown()),
   doc_project_ids: z.array(z.string()),
-  doc_project_names: z.array(z.string()).default([]),
+  /** Absent in browse mode (a project with no query). */
+  doc_project_names: z.array(z.string()).optional(),
   best_score: z.number(),
   best_chunk_heading_path: z.array(z.string()),
   full_content: z.string(),
@@ -34,6 +35,9 @@ export const DocSearchResult = z.object({
   total_chars: z.number().int(),
   doc_updated_at: z.string().nullable(),
   is_partial: z.boolean(),
+  /** True on every row when nothing cleared the relevance threshold: these are
+   *  best-effort candidates. Absent in browse mode (no query). */
+  below_confidence: z.boolean().optional(),
 });
 export type DocSearchResult = z.infer<typeof DocSearchResult>;
 
@@ -51,11 +55,14 @@ export const ChunkSearchResult = z.object({
   doc_project_ids: z.array(z.string()),
   doc_project_names: z.array(z.string()).default([]),
   doc_metadata: z.record(z.string(), z.unknown()),
+  below_confidence: z.boolean().optional(),
 });
 export type ChunkSearchResult = z.infer<typeof ChunkSearchResult>;
 
 export const SearchResponse = z.object({
-  results: z.array(z.record(z.string(), z.unknown())),
+  /** `docs` mode: one DocSearchResult per document. `hybrid` / `fts` /
+   *  `semantic`: one ChunkSearchResult per chunk. */
+  results: z.array(z.union([DocSearchResult, ChunkSearchResult])),
   query: z.string(),
   mode: z.string(),
   total_found: z.number().int(),
@@ -128,6 +135,13 @@ export const DashboardResponse = z.object({
 });
 export type DashboardResponse = z.infer<typeof DashboardResponse>;
 
+/** `GET /dashboard/recent-docs`: the recently-changed tile alone, optionally
+ *  scoped to one project. */
+export const DashboardRecentDocsResponse = z.object({
+  recent_docs: z.array(DashboardDoc),
+});
+export type DashboardRecentDocsResponse = z.infer<typeof DashboardRecentDocsResponse>;
+
 export const ProjectDocumentsResponse = z.object({
   documents: z.array(DashboardDoc),
   total: z.number().int(),
@@ -136,8 +150,20 @@ export const ProjectDocumentsResponse = z.object({
 });
 export type ProjectDocumentsResponse = z.infer<typeof ProjectDocumentsResponse>;
 
-// /documents/trash — raw doc rows with extra `project_ids` field.
-export const TrashedDoc = z.record(z.string(), z.unknown());
+// /documents/trash — soft-deleted rows, newest deletion first. The exact
+// total travels in the X-Total-Count response header (#249).
+export const TrashedDoc = z.object({
+  id: z.string(),
+  title: z.string(),
+  source: z.string().nullable(),
+  chunk_count: z.number().int(),
+  total_chars: z.number().int(),
+  /** Absent when the review workflow is off (#241). */
+  review_status: z.string().optional(),
+  deleted_at: z.string(),
+  updated_at: z.string().nullable(),
+  project_ids: z.array(z.string()),
+});
 export type TrashedDoc = z.infer<typeof TrashedDoc>;
 
 // /resolve-link response shape — best-effort link resolution.

@@ -192,10 +192,10 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `POST /documents/metadata-search` | Query by metadata / project / time, no text query. |
 | `GET /metadata-keys` | Metadata keys with counts and example values. |
 | `GET /resolve-link`, `GET /check-filename` | Link and title resolution helpers. |
-| `POST /ingest` | Create or update from JSON (`title`, `content`, …). |
+| `POST /ingest` | Create or update from JSON (`title`, `content`, …). Unknown fields are a `400`. |
 | `POST /ingest/file` | Create from a multipart file upload. |
 | `POST /documents/{id}/upload` | Replace a document's content from a file. |
-| `POST /documents/{id}/edit` | Update title, content, metadata, projects. |
+| `POST /documents/{id}/edit` | Update title, content, metadata, projects. Unknown fields are a `400`. |
 | `DELETE /documents/{id}` | Soft-delete (to trash). |
 | `POST /documents/{id}/restore` | Restore from trash. |
 | `DELETE /documents/{id}/purge` | Permanent delete. Irreversible. |
@@ -214,33 +214,43 @@ honour the identity headers. `/version` needs nothing.
 
 ### Every mutation needs a concurrency token
 
-Cerefox uses optimistic locking, and this API is no exception. A content update
-requires the `content_hash` you read the document at, as
-`expected_content_hash`, or an explicit `last_write_wins`. A stale hash returns
-`409` (with `current_hash`, so you can re-read without a second round trip);
-sending neither returns `400` with `CEREFOX_TOKEN_REQUIRED`. Read, then modify,
-then write with the token you read.
+Cerefox uses optimistic locking, and this API is no exception. Read the
+document first: `GET /documents/{id}` returns its `content_hash`. Then send
+that hash back with the write. A stale hash is a `409` carrying `current_hash`,
+so you can re-read without a second round trip. Sending no hash (and no
+`last_write_wins`) is a `400` with `CEREFOX_TOKEN_REQUIRED`.
+
+| Write | Where the hash goes | `last_write_wins` |
+|---|---|---|
+| `POST /ingest` with `document_id`, or with `update_if_exists` matching a document | `expected_content_hash` in the body | Accepted |
+| `POST /documents/{id}/edit` | `expected_content_hash` in the body. Checked on every save, including a metadata-only one | Accepted |
+| `POST /documents/{id}/upload`, `POST /ingest/file` with `update_existing` | `expected_content_hash` form field | `last_write_wins=true` form field |
+| `DELETE /documents/{id}` | `X-Cerefox-Expected-Content-Hash` header, or `expected_content_hash` query parameter | Not accepted |
+| `POST /documents/{id}/restore`, `DELETE /documents/{id}/purge` | No hash | Not applicable |
+
+`last_write_wins` skips the check. Use it only when an external source of truth
+(a file you are syncing, say) makes a conflict meaningless; there is no implicit
+default. Creating a new document needs no hash.
 
 **Check the status code, not just the body.** Every refusal is a real HTTP
-status: `400` for a malformed or incomplete request, `409` for a concurrency
-conflict, `404` for a missing document, `503` when the embedder is
-unavailable. The reason is in the body's `detail` (and, on the ingest routes,
-also in `error`, which they have always used). Before v1.12.0 the three ingest
-routes answered `200` with `success: false` for a *refused* write, so a client
-checking only `resp.ok` read a refusal as a success; that is fixed, and it is
-the one response-shape change in v1.12.0.
+status: `400` for a malformed or incomplete request (including a body field the
+route does not know, which is refused rather than ignored), `404` for a missing
+document or version, `409` for a concurrency conflict or a trashed document,
+`422` for content that links to document ids that do not exist, and `503` when
+the embedder is unavailable. The reason is in the body's `detail` (and, on the
+ingest and edit routes, also in `error`, which they have always used). Until
+v1.15.2 a delete with a stale hash answered `500`, and `POST /ingest` answered
+`200` with `success: false` for a missing title or empty content; both are
+fixed.
 
-`POST /documents/{id}/upload` takes the same contract: pass
-`expected_content_hash` as a form field, or `last_write_wins=true` if the file
-you are uploading is an external source of truth and a conflict is genuinely
-meaningless. There is no implicit default.
+**Delete follows a read too.** A caller that identifies itself must send the
+hash on `DELETE /documents/{id}`, exactly as `cerefox_delete_document` requires
+it over MCP. A caller that sends no identity is the bundled web UI, which
+confirms with the human in a dialog instead, and it keeps working unchanged.
 
-**Delete follows a read too.** `DELETE /documents/{id}` requires the hash from
-an identified caller, as `X-Cerefox-Expected-Content-Hash` or an
-`expected_content_hash` query parameter, exactly as `cerefox_delete_document`
-requires it over MCP. A caller that sends no identity is the bundled web UI,
-which confirms with the human in a dialog instead, and it keeps working
-unchanged.
+The full contract of every endpoint (parameters, headers, bodies, error codes)
+is in [`docs/api/openapi.json`](../api/openapi.json), generated from the route
+handlers themselves.
 
 Purge (`DELETE /documents/{id}/purge`) is irreversible and takes no token. It is
 reachable by anything that can reach the port, which is another reason the
@@ -270,7 +280,7 @@ practical differences:
 | Transport | Plain HTTP | stdio or Streamable HTTP |
 | Client needs | An HTTP client | An MCP client |
 | Identity | Optional, defaults to `web-ui` | Per-call `author` |
-| Partial edits | `POST /documents/{id}/edit` | `cerefox_insert`, `cerefox_edit` |
+| Section-level edits | None: `POST /documents/{id}/edit` replaces the whole content | `cerefox_insert`, `cerefox_edit` |
 | Guidance for agents | This guide | `cerefox_get_help()`, in-band |
 | Authentication | None on loopback; API key otherwise | None locally; token or OAuth remotely |
 

@@ -9,7 +9,50 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `/api/v1` write routes now keep their own contract (#296).** Reported by
+  an agent using the HTTP API, and confirmed by checking all 39 routes against
+  their handlers:
+  - **`POST /ingest` can update a document.** It never read
+    `expected_content_hash` or `last_write_wins`, so every update by
+    `document_id` was refused with `CEREFOX_TOKEN_REQUIRED` whatever the caller
+    sent. It also ignored `update_if_exists` (a caller asking for an update got
+    a second document), `project_name`, `project_names` and `source`. All are
+    honoured now. `POST /ingest/file` accepts the hash and `last_write_wins` too.
+  - **Unknown fields are refused, not dropped.** `POST /ingest` and
+    `POST /documents/{id}/edit` answer `400` naming the field, so a typo can no
+    longer turn an update into a create.
+  - **A delete with a stale hash is a `409` carrying `current_hash`**, not a `500`.
+  - **`POST /documents/{id}/edit` honours `last_write_wins`** and checks a sent
+    hash on a metadata-only save too.
+  - **Real statuses for refusals:** a missing title or empty content on
+    `POST /ingest` is a `400` (was `200 success:false`); an update of an unknown
+    or trashed document is a `404` / `409` (was `500`). Archiving a version that
+    does not belong to the document is a `404` (was `200` plus an audit entry
+    reading "Version ? archived"), and `archived` must be a boolean. Purging an
+    id that does not exist is a `404` (was `purged: true`).
+- **Search results in the web UI show their projects again.** The route dropped
+  the `doc_project_names` the search RPCs return, so result cards rendered no
+  project chips.
+
 ### Changed
+
+- **`docs/api/openapi.json` describes every input (#296, API document 1.1.0).**
+  The first version listed path parameters only: every query parameter, the
+  delete route's hash header, the identity headers, both multipart bodies and
+  authentication were missing, and the `/ingest` and `/edit` bodies described
+  fields the routes did not read. Parameters, headers, form fields, response
+  headers and per-route error codes are now **derived from the handler source**,
+  and `_shared/__tests__/api-request-contract.test.ts` requires them to match
+  their documentation in both directions, so a read input nobody documented and
+  a documented input nobody reads both fail. All 39 routes now carry a response
+  schema, and `GET /documents/{id}` documents `content_hash`, the concurrency
+  token, which it had always returned. The live truth test now also fails on a
+  response field the schema does not mention, which is how that one hid.
+  `docs/guides/api.md`'s concurrency section is rewritten to match: which write
+  takes the hash where, and which take none.
+
 
 - **`docs/guides/ops-scripts.md` documents the scripts it claims to.** It
   advertises covering all of `scripts/` and listed 7 of 15: `gen_openapi.ts` and
