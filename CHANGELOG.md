@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.16.1] -- 2026-09-30
+
 ### Fixed
 
 - **The local embedder can download its model from inside the web server.** On
