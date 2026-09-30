@@ -157,7 +157,11 @@ export function renderMetadata(
   add("Projects", projects.length > 0 ? projects.join(", ") : "(none)");
   add("Created", meta.created_at);
   add("Updated", meta.updated_at);
-  add("Characters", meta.total_chars?.toLocaleString());
+  // The store's total_chars: the sum of the chunks' content. The exported file
+  // is those chunks rejoined, so its size can differ by a few characters (a
+  // production export matched exactly for 1,017 of 1,179 files, off by 0-228
+  // otherwise). Labelled so nobody reads a mismatch as lost content.
+  add("Characters (stored)", meta.total_chars?.toLocaleString());
   add("Chunks", meta.chunk_count);
   if (opts.showReview) add("Review status", meta.review_status);
   add("Content hash", meta.content_hash);

@@ -9,7 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **`cerefox_export.ts` labels the sidecar's character count "Characters (stored)".**
+  It is the store's `total_chars` (the sum of the chunks), and the exported file is
+  those chunks rejoined, so its size can differ by a few characters. Under the old
+  label that difference read like missing content.
 
 ---
 
