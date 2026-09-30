@@ -29,6 +29,32 @@
 
 ## Current Focus
 
+**2026-09-30 — v1.16.0 IS RELEASED AND VERIFIED on staging and Cerefox Local;
+production (on 1.15.3) awaits the maintainer.** Headline: opt-in trash auto-purge
+(#251, iteration 47): the delete that adds to the trash also sweeps documents older than
+`trash_retention_days` (default 60), off by default; schema 0.17.0, migration 0033, so
+`cerefox server deploy` is required. Also: `/version` reports the running code's commit,
+not the daemon cwd's (#305), and two advisories cleared.
+
+**The first v1.16.0 cut failed on its tag and was re-cut** (npm never published; ghcr
+had, and was overwritten). Cause: an `api.md` table cell said "(v1.16.0)"; summaries are
+copied into the generated `openapi.json`, whose "no package version" guard can only fire
+once the cut bumps the package. New guard (#307) fails BEFORE the cut on any `vX.Y.Z`
+in the artifact that is not older than the current package. Rule: never write the
+upcoming release number into `api.md`'s endpoint table.
+
+Verified: staging (released package, `server deploy`, doctor green incl. the new
+auto-purge line; the smoke test; an auto-purge round trip on the released build;
+Playwright 27/1) and Local (`pg_dump` in `~/.cerefox/local/backups/`, upgrade, data
+identical, embedder runtime unchanged, migration applied on start, settings seeded
+off/60). Auto-purge was left OFF on both; turning it on for Local is the maintainer's
+call. Discord announcement drafted (two messages), not yet posted.
+
+Known quirk, not user-facing: `cerefox server deploy` run from the repo's own build
+fails the Edge Function step (the Supabase CLI walks up to the repo's `supabase/.temp`
+link state). Installed packages are unaffected; verify branches by packing and
+installing outside the repo.
+
 **2026-09-30 — v1.15.3 IS RELEASED AND VERIFIED on staging and Cerefox Local;
 production (still 1.15.1) is green-lit and awaiting the maintainer.** npm `latest`, ghcr
 `v1.15.3` = `latest`, and the GitHub Release are out; release workflow, image build and

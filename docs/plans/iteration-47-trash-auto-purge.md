@@ -1,6 +1,6 @@
 # Iteration 47 — Trash auto-purge (#251)
 
-**Status:** merged (#306), releasing as v1.16.0.
+**Status:** ✅ CLOSED, shipped v1.16.0 (2026-09-30; re-cut once, see Current Focus).
 Design: [`docs/specs/trash-auto-purge.md`](../specs/trash-auto-purge.md).
 
 ## Decisions
@@ -23,4 +23,5 @@ Design: [`docs/specs/trash-auto-purge.md`](../specs/trash-auto-purge.md).
 | `doctor` line | done |
 | Docs: configuration, access-paths trust model, api.md, agent guides | done |
 | Staging verification (see spec): all scenarios pass (off, bad values, preview = purged count, oldest-first, cap 100, concurrent 60 + 90, failure isolation, CLI/MCP output), Playwright 27/1 | done |
-| Release v1.16.0 + Discord announcement (drafted, posted after go-ahead) | pending |
+| Release v1.16.0 | done (re-cut after a tag-only CI failure, #307) |
+| Discord announcement | drafted, awaiting go-ahead |
