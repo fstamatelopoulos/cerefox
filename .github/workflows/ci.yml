@@ -201,6 +201,19 @@ jobs:
         run: >
           bun audit
           --ignore=GHSA-qwww-vcr4-c8h2
+      - name: bun audit — Cerefox Local image embedder runtime
+        # docker/local/runtime is what the Local image installs (pinned, #300).
+        # It was outside every audit until it had a lockfile. Accepted here, for
+        # the image only: the two sharp advisories (transformers 3.8.1 needs
+        # sharp ^0.34; sharp serves the image-processing path, which a text
+        # embedding model never loads). Retired by moving the image to
+        # transformers 4.x (#300, second half). See security-audit-1.0.md.
+        working-directory: docker/local/runtime
+        run: >
+          bun install --frozen-lockfile --ignore-scripts &&
+          bun audit
+          --ignore=GHSA-f88m-g3jw-g9cj
+          --ignore=GHSA-rgj7-g3m4-5g8c
 
   gitleaks:
     name: Secret scan (gitleaks)

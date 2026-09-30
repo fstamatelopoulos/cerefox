@@ -1,0 +1,9 @@
+{
+  "name": "cerefox-local-runtime",
+  "private": true,
+  "description": "The Cerefox Local image's embedder runtime. Pinned exactly and installed from the committed bun.lock (#300): the image used to resolve ^ ranges on every build, so two builds of one tag could embed differently. onnxruntime-node matches the version transformers 3.8.1 pins, so there is one copy, the one that runs.",
+  "dependencies": {
+    "@huggingface/transformers": "3.8.1",
+    "onnxruntime-node": "1.21.0"
+  }
+}
