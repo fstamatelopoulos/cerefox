@@ -73,7 +73,7 @@ function notReady(error: string): IngestResponse {
  * `success: false` and `error` stay in the body, so a client reading either of
  * them keeps working; only the status (and the added `detail`) are new.
  */
-function ingestFailure(err: unknown): [IngestResponse, 400 | 409 | 500] {
+function ingestFailure(err: unknown): [IngestResponse, 400 | 404 | 409 | 422 | 500] {
   if (err instanceof ConcurrencyConflictError) {
     return [
       {
@@ -86,7 +86,55 @@ function ingestFailure(err: unknown): [IngestResponse, 400 | 409 | 500] {
   if (err instanceof ConcurrencyTokenRequiredError) {
     return [notReady(err.message), 400];
   }
-  return [notReady(err instanceof Error ? err.message : String(err)), 500];
+  const msg = err instanceof Error ? err.message : String(err);
+  // Caller-state failures are not server faults (#296). Classified by the
+  // pipeline's own wording, the same way `documents-write.ts` classifies the
+  // edit path: an update by an unknown id, an update of a trashed document,
+  // and content linking to ids that do not exist.
+  if (/^Document (.* )?not found/.test(msg)) return [notReady(msg), 404];
+  if (msg.includes("soft-deleted")) return [notReady(msg), 409];
+  if (msg.includes("CEREFOX_UNRESOLVED_LINKS")) return [notReady(msg), 422];
+  return [notReady(msg), 500];
+}
+
+/** Every top-level field `POST /ingest` reads. `mode` is sent by the bundled
+ *  UI and carries no meaning; the identity fields are read by
+ *  `resolveCallerIdentity`. `ingest-contract.test.ts` pins this list to the
+ *  published request schema in both directions. */
+export const INGEST_FIELDS = new Set([
+  "title",
+  "content",
+  "document_id",
+  "expected_content_hash",
+  "last_write_wins",
+  "update_existing",
+  "update_if_exists",
+  "project_ids",
+  "project_names",
+  "project_name",
+  "metadata",
+  "source",
+  "mode",
+  "author",
+  "requestor",
+  "author_type",
+]);
+
+/** Type checks a cast would otherwise hide until the RPC or a jsonb column. */
+function ingestShapeError(body: Record<string, unknown>): string | null {
+  const isStrArray = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === "string");
+  if (body.metadata != null && (typeof body.metadata !== "object" || Array.isArray(body.metadata))) {
+    return "metadata must be a JSON object of key/value pairs.";
+  }
+  if (body.project_ids != null && !isStrArray(body.project_ids)) return "project_ids must be an array of strings.";
+  if (body.project_names != null && !isStrArray(body.project_names)) return "project_names must be an array of strings.";
+  for (const k of ["project_name", "source", "document_id", "expected_content_hash"]) {
+    if (body[k] != null && typeof body[k] !== "string") return `${k} must be a string.`;
+  }
+  for (const k of ["last_write_wins", "update_existing", "update_if_exists"]) {
+    if (body[k] != null && typeof body[k] !== "boolean") return `${k} must be a boolean.`;
+  }
+  return null;
 }
 
 export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
@@ -102,11 +150,26 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
     } catch {
       return c.json(notReady("Invalid JSON body"), 400);
     }
+    // Unknown fields are refused, not dropped (#296). The published contract
+    // once listed six fields this route ignored; a caller that sent
+    // `update_if_exists` got a duplicate document instead of an update, and
+    // nothing told it why. A typo now costs a 400 rather than a silent miswrite.
+    const unknown = Object.keys(body).filter((k) => !INGEST_FIELDS.has(k));
+    if (unknown.length > 0) {
+      return c.json(
+        notReady(`Unknown field(s): ${unknown.join(", ")}. Accepted: ${[...INGEST_FIELDS].join(", ")}.`),
+        400,
+      );
+    }
     const title = String(body.title ?? "").trim();
     const content = String(body.content ?? "");
 
-    if (!title) return c.json(notReady("Title is required."), 200);
-    if (!content.trim()) return c.json(notReady("Content cannot be empty."), 200);
+    // Real statuses (#296): these answered 200 {success:false}, the pattern
+    // #232 removed from every other refusal on this route.
+    if (!title) return c.json(notReady("Title is required."), 400);
+    if (!content.trim()) return c.json(notReady("Content cannot be empty."), 400);
+    const shapeError = ingestShapeError(body);
+    if (shapeError) return c.json(notReady(shapeError), 400);
 
     const who = resolveCallerIdentity(c, body);
     if (!who.ok) return c.json({ detail: who.detail }, 400);
@@ -119,15 +182,25 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
       const result = await pipeline.ingestText({
         text: content.trim(),
         title,
-        source: "paste",
-        projectIds: Array.isArray(body.project_ids)
-          ? (body.project_ids as string[])
-          : null,
-        metadata: (body.metadata as Record<string, string> | undefined) ?? null,
-        updateExisting: Boolean(body.update_existing),
+        source: typeof body.source === "string" && body.source.trim() ? body.source.trim() : "paste",
+        projectIds: Array.isArray(body.project_ids) ? (body.project_ids as string[]) : null,
+        projectNames: Array.isArray(body.project_names) ? (body.project_names as string[]) : null,
+        projectName: typeof body.project_name === "string" ? body.project_name : null,
+        metadata: (body.metadata as Record<string, unknown> | null | undefined) ?? null,
+        // `update_if_exists` is the name MCP and the CLI use; `update_existing`
+        // is the one the bundled UI has always sent. Either means the same.
+        updateExisting: body.update_existing === true || body.update_if_exists === true,
         documentId: (body.document_id as string | undefined) ?? null,
         author: who.identity.author,
         authorType: who.identity.authorType,
+        // The concurrency contract (#296). Never read before v1.15.2, so an
+        // update by document_id was refused with CEREFOX_TOKEN_REQUIRED
+        // whatever the caller sent.
+        expectedContentHash:
+          typeof body.expected_content_hash === "string" && body.expected_content_hash.trim() !== ""
+            ? body.expected_content_hash.trim()
+            : null,
+        lastWriteWins: body.last_write_wins === true,
       });
       const skipped = result.action === "skipped";
       const resp: IngestResponse = {
