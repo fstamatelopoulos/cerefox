@@ -65,12 +65,19 @@ export function IngestPage() {
     }
   };
 
+  // "Update existing" overwrites the matched document's content, and a content
+  // update needs a concurrency token or an explicit last_write_wins. The page
+  // sent neither, so the toggle was refused whenever the content had changed
+  // (#298), i.e. whenever it mattered. The human ticking the box IS the
+  // overwrite decision (there is no earlier read whose hash we could send),
+  // so it goes as last_write_wins, which the audit log records as such.
   const pasteMutation = useMutation({
     mutationFn: () =>
       ingestPaste({
         title,
         content,
         update_existing: updateExisting,
+        ...(updateExisting ? { last_write_wins: true } : {}),
         project_ids: projectIds,
         metadata: collectMeta(),
       }),
@@ -85,6 +92,8 @@ export function IngestPage() {
       formData.append("file", file);
       if (title.trim()) formData.append("title", title.trim());
       formData.append("update_existing", String(updateExisting));
+      // Same rule as the paste tab (#298).
+      if (updateExisting) formData.append("last_write_wins", "true");
       if (projectIds.length > 0) formData.append("project_ids", projectIds.join(","));
       const meta = collectMeta();
       if (Object.keys(meta).length > 0) formData.append("metadata", JSON.stringify(meta));
@@ -452,7 +461,7 @@ export function IngestPage() {
               >
                 <span />
               </button>
-              <span style={{ fontSize: 13 }}>Update existing if title matches</span>
+              <span style={{ fontSize: 13 }}>Update existing if title matches (replaces its content)</span>
             </label>
           </div>
         </div>

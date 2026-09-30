@@ -47,15 +47,19 @@ the HTTP API met `400`s the published OpenAPI document did not explain. Branch
   `env_label`, `level`/`min`, and the edit route's `*Changed` flags). API document 1.1.0.
 - Verified on staging: package suite incl. the new live `api-write-contract.test.ts`,
   web-integration 50/0, Playwright 24/1-skip.
-- **Filed, not fixed: #298** — the web UI's "Update existing" toggle is refused with
-  `CEREFOX_TOKEN_REQUIRED` whenever content changed (reproduced on 1.15.1). Needs a
-  semantics decision (send `last_write_wins`, or resolve the match and send its hash).
-- **#294 declined**; Dependabot now ignores `@types/node` majors until the Node floor
-  moves. **#293** (minor-and-patch group) is being verified: the local ONNX embedder's
-  runtime actually jumps `onnxruntime-node` 1.24.3 → 1.30.0 and the tokenizer 0.1.3 →
-  0.2.0, not the 1.27 → 1.30 the title suggests.
-- Plan: merge #296 and (if clean) #293, cut **v1.15.2**, verify on staging, then upgrade
-  Cerefox Local.
+- **#298 fixed in the same PR**: the web UI's "Update existing" toggle was refused with
+  `CEREFOX_TOKEN_REQUIRED` whenever content changed. The maintainer chose to send it as
+  `last_write_wins` (the tick is the overwrite decision); two Playwright tests fail on
+  the old UI and pass on the fix.
+- **Dependencies**: #294 declined (Dependabot ignores `@types/node` majors until the Node
+  floor moves). #293 was superseded by **#297, merged** after verification: the local
+  embedder's runtime really jumps `onnxruntime-node` 1.24.3 → 1.30.0 (q8 embeddings shift,
+  min cosine 0.982 on Arm64; top-1 retrieval unchanged 12/12), but npm installs already
+  resolve that and the Local image ignores `bun.lock` (#300). `ip-address` fixed by
+  override; both `sharp` audit exceptions retired.
+- **onnxruntime 1.29+ ships Microsoft usage telemetry**; the local embedder now sets
+  `ORT_DISABLE_TELEMETRY=1` before loading it.
+- Plan: merge #299, cut **v1.15.2**, verify on staging, then upgrade Cerefox Local.
 
 **2026-09-28 — v1.15.1 IS RELEASED AND VERIFIED.** npm, ghcr, the GitHub Release
 and the tag are all out and consistent. Staging, Cerefox Local and production are

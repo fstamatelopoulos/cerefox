@@ -38,6 +38,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   `mobile.events.data.microsoft.com`. The local embedder exists so that nothing
   leaves the machine, so it now sets `ORT_DISABLE_TELEMETRY=1` before the runtime
   loads (unless you set it yourself). Affects only `CEREFOX_EMBEDDER=local`.
+- **The web UI's "Update existing" toggle works (#298).** It sent no concurrency
+  token, so the Ingest page (paste and file tabs) refused every update whose
+  content had changed with `CEREFOX_TOKEN_REQUIRED`: the toggle only "worked"
+  when there was nothing to update. Ticking it is now sent as `last_write_wins`,
+  since the person ticking the box is making the overwrite decision, and the
+  audit log records the write as `[last-write-wins]`. The label says it replaces
+  the content.
 - **Search results in the web UI show their projects again.** The route dropped
   the `doc_project_names` the search RPCs return, so result cards rendered no
   project chips.
