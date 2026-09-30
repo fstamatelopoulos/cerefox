@@ -203,6 +203,20 @@ describe("POST /ingest", () => {
     expect(calls[1]!.lastWriteWins).toBe(true);
   });
 
+  test("update_if_exists reaches the pipeline as sent: absent stays undefined", async () => {
+    // The pipeline's override note depends on telling "not sent" from "false".
+    const calls = spyIngest();
+    const send = (extra: Record<string, unknown>) =>
+      app(fakeStore()).request(
+        "/api/v1/ingest",
+        json({ title: "T", content: "body", document_id: DOC, last_write_wins: true, ...extra }),
+      );
+    await send({});
+    await send({ update_if_exists: false });
+    await send({ update_existing: true });
+    expect(calls.map((c) => c.updateExisting)).toEqual([undefined, false, true]);
+  });
+
   test("honours every field the published contract lists", async () => {
     const calls = spyIngest();
     const r = await app(fakeStore()).request(

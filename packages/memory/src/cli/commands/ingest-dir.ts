@@ -149,7 +149,7 @@ async function action(dir: string, options: IngestDirOptions): Promise<void> {
         sourceOnCreate: "cli",
         projectName: options.projectName ?? null,
         metadata: metadata ?? null,
-        updateExisting: Boolean(options.updateIfExists),
+        updateExisting: options.updateIfExists ? true : undefined,
         author,
         authorType: authorType as "user" | "agent",
         // Filesystem-sync semantics: the directory IS the source of truth, so

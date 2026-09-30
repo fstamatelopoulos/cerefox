@@ -20,6 +20,7 @@ import {
   TOOLS_BY_NAME,
   type ToolContext,
 } from "../mcp-tools/index.ts";
+import { normalizeContent, sha256hex } from "../mcp-tools/_chunker.ts";
 
 const FAKE_CTX: ToolContext = { accessPath: "local-mcp" };
 
@@ -341,6 +342,46 @@ describe("cerefox_ingest optimistic concurrency (iter-32)", () => {
     // It must NOT be the conflict error — with the check bypassed the handler
     // proceeds to the embedding call, which fails against the fake key.
     expect(String((err as Error)?.message ?? "")).not.toContain("Conflict:");
+  });
+});
+
+describe("cerefox_ingest override note", () => {
+  // The note says a flag the caller SET was overridden by document_id. It used
+  // to fire whenever update_if_exists was not true, including when it was never
+  // sent, so every update by id (the recommended workflow) carried a warning.
+  // The content-unchanged branch returns before any embedding, so a lookup
+  // mock is all this needs.
+  async function ingestUnchanged(extra: Record<string, unknown>): Promise<string> {
+    const content = "# Same\n\nUnchanged body.";
+    const hash = await sha256hex(normalizeContent(content));
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      is: () => chain,
+      order: () => chain,
+      limit: () => ({ data: [{ id: "doc-1", title: "T", content_hash: hash }], error: null }),
+    };
+    const client = { from: () => chain, rpc: () => ({ data: null, error: null }) } as unknown as SupabaseClient;
+    const out = await TOOLS_BY_NAME["cerefox_ingest"].handler(
+      client,
+      { title: "T", content, document_id: "doc-1", expected_content_hash: hash, ...extra },
+      { ...FAKE_CTX, openaiApiKey: "test-key" },
+    );
+    return String(out);
+  }
+
+  test("no note when update_if_exists was not sent", async () => {
+    const out = await ingestUnchanged({});
+    expect(out).toContain("already up-to-date");
+    expect(out).not.toContain("overridden");
+  });
+
+  test("no note when update_if_exists was true", async () => {
+    expect(await ingestUnchanged({ update_if_exists: true })).not.toContain("overridden");
+  });
+
+  test("the note when the caller explicitly sent update_if_exists: false", async () => {
+    expect(await ingestUnchanged({ update_if_exists: false })).toContain("update_if_exists flag was overridden");
   });
 });
 

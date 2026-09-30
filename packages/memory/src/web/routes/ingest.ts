@@ -189,7 +189,12 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
         metadata: (body.metadata as Record<string, unknown> | null | undefined) ?? null,
         // `update_if_exists` is the name MCP and the CLI use; `update_existing`
         // is the one the bundled UI has always sent. Either means the same.
-        updateExisting: body.update_existing === true || body.update_if_exists === true,
+        // Undefined when neither name was sent, so "explicitly false" stays
+        // distinguishable from "not sent" (the pipeline's override note).
+        updateExisting:
+          body.update_existing == null && body.update_if_exists == null
+            ? undefined
+            : body.update_existing === true || body.update_if_exists === true,
         documentId: (body.document_id as string | undefined) ?? null,
         author: who.identity.author,
         authorType: who.identity.authorType,

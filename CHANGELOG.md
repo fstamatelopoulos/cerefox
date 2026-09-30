@@ -9,7 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **An update by `document_id` no longer warns about a flag you did not send.**
+  Every such update (the recommended workflow) came back with "update_if_exists
+  flag was overridden", on MCP, the CLI, `/api/v1/ingest` and the
+  `cerefox-ingest` Edge Function, because the note fired whenever the flag was
+  not `true`. It now appears only when the caller explicitly sent
+  `update_if_exists: false`, which is the case it was written for. The Edge
+  Function half takes effect after `cerefox server deploy`.
 
 ---
 

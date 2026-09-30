@@ -756,7 +756,7 @@ When `document_id` is provided, the pipeline bypasses title-matching and hash-de
 | `document_id` found, content unchanged | Update metadata/title only -- no version snapshot, no re-chunking |
 | `document_id` found, content changed | `cerefox_snapshot_version` RPC → insert new chunks → update document metadata |
 
-If `update_if_exists=False` is also set (the default), the update proceeds anyway and a `note` field is included in the response warning that the flag was overridden. This makes the intent explicit without silently ignoring the parameter.
+If the caller also explicitly sends `update_if_exists=False`, the update proceeds anyway and a `note` field is included in the response warning that the flag was overridden. This makes the intent explicit without silently ignoring the parameter. An *omitted* flag overrides nothing and gets no note: until v1.15.3 the note fired whenever the flag was not true, so every update by id (the recommended workflow) carried a warning the caller had not earned.
 
 #### Title-based update (fallback)
 

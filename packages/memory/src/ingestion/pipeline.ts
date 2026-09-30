@@ -149,7 +149,10 @@ export class IngestionPipeline {
           result.projectIds = await this.db.getDocumentProjectIds(documentId);
         }
       }
-      if (!updateExisting) {
+      // Only when the caller explicitly SENT update_if_exists=false: that flag
+      // was then overridden. An omitted flag overrode nothing, and the note on
+      // every update-by-id (the recommended workflow) read as a warning.
+      if (opts.updateExisting === false) {
         result.note =
           "document_id provided; update_if_exists flag was overridden";
       }

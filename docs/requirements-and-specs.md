@@ -260,7 +260,7 @@ Versions are managed with a lazy retention policy:
 | FR-11.4 | On each update, lazily delete versions older than the retention window (except the most recent one) | P1 |
 | FR-11.5 | Versions store: full content, all metadata, timestamp, and the source/agent that performed the update | P1 |
 | FR-11.11 | Support `document_id`-based ingest updates: pass a document UUID to update a specific document without title-matching. Error if the document does not exist. Hash dedup is bypassed -- the caller explicitly intends to update. | P1 |
-| FR-11.12 | When `document_id` is provided and `update_if_exists=false`, the update proceeds and the response includes a `note` field warning that the flag was overridden. | P1 |
+| FR-11.12 | When `document_id` is provided and the caller explicitly sends `update_if_exists=false`, the update proceeds and the response includes a `note` field warning that the flag was overridden. An omitted flag overrides nothing, so no note (revised for v1.15.3; it used to fire on every update by id). | P1 |
 | FR-11.13 | Archived chunks MUST NOT carry search artifacts: embeddings and FTS are nulled at archive time (v1.8.0, #216) — the version's `content` is the safety copy; search is current-chunks-only; restore is manual re-ingest (re-embeds) | P1 |
 
 #### FR-11.2: Full Document Retrieval API
