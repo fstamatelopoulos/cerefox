@@ -9,12 +9,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
-
----
-
-## [v1.16.0] -- 2026-09-30
-
 > **Redeploy required:** `cerefox server deploy` (schema 0.17.0, migration 0033).
 > Until you do, the new settings exist in the client but the server ignores them;
 > nothing is ever purged by an older server.
