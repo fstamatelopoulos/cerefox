@@ -48,7 +48,7 @@ Verified after publish:
   schemas; Playwright 26/1-skip against :8030; CLI, stdio MCP (15 tools) and one remote
   MCP `tools/list` call.
 - **Cerefox Local** (`cerefox-local`, :8010): full `pg_dump` taken first
-  (`~/.cerefox/backups/cerefox-local-pre-v1.15.2-*.sql.gz`), `upgrade v1.15.2`; data
+  (`~/.cerefox/local/backups/cerefox-local-pre-v1.15.2-*.sql.gz`, kept apart from production's `~/.cerefox/backups`), `upgrade v1.15.2`; data
   identical to the pre-upgrade baseline (179 docs / 205 chunks / 22 projects / 1,808
   trashed); `doctor` green; embedder runtime identical to the 1.15.1 image
   (transformers 3.8.1 + nested onnxruntime 1.21.0, so existing chunks stay valid);
