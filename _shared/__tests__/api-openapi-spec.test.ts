@@ -80,6 +80,28 @@ describe("the OpenAPI document for /api/v1", () => {
     expect(info.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
+  test("the artifact mentions no release newer than the package it ships in", () => {
+    // The v1.16.0 cut failed the check above for a second reason: a summary in
+    // docs/guides/api.md said "(v1.16.0)". Summaries are copied into this
+    // artifact, so it named the release it was about to ship in, which only
+    // collides once cut_release.ts bumps the package, i.e. on the tag, after
+    // every pre-cut check had passed. This catches it BEFORE the cut: any
+    // "vX.Y.Z" in the artifact must be a release that already exists.
+    const repoRoot = join(dirname(OUT_FILE), "..", "..");
+    const pkg = JSON.parse(readFileSync(join(repoRoot, "packages", "memory", "package.json"), "utf8")) as {
+      version: string;
+    };
+    const cmp = (a: string, b: string) => {
+      const [x, y] = [a, b].map((v) => v.split(".").map(Number));
+      for (let i = 0; i < 3; i++) if (x![i]! !== y![i]!) return x![i]! - y![i]!;
+      return 0;
+    };
+    const current = pkg.version.replace(/-.*/, "");
+    const mentioned = [...specJson(buildSpec()).matchAll(/\bv(\d+\.\d+\.\d+)\b/g)].map((m) => m[1]!);
+    expect(mentioned.length).toBeGreaterThan(0); // the detector still sees the existing "(v1.14.1)"-style notes
+    expect(mentioned.filter((v) => cmp(v, current) >= 0)).toEqual([]);
+  });
+
   test("regenerating is deterministic", () => {
     // The staleness guard is only meaningful if two runs over unchanged inputs
     // agree. If anything in the pipeline were ordering-dependent or carried a

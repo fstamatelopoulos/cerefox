@@ -189,7 +189,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `GET /documents/{id}/versions` | Version history. |
 | `POST /documents/{id}/versions/{version_id}/archive` | Archive or unarchive one stored version (body `{ "archived": true\|false }`). Archiving strips a version's search artifacts; its content is kept as the safety copy. |
 | `GET /documents/{id}/download` | Raw markdown. |
-| `GET /documents/trash` | Soft-deleted documents, newest first, `limit` ≤ 500. The exact total is in the `X-Total-Count` response header (v1.14.1). `deleted_before=<ISO timestamp>` restricts both to documents trashed before then (v1.16.0). |
+| `GET /documents/trash` | Soft-deleted documents, newest first, `limit` ≤ 500. The exact total is in the `X-Total-Count` response header (v1.14.1). `deleted_before=<ISO timestamp>` restricts both to documents trashed before then. |
 | `POST /documents/metadata-search` | Query by metadata / project / time, no text query. |
 | `GET /metadata-keys` | Metadata keys with counts and example values. |
 | `GET /resolve-link`, `GET /check-filename` | Link and title resolution helpers. |
