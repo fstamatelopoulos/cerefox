@@ -50,10 +50,18 @@ identical, embedder runtime unchanged, migration applied on start, settings seed
 off/60). Auto-purge was left OFF on both; turning it on for Local is the maintainer's
 call. Discord announcement drafted (two messages), not yet posted.
 
-Known quirk, not user-facing: `cerefox server deploy` run from the repo's own build
-fails the Edge Function step (the Supabase CLI walks up to the repo's `supabase/.temp`
-link state). Installed packages are unaffected; verify branches by packing and
-installing outside the repo.
+**Trash auto-purge is ON for Cerefox Local only** (enabled 2026-09-30 at the
+maintainer's request, 60-day period). Its trash held 3 documents, all trashed
+2026-09-30, so **the first real purge can happen from 2026-11-29**; check the audit log
+for `trash-retention` entries after that date. Production stays OFF (maintainer
+decision); production is still on 1.15.3, and its 1.16.0 upgrade (backup first) is
+pending with the maintainer.
+
+Resolved after the release (next release, #308 area): `cerefox server deploy` run from the
+repo's own build failed every Edge Function. Root cause: inside an npm workspace `npx`
+moves the child to the workspace package's directory (`packages/memory`) whatever `cwd`
+it is given, so the Supabase CLI looked for functions there. Now passes `--workdir`.
+Same error text as #84, a different cause, which is why it kept looking solved.
 
 **2026-09-30 — v1.15.3 IS RELEASED AND VERIFIED on staging and Cerefox Local;
 production (still 1.15.1) is green-lit and awaiting the maintainer.** npm `latest`, ghcr
