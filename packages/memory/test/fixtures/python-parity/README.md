@@ -4,6 +4,20 @@ Captured **2026-05-27** from the Python `cerefox web` server (v0.6 era,
 iteration 24) against the maintainer's real Supabase data, as the reference for
 porting the web API to TypeScript.
 
+## Scrubbed of real content (2026-10-01)
+
+These were captured against a real store, so they held its document titles,
+contents, project names and descriptions. Every such free-text value has been
+replaced with a neutral placeholder ("Example document 3", "Example project 2"),
+mapped one-to-one so that the same original gets the same placeholder in every
+file. Ids, numbers, timestamps, enum values and the shape of every object are
+untouched, so the files still record exactly the wire shapes they exist to
+record. The search query ("cerefox") and the embedding reference text are
+unchanged: neither was private.
+
+**Never capture fixtures from a real store again.** Build them from synthetic
+data, or scrub before committing.
+
 ## These cannot be regenerated
 
 The Python implementation was **removed entirely at v1.0.0** (iter-28G). The
