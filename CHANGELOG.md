@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.15.3] -- 2026-09-30
+
 ### Added
 
 - **A store now describes its own API (#303).** `GET /api/v1/openapi.json` serves
