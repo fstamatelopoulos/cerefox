@@ -60,3 +60,26 @@ export function escapedContentNote(content: string, channel: "mcp" | "cli" = "mc
     `intended, ` + remedy
   );
 }
+
+/** HTML/XML character references an agent sometimes writes instead of the
+ *  character itself: `&amp;` for `&`, `&lt;&gt;` for `<>`, `&#39;` for `'`. */
+const HTML_ENTITY = /&(?:amp|lt|gt|quot|apos|nbsp|#\d{1,6}|#x[0-9a-f]{1,6});/gi;
+
+/**
+ * Same posture as `escapedContentNote`, for titles: a warning in the write's
+ * response, never normalization. Agents writing through MCP have stored titles
+ * such as "Scope &amp; Proposal" and "Fotis &lt;&gt; Mike": the model encoded
+ * the characters inside its tool call. Titles are boosted in search and shown
+ * everywhere, so the note names what was stored and how to fix it. Unlike
+ * content, a title that legitimately needs a literal "&amp;" is vanishingly
+ * rare, so this fires on a single occurrence.
+ */
+export function escapedTitleNote(title: string): string {
+  const found = [...new Set((title.match(HTML_ENTITY) ?? []).map((e) => e.toLowerCase()))];
+  if (found.length === 0) return "";
+  return (
+    ` Note: the title contains HTML entities (${found.join(", ")}), stored literally. ` +
+    `If you meant the characters themselves (e.g. "&" for "&amp;", "<>" for "&lt;&gt;"), ` +
+    `update the title with the actual characters.`
+  );
+}

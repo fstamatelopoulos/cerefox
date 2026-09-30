@@ -11,6 +11,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Changed
 
+- **An MCP write whose title contains HTML entities says so.** Agents sometimes
+  send `&amp;` or `&lt;&gt;` instead of `&` or `<>` (the model encodes them inside
+  its tool call), and nine such titles were found in one store, all written over
+  MCP since May. Titles are boosted in search, so `cerefox_ingest` now appends a
+  note naming the entities it stored and how to fix them. Nothing is rewritten:
+  the same store-exactly-what-was-sent posture as the escaped-content note (#222).
+  The quick reference tells agents to write the characters themselves.
+
 - **`cerefox_export.ts` labels the sidecar's character count "Characters (stored)".**
   It is the store's `total_chars` (the sum of the chunks), and the exported file is
   those chunks rejoined, so its size can differ by a few characters. Under the old

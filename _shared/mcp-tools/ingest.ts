@@ -15,7 +15,7 @@
  * extraction (no behaviour change).
  */
 
-import { escapedContentNote } from "./escape-heuristic.ts";
+import { escapedContentNote, escapedTitleNote } from "./escape-heuristic.ts";
 import type { MCPSupabaseClient } from "./types.ts";
 
 import {
@@ -233,7 +233,7 @@ async function handler(
     }
 
     const note = overrideNote;
-    return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${note}${escapedContentNote(content)}`;
+    return `Document updated: "${title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${note}${escapedContentNote(content)}${escapedTitleNote(title)}`;
   }
 
   // ── Update-existing path ─────────────────────────────────────────────────
@@ -333,7 +333,7 @@ async function handler(
         await ensureDocumentInProject(supabase, existingDoc.id, project_name, { author, authorType: author_type });
       }
 
-      return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${escapedContentNote(content)}`;
+      return `Document updated: "${existingDoc.title}" (id: ${existingDoc.id}), ${chunks.length} chunk(s), ${totalChars} chars. New content_hash: ${contentHash}.${escapedContentNote(content)}${escapedTitleNote(title)}`;
     }
     // Fall through to create path
   }
@@ -419,7 +419,8 @@ async function handler(
   return (
     `Document saved: "${title}" (id: ${documentId}), ${chunks.length} chunk(s), ${totalChars} chars${projectInfo}. ` +
     `content_hash: ${contentHash} — pass it as expected_content_hash on your next edit.` +
-    escapedContentNote(content)
+    escapedContentNote(content) +
+    escapedTitleNote(title)
   );
 }
 
