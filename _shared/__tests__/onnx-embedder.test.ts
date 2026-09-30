@@ -12,14 +12,16 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
 import { resolveEmbedderKind } from "../embeddings/index.ts";
 import {
   ONNX_MODEL_DIM,
   ONNX_MODEL_ID,
   buildPrefixedInputs,
+  isModelCached,
   nomicPrefix,
 } from "../embeddings/onnx-embedder.ts";
 
@@ -91,5 +93,58 @@ describe("Edge Function safety (loading rules)", () => {
     // The heavy dep must be loaded via a variable specifier (not a literal),
     // so no bundler statically resolves it.
     expect(src).not.toMatch(/import\(\s*["']@huggingface\/transformers["']\s*\)/);
+  });
+});
+
+describe("isModelCached (#301)", () => {
+  // The loading banner and per-file lines are for the run that downloads. They
+  // printed on every process start, i.e. on every CLI command inside Local.
+  const FILES = ["config.json", "tokenizer.json", "tokenizer_config.json", "onnx/model_quantized.onnx"];
+  const withFiles = (files: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), "cfx-models-"));
+    for (const f of files) {
+      const p = join(dir, "nomic-ai", "nomic-embed-text-v1.5", f);
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, "x");
+    }
+    return dir;
+  };
+
+  test("false for an empty cache", () => {
+    const dir = withFiles([]);
+    expect(isModelCached(dir)).toBe(false);
+    rmSync(dir, { recursive: true });
+  });
+
+  test("false when any one file is missing (a half-finished download)", () => {
+    for (const missing of FILES) {
+      const dir = withFiles(FILES.filter((f) => f !== missing));
+      expect({ missing, cached: isModelCached(dir) }).toEqual({ missing, cached: false });
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  test("true when every file the q8 pipeline reads is present", () => {
+    const dir = withFiles(FILES);
+    expect(isModelCached(dir)).toBe(true);
+    rmSync(dir, { recursive: true });
+  });
+});
+
+describe("onnxruntime telemetry opt-out", () => {
+  // onnxruntime >= 1.29 posts usage telemetry. The embedder sets the opt-out
+  // in-process, which reaches the native library under Node but NOT under Bun,
+  // so the Bun-run Local image must set it in its environment.
+  test("the embedder sets it before loading transformers", () => {
+    const src = readFileSync(join(EMBEDDINGS_DIR, "onnx-embedder.ts"), "utf8");
+    const set = src.indexOf('process.env.ORT_DISABLE_TELEMETRY ??= "1"');
+    const load = src.indexOf("await import(spec)");
+    expect(set).toBeGreaterThan(-1);
+    expect(load).toBeGreaterThan(set);
+  });
+
+  test("the Local image sets it at process level", () => {
+    const dockerfile = readFileSync(join(EMBEDDINGS_DIR, "..", "..", "docker", "local", "Dockerfile"), "utf8");
+    expect(dockerfile).toMatch(/^\s*ORT_DISABLE_TELEMETRY=1\b/m);
   });
 });

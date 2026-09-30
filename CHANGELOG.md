@@ -26,6 +26,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   deployed schema is older than this client's", the only case that needs
   `cerefox server deploy`; it used to be any difference, which would have told
   an older client pointed at a newer server to redeploy.
+- **The local embedder only announces a download when it downloads.** Every
+  process start printed `loading "nomic-embed-text-v1.5" from HuggingFace …
+  (first-run only)` plus a line per model file, so every CLI command inside
+  Cerefox Local began with five lines of noise although the model was cached.
+  A cached model now loads silently; the first download is narrated as before.
+- **The onnxruntime telemetry opt-out now also covers Bun.** v1.15.2's in-process
+  `ORT_DISABLE_TELEMETRY=1` reaches the runtime under Node (every npm install),
+  but not under Bun, which is what the Cerefox Local image runs. Today's image
+  uses an onnxruntime without telemetry, so nothing was sent from it; the image
+  now sets the variable in its environment so that stays true when its runtime
+  moves (#300). If you run Cerefox from source under Bun with
+  `CEREFOX_EMBEDDER=local`, export `ORT_DISABLE_TELEMETRY=1` yourself.
 
 ---
 

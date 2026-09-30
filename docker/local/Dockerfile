@@ -77,6 +77,9 @@ RUN chmod +x /etc/s6-overlay/scripts/* \
  && chmod +x /etc/s6-overlay/s6-rc.d/postgres/run /etc/s6-overlay/s6-rc.d/postgrest/run /etc/s6-overlay/s6-rc.d/cerefox-server/run
 
 # Postgres first-boot init (base image reads these) + local wiring.
+# ORT_DISABLE_TELEMETRY: onnxruntime >= 1.29 posts usage telemetry. The embedder
+# also sets it in-process, but under Bun (this image's runtime) a process.env
+# assignment does not reach the native library, so it must be set here.
 ENV POSTGRES_USER=cerefox \
     POSTGRES_PASSWORD=cerefox \
     POSTGRES_DB=cerefox \
@@ -84,6 +87,7 @@ ENV POSTGRES_USER=cerefox \
     CEREFOX_SUPABASE_URL=http://127.0.0.1:8000 \
     CEREFOX_POSTGREST_UPSTREAM=http://127.0.0.1:3000 \
     CEREFOX_MODELS_DIR=/var/lib/postgresql/data/.cerefox-models \
+    ORT_DISABLE_TELEMETRY=1 \
     PGRST_DB_URI=postgresql://authenticator:authenticator@127.0.0.1:5432/cerefox \
     PGRST_DB_SCHEMAS=public \
     PGRST_DB_ANON_ROLE=anon \

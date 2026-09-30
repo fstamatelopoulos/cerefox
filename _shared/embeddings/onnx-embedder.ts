@@ -46,6 +46,25 @@ export function buildPrefixedInputs(texts: string[], role: EmbedRole): string[] 
   return texts.map((t) => p + t);
 }
 
+/** What the q8 pipeline reads, relative to the cache dir. Same layout under
+ *  transformers.js 3.x (the Local image) and 4.x (npm installs). */
+const MODEL_FILES = [
+  "config.json",
+  "tokenizer.json",
+  "tokenizer_config.json",
+  `onnx/model_quantized.onnx`,
+].map((f) => join(ONNX_MODEL_ID, f));
+
+/**
+ * Is every file the pipeline needs already on disk? Decides whether loading is
+ * a download worth narrating or a local read that should stay silent: the
+ * "loading from HuggingFace… first-run only" banner used to print on EVERY
+ * process start, which on the CLI is every command (#301).
+ */
+export function isModelCached(dir: string = getCacheDir()): boolean {
+  return MODEL_FILES.every((f) => existsSync(join(dir, f)));
+}
+
 function getCacheDir(): string {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
     .process?.env ?? {};
@@ -70,6 +89,13 @@ async function loadTransformers(): Promise<typeof transformersModule> {
   // This is the embedder that exists so nothing leaves the machine, so opt out
   // before the native library loads. `??=`: an operator who sets it explicitly
   // (to anything) keeps their choice.
+  //
+  // This works under NODE, which is what an npm install runs (the bin's
+  // shebang). Under BUN a process.env assignment does not reach the native
+  // library: measured, a Bun process queued events despite this line, while
+  // the same variable set before launch queued none. Anything that runs the
+  // embedder under Bun must set it in the launching environment; the Local
+  // image does so in its Dockerfile.
   process.env.ORT_DISABLE_TELEMETRY ??= "1";
   transformersModule = await import(spec);
   const dir = getCacheDir();
@@ -111,6 +137,14 @@ async function ensurePipeline(): Promise<FeaturePipeline> {
   if (pipelinePromise) return pipelinePromise;
   pipelinePromise = (async () => {
     const transformers = await loadTransformers();
+    // A cached model is a local read: no banner, no per-file lines, no
+    // "ready" line. The narration is for the one run that downloads.
+    if (isModelCached()) {
+      const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, {
+        dtype: ONNX_MODEL_DTYPE,
+      });
+      return pipe as unknown as FeaturePipeline;
+    }
     const mb = ONNX_MODEL_APPROX_MB;
     const fmt = (s: number) => (s < 60 ? `${s}s` : `${Math.round(s / 60)}m`);
     process.stderr.write(
