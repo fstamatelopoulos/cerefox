@@ -29,14 +29,30 @@
 
 ## Current Focus
 
-**2026-09-30 — v1.15.3 BEING CUT.** Carries #301 (update-by-id override note only for
-an explicit `false`; `/schema-version` reports the bundled version on every install and
-`mismatch` means deployed < bundled; cached model loads silently; the Local image sets
-`ORT_DISABLE_TELEMETRY`, since the in-process opt-out does not reach onnxruntime under
-Bun) and #303 (every guide ships; `GET /api/v1/openapi.json` plus an RFC 8631
-`Link: rel="service-desc"` on every `/api/v1` response). Plan: cut, verify staging
-(`server deploy` needed: the `cerefox-ingest` EF changed) and Local, then green-light
-production, which stayed on 1.15.1 to take 1.15.3 directly.
+**2026-09-30 — v1.15.3 IS RELEASED AND VERIFIED on staging and Cerefox Local;
+production (still 1.15.1) is green-lit and awaiting the maintainer.** npm `latest`, ghcr
+`v1.15.3` = `latest`, and the GitHub Release are out; release workflow, image build and
+main CI watched to green; the registry tarball carries all 19 guides and `openapi.json`.
+
+It carries #301 (update-by-id override note only for an explicit `false`, on MCP, CLI,
+`/api/v1` and the `cerefox-ingest` EF; `/schema-version` reports the bundled version on
+every install and `mismatch` means deployed < bundled; cached model loads silently; the
+Local image sets `ORT_DISABLE_TELEMETRY`, because the in-process opt-out does not reach
+onnxruntime under Bun) and #303 (every guide ships; `GET /api/v1/openapi.json`, with an
+RFC 8631 `Link: rel="service-desc"` on every `/api/v1` response).
+
+Verified: **staging** (own 1.15.3 tree, `server deploy` with 9 EFs, web :8030 restarted,
+`doctor` green, a 34-check smoke against the running server including the served spec
+byte-identical to the tagged artifact, Playwright 26/1-skip, the deployed ingest EF and
+the stdio MCP tool both omitting the note unless `false` is sent). **Local** (fresh
+`pg_dump` in `~/.cerefox/local/backups/`, `upgrade v1.15.3`, data identical to baseline,
+`doctor` green, embedder runtime unchanged from 1.15.2, the same smoke passing, the CLI
+silent on a cached model, `ORT_DISABLE_TELEMETRY=1` in the container).
+
+Observed on Local, not ours: the cfxbot agent's e2e tests create and soft-delete test
+documents without purging them (the ~1,800 trashed documents) and send no identity
+headers, so their writes are recorded as `web-ui`. #300 stays open (pin the Local
+image's embedder runtime; decide the move to transformers 4.x deliberately).
 
 **2026-09-30 — v1.15.2 IS RELEASED AND VERIFIED on staging and Cerefox Local;
 production is awaiting the maintainer's upgrade.** npm (`latest`, with provenance),
