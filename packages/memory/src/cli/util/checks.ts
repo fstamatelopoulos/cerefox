@@ -455,12 +455,6 @@ export async function checkSchemaVersion(): Promise<CheckResult> {
 const EMBEDDER_CHECK_NAME = "embedder";
 
 /**
- * Embedder-mismatch guard (iter-31). The configured embedder must match what the
- * existing chunks were embedded with — different embedders put vectors in
- * different spaces, so a mismatch silently breaks semantic search. Warns (never
- * blocks) and points at `server reindex`.
- */
-/**
  * Whether the review workflow is on (#241). Informational: both states are
  * valid, but "why does nothing show a review status?" and "why are my agent's
  * documents pending?" are the two questions this line pre-empts. Reads the
@@ -519,6 +513,64 @@ export async function checkReviewWorkflow(): Promise<CheckResult> {
   };
 }
 
+/**
+ * Trash auto-purge (#251). Informational either way, but it is the one setting
+ * that makes an ordinary delete destroy other documents, so an operator reading
+ * doctor should never have to go looking for it. Reads both keys exactly as the
+ * sweep does (cerefox_get_config); a store without the keys predates 0.17.0 and
+ * never sweeps.
+ */
+export async function checkTrashAutoPurge(): Promise<CheckResult> {
+  const name = "trash auto-purge";
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    return { name, status: "skipped", detail: "no Supabase credentials" };
+  }
+  const read = async (key: string): Promise<string | null> => {
+    const resp = await fetch(`${settings.supabaseUrl!.replace(/\/$/, "")}/rest/v1/rpc/cerefox_get_config`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: settings.supabaseKey!,
+        Authorization: `Bearer ${settings.supabaseKey}`,
+      },
+      body: JSON.stringify({ p_key: key }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const body = (await resp.json()) as unknown;
+    return typeof body === "string" ? body : null;
+  };
+  let enabled: string | null;
+  let days: string | null;
+  try {
+    [enabled, days] = await Promise.all([read("trash_auto_purge_enabled"), read("trash_retention_days")]);
+  } catch (err) {
+    return { name, status: "skipped", detail: `could not read config: ${(err as Error).message}` };
+  }
+  if (enabled == null) {
+    return { name, status: "ok", detail: "not available on this schema (needs 0.17.0; the trash is never auto-purged)" };
+  }
+  if (enabled.trim() !== "true") {
+    return {
+      name,
+      status: "ok",
+      detail: "off — the trash is only emptied by hand",
+      hint: "Opt in with `cerefox config set trash_auto_purge_enabled true` (period: trash_retention_days).",
+    };
+  }
+  return {
+    name,
+    status: "ok",
+    detail: `ON — each delete also purges documents trashed more than ${days ?? "?"} day(s) ago (up to 100 per delete)`,
+  };
+}
+
+/**
+ * Embedder-mismatch guard (iter-31). The configured embedder must match what the
+ * existing chunks were embedded with — different embedders put vectors in
+ * different spaces, so a mismatch silently breaks semantic search. Warns (never
+ * blocks) and points at `server reindex`.
+ */
 export async function checkEmbedderMismatch(): Promise<CheckResult> {
   const settings = loadSettings();
   if (!settings.supabaseUrl || !settings.supabaseKey) {
@@ -1100,6 +1152,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "openai", phase: "Probing OpenAI embeddings", run: () => checkOpenAI() },
     { name: "schema + RPCs", phase: "Reading schema + RPC version", run: () => checkSchemaVersion() },
     { name: "review workflow", phase: "Reading review workflow flag", run: () => checkReviewWorkflow() },
+    { name: "trash auto-purge", phase: "Reading trash auto-purge settings", run: () => checkTrashAutoPurge() },
     { name: "embedder", phase: "Checking embedder consistency", run: () => checkEmbedderMismatch() },
     { name: "content format", phase: "Checking chunk reconstruction format", run: () => checkContentFormat() },
     { name: "metadata health", phase: "Checking metadata well-formedness", run: () => checkMetadataHealth() },

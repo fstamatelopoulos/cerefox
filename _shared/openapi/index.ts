@@ -89,8 +89,11 @@ const PREFIX = "/api/v1";
  * multipart bodies, per-route error codes and authentication, and the ingest
  * and edit request bodies were corrected to what the routes read. The routes
  * gained fields and lost no accepted input, so a minor.
+ *
+ * 1.2.0 (#251): `DELETE /documents/{id}` returns `auto_purged`, and
+ * `GET /documents/trash` accepts `deleted_before`. Additive.
  */
-const API_VERSION = "1.1.0";
+const API_VERSION = "1.2.0";
 
 // ── Paths, from the registrations ────────────────────────────────────────────
 
@@ -332,7 +335,14 @@ export const QUERY_DOCS: Record<string, Record<string, ParamDoc>> = {
     version_id: { description: "An archived version to download instead of the current one.", schema: UUID },
   },
   "DELETE /documents/*": { expected_content_hash: HASH_PARAM },
-  "GET /documents/trash": { limit: { description: "Maximum rows. Clamped to 1–500.", schema: int(1, 500, 50) } },
+  "GET /documents/trash": {
+    limit: { description: "Maximum rows. Clamped to 1–500.", schema: int(1, 500, 50) },
+    deleted_before: {
+      description:
+        "Only documents trashed before this instant; `X-Total-Count` then counts exactly those. With now minus `trash_retention_days`, it is what trash auto-purge would make eligible.",
+      schema: TIMESTAMP,
+    },
+  },
   "GET /check-filename": {
     filename: {
       description: "A source path, matched exactly. Empty answers `exists: false`.",

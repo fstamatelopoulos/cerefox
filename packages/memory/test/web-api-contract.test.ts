@@ -436,3 +436,50 @@ describe("git_commit_short describes the running code, not the cwd", () => {
     }
   });
 });
+
+// ── Trash auto-purge (#251) ─────────────────────────────────────────────────
+
+describe("trash auto-purge on the HTTP surface", () => {
+  test("DELETE passes auto_purged through, and omits it for a pre-0.17.0 server", async () => {
+    const withCount = fakeStore({
+      rpc: () => ({ data: { already_deleted: false, auto_purged: 4 }, error: null }),
+    });
+    const r1 = await app(withCount).request(`/api/v1/documents/${DOC}`, { method: "DELETE" });
+    expect(await r1.json()).toEqual({ success: true, already_deleted: false, auto_purged: 4 });
+
+    const old = fakeStore({ rpc: () => ({ data: { already_deleted: false }, error: null }) });
+    const r2 = await app(old).request(`/api/v1/documents/${DOC}`, { method: "DELETE" });
+    expect(await r2.json()).toEqual({ success: true, already_deleted: false });
+  });
+
+  test("GET /documents/trash: deleted_before filters both the rows and the count", async () => {
+    const lt: Array<[string, unknown]> = [];
+    const client = {
+      rpc: async () => ({ data: false, error: null }),
+      from: () => {
+        const q: Record<string, unknown> = {};
+        const chain = () => q;
+        for (const m of ["select", "not", "order", "eq", "in", "is"]) q[m] = chain;
+        q.lt = (col: string, v: unknown) => {
+          lt.push([col, v]);
+          return q;
+        };
+        q.limit = async () => ({ data: [], error: null });
+        q.then = (res: (v: unknown) => void) => res({ data: null, count: 7, error: null });
+        return q;
+      },
+    };
+    const r = await app({ client }).request("/api/v1/documents/trash?limit=1&deleted_before=2026-08-01T00:00:00Z");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("x-total-count")).toBe("7");
+    expect(lt).toEqual([
+      ["deleted_at", "2026-08-01T00:00:00.000Z"],
+      ["deleted_at", "2026-08-01T00:00:00.000Z"],
+    ]);
+  });
+
+  test("GET /documents/trash: a malformed deleted_before is a 400", async () => {
+    const r = await app(fakeStore()).request("/api/v1/documents/trash?deleted_before=last-tuesday");
+    expect(r.status).toBe(400);
+  });
+});

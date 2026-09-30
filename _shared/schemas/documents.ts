@@ -191,6 +191,10 @@ export const DeleteResponse = z.object({
   success: z.boolean(),
   /** True when the document was already in the trash, so this was a no-op. */
   already_deleted: z.boolean(),
+  /** Documents this delete permanently purged from the trash because they had
+   *  been there longer than `trash_retention_days` (trash auto-purge, #251).
+   *  0 when the setting is off; absent on a no-op or a pre-0.17.0 server. */
+  auto_purged: z.number().int().optional(),
 });
 export type DeleteResponse = z.infer<typeof DeleteResponse>;
 

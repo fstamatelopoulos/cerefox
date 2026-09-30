@@ -1103,6 +1103,82 @@ AS $$
     ORDER BY created_at DESC;
 $$;
 
+-- ── cerefox_purge_expired_trash (#251, 0.17.0) ───────────────────────────────
+-- Permanently purges documents that have been in the trash longer than
+-- `trash_retention_days`, when `trash_auto_purge_enabled` is exactly 'true'.
+-- Called by cerefox_delete_document after every real soft delete: the write
+-- that adds to the trash also sweeps it. There is no scheduler, by decision
+-- (docs/specs/trash-auto-purge.md): the trash only grows through deletes, so
+-- this keeps it bounded on every deployment without pg_cron or a daemon.
+--
+-- Safeguards, each load-bearing:
+--   * at most p_max documents per call, oldest first (partial index on
+--     deleted_at), so a large first backlog drains over several deletes;
+--   * FOR UPDATE SKIP LOCKED, so concurrent deletes sweep disjoint rows;
+--   * an unparsable or < 1 retention purges NOTHING (never "purge everything");
+--   * one audit entry per purge, authored 'trash-retention' / 'user': the
+--     authority is the operator's setting, not whoever's delete triggered it.
+-- Not exposed on MCP, the Edge Functions or the CLI: there is still no
+-- agent-callable purge (access-paths.md → trust model).
+CREATE OR REPLACE FUNCTION cerefox_purge_expired_trash(
+    p_max INT DEFAULT 100
+)
+RETURNS INT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_enabled  TEXT;
+    v_days_txt TEXT;
+    v_days     INT;
+    v_cutoff   TIMESTAMPTZ;
+    v_count    INT := 0;
+    r          RECORD;
+BEGIN
+    SELECT value INTO v_enabled FROM cerefox_config WHERE key = 'trash_auto_purge_enabled';
+    IF v_enabled IS DISTINCT FROM 'true' THEN
+        RETURN 0;
+    END IF;
+
+    SELECT value INTO v_days_txt FROM cerefox_config WHERE key = 'trash_retention_days';
+    IF v_days_txt IS NULL OR BTRIM(v_days_txt) !~ '^[0-9]{1,6}$' THEN
+        RETURN 0;
+    END IF;
+    v_days := BTRIM(v_days_txt)::INT;
+    IF v_days < 1 THEN
+        RETURN 0;
+    END IF;
+    v_cutoff := NOW() - make_interval(days => v_days);
+
+    FOR r IN
+        SELECT id, title, total_chars, deleted_at
+        FROM cerefox_documents
+        WHERE deleted_at IS NOT NULL AND deleted_at < v_cutoff
+        ORDER BY deleted_at
+        LIMIT GREATEST(COALESCE(p_max, 0), 0)
+        FOR UPDATE SKIP LOCKED
+    LOOP
+        PERFORM cerefox_create_audit_entry(
+            p_document_id := r.id,
+            p_operation   := 'delete',
+            p_author      := 'trash-retention',
+            p_author_type := 'user',
+            p_size_before := r.total_chars,
+            p_size_after  := 0,
+            p_description := 'Auto-purged from the trash (trash_retention_days = ' || v_days ||
+                             '; trashed ' || to_char(r.deleted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') ||
+                             '): ' || COALESCE(r.title, '(untitled)') ||
+                             ' (' || COALESCE(r.total_chars, 0) || ' chars)'
+        );
+        DELETE FROM cerefox_documents WHERE id = r.id;
+        v_count := v_count + 1;
+    END LOOP;
+
+    RETURN v_count;
+END;
+$$;
+
 -- ── cerefox_delete_document (soft delete) ────────────────────────────────────
 -- Soft-deletes a document by setting deleted_at = NOW(). The document, its
 -- chunks, and versions remain in the database but are excluded from search.
@@ -1123,6 +1199,12 @@ $$;
 --
 -- Deleting an already-deleted document is a reported no-op: the original
 -- deleted_at is preserved and no duplicate audit entry is written.
+--
+-- 0.17.0 (#251): a real soft delete then sweeps the trash
+-- (cerefox_purge_expired_trash) and reports how many documents it purged as
+-- `auto_purged`. The sweep runs in its own sub-block: if it fails, only its
+-- savepoint rolls back, a WARNING is raised, and the delete commits exactly as
+-- it would with auto-purge off. A sweep can never fail a delete.
 
 DROP FUNCTION IF EXISTS cerefox_delete_document(UUID, TEXT, TEXT, TEXT, TEXT);
 DROP FUNCTION IF EXISTS cerefox_delete_document(UUID, TEXT, TEXT);
@@ -1144,6 +1226,7 @@ DECLARE
     v_total_chars  INT;
     v_current_hash TEXT;
     v_deleted_at   TIMESTAMPTZ;
+    v_auto_purged  INT := 0;
 BEGIN
     -- FOR UPDATE: makes the hash check atomic with the delete — a concurrent
     -- content update serializes here, and a stale deleter sees its hash.
@@ -1202,12 +1285,21 @@ BEGIN
                          COALESCE('; reason: ' || NULLIF(BTRIM(p_reason), ''), '')
     );
 
+    BEGIN
+        v_auto_purged := cerefox_purge_expired_trash(100);
+    EXCEPTION WHEN OTHERS THEN
+        v_auto_purged := 0;
+        RAISE WARNING 'cerefox: trash auto-purge skipped after deleting %: % (%)',
+            p_document_id, SQLERRM, SQLSTATE;
+    END;
+
     RETURN jsonb_build_object(
         'document_id', p_document_id,
         'title', v_title,
         'total_chars', v_total_chars,
         'deleted_at', v_deleted_at,
-        'already_deleted', FALSE
+        'already_deleted', FALSE,
+        'auto_purged', v_auto_purged
     );
 END;
 $$;
@@ -2742,7 +2834,10 @@ DECLARE
         -- (0 = off). Partial edits make writes cheap, so an insert-only agent
         -- never assembles the document and never sees it grow past its split
         -- point. A signal in the write's response, never a refusal.
-        'document_size_warning_chars'
+        'document_size_warning_chars',
+        -- #251: trash auto-purge, off by default; read by
+        -- cerefox_purge_expired_trash on every soft delete.
+        'trash_auto_purge_enabled', 'trash_retention_days'
     ];
     v_old TEXT;
 BEGIN
@@ -3091,6 +3186,9 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.17.0 (#251): trash auto-purge. New cerefox_purge_expired_trash, called
+    -- by cerefox_delete_document after a real soft delete (which now returns
+    -- `auto_purged`); two config keys, off by default. Migration 0033.
     -- 0.16.2 (#26 follow-up): the Data API grant list is DERIVED from pg_class
     -- rather than a hand-written array that has to match the set of tables. The
     -- array had drifted (cerefox_document_relations), which only a FRESH cloud
@@ -3129,7 +3227,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.16.2'::TEXT;
+    SELECT '0.17.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

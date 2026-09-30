@@ -74,7 +74,7 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
   // it when given: the bare 3-arg call still matches the old function
   // signature, so plain `document delete` keeps working against pre-0.12.0
   // servers — `--reason` is the only part that needs the newer schema.
-  let result: { already_deleted?: boolean; deleted_at?: string } | null;
+  let result: { already_deleted?: boolean; deleted_at?: string; auto_purged?: number } | null;
   try {
     result = await client.rpc("cerefox_delete_document", {
       p_document_id: documentId,
@@ -145,6 +145,14 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
   );
   if (options.reason) {
     println(c.dim(`  Reason (recorded in the audit log): ${options.reason}`));
+  }
+  if (result?.auto_purged) {
+    println(
+      c.yellow(
+        `  Trash auto-purge: this delete also permanently purged ${result.auto_purged} document(s) ` +
+          `that had been in the trash longer than trash_retention_days.`,
+      ),
+    );
   }
 }
 

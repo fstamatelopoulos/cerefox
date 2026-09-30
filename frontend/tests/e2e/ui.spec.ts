@@ -456,6 +456,29 @@ test.describe("Settings", () => {
     expect(relationsAfter?.effective).toBe(relations?.effective);
   });
 
+  test("turning on trash auto-purge states what the next delete would purge (#251)", async ({ page, request }) => {
+    const cfg = async () =>
+      ((await (await request.get("/api/v1/config")).json()).keys as Array<{ key: string; effective: string }>).find(
+        (k) => k.key === "trash_auto_purge_enabled",
+      )?.effective;
+    const before = await cfg();
+    test.skip(before === "true", "auto-purge is already on for this target; nothing to confirm");
+
+    await page.goto(`${APP}/settings`);
+    await page.getByTestId("config-row-trash_auto_purge_enabled").locator(".mantine-Switch-track").click();
+
+    // The irreversible part, in numbers, before anything is written.
+    const modal = page.getByTestId("config-confirm-body");
+    await expect(modal).toBeVisible();
+    const preview = modal.getByTestId("trash-purge-preview");
+    await expect(preview).toContainText(/day\(s\)/, { timeout: 10_000 });
+    await expect(preview).not.toContainText("Counting");
+
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await expect(modal).toBeHidden();
+    expect(await cfg()).toBe(before);
+  });
+
   test("rejects an out-of-range value", async ({ request }) => {
     const resp = await request.put("/api/v1/config/min_search_score", {
       data: { value: "5" },

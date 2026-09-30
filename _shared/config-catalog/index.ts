@@ -27,6 +27,8 @@ export interface ConfigKeySpec {
   /** Numeric bounds, for input validation. */
   min?: number;
   max?: number;
+  /** Numbers only: must be a whole number (e.g. a count of days). */
+  integer?: boolean;
   /** Grouping for display. */
   group: "Governance" | "Retrieval" | "Retention" | "Features";
   /**
@@ -116,6 +118,31 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
       "Turning this OFF keeps every version of every document forever. Versions carry embeddings, so storage grows without bound — on a busy store that is the largest table. Turning it back ON prunes on the next save, which permanently deletes versions outside the window (the newest and any archived ones survive).",
   },
   {
+    key: "trash_auto_purge_enabled",
+    description:
+      "Permanently purge documents that have been in the trash longer than the trash retention period. Swept by the next document delete (there is no scheduler): a document becomes eligible after the period and is removed by the next delete after that.",
+    kind: "boolean",
+    defaultValue: "false",
+    group: "Retention",
+    highImpact: true,
+    impactNote:
+      "Turning this ON makes every document delete also purge, permanently, the documents that have been in the trash longer than the retention period, up to 100 per delete, including ones already in the trash today. Purged documents cannot be restored. Each purge is recorded in the audit log as 'trash-retention'.",
+  },
+  {
+    key: "trash_retention_days",
+    description:
+      "Days a document stays in the trash before auto-purge may remove it (only while trash auto-purge is on). This is the window in which a trashed document can still be restored.",
+    kind: "number",
+    defaultValue: "60",
+    min: 1,
+    max: 3650,
+    integer: true,
+    group: "Retention",
+    highImpact: true,
+    impactNote:
+      "Shortening this while auto-purge is on makes more of the current trash eligible: the next delete purges documents older than the new period, permanently.",
+  },
+  {
     key: "document_size_warning_chars",
     description:
       "Flag writes that push a document past this many characters (0 = off). Partial edits make writes cheap, so an agent that only ever inserts never assembles the document and never sees it grow; this puts the fact in the write's response. A signal only — writes are never blocked.",
@@ -177,6 +204,9 @@ export function validateConfigValue(key: string, value: string): string | null {
     const n = Number(value);
     if (!Number.isFinite(n)) {
       return `${key} must be a number (got ${JSON.stringify(value)}).`;
+    }
+    if (spec.integer && !Number.isInteger(n)) {
+      return `${key} must be a whole number (got ${n}).`;
     }
     if (spec.min !== undefined && n < spec.min) {
       return `${key} must be ≥ ${spec.min} (got ${n}).`;

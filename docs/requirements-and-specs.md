@@ -334,7 +334,8 @@ The post-v1.3 read/edit surface features, numbered in the FR-11.x series:
 
 - An agent MUST be able to **soft-delete** a document over MCP
   (`cerefox_delete_document`): the document leaves search and lands in the
-  web-UI trash, recoverable until a human purges it.
+  web-UI trash, recoverable until a human purges it, or until opt-in trash
+  auto-purge removes it after `trash_retention_days` (#251).
 - A delete MUST prove a preceding read: the call REQUIRES the document's
   `content_hash` as the caller read it, and a stale hash MUST surface as a
   conflict (re-read, reconsider, retry). There is deliberately **no

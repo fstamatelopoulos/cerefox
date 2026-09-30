@@ -270,6 +270,53 @@ cerefox document get <document-id> --version-id <version-id>
 
 ---
 
+## Trash auto-purge
+
+Deleting a document moves it to the trash, where it stays until someone restores or
+purges it. On a store where agents create and delete a lot, the trash grows without
+bound. Since v1.16.0 you can have Cerefox purge old trash automatically. It is
+**off by default**.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `trash_auto_purge_enabled` | `false` | Turn automatic purging on or off. |
+| `trash_retention_days` | `60` | How long a document stays in the trash before it may be purged: your window to restore it. Whole days, 1 to 3650. |
+
+Set them from **Settings** (Retention) or the CLI:
+
+```bash
+cerefox config set trash_retention_days 60
+cerefox config set trash_auto_purge_enabled true
+```
+
+**When it runs.** Cerefox has no scheduler. The trash only grows when a document is
+deleted, so that is when it is swept: each delete also purges documents that have been
+in the trash longer than `trash_retention_days`, up to 100 per delete, oldest first.
+A document therefore becomes *eligible* after the retention period and is removed by
+**the next delete after that**. If nothing is deleted, expired documents stay, and
+nothing new arrives in the trash either.
+
+**What you can rely on.**
+
+- Only documents already older than the retention period are purged, never the one
+  being deleted.
+- A failure while sweeping never fails the delete: the delete completes, and the sweep
+  is retried on the next one.
+- Every purge is in the audit log (author `trash-retention`), naming the retention in
+  force and the day the document was trashed.
+- A delete reports how many documents it purged: `auto_purged` in the
+  `/api/v1` response, a line in the CLI and MCP output.
+- `cerefox doctor` shows whether it is on and with which period.
+- Settings asks for confirmation and tells you how many documents already in the trash
+  the next delete would purge. Shortening the period while it is on gets the same
+  confirmation.
+
+Purged documents cannot be restored. Turning this on for a store with a large, old
+trash purges it over the next few deletes; check the Trash page first if anything
+there matters.
+
+---
+
 ## Storage & Backup
 
 | Variable | Default | Description |

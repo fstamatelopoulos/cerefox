@@ -9,7 +9,41 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+> **Redeploy required:** `cerefox server deploy` (schema 0.17.0, migration 0033).
+> Until you do, the new settings exist in the client but the server ignores them;
+> nothing is ever purged by an older server.
+
+### Added
+
+- **Trash auto-purge, opt-in (#251).** Two new settings, in **Settings → Retention**
+  and via `cerefox config set`:
+  - `trash_auto_purge_enabled`, off by default;
+  - `trash_retention_days`, default **60**.
+
+  When it's on, deleting a document also permanently purges documents that have been
+  in the trash longer than the retention period: up to 100 per delete, oldest first,
+  never the document being deleted. Cerefox has no scheduler and this adds none. The
+  trash only grows when something is deleted, so that is when it's swept, on every
+  deployment (Supabase or Local) and every transport (web, CLI, MCP, API).
+
+  Guarantees:
+  - A sweep can never make a delete fail.
+  - Every purge is in the audit log (`trash-retention`).
+  - Each delete reports how many it purged: `auto_purged` in `/api/v1`, a line in
+    the CLI and MCP output.
+  - `cerefox doctor` shows the setting.
+  - Turning it on (or shortening the period) asks for confirmation and states how
+    many documents already in the trash the next delete would purge.
+
+  Design and trust-model reasoning: `docs/specs/trash-auto-purge.md`; user guide:
+  `docs/guides/configuration.md` → Trash auto-purge.
+- `GET /api/v1/documents/trash` accepts `deleted_before` (API document 1.2.0).
+
 ### Fixed
+
+- **A server run from a source checkout served a stale `openapi.json`** (#303
+  follow-up): the package's build-artifact copy outranked the repo's current file.
+  `bun run build` now also refreshes the bundled docs.
 
 - **`/api/v1/version` reports the commit of the code that is running.** The
   web server asked git about the directory the daemon was started from, so a

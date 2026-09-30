@@ -239,3 +239,31 @@ describe("cerefox_delete_document — responses", () => {
     expect(captured.usageLogged ?? 0).toBe(0);
   });
 });
+
+describe("cerefox_delete_document — trash auto-purge (#251)", () => {
+  const base = {
+    document_id: DOC_ID,
+    title: "Doomed Doc",
+    total_chars: 1234,
+    deleted_at: "2026-08-13T00:00:00Z",
+    already_deleted: false,
+  };
+  const call = (row: Record<string, unknown>) =>
+    del.handler(mockClient({ row }), { document_id: DOC_ID, expected_content_hash: "a".repeat(64) }, ctx);
+
+  test("says when the delete also purged expired trash, with the count", async () => {
+    const out = String(await call({ ...base, auto_purged: 3 }));
+    expect(out).toContain("permanently purged 3 document(s)");
+    expect(out).toContain("Trash auto-purge");
+  });
+
+  test("says nothing about it when nothing was purged, or on an older server", async () => {
+    for (const row of [{ ...base, auto_purged: 0 }, base]) {
+      expect(String(await call(row))).not.toContain("permanently purged");
+    }
+  });
+
+  test("the tool description no longer promises recovery until a HUMAN purges, full stop", () => {
+    expect(del.description).toContain("trash auto-purge");
+  });
+});

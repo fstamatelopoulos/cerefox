@@ -422,8 +422,13 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     // A pre-0.12.0 VOID RPC returns null — its outcome is UNKNOWN, so no
     // fabricated honesty field: only report already_deleted when the server
     // actually said so.
-    const row = data as { already_deleted?: boolean } | null;
-    return c.json({ success: true, ...(row ? { already_deleted: row.already_deleted ?? false } : {}) });
+    const row = data as { already_deleted?: boolean; auto_purged?: number } | null;
+    return c.json({
+      success: true,
+      ...(row ? { already_deleted: row.already_deleted ?? false } : {}),
+      // #251: expired trash this delete purged (0.17.0+; absent before).
+      ...(typeof row?.auto_purged === "number" ? { auto_purged: row.auto_purged } : {}),
+    });
   });
 
   // ── POST /documents/{id}/restore ───────────────────────────────────────────

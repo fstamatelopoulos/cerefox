@@ -13,7 +13,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { CONFIG_CATALOG } from "../config-catalog/index.ts";
+import { CONFIG_CATALOG, validateConfigValue } from "../config-catalog/index.ts";
 
 const RPCS = join(import.meta.dir, "..", "..", "src", "cerefox", "db", "rpcs.sql");
 
@@ -41,5 +41,22 @@ describe("CONFIG_CATALOG ⟷ cerefox_set_config allow-list", () => {
     expect(spec?.kind).toBe("boolean");
     expect(spec?.defaultValue).toBe("false");
     expect(spec?.highImpact).toBe(true);
+  });
+});
+
+describe("trash auto-purge keys (#251)", () => {
+  test("off by default, 60 days by default, both high-impact", () => {
+    const on = CONFIG_CATALOG.find((k) => k.key === "trash_auto_purge_enabled");
+    const days = CONFIG_CATALOG.find((k) => k.key === "trash_retention_days");
+    expect([on?.defaultValue, on?.highImpact]).toEqual(["false", true]);
+    expect([days?.defaultValue, days?.highImpact, days?.integer]).toEqual(["60", true, true]);
+  });
+
+  test("the period must be whole days between 1 and 3650", () => {
+    expect(validateConfigValue("trash_retention_days", "60")).toBeNull();
+    expect(validateConfigValue("trash_retention_days", "1")).toBeNull();
+    for (const bad of ["0", "-1", "1.5", "3651", "abc", ""]) {
+      expect({ bad, ok: validateConfigValue("trash_retention_days", bad) === null }).toEqual({ bad, ok: false });
+    }
   });
 });

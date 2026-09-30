@@ -189,12 +189,19 @@ export function readDoc(docPath: string): string | null {
  */
 export function readOpenApiDocument(): string | null {
   const here = moduleDir();
-  const candidates = [
-    // Built: <install>/dist/bin/cerefox.js → <install>/docs/api/
-    join(here, "..", "..", "docs", "api", "openapi.json"),
-    // Source: <repo>/packages/memory/src/web/docs.ts → <repo>/docs/api/
-    join(here, "..", "..", "..", "..", "docs", "api", "openapi.json"),
-  ];
+  // Running from source (<repo>/packages/memory/src/web/docs.ts): the repo's
+  // own docs/api/openapi.json is the truth. The package's docs/ folder is a
+  // gitignored build artifact that goes stale between bundle runs, and it was
+  // winning here, so a source-mode server served an out-of-date contract.
+  const fromSource = here.endsWith(join("src", "web"));
+  const repoCopy = join(here, "..", "..", "..", "..", "docs", "api", "openapi.json");
+  const candidates = fromSource
+    ? [repoCopy]
+    : [
+        // Built: <install>/dist/bin/cerefox.js → <install>/docs/api/
+        join(here, "..", "..", "docs", "api", "openapi.json"),
+        repoCopy,
+      ];
   for (const p of candidates) {
     if (existsSync(p)) return readFileSync(p, "utf8");
   }
