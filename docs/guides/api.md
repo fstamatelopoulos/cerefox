@@ -181,6 +181,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 |---|---|
 | `GET /version` | Server version and environment label. |
 | `GET /schema-version` | Deployed schema version. |
+| `GET /openapi.json` | This API's OpenAPI 3.1 description, served by the version you are talking to. Every `/api/v1` response points at it with `Link: </api/v1/openapi.json>; rel="service-desc"` (RFC 8631). |
 | `GET /search?q=…` | Hybrid search (FTS + semantic). `&review_status=approved\|pending_review` filters server-side; `400` while the review workflow is off. |
 | `GET /dashboard`, `GET /dashboard/recent-docs` | Dashboard aggregates. |
 | `GET /documents/{id}` | Full document, with metadata, projects and versions. |
@@ -250,7 +251,12 @@ confirms with the human in a dialog instead, and it keeps working unchanged.
 
 The full contract of every endpoint (parameters, headers, bodies, error codes)
 is in [`docs/api/openapi.json`](../api/openapi.json), generated from the route
-handlers themselves.
+handlers themselves. A running server serves its own copy at
+`GET /api/v1/openapi.json` (since v1.15.3), so a client always gets the
+contract of the version it is actually talking to. It does not need to know
+that path: every `/api/v1` response carries
+`Link: </api/v1/openapi.json>; rel="service-desc"`, the standard pointer to a
+machine-readable API description (RFC 8631).
 
 Purge (`DELETE /documents/{id}/purge`) is irreversible and takes no token. It is
 reachable by anything that can reach the port, which is another reason the

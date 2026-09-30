@@ -14,7 +14,7 @@ import { Hono } from "hono";
 import { bundledSchemaVersion } from "../../../../../_shared/server-assets/index.ts";
 import { PKG_VERSION } from "../../meta.ts";
 import type { WebContext } from "../context.ts";
-import { listBundledDocs, readDoc } from "../docs.ts";
+import { listBundledDocs, readDoc, readOpenApiDocument } from "../docs.ts";
 import {
   classifyCompat,
   COMPATIBILITY,
@@ -66,6 +66,17 @@ export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
     return c.body(content, 200, {
       "Content-Type": "text/markdown; charset=utf-8",
     });
+  });
+
+  // This API's own description (#303). Discoverable without knowing the path:
+  // every /api/v1 response carries `Link: </api/v1/openapi.json>;
+  // rel="service-desc"` (RFC 8631), set in server.ts.
+  app.get("/api/v1/openapi.json", (c) => {
+    const doc = readOpenApiDocument();
+    if (doc === null) {
+      return c.json({ detail: "The OpenAPI document is not bundled with this build." }, 404);
+    }
+    return c.body(doc, 200, { "Content-Type": "application/json; charset=utf-8" });
   });
 
   app.get("/api/v1/schema-version", async (c) => {

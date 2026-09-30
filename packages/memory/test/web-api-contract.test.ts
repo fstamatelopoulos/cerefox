@@ -11,6 +11,8 @@
  */
 
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { IngestionPipeline } from "../src/ingestion/pipeline.ts";
 import { ConcurrencyConflictError } from "../src/ingestion/types.ts";
@@ -387,5 +389,28 @@ describe("GET /schema-version", () => {
     expect(compareSemver(COMPATIBILITY.minSchema, bundled)).toBeLessThan(0);
     const behind = await at(COMPATIBILITY.minSchema);
     expect({ mismatch: behind.mismatch, level: behind.level }).toEqual({ mismatch: true, level: "above-min-but-old" });
+  });
+});
+
+// ── Self-description (#303) ─────────────────────────────────────────────────
+
+describe("GET /openapi.json and the service-desc Link", () => {
+  const LINK = '</api/v1/openapi.json>; rel="service-desc"';
+
+  test("serves the committed OpenAPI document, byte for byte", async () => {
+    const r = await app(fakeStore()).request("/api/v1/openapi.json");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toContain("application/json");
+    const committed = readFileSync(join(import.meta.dir, "..", "..", "..", "docs", "api", "openapi.json"), "utf8");
+    expect(await r.text()).toBe(committed);
+  });
+
+  test("every /api/v1 response points at it (RFC 8631), errors included", async () => {
+    const a = app(fakeStore());
+    const ok = await a.request("/api/v1/version");
+    const notFound = await a.request(`/api/v1/documents/${DOC}/purge`, { method: "DELETE" });
+    const bad = await a.request("/api/v1/ingest", json({ title: "T", content: "x", bogus: 1 }));
+    expect([ok.status, notFound.status, bad.status]).toEqual([200, 404, 400]);
+    for (const r of [ok, notFound, bad]) expect(r.headers.get("link")).toBe(LINK);
   });
 });

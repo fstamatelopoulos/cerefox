@@ -179,3 +179,24 @@ export function readDoc(docPath: string): string | null {
   }
   return null;
 }
+
+/**
+ * The OpenAPI document for `/api/v1`, as shipped: `<install>/docs/api/
+ * openapi.json` (copied by `bundle_package_docs.ts`), else the repo's
+ * `docs/api/openapi.json` in source mode. Returned verbatim, so what a client
+ * fetches is byte-identical to the committed, generated artifact. Null when
+ * neither exists (a build that skipped bundle-docs).
+ */
+export function readOpenApiDocument(): string | null {
+  const here = moduleDir();
+  const candidates = [
+    // Built: <install>/dist/bin/cerefox.js → <install>/docs/api/
+    join(here, "..", "..", "docs", "api", "openapi.json"),
+    // Source: <repo>/packages/memory/src/web/docs.ts → <repo>/docs/api/
+    join(here, "..", "..", "..", "..", "docs", "api", "openapi.json"),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return readFileSync(p, "utf8");
+  }
+  return null;
+}
