@@ -1,0 +1,1200 @@
+[
+  {
+    "id": "q001",
+    "category": "exact_title",
+    "text": "PostgreSQL Backup and Restore Runbook",
+    "relevant": {
+      "eng-postgres-backups": 2,
+      "inc-backup-archive-failure": 1
+    },
+    "group": "g02"
+  },
+  {
+    "id": "q002",
+    "category": "exact_title",
+    "text": "Paid Time Off (PTO) Policy",
+    "relevant": {
+      "pol-pto": 2
+    },
+    "group": "g03"
+  },
+  {
+    "id": "q003",
+    "category": "exact_title",
+    "text": "Elizabeth Marrowby",
+    "relevant": {
+      "contact-elizabeth-marrowby": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-kestrel-kickoff": 1,
+      "mtg-q3-budget-review": 1
+    },
+    "group": "g04"
+  },
+  {
+    "id": "q004",
+    "category": "exact_title",
+    "text": "Alexandra Quillon",
+    "relevant": {
+      "contact-alexandra-quillon": 2,
+      "mtg-1on1-alex-career": 1,
+      "mtg-hiring-debrief-sre": 1,
+      "mtg-platform-weekly-march": 1,
+      "inc-checkout-timeouts": 1
+    },
+    "group": "g05"
+  },
+  {
+    "id": "q005",
+    "category": "exact_title",
+    "text": "Robert Tavistrom",
+    "relevant": {
+      "contact-robert-tavistrom": 2,
+      "mtg-insurance-renewal-call": 1
+    },
+    "group": "g06"
+  },
+  {
+    "id": "q006",
+    "category": "exact_title",
+    "text": "Nick Ventrella",
+    "relevant": {
+      "contact-nick-ventrella": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-hiring-debrief-sre": 1
+    },
+    "group": "g07"
+  },
+  {
+    "id": "q007",
+    "category": "exact_title",
+    "text": "Car Cover Renewal 2024",
+    "relevant": {
+      "fin-car-cover-renewal": 2,
+      "mtg-insurance-renewal-call": 1
+    },
+    "group": "g11"
+  },
+  {
+    "id": "q008",
+    "category": "exact_title",
+    "text": "Chickpea and Spinach Curry",
+    "relevant": {
+      "rec-chickpea-spinach-curry": 2
+    },
+    "group": "g12"
+  },
+  {
+    "id": "q009",
+    "category": "exact_title",
+    "text": "Summary: Sleep and Memory Consolidation",
+    "relevant": {
+      "res-sleep-memory-consolidation": 2
+    },
+    "group": "g25"
+  },
+  {
+    "id": "q010",
+    "category": "exact_title",
+    "text": "Kestrel Push Notifications",
+    "relevant": {
+      "spec-kestrel-push-notifications": 2
+    }
+  },
+  {
+    "id": "q011",
+    "category": "distinctive_keyword",
+    "text": "Kestrel",
+    "relevant": {
+      "mtg-kestrel-kickoff": 2,
+      "spec-kestrel-offline-sync": 2,
+      "spec-kestrel-push-notifications": 1,
+      "contact-katherine-fenwright": 1
+    }
+  },
+  {
+    "id": "q012",
+    "category": "distinctive_keyword",
+    "text": "Larkspur",
+    "relevant": {
+      "spec-larkspur-autocomplete": 2
+    }
+  },
+  {
+    "id": "q013",
+    "category": "distinctive_keyword",
+    "text": "levain",
+    "relevant": {
+      "rec-weeknight-sourdough": 2
+    },
+    "group": "g13"
+  },
+  {
+    "id": "q014",
+    "category": "distinctive_keyword",
+    "text": "PodDisruptionBudget",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2,
+      "mtg-platform-weekly-march": 1
+    }
+  },
+  {
+    "id": "q015",
+    "category": "distinctive_keyword",
+    "text": "ryokan",
+    "relevant": {
+      "trv-kyoto-autumn": 2
+    }
+  },
+  {
+    "id": "q016",
+    "category": "distinctive_keyword",
+    "text": "Sintra",
+    "relevant": {
+      "trv-lisbon-may": 2
+    }
+  },
+  {
+    "id": "q017",
+    "category": "distinctive_keyword",
+    "text": "CoreDNS",
+    "relevant": {
+      "inc-internal-dns-failure": 2
+    },
+    "group": "g22"
+  },
+  {
+    "id": "q018",
+    "category": "distinctive_keyword",
+    "text": "stampede",
+    "relevant": {
+      "res-cache-invalidation": 2
+    },
+    "group": "g24"
+  },
+  {
+    "id": "q019",
+    "category": "distinctive_keyword",
+    "text": "attention residue",
+    "relevant": {
+      "res-focus-attention-residue": 2
+    }
+  },
+  {
+    "id": "q020",
+    "category": "distinctive_keyword",
+    "text": "hybrid logical clock",
+    "relevant": {
+      "spec-kestrel-offline-sync": 2
+    }
+  },
+  {
+    "id": "q021",
+    "category": "multi_word_topic",
+    "text": "Kubernetes node upgrade",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2,
+      "mtg-platform-weekly-march": 1
+    },
+    "group": "g01"
+  },
+  {
+    "id": "q022",
+    "category": "multi_word_topic",
+    "text": "home office stipend",
+    "relevant": {
+      "pol-remote-work": 2
+    }
+  },
+  {
+    "id": "q023",
+    "category": "multi_word_topic",
+    "text": "offline conflict resolution",
+    "relevant": {
+      "spec-kestrel-offline-sync": 2,
+      "mtg-kestrel-kickoff": 1
+    },
+    "group": "g14"
+  },
+  {
+    "id": "q024",
+    "category": "multi_word_topic",
+    "text": "replication lag alert threshold",
+    "relevant": {
+      "eng-postgres-replica-lag": 2
+    }
+  },
+  {
+    "id": "q025",
+    "category": "multi_word_topic",
+    "text": "collision damage waiver rental car",
+    "relevant": {
+      "trv-iceland-ring-road": 2,
+      "fin-car-cover-renewal": 1,
+      "mtg-insurance-renewal-call": 1
+    },
+    "group": "g19"
+  },
+  {
+    "id": "q026",
+    "category": "multi_word_topic",
+    "text": "single sign-on configuration",
+    "relevant": {
+      "spec-sso-saml": 2
+    },
+    "group": "g15"
+  },
+  {
+    "id": "q027",
+    "category": "multi_word_topic",
+    "text": "continuous integration caching",
+    "relevant": {
+      "eng-ci-pipeline-speed": 2
+    },
+    "group": "g16"
+  },
+  {
+    "id": "q028",
+    "category": "multi_word_topic",
+    "text": "employer pension match",
+    "relevant": {
+      "fin-pension-contributions": 2
+    },
+    "group": "g21"
+  },
+  {
+    "id": "q029",
+    "category": "multi_word_topic",
+    "text": "Iceland ring road",
+    "relevant": {
+      "trv-iceland-ring-road": 2
+    },
+    "group": "g20"
+  },
+  {
+    "id": "q030",
+    "category": "multi_word_topic",
+    "text": "API rate limiting",
+    "relevant": {
+      "spec-api-rate-limiting": 2
+    },
+    "group": "g27"
+  },
+  {
+    "id": "q031",
+    "category": "multi_word_topic",
+    "text": "reciprocal rank fusion",
+    "relevant": {
+      "res-sparse-vs-dense-retrieval": 2
+    },
+    "group": "g28"
+  },
+  {
+    "id": "q032",
+    "category": "paraphrase",
+    "text": "automobile insurance",
+    "relevant": {
+      "fin-car-cover-renewal": 2,
+      "mtg-insurance-renewal-call": 1,
+      "contact-robert-tavistrom": 1
+    },
+    "group": "g11"
+  },
+  {
+    "id": "q033",
+    "category": "paraphrase",
+    "text": "garbanzo stew",
+    "relevant": {
+      "rec-chickpea-spinach-curry": 2
+    },
+    "group": "g12"
+  },
+  {
+    "id": "q034",
+    "category": "paraphrase",
+    "text": "vacation allowance",
+    "relevant": {
+      "pol-pto": 2
+    },
+    "group": "g03"
+  },
+  {
+    "id": "q035",
+    "category": "paraphrase",
+    "text": "saving for retirement",
+    "relevant": {
+      "fin-pension-contributions": 2
+    },
+    "group": "g21"
+  },
+  {
+    "id": "q036",
+    "category": "paraphrase",
+    "text": "refund for job-related purchases",
+    "relevant": {
+      "pol-expense-reimbursement": 2
+    },
+    "group": "g17"
+  },
+  {
+    "id": "q037",
+    "category": "paraphrase",
+    "text": "staying at a traditional Japanese inn",
+    "relevant": {
+      "trv-kyoto-autumn": 2
+    }
+  },
+  {
+    "id": "q038",
+    "category": "paraphrase",
+    "text": "overnight learning retention",
+    "relevant": {
+      "res-sleep-memory-consolidation": 2
+    },
+    "group": "g25"
+  },
+  {
+    "id": "q039",
+    "category": "paraphrase",
+    "text": "evacuating hosts before patching",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2
+    }
+  },
+  {
+    "id": "q040",
+    "category": "paraphrase",
+    "text": "paying extra off the home loan",
+    "relevant": {
+      "fin-mortgage-overpayment": 2
+    },
+    "group": "g18"
+  },
+  {
+    "id": "q041",
+    "category": "paraphrase",
+    "text": "lapsed ssl",
+    "relevant": {
+      "inc-expired-tls-certificate": 2
+    },
+    "group": "g10"
+  },
+  {
+    "id": "q042",
+    "category": "paraphrase",
+    "text": "maternity and paternity rules",
+    "relevant": {
+      "pol-parental-leave": 2
+    }
+  },
+  {
+    "id": "q043",
+    "category": "abbreviation",
+    "text": "k8s node upgrade",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2,
+      "mtg-platform-weekly-march": 1
+    },
+    "group": "g01"
+  },
+  {
+    "id": "q044",
+    "category": "abbreviation",
+    "text": "PTO policy",
+    "relevant": {
+      "pol-pto": 2
+    },
+    "group": "g03"
+  },
+  {
+    "id": "q045",
+    "category": "abbreviation",
+    "text": "PITR",
+    "relevant": {
+      "eng-postgres-backups": 2,
+      "inc-backup-archive-failure": 1
+    }
+  },
+  {
+    "id": "q046",
+    "category": "abbreviation",
+    "text": "SSO SAML setup",
+    "relevant": {
+      "spec-sso-saml": 2
+    },
+    "group": "g15"
+  },
+  {
+    "id": "q047",
+    "category": "abbreviation",
+    "text": "HYSA",
+    "relevant": {
+      "fin-emergency-fund": 2,
+      "fin-tax-return-checklist": 1
+    },
+    "group": "g26"
+  },
+  {
+    "id": "q048",
+    "category": "abbreviation",
+    "text": "ERC mortgage",
+    "relevant": {
+      "fin-mortgage-overpayment": 2
+    },
+    "group": "g18"
+  },
+  {
+    "id": "q049",
+    "category": "abbreviation",
+    "text": "CDW",
+    "relevant": {
+      "trv-iceland-ring-road": 2
+    },
+    "group": "g19"
+  },
+  {
+    "id": "q050",
+    "category": "abbreviation",
+    "text": "PDB drain stuck",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2,
+      "mtg-platform-weekly-march": 1
+    }
+  },
+  {
+    "id": "q051",
+    "category": "abbreviation",
+    "text": "CI cache",
+    "relevant": {
+      "eng-ci-pipeline-speed": 2
+    },
+    "group": "g16"
+  },
+  {
+    "id": "q052",
+    "category": "abbreviation",
+    "text": "RRF",
+    "relevant": {
+      "res-sparse-vs-dense-retrieval": 2
+    },
+    "group": "g28"
+  },
+  {
+    "id": "q053",
+    "category": "short_name",
+    "text": "Liz Marrowby",
+    "relevant": {
+      "contact-elizabeth-marrowby": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-kestrel-kickoff": 1,
+      "mtg-q3-budget-review": 1
+    },
+    "group": "g04"
+  },
+  {
+    "id": "q054",
+    "category": "short_name",
+    "text": "Alex Quillon",
+    "relevant": {
+      "contact-alexandra-quillon": 2,
+      "mtg-1on1-alex-career": 1,
+      "mtg-hiring-debrief-sre": 1,
+      "mtg-platform-weekly-march": 1,
+      "inc-checkout-timeouts": 1
+    },
+    "group": "g05"
+  },
+  {
+    "id": "q055",
+    "category": "short_name",
+    "text": "Bob Tavistrom",
+    "relevant": {
+      "contact-robert-tavistrom": 2,
+      "mtg-insurance-renewal-call": 1
+    },
+    "group": "g06"
+  },
+  {
+    "id": "q056",
+    "category": "short_name",
+    "text": "Nicholas Ventrella",
+    "relevant": {
+      "contact-nick-ventrella": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-hiring-debrief-sre": 1
+    },
+    "group": "g07"
+  },
+  {
+    "id": "q057",
+    "category": "short_name",
+    "text": "Kate Fenwright",
+    "relevant": {
+      "contact-katherine-fenwright": 2,
+      "mtg-kestrel-kickoff": 1,
+      "mtg-q3-budget-review": 1,
+      "spec-kestrel-offline-sync": 1
+    }
+  },
+  {
+    "id": "q058",
+    "category": "short_name",
+    "text": "Tom Brisbeck",
+    "relevant": {
+      "contact-thomas-brisbeck": 2,
+      "fin-tax-return-checklist": 1
+    }
+  },
+  {
+    "id": "q059",
+    "category": "short_name",
+    "text": "Bill Halvardsen",
+    "relevant": {
+      "mtg-q3-budget-review": 2
+    }
+  },
+  {
+    "id": "q060",
+    "category": "short_name",
+    "text": "Jen Okereke-Lund",
+    "relevant": {
+      "mtg-hiring-debrief-sre": 2,
+      "mtg-kestrel-kickoff": 2
+    }
+  },
+  {
+    "id": "q061",
+    "category": "short_name",
+    "text": "Marrowby",
+    "relevant": {
+      "contact-elizabeth-marrowby": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-kestrel-kickoff": 1,
+      "mtg-q3-budget-review": 1
+    }
+  },
+  {
+    "id": "q062",
+    "category": "short_name",
+    "text": "Kate product lead Kestrel",
+    "relevant": {
+      "contact-katherine-fenwright": 2,
+      "mtg-kestrel-kickoff": 1,
+      "spec-kestrel-offline-sync": 1
+    }
+  },
+  {
+    "id": "q063",
+    "category": "misspelling",
+    "text": "kuberentes node upgrade",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2,
+      "mtg-platform-weekly-march": 1
+    },
+    "group": "g01"
+  },
+  {
+    "id": "q064",
+    "category": "misspelling",
+    "text": "postgress backup restore",
+    "relevant": {
+      "eng-postgres-backups": 2,
+      "inc-backup-archive-failure": 1
+    },
+    "group": "g02"
+  },
+  {
+    "id": "q065",
+    "category": "misspelling",
+    "text": "sourdogh loaf",
+    "relevant": {
+      "rec-weeknight-sourdough": 2
+    },
+    "group": "g13"
+  },
+  {
+    "id": "q066",
+    "category": "misspelling",
+    "text": "Elizabeth Marowby",
+    "relevant": {
+      "contact-elizabeth-marrowby": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-kestrel-kickoff": 1,
+      "mtg-q3-budget-review": 1
+    },
+    "group": "g04"
+  },
+  {
+    "id": "q067",
+    "category": "misspelling",
+    "text": "reimbursment policy",
+    "relevant": {
+      "pol-expense-reimbursement": 2
+    },
+    "group": "g17"
+  },
+  {
+    "id": "q068",
+    "category": "misspelling",
+    "text": "Kestral offline sync",
+    "relevant": {
+      "spec-kestrel-offline-sync": 2,
+      "mtg-kestrel-kickoff": 1
+    },
+    "group": "g14"
+  },
+  {
+    "id": "q069",
+    "category": "misspelling",
+    "text": "chikpea curry",
+    "relevant": {
+      "rec-chickpea-spinach-curry": 2
+    },
+    "group": "g12"
+  },
+  {
+    "id": "q070",
+    "category": "misspelling",
+    "text": "focacia rosemary",
+    "relevant": {
+      "rec-rosemary-focaccia": 2
+    }
+  },
+  {
+    "id": "q071",
+    "category": "misspelling",
+    "text": "mortage overpayment",
+    "relevant": {
+      "fin-mortgage-overpayment": 2
+    },
+    "group": "g18"
+  },
+  {
+    "id": "q072",
+    "category": "misspelling",
+    "text": "Icleand ring road",
+    "relevant": {
+      "trv-iceland-ring-road": 2
+    },
+    "group": "g20"
+  },
+  {
+    "id": "q073",
+    "category": "word_order",
+    "text": "Marrowby Elizabeth",
+    "relevant": {
+      "contact-elizabeth-marrowby": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-kestrel-kickoff": 1,
+      "mtg-q3-budget-review": 1
+    },
+    "group": "g04"
+  },
+  {
+    "id": "q074",
+    "category": "word_order",
+    "text": "Quillon Alexandra",
+    "relevant": {
+      "contact-alexandra-quillon": 2,
+      "mtg-1on1-alex-career": 1,
+      "mtg-hiring-debrief-sre": 1,
+      "mtg-platform-weekly-march": 1,
+      "inc-checkout-timeouts": 1
+    },
+    "group": "g05"
+  },
+  {
+    "id": "q075",
+    "category": "word_order",
+    "text": "backup restore postgresql",
+    "relevant": {
+      "eng-postgres-backups": 2,
+      "inc-backup-archive-failure": 1
+    },
+    "group": "g02"
+  },
+  {
+    "id": "q076",
+    "category": "word_order",
+    "text": "curry spinach chickpea",
+    "relevant": {
+      "rec-chickpea-spinach-curry": 2
+    },
+    "group": "g12"
+  },
+  {
+    "id": "q077",
+    "category": "word_order",
+    "text": "insurance home contents",
+    "relevant": {
+      "fin-home-contents-insurance": 2,
+      "mtg-insurance-renewal-call": 1
+    }
+  },
+  {
+    "id": "q078",
+    "category": "word_order",
+    "text": "policy travel business",
+    "relevant": {
+      "pol-business-travel": 2
+    }
+  },
+  {
+    "id": "q079",
+    "category": "word_order",
+    "text": "sync offline kestrel",
+    "relevant": {
+      "spec-kestrel-offline-sync": 2,
+      "mtg-kestrel-kickoff": 1
+    },
+    "group": "g14"
+  },
+  {
+    "id": "q080",
+    "category": "word_order",
+    "text": "timeouts checkout postmortem",
+    "relevant": {
+      "inc-checkout-timeouts": 2,
+      "inc-ops-219-retry-budget": 1
+    },
+    "group": "g09"
+  },
+  {
+    "id": "q081",
+    "category": "word_order",
+    "text": "lag replication postgres",
+    "relevant": {
+      "eng-postgres-replica-lag": 2
+    }
+  },
+  {
+    "id": "q082",
+    "category": "word_order",
+    "text": "tart lemon",
+    "relevant": {
+      "rec-lemon-tart": 2
+    }
+  },
+  {
+    "id": "q083",
+    "category": "inflection",
+    "text": "deploying services",
+    "relevant": {
+      "eng-deploy-rollback": 2
+    },
+    "group": "g08"
+  },
+  {
+    "id": "q084",
+    "category": "inflection",
+    "text": "rolled back deployment",
+    "relevant": {
+      "eng-deploy-rollback": 2,
+      "inc-checkout-timeouts": 1
+    },
+    "group": "g08"
+  },
+  {
+    "id": "q085",
+    "category": "inflection",
+    "text": "upgraded kubernetes nodes",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2,
+      "mtg-platform-weekly-march": 1
+    },
+    "group": "g01"
+  },
+  {
+    "id": "q086",
+    "category": "inflection",
+    "text": "backing up postgres",
+    "relevant": {
+      "eng-postgres-backups": 2,
+      "inc-backup-archive-failure": 1
+    },
+    "group": "g02"
+  },
+  {
+    "id": "q087",
+    "category": "inflection",
+    "text": "reimbursing expenses",
+    "relevant": {
+      "pol-expense-reimbursement": 2
+    },
+    "group": "g17"
+  },
+  {
+    "id": "q088",
+    "category": "inflection",
+    "text": "braising short rib",
+    "relevant": {
+      "rec-braised-short-ribs": 2
+    }
+  },
+  {
+    "id": "q089",
+    "category": "inflection",
+    "text": "shaping loaves",
+    "relevant": {
+      "rec-weeknight-sourdough": 2
+    }
+  },
+  {
+    "id": "q090",
+    "category": "inflection",
+    "text": "invalidated caches",
+    "relevant": {
+      "res-cache-invalidation": 2
+    },
+    "group": "g24"
+  },
+  {
+    "id": "q091",
+    "category": "inflection",
+    "text": "renewing passports",
+    "relevant": {
+      "trv-passport-renewal": 2
+    }
+  },
+  {
+    "id": "q092",
+    "category": "inflection",
+    "text": "expiring certificates",
+    "relevant": {
+      "inc-expired-tls-certificate": 2
+    },
+    "group": "g10"
+  },
+  {
+    "id": "q093",
+    "category": "question",
+    "text": "how do I rotate the api key",
+    "relevant": {
+      "pol-security-credentials": 2
+    }
+  },
+  {
+    "id": "q094",
+    "category": "question",
+    "text": "how many PTO days can I carry over",
+    "relevant": {
+      "pol-pto": 2
+    },
+    "group": "g03"
+  },
+  {
+    "id": "q095",
+    "category": "question",
+    "text": "what time does the nightly database backup run",
+    "relevant": {
+      "eng-postgres-backups": 2,
+      "inc-backup-archive-failure": 2,
+      "eng-k8s-node-upgrade": 1
+    }
+  },
+  {
+    "id": "q096",
+    "category": "question",
+    "text": "how do I deploy a service",
+    "relevant": {
+      "eng-deploy-rollback": 2
+    },
+    "group": "g08"
+  },
+  {
+    "id": "q097",
+    "category": "question",
+    "text": "who is our insurance broker",
+    "relevant": {
+      "contact-robert-tavistrom": 2,
+      "mtg-insurance-renewal-call": 1
+    },
+    "group": "g06"
+  },
+  {
+    "id": "q098",
+    "category": "question",
+    "text": "what is the hotel limit when travelling for work",
+    "relevant": {
+      "pol-business-travel": 2
+    }
+  },
+  {
+    "id": "q099",
+    "category": "question",
+    "text": "what caused the checkout timeouts",
+    "relevant": {
+      "inc-checkout-timeouts": 2,
+      "inc-ops-219-retry-budget": 1
+    },
+    "group": "g09"
+  },
+  {
+    "id": "q100",
+    "category": "question",
+    "text": "how much should be in the emergency fund",
+    "relevant": {
+      "fin-emergency-fund": 2
+    },
+    "group": "g26"
+  },
+  {
+    "id": "q101",
+    "category": "question",
+    "text": "why did the DNS lookups fail",
+    "relevant": {
+      "inc-internal-dns-failure": 2
+    },
+    "group": "g22"
+  },
+  {
+    "id": "q102",
+    "category": "question",
+    "text": "when is the tax return deadline",
+    "relevant": {
+      "fin-tax-return-checklist": 2,
+      "contact-thomas-brisbeck": 1
+    }
+  },
+  {
+    "id": "q103",
+    "category": "identifier",
+    "text": "E4012",
+    "relevant": {
+      "inc-checkout-timeouts": 2,
+      "inc-ops-219-retry-budget": 1,
+      "mtg-platform-weekly-march": 1
+    },
+    "group": "g09"
+  },
+  {
+    "id": "q104",
+    "category": "identifier",
+    "text": "OPS-217",
+    "relevant": {
+      "inc-checkout-timeouts": 2,
+      "inc-ops-219-retry-budget": 1,
+      "mtg-platform-weekly-march": 1
+    },
+    "group": "g09"
+  },
+  {
+    "id": "q105",
+    "category": "identifier",
+    "text": "OPS-219",
+    "relevant": {
+      "inc-ops-219-retry-budget": 2,
+      "inc-checkout-timeouts": 1,
+      "mtg-platform-weekly-march": 1
+    }
+  },
+  {
+    "id": "q106",
+    "category": "identifier",
+    "text": "E2207",
+    "relevant": {
+      "inc-backup-archive-failure": 2
+    }
+  },
+  {
+    "id": "q107",
+    "category": "identifier",
+    "text": "OPS-231",
+    "relevant": {
+      "inc-internal-dns-failure": 2
+    },
+    "group": "g22"
+  },
+  {
+    "id": "q108",
+    "category": "identifier",
+    "text": "E5003",
+    "relevant": {
+      "inc-internal-dns-failure": 2
+    },
+    "group": "g22"
+  },
+  {
+    "id": "q109",
+    "category": "identifier",
+    "text": "E4031",
+    "relevant": {
+      "inc-expired-tls-certificate": 2
+    },
+    "group": "g10"
+  },
+  {
+    "id": "q110",
+    "category": "identifier",
+    "text": "OPS-252",
+    "relevant": {
+      "inc-build-runner-disk-full": 2,
+      "eng-ci-pipeline-speed": 1
+    },
+    "group": "g23"
+  },
+  {
+    "id": "q111",
+    "category": "identifier",
+    "text": "E7100 no space left on device",
+    "relevant": {
+      "inc-build-runner-disk-full": 2
+    },
+    "group": "g23"
+  },
+  {
+    "id": "q112",
+    "category": "identifier",
+    "text": "HTTP 429",
+    "relevant": {
+      "spec-api-rate-limiting": 2
+    },
+    "group": "g27"
+  },
+  {
+    "id": "q113",
+    "category": "long_query",
+    "text": "I need the runbook for moving our production kubernetes workloads onto new worker nodes without taking the services down",
+    "relevant": {
+      "eng-k8s-node-upgrade": 2
+    }
+  },
+  {
+    "id": "q114",
+    "category": "long_query",
+    "text": "notes from the call where we talked about renewing the car policy and whether the no-claims discount carries over",
+    "relevant": {
+      "mtg-insurance-renewal-call": 2,
+      "fin-car-cover-renewal": 1
+    }
+  },
+  {
+    "id": "q115",
+    "category": "long_query",
+    "text": "what did the team decide about hiring for the senior site reliability engineer role after the interview loop",
+    "relevant": {
+      "mtg-hiring-debrief-sre": 2
+    }
+  },
+  {
+    "id": "q116",
+    "category": "long_query",
+    "text": "recipe for a crusty loaf with a long cold fermentation that uses a starter instead of commercial yeast",
+    "relevant": {
+      "rec-weeknight-sourdough": 2
+    },
+    "group": "g13"
+  },
+  {
+    "id": "q117",
+    "category": "long_query",
+    "text": "how does the mobile app keep notes consistent when two inspectors edit the same record while both of them are offline",
+    "relevant": {
+      "spec-kestrel-offline-sync": 2,
+      "mtg-kestrel-kickoff": 1
+    },
+    "group": "g14"
+  },
+  {
+    "id": "q118",
+    "category": "long_query",
+    "text": "that day trip from the city by train to the palaces up in the hills and the old tram we rode early in the morning",
+    "relevant": {
+      "trv-lisbon-may": 2
+    }
+  },
+  {
+    "id": "q119",
+    "category": "long_query",
+    "text": "summary of the reading comparing keyword matching like bm25 with embedding based retrieval and how to combine the two result lists",
+    "relevant": {
+      "res-sparse-vs-dense-retrieval": 2
+    }
+  },
+  {
+    "id": "q120",
+    "category": "long_query",
+    "text": "what are the rules for expensing meals and taxis when I am travelling to a customer site for a few days",
+    "relevant": {
+      "pol-expense-reimbursement": 2,
+      "pol-business-travel": 1
+    }
+  },
+  {
+    "id": "q121",
+    "category": "long_query",
+    "text": "the incident where the build machines filled up their disks with log files and nearly all of the pipelines started failing",
+    "relevant": {
+      "inc-build-runner-disk-full": 2,
+      "eng-ci-pipeline-speed": 1
+    },
+    "group": "g23"
+  },
+  {
+    "id": "q122",
+    "category": "long_query",
+    "text": "how much did cloud spending go up last quarter and who from finance was in the review where we discussed it",
+    "relevant": {
+      "mtg-q3-budget-review": 2
+    }
+  },
+  {
+    "id": "q123",
+    "category": "negative",
+    "text": "Terraform state locking",
+    "relevant": {}
+  },
+  {
+    "id": "q124",
+    "category": "negative",
+    "text": "dog vaccination schedule",
+    "relevant": {}
+  },
+  {
+    "id": "q125",
+    "category": "negative",
+    "text": "sushi rice vinegar ratio",
+    "relevant": {}
+  },
+  {
+    "id": "q126",
+    "category": "negative",
+    "text": "health insurance deductible",
+    "relevant": {}
+  },
+  {
+    "id": "q127",
+    "category": "negative",
+    "text": "Kafka consumer group rebalancing",
+    "relevant": {}
+  },
+  {
+    "id": "q128",
+    "category": "negative",
+    "text": "GraphQL schema federation",
+    "relevant": {}
+  },
+  {
+    "id": "q129",
+    "category": "negative",
+    "text": "Paris restaurant recommendations",
+    "relevant": {}
+  },
+  {
+    "id": "q130",
+    "category": "negative",
+    "text": "Marguerite Ellsworthy phone number",
+    "relevant": {}
+  },
+  {
+    "id": "q131",
+    "category": "negative",
+    "text": "OPS-999",
+    "relevant": {}
+  },
+  {
+    "id": "q132",
+    "category": "negative",
+    "text": "cat sitter contact details",
+    "relevant": {}
+  }
+]
