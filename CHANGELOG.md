@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.15.2] -- 2026-09-30
+
 ### Fixed
 
 - **The `/api/v1` write routes now keep their own contract (#296).** Reported by
@@ -101,8 +107,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   `api-routes-documented.test.ts` said the machine-readable spec was still
   tracked, and `CONTRIBUTING.md` listed `/api/v1/*` as under contract without
   saying the spec has to be regenerated when a route changes.
-
-Open roadmap.
 
 ---
 
