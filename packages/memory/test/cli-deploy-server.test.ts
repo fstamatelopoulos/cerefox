@@ -13,6 +13,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { efDeployArgs } from "../src/cli/commands/deploy-server.ts";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = join(PKG_ROOT, "..", "..");
@@ -85,5 +86,21 @@ describe("cerefox deploy-server CLI", () => {
     } finally {
       rmSync(emptyConfigDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("efDeployArgs — the npx supabase functions deploy call", () => {
+  test("always names the project directory with --workdir (npm workspaces move npx's cwd)", () => {
+    const args = efDeployArgs("cerefox-search", "/x/dist/server-assets", "abcdefghijklmnop");
+    const i = args.indexOf("--workdir");
+    expect(i).toBeGreaterThan(-1);
+    expect(args[i + 1]).toBe("/x/dist/server-assets");
+    expect(args.slice(0, 6)).toEqual(["--yes", "supabase", "functions", "deploy", "cerefox-search", "--use-api"]);
+    expect(args).toContain("--project-ref");
+  });
+
+  test("in-function-auth functions get --no-verify-jwt; no ref means no --project-ref", () => {
+    expect(efDeployArgs("cerefox-mcp", "/w", null)).toContain("--no-verify-jwt");
+    expect(efDeployArgs("cerefox-mcp", "/w", null)).not.toContain("--project-ref");
   });
 });

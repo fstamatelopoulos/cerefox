@@ -358,13 +358,9 @@ async function action(options: DeployServerOptions): Promise<void> {
       // is Docker-independent (it's the same fallback the CLI uses when Docker is off) and is
       // the right path for an end-user deploying to their cloud Supabase — no local Docker
       // bundler needed. Requires a reasonably current Supabase CLI (we resolve latest via npx).
-      const args = ["--yes", "supabase", "functions", "deploy", ef, "--use-api"];
-      if (projectRef) args.push("--project-ref", projectRef);
+      const args = efDeployArgs(ef, workdir, projectRef);
       // OAuth protected-resource / public routes gate auth in-function (design §6).
-      if (NO_VERIFY_JWT_EFS.has(ef)) {
-        args.push("--no-verify-jwt");
-        info(`     (${ef}: --no-verify-jwt — in-function auth)`);
-      }
+      if (NO_VERIFY_JWT_EFS.has(ef)) info(`     (${ef}: --no-verify-jwt — in-function auth)`);
       // stdout/stderr are captured rather than inherited so we can READ the
       // bundler's reply and explain it (see `upstreamRegistryRace` below).
       // Everything captured is printed verbatim immediately after, so nothing
@@ -472,6 +468,27 @@ async function action(options: DeployServerOptions): Promise<void> {
  * loud, leaves the previous functions serving, and self-heals on retry — a
  * standing manual-bump burden across 9 functions is the worse trade).
  */
+/**
+ * The `npx supabase functions deploy` arguments for one Edge Function.
+ *
+ * `--workdir` names the directory holding `supabase/functions/<ef>`
+ * explicitly. Starting the child in that directory (`cwd`) is not enough:
+ * inside an npm workspace, `npx` moves the command to the workspace package's
+ * own directory before running it. From the repo's build that is
+ * `packages/memory`, so the CLI looked for `packages/memory/supabase/functions/
+ * <ef>/index.ts`, failed every function with "entrypoint path does not exist"
+ * and left a stray `packages/memory/supabase/.temp` behind (committed by
+ * accident once, in August). Installed packages were never affected; the
+ * same error text also belongs to #84, a different cause, which is why this
+ * one kept looking solved.
+ */
+export function efDeployArgs(ef: string, workdir: string, projectRef: string | null | undefined): string[] {
+  const args = ["--yes", "supabase", "functions", "deploy", ef, "--use-api", "--workdir", workdir];
+  if (projectRef) args.push("--project-ref", projectRef);
+  if (NO_VERIFY_JWT_EFS.has(ef)) args.push("--no-verify-jwt");
+  return args;
+}
+
 export function upstreamRegistryRace(output: string): boolean {
   return (
     /Failed to bundle the function/i.test(output) &&
