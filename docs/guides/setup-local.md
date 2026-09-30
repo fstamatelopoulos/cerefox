@@ -149,7 +149,7 @@ cerefox-local upgrade        # newest stable release + recreate (keeps data + OP
 cerefox-local upgrade v1.2.3 # pin an exact version (also how you downgrade)
 cerefox-local upgrade --latest  # follow the moving :latest tag from now on
 cerefox-local uninstall          # remove the container, KEEP the data volume
-cerefox-local uninstall --purge  # remove the container AND delete the data volume
+cerefox-local uninstall --purge  # remove the container AND delete the data volume (asks you to confirm; --yes in scripts)
 ```
 
 > **Coming from an image older than v1.1.0?** Run `cerefox-local upgrade v1.1.1`

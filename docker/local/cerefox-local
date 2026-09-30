@@ -156,7 +156,9 @@ Lifecycle (handled on the host):
   restart               restart the container
   upgrade [tag|--latest] upgrade to the newest release (or a specific version /
                         the moving :latest tag) + recreate; keeps your data + keys
-  uninstall [--purge]   remove the container (--purge also DELETES the data volume)
+  uninstall [--purge [--yes]]
+                        remove the container (--purge also DELETES the data volume;
+                        it asks you to confirm, or needs --yes when not on a terminal)
   status                show container state + URL
   logs [-f]             show container logs
   api-key [--rotate]    print the local API key (only needed by callers that are
@@ -173,6 +175,22 @@ EOF
 }
 
 cmd="${1:-}"; [ "$#" -gt 0 ] && shift || true
+
+# Host verbs act on the container and its data, so `--help` must never reach
+# them. `cerefox-local uninstall --help` used to REMOVE the container: every
+# host verb ignored arguments it did not know, and `uninstall --purge --help`
+# would have deleted the data volume. Help is answered here, before any verb
+# runs; the verbs below also refuse arguments they do not know.
+case "$cmd" in
+  init|start|up|stop|down|restart|upgrade|uninstall|status|logs|api-key|configure-agent|self-update|upgrade-cli)
+    for _a in "$@"; do
+      case "$_a" in -h|--help) usage; exit 0 ;; esac
+    done
+    ;;
+esac
+
+# For verbs that take no arguments: refuse any, before touching Docker.
+no_args() { [ "$#" -eq 0 ] || die "'$cmd' takes no arguments (got: $*). See: cerefox-local --help"; }
 
 case "$cmd" in
   ""|-h|--help|help)
@@ -288,6 +306,7 @@ case "$cmd" in
     ;;
 
   start|up)
+    no_args "$@"
     need_docker
     # The container is stopped (so it isn't holding its port). If the stored port is busy,
     # it's an external conflict — recreate on a free port (docker start can't rebind).
@@ -299,9 +318,10 @@ case "$cmd" in
       docker start "$CONTAINER" >/dev/null && echo "✓ started → http://localhost:$(host_port)/app/"
     fi
     ;;
-  stop|down)     need_docker; docker stop "$CONTAINER"  >/dev/null && echo "✓ stopped (data kept)" ;;
-  restart)       need_docker; docker restart "$CONTAINER" >/dev/null && echo "✓ restarted → http://localhost:$(host_port)/app/" ;;
+  stop|down)     no_args "$@"; need_docker; docker stop "$CONTAINER"  >/dev/null && echo "✓ stopped (data kept)" ;;
+  restart)       no_args "$@"; need_docker; docker restart "$CONTAINER" >/dev/null && echo "✓ restarted → http://localhost:$(host_port)/app/" ;;
   status)
+    no_args "$@"
     need_docker
     if is_running; then echo "● running   $CONTAINER   → http://localhost:$(host_port)/app/";
     elif docker inspect "$CONTAINER" >/dev/null 2>&1; then echo "○ stopped   $CONTAINER   (run: cerefox-local start)";
@@ -426,8 +446,26 @@ case "$cmd" in
     ;;
 
   uninstall)
+    purge=false; yes=false
+    for _a in "$@"; do
+      case "$_a" in
+        --purge) purge=true ;;
+        --yes|-y) yes=true ;;
+        *) die "unknown uninstall option: $_a (use --purge, --yes). Nothing was removed." ;;
+      esac
+    done
+    # --purge destroys every document, version and audit entry. Confirm first:
+    # typed at a terminal, or an explicit --yes from a script.
+    if [ "$purge" = true ] && [ "$yes" != true ]; then
+      if [ -t 0 ] && [ -t 1 ]; then
+        printf '⚠ This permanently DELETES the data volume %s (all documents, versions, audit log).\n  Type the volume name to confirm: ' "$VOLUME"
+        read -r _confirm || _confirm=""
+        [ "$_confirm" = "$VOLUME" ] || die "not confirmed. Nothing was removed."
+      else
+        die "--purge deletes all data; not on a terminal, so pass --yes to confirm. Nothing was removed."
+      fi
+    fi
     need_docker
-    purge=false; [ "${1:-}" = "--purge" ] && purge=true
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
     echo "✓ container removed"
     if [ "$purge" = true ]; then

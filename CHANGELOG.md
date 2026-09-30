@@ -11,6 +11,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **`cerefox-local <verb> --help` never acts any more.** `cerefox-local uninstall
+  --help` removed the container instead of printing help, because the host verbs
+  ignored arguments they did not know; `uninstall --purge --help` would have
+  deleted the data volume, and `stop`/`start`/`restart --help` acted too. Help is
+  now answered before any verb runs, and `start`, `stop`, `restart`, `status` and
+  `uninstall` refuse unknown arguments. `uninstall --purge` now asks you to type
+  the volume name to confirm, or needs `--yes` when not run at a terminal. The fix
+  reaches an existing install with the next `cerefox-local upgrade`, which refreshes
+  the host script from the image.
+
 - **`cerefox server deploy` works when run from inside an npm workspace.** The
   Edge Function step ran `npx supabase functions deploy` in the right directory,
   but inside a workspace `npx` moves to the workspace package's own directory
