@@ -51,6 +51,8 @@ export async function ingestPaste(data: {
   title: string;
   content: string;
   update_existing: boolean;
+  /** Sent with update_existing (#298): see IngestPage. */
+  last_write_wins?: boolean;
   project_ids: string[];
   metadata: Record<string, unknown>;
 }): Promise<IngestResponse> {

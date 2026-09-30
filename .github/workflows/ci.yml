@@ -184,14 +184,12 @@ jobs:
         # Fails on any advisory not on the accepted list below. The ignored
         # IDs are the audit-accepted, unreachable findings documented in
         # docs/specs/security-audit-1.0.md (2026-08-02 addendum, extended
-        # 2026-09-08, adm-zip entries retired 2026-09-22):
-        #   GHSA-f88m-g3jw-g9cj  sharp       — transformers vision path, never invoked
-        #   GHSA-rgj7-g3m4-5g8c  sharp       — same path; the fix (0.35.4) is
-        #                                      outside the ^0.34.5 that
-        #                                      @huggingface/transformers pins
+        # 2026-09-08, adm-zip entries retired 2026-09-22, sharp entries
+        # retired 2026-09-30 — transformers 4.3 brought sharp 0.35.5):
         #   GHSA-qwww-vcr4-c8h2  react-router — RSC mode, unused in the SPA
         # Fixed by overrides in the root package.json instead of accepted:
-        # hono (>=4.13.5), js-yaml (>=4.3.2) and adm-zip (>=0.6.1). The three
+        # hono (>=4.13.5), js-yaml (>=4.3.2), adm-zip (>=0.6.1) and ip-address
+        # (>=10.5.1, via @modelcontextprotocol/sdk → express-rate-limit). The three
         # adm-zip advisories used to be accepted here on the grounds that no
         # fixed release existed; 0.6.1 shipped, so the override retired all
         # three at once, including the one published 2026-09-21 that broke
@@ -200,8 +198,6 @@ jobs:
         # accepted list in the same PR. When one is fixed upstream, remove it.
         run: >
           bun audit
-          --ignore=GHSA-f88m-g3jw-g9cj
-          --ignore=GHSA-rgj7-g3m4-5g8c
           --ignore=GHSA-qwww-vcr4-c8h2
 
   gitleaks:

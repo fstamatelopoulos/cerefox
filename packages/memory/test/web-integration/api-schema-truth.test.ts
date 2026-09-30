@@ -27,6 +27,7 @@ import { afterAll, beforeAll, describe, expect } from "bun:test";
 import { LIVE_TEST_BUDGET_MS, liveTest } from "../_live-test.ts";
 import { probeSupabase, spawnWebServer, type SpawnedServer } from "./_helpers.js";
 import * as S from "../../../../_shared/schemas/index.ts";
+import { undocumentedKeys } from "../_schema-keys.ts";
 
 const LIVE_OK = probeSupabase();
 
@@ -46,7 +47,7 @@ interface Ctx {
 const CASES: Case[] = [
   { name: "GET /version", path: () => "/version", schema: S.VersionResponse },
   { name: "GET /schema-version", path: () => "/schema-version", schema: S.SchemaVersionResponse },
-  { name: "GET /search", path: () => "/search?q=cerefox&limit=2", schema: S.SearchResponse },
+  { name: "GET /search", path: () => "/search?q=cerefox&count=2", schema: S.SearchResponse },
   { name: "GET /dashboard", path: () => "/dashboard", schema: S.DashboardResponse },
   { name: "GET /projects", path: () => "/projects", schema: S.ProjectResponse, array: true },
   { name: "GET /metadata-keys", path: () => "/metadata-keys", schema: S.MetadataKeyResponse, array: true },
@@ -55,7 +56,11 @@ const CASES: Case[] = [
   { name: "GET /usage-log", path: () => "/usage-log?limit=2", schema: S.UsageLogEntryResponse, array: true },
   { name: "GET /usage-log/summary", path: () => "/usage-log/summary", schema: S.UsageSummaryResponse },
   { name: "GET /docs", path: () => "/docs", schema: S.BundledDocEntry, array: true },
-  { name: "GET /check-filename", path: () => "/check-filename?title=Cerefox", schema: S.FilenameCheckResponse },
+  { name: "GET /search (chunks)", path: () => "/search?q=cerefox&mode=hybrid&count=2", schema: S.SearchResponse },
+  { name: "GET /dashboard/recent-docs", path: () => "/dashboard/recent-docs", schema: S.DashboardRecentDocsResponse },
+  // `filename`, not `title`: the handler reads `filename`, so `?title=` sent an
+  // empty value and asserted `{exists:false}` — a check that could not fail (#296).
+  { name: "GET /check-filename", path: () => "/check-filename?filename=README.md", schema: S.FilenameCheckResponse },
   { name: "GET /resolve-link", path: () => "/resolve-link?path=Cerefox", schema: S.ResolveLinkResponse },
   { name: "GET /config", path: () => "/config", schema: S.ConfigListResponse },
   { name: "GET /config/{key}", path: () => "/config/usage_tracking_enabled", schema: S.ConfigValueResponse },
@@ -79,7 +84,7 @@ describe("the /api/v1 schemas match what the server returns (#270)", () => {
     try {
       const projects = (await (await fetch(`${server.base}/api/v1/projects`)).json()) as Array<{ id: string }>;
       ctx.projectId = projects[0]?.id ?? null;
-      const search = (await (await fetch(`${server.base}/api/v1/search?q=cerefox&limit=1`)).json()) as {
+      const search = (await (await fetch(`${server.base}/api/v1/search?q=cerefox&count=1`)).json()) as {
         results?: Array<{ document_id: string }>;
       };
       ctx.docId = search.results?.[0]?.document_id ?? null;
@@ -111,6 +116,11 @@ describe("the /api/v1 schemas match what the server returns (#270)", () => {
       if (c.array && target === undefined) continue; // empty collection, nothing to assert
       checked++;
       const res = c.schema.safeParse(target);
+      // safeParse strips unknown keys and succeeds, so a schema that OMITS a
+      // field the server sends passed here forever — that is how content_hash
+      // went undocumented on GET /documents/{id} (#296). Name every such key.
+      const extra = undocumentedKeys(c.schema, target);
+      if (extra.length > 0) failures.push(`${c.name}: undocumented field(s) ${extra.slice(0, 5).join(", ")}`);
       if (!res.success) {
         const issues = (res.error?.issues ?? [])
           .slice(0, 3)
@@ -125,7 +135,7 @@ describe("the /api/v1 schemas match what the server returns (#270)", () => {
     expect(failures).toEqual([]);
     // A run that asserted nothing would pass the line above vacuously — the same
     // vacuous-guard shape this project has been bitten by repeatedly.
-    expect(checked).toBeGreaterThanOrEqual(12);
+    expect(checked).toBeGreaterThanOrEqual(14);
   }, LIVE_TEST_BUDGET_MS);
 
   liveTest("a response missing a documented field is caught", async () => {

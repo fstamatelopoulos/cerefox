@@ -10,6 +10,8 @@
 
 import { z } from "zod";
 
+import { IdentityFields } from "./documents.js";
+
 export const ProjectResponse = z.object({
   id: z.string(),
   name: z.string(),
@@ -24,8 +26,18 @@ export type ProjectList = z.infer<typeof ProjectList>;
 
 // CRUD request bodies (Part 24F).
 
-export const CreateProjectRequest = z.object({
-  name: z.string(),
+export const CreateProjectRequest = IdentityFields.extend({
+  name: z.string().min(1),
   description: z.string().default(""),
 });
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequest>;
+
+/** Only the fields present are changed; at least one is required. */
+export const UpdateProjectRequest = IdentityFields.extend({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+});
+export type UpdateProjectRequest = z.infer<typeof UpdateProjectRequest>;
+
+export const SuccessResponse = z.object({ success: z.boolean() });
+export type SuccessResponse = z.infer<typeof SuccessResponse>;

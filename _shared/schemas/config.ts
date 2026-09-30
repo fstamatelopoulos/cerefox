@@ -8,14 +8,16 @@
 
 import { z } from "zod";
 
+import { IdentityFields } from "./documents.js";
+
 export const ConfigValueResponse = z.object({
   key: z.string(),
   value: z.string().nullable(),
 });
 export type ConfigValueResponse = z.infer<typeof ConfigValueResponse>;
 
-export const SetConfigRequest = z.object({
-  value: z.string(),
+export const SetConfigRequest = IdentityFields.extend({
+  value: z.string().describe("Stored as text; validated against the key's catalogue entry."),
 });
 export type SetConfigRequest = z.infer<typeof SetConfigRequest>;
 

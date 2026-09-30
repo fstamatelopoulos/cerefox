@@ -276,6 +276,7 @@ interface DocResultRow {
   doc_source?: string | null;
   doc_metadata?: Record<string, unknown>;
   doc_project_ids?: string[];
+  doc_project_names?: string[];
   best_score?: number;
   best_chunk_heading_path?: string[];
   full_content?: string;
@@ -298,6 +299,7 @@ interface ChunkResultRow {
   doc_title?: string;
   doc_source?: string | null;
   doc_project_ids?: string[];
+  doc_project_names?: string[];
   doc_metadata?: Record<string, unknown>;
   below_confidence?: boolean;
 }
@@ -309,6 +311,9 @@ function projectDocResult(r: DocResultRow): Record<string, unknown> {
     doc_source: r.doc_source ?? null,
     doc_metadata: r.doc_metadata ?? {},
     doc_project_ids: r.doc_project_ids ?? [],
+    // The RPCs have returned names since iteration 16B; this allowlist dropped
+    // them, so the web UI's result cards rendered no project chips (#296).
+    doc_project_names: r.doc_project_names ?? [],
     best_score: r.best_score ?? 0,
     best_chunk_heading_path: r.best_chunk_heading_path ?? [],
     full_content: r.full_content ?? "",
@@ -338,6 +343,7 @@ function projectChunkResult(r: ChunkResultRow): Record<string, unknown> {
     doc_title: r.doc_title ?? "",
     doc_source: r.doc_source ?? null,
     doc_project_ids: r.doc_project_ids ?? [],
+    doc_project_names: r.doc_project_names ?? [],
     doc_metadata: r.doc_metadata ?? {},
     // See projectDocResult — same allowlist caveat (#138).
     below_confidence: r.below_confidence ?? false,

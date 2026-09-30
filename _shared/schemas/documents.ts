@@ -40,6 +40,10 @@ export const DocumentDetailResponse = z.object({
   updated_at: z.string().nullable().optional(),
   /** Set when the document is soft-deleted (in trash); null/absent otherwise. */
   deleted_at: z.string().nullable().optional(),
+  /** The optimistic-concurrency token: send it back as `expected_content_hash`
+   *  on an edit, an ingest by `document_id`, an upload or a delete. Always the
+   *  CURRENT hash, even when `version_id` selects an archived version. */
+  content_hash: z.string().nullable(),
   versions: z.array(DocumentVersionResponse).default([]),
 });
 export type DocumentDetailResponse = z.infer<typeof DocumentDetailResponse>;
@@ -66,29 +70,72 @@ export type FilenameCheckResponse = z.infer<typeof FilenameCheckResponse>;
 
 // Write-endpoint request/response shapes (Part 24E).
 
-export const EditRequest = z.object({
-  title: z.string(),
-  content: z.string(),
-  project_ids: z.array(z.string()).default([]),
-  metadata: z.record(z.string(), z.string()).default({}),
+/**
+ * Caller identity, accepted in the body of every write that takes one
+ * (#226). The `X-Cerefox-*` headers carry the same fields and win when both
+ * are present; they are the only form on a GET or DELETE.
+ */
+export const IdentityFields = z.object({
+  author: z.string().optional().describe("Who is writing. Recorded as cerefox_audit_log.author."),
+  requestor: z
+    .string()
+    .optional()
+    .describe("Who is calling. Recorded as cerefox_usage_log.requestor; defaults to `author`."),
+  author_type: z
+    .enum(["user", "agent"])
+    .optional()
+    .describe("`agent` makes a new document land in pending_review, as it does over MCP."),
 });
+
+const HASH_DESCRIPTION =
+  "The content_hash you read the document at (GET /documents/{id}). Required on a content update unless last_write_wins is true; a stale one is a 409.";
+const LWW_DESCRIPTION =
+  "Skip the concurrency check. Only when an external source of truth makes a conflict meaningless.";
+
+/** Every field is optional: a body carrying only `metadata` changes only the
+ *  metadata. An empty or unchanged `content` takes the metadata-only path.
+ *  `.strict()` because the route refuses unknown fields (#296), so the
+ *  document says so; `EDIT_FIELDS` in the route is pinned to these keys. */
+export const EditRequest = IdentityFields.extend({
+  title: z.string().optional(),
+  content: z.string().optional(),
+  project_ids: z.array(z.string()).optional().describe("Replaces the full set of project memberships."),
+  metadata: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("Replaces the metadata. `{}` clears every key; omit to leave it unchanged."),
+  expected_content_hash: z.string().nullable().optional().describe(HASH_DESCRIPTION),
+  last_write_wins: z.boolean().optional().describe(LWW_DESCRIPTION),
+}).strict();
 export type EditRequest = z.infer<typeof EditRequest>;
 
 export const EditResponse = z.object({
   success: z.boolean(),
+  /** True when the content changed and was re-chunked and re-embedded. */
   reindexed: z.boolean().default(false),
   error: z.string().nullable().optional(),
+  // On the metadata-only branch: which facets actually changed. A facet sent
+  // unchanged is skipped (and writes no audit entry), so these can be false
+  // for a field the request carried. camelCase for historical reasons.
+  titleChanged: z.boolean().optional(),
+  metadataChanged: z.boolean().optional(),
+  projectsChanged: z.boolean().optional(),
 });
 export type EditResponse = z.infer<typeof EditResponse>;
 
-export const ReviewStatusRequest = z.object({
+export const ReviewStatusRequest = IdentityFields.extend({
   status: z.enum(["approved", "pending_review"]),
 });
 export type ReviewStatusRequest = z.infer<typeof ReviewStatusRequest>;
 
-export const VersionArchiveRequest = z.object({
+export const VersionArchiveRequest = IdentityFields.extend({
   archived: z.boolean(),
 });
+
+export const VersionArchiveResponse = z.object({
+  archived: z.boolean(),
+});
+export type VersionArchiveResponse = z.infer<typeof VersionArchiveResponse>;
 export type VersionArchiveRequest = z.infer<typeof VersionArchiveRequest>;
 
 // ── Write-path response shapes (#270) ────────────────────────────────────────
@@ -98,23 +145,33 @@ export type VersionArchiveRequest = z.infer<typeof VersionArchiveRequest>;
 // They exist so the OpenAPI document can describe the write surface an embedder
 // actually uses; before this, every write endpoint was listed with no body.
 
-export const IngestRequest = z.object({
-  title: z.string(),
-  content: z.string(),
-  /** Omit to create; pass to update a specific document. */
-  document_id: z.string().uuid().optional(),
-  /** REQUIRED on a content update: the hash you read the document at. */
-  expected_content_hash: z.string().optional(),
-  /** Skips the concurrency check. Only when an external source of truth makes conflicts meaningless. */
-  last_write_wins: z.boolean().optional(),
-  update_if_exists: z.boolean().optional(),
-  project_name: z.string().optional(),
-  project_names: z.array(z.string()).optional(),
+/** `.strict()`: the route refuses unknown fields (#296), and `INGEST_FIELDS`
+ *  is pinned to these keys by `api-request-contract.test.ts`. */
+export const IngestRequest = IdentityFields.extend({
+  title: z.string().min(1),
+  content: z.string().min(1),
+  document_id: z
+    .string()
+    .uuid()
+    .optional()
+    .describe("Update this document. Omit to create (or to match by title with update_if_exists)."),
+  expected_content_hash: z.string().optional().describe(HASH_DESCRIPTION),
+  last_write_wins: z.boolean().optional().describe(LWW_DESCRIPTION),
+  update_if_exists: z
+    .boolean()
+    .optional()
+    .describe("Update the document with this title instead of creating a second one. A content update, so it needs the hash or last_write_wins."),
+  update_existing: z.boolean().optional().describe("Alias of update_if_exists (the name the bundled web UI sends)."),
+  project_ids: z.array(z.string()).optional().describe("Project ids; the full set of memberships."),
+  project_names: z
+    .array(z.string())
+    .optional()
+    .describe("Project names, created if they do not exist; the full set of memberships."),
+  project_name: z.string().optional().describe("One project name, added to the memberships."),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  source: z.string().optional(),
-  author: z.string().optional(),
-  author_type: z.enum(["user", "agent"]).optional(),
-});
+  source: z.string().optional().describe('Origin label. Defaults to "paste".'),
+  mode: z.string().optional().describe("Ignored. Sent by the bundled web UI."),
+}).strict();
 export type IngestRequest = z.infer<typeof IngestRequest>;
 
 export const IngestResponse = z.object({
@@ -125,6 +182,8 @@ export const IngestResponse = z.object({
   skipped: z.boolean(),
   /** True when an existing document was updated rather than created. */
   updated: z.boolean(),
+  /** Why a write was skipped or overridden, when there is something to say. */
+  note: z.string().optional(),
 });
 export type IngestResponse = z.infer<typeof IngestResponse>;
 
@@ -152,3 +211,12 @@ export const ReviewStatusResponse = z.object({
   status: z.enum(["approved", "pending_review"]),
 });
 export type ReviewStatusResponse = z.infer<typeof ReviewStatusResponse>;
+
+/** `POST /documents/{id}/upload`: never a skip, so no `skipped`. */
+export const UploadResponse = z.object({
+  success: z.boolean(),
+  document_id: z.string(),
+  title: z.string(),
+  updated: z.boolean(),
+});
+export type UploadResponse = z.infer<typeof UploadResponse>;

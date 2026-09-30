@@ -14,6 +14,8 @@ export const VersionResponse = z.object({
   version: z.string(),
   git_commit_short: z.string().nullable(),
   build_date: z.string().nullable(),
+  /** `CEREFOX_ENV_LABEL` (e.g. "STAGING"), or null on an unlabelled target. */
+  env_label: z.string().nullable(),
 });
 export type VersionResponse = z.infer<typeof VersionResponse>;
 
@@ -31,6 +33,11 @@ export const SchemaVersionResponse = z.object({
   bundled: z.string().nullable(),
   deployed: z.string().nullable(),
   mismatch: z.boolean(),
+  /** `ok`, `above-min-but-old` (works; a newer server exists), `below-min`
+   *  (blocking: `cerefox server deploy`), or `unknown`. */
+  level: z.string(),
+  /** The oldest deployed schema this client works correctly against. */
+  min: z.string(),
 });
 export type SchemaVersionResponse = z.infer<typeof SchemaVersionResponse>;
 
@@ -42,3 +49,8 @@ export const PreferencesResponse = z.object({
   theme: z.string(),
 });
 export type PreferencesResponse = z.infer<typeof PreferencesResponse>;
+
+export const PreferencesRequest = z.object({
+  theme: z.enum(["auto", "light", "dark"]),
+});
+export type PreferencesRequest = z.infer<typeof PreferencesRequest>;

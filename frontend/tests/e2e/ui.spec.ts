@@ -123,6 +123,87 @@ test.describe("Ingest (paste)", () => {
   });
 });
 
+// "Update existing" must actually update when the content changed (#298). It
+// sent no concurrency token, so the server refused exactly the case the toggle
+// exists for; these walk it through the real UI on both tabs and then check the
+// store, not just the banner: one document, carrying the new content.
+test.describe("Ingest: Update existing (#298)", () => {
+  /** The ids of every live document with this exact title. */
+  async function docIdsByTitle(title: string): Promise<string[]> {
+    const client = createClient(loadSettings());
+    const { data } = await client.raw.from("cerefox_documents").select("id").eq("title", title).is("deleted_at", null);
+    return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+  }
+
+  async function toggleUpdateExisting(page: import("@playwright/test").Page): Promise<void> {
+    const toggle = page.getByRole("switch");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+  }
+
+  test("paste: changed content under the same title updates the document", async ({ page, request }) => {
+    const title = uniqueTitle("Update Existing Paste");
+    const first = `first-${crypto.randomUUID()}`;
+    const second = `second-${crypto.randomUUID()}`;
+    try {
+      await page.goto(`${APP}/ingest`);
+      await page.fill('input[placeholder="Document title"]', title);
+      await page.fill('textarea[placeholder="# Paste your Markdown here…"]', `# V1\n\n${first}`);
+      await page.click('button[type="submit"]:has-text("Ingest")');
+      await expect(page.getByText("ingested successfully")).toBeVisible({ timeout: 30_000 });
+
+      await page.goto(`${APP}/ingest`);
+      await page.fill('input[placeholder="Document title"]', title);
+      await page.fill('textarea[placeholder="# Paste your Markdown here…"]', `# V2\n\n${second}`);
+      await toggleUpdateExisting(page);
+      await page.click('button[type="submit"]:has-text("Ingest")');
+      await expect(page.getByText("updated and re-indexed")).toBeVisible({ timeout: 30_000 });
+
+      const ids = await docIdsByTitle(title);
+      expect(ids).toHaveLength(1);
+      const doc = (await (await request.get(`/api/v1/documents/${ids[0]}`)).json()) as { full_content: string };
+      expect(doc.full_content).toContain(second);
+      expect(doc.full_content).not.toContain(first);
+    } finally {
+      await purgeDocByTitle(title);
+    }
+  });
+
+  test("file: a changed re-upload of the same file updates the document", async ({ page, request }) => {
+    const title = uniqueTitle("Update Existing File");
+    const name = `e2e-update-existing-${crypto.randomUUID().slice(0, 8)}.md`;
+    const first = `first-${crypto.randomUUID()}`;
+    const second = `second-${crypto.randomUUID()}`;
+    const upload = async (body: string, update: boolean) => {
+      await page.goto(`${APP}/ingest`);
+      await page.getByRole("button", { name: "Upload file" }).click();
+      await page.fill('input[placeholder="Document title"]', title);
+      await page.setInputFiles('input[type="file"]', {
+        name,
+        mimeType: "text/markdown",
+        buffer: Buffer.from(body),
+      });
+      if (update) await toggleUpdateExisting(page);
+      await page.click('button[type="submit"]:has-text("Upload & ingest")');
+    };
+    try {
+      await upload(`# V1\n\n${first}\n`, false);
+      await expect(page.getByText("ingested successfully")).toBeVisible({ timeout: 30_000 });
+
+      await upload(`# V2\n\n${second}\n`, true);
+      await expect(page.getByText("updated and re-indexed")).toBeVisible({ timeout: 30_000 });
+
+      const ids = await docIdsByTitle(title);
+      expect(ids).toHaveLength(1);
+      const doc = (await (await request.get(`/api/v1/documents/${ids[0]}`)).json()) as { full_content: string };
+      expect(doc.full_content).toContain(second);
+      expect(doc.full_content).not.toContain(first);
+    } finally {
+      await purgeDocByTitle(title);
+    }
+  });
+});
+
 // ── Search ─────────────────────────────────────────────────────────────────
 test.describe("Search", () => {
   test("search page loads", async ({ page }) => {

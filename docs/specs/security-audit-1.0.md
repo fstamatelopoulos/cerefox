@@ -93,7 +93,8 @@ the Bearer token is the gate); the #110 query is parameterized.
   paths Cerefox never invokes (sharp — embeddings are text-only). No current
   upstream release resolves them. Revisit on `@huggingface/transformers` major
   bumps. (**The `adm-zip` half of this entry is retired** — see the 2026-09-22
-  addendum: a fixed release shipped and is now pinned by override.)
+  addendum: a fixed release shipped and is now pinned by override. **So is the
+  `sharp` half** — see the 2026-09-30 addendum.)
 - `react-router` RSC-mode advisory: fixed only in v8; Cerefox's SPA does not
   use RSC/SSR, so the affected code never runs. Revisit at a react-router v8
   migration.
@@ -137,6 +138,15 @@ the Bearer token is the gate); the #110 query is parameterized.
   "when a fixed release ships", and no one watches for that. When accepting on
   those grounds, the honest trigger is the next time the gate fails for any
   reason — check whether the premise still holds before adding another id.
+- **2026-09-30 addendum — the `sharp` acceptances are retired; `ip-address` fixed
+  by override.** `@huggingface/transformers` 4.3.0 (#297) depends on
+  `sharp ^0.35.4` and resolves 0.35.5, which fixes both GHSA-f88m-g3jw-g9cj and
+  GHSA-rgj7-g3m4-5g8c, so both were removed from the gate. The same day two
+  moderate `ip-address` advisories (GHSA-rpw4-54j3-4h4q, GHSA-2vr4-cq9g-pvrc,
+  fixed in 10.5.1) broke the gate on every branch; the package arrives via
+  `@modelcontextprotocol/sdk` → `express-rate-limit`, whose `^10.2.0` already
+  admits the fix, so an override to `^10.5.1` clears them rather than an
+  acceptance. The only accepted advisory left is the `react-router` RSC one.
 - The container-minted `service_role` JWT has no expiry; it never leaves the
   container, and rotating it is deleting `.cerefox_jwt_secret` from the data
   volume.

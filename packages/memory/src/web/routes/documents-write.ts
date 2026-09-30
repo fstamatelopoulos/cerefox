@@ -42,7 +42,10 @@ import {
   FacetValidationError,
   updateDocumentFacets,
 } from "../../../../../_shared/mcp-tools/_document-meta.ts";
-import { isDocumentNotFoundError } from "../../../../../_shared/mcp-tools/_utils.ts";
+import {
+  extractConflictHashes,
+  isDocumentNotFoundError,
+} from "../../../../../_shared/mcp-tools/_utils.ts";
 import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import {
@@ -99,6 +102,39 @@ async function getCurrentDoc(
   return (data as Record<string, unknown> | null) ?? null;
 }
 
+/** Every top-level field `POST /documents/{id}/edit` reads (#296). The
+ *  identity fields are read by `resolveCallerIdentity`. */
+export const EDIT_FIELDS = new Set([
+  "title",
+  "content",
+  "project_ids",
+  "metadata",
+  "expected_content_hash",
+  "last_write_wins",
+  "author",
+  "requestor",
+  "author_type",
+]);
+
+const TRASHED_MESSAGE =
+  "This document was moved to the trash while you were editing. " +
+  "Restore it from the Trash page first, then save again.";
+
+/** The edit route's 409. `message` is phrased for the web UI's toast; `detail`
+ *  carries the same text because it is where every other route puts the reason. */
+function conflictBody(currentHash: string | null | undefined): Record<string, unknown> {
+  const message =
+    "This document changed while you were editing it (another writer saved a newer version). " +
+    "Open it again in a new tab, merge your changes, and save from there.";
+  return {
+    success: false,
+    error: "conflict",
+    message,
+    detail: message,
+    ...(currentHash ? { current_hash: currentHash } : {}),
+  };
+}
+
 export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
   // ── POST /documents/{id}/edit ──────────────────────────────────────────────
   app.post("/api/v1/documents/:document_id/edit", async (c) => {
@@ -107,7 +143,17 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     try {
       body = (await c.req.json()) as Record<string, unknown>;
     } catch {
-      return c.json({ success: false, error: "Invalid JSON body" }, 400);
+      return c.json({ success: false, error: "Invalid JSON body", detail: "Invalid JSON body" }, 400);
+    }
+    // Unknown fields are refused, not dropped (#296): same rule as POST /ingest.
+    const unknown = Object.keys(body).filter((k) => !EDIT_FIELDS.has(k));
+    if (unknown.length > 0) {
+      const msg = `Unknown field(s): ${unknown.join(", ")}. Accepted: ${[...EDIT_FIELDS].join(", ")}.`;
+      return c.json({ success: false, error: msg, detail: msg }, 400);
+    }
+    if (body.last_write_wins != null && typeof body.last_write_wins !== "boolean") {
+      const msg = "last_write_wins must be a boolean.";
+      return c.json({ success: false, error: msg, detail: msg }, 400);
     }
     const who = resolveCallerIdentity(c, body);
     if (!who.ok) return c.json({ detail: who.detail }, 400);
@@ -126,7 +172,11 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       (typeof body.metadata !== "object" || Array.isArray(body.metadata))
     ) {
       return c.json(
-        { success: false, error: "metadata must be a JSON object of key/value pairs" },
+        {
+          success: false,
+          error: "metadata must be a JSON object of key/value pairs",
+          detail: "metadata must be a JSON object of key/value pairs",
+        },
         400,
       );
     }
@@ -134,7 +184,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
 
     const doc = await getCurrentDoc(ctx, documentId);
     if (!doc) {
-      return c.json({ success: false, error: "Document not found" }, 404);
+      return c.json({ success: false, error: "Document not found", detail: "Document not found" }, 404);
     }
     if (doc.deleted_at) {
       // Covers BOTH branches below (content-changed and metadata-only): the
@@ -144,15 +194,26 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
         {
           success: false,
           error: "document is in the trash",
-          message:
-            "This document was moved to the trash while you were editing. " +
-            "Restore it from the Trash page first, then save again.",
+          message: TRASHED_MESSAGE,
+          detail: TRASHED_MESSAGE,
         },
         409,
       );
     }
 
     const currentHash = doc.content_hash as string | null;
+    const expectedHash =
+      typeof body.expected_content_hash === "string" && body.expected_content_hash.trim() !== ""
+        ? body.expected_content_hash.trim()
+        : null;
+    const lastWriteWins = body.last_write_wins === true;
+    // A hash the caller sent is honoured on EVERY branch (#296). Only the
+    // content branch reaches the RPC's check, so a metadata-only save from a
+    // stale read used to succeed while the same request with changed content
+    // was refused: the rule depended on which branch the body happened to take.
+    if (expectedHash !== null && !lastWriteWins && currentHash !== null && expectedHash !== currentHash) {
+      return c.json(conflictBody(currentHash), 409);
+    }
     const proposedHash = content.trim() ? contentHash(content) : null;
     const contentChanged =
       proposedHash !== null && currentHash !== null && proposedHash !== currentHash;
@@ -169,6 +230,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           {
             success: false,
             error: "Embedder not available — set OPENAI_API_KEY in your config",
+            detail: "Embedder not available — set OPENAI_API_KEY in your config",
           },
           503,
         );
@@ -193,24 +255,13 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           authorType: who.identity.authorType,
           // Optimistic concurrency (iter-32): the SPA sends the content_hash
           // it loaded the document with; a concurrent change → 409 below.
-          expectedContentHash:
-            typeof body.expected_content_hash === "string"
-              ? body.expected_content_hash
-              : null,
+          expectedContentHash: expectedHash,
+          lastWriteWins,
         });
         return c.json({ success: true, reindexed: result.reindexed });
       } catch (err) {
         if (err instanceof ConcurrencyConflictError) {
-          return c.json(
-            {
-              success: false,
-              error: "conflict",
-              message:
-                "This document changed while you were editing it (another writer saved a newer version). Open it again in a new tab, merge your changes, and save from there.",
-              current_hash: err.currentHash,
-            },
-            409,
-          );
+          return c.json(conflictBody(err.currentHash), 409);
         }
         if (err instanceof ConcurrencyTokenRequiredError) {
           return c.json(
@@ -218,6 +269,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
               success: false,
               error: "expected_content_hash required",
               message: err.message,
+              detail: err.message,
             },
             400,
           );
@@ -228,14 +280,11 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
         // semantic check the editor can fix.
         if (msg.includes("CEREFOX_UNRESOLVED_LINKS")) {
           const ids = msg.match(/do not exist: ([^.]+)\./)?.[1] ?? "";
+          const message =
+            `This content links document id(s) that don't exist${ids ? `: ${ids}` : ""}. ` +
+            `Fix or remove the broken link(s), or wrap example ids in backticks.`;
           return c.json(
-            {
-              success: false,
-              error: "unresolved document links",
-              message:
-                `This content links document id(s) that don't exist${ids ? `: ${ids}` : ""}. ` +
-                `Fix or remove the broken link(s), or wrap example ids in backticks.`,
-            },
+            { success: false, error: "unresolved document links", message, detail: message },
             422,
           );
         }
@@ -248,14 +297,13 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
             {
               success: false,
               error: "document is in the trash",
-              message:
-                "This document was moved to the trash while you were editing. " +
-                "Restore it from the Trash page first, then save again.",
+              message: TRASHED_MESSAGE,
+              detail: TRASHED_MESSAGE,
             },
             409,
           );
         }
-        return c.json({ success: false, error: msg }, 500);
+        return c.json({ success: false, error: msg, detail: msg }, 500);
       }
     }
 
@@ -353,6 +401,22 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       if (isDocumentNotFoundError(error)) {
         return c.json({ detail: `Document ${documentId} not found` }, 404);
       }
+      // A stale hash is a conflict, not a server fault (#296): it answered 500
+      // until v1.15.2, so a client following the documented 409 read a routine
+      // concurrent change as the server breaking. Same body as the other
+      // write routes' 409, including current_hash so the caller can re-read.
+      if ((error.message ?? "").includes("CEREFOX_CONFLICT")) {
+        const { current } = extractConflictHashes(error.message);
+        return c.json(
+          {
+            success: false,
+            error: "conflict",
+            detail: error.message,
+            ...(current !== "unknown" ? { current_hash: current } : {}),
+          },
+          409,
+        );
+      }
       return c.json({ detail: error.message }, 500);
     }
     // A pre-0.12.0 VOID RPC returns null — its outcome is UNKNOWN, so no
@@ -395,6 +459,16 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     // No body on this method — identity comes from headers only.
     const who = resolveCallerIdentity(c);
     if (!who.ok) return c.json({ detail: who.detail }, 400);
+    // An id that never existed is a 404, not `purged: true` (#296): the
+    // after-check below reads "row gone" as success, and a row that was never
+    // there is gone too.
+    const { data: before, error: readErr } = await ctx.supabase
+      .from("cerefox_documents")
+      .select("id")
+      .eq("id", documentId)
+      .maybeSingle();
+    if (readErr) return c.json({ detail: readErr.message }, 500);
+    if (!before) return c.json({ detail: `Document ${documentId} not found` }, 404);
     const { error } = await ctx.supabase.rpc("cerefox_purge_document", {
       p_document_id: documentId,
       p_author: who.identity.author,
@@ -485,27 +559,37 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       }
       const who = resolveCallerIdentity(c, body);
       if (!who.ok) return c.json({ detail: who.detail }, 400);
-      const archived = Boolean(body.archived);
+      // A boolean, not anything truthy (#296): `"false"` used to archive.
+      if (typeof body.archived !== "boolean") {
+        return c.json({ detail: "archived must be a boolean." }, 400);
+      }
+      const archived = body.archived;
 
+      // Scoped to the document in the path (#296). The update matched on the
+      // version id alone, so an unknown id answered 200 and wrote an audit
+      // entry reading "Version ? archived", and a version of another document
+      // was archived under this one's URL.
       const { data, error } = await ctx.supabase
         .from("cerefox_document_versions")
         .update({ archived })
         .eq("id", versionId)
+        .eq("document_id", documentId)
         .select("document_id, version_number")
         .maybeSingle();
       if (error) return c.json({ detail: error.message }, 500);
+      const ver = data as { document_id: string; version_number: number } | null;
+      if (!ver) {
+        return c.json({ detail: `Version ${versionId} of document ${documentId} not found` }, 404);
+      }
 
-      const ver = data as
-        | { document_id: string; version_number: number }
-        | null;
       const op = archived ? "archive" : "unarchive";
       await createAuditEntry(ctx, {
         operation: op,
         author: who.identity.author,
         authorType: who.identity.authorType,
-        documentId: ver?.document_id ?? documentId,
+        documentId: ver.document_id,
         versionId,
-        description: `Version ${ver?.version_number ?? "?"} ${op}d`,
+        description: `Version ${ver.version_number} ${op}d`,
       });
       return c.json({ archived });
     },
