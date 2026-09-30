@@ -11,6 +11,27 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **The local embedder can download its model from inside the web server.** On
+  any store whose first model download happened in `cerefox web` (a fresh Cerefox
+  Local volume created without the installer's warmup, or an npm install with
+  `CEREFOX_EMBEDDER=local`), every write failed with "Unable to get model file path
+  or buffer" and nothing was cached, while the log reported the model as
+  "(cached)". The web server's HTTP layer replaced the process-wide
+  `Request`/`Response` classes, which the model downloader builds its cache from.
+  It no longer does. Broken since v1.0.1 and hidden because the installer downloads
+  the model in a separate process first. The download log now says "size not
+  reported" instead of the misleading "(cached)".
+
+- **`cerefox-local <verb> --help` never acts any more.** `cerefox-local uninstall
+  --help` removed the container instead of printing help, because the host verbs
+  ignored arguments they did not know; `uninstall --purge --help` would have
+  deleted the data volume, and `stop`/`start`/`restart --help` acted too. Help is
+  now answered before any verb runs, and `start`, `stop`, `restart`, `status` and
+  `uninstall` refuse unknown arguments. `uninstall --purge` now asks you to type
+  the volume name to confirm, or needs `--yes` when not run at a terminal. The fix
+  reaches an existing install with the next `cerefox-local upgrade`, which refreshes
+  the host script from the image.
+
 - **`cerefox server deploy` works when run from inside an npm workspace.** The
   Edge Function step ran `npx supabase functions deploy` in the right directory,
   but inside a workspace `npx` moves to the workspace package's own directory
