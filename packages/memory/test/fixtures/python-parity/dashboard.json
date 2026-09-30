@@ -4,7 +4,7 @@
   "recent_docs": [
     {
       "id": "17954ead-d1d7-47cb-81e8-99213415baa1",
-      "title": "Cerefox Decision Log — 2026 Q2 (Part 4)",
+      "title": "Example document 1",
       "source": "agent",
       "chunk_count": 7,
       "total_chars": 22178,
@@ -16,7 +16,7 @@
     },
     {
       "id": "456f355d-b5cd-494d-b653-7deb6c0667b4",
-      "title": "Migrating to Cerefox v0.4.0 (historical)",
+      "title": "Example document 2",
       "source": "manual",
       "chunk_count": 3,
       "total_chars": 8667,
@@ -28,7 +28,7 @@
     },
     {
       "id": "9f0f964e-4a22-4ead-89aa-967595eae62f",
-      "title": "Migrating to Cerefox v0.5.x",
+      "title": "Example document 3",
       "source": "manual",
       "chunk_count": 4,
       "total_chars": 11629,
@@ -40,7 +40,7 @@
     },
     {
       "id": "a27d97e5-a0b6-45b6-84a1-ab1cf21039fc",
-      "title": "Cerefox Decision Log — 2026 Q2 (Part 3)",
+      "title": "Example document 4",
       "source": "agent",
       "chunk_count": 17,
       "total_chars": 55370,
@@ -52,7 +52,7 @@
     },
     {
       "id": "a49b288f-b6f0-4c43-a06d-7fb68505332a",
-      "title": "Upgrading Cerefox",
+      "title": "Example document 5",
       "source": "cerefox-self-docs",
       "chunk_count": 5,
       "total_chars": 16526,
@@ -64,7 +64,7 @@
     },
     {
       "id": "38b4a6e2-a2b8-4f09-9444-e148530c20ca",
-      "title": "Connecting AI Agents to Cerefox",
+      "title": "Example document 6",
       "source": "cerefox-self-docs",
       "chunk_count": 19,
       "total_chars": 62204,
@@ -76,7 +76,7 @@
     },
     {
       "id": "1e9e831c-b148-416d-ad82-ecbecee780f2",
-      "title": "Cerefox Knowledge Base -- Agent Quick Reference",
+      "title": "Example document 7",
       "source": "cerefox-self-docs",
       "chunk_count": 3,
       "total_chars": 6897,
@@ -88,7 +88,7 @@
     },
     {
       "id": "bb3d8018-74ce-4720-b050-5085ccf6bb20",
-      "title": "Career Coach - Lisa Nichols INTOO",
+      "title": "Example document 8",
       "source": "agent",
       "chunk_count": 2,
       "total_chars": 5834,
@@ -100,7 +100,7 @@
     },
     {
       "id": "12bcae31-11fd-486a-b1c5-3b73e1672cba",
-      "title": "Opportunity - Gallop Intelligence",
+      "title": "Example document 9",
       "source": "agent",
       "chunk_count": 5,
       "total_chars": 17869,
@@ -112,7 +112,7 @@
     },
     {
       "id": "a52d4ef1-f6c5-40ca-bd5d-91eab1b627c9",
-      "title": "Operations Scripts",
+      "title": "Example document 10",
       "source": "cerefox-self-docs",
       "chunk_count": 4,
       "total_chars": 11889,
@@ -126,78 +126,78 @@
   "projects": [
     {
       "id": "32d1d418-c49d-4801-9ee1-111a77a21b5b",
-      "name": "Cerefox",
-      "description": "User owned share memory/KB for AI agents",
+      "name": "Example project 1",
+      "description": "Example description 1",
       "created_at": "2026-03-11T05:15:54.112564+00:00",
       "updated_at": "2026-03-16T05:37:38.580648+00:00"
     },
     {
       "id": "e8092c01-2607-4046-a4c9-5163479e1914",
-      "name": "Cerefox Agent",
-      "description": "Project for the Cerefox Agent",
+      "name": "Example project 2",
+      "description": "Example description 2",
       "created_at": "2026-03-23T17:33:44.664602+00:00",
       "updated_at": "2026-03-23T23:05:45.288627+00:00"
     },
     {
       "id": "f73196a4-287b-4680-af5c-8fface23cade",
-      "name": "cfcf",
-      "description": "Cerefox Code Factory - cf²",
+      "name": "Example project 3",
+      "description": "Example description 3",
       "created_at": "2026-04-26T07:49:00.426695+00:00",
       "updated_at": "2026-05-18T21:11:48.02591+00:00"
     },
     {
       "id": "b4f9a4ba-054c-4555-8c9f-2bf17da71a78",
-      "name": "gmbot",
+      "name": "Example project 4",
       "description": "",
       "created_at": "2026-05-06T15:34:51.6068+00:00",
       "updated_at": "2026-05-06T15:34:51.6068+00:00"
     },
     {
       "id": "75ac5563-8c49-42df-9cdf-14285bde835a",
-      "name": "Job-Hunting",
-      "description": "Job Hunting May 2016 onward",
+      "name": "Example project 5",
+      "description": "Example description 4",
       "created_at": "2026-05-22T18:46:22.483002+00:00",
       "updated_at": "2026-05-22T19:08:14.202165+00:00"
     },
     {
       "id": "2bc873eb-e0b8-4071-8df0-35447c4ddbad",
-      "name": "Networking",
-      "description": "Everything about professional networking",
+      "name": "Example project 6",
+      "description": "Example description 5",
       "created_at": "2026-03-19T20:38:44.129367+00:00",
       "updated_at": "2026-03-19T20:39:35.370118+00:00"
     },
     {
       "id": "6d260915-38ef-489e-942d-baa95a5ff8ba",
-      "name": "Personal",
-      "description": "Personal notes",
+      "name": "Example project 7",
+      "description": "Example description 6",
       "created_at": "2026-03-11T19:02:58.861706+00:00",
       "updated_at": "2026-03-11T20:18:48.965929+00:00"
     },
     {
       "id": "38d5cee6-7c22-4ce4-9055-3c368ffcf521",
-      "name": "Publications",
-      "description": "Content related to publications and promo strategy",
+      "name": "Example project 8",
+      "description": "Example description 7",
       "created_at": "2026-03-25T23:00:45.83198+00:00",
       "updated_at": "2026-05-26T05:27:21.555+00:00"
     },
     {
       "id": "446d1741-9c9e-4f47-ab1f-f58e3b784f8a",
-      "name": "Teliboria",
-      "description": "Content about Teliboria the sandbox TTRPG world",
+      "name": "Example project 9",
+      "description": "Example description 8",
       "created_at": "2026-03-11T18:59:10.943549+00:00",
       "updated_at": "2026-03-11T20:19:09.985926+00:00"
     },
     {
       "id": "022122e8-b4e4-4b1f-a2eb-8f5add370635",
-      "name": "Teliboria-World-Context",
+      "name": "Example project 10",
       "description": "",
       "created_at": "2026-05-24T01:48:51.478952+00:00",
       "updated_at": "2026-05-24T01:48:51.478952+00:00"
     },
     {
       "id": "3b6e2c94-32f3-4be9-ac0e-b8972407dc2e",
-      "name": "Test Files",
-      "description": "Container project for test files",
+      "name": "Example project 11",
+      "description": "Example description 9",
       "created_at": "2026-03-11T05:24:00.59117+00:00",
       "updated_at": "2026-03-11T05:24:00.59117+00:00"
     }

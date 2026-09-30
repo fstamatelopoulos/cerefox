@@ -606,7 +606,7 @@ The resolver also accepts three other link forms, but **agents should not write 
 |---|---|---|
 | Repo-relative path | `[Quickstart](docs/guides/quickstart.md)` | Only when the target has a `source_path` from repo ingest. Don't construct manually. |
 | Basename only | `[Quickstart](quickstart.md)` | Same — best-effort path fallback. Don't construct manually. |
-| Angle-bracket title | `[Career Coach](<Career Coach: Lisa Nichols>)` | **Fragile**. Breaks on titles containing colons, parentheses, ampersands, brackets, or other punctuation. Web UI's URL sanitizer strips suspicious-looking URLs (e.g. anything before a `:` that looks like a scheme) → link silently navigates to current page. **Never use this form in agent-authored content.** |
+| Angle-bracket title | `[Release Notes](<Release Notes: Version 2>)` | **Fragile**. Breaks on titles containing colons, parentheses, ampersands, brackets, or other punctuation. Web UI's URL sanitizer strips suspicious-looking URLs (e.g. anything before a `:` that looks like a scheme) → link silently navigates to current page. **Never use this form in agent-authored content.** |
 
 If you're tempted to write `[Title With Spaces](<Title With Spaces>)` because you don't have the ID, **do an extra `cerefox_search` and use the ID instead**. The one extra tool call is much cheaper than the user encountering a broken link.
 
@@ -618,7 +618,7 @@ The `[Link Text](target)` syntax has two halves:
 - **Target** (`(…)`): what the resolver consumes. Always a UUID for agent-authored content.
 
 Bad: `[c937b70f-77af-...](c937b70f-77af-...)` — opaque to the reader.
-Good: `[Job Hunting - Opportunity Index](c937b70f-77af-43d3-b9bc-9f31e0d2041d)`.
+Good: `[Quarterly Planning - Q3 Goals](3f2b9c1e-8a47-4d2e-9b6a-1c5e7d0a4f82)`.
 
 ### What you don't need to do
 
