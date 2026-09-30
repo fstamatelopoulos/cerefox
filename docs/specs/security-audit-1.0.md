@@ -147,6 +147,14 @@ the Bearer token is the gate); the #110 query is parameterized.
   `@modelcontextprotocol/sdk` → `express-rate-limit`, whose `^10.2.0` already
   admits the fix, so an override to `^10.5.1` clears them rather than an
   acceptance. The only accepted advisory left is the `react-router` RSC one.
+- **2026-09-30 addendum (later the same day) — two more, both fixed by
+  override.** `fast-uri` GHSA-hrr3-gc8f-f4qj (moderate; fixed in 3.1.8): the
+  existing override moved from `^3.1.7` to `^3.1.8`. `brace-expansion`
+  GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p (high) and GHSA-q2hr-2g5m-vwhr
+  (moderate), fixed in 5.0.11: reached only through the frontend's lint tooling
+  (`eslint` → `minimatch ^10` → `brace-expansion ^5`), never at runtime, and the
+  tree holds a single copy on the 5.x line, so an override to `^5.0.11` is
+  safe. Nothing newly accepted.
 - The container-minted `service_role` JWT has no expiry; it never leaves the
   container, and rotating it is deleting `.cerefox_jwt_secret` from the data
   volume.

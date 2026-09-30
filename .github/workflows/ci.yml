@@ -188,8 +188,10 @@ jobs:
         # retired 2026-09-30 — transformers 4.3 brought sharp 0.35.5):
         #   GHSA-qwww-vcr4-c8h2  react-router — RSC mode, unused in the SPA
         # Fixed by overrides in the root package.json instead of accepted:
-        # hono (>=4.13.5), js-yaml (>=4.3.2), adm-zip (>=0.6.1) and ip-address
-        # (>=10.5.1, via @modelcontextprotocol/sdk → express-rate-limit). The three
+        # hono (>=4.13.5), js-yaml (>=4.3.2), adm-zip (>=0.6.1), ip-address
+        # (>=10.5.1, via @modelcontextprotocol/sdk → express-rate-limit),
+        # fast-uri (>=3.1.8) and brace-expansion (>=5.0.11, frontend lint
+        # only, via eslint → minimatch). The three
         # adm-zip advisories used to be accepted here on the grounds that no
         # fixed release existed; 0.6.1 shipped, so the override retired all
         # three at once, including the one published 2026-09-21 that broke
