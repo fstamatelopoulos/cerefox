@@ -65,6 +65,12 @@ async function loadTransformers(): Promise<typeof transformersModule> {
   // eszip for the EF) from statically resolving the ~30 MB package + native
   // onnxruntime binary. Resolved at runtime from node_modules.
   const spec = "@huggingface/transformers";
+  // onnxruntime 1.29+ ships Microsoft usage telemetry (a device id plus usage
+  // events, queued on disk and posted to mobile.events.data.microsoft.com).
+  // This is the embedder that exists so nothing leaves the machine, so opt out
+  // before the native library loads. `??=`: an operator who sets it explicitly
+  // (to anything) keeps their choice.
+  process.env.ORT_DISABLE_TELEMETRY ??= "1";
   transformersModule = await import(spec);
   const dir = getCacheDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });

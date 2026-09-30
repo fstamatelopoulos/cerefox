@@ -32,6 +32,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
     does not belong to the document is a `404` (was `200` plus an audit entry
     reading "Version ? archived"), and `archived` must be a boolean. Purging an
     id that does not exist is a `404` (was `purged: true`).
+- **The local embedder no longer sends usage telemetry.** onnxruntime 1.29+ (which
+  a fresh npm install of `@cerefox/memory` already resolves) ships Microsoft usage
+  telemetry: a device id and usage events, queued on disk and posted to
+  `mobile.events.data.microsoft.com`. The local embedder exists so that nothing
+  leaves the machine, so it now sets `ORT_DISABLE_TELEMETRY=1` before the runtime
+  loads (unless you set it yourself). Affects only `CEREFOX_EMBEDDER=local`.
 - **Search results in the web UI show their projects again.** The route dropped
   the `doc_project_names` the search RPCs return, so result cards rendered no
   project chips.
