@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { escapedContentNote, measureEscapes } from "../mcp-tools/escape-heuristic.ts";
+import { escapedContentNote, escapedTitleNote, measureEscapes } from "../mcp-tools/escape-heuristic.ts";
 
 describe("measureEscapes", () => {
   test("counts literal \\n, literal \\\" and real newlines independently", () => {
@@ -48,5 +48,23 @@ describe("escapedContentNote", () => {
     const note = escapedContentNote(content)!;
     expect(note).toContain("4 literal \\n");
     expect(note).toContain("0 real newline");
+  });
+});
+
+describe("escapedTitleNote", () => {
+  test("names the entities an agent stored instead of the characters", () => {
+    const n = escapedTitleNote("Scope &amp; Proposal: Fotis &lt;&gt; Mike");
+    expect(n).toContain("&amp;");
+    expect(n).toContain("&lt;");
+    expect(n).toContain("&gt;");
+  });
+  test("numeric references count too", () => {
+    expect(escapedTitleNote("It&#39;s done")).toContain("&#39;");
+    expect(escapedTitleNote("It&#x27;s done")).toContain("&#x27;");
+  });
+  test("silent for plain titles, including a bare ampersand", () => {
+    for (const t of ["Scope & Proposal", "A <> B", "R&D budget", "AT&T notes", "Q&A"]) {
+      expect(escapedTitleNote(t)).toBe("");
+    }
   });
 });
