@@ -18,6 +18,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   not `true`. It now appears only when the caller explicitly sent
   `update_if_exists: false`, which is the case it was written for. The Edge
   Function half takes effect after `cerefox server deploy`.
+- **The web UI can tell you when the server needs redeploying again (#301).**
+  `GET /api/v1/schema-version` answered `bundled: null` on every published
+  install: it looked for `schema.sql` relative to its own source file, which is
+  wrong once the code is bundled, so the "redeploy" banner could never appear.
+  It now uses the same reader as `cerefox doctor`. `mismatch` now means "the
+  deployed schema is older than this client's", the only case that needs
+  `cerefox server deploy`; it used to be any difference, which would have told
+  an older client pointed at a newer server to redeploy.
 
 ---
 

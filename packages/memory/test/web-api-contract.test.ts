@@ -14,6 +14,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import { IngestionPipeline } from "../src/ingestion/pipeline.ts";
 import { ConcurrencyConflictError } from "../src/ingestion/types.ts";
+import { COMPATIBILITY, compareSemver } from "../../../_shared/compatibility/index.ts";
 import { buildApp } from "../src/web/server.ts";
 
 process.env.NODE_ENV = "test";
@@ -351,5 +352,40 @@ describe("POST /documents/{id}/edit", () => {
       json({ title: "T", content: "", expected_hash: HASH_B }),
     );
     expect(r.status).toBe(400);
+  });
+});
+
+// ── GET /schema-version (#301) ──────────────────────────────────────────────
+
+describe("GET /schema-version", () => {
+  const at = async (deployed: string) => {
+    const store = fakeStore({ rpc: (name) => (name === "cerefox_schema_version" ? { data: deployed, error: null } : { data: null, error: null }) });
+    return (await (await app(store).request("/api/v1/schema-version")).json()) as {
+      bundled: string | null;
+      deployed: string;
+      mismatch: boolean;
+      level: string;
+    };
+  };
+
+  test("reports the bundled version", async () => {
+    expect((await at("0.16.2")).bundled).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  test("mismatch only when the deployed schema is OLDER than the client's", async () => {
+    const bundled = (await at("0.0.0")).bundled!;
+    const newer = `${Number(bundled.split(".")[0]) + 1}.0.0`;
+    const equal = await at(bundled);
+    expect({ mismatch: equal.mismatch, level: equal.level }).toEqual({ mismatch: false, level: "ok" });
+    // An older client against a newer server needs no redeploy: no banner.
+    const ahead = await at(newer);
+    expect({ mismatch: ahead.mismatch, level: ahead.level }).toEqual({ mismatch: false, level: "ok" });
+    // At the minimum but below the client's bundled version: redeploy needed.
+    // The minimum is below the bundled version whenever the schema has moved on
+    // since the last minimum raise, which is the steady state; assert that too,
+    // so this case can never pass without asserting anything.
+    expect(compareSemver(COMPATIBILITY.minSchema, bundled)).toBeLessThan(0);
+    const behind = await at(COMPATIBILITY.minSchema);
+    expect({ mismatch: behind.mismatch, level: behind.level }).toEqual({ mismatch: true, level: "above-min-but-old" });
   });
 });

@@ -12,7 +12,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -101,6 +102,53 @@ describe("cerefox web smoke", () => {
     } finally {
       child.kill("SIGTERM");
       await new Promise((r) => setTimeout(r, 100));
+    }
+  });
+
+  test("/api/v1/schema-version reads the BUNDLED schema version from the built bin", async () => {
+    // Every published install answered `bundled: null`: the route guessed the
+    // path relative to its own source file, which is wrong once bundled into
+    // dist/bin/cerefox.js, so the web UI's redeploy banner could never fire.
+    // Run the built bin from an unrelated cwd with no config, so only the
+    // bundled dist/server-assets layout can satisfy it and no database is
+    // touched (ctx is null without credentials; `deployed` is then null).
+    if (!existsSync(BIN)) throw new Error("run `bun run build` first");
+    const expected = readFileSync(join(REPO_ROOT, "src", "cerefox", "db", "schema.sql"), "utf8").match(
+      /^--\s*@version:\s*(\S+)/m,
+    )?.[1];
+    expect(expected).toMatch(/^\d+\.\d+\.\d+/);
+
+    const empty = mkdtempSync(join(tmpdir(), "cfx-smoke-"));
+    const env: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (v !== undefined && !/^(CEREFOX_|SUPABASE_|OPENAI_)/.test(k)) env[k] = v;
+    }
+    env.CEREFOX_CONFIG_DIR = empty;
+    const port = PORT + 1;
+    const child = spawn("node", [BIN, "web", "--port", String(port)], {
+      cwd: empty,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (c: Buffer) => {
+      stderr += c.toString();
+    });
+    let exited = false;
+    child.on("exit", () => {
+      exited = true;
+    });
+    try {
+      const url = `http://127.0.0.1:${port}/api/v1/schema-version`;
+      const ready = await waitForPort(url, 5_000, () => exited);
+      if (!ready) throw new Error(`Web server did not become ready. stderr:\n${stderr}`);
+      const body = (await (await fetch(url)).json()) as { bundled: string | null; deployed: string | null };
+      expect(body.bundled).toBe(expected);
+      expect(body.deployed).toBeNull();
+    } finally {
+      child.kill("SIGTERM");
+      await new Promise((r) => setTimeout(r, 100));
+      rmSync(empty, { recursive: true, force: true });
     }
   });
 });

@@ -30,8 +30,11 @@ export const BundledDocList = z.array(BundledDocEntry);
 export type BundledDocList = z.infer<typeof BundledDocList>;
 
 export const SchemaVersionResponse = z.object({
+  /** The schema version this client ships; null only if its assets cannot be found. */
   bundled: z.string().nullable(),
+  /** `cerefox_schema_version()` on the store; null without a database. */
   deployed: z.string().nullable(),
+  /** True when the deployed schema is OLDER than `bundled`: run `cerefox server deploy`. */
   mismatch: z.boolean(),
   /** `ok`, `above-min-but-old` (works; a newer server exists), `below-min`
    *  (blocking: `cerefox server deploy`), or `unknown`. */
