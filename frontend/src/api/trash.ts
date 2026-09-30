@@ -47,3 +47,16 @@ export async function purgeDocument(documentId: string): Promise<{ purged: boole
   });
   return { purged: r.purged ?? true };
 }
+
+/**
+ * How many documents were trashed before `cutoff` (#251): what trash
+ * auto-purge would make eligible. Counts via `X-Total-Count`, so one row is
+ * fetched whatever the number.
+ */
+export async function countTrashBefore(cutoff: Date): Promise<number> {
+  const resp = await apiFetchResponse(
+    `/documents/trash?limit=1&deleted_before=${encodeURIComponent(cutoff.toISOString())}`,
+  );
+  const n = Number(resp.headers.get("X-Total-Count"));
+  return Number.isFinite(n) ? n : 0;
+}

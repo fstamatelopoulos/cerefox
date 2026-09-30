@@ -193,7 +193,7 @@ The audit trail records each operation distinctly (`insert` / `replace-section` 
 
 ### cerefox_delete_document
 
-**Soft**-delete a document: it leaves search results and lands in the web-UI trash, recoverable until a human purges it. New in v1.7.0 (#208) — before that, deletion was CLI/web-UI-only and agents had to ask their user.
+**Soft**-delete a document: it leaves search results and lands in the web-UI trash, recoverable until a human purges it (or, if the operator has turned on trash auto-purge, until it has been in the trash longer than `trash_retention_days`; the delete reply says when it purged anything). New in v1.7.0 (#208) — before that, deletion was CLI/web-UI-only and agents had to ask their user.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|

@@ -742,22 +742,31 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       Math.max(Number.parseInt(c.req.query("limit") ?? "50", 10) || 50, 1),
       500,
     );
+    // Only documents trashed before this instant (#251): how Settings says
+    // how many documents turning on trash auto-purge would make eligible.
+    const deletedBefore = c.req.query("deleted_before");
+    if (deletedBefore !== undefined && Number.isNaN(Date.parse(deletedBefore))) {
+      return c.json({ detail: "deleted_before must be an ISO-8601 timestamp" }, 400);
+    }
     // The listing is capped at 500 rows; the exact total travels in a header
     // so the Trash page can say "showing 500 of 569" and Empty trash can
     // state the real number (#249). Same exact-count query the dashboard uses.
+    // Postgres' 'infinity' timestamp: "no cutoff" as a filter every trashed row
+    // passes, so each query stays one bounded chain.
+    const cutoff = deletedBefore !== undefined ? new Date(deletedBefore).toISOString() : "infinity";
     const [listed, counted] = await Promise.all([
       ctx.supabase
         .from("cerefox_documents")
-        .select(
-          "id, title, source, chunk_count, total_chars, review_status, deleted_at, updated_at",
-        )
+        .select("id, title, source, chunk_count, total_chars, review_status, deleted_at, updated_at")
         .not("deleted_at", "is", null)
+        .lt("deleted_at", cutoff)
         .order("deleted_at", { ascending: false })
         .limit(limit),
       ctx.supabase
         .from("cerefox_documents")
         .select("id", { count: "exact", head: true })
-        .not("deleted_at", "is", null),
+        .not("deleted_at", "is", null)
+        .lt("deleted_at", cutoff),
     ]);
     const { data, error } = listed;
     if (error) return c.json({ detail: error.message }, 500);

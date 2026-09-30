@@ -295,6 +295,22 @@ states the count, with a Stop button and a per-document audit entry; there is no
 server-side "purge everything" endpoint, on purpose, because `/api/v1` is
 reachable by anything holding the local key.
 
+**Trash auto-purge (v1.16.0, opt-in) does not weaken this either, and here is exactly
+why.** With `trash_auto_purge_enabled` on, every soft delete (including an agent's) also
+purges documents that have been in the trash longer than `trash_retention_days`. So an
+agent's action can *trigger* a purge. It stays within the model because:
+
+- **a human turned the policy on and chose the period**: that period is the review
+  window of step 2, decided in advance instead of per document;
+- the sweep purges only documents **older than that period**, never the one being
+  deleted and never anything an agent selects;
+- there is still **no agent-callable purge**: the sweep function is not exposed over MCP
+  or the Edge Functions, has no CLI verb, and, like every RPC, is callable over the
+  Data API only with the service-role key.
+
+With the setting off (the default), nothing here changes. Design:
+[`docs/specs/trash-auto-purge.md`](../specs/trash-auto-purge.md).
+
 A `cerefox purge-doc` CLI command, a `cerefox_purge_document` MCP tool, or a
 `/documents/{id}/purge` HTTP endpoint accessible via the Cerefox token would each break this
 property. **Do not add them without a governance design that replaces the human-in-the-

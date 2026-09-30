@@ -104,6 +104,7 @@ async function handler(
         total_chars?: number;
         deleted_at?: string;
         already_deleted?: boolean;
+        auto_purged?: number;
       }
     | undefined;
   if (!row) throw new Error("cerefox_delete_document returned no data");
@@ -133,7 +134,15 @@ async function handler(
     `${row.total_chars ?? "?"} chars) at ${row.deleted_at}.\n` +
     `The document is excluded from search but fully recoverable: it sits in the ` +
     `trash until restored or purged. cerefox_restore_document undoes this if it ` +
-    `was a mistake; permanent purge is human-only (web UI).\n` +
+    `was a mistake; permanent purge is human-only (web UI), or automatic after the ` +
+    `trash retention period if the operator has turned trash auto-purge on.\n` +
+    // #251: the delete that adds to the trash also sweeps it. Say so: a caller
+    // should never learn from the audit log that its call destroyed data.
+    (row.auto_purged
+      ? `Trash auto-purge (an operator setting): this delete also permanently purged ` +
+        `${row.auto_purged} document(s) that had been in the trash longer than the ` +
+        `retention period.\n`
+      : "") +
     `Tell your user what you deleted and why, so they can review it.`
   );
 }
@@ -141,7 +150,7 @@ async function handler(
 export const deleteDocumentTool: ToolDefinition = {
   name: "cerefox_delete_document",
   description:
-    "SOFT-delete a document: it leaves search results and lands in the trash, recoverable until a human purges it. Requires expected_content_hash — the content_hash of the document AS YOU READ IT — so a delete always follows a read; if the document changed in between, the call fails with a conflict and you should re-read before deciding again. A mistaken delete can be undone with cerefox_restore_document; permanent purge is human-only (web UI). ALWAYS tell your user what you deleted and why. Pass a short reason — it is recorded in the audit log for the human reviewing the trash. Prefer this over ingesting empty/placeholder content when a document should go away.",
+    "SOFT-delete a document: it leaves search results and lands in the trash, recoverable until a human purges it (or, if the operator has turned on trash auto-purge, until it has been in the trash longer than the retention period; a delete reports any such purges it triggered). Requires expected_content_hash — the content_hash of the document AS YOU READ IT — so a delete always follows a read; if the document changed in between, the call fails with a conflict and you should re-read before deciding again. A mistaken delete can be undone with cerefox_restore_document; permanent purge is human-only (web UI). ALWAYS tell your user what you deleted and why. Pass a short reason — it is recorded in the audit log for the human reviewing the trash. Prefer this over ingesting empty/placeholder content when a document should go away.",
   annotations: {
     title: "Delete document (soft, recoverable)",
     readOnlyHint: false,

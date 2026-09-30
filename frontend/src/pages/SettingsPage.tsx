@@ -18,6 +18,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { fetchConfig, setConfigValue, type ConfigEntry } from "../api/config";
+import { countTrashBefore } from "../api/trash";
+import { purgeCutoff, purgePreviewText } from "../lib/trashPurgePreview";
 import { CliCard } from "../components/CliCard";
 import { showError, showSuccess } from "../utils/notifications";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -90,9 +92,32 @@ export function SettingsPage() {
     mutation.mutate({ key: entry.key, value });
   }
 
-  if (isLoading) return <Text>Loading settings…</Text>;
-
   const entries = data?.keys ?? [];
+
+  // #251: confirming a trash auto-purge setting says how many documents
+  // ALREADY in the trash the next delete would purge — the irreversible part.
+  const effective = (k: string) => entries.find((e) => e.key === k)?.effective ?? null;
+  const cutoff = confirming
+    ? purgeCutoff({
+        key: confirming.entry.key,
+        value: confirming.value,
+        currentEnabled: effective("trash_auto_purge_enabled"),
+        currentDays: effective("trash_retention_days"),
+        now: new Date(),
+      })
+    : null;
+  const days =
+    confirming?.entry.key === "trash_retention_days"
+      ? Number(confirming.value)
+      : Number(effective("trash_retention_days"));
+  const preview = useQuery({
+    queryKey: ["trash-purge-preview", cutoff?.toISOString() ?? null],
+    queryFn: () => countTrashBefore(cutoff!),
+    enabled: cutoff !== null,
+    staleTime: 0,
+  });
+
+  if (isLoading) return <Text>Loading settings…</Text>;
 
   return (
     <Stack gap="lg">
@@ -159,6 +184,17 @@ export function SettingsPage() {
             {confirming.entry.impact_note && (
               <Alert icon={<IconAlertTriangle size={16} />} color="yellow">
                 <Text size="sm">{confirming.entry.impact_note}</Text>
+              </Alert>
+            )}
+            {cutoff !== null && (
+              <Alert color="red" data-testid="trash-purge-preview">
+                <Text size="sm">
+                  {preview.isLoading
+                    ? "Counting the documents this would make eligible…"
+                    : preview.isError
+                      ? "Could not count the documents this would make eligible. Check the Trash page before applying."
+                      : purgePreviewText(preview.data ?? 0, days)}
+                </Text>
               </Alert>
             )}
             <Group justify="flex-end">

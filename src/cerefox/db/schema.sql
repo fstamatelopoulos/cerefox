@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.16.2
+-- @version: 0.17.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -412,6 +412,15 @@ ON CONFLICT (key) DO NOTHING;
 -- migration ever write the value; the toggle itself is `cerefox config set`.
 INSERT INTO cerefox_config (key, value)
 VALUES ('review_workflow_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;
+-- Trash auto-purge (#251): OFF by default. When on, the soft delete that adds
+-- to the trash also purges documents trashed more than trash_retention_days
+-- ago (cerefox_purge_expired_trash). Design: docs/specs/trash-auto-purge.md.
+INSERT INTO cerefox_config (key, value)
+VALUES ('trash_auto_purge_enabled', 'false')
+ON CONFLICT (key) DO NOTHING;
+INSERT INTO cerefox_config (key, value)
+VALUES ('trash_retention_days', '60')
 ON CONFLICT (key) DO NOTHING;
 
 

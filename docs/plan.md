@@ -197,7 +197,11 @@ release picks it up.
 
 ## Active iteration
 
-**No iteration is open.** Work since v1.13.0 has run as ticket-sized slices off
+**[Iteration 47 — Trash auto-purge](plans/iteration-47-trash-auto-purge.md)** —
+🚧 **IN PROGRESS** (#251, target v1.16.0). The delete that adds to the trash also
+sweeps it; off by default, 60-day default period.
+
+Before iteration 47: work since v1.13.0 had run as ticket-sized slices off
 `main` rather than as numbered iterations — #254–#267 (the search-response
 contract), the v1.15.0 dependency sweep, then #270/#284/#286/#289 in v1.15.1. Each
 is recorded in `CHANGELOG.md` and in the issue it closed. Open the next iteration
