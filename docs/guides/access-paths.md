@@ -258,7 +258,12 @@ before "completing" the parity table by adding purge to agent-facing access path
 > that in #210 (2026-08-13): every delete and restore is audited with author
 > attribution, restore cannot destroy content, and the CLI had `document restore`
 > all along — the boundary the docs described had already outgrown the code. The
-> guarded property is now exactly one thing: **no agent path to permanent purge.**
+> guarded property is now exactly one thing: **no MCP, Edge Function or CLI path to
+> permanent purge.** Stated precisely: the web UI's own backend, `/api/v1`, has a
+> per-document purge endpoint, and any client that can reach the web server (on
+> loopback, or elsewhere with the API key) can call it, an agent harness built on the
+> HTTP API included. Securing that port is what keeps it human-only; see
+> `securing-local-access.md`.
 
 ### The three tiers
 
@@ -266,7 +271,7 @@ before "completing" the parity table by adding purge to agent-facing access path
 |---|---|---|---|
 | 1. Reads + soft mutations | search, get, list-*, ingest (create/update), metadata-search, get-audit-log | n/a (reads) / yes (versioned) | All paths — MCP, Edge Functions, CLI, web UI |
 | 2. Soft-destructive + recovery | `delete_document` (soft delete to trash), `restore_document` (un-trash), `set_review_status` (web only; a `404` while `review_workflow_enabled` is off) | yes — delete is restorable; restore recovers | CLI (`cerefox document delete` / `restore`), web UI, and — since v1.7.0 (#208, #210) — MCP (`cerefox_delete_document`, which requires the caller's read-hash, and `cerefox_restore_document`). **Not** the primitive GPT-Actions Edge Functions (deliberately deferred). |
-| 3. **Hard-destructive** | `purge_document` (permanent), `set_version_archived` (toggle version retention) | no (purge) | **Web UI only** |
+| 3. **Hard-destructive** | `purge_document` (permanent), `set_version_archived` (toggle version retention) | no (purge) | **Web UI**, through its backend `/api/v1`, which any client that can reach the web server can also call. Never MCP, the Edge Functions or the CLI. |
 
 ### Why purge is web-UI-only
 
@@ -304,9 +309,10 @@ agent's action can *trigger* a purge. It stays within the model because:
   window of step 2, decided in advance instead of per document;
 - the sweep purges only documents **older than that period**, never the one being
   deleted and never anything an agent selects;
-- there is still **no agent-callable purge**: the sweep function is not exposed over MCP
-  or the Edge Functions, has no CLI verb, and, like every RPC, is callable over the
-  Data API only with the service-role key.
+- it adds **no new way to purge**: the sweep function is not exposed over MCP or the
+  Edge Functions, has no CLI verb, and, like every RPC, is callable over the Data API
+  only with the service-role key. Explicit purge stays where it was: the web UI, and
+  `/api/v1`'s per-document endpoint for any client that can reach the web server.
 
 With the setting off (the default), nothing here changes. Design:
 [`docs/specs/trash-auto-purge.md`](../specs/trash-auto-purge.md).

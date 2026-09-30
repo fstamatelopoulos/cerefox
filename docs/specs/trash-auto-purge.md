@@ -61,17 +61,19 @@ exactly N days".
 
 ## The trust model, stated precisely
 
-`access-paths.md` guards one property: **no agent path to permanent purge**,
-because a human reviews the trash. With auto-purge on, an agent's delete
+`access-paths.md` guards one property: **no MCP, Edge Function or CLI path to
+permanent purge**, because a human reviews the trash. (Explicit purge exists on the
+web UI and on its backend, `/api/v1`, which any client that can reach the web server
+can call; that exposure predates this feature and is unchanged by it.) With auto-purge on, an agent's delete
 triggers a purge. That is compatible with the property only because:
 
 - a **human** turned the policy on and chose N, which is the length of the
   review window;
 - the sweep removes only documents **older than N days**, never the one being
   deleted, and never anything an agent chooses;
-- there is still **no agent-callable purge**. `cerefox_purge_expired_trash` is
-  not exposed over MCP or the Edge Functions, has no CLI verb, and is reachable
-  over the Data API only with the service-role key, like every RPC.
+- it adds **no new way to purge**. `cerefox_purge_expired_trash` is not exposed
+  over MCP or the Edge Functions, has no CLI verb, and is reachable over the
+  Data API only with the service-role key, like every RPC.
 
 `access-paths.md` is updated to say this.
 
