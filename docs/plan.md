@@ -49,7 +49,7 @@ the stdio MCP tool both omitting the note unless `false` is sent). **Local** (fr
 `doctor` green, embedder runtime unchanged from 1.15.2, the same smoke passing, the CLI
 silent on a cached model, `ORT_DISABLE_TELEMETRY=1` in the container).
 
-Observed on Local, not ours: the cfxbot agent's e2e tests create and soft-delete test
+Observed on Local, not ours: an API client's e2e tests create and soft-delete test
 documents without purging them (the ~1,800 trashed documents) and send no identity
 headers, so their writes are recorded as `web-ui`. #300 stays open (pin the Local
 image's embedder runtime; decide the move to transformers 4.x deliberately).
