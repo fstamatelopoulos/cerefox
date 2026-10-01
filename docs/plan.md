@@ -29,19 +29,34 @@
 
 ## Current Focus
 
-**2026-10-01 — v1.17.0 (search calibration, iteration 48) is BUILT and verified on
-staging; awaiting the maintainer's go-ahead to cut.** Branch `feat/search-calibration`.
-Plan: [`docs/plans/iteration-48-search-calibration.md`](plans/iteration-48-search-calibration.md);
-results: `docs/specs/search-calibration.md` → Results. Schema 0.18.0, RPC-only (no
-migration; `server deploy` re-applies rpcs.sql): bounded `ts_rank_cd` in hybrid fusion,
-`min_term_coverage` default 0.67, `cerefox_default_min_search_score()` derives 0.5/0.6
-from the store's embeddings (fixes fresh Local containers searching at 0.5), and the web
-search route no longer overrides store settings. Benchmark (`scripts/search_benchmark.ts`,
-158 docs / 147 queries, exact live reproduction on both embedders) and live floor test
-(`search-calibration-floor.test.ts`, floors in `vocabulary/floors.json`). Staging runs
-0.18.0 via the repo build's `server deploy --schema-only` (EFs untouched); staging's own
-`min_search_score` 0.7 is kept (the floor test skips on tuned stores). Throwaway container
-`cfx-bench-local` (volume `cfx-bench-data`) can be removed after the release.
+**2026-10-01 — v1.17.0 IS RELEASED AND VERIFIED on staging and Cerefox Local;
+production (on 1.16.1) awaits the maintainer** (`cerefox server deploy` required: schema
+0.18.0 and EF v1.17.0). Headline: hybrid search calibrated against a benchmark (iteration
+48, [plan](plans/iteration-48-search-calibration.md), results in
+`docs/specs/search-calibration.md`). Bounded keyword score, `min_term_coverage` 0.67, the
+built-in floor derived from the store's embeddings (fixes fresh Local containers searching
+at 0.5), and the web search route no longer overrides store settings.
+
+Verified on staging (released package, `server deploy` incl. 9 EFs, doctor green):
+- package suite 380/0;
+- live EF + remote MCP 49/0;
+- Playwright 27 passed, 1 skipped (as usual);
+- `--check-floors` held, and reproduction was exact on the deployed RPCs;
+- web, CLI and the RPC return identical rankings, where the old forced-0.5 web path
+  returned more results.
+
+Verified on Local (pg_dump in `~/.cerefox/local/backups/pre-v1.17.0-*`): data, config and
+embedder identical, schema 0.18.0, doctor green, search fine, auto-purge still ON at 60 days.
+
+Fresh v1.17.0 store, no warmup: derives 0.6 with no config row; a no-answer query is
+flagged below confidence. **Seen there, not a regression:** on a slow link the first
+write failed when the 131 MB model download's connection dropped (231 s, raw socket
+error, no resume). Bun and runtime are identical to 1.16.1. Candidate issue: retry or
+resume the download, and say so in the error.
+
+Staging keeps its own `min_search_score` 0.7, so the floor test skips there. The
+"Search calibration benchmark" project stays on staging for reuse. The agent's second
+Local container (`cerefox-staging`) is still on 1.16.1.
 
 **2026-09-30 (later) — v1.16.1 IS RELEASED; staging and Cerefox Local are on it.**
 Fixes: (1) the local embedder could not download its model inside `cerefox web`

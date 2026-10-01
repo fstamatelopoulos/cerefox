@@ -1,6 +1,6 @@
 # Iteration 48 — Search calibration
 
-**Status:** built and verified on staging; release pending. Target **v1.17.0** (minor: search scoring changes).
+**Status:** released as v1.17.0 (2026-10-01). Target **v1.17.0** (minor: search scoring changes).
 Design: [`docs/specs/search-calibration.md`](../specs/search-calibration.md).
 
 ## Decisions
@@ -42,4 +42,4 @@ you found it).
 | Distractor expansion | done: +98 docs, +15 queries (158/147); reviewed, 2 items removed |
 | Implement (schema 0.18.0, RPC-only like 0.16.1): bounded `ts_rank_cd` in hybrid, coverage 0.67, `cerefox_default_min_search_score()` from the store's embedder (fixes the Local seed bug); web search route stops sending its own `p_min_score`/`p_alpha`; live floor test | done; deployed to staging + throwaway Local; floors recorded for both embedders; floor test green on staging at defaults |
 | Docs: solution-design, configuration, setup-local, ops-scripts, AGENT_GUIDE, CLAUDE.md rule, spec Results; CHANGELOG with before/after | done |
-| Release v1.17.0 | awaiting maintainer go-ahead |
+| Release v1.17.0 | released 2026-10-01; staging + Local upgraded and verified; production pending |
