@@ -155,8 +155,9 @@ Two defects surfaced along the way and are fixed in the same release:
 An evaluation on real data on a staging environment (thousands of known-item
 queries generated from its documents, AI-written paraphrases and no-answer queries;
 paired statistics with document-clustered bootstrap intervals and Holm-corrected
-McNemar tests) found two things the synthetic vocabulary did not. Its detailed
-figures are kept out of the repository because they describe a private store.
+McNemar tests) found two things the synthetic vocabulary did not. The full
+study, with store sizes rounded and the deployments anonymised, is
+[`docs/research/search-quality-study-1.17.md`](../research/search-quality-study-1.17.md).
 
 1. **The vector candidates came from an approximate index.** Ordering by the bare
    `embedding <=> query` distance let Postgres answer from the HNSW index, which
