@@ -152,7 +152,7 @@ DECLARE
     -- plainto_tsquery: ANDs all terms, treats every token as a literal word.
     -- We deliberately avoid websearch_to_tsquery here because it interprets `-` as
     -- a negation operator, which traps natural queries against dashed titles
-    -- (e.g. `Job Hunting - Opportunity Index`). Agent queries don't use the
+    -- (e.g. `Release Notes - Q3 Index`). Agent queries don't use the
     -- websearch operators (phrase, OR, NOT); semantic ranking is the soft-match
     -- layer for "broadly related". If operator support is ever needed, gate it
     -- behind an opt-in flag rather than changing the default.
@@ -177,12 +177,17 @@ DECLARE
     total_tokens  INT;
     candidate_count INT := p_match_count * 5;
     -- #133 resolution: caller value, else deployment config, else built-in.
+    -- 0.18.0: the built-in floor follows the store's embedder (0.5 OpenAI,
+    -- 0.6 nomic), so a store with no config row gets the right one.
     v_min_score     FLOAT := COALESCE(p_min_score,
-                                      cerefox_config_float('min_search_score', 0.5));
+                                      cerefox_config_float('min_search_score',
+                                                           cerefox_default_min_search_score()));
     v_alpha         FLOAT := COALESCE(p_alpha,
                                       cerefox_config_float('search_alpha', 0.7));
+    -- 0.18.0: 0.67 (was 0.5), so a confident OR-fallback match needs two of
+    -- three terms, not one of two (docs/specs/search-calibration.md).
     v_min_coverage  FLOAT := COALESCE(p_min_term_coverage,
-                                      cerefox_config_float('min_term_coverage', 0.5));
+                                      cerefox_config_float('min_term_coverage', 0.67));
 BEGIN
     -- Build the OR-composed query: plainto each whitespace token (so tokens get
     -- the same normalization/stemming as the AND path), skip stopword-only
@@ -225,7 +230,13 @@ BEGIN
         fts_results AS (
             SELECT
                 c.id,
-                ts_rank_cd(c.fts, query_fts)::FLOAT AS fts_score,
+                -- 0.18.0: normalisation 32 bounds the keyword score to
+                -- rank/(rank+1), in [0, 1) like the cosine it is fused with.
+                -- Unbounded (up to ~4 when every term matches), one keyword
+                -- hit outweighed any semantic evidence, and the same document
+                -- scored 1.2 or 0.3 depending on which phrasing found it
+                -- (docs/specs/search-calibration.md).
+                ts_rank_cd(c.fts, query_fts, 32)::FLOAT AS fts_score,
                 -- v1.0.4 coverage gate: in AND mode a match means 100% of the
                 -- query's terms are present, so the unconditional pass is
                 -- earned by construction. In OR-fallback mode, earn it only
@@ -406,7 +417,7 @@ DECLARE
     seen_tokens   TEXT[]    := '{}';
     total_tokens  INT;
     v_min_coverage FLOAT := COALESCE(p_min_term_coverage,
-                                     cerefox_config_float('min_term_coverage', 0.5));
+                                     cerefox_config_float('min_term_coverage', 0.67));
 BEGIN
     FOR tok IN SELECT unnest(regexp_split_to_array(trim(p_query_text), '\s+')) LOOP
         tok_q := plainto_tsquery('english', tok);
@@ -2755,6 +2766,28 @@ BEGIN
 END;
 $$;
 
+-- Built-in vector-similarity floor for this store (0.18.0), used when
+-- `min_search_score` has no config row. It depends on the embedder: nomic's
+-- cosine for unrelated text sits around 0.4-0.55 (OpenAI's around 0.1-0.3), so
+-- 0.5 lets unrelated documents through as confident results. Cerefox Local
+-- used to get its 0.6 from a config row seeded at container start; the s6
+-- image never ran that seed, so fresh Local stores searched at 0.5. Deriving it
+-- here covers every store whatever created it. A store holds one embedder
+-- (`cerefox doctor` enforces it), so one current chunk decides.
+CREATE OR REPLACE FUNCTION cerefox_default_min_search_score()
+RETURNS FLOAT
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+    SELECT CASE
+        WHEN (SELECT embedder_primary FROM cerefox_chunks
+              WHERE version_id IS NULL LIMIT 1) LIKE 'nomic-%'
+        THEN 0.6 ELSE 0.5
+    END::FLOAT;
+$$;
+
 -- Integer/boolean companions to cerefox_config_float. Same contract: fall back
 -- to the caller's default when the key is unset or unparseable, so a malformed
 -- row can never break a write path.
@@ -3186,6 +3219,10 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.18.0 (iteration 48): search calibration, RPC-only. Bounded keyword
+    -- score in hybrid fusion (ts_rank_cd normalisation 32); min_term_coverage
+    -- default 0.67; built-in min_search_score follows the store's embedder
+    -- (new cerefox_default_min_search_score). docs/specs/search-calibration.md.
     -- 0.17.0 (#251): trash auto-purge. New cerefox_purge_expired_trash, called
     -- by cerefox_delete_document after a real soft delete (which now returns
     -- `auto_purged`); two config keys, off by default. Migration 0033.
@@ -3227,7 +3264,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.17.0'::TEXT;
+    SELECT '0.18.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

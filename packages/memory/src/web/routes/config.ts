@@ -67,6 +67,14 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
           p_key: spec.key,
         });
         const stored = error ? null : unwrapScalarRpc(data);
+        // A store-dependent default is asked of the store (min_search_score
+        // follows the embedder). Older schemas lack the RPC: fall back.
+        let builtIn = spec.defaultValue;
+        if (stored == null && spec.defaultRpc) {
+          const d = await ctx.supabase.rpc(spec.defaultRpc, {});
+          const v = d.error ? null : unwrapScalarRpc(d.data);
+          if (v != null) builtIn = String(v);
+        }
         const envVar = RETIRED_ENV_VARS[spec.key];
         // Report the override only when it is actually set *on this server*.
         // Another machine running its own MCP server may differ, which the UI
@@ -75,10 +83,10 @@ export function registerConfigRoutes(app: Hono, ctx: WebContext): void {
         return {
           key: spec.key,
           value: stored,
-          effective: stored ?? spec.defaultValue,
+          effective: stored ?? builtIn,
           description: spec.description,
           kind: spec.kind,
-          default: spec.defaultValue,
+          default: builtIn,
           min: spec.min ?? null,
           max: spec.max ?? null,
           group: spec.group,

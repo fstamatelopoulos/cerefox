@@ -144,9 +144,26 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 > ```
 >
 > Resolution order, highest first: **per-call argument** (`--min-score`, the
-> `min_score` MCP parameter) → **client env var** below → **`cerefox_config`**
-> → built-in default. A malformed stored value is ignored in favour of the
-> built-in, so a bad setting can never break search.
+> `min_score` MCP parameter) → **`cerefox_config`** → built-in default. A
+> malformed stored value is ignored in favour of the built-in, so a bad setting
+> can never break search. (Before v1.17.0 the web UI and `/api/v1` search sent
+> their own `min_search_score` and `search_alpha`, so they did not obey a stored
+> value; now every path does.)
+>
+> **Built-in defaults (v1.17.0, schema 0.18.0)**, chosen by the search
+> calibration benchmark (`docs/specs/search-calibration.md`):
+>
+> | Key | Default | Meaning |
+> |---|---|---|
+> | `min_search_score` | **0.5** on an OpenAI store, **0.6** on a local-embedder (nomic) store, derived from the store's own embeddings | A result with no confident keyword match must be at least this similar to the query. Nomic scores unrelated text around 0.4 to 0.55, so 0.5 would let it through. |
+> | `min_term_coverage` | **0.67** (was 0.5) | When no document contains every query word, a keyword match counts as confident only if it covers this share of the words: two of three, not one of two. |
+> | `search_alpha` | **0.7** | Weight of meaning against keywords. Both sides are on a 0 to 1 scale since v1.17.0, so the weight now means what it says. |
+>
+> Tune only with evidence: `bun scripts/search_benchmark.ts` measures any
+> setting against a labelled query vocabulary on a staging store
+> ([ops-scripts.md](ops-scripts.md#search_benchmarkts--search-calibration-benchmark)).
+> A setting that suits one store's content can cost another kind of query
+> without anything looking wrong.
 
 > **Which paths read these?** Client-side tunables in this section are read
 > from *your* `.env` by the **CLI**, the **local MCP server**, and `cerefox
@@ -162,8 +179,8 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 |----------|---------|-------------|
 | `CEREFOX_MAX_RESPONSE_BYTES` | `200000` | Maximum bytes in a single search response (local MCP path). See explanation below. |
 | `CEREFOX_MIN_SEARCH_SCORE` | **Retired in v1.1.0 — no longer read.** | Now a store setting: `cerefox config set min_search_score <value>`, or the **Settings** page. The right floor depends on which embedder produced the vectors, and the embedder belongs to the store — every client querying one database must use the same one. A per-call override still works (`cerefox search --min-score`, the MCP `min_score` param). `cerefox doctor` and the Settings page report the variable if it is still set. |
-| `CEREFOX_SEARCH_ALPHA` | **Retired in v1.1.0 — no longer read.** | Now a store setting: `cerefox config set search_alpha <value>`, or the **Settings** page.  A per-call override still works (`cerefox search --min-score`, the MCP `min_score` param). `cerefox doctor` and the Settings page report the variable if it is still set. |
-| `CEREFOX_MIN_TERM_COVERAGE` | **Retired in v1.1.0 — no longer read.** | Now a store setting: `cerefox config set min_term_coverage <value>`, or the **Settings** page.  A per-call override still works (`cerefox search --min-score`, the MCP `min_score` param). `cerefox doctor` and the Settings page report the variable if it is still set. |
+| `CEREFOX_SEARCH_ALPHA` | **Retired in v1.1.0 — no longer read.** | Now a store setting: `cerefox config set search_alpha <value>`, or the **Settings** page. A per-call override still works (`cerefox search --alpha`). `cerefox doctor` and the Settings page report the variable if it is still set. |
+| `CEREFOX_MIN_TERM_COVERAGE` | **Retired in v1.1.0 — no longer read.** | Now a store setting: `cerefox config set min_term_coverage <value>`, or the **Settings** page. A per-call override still works (`cerefox search --min-term-coverage`, the MCP `min_term_coverage` param). `cerefox doctor` and the Settings page report the variable if it is still set. |
 | `CEREFOX_EMBED_MAX_INPUT_CHARS` | `20000` | Safety cap on the characters sent to the embedding model per input. The full chunk content is always stored and reconstructed untouched; only the embedding uses the (rare) truncated prefix, so an oversized chunk can never fail an ingest. |
 | `CEREFOX_MODELS_DIR` | `~/.cerefox/models` (in-container: inside the data volume) | Where the local embedder caches downloaded model weights (Cerefox Local; `CEREFOX_EMBEDDER=local`). |
 | `CEREFOX_ONNX_BATCH` | `4` | Texts per local-embedder inference call. Peak memory scales with this; the small default keeps ingest/reindex safe on small Docker VMs. |

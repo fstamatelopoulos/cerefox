@@ -1,0 +1,40 @@
+{
+  "text-embedding-3-small": {
+    "schema": "0.18.0",
+    "overallMrr": 0.86,
+    "categoryMrr": {
+      "abbreviation": 0.78,
+      "distinctive_keyword": 0.89,
+      "exact_title": 0.95,
+      "identifier": 0.83,
+      "inflection": 0.95,
+      "long_query": 0.95,
+      "misspelling": 0.95,
+      "multi_word_topic": 0.95,
+      "paraphrase": 0.47,
+      "question": 0.76,
+      "short_name": 0.91,
+      "word_order": 0.95
+    },
+    "maxConfidentFalsePositives": 0
+  },
+  "nomic-embed-text-v1.5": {
+    "schema": "0.18.0",
+    "overallMrr": 0.84,
+    "categoryMrr": {
+      "abbreviation": 0.8,
+      "distinctive_keyword": 0.83,
+      "exact_title": 0.95,
+      "identifier": 0.87,
+      "inflection": 0.95,
+      "long_query": 0.89,
+      "misspelling": 0.95,
+      "multi_word_topic": 0.88,
+      "paraphrase": 0.29,
+      "question": 0.88,
+      "short_name": 0.88,
+      "word_order": 0.95
+    },
+    "maxConfidentFalsePositives": 2
+  }
+}

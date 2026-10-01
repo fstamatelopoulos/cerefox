@@ -1,0 +1,13 @@
+# Gitleaks configuration: the default rules, plus one narrow exception.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Search-calibration vocabulary document keys (kebab-case slugs, not secrets)"
+# The vocabulary (_shared/search-benchmark/vocabulary/corpus.json) names each
+# document with a JSON field called "key", which the generic-api-key rule reads
+# as a credential when the slug has enough entropy (e.g. "inc-ops-222-split-e4012").
+# Matched on the whole line and only for a lowercase kebab slug, so a real key
+# pasted anywhere, including into that file, is still caught.
+regexTarget = "line"
+regexes = ['''^\s*"key": "[a-z0-9]+(?:-[a-z0-9]+)*",?\s*$''']

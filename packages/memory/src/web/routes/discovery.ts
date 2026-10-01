@@ -17,7 +17,6 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
-import { getMinSearchScore, getSearchAlpha } from "../../../../../_shared/mcp-tools/_utils.js";
 import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
@@ -399,15 +398,18 @@ async function runSearch(
     return ((data ?? []) as ChunkResultRow[]).map(projectChunkResult);
   }
 
+  // No p_alpha / p_min_score (v1.17.0): the RPC resolves both from the store's
+  // cerefox_config, as it does for MCP and the CLI. This route used to send its
+  // own (0.5 or 0.6 by this process's env, alpha 0.7), so the web UI and
+  // /api/v1 ignored a store's tuned values and searched differently from every
+  // agent querying the same store.
   if (mode === "hybrid") {
     const params: Record<string, unknown> = {
       p_query_text: query,
       p_query_embedding: embedding,
       p_match_count: count,
-      p_alpha: getSearchAlpha(),
       p_use_upgrade: false,
       p_project_id: projectId,
-      p_min_score: getMinSearchScore(),
     };
     if (metadataFilter) params.p_metadata_filter = metadataFilter;
     if (reviewStatus) params.p_review_status = reviewStatus;
@@ -424,9 +426,7 @@ async function runSearch(
     p_query_text: query,
     p_query_embedding: embedding,
     p_match_count: Math.min(count, 5),
-    p_alpha: getSearchAlpha(),
     p_project_id: projectId,
-    p_min_score: getMinSearchScore(),
   };
   if (metadataFilter) params.p_metadata_filter = metadataFilter;
   if (reviewStatus) params.p_review_status = reviewStatus;

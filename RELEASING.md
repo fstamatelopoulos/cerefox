@@ -59,7 +59,17 @@ redeploy their server.
    release touches their surface.
 7. **Docs current**: `docs/plan.md`, migration guide, and the npm
    `packages/memory/README.md` reflect what's shipping.
-8. **supabase-js ↔ PostgREST pin** (local self-hosted backend): if this cycle
+8. **Search floors** — if the release changes how search ranks (the hybrid
+   formula, a retrieval default, the query parser, chunking, the embedder), run
+   the calibration benchmark with `--check-floors` on staging (OpenAI) **and**
+   on a throwaway Cerefox Local (nomic). It fails on any category below its floor
+   in `_shared/search-benchmark/vocabulary/floors.json`. The live floor test
+   (`packages/memory/test/search-calibration-floor.test.ts`) covers the OpenAI
+   case from the package suite, but it skips on a store that tunes its own
+   retrieval settings, and it cannot embed with the local model on the host.
+   Moving a floor needs a reason in the PR. See
+   [ops-scripts.md](docs/guides/ops-scripts.md#search_benchmarkts--search-calibration-benchmark).
+9. **supabase-js ↔ PostgREST pin** (local self-hosted backend): if this cycle
    bumped `@supabase/supabase-js` (→ `postgrest-js`), re-check the PostgREST
    version pinned in `docker/local/{compose.yml,Dockerfile}` against what the new
    `postgrest-js` targets, and run the **Version coupling** workflow (or

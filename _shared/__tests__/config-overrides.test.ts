@@ -11,7 +11,7 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { getMaxResponseBytes, getMinSearchScore } from "../mcp-tools/_utils.ts";
+import { getMaxResponseBytes } from "../mcp-tools/_utils.ts";
 import { openaiEmbeddingConfig } from "../embeddings/index.ts";
 
 const REPO_ROOT = join(import.meta.dir, "..", "..");
@@ -30,24 +30,15 @@ function clear() {
 beforeEach(clear);
 afterEach(clear);
 
-describe("getMinSearchScore", () => {
-  it("defaults to 0.5", () => expect(getMinSearchScore()).toBe(0.5));
-
-  // Retired in v1.1.0. The similarity floor depends on which embedder produced
-  // the vectors, and the embedder belongs to the STORE — every client querying
-  // one database must use the same one. So the value lives in cerefox_config,
-  // and a client-side variable must NOT be able to make search behave
-  // differently depending on who asked.
-  it("ignores CEREFOX_MIN_SEARCH_SCORE — the store's config governs", () => {
-    process.env.CEREFOX_MIN_SEARCH_SCORE = "0.7";
-    expect(getMinSearchScore()).toBe(0.5);
-  });
-
-  // Still keyed on the embedder: this is the built-in fallback used when the
-  // store has expressed no preference, not an override of one.
-  it("still uses the higher local-embedder default", () => {
-    process.env.CEREFOX_EMBEDDER = "local";
-    expect(getMinSearchScore()).toBe(0.6);
+describe("search tuning comes from the store, on every path (v1.17.0)", () => {
+  // The web search route once sent its own p_min_score (0.5, or 0.6 by this
+  // process's CEREFOX_EMBEDDER) and p_alpha, so the web UI and /api/v1 ignored
+  // a store's tuned values while MCP and the CLI honoured them. The floor
+  // depends on the store's embedder, which the RPC now derives itself.
+  it("the web search route sends neither p_min_score nor p_alpha", () => {
+    const src = readFileSync(join(REPO_ROOT, "packages/memory/src/web/routes/discovery.ts"), "utf8");
+    expect(src).not.toMatch(/p_min_score\s*:/);
+    expect(src).not.toMatch(/p_alpha\s*:/);
   });
 });
 

@@ -11,6 +11,37 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Changed
 
+- **Search ranks more consistently across phrasings, and is measured against a
+  benchmark (schema 0.18.0; run `cerefox server deploy`).** The same document
+  could score 1.2 for one phrasing and 0.3 for another (a full name against a
+  short name, say), because the keyword side of hybrid search was unbounded: when
+  every query word matched, it outweighed any semantic evidence about five to one.
+  It is now bounded to 0 to 1 like the semantic side, and a partial keyword match
+  needs two of three query words (`min_term_coverage` 0.67, was 0.5) to count as
+  confident. The settings were chosen by a benchmark rather than by one example:
+  147 labelled queries in 13 categories (paraphrases, abbreviations, short names,
+  misspellings, identifiers, questions, no-answer queries…) over a synthetic
+  158-document corpus, on both embedders. Measured before → after:
+
+  | | OpenAI | local (nomic) |
+  |---|---|---|
+  | First relevant result's rank (MRR@10) | 0.881 → 0.912 | 0.865 → 0.892 |
+  | Right document first (Hit@1) | 0.836 → 0.873 | 0.806 → 0.843 |
+  | How far the right document's score moves between phrasings | 0.68 → 0.46 | 0.61 → 0.37 |
+  | No-answer queries answered with confidence (of 13) | 4 → 0 | 6 → 2 |
+
+  Paraphrased queries gained most. One category slipped: a single identifier
+  query on OpenAI now ranks the ticket named after the error code above the
+  postmortem where it occurred. Scores in `docs` and `hybrid` modes are now
+  between 0 and 1; anything that compared a score against a fixed number above
+  0.5 or so should be rechecked. A store that sets `min_term_coverage` itself
+  keeps its value. Details: `docs/specs/search-calibration.md`.
+
+- **The web UI and `/api/v1` search obey the store's search settings.** They sent
+  their own `min_search_score` and `search_alpha`, so a store's tuned values
+  applied to agents and the CLI but not to the web UI, and the two could disagree
+  on the same query. They now leave both to the store, like every other path.
+
 - **The Cerefox Local image's embedder runtime is pinned (#300, first half).** The
   image resolved `^` ranges for `@huggingface/transformers` and `onnxruntime-node`
   on every build, without a lockfile, so two builds of the same tag could embed
@@ -33,6 +64,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   It is the store's `total_chars` (the sum of the chunks), and the exported file is
   those chunks rejoined, so its size can differ by a few characters. Under the old
   label that difference read like missing content.
+
+### Fixed
+
+- **A new Cerefox Local searched with the wrong confidence floor.** The local
+  embedder needs a higher floor (0.6) than OpenAI (0.5), and the container was
+  meant to set it on first start, but the current image never ran that step. On
+  containers created since, agent and CLI searches used 0.5, at which the local
+  model treats unrelated documents as confident matches. The floor is now derived
+  from the store's own embeddings whenever none is stored, so every store gets the
+  right one with nothing to set, and a stored value still wins.
+
+### Added
+
+- **`scripts/search_benchmark.ts` and a search floor test.** The benchmark runs the
+  labelled vocabulary (`_shared/search-benchmark/vocabulary/`) against a staging
+  store, checks that it reproduces the live ranking exactly, and compares scoring
+  alternatives per category. A live test asserts each category's floor for each
+  embedder, so a later change to search cannot quietly cost one kind of query.
+  Contributor tooling; see `docs/guides/ops-scripts.md`.
 
 ---
 

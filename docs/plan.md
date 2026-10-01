@@ -29,6 +29,20 @@
 
 ## Current Focus
 
+**2026-10-01 — v1.17.0 (search calibration, iteration 48) is BUILT and verified on
+staging; awaiting the maintainer's go-ahead to cut.** Branch `feat/search-calibration`.
+Plan: [`docs/plans/iteration-48-search-calibration.md`](plans/iteration-48-search-calibration.md);
+results: `docs/specs/search-calibration.md` → Results. Schema 0.18.0, RPC-only (no
+migration; `server deploy` re-applies rpcs.sql): bounded `ts_rank_cd` in hybrid fusion,
+`min_term_coverage` default 0.67, `cerefox_default_min_search_score()` derives 0.5/0.6
+from the store's embeddings (fixes fresh Local containers searching at 0.5), and the web
+search route no longer overrides store settings. Benchmark (`scripts/search_benchmark.ts`,
+158 docs / 147 queries, exact live reproduction on both embedders) and live floor test
+(`search-calibration-floor.test.ts`, floors in `vocabulary/floors.json`). Staging runs
+0.18.0 via the repo build's `server deploy --schema-only` (EFs untouched); staging's own
+`min_search_score` 0.7 is kept (the floor test skips on tuned stores). Throwaway container
+`cfx-bench-local` (volume `cfx-bench-data`) can be removed after the release.
+
 **2026-09-30 (later) — v1.16.1 IS RELEASED; staging and Cerefox Local are on it.**
 Fixes: (1) the local embedder could not download its model inside `cerefox web`
 (Hono replaced the global Request/Response; broken since v1.0.1, hidden by the
