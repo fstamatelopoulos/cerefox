@@ -156,7 +156,7 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 > | Key | Default | Meaning |
 > |---|---|---|
 > | `min_search_score` | **0.5** on an OpenAI store, **0.6** on a local-embedder (nomic) store, derived from the store's own embeddings | A result with no confident keyword match must be at least this similar to the query. Nomic scores unrelated text around 0.4 to 0.55, so 0.5 would let it through. |
-> | `min_term_coverage` | **0.67** (was 0.5) | When no document contains every query word, a keyword match counts as confident only if it covers this share of the words: two of three, not one of two. |
+> | `min_term_coverage` | **0.66** (0.5 before v1.17.0; 0.67 in v1.17.0 and v1.17.1, which made a three-word query need all three) | When no document contains every query word, a keyword match counts as confident only if it covers this share of the words: two of three, not one of two. |
 > | `search_alpha` | **0.7** | Weight of meaning against keywords. Both sides are on a 0 to 1 scale since v1.17.0, so the weight now means what it says. |
 >
 > Tune only with evidence: `bun scripts/search_benchmark.ts` measures any

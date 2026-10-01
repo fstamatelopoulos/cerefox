@@ -110,6 +110,10 @@ async function main(): Promise<void> {
     const [{ v: schema }] = await sql`SELECT cerefox_schema_version() AS v`;
     const [maj = 0, min = 0] = String(schema).split(".").map(Number);
     const calibrated = maj > 0 || min >= 18;
+    const [, , patch = 0] = String(schema).split(".").map(Number);
+    // Built-in min_term_coverage by schema: 0.5 before 0.18.0, 0.67 in 0.18.0-0.18.1
+    // (which made three-term queries need all three), 0.66 from 0.18.2.
+    const schemaCoverageDefault = !calibrated ? 0.5 : maj === 0 && min === 18 && patch < 2 ? 0.67 : 0.66;
     const cfg = async (k: string, d: number) => {
       const [r] = await sql`SELECT cerefox_config_float(${k}, ${d}) AS v`;
       return Number(r!.v);
@@ -118,7 +122,7 @@ async function main(): Promise<void> {
     const live = {
       alpha: await cfg("search_alpha", 0.7),
       minScore: await cfg("min_search_score", defaultFloor),
-      minCoverage: await cfg("min_term_coverage", calibrated ? 0.67 : 0.5),
+      minCoverage: await cfg("min_term_coverage", schemaCoverageDefault),
     };
     const gates = { minScore: live.minScore, minCoverage: live.minCoverage };
 
@@ -163,7 +167,7 @@ async function main(): Promise<void> {
     // The gates are embedder-specific (cosine distributions differ) and interact
     // with the formula, so every formula is scored across a grid of both gates.
     const candidates: Candidate[] = [current];
-    for (const mc of [0.5, 0.67]) {
+    for (const mc of [0.5, 0.66]) {
       for (const ms of [0.4, 0.5, 0.6, 0.7]) {
         const g = { minScore: ms, minCoverage: mc };
         const tag = `min=${ms} cov=${mc}`;
@@ -183,7 +187,7 @@ async function main(): Promise<void> {
       const [{ e: embedder }] = await sql`SELECT embedder_primary AS e FROM cerefox_chunks WHERE version_id IS NULL LIMIT 1`;
       const floors = (JSON.parse(readFileSync(join(FIXTURE, "floors.json"), "utf8")) as Record<string, Floors>)[embedder as string];
       if (!floors) throw new Error(`no floors recorded for ${embedder}`);
-      const got = evaluate(linear("defaults", 0.7, { minScore: defaultFloor, minCoverage: 0.67 }, bounded), queries, signals, keyById);
+      const got = evaluate(linear("defaults", 0.7, { minScore: defaultFloor, minCoverage: schemaCoverageDefault }, bounded), queries, signals, keyById);
       const breaches = floorBreaches(got, floors);
       if (breaches.length > 0) throw new Error(`floors breached (${embedder}):\n  ${breaches.join("\n  ")}`);
       console.error(`[bench] floors hold for ${embedder}: overall MRR ${got.overall.mrr.toFixed(3)} (floor ${floors.overallMrr})`);
@@ -200,7 +204,7 @@ async function main(): Promise<void> {
       // Floors describe the built-in defaults, not this store's own tuning (a
       // labelled store is often tuned): the same formula at the default gates.
       if (!calibrated) throw new Error("--write-floors needs schema >= 0.18.0");
-      const defaults = linear("defaults", 0.7, { minScore: defaultFloor, minCoverage: 0.67 }, bounded);
+      const defaults = linear("defaults", 0.7, { minScore: defaultFloor, minCoverage: schemaCoverageDefault }, bounded);
       all[embedder as string] = floorsFrom(String(schema), evaluate(defaults, queries, signals, keyById));
       writeFileSync(path, `${JSON.stringify(all, null, 2)}\n`);
       console.error(`[bench] floors for ${embedder} written to ${path}`);

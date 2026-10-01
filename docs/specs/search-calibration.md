@@ -150,6 +150,33 @@ Two defects surfaced along the way and are fixed in the same release:
   store's settings, so they searched differently from every agent on the same
   store. They now leave both to the store.
 
+## Correction (v1.17.1, v1.17.2): what the synthetic benchmark missed
+
+An evaluation on real data on a staging environment (thousands of known-item
+queries generated from its documents, AI-written paraphrases and no-answer queries;
+paired statistics with document-clustered bootstrap intervals and Holm-corrected
+McNemar tests) found two things the synthetic vocabulary did not. Its detailed
+figures are kept out of the repository because they describe a private store.
+
+1. **The vector candidates came from an approximate index.** Ordering by the bare
+   `embedding <=> query` distance let Postgres answer from the HNSW index, which
+   returns at most `hnsw.ef_search` (40) rows and, after heavy version churn, not
+   the nearest ones. The bounded keyword score of 0.18.0 made the gap visible.
+   Fixed in 0.18.1 (exact scan; also faster at this scale). The benchmark searched
+   one project, where Postgres scans exactly, so it never exercised the index path.
+2. **`min_term_coverage` 0.67 meant three of three.** The gate is
+   `matched >= coverage x terms`; 0.67 x 3 = 2.01. Multi-word keyword queries
+   ranked markedly worse than in 1.16.1. Fixed in 0.18.2 (0.66). The synthetic
+   vocabulary has few three-word keyword queries whose words sit in different
+   chunks, which is where the rule bites.
+
+With both fixed, search measured significantly better than 1.16.1 overall on that
+data, and `search_alpha` 0.6 was indistinguishable from 0.7 (so 0.7 stays).
+
+Lessons kept in the process: a ranking change is checked on real data on staging as
+well as on the vocabulary; the benchmark's results are only as broad as its query
+shapes; and a parameter is tested by its arithmetic, not its description.
+
 ## Wiring
 
 - `scripts/search_benchmark.ts`: ingests the corpus into a dedicated project on a

@@ -4,8 +4,8 @@
  *
  * pgvector's HNSW scan returns at most `hnsw.ef_search` rows (40 by default)
  * and, on a store whose index has seen heavy version churn, not the nearest
- * ones: a hybrid search that asked for 250 vector candidates received ~38,
- * most of them outside the true top 250, so documents that matched by meaning
+ * ones: a hybrid search received far fewer vector candidates than it asked
+ * for, most of them outside the true nearest set, so documents that matched by meaning
  * were scored as if they had not. The planner uses the index only when a query
  * orders by the bare `embedding <=> query` distance (which the RPCs' CASE folds
  * to once p_use_upgrade is known), so the search RPCs order by the computed

@@ -103,7 +103,7 @@ async function action(
         ? { p_min_score: envScore }
         : {};
   // v1.0.4 coverage gate: flag > CEREFOX_MIN_TERM_COVERAGE env > server
-  // default (the store's config, else 0.67 since schema 0.18.0). Only sent when one of the first two is set — omitting it
+  // default (the store's config, else 0.66 since schema 0.18.2). Only sent when one of the first two is set — omitting it
   // keeps the call compatible with pre-0.9.1 servers (unknown named args fail
   // the PostgREST function match).
   const envCoverage = getMinTermCoverage();
@@ -352,7 +352,7 @@ export function registerSearch(program: Command): void {
     .option("--mode <mode>", "Search mode: docs (default), hybrid, fts.", "docs")
     .option("--alpha <float>", "Semantic weight 0..1 (default: CEREFOX_SEARCH_ALPHA; else 0.7).")
     .option("--min-score <float>", "Minimum cosine similarity threshold (default: the store's min_search_score; else 0.5, or 0.6 on a local-embedder store).")
-    .option("--min-term-coverage <float>", "OR-fallback keyword matches must cover at least this fraction of the query's meaningful terms to count as confident hits (default: the store's min_term_coverage; else 0.67; needs schema ≥ 0.9.1).")
+    .option("--min-term-coverage <float>", "OR-fallback keyword matches must cover at least this fraction of the query's meaningful terms to count as confident hits (default: the store's min_term_coverage; else 0.66; needs schema ≥ 0.9.1).")
     .option("--max-bytes <n>", "Response size budget in bytes (default: CEREFOX_MAX_RESPONSE_BYTES or 200000).")
     .addOption(authorOption("read"))
     .addOption(requestorAliasOption())

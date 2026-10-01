@@ -490,7 +490,7 @@ export const searchTool: ToolDefinition = {
       min_term_coverage: {
         type: "number",
         description:
-          "Keyword OR-fallback confidence bar 0–1 (default: server-configured, else 0.67): fraction of the query's meaningful terms a result must match to count as a confident hit; weaker matches return flagged below-confidence. 0 = any matching term. Needs schema ≥ 0.9.1.",
+          "Keyword OR-fallback confidence bar 0–1 (default: server-configured, else 0.66): fraction of the query's meaningful terms a result must match to count as a confident hit; weaker matches return flagged below-confidence. 0 = any matching term. Needs schema ≥ 0.9.1.",
       },
       max_bytes: {
         type: "integer",

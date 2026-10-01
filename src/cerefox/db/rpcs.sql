@@ -184,10 +184,16 @@ DECLARE
                                                            cerefox_default_min_search_score()));
     v_alpha         FLOAT := COALESCE(p_alpha,
                                       cerefox_config_float('search_alpha', 0.7));
-    -- 0.18.0: 0.67 (was 0.5), so a confident OR-fallback match needs two of
+    -- 0.18.2: 0.66, so a confident OR-fallback match needs two of three
+    -- terms. 0.18.0 shipped 0.67, which for three terms is 2.01, i.e. all
+    -- three, which on real data made multi-word keyword queries rank markedly
+    -- worse
+    -- (docs/specs/search-calibration.md). The bar is coverage >= v * terms, so
+    -- the value must sit at or below k/n for the k-of-n rule it intends.
+    -- (0.18.0 note:) a confident OR-fallback match needs two of
     -- three terms, not one of two (docs/specs/search-calibration.md).
     v_min_coverage  FLOAT := COALESCE(p_min_term_coverage,
-                                      cerefox_config_float('min_term_coverage', 0.67));
+                                      cerefox_config_float('min_term_coverage', 0.66));
 BEGIN
     -- Build the OR-composed query: plainto each whitespace token (so tokens get
     -- the same normalization/stemming as the AND path), skip stopword-only
@@ -297,7 +303,7 @@ BEGIN
             -- folds to once p_use_upgrade is known) lets the planner serve this
             -- from the HNSW index, which is approximate and returns at most
             -- hnsw.ef_search (40) rows: on a store with heavy version churn it
-            -- returned ~38 of the 250 candidates asked for, mostly not the
+            -- returned far fewer candidates than asked for, mostly not the
             -- nearest ones. An exact scan is also faster at knowledge-base
             -- scale (thousands of chunks).
             ORDER BY vec_score DESC
@@ -429,7 +435,7 @@ DECLARE
     seen_tokens   TEXT[]    := '{}';
     total_tokens  INT;
     v_min_coverage FLOAT := COALESCE(p_min_term_coverage,
-                                     cerefox_config_float('min_term_coverage', 0.67));
+                                     cerefox_config_float('min_term_coverage', 0.66));
 BEGIN
     FOR tok IN SELECT unnest(regexp_split_to_array(trim(p_query_text), '\s+')) LOOP
         tok_q := plainto_tsquery('english', tok);
@@ -3229,6 +3235,8 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.18.2: min_term_coverage built-in default 0.66 (two of three terms).
+    -- 0.18.0's 0.67 required all three for a three-term query. RPC-only.
     -- 0.18.1: exact vector candidates. Hybrid and semantic search ordered by
     -- the bare distance, which let the planner use the approximate HNSW index
     -- (at most ef_search = 40 rows, poor recall after heavy version churn);
@@ -3279,7 +3287,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.18.1'::TEXT;
+    SELECT '0.18.2'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────
