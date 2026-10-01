@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.17.2] -- 2026-10-01
+
 ### Fixed
 
 - **Multi-word keyword searches lost ground in 1.17.0 (schema 0.18.2; run
