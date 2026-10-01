@@ -9,7 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Multi-word keyword searches lost ground in 1.17.0 (schema 0.18.2; run
+  `cerefox server deploy`).** 1.17.0 set `min_term_coverage` to 0.67, described as
+  "two of three query words". But the gate is `matched >= coverage x words`, and
+  0.67 x 3 = 2.01, so a three-word query needed all three words in the same chunk.
+  The synthetic benchmark did not show it; an evaluation on real data did: queries
+  made of a document's distinctive words ranked it markedly worse than in 1.16.1.
+  The default is now 0.66, a true two-of-three rule (2 of 2, 2 of 3, 3 of 4), which
+  restores those queries and keeps the rest of 1.17's gains. With this release,
+  search measured significantly better than 1.16.1 overall, with the largest gains
+  on misspelled titles, paraphrased questions and section headings, more consistent
+  scores across phrasings of the same need, and far fewer confident answers to
+  questions the knowledge base cannot answer. A store that sets `min_term_coverage`
+  itself keeps its value. A test now pins the arithmetic rather than the description.
 
 ---
 
@@ -21,8 +35,8 @@ Open roadmap.
   (schema 0.18.1; run `cerefox server deploy`).** The vector side of search asked
   Postgres for its nearest chunks in a way that let the approximate vector index
   answer. That index returns at most 40 rows, and on a store whose index had seen
-  heavy version churn they were mostly not the nearest ones: one store got about 38
-  of the 250 candidates search asked for, most of them wrong. Any document outside
+  heavy version churn they were mostly not the nearest ones: far fewer candidates
+  than search asked for came back, most of them not the nearest. Any document outside
   that set was scored as if its meaning did not match at all. This predates 1.17.0,
   but 1.17.0 made it visible: before, an unbounded keyword score masked the missing
   half; once keyword scores were capped, a document found only by keyword could
@@ -90,8 +104,8 @@ Open roadmap.
 
 - **An MCP write whose title contains HTML entities says so.** Agents sometimes
   send `&amp;` or `&lt;&gt;` instead of `&` or `<>` (the model encodes them inside
-  its tool call), and nine such titles were found in one store, all written over
-  MCP since May. Titles are boosted in search, so `cerefox_ingest` now appends a
+  its tool call), and such titles were found in a real store, all written over
+  MCP. Titles are boosted in search, so `cerefox_ingest` now appends a
   note naming the entities it stored and how to fix them. Nothing is rewritten:
   the same store-exactly-what-was-sent posture as the escaped-content note (#222).
   The quick reference tells agents to write the characters themselves.

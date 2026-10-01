@@ -89,7 +89,7 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
     description:
       "Fraction of a query's meaningful terms a keyword OR-fallback match must cover to count as confident.",
     kind: "number",
-    defaultValue: "0.67",
+    defaultValue: "0.66",
     min: 0,
     max: 1,
     group: "Retrieval",

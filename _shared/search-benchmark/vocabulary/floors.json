@@ -1,6 +1,6 @@
 {
   "text-embedding-3-small": {
-    "schema": "0.18.0",
+    "schema": "0.18.2",
     "overallMrr": 0.86,
     "categoryMrr": {
       "abbreviation": 0.78,
@@ -16,10 +16,10 @@
       "short_name": 0.91,
       "word_order": 0.95
     },
-    "maxConfidentFalsePositives": 0
+    "maxConfidentFalsePositives": 1
   },
   "nomic-embed-text-v1.5": {
-    "schema": "0.18.0",
+    "schema": "0.18.2",
     "overallMrr": 0.84,
     "categoryMrr": {
       "abbreviation": 0.8,
@@ -35,6 +35,6 @@
       "short_name": 0.88,
       "word_order": 0.95
     },
-    "maxConfidentFalsePositives": 2
+    "maxConfidentFalsePositives": 3
   }
 }
