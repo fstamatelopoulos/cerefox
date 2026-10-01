@@ -31,6 +31,7 @@ The canonical scripts are **TypeScript**, run with [Bun](https://bun.sh) (instal
 | `reindex_all.ts` | `bun scripts/reindex_all.ts` |
 | `cerefox_export.ts` | `bun scripts/cerefox_export.ts` |
 | `gen_openapi.ts` | `bun scripts/gen_openapi.ts` |
+| `search_benchmark.ts` | `bun scripts/search_benchmark.ts --api … --db … --embed …` (staging only) |
 | `cut_release.ts` | `bun scripts/cut_release.ts` (see [RELEASING.md](../../RELEASING.md)) |
 
 The remaining files under `scripts/` are not run by hand: `bundle_help.ts`,
@@ -325,6 +326,49 @@ Two things worth knowing about what it does *not* claim:
   changes. Binding it to the package version made the committed artifact stale at
   every release cut — which broke the v1.15.1 npm publish — and churned every
   generated client on patch releases that did not touch the API.
+
+## search_benchmark.ts — Search-calibration benchmark
+
+Measures how search ranks against a labelled query vocabulary
+(`_shared/search-benchmark/vocabulary/`: a synthetic corpus, about 150 queries
+in 13 categories, variant groups, no-answer queries) and compares alternative
+scoring formulas and settings. It is how the v1.17.0 defaults were chosen. Design
+and results: [`docs/specs/search-calibration.md`](../specs/search-calibration.md).
+
+**It writes**, so it refuses a target without a label (`--label` or
+`CEREFOX_ENV_LABEL`): the corpus goes into a project named
+`Search calibration benchmark`, and a temporary read-only probe function
+(`cerefox_bench_signals`) is created for the run and dropped after it. Re-runs
+write only documents whose content changed.
+
+```bash
+# Staging (OpenAI): the staging web server ingests, the database URL probes
+set -a; . ~/.cerefox/staging/.env; set +a
+bun scripts/search_benchmark.ts --api http://127.0.0.1:8030 \
+    --db "$CEREFOX_DATABASE_URL" --embed openai --out /tmp/bench.json > /tmp/bench.md
+
+# A throwaway Cerefox Local (nomic), postgres published on 55432
+bun scripts/search_benchmark.ts --api http://127.0.0.1:8099 \
+    --db postgresql://cerefox:cerefox@127.0.0.1:55432/cerefox \
+    --embed container:<container-name> --label bench-throwaway
+```
+
+| Flag | Description |
+|------|-------------|
+| `--api URL` | The target's web server; the corpus is ingested through `/api/v1/ingest` |
+| `--db URL` | Direct Postgres URL, for the probe and the live search calls |
+| `--embed openai \| container:<name>` | How queries are embedded: OpenAI (needs `OPENAI_API_KEY`), or the repo's own local embedder run inside a Cerefox Local container |
+| `--label TEXT` | Required unless `CEREFOX_ENV_LABEL` is set |
+| `--corpus DIR` | Use another vocabulary directory (for drafting one) |
+| `--out FILE` | JSON report (the markdown summary goes to stdout) |
+| `--write-floors` | Record the live formula's per-category floors for this store's embedder in `vocabulary/floors.json` |
+| `--cleanup` | Delete the benchmark documents and project afterwards |
+
+Before reporting any number it checks that its reproduction of the live formula
+matches `cerefox_search_docs` exactly for every query, and stops if it does not.
+A mismatch means the harness no longer models the RPC; fix the harness first.
+
+---
 
 ## sync_docs.ts — Sync project documentation into Cerefox
 

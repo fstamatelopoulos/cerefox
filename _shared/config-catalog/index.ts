@@ -24,6 +24,11 @@ export interface ConfigKeySpec {
   kind: ConfigValueKind;
   /** Value used when the row is absent, as stored (always a string). */
   defaultValue: string;
+  /**
+   * When the built-in default depends on the store, the zero-argument RPC that
+   * returns it; `defaultValue` is then the common case, for display only.
+   */
+  defaultRpc?: string;
   /** Numeric bounds, for input validation. */
   min?: number;
   max?: number;
@@ -71,9 +76,10 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
   {
     key: "min_search_score",
     description:
-      "Minimum cosine similarity for vector-side results. Use 0.6 with the local embedder.",
+      "Minimum cosine similarity for vector-side results. Unset, it follows the store's embedder: 0.5 OpenAI, 0.6 local (nomic).",
     kind: "number",
     defaultValue: "0.5",
+    defaultRpc: "cerefox_default_min_search_score",
     min: 0,
     max: 1,
     group: "Retrieval",
@@ -83,7 +89,7 @@ export const CONFIG_CATALOG: ReadonlyArray<ConfigKeySpec> = [
     description:
       "Fraction of a query's meaningful terms a keyword OR-fallback match must cover to count as confident.",
     kind: "number",
-    defaultValue: "0.5",
+    defaultValue: "0.67",
     min: 0,
     max: 1,
     group: "Retrieval",

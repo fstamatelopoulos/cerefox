@@ -23,6 +23,9 @@
  *                             script writes documents and must never run
  *                             against production
  * --cleanup                   delete and purge the benchmark documents after
+ * --write-floors              record the live formula's per-category floors for
+ *                             this store's embedder in vocabulary/floors.json
+ *                             (what the live floor test asserts)
  */
 
 import { execFileSync } from "node:child_process";
@@ -31,17 +34,25 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
-import { getEmbedding } from "../_shared/embeddings/index.ts";
+import { embedBatch } from "../_shared/embeddings/index.ts";
 import { bounded, linear, raw, rrf, run, type Candidate, type ChunkSignals, type RankedDocs } from "../_shared/search-benchmark/fusion.ts";
-import { groupConsistency, hitAt1, mean, ndcgAtK, recallAtK, reciprocalRank } from "../_shared/search-benchmark/metrics.ts";
+import {
+  BENCH_PROJECT,
+  ensureCorpus,
+  floorsFrom,
+  evaluate as evaluateRanking,
+  toRanked,
+  type BenchStore,
+  type Evaluation,
+  type SearchRow,
+  type VocabularyDoc as Doc,
+  type VocabularyQuery as Query,
+} from "../_shared/search-benchmark/live.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..");
 const FIXTURE = join(REPO, "_shared", "search-benchmark", "vocabulary");
-export const BENCH_PROJECT = "Search calibration benchmark";
 
-interface Doc { key: string; title: string; content: string }
-interface Query { id: string; category: string; text: string; relevant: Record<string, number>; group?: string }
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -64,28 +75,18 @@ async function main(): Promise<void> {
   const sql = postgres(dbUrl, { max: 4, onnotice: () => {} });
 
   try {
-    // 1. Corpus in, idempotently (same title → update; unchanged content is a no-op).
-    console.error(`[bench] ${label}: ingesting ${corpus.length} documents into "${BENCH_PROJECT}"…`);
-    for (const d of corpus) {
+    // 1. Corpus in. Only missing or changed documents are written.
+    const store = sqlStore(sql);
+    const { projectId, keyById, written } = await ensureCorpus(store, corpus, async (d) => {
       const r = await fetch(`${api}/api/v1/ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Cerefox-Author": "search-benchmark" },
         body: JSON.stringify({ title: d.title, content: d.content, project_name: BENCH_PROJECT, update_if_exists: true, last_write_wins: true, source: "benchmark" }),
       });
       if (!r.ok) throw new Error(`ingest "${d.title}": ${r.status} ${await r.text()}`);
-    }
-    const [proj] = await sql`SELECT id FROM cerefox_projects WHERE name = ${BENCH_PROJECT}`;
-    if (!proj) throw new Error("benchmark project not found after ingest");
-    const rows = await sql`SELECT d.id, d.title FROM cerefox_documents d
-      JOIN cerefox_document_projects dp ON dp.document_id = d.id AND dp.project_id = ${proj.id}
-      WHERE d.deleted_at IS NULL`;
-    const keyById = new Map<string, string>();
-    const byTitle = new Map(corpus.map((d) => [d.title, d.key]));
-    for (const r of rows) {
-      const k = byTitle.get(r.title as string);
-      if (k) keyById.set(r.id as string, k);
-    }
-    if (keyById.size !== corpus.length) throw new Error(`expected ${corpus.length} benchmark documents, found ${keyById.size}`);
+    });
+    console.error(`[bench] ${label}: corpus of ${corpus.length} in "${BENCH_PROJECT}" (${written} written)`);
+    const proj = { id: projectId };
 
     // 2. Probe in (locked down: service_role only, as for every cerefox_ function).
     await sql.unsafe(readFileSync(join(REPO, "_shared", "search-benchmark", "probe.sql"), "utf8"));
@@ -100,12 +101,21 @@ async function main(): Promise<void> {
     console.error(`[bench] embedding ${queries.length} queries (${embed})…`);
     const vectors = await embedQueries(queries.map((q) => q.text), embed);
 
-    // 4. Live gates (the formula's current parameters on this target).
+    // 4. The live formula and its parameters, as this target resolves them.
+    // Schema 0.18.0 bounded the keyword score and moved two built-in defaults.
+    const [{ v: schema }] = await sql`SELECT cerefox_schema_version() AS v`;
+    const [maj = 0, min = 0] = String(schema).split(".").map(Number);
+    const calibrated = maj > 0 || min >= 18;
     const cfg = async (k: string, d: number) => {
       const [r] = await sql`SELECT cerefox_config_float(${k}, ${d}) AS v`;
       return Number(r!.v);
     };
-    const live = { alpha: await cfg("search_alpha", 0.7), minScore: await cfg("min_search_score", 0.5), minCoverage: await cfg("min_term_coverage", 0.5) };
+    const defaultFloor = calibrated ? Number((await sql`SELECT cerefox_default_min_search_score() AS v`)[0]!.v) : 0.5;
+    const live = {
+      alpha: await cfg("search_alpha", 0.7),
+      minScore: await cfg("min_search_score", defaultFloor),
+      minCoverage: await cfg("min_term_coverage", calibrated ? 0.67 : 0.5),
+    };
     const gates = { minScore: live.minScore, minCoverage: live.minCoverage };
 
     // 5. Signals + the live ranking, per query.
@@ -118,13 +128,11 @@ async function main(): Promise<void> {
       // the probe sees every chunk, so the two agree only while the corpus fits in it.
       if (sig.length > 500) throw new Error(`corpus has ${sig.length} chunks; the reproduction assumes <= 500`);
       signals.push(sig.map((s) => ({ ...s, vec_score: Number(s.vec_score), rank_and: Number(s.rank_and), rank_or: Number(s.rank_or) }) as unknown as ChunkSignals));
-      const lv = await sql`SELECT document_id, best_score, below_confidence FROM cerefox_search_docs(
-        p_query_text => ${queries[i]!.text}, p_query_embedding => ${vec}::vector, p_match_count => 10, p_project_id => ${proj.id})`;
-      liveRanked.push({ docs: lv.map((r) => ({ document_id: r.document_id as string, score: Number(r.best_score) })), below_confidence: Boolean(lv[0]?.below_confidence) });
+      liveRanked.push(await store.searchDocs(queries[i]!.text, vectors[i]!, proj.id));
     }
 
     // 6. The reproduction check. Nothing below is trusted unless this passes.
-    const current = linear("current", live.alpha, gates, raw);
+    const current = linear(`live (schema ${schema})`, live.alpha, gates, calibrated ? bounded : raw);
     const mismatches: string[] = [];
     queries.forEach((q, i) => {
       const mine = run(current, signals[i]!, 10);
@@ -155,14 +163,31 @@ async function main(): Promise<void> {
       for (const ms of [0.4, 0.5, 0.6, 0.7]) {
         const g = { minScore: ms, minCoverage: mc };
         const tag = `min=${ms} cov=${mc}`;
-        candidates.push(linear(`current ${tag}`, live.alpha, g, raw));
+        candidates.push(linear(`unbounded a=0.7 ${tag}`, 0.7, g, raw));
         for (const a of [0.6, 0.7, 0.8]) candidates.push(linear(`bounded a=${a} ${tag}`, a, g, bounded));
         candidates.push(rrf(`rrf k=60 ${tag}`, 60, g));
       }
     }
 
-    const report = { label, embed, live, queries: queries.length, documents: corpus.length, candidates: candidates.map((c) => evaluate(c, queries, signals, keyById)) };
+    const report = { label, embed, schema: String(schema), live, queries: queries.length, documents: corpus.length, candidates: candidates.map((c) => evaluate(c, queries, signals, keyById)) };
     writeFileSync(out, JSON.stringify(report, null, 2));
+    if (flag("write-floors")) {
+      const [{ e: embedder }] = await sql`SELECT embedder_primary AS e FROM cerefox_chunks WHERE version_id IS NULL LIMIT 1`;
+      const path = join(FIXTURE, "floors.json");
+      let all: Record<string, unknown> = {};
+      try {
+        all = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      } catch {
+        // first write
+      }
+      // Floors describe the built-in defaults, not this store's own tuning (a
+      // labelled store is often tuned): the same formula at the default gates.
+      if (!calibrated) throw new Error("--write-floors needs schema >= 0.18.0");
+      const defaults = linear("defaults", 0.7, { minScore: defaultFloor, minCoverage: 0.67 }, bounded);
+      all[embedder as string] = floorsFrom(String(schema), evaluate(defaults, queries, signals, keyById));
+      writeFileSync(path, `${JSON.stringify(all, null, 2)}\n`);
+      console.error(`[bench] floors for ${embedder} written to ${path}`);
+    }
     console.log(markdown(report));
     console.error(`[bench] report: ${out}`);
   } finally {
@@ -182,9 +207,8 @@ async function embedQueries(texts: string[], embed: string): Promise<number[][]>
   if (embed === "openai") {
     const key = process.env.OPENAI_API_KEY;
     if (!key) throw new Error("OPENAI_API_KEY is required for --embed openai");
-    const out: number[][] = [];
-    for (const t of texts) out.push(await getEmbedding(t, key));
-    return out;
+    // A query embeds as the raw text on OpenAI, so a batch is identical.
+    return embedBatch(texts, key);
   }
   if (embed.startsWith("container:")) {
     // The repo's own embedder, run inside a Cerefox Local container against the
@@ -211,82 +235,37 @@ async function embedQueries(texts: string[], embed: string): Promise<number[][]>
   throw new Error(`unknown --embed ${embed}`);
 }
 
-interface CandidateReport {
-  name: string;
-  overall: Metrics;
-  byCategory: Record<string, Metrics & { n: number }>;
-  groups: { consistency: number; scoreSpread: number; n: number };
-  negatives: { confidentFalsePositives: number; n: number };
-  topScore: { p10: number; p50: number; p90: number };
-  perQuery: { id: string; rr: number; below: boolean; top: string[] }[];
-}
-interface Metrics { mrr: number; hit1: number; recall5: number; ndcg10: number }
+interface CandidateReport extends Evaluation { name: string }
 
 function evaluate(c: Candidate, queries: Query[], signals: ChunkSignals[][], keyById: Map<string, string>): CandidateReport {
-  const ranked = queries.map((_, i) => run(c, signals[i]!, 10));
-  const keys = ranked.map((r) => r.docs.map((d) => keyById.get(d.document_id) ?? d.document_id));
-  const per = queries.map((q, i) => ({
-    q,
-    mrr: reciprocalRank(keys[i]!, q.relevant),
-    hit1: hitAt1(keys[i]!, q.relevant),
-    recall5: recallAtK(keys[i]!, q.relevant, 5),
-    ndcg10: ndcgAtK(keys[i]!, q.relevant, 10),
-  }));
-  const positive = per.filter((p) => p.q.category !== "negative");
-  const agg = (xs: typeof per): Metrics => ({
-    mrr: mean(xs.map((x) => x.mrr)),
-    hit1: mean(xs.map((x) => x.hit1)),
-    recall5: mean(xs.map((x) => x.recall5)),
-    ndcg10: mean(xs.map((x) => x.ndcg10)),
-  });
-  const byCategory: CandidateReport["byCategory"] = {};
-  for (const cat of [...new Set(positive.map((p) => p.q.category))].sort()) {
-    const xs = positive.filter((p) => p.q.category === cat);
-    byCategory[cat] = { ...agg(xs), n: xs.length };
-  }
-  const groupIds = [...new Set(queries.map((q) => q.group).filter(Boolean))] as string[];
-  const consistency = mean(
-    groupIds.map((g) => groupConsistency(queries.map((q, i) => (q.group === g ? keys[i]! : null)).filter((x): x is string[] => x !== null), 5)),
-  );
-  // How far the shared target's score moves across a group's variants, relative to
-  // its best: 0 = every phrasing scores it the same; 1 = some phrasing loses it.
-  // This is the "full name vs short name" symptom, measured on every group shape.
-  const scoreSpread = mean(
-    groupIds.map((g) => {
-      const members = queries.map((q, i) => ({ q, i })).filter((m) => m.q.group === g);
-      const target = Object.keys(members[0]!.q.relevant).find((k) => members.every((m) => m.q.relevant[k] === 2))!;
-      const scores = members.map((m) => {
-        const j = keys[m.i]!.indexOf(target);
-        return j === -1 ? 0 : ranked[m.i]!.docs[j]!.score;
-      });
-      const hi = Math.max(...scores);
-      return hi <= 0 ? 1 : (hi - Math.min(...scores)) / hi;
-    }),
-  );
-  const negIdx = queries.map((q, i) => (q.category === "negative" ? i : -1)).filter((i) => i >= 0);
-  const confidentFP = negIdx.filter((i) => ranked[i]!.docs.length > 0 && !ranked[i]!.below_confidence).length;
-  const tops = positive.map((_, i) => ranked[queries.indexOf(positive[i]!.q)]!.docs[0]?.score ?? 0).sort((a, b) => a - b);
-  const pct = (p: number) => tops[Math.min(tops.length - 1, Math.floor(p * tops.length))] ?? 0;
+  return { name: c.name, ...evaluateRanking(queries, signals.map((sig) => run(c, sig, 10)), keyById) };
+}
+
+function sqlStore(sql: postgres.Sql): BenchStore {
+  const projectId = async () =>
+    ((await sql`SELECT id FROM cerefox_projects WHERE name = ${BENCH_PROJECT}`)[0]?.id as string | undefined) ?? null;
   return {
-    name: c.name,
-    overall: agg(positive),
-    byCategory,
-    groups: { consistency, scoreSpread, n: groupIds.length },
-    negatives: { confidentFalsePositives: confidentFP, n: negIdx.length },
-    topScore: { p10: pct(0.1), p50: pct(0.5), p90: pct(0.9) },
-    perQuery: queries.map((q, i) => ({
-      id: q.id,
-      rr: per[i]!.mrr,
-      below: ranked[i]!.below_confidence,
-      top: ranked[i]!.docs.slice(0, 3).map((d, j) => `${keys[i]![j]}@${d.score.toFixed(3)}`),
-    })),
+    projectId,
+    async listDocs() {
+      const pid = await projectId();
+      if (!pid) return new Map();
+      const rows = await sql`SELECT d.id, d.title, d.content_hash FROM cerefox_documents d
+        JOIN cerefox_document_projects dp ON dp.document_id = d.id AND dp.project_id = ${pid}
+        WHERE d.deleted_at IS NULL`;
+      return new Map(rows.map((r) => [r.title as string, { id: r.id as string, content_hash: r.content_hash as string }]));
+    },
+    async searchDocs(query, embedding, pid) {
+      const rows = await sql`SELECT document_id, best_score, below_confidence FROM cerefox_search_docs(
+        p_query_text => ${query}, p_query_embedding => ${`[${embedding.join(",")}]`}::vector, p_match_count => 10, p_project_id => ${pid})`;
+      return toRanked(rows as unknown as SearchRow[]);
+    },
   };
 }
 
-function markdown(r: { label: string; embed: string; live: Record<string, number>; queries: number; documents: number; candidates: CandidateReport[] }): string {
+function markdown(r: { label: string; embed: string; schema: string; live: Record<string, number>; queries: number; documents: number; candidates: CandidateReport[] }): string {
   const f = (x: number) => x.toFixed(3);
   const lines = [
-    `## Search benchmark: ${r.label} (${r.embed})`,
+    `## Search benchmark: ${r.label} (${r.embed}, schema ${r.schema})`,
     ``,
     `${r.documents} documents, ${r.queries} queries. Live parameters: alpha ${r.live.alpha}, min_search_score ${r.live.minScore}, min_term_coverage ${r.live.minCoverage}.`,
     ``,

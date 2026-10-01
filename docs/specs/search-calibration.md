@@ -94,6 +94,62 @@ A candidate replaces the current formula only if, on **both** embedders:
 The benchmark results, for every candidate, go in the PR and in this document before
 the change ships.
 
+## Results (2026-09-30, shipped in v1.17.0 / schema 0.18.0)
+
+Measured on the full vocabulary (158 documents, 147 queries) on a cloud staging
+store (OpenAI) and a throwaway Cerefox Local (nomic). On both, the harness
+reproduced the live `cerefox_search_docs` ranking exactly for every query, under
+the old formula and again under the new one, before any number was compared.
+
+**Chosen:** bounded keyword score (`ts_rank_cd` normalisation 32, `r/(r+1)`),
+`search_alpha` 0.7, `min_term_coverage` 0.67 (was 0.5), `min_search_score`
+unchanged per embedder (0.5 OpenAI, 0.6 nomic), now derived from the store's
+embeddings when no row is stored.
+
+| | OpenAI before | OpenAI after | nomic before | nomic after |
+|---|---|---|---|---|
+| MRR@10 | 0.881 | **0.912** | 0.865 | **0.892** |
+| Hit@1 | 0.836 | **0.873** | 0.806 | **0.843** |
+| nDCG@10 | 0.877 | **0.901** | 0.877 | **0.895** |
+| Target score spread across variants | 0.680 | **0.463** | 0.611 | **0.370** |
+| Top-5 overlap across variants | 0.545 | 0.541 | 0.507 | 0.498 |
+| Confident false positives (13 no-answer queries) | 4 | **0** | 6 | **2** |
+| Top score p50 / p90 | 0.86 / 2.01 | 0.50 / 0.71 | 0.98 / 2.12 | 0.63 / 0.79 |
+
+"Before" is the old formula at the defaults a store actually had (unbounded rank,
+coverage 0.5, the embedder's floor).
+
+Per category, paraphrase moved most (OpenAI 0.31 → 0.53, nomic 0.22 → 0.34),
+then question, short name (nomic 0.88 → 0.94), misspelling, long query and
+multi-word topic. **One category regressed**: identifier on OpenAI, 0.923 →
+0.885, a single query. For "E4012" the new formula ranks the ticket titled
+"Split E4012 into E4012 and E4014" above the postmortem where the error
+occurred; both are reasonable answers, and the drop is within tolerance.
+
+**Deviation from the decision rule, stated:** top-5 overlap across variants did
+not improve (flat, slightly lower). It was chosen as the consistency measure
+before any results existed, and it turned out to be decided mostly by positions
+2 to 5, which on this corpus are unlabelled distractors. The measure that
+captures the original complaint, how far the *right* document's score moves
+between phrasings of one need, improved by about a third on both embedders, and
+Hit@1 rose with it. The change ships on that basis; the rule should name the
+target-score spread for future decisions.
+
+Also measured and rejected: reciprocal-rank fusion (k 20 and 60) lost on MRR on
+both embedders; alpha 0.6 and 0.8 were within noise of 0.7, with 0.8 costing
+single-keyword queries on OpenAI; a lower vector floor (0.4) raised recall but
+let no-answer queries through.
+
+Two defects surfaced along the way and are fixed in the same release:
+
+- A fresh Cerefox Local never got its 0.6 floor: the seed lived in a start path
+  the current image does not run, so MCP and CLI searches on new containers used
+  0.5, at which nomic returned all ten original no-answer queries as confident
+  results. The RPC now derives the floor from the store's embeddings.
+- The web UI and `/api/v1` search sent their own floor and alpha, overriding the
+  store's settings, so they searched differently from every agent on the same
+  store. They now leave both to the store.
+
 ## Wiring
 
 - `scripts/search_benchmark.ts`: ingests the corpus into a dedicated project on a

@@ -32,18 +32,6 @@ export function getMaxResponseBytes(): number {
   return Number.isNaN(n) || n <= 0 ? MAX_RESPONSE_BYTES : n;
 }
 
-/** Built-in default cosine-similarity floor for hybrid/semantic search. */
-export const DEFAULT_MIN_SEARCH_SCORE = 0.5;
-
-/**
- * Nomic's cosine-score distribution sits higher than OpenAI's: unrelated text
- * lands ~0.4–0.55 (vs ~0.1–0.3), so the 0.5 floor calibrated for
- * text-embedding-3-small lets weak matches through on the local embedder
- * (rc.3 dogfood: an unrelated doc passed at vec≈0.54). 0.6 restores the
- * intended precision; relevant nomic matches score ~0.7+.
- */
-export const DEFAULT_MIN_SEARCH_SCORE_LOCAL = 0.6;
-
 /**
  * Read an env var in any of Cerefox's three runtimes.
  *
@@ -90,23 +78,6 @@ export function getSearchAlpha(): number {
 }
 
 /**
- * Resolve the minimum cosine-similarity floor for hybrid/semantic search
- * (vector-only matches below this are dropped; FTS matches always pass).
- * Overridable via the `CEREFOX_MIN_SEARCH_SCORE` env var (0.0–1.0). The Python
- * runtime read this; the TS migration dropped it — restored here as the single
- * default used by the CLI, local/remote MCP, and the web API.
- *
- * Runtime-agnostic env read: works in Node/Bun; in the Deno Edge Function
- * `process` may be absent, so it falls back to the built-in default (the cloud
- * EF path doesn't use the host `.env` anyway).
- */
-export function getMinSearchScore(): number {
-  return readEnv("CEREFOX_EMBEDDER") === "local"
-    ? DEFAULT_MIN_SEARCH_SCORE_LOCAL
-    : DEFAULT_MIN_SEARCH_SCORE;
-}
-
-/**
  * Retrieval tuning is server-side state, not a per-machine preference.
  *
  * These used to read CEREFOX_MIN_SEARCH_SCORE / CEREFOX_SEARCH_ALPHA /
@@ -122,9 +93,9 @@ export function getMinSearchScore(): number {
  * `cerefox_config`, then the built-in default. One `cerefox config set` — or the
  * Settings page — governs every access path.
  *
- * Cerefox Local still needs its higher floor for the nomic embedder; it seeds
- * `min_search_score` into its own `cerefox_config` at container init rather than
- * carrying it in the environment.
+ * Cerefox Local still needs its higher floor for the nomic embedder. Since
+ * schema 0.18.0 the RPC derives the built-in floor from the store's own
+ * embedder (`cerefox_default_min_search_score`), so no client carries it.
  *
  * A per-call argument (`--min-score`, the MCP `min_score` param) still wins, as
  * it always did. `cerefox doctor` reports the retired variables if still set.

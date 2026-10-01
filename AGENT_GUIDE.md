@@ -52,6 +52,8 @@ Find documents using hybrid search (full-text + semantic vector similarity).
 **Results format**: Each result shows `## Title [id: <uuid>] (score: X.XXX)` followed by content (in `hybrid` and `fts` modes the heading also carries the section path and the chunk index: `## Title › Section › Subsection [id: <uuid>] (chunk 4) (score: …)`).
 Save the `document_id` from `[id: ...]` -- you need it for `cerefox_get_document` and `cerefox_ingest` updates.
 
+**Reading scores**: in `docs` and `hybrid` modes a score is between 0 and 1 (since v1.17.0; scores above 1 came from older servers). Use it to compare results within one response, not across queries: a short or unusual phrasing scores lower than a full title even when it finds the same document. If a search returns a below-confidence notice, the results are best guesses, so try another phrasing before concluding the knowledge isn't there.
+
 For large documents, results may be partial (`is_partial` flag). Use `cerefox_get_document` with the ID to get the full text.
 
 **Rule**: Always search before answering questions about stored knowledge. Always search before ingesting to check for duplicates.

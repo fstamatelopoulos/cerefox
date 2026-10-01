@@ -108,7 +108,12 @@
       "mtg-kestrel-kickoff": 2,
       "spec-kestrel-offline-sync": 2,
       "spec-kestrel-push-notifications": 1,
-      "contact-katherine-fenwright": 1
+      "contact-katherine-fenwright": 1,
+      "spec-kestrel-photo-uploads": 1,
+      "spec-kestrel-shared-checklists": 1,
+      "spec-kestrel-tablet-layout": 1,
+      "spec-kestrel-email-digest": 1,
+      "mtg-kestrel-field-trial-retro": 1
     }
   },
   {
@@ -116,7 +121,10 @@
     "category": "distinctive_keyword",
     "text": "Larkspur",
     "relevant": {
-      "spec-larkspur-autocomplete": 2
+      "spec-larkspur-autocomplete": 2,
+      "spec-larkspur-saved-searches": 1,
+      "mtg-larkspur-design-review": 1,
+      "contact-kate-ormsby": 1
     }
   },
   {
@@ -124,7 +132,8 @@
     "category": "distinctive_keyword",
     "text": "levain",
     "relevant": {
-      "rec-weeknight-sourdough": 2
+      "rec-weeknight-sourdough": 2,
+      "rec-sourdough-starter": 1
     },
     "group": "g13"
   },
@@ -158,7 +167,8 @@
     "category": "distinctive_keyword",
     "text": "CoreDNS",
     "relevant": {
-      "inc-internal-dns-failure": 2
+      "inc-internal-dns-failure": 2,
+      "mtg-incident-review-april": 1
     },
     "group": "g22"
   },
@@ -230,7 +240,8 @@
     "relevant": {
       "trv-iceland-ring-road": 2,
       "fin-car-cover-renewal": 1,
-      "mtg-insurance-renewal-call": 1
+      "mtg-insurance-renewal-call": 1,
+      "trv-north-coast-500": 1
     },
     "group": "g19"
   },
@@ -322,7 +333,8 @@
     "category": "paraphrase",
     "text": "saving for retirement",
     "relevant": {
-      "fin-pension-contributions": 2
+      "fin-pension-contributions": 2,
+      "fin-old-pension-pots": 1
     },
     "group": "g21"
   },
@@ -429,7 +441,8 @@
     "text": "HYSA",
     "relevant": {
       "fin-emergency-fund": 2,
-      "fin-tax-return-checklist": 1
+      "fin-tax-return-checklist": 1,
+      "fin-household-budget": 1
     },
     "group": "g26"
   },
@@ -438,7 +451,8 @@
     "category": "abbreviation",
     "text": "ERC mortgage",
     "relevant": {
-      "fin-mortgage-overpayment": 2
+      "fin-mortgage-overpayment": 2,
+      "mtg-remortgage-call": 1
     },
     "group": "g18"
   },
@@ -569,7 +583,8 @@
       "contact-elizabeth-marrowby": 2,
       "mtg-platform-weekly-march": 1,
       "mtg-kestrel-kickoff": 1,
-      "mtg-q3-budget-review": 1
+      "mtg-q3-budget-review": 1,
+      "contact-gideon-marrowby": 1
     }
   },
   {
@@ -638,7 +653,8 @@
     "text": "Kestral offline sync",
     "relevant": {
       "spec-kestrel-offline-sync": 2,
-      "mtg-kestrel-kickoff": 1
+      "mtg-kestrel-kickoff": 1,
+      "spec-kestrel-photo-uploads": 1
     },
     "group": "g14"
   },
@@ -727,7 +743,8 @@
     "text": "insurance home contents",
     "relevant": {
       "fin-home-contents-insurance": 2,
-      "mtg-insurance-renewal-call": 1
+      "mtg-insurance-renewal-call": 1,
+      "fin-bike-insurance": 1
     }
   },
   {
@@ -744,7 +761,8 @@
     "text": "sync offline kestrel",
     "relevant": {
       "spec-kestrel-offline-sync": 2,
-      "mtg-kestrel-kickoff": 1
+      "mtg-kestrel-kickoff": 1,
+      "spec-kestrel-photo-uploads": 1
     },
     "group": "g14"
   },
@@ -754,7 +772,8 @@
     "text": "timeouts checkout postmortem",
     "relevant": {
       "inc-checkout-timeouts": 2,
-      "inc-ops-219-retry-budget": 1
+      "inc-ops-219-retry-budget": 1,
+      "inc-ops-222-split-e4012": 1
     },
     "group": "g09"
   },
@@ -763,7 +782,8 @@
     "category": "word_order",
     "text": "lag replication postgres",
     "relevant": {
-      "eng-postgres-replica-lag": 2
+      "eng-postgres-replica-lag": 2,
+      "inc-replica-lag-index-build": 1
     }
   },
   {
@@ -924,7 +944,8 @@
     "text": "what caused the checkout timeouts",
     "relevant": {
       "inc-checkout-timeouts": 2,
-      "inc-ops-219-retry-budget": 1
+      "inc-ops-219-retry-budget": 1,
+      "inc-ops-222-split-e4012": 1
     },
     "group": "g09"
   },
@@ -942,7 +963,8 @@
     "category": "question",
     "text": "why did the DNS lookups fail",
     "relevant": {
-      "inc-internal-dns-failure": 2
+      "inc-internal-dns-failure": 2,
+      "mtg-incident-review-april": 1
     },
     "group": "g22"
   },
@@ -962,7 +984,8 @@
     "relevant": {
       "inc-checkout-timeouts": 2,
       "inc-ops-219-retry-budget": 1,
-      "mtg-platform-weekly-march": 1
+      "mtg-platform-weekly-march": 1,
+      "inc-ops-222-split-e4012": 1
     },
     "group": "g09"
   },
@@ -973,7 +996,8 @@
     "relevant": {
       "inc-checkout-timeouts": 2,
       "inc-ops-219-retry-budget": 1,
-      "mtg-platform-weekly-march": 1
+      "mtg-platform-weekly-march": 1,
+      "inc-ops-222-split-e4012": 1
     },
     "group": "g09"
   },
@@ -1000,7 +1024,9 @@
     "category": "identifier",
     "text": "OPS-231",
     "relevant": {
-      "inc-internal-dns-failure": 2
+      "inc-internal-dns-failure": 2,
+      "inc-ops-233-dns-budget": 1,
+      "mtg-incident-review-april": 1
     },
     "group": "g22"
   },
@@ -1009,7 +1035,8 @@
     "category": "identifier",
     "text": "E5003",
     "relevant": {
-      "inc-internal-dns-failure": 2
+      "inc-internal-dns-failure": 2,
+      "inc-ops-233-dns-budget": 1
     },
     "group": "g22"
   },
@@ -1195,6 +1222,137 @@
     "id": "q132",
     "category": "negative",
     "text": "cat sitter contact details",
+    "relevant": {}
+  },
+  {
+    "id": "q133",
+    "category": "short_name",
+    "text": "Ventrella",
+    "relevant": {
+      "contact-nick-ventrella": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-hiring-debrief-sre": 1
+    },
+    "group": "g07"
+  },
+  {
+    "id": "q134",
+    "category": "short_name",
+    "text": "Brisbeck",
+    "relevant": {
+      "contact-thomas-brisbeck": 2,
+      "fin-tax-return-checklist": 1,
+      "contact-helena-moss": 1
+    }
+  },
+  {
+    "id": "q135",
+    "category": "short_name",
+    "text": "Liz head of platform",
+    "relevant": {
+      "contact-elizabeth-marrowby": 2,
+      "mtg-platform-weekly-march": 1,
+      "mtg-kestrel-kickoff": 1,
+      "mtg-q3-budget-review": 1
+    },
+    "group": "g04"
+  },
+  {
+    "id": "q136",
+    "category": "short_name",
+    "text": "Nick postgres consultant",
+    "relevant": {
+      "contact-nick-ventrella": 2,
+      "eng-postgres-backups": 1,
+      "mtg-platform-weekly-march": 1,
+      "mtg-hiring-debrief-sre": 1
+    },
+    "group": "g07"
+  },
+  {
+    "id": "q137",
+    "category": "short_name",
+    "text": "Bob bike shop",
+    "relevant": {
+      "contact-bob-hartigan": 2,
+      "home-bike-maintenance": 1
+    }
+  },
+  {
+    "id": "q138",
+    "category": "short_name",
+    "text": "Kate Larkspur",
+    "relevant": {
+      "contact-kate-ormsby": 2,
+      "mtg-larkspur-design-review": 1
+    }
+  },
+  {
+    "id": "q139",
+    "category": "identifier",
+    "text": "E4013",
+    "relevant": {
+      "inc-payment-webhooks-delayed": 2
+    }
+  },
+  {
+    "id": "q140",
+    "category": "identifier",
+    "text": "OPS-236",
+    "relevant": {
+      "inc-stale-dns-records": 2,
+      "mtg-incident-review-april": 1
+    }
+  },
+  {
+    "id": "q141",
+    "category": "identifier",
+    "text": "E7101",
+    "relevant": {
+      "inc-artifact-cache-full": 2
+    }
+  },
+  {
+    "id": "q142",
+    "category": "question",
+    "text": "who services the boiler",
+    "relevant": {
+      "contact-gideon-marrowby": 2,
+      "home-boiler-service": 2
+    }
+  },
+  {
+    "id": "q143",
+    "category": "exact_title",
+    "text": "Redis Snapshot and Restore Runbook",
+    "relevant": {
+      "eng-redis-snapshot-runbook": 2
+    }
+  },
+  {
+    "id": "q144",
+    "category": "paraphrase",
+    "text": "pushbike protection",
+    "relevant": {
+      "fin-bike-insurance": 2
+    }
+  },
+  {
+    "id": "q145",
+    "category": "negative",
+    "text": "OPS-240",
+    "relevant": {}
+  },
+  {
+    "id": "q146",
+    "category": "negative",
+    "text": "E4015",
+    "relevant": {}
+  },
+  {
+    "id": "q147",
+    "category": "negative",
+    "text": "solar panel installation quote",
     "relevant": {}
   }
 ]

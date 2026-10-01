@@ -1,6 +1,6 @@
 # Iteration 48 — Search calibration
 
-**Status:** in progress. Target **v1.17.0** (minor: search scoring changes).
+**Status:** built and verified on staging; release pending. Target **v1.17.0** (minor: search scoring changes).
 Design: [`docs/specs/search-calibration.md`](../specs/search-calibration.md).
 
 ## Decisions
@@ -38,7 +38,8 @@ you found it).
 | Baseline: current formula, both embedders | done (2026-09-30): staging/OpenAI, throwaway Local/nomic |
 | Candidates: bounded FTS rank, RRF, retuned gates; per-category results | done. Leading: bounded `ts_rank_cd` (r/(r+1)), alpha 0.7, `min_term_coverage` 0.67, vector gates unchanged (0.5 OpenAI / 0.6 nomic). RRF loses on both. |
 | Finding: fresh Local (s6 image) never seeds `min_search_score` 0.6 (only the legacy `entrypoint.sh` did); MCP/CLI then search at 0.5, where nomic returns 10/10 negatives confidently | found; fix in 1.17.0 |
-| Maintainer review of results, formula choice | awaiting |
-| Implement in `cerefox_hybrid_search` (+ migration, schema bump); live floor test | pending |
-| Docs: solution-design, configuration, AGENT_GUIDE; CHANGELOG with before/after | pending |
-| Release v1.17.0 | pending |
+| Maintainer review of results, formula choice | done (2026-09-30): bounded rank + coverage 0.67, gates unchanged; also add distractors before the release so floors are set once |
+| Distractor expansion | done: +98 docs, +15 queries (158/147); reviewed, 2 items removed |
+| Implement (schema 0.18.0, RPC-only like 0.16.1): bounded `ts_rank_cd` in hybrid, coverage 0.67, `cerefox_default_min_search_score()` from the store's embedder (fixes the Local seed bug); web search route stops sending its own `p_min_score`/`p_alpha`; live floor test | done; deployed to staging + throwaway Local; floors recorded for both embedders; floor test green on staging at defaults |
+| Docs: solution-design, configuration, setup-local, ops-scripts, AGENT_GUIDE, CLAUDE.md rule, spec Results; CHANGELOG with before/after | done |
+| Release v1.17.0 | awaiting maintainer go-ahead |

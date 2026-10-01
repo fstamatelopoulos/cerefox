@@ -364,6 +364,31 @@ No version snapshot is created because content is identical.
 
 **Query parser**: `cerefox_hybrid_search` and `cerefox_fts_search` use `plainto_tsquery('english', …)` to parse the user's query string. `plainto_tsquery` treats every token as a literal word and ANDs them together; it does **not** interpret operators (no phrase quotes, no `OR`, no `-` negation). This is intentional: agent queries are natural-language phrases, dashed identifiers are common in document titles (`setup-supabase`, `Quarterly Planning - Q3 Goals`), and the semantic-similarity half of hybrid search already provides "broadly related" matching. `websearch_to_tsquery` (the alternative) interprets `-` as negation, which silently traps any query containing a dashed title. If operator support is ever needed, gate it behind an opt-in flag rather than changing the default.
 
+**Scoring (v1.17.0, schema 0.18.0)**: a chunk's hybrid score is
+`alpha · cosine + (1 − alpha) · r/(r+1)`, where `r` is `ts_rank_cd` and
+`r/(r+1)` is its normalisation 32. Both sides are on a 0 to 1 scale. Before
+0.18.0 the keyword side was the raw `ts_rank_cd`, which reaches about 4 when
+every query term matches: one keyword hit then outweighed any semantic
+evidence, and the same document scored 1.2 under one phrasing and 0.3 under
+another (a full name vs a short name, say). A chunk is a confident result if it
+has a keyword match with enough term coverage, or its cosine clears
+`min_search_score`; otherwise the response is the below-confidence fallback.
+
+The constants were chosen by a benchmark, not by intuition: a synthetic corpus
+and a labelled vocabulary of 13 query categories (exact titles, paraphrases,
+abbreviations, short names, misspellings, identifiers, long questions,
+no-answer queries…) with variant groups that phrase one need several ways
+(`_shared/search-benchmark/`). `scripts/search_benchmark.ts` reproduces the
+live ranking exactly from per-chunk signals before scoring any alternative, so
+candidates are compared on identical candidate pools; the live floor test
+(`packages/memory/test/search-calibration-floor.test.ts`) then pins every
+category's floor for each embedder. Reciprocal-rank fusion was measured and
+lost on both embedders. Design and results: `docs/specs/search-calibration.md`.
+
+**Any change to how search ranks** (the formula, a default, the query parser,
+chunking) is measured with the benchmark first and must keep the floor test
+green; a category that drops is a regression even when the average holds.
+
 ### 5.3 Automatic Small-to-Big Retrieval
 
 The `cerefox_search` tool automatically adjusts how results are assembled based on document size. Agents always call the same tool; the threshold logic is internal.

@@ -11,8 +11,9 @@ generic tech vocabulary are used as ordinary vocabulary.
 
 | File | What it is |
 |---|---|
-| `corpus.json` | 60 documents: `{key, title, content}`; content starts with `# <title>` |
-| `queries.json` | 132 queries: `{id, category, text, relevant: {key: grade}, group?}` |
+| `corpus.json` | 158 documents: `{key, title, content}`; content starts with `# <title>` |
+| `queries.json` | 147 queries: `{id, category, text, relevant: {key: grade}, group?}` |
+| `floors.json` | Per-embedder floors the live floor test asserts; written by `search_benchmark.ts --write-floors` |
 
 The two JSON files are the source of truth; edit them directly. Their integrity
 (labels point at real documents, negatives carry no labels, groups share a grade-2
@@ -21,6 +22,14 @@ real) is checked by `_shared/__tests__/search-calibration-vocabulary.test.ts`.
 How the benchmark uses them: `docs/specs/search-calibration.md`.
 
 ## Corpus
+
+The corpus grew in two passes. The first 60 documents (below) were enough to
+choose a formula but not to tell candidates apart: 10 of 12 answerable
+categories scored 0.9 to 1.0 under every formula. The second pass (see
+*Distractors* further down) added 98 documents built to compete with the
+labelled answers, which brought the spread down to where a regression shows.
+
+### First pass
 
 60 documents, 6 per domain: engineering how-tos, incidents/postmortems, meeting
 notes, contact cards, product specs, company policies, recipes, travel logs,
@@ -70,6 +79,8 @@ Seven documents are never labelled and act as pure distractors:
 `trv-carry-on-packing-list`.
 
 ## Queries
+
+The table below is the first pass (132). The second added 15 (see *Distractors*): 147 in all, 13 of them negatives.
 
 | Category | Count |
 |---|---|
@@ -140,6 +151,38 @@ Grade-1 labels are not always identical across a group (for example, a question
 may carry an extra grade-1 doc that answers that specific phrasing). Group
 consistency should be measured on the shared grade-2 doc and the top-5 overlap,
 as the spec says.
+
+## Distractors (second pass, 98 documents, 15 queries)
+
+Written to make the right answer harder to find, never to answer an existing
+query better than its labelled document. The original 60 documents are
+unchanged. Clusters:
+
+- **Look-alikes of labelled targets on another subject:** a Redis runbook whose
+  title copies the PostgreSQL one, a Postgres major-version upgrade, an ingress
+  migration that mentions drains and PodDisruptionBudgets in passing, a chickpea
+  salad, a beef stew, a Tokyo trip with a ryokan, the North Coast 500 for the
+  Iceland ring road, a search-metrics note that mentions reciprocal rank fusion.
+- **Rare terms in more documents:** Kestrel now appears in 13 documents (was 6),
+  Quillon 7 (5), Marrowby 6 (4), levain and "attention residue" 3 each (1).
+- **Name collisions:** other people called Liz/Elizabeth, Bob/Robert, Kate, Alex,
+  Nick, Tom and Jen, and shared surnames (a Marrowby who services a boiler, a
+  Quillon who quotes for joinery).
+- **Identifier neighbours:** OPS-218 and OPS-222 beside OPS-217/219 (OPS-222
+  splits E4012), E4013/E4014, E4032/E4035, E5004, E7101, E2208. A few documents
+  name a queried code only to contrast it; those are left unlabelled on purpose.
+- **A new home domain** (7 documents) for cross-domain vocabulary.
+
+New queries: surname-only (Ventrella, Brisbeck), short names with context, a
+short name whose answer is one of the new collision cards, three new identifiers,
+an exact title, a paraphrase, and three negatives (OPS-240, E4015, a solar-panel
+quote). Existing queries gained grade-1 labels only where a new document
+genuinely answers part of them (for example, the Kestrel-centred specs for
+"Kestrel", the April incident review for the DNS queries).
+
+Removed in review: a card for a person whose name was one letter from a negative
+query's (it turned that negative into a misspelling test), and a sentence written
+only to put "Alex" into an unrelated card.
 
 ## Labelling decisions
 
