@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.17.1] -- 2026-10-01
+
 ### Fixed
 
 - **Hybrid and semantic search could miss documents that matched by meaning
