@@ -29,6 +29,32 @@
 
 ## Current Focus
 
+**2026-10-01 (later): v1.17.2 IS RELEASED AND VERIFIED on staging and both Local
+containers; production (on 1.17.0) awaits the maintainer, going straight to 1.17.2**
+(`cerefox server deploy`: schema 0.18.2, EF v1.17.2). Fixes to 1.17.0, both found on
+real data rather than the synthetic vocabulary:
+- **1.17.1:** exact vector candidates (the HNSW index could answer the RPC's bare-distance
+  ordering), plus the resumable model download (#314);
+- **1.17.2:** `min_term_coverage` 0.66, because 0.67 meant three of three.
+
+The real-data study (aggregates) is in the maintainer's KB, project Cerefox, and is
+deliberately NOT in the repo. `search_alpha` stays 0.7 (0.6 was indistinguishable).
+
+Verified on 1.17.2:
+- **Staging:** floors and reproduction exact; package suite 380/0; EF + remote MCP 49/0;
+  Playwright 27 passed, 1 skipped; live defaults equal the study's measured condition in
+  every query family.
+- **Fresh Local, no warmup:** the first write downloads the model in-request; nomic floors
+  hold.
+- **Both Local containers:** data identical after the upgrade.
+
+Process changes:
+- RELEASING step 8 (floors on both embedders);
+- ranking changes also need a real-data check on staging (CLAUDE.md);
+- released CHANGELOG sections were scrubbed of store-specific figures via
+  `--accept-history-edit`. The v1.17.0/v1.17.1 tag annotations still carry two such
+  counts, because tags are never force-moved.
+
 **2026-10-01 — v1.17.0 IS RELEASED AND VERIFIED on staging and Cerefox Local;
 production (on 1.16.1) awaits the maintainer** (`cerefox server deploy` required: schema
 0.18.0 and EF v1.17.0). Headline: hybrid search calibrated against a benchmark (iteration
