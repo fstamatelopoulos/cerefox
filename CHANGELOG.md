@@ -9,7 +9,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Hybrid and semantic search could miss documents that matched by meaning
+  (schema 0.18.1; run `cerefox server deploy`).** The vector side of search asked
+  Postgres for its nearest chunks in a way that let the approximate vector index
+  answer. That index returns at most 40 rows, and on a store whose index had seen
+  heavy version churn they were mostly not the nearest ones: one store got about 38
+  of the 250 candidates search asked for, most of them wrong. Any document outside
+  that set was scored as if its meaning did not match at all. This predates 1.17.0,
+  but 1.17.0 made it visible: before, an unbounded keyword score masked the missing
+  half; once keyword scores were capped, a document found only by keyword could
+  score under 0.2. Search now ranks its vector candidates exactly, which is also
+  faster at knowledge-base scale, and every keyword match carries its real
+  similarity into the score.
+
+- **Cerefox Local's model download survives a slow or dropped connection (#314).**
+  The 131 MB model was fetched as one stream with no retry: if the connection
+  dropped part-way, the request that triggered it failed with a raw socket error and
+  the next attempt started again from zero. It now downloads in verified 4 MB
+  pieces, resumes after a drop, retries with backoff, and stops waiting on a
+  connection that has gone silent. Each piece must arrive at exactly its expected
+  size, because on a dropped connection the runtime can silently re-send a request
+  and splice the two responses together; an unchecked download could have kept a
+  corrupt model. A download that still fails returns a clear 503 instead of a 500,
+  and `cerefox doctor` warns when the model is not downloaded yet.
 
 ---
 

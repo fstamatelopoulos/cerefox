@@ -237,6 +237,15 @@ BEGIN
                 -- scored 1.2 or 0.3 depending on which phrasing found it
                 -- (docs/specs/search-calibration.md).
                 ts_rank_cd(c.fts, query_fts, 32)::FLOAT AS fts_score,
+                -- 0.18.1: the exact cosine of every keyword match, so a chunk
+                -- that matched by keyword is never fused as if its meaning
+                -- scored 0 merely because it fell outside vec_results.
+                CASE
+                    WHEN p_use_upgrade AND c.embedding_upgrade IS NOT NULL
+                        THEN (1.0 - (c.embedding_upgrade <=> p_query_embedding))::FLOAT
+                    ELSE
+                        (1.0 - (c.embedding_primary <=> p_query_embedding))::FLOAT
+                END AS fts_vec_score,
                 -- v1.0.4 coverage gate: in AND mode a match means 100% of the
                 -- query's terms are present, so the unconditional pass is
                 -- earned by construction. In OR-fallback mode, earn it only
@@ -283,21 +292,24 @@ BEGIN
                   ))
               AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
               AND (p_review_status IS NULL OR d.review_status = p_review_status)
-            ORDER BY
-                CASE
-                    WHEN p_use_upgrade AND c.embedding_upgrade IS NOT NULL
-                        THEN c.embedding_upgrade <=> p_query_embedding
-                    ELSE c.embedding_primary <=> p_query_embedding
-                END
+            -- 0.18.1: ordered by the computed similarity, NOT by the bare
+            -- `embedding <=> query` distance. The bare form (which the CASE
+            -- folds to once p_use_upgrade is known) lets the planner serve this
+            -- from the HNSW index, which is approximate and returns at most
+            -- hnsw.ef_search (40) rows: on a store with heavy version churn it
+            -- returned ~38 of the 250 candidates asked for, mostly not the
+            -- nearest ones. An exact scan is also faster at knowledge-base
+            -- scale (thousands of chunks).
+            ORDER BY vec_score DESC
             LIMIT candidate_count
         ),
         combined AS (
             SELECT
                 COALESCE(f.id, v.id) AS id,
-                (   v_alpha * COALESCE(v.vec_score, 0.0) +
+                (   v_alpha * COALESCE(v.vec_score, f.fts_vec_score, 0.0) +
                     (1.0 - v_alpha) * COALESCE(f.fts_score, 0.0)
                 ) AS score,
-                COALESCE(v.vec_score, 0.0) AS vec_score,
+                COALESCE(v.vec_score, f.fts_vec_score, 0.0) AS vec_score,
                 -- TRUE when the chunk matched the @@ FTS operator WITH enough
                 -- term coverage to earn the unconditional pass (v1.0.4; always
                 -- true for AND-mode matches). We use this flag rather than
@@ -565,12 +577,10 @@ BEGIN
                   THEN (1.0 - (c.embedding_upgrade <=> p_query_embedding))::FLOAT
               ELSE (1.0 - (c.embedding_primary <=> p_query_embedding))::FLOAT
           END >= p_min_score
-    ORDER BY
-        CASE
-            WHEN p_use_upgrade AND c.embedding_upgrade IS NOT NULL
-                THEN c.embedding_upgrade <=> p_query_embedding
-            ELSE c.embedding_primary <=> p_query_embedding
-        END
+    -- 0.18.1: by the computed similarity, so the approximate HNSW index cannot
+    -- serve (and truncate) it; see vec_results in cerefox_hybrid_search.
+    -- By position: `score` would be ambiguous with the OUT column here.
+    ORDER BY 8 DESC
     LIMIT p_match_count;
 END;
 $$;
@@ -3219,6 +3229,11 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.18.1: exact vector candidates. Hybrid and semantic search ordered by
+    -- the bare distance, which let the planner use the approximate HNSW index
+    -- (at most ef_search = 40 rows, poor recall after heavy version churn);
+    -- they now order by the computed similarity (exact scan). Keyword matches
+    -- carry their exact cosine into fusion. RPC-only.
     -- 0.18.0 (iteration 48): search calibration, RPC-only. Bounded keyword
     -- score in hybrid fusion (ts_rank_cd normalisation 32); min_term_coverage
     -- default 0.67; built-in min_search_score follows the store's embedder
@@ -3264,7 +3279,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.18.0'::TEXT;
+    SELECT '0.18.1'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

@@ -21,9 +21,9 @@
  * volume so models survive container recreate/upgrade); default `~/.cerefox/models`.
  */
 
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync, appendFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export const ONNX_MODEL_ID = "nomic-ai/nomic-embed-text-v1.5";
 export const ONNX_MODEL_NAME = "nomic-embed-text-v1.5";
@@ -46,14 +46,149 @@ export function buildPrefixedInputs(texts: string[], role: EmbedRole): string[] 
   return texts.map((t) => p + t);
 }
 
-/** What the q8 pipeline reads, relative to the cache dir. Same layout under
+/** What the q8 pipeline reads, relative to the model dir. Same layout under
  *  transformers.js 3.x (the Local image) and 4.x (npm installs). */
-const MODEL_FILES = [
+const MODEL_REPO_FILES = [
   "config.json",
   "tokenizer.json",
   "tokenizer_config.json",
   `onnx/model_quantized.onnx`,
-].map((f) => join(ONNX_MODEL_ID, f));
+];
+const MODEL_FILES = MODEL_REPO_FILES.map((f) => join(ONNX_MODEL_ID, f));
+
+/**
+ * The model could not be fetched (#314). Carries a status so HTTP surfaces
+ * answer 503 (try again) rather than 500, and a message that says what was
+ * happening instead of the transport error underneath.
+ */
+export class EmbedderDownloadError extends Error {
+  readonly status = 503;
+  constructor(detail: string) {
+    super(
+      `The local embedding model (${ONNX_MODEL_NAME}, ~${ONNX_MODEL_APPROX_MB} MB) could not be downloaded: ${detail}. ` +
+        "What was downloaded is kept, and the next request resumes it. Check the network and try again.",
+    );
+    this.name = "EmbedderDownloadError";
+  }
+}
+
+/** Consecutive failed requests per file before giving up. */
+const DOWNLOAD_ATTEMPTS = 6;
+/** Bytes per Range request. Small enough that a failure loses little. */
+const SEGMENT_BYTES = 4 * 1024 * 1024;
+/**
+ * Per-request limit. A connection that dies without a reset (a network that
+ * disappears rather than refuses) otherwise leaves fetch waiting forever. 4 MB
+ * in 2 minutes is ~35 KB/s, far below any link that could finish the model.
+ */
+const REQUEST_TIMEOUT_MS = 120_000;
+
+/**
+ * One exact byte range, or an error. The length check is the point: when a
+ * connection drops, Bun's fetch can silently re-issue the request and splice
+ * the new response onto the old stream (observed: one fetch, two server
+ * requests, the bytes of both). Trusting the stream would write a corrupt model;
+ * a segment of the wrong length is retried instead.
+ */
+async function fetchRange(
+  url: string,
+  start: number,
+  end: number,
+  timeoutMs: number,
+): Promise<{ bytes: Uint8Array; total: number } | "no-range"> {
+  const res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(timeoutMs) });
+  if (res.status === 200) {
+    await res.body?.cancel();
+    return "no-range";
+  }
+  const total = Number(/\/(\d+)\s*$/.exec(res.headers.get("content-range") ?? "")?.[1] ?? 0);
+  if (res.status === 416 && total > 0) {
+    // Nothing at or past `start`: the part file already holds the whole file.
+    await res.body?.cancel();
+    return { bytes: new Uint8Array(0), total };
+  }
+  if (res.status !== 206) throw new Error(`HTTP ${res.status}`);
+  if (total === 0) throw new Error("partial response without a total size (Content-Range)");
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const want = Math.min(end, total > 0 ? total - 1 : end) - start + 1;
+  if (bytes.byteLength !== want) throw new Error(`segment ${start}-${end}: got ${bytes.byteLength} bytes, expected ${want}`);
+  return { bytes, total };
+}
+
+/**
+ * Fetch any missing model file into the cache path transformers.js reads,
+ * resumably and with retries (#314). Before this the download was one stream
+ * inside transformers.js: on a slow link the connection dropped minutes in, the
+ * request that triggered it failed with a raw socket error, and the next attempt
+ * refetched the 131 MB from zero.
+ *
+ * Works in verified Range segments appended to `<file>.part`, renamed into
+ * place only when the declared size is reached, so neither a partial nor a
+ * spliced file is ever mistaken for the model. A host that ignores Range gets
+ * one whole-file request, checked against Content-Length.
+ */
+export async function downloadModelFiles(
+  remoteHost: string,
+  onProgress: (file: string, loaded: number, total: number) => void,
+  onDone: (file: string, size: number) => void,
+  opts: { attempts?: number; backoffMs?: (attempt: number) => number; segmentBytes?: number; timeoutMs?: number } = {},
+): Promise<void> {
+  const attempts = opts.attempts ?? DOWNLOAD_ATTEMPTS;
+  const backoffMs = opts.backoffMs ?? ((attempt: number) => Math.min(30, 2 ** attempt) * 1000);
+  const segment = opts.segmentBytes ?? SEGMENT_BYTES;
+  const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const dir = getCacheDir();
+  const base = remoteHost.endsWith("/") ? remoteHost : `${remoteHost}/`;
+  for (const rel of MODEL_REPO_FILES) {
+    const dest = join(dir, ONNX_MODEL_ID, rel);
+    if (existsSync(dest)) continue;
+    mkdirSync(dirname(dest), { recursive: true });
+    const part = `${dest}.part`;
+    const url = `${base}${ONNX_MODEL_ID}/resolve/main/${rel}`;
+    let failures = 0;
+    let lastError = "";
+    let total = 0;
+    for (;;) {
+      const have = existsSync(part) ? statSync(part).size : 0;
+      if (total > 0 && have >= total) break;
+      try {
+        const got = await fetchRange(url, have, have + segment - 1, timeoutMs);
+        if (got === "no-range") {
+          // Whole file in one request; only a length-checked body is kept.
+          // No segment to bound it, so a generous whole-file limit (10 KB/s).
+          const res = await fetch(url, { signal: AbortSignal.timeout(Math.max(timeoutMs, ONNX_MODEL_APPROX_MB * 100_000)) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const declared = Number(res.headers.get("content-length") ?? 0);
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          if (declared > 0 && bytes.byteLength !== declared) {
+            throw new Error(`got ${bytes.byteLength} bytes, expected ${declared}`);
+          }
+          writeFileSync(part, bytes);
+          total = bytes.byteLength;
+        } else {
+          total = got.total;
+          if (have > total) {
+            // A part file longer than the file itself is not ours to trust.
+            writeFileSync(part, new Uint8Array(0));
+            continue;
+          }
+          appendFileSync(part, got.bytes);
+        }
+        failures = 0;
+        onProgress(rel, statSync(part).size, total);
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        failures++;
+        if (failures >= attempts) throw new EmbedderDownloadError(`${rel}: ${lastError}`);
+        const wait = backoffMs(failures);
+        process.stderr.write(`[cerefox-embed] ${rel}: ${lastError}; retrying in ${Math.round(wait / 1000)}s (${failures}/${attempts - 1})\n`);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+    renameSync(part, dest);
+    onDone(rel, statSync(dest).size);
+  }
+}
 
 /**
  * Is every file the pipeline needs already on disk? Decides whether loading is
@@ -223,9 +358,17 @@ async function ensurePipeline(): Promise<FeaturePipeline> {
       }
     };
 
+    // Our own resumable, retried fetch first (#314); transformers.js then
+    // finds every file in its cache and loads locally.
+    await downloadModelFiles(
+      String(transformers.env.remoteHost ?? "https://huggingface.co/"),
+      (file, loaded, total) => progressCallback({ status: "progress", file, loaded, total }),
+      (file, size) => progressCallback({ status: "done", file, total: size }),
+    );
+    // Every file is on disk now, so this is a local load: no progress callback,
+    // which would only report each file "done" a second time.
     const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, {
       dtype: ONNX_MODEL_DTYPE,
-      progress_callback: progressCallback,
     });
     process.stderr.write(`[cerefox-embed] embedder ready.\n`);
     return pipe as unknown as FeaturePipeline;

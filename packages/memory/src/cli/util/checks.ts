@@ -576,7 +576,7 @@ export async function checkEmbedderMismatch(): Promise<CheckResult> {
   if (!settings.supabaseUrl || !settings.supabaseKey) {
     return { name: EMBEDDER_CHECK_NAME, status: "skipped", detail: "Supabase config missing; skipped." };
   }
-  const { activeEmbedderName } = await import("../../../../../_shared/embeddings/index.ts");
+  const { activeEmbedderName, resolveEmbedderKind } = await import("../../../../../_shared/embeddings/index.ts");
   const active = activeEmbedderName();
   try {
     const url =
@@ -592,6 +592,20 @@ export async function checkEmbedderMismatch(): Promise<CheckResult> {
     const recorded = [...new Set(rows.map((r) => r.embedder_primary))];
     const stale = recorded.filter((r) => r !== active);
     if (stale.length === 0) {
+      // #314: a local model that is not on disk yet is fetched by the first
+      // search or write, which then waits on (or, offline, fails on) ~130 MB.
+      // Say so before that happens.
+      if (resolveEmbedderKind() === "local") {
+        const { isModelCached } = await import("../../../../../_shared/embeddings/onnx-embedder.ts");
+        if (!isModelCached()) {
+          return {
+            name: EMBEDDER_CHECK_NAME,
+            status: "warn",
+            detail: `configured "${active}", but the model is not downloaded yet; the first search or write will fetch it (~130 MB).`,
+            hint: "Fetch it now with `cerefox embedder-warmup` (Cerefox Local: `cerefox-local embedder-warmup`); it resumes if the connection drops.",
+          };
+        }
+      }
       return {
         name: EMBEDDER_CHECK_NAME,
         status: "ok",

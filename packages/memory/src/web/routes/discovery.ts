@@ -535,6 +535,10 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       if (err instanceof HttpError) {
         return c.json({ detail: err.message }, err.status);
       }
+      // #314: the local model could not be fetched; retryable, said plainly.
+      if (err instanceof Error && err.name === "EmbedderDownloadError") {
+        return c.json({ detail: err.message }, 503);
+      }
       throw err;
     }
 
