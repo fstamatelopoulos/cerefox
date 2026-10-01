@@ -51,12 +51,13 @@ embedder identical, schema 0.18.0, doctor green, search fine, auto-purge still O
 Fresh v1.17.0 store, no warmup: derives 0.6 with no config row; a no-answer query is
 flagged below confidence. **Seen there, not a regression:** on a slow link the first
 write failed when the 131 MB model download's connection dropped (231 s, raw socket
-error, no resume). Bun and runtime are identical to 1.16.1. Candidate issue: retry or
-resume the download, and say so in the error.
+error, no resume). Bun and runtime are identical to 1.16.1. Filed as #314.
 
 Staging keeps its own `min_search_score` 0.7, so the floor test skips there. The
 "Search calibration benchmark" project stays on staging for reuse. The agent's second
-Local container (`cerefox-staging`) is still on 1.16.1.
+Local container (`cerefox-staging`, :8011) is upgraded too (recreated by hand with its
+own settings; backup `~/.cerefox/local/backups/cerefox-staging-pre-v1.17.0-*`); it had no
+`min_search_score` row and now derives 0.6. The download fragility is #314.
 
 **2026-09-30 (later) — v1.16.1 IS RELEASED; staging and Cerefox Local are on it.**
 Fixes: (1) the local embedder could not download its model inside `cerefox web`
