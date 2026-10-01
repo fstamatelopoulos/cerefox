@@ -361,7 +361,8 @@ bun scripts/search_benchmark.ts --api http://127.0.0.1:8099 \
 | `--label TEXT` | Required unless `CEREFOX_ENV_LABEL` is set |
 | `--corpus DIR` | Use another vocabulary directory (for drafting one) |
 | `--out FILE` | JSON report (the markdown summary goes to stdout) |
-| `--write-floors` | Record the live formula's per-category floors for this store's embedder in `vocabulary/floors.json` |
+| `--write-floors` | Record the per-category floors of the built-in defaults for this store's embedder in `vocabulary/floors.json` |
+| `--check-floors` | Fail (exit 1) if the built-in defaults on this store fall below any recorded floor for its embedder. The release check for search changes (RELEASING.md) |
 | `--cleanup` | Delete the benchmark documents and project afterwards |
 
 Before reporting any number it checks that its reproduction of the live formula

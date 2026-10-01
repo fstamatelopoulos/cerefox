@@ -23,6 +23,8 @@
  *                             script writes documents and must never run
  *                             against production
  * --cleanup                   delete and purge the benchmark documents after
+ * --check-floors              fail if the built-in defaults fall below this
+ *                             embedder's floors (the release check, RELEASING.md)
  * --write-floors              record the live formula's per-category floors for
  *                             this store's embedder in vocabulary/floors.json
  *                             (what the live floor test asserts)
@@ -39,7 +41,9 @@ import { bounded, linear, raw, rrf, run, type Candidate, type ChunkSignals, type
 import {
   BENCH_PROJECT,
   ensureCorpus,
+  floorBreaches,
   floorsFrom,
+  type Floors,
   evaluate as evaluateRanking,
   toRanked,
   type BenchStore,
@@ -171,6 +175,19 @@ async function main(): Promise<void> {
 
     const report = { label, embed, schema: String(schema), live, queries: queries.length, documents: corpus.length, candidates: candidates.map((c) => evaluate(c, queries, signals, keyById)) };
     writeFileSync(out, JSON.stringify(report, null, 2));
+    if (flag("check-floors")) {
+      // The same evaluation the live floor test makes, but with the query
+      // embeddings the runner can produce for either embedder (a Local store's
+      // model cannot run on the host, so the floor test covers OpenAI only).
+      if (!calibrated) throw new Error("--check-floors needs schema >= 0.18.0");
+      const [{ e: embedder }] = await sql`SELECT embedder_primary AS e FROM cerefox_chunks WHERE version_id IS NULL LIMIT 1`;
+      const floors = (JSON.parse(readFileSync(join(FIXTURE, "floors.json"), "utf8")) as Record<string, Floors>)[embedder as string];
+      if (!floors) throw new Error(`no floors recorded for ${embedder}`);
+      const got = evaluate(linear("defaults", 0.7, { minScore: defaultFloor, minCoverage: 0.67 }, bounded), queries, signals, keyById);
+      const breaches = floorBreaches(got, floors);
+      if (breaches.length > 0) throw new Error(`floors breached (${embedder}):\n  ${breaches.join("\n  ")}`);
+      console.error(`[bench] floors hold for ${embedder}: overall MRR ${got.overall.mrr.toFixed(3)} (floor ${floors.overallMrr})`);
+    }
     if (flag("write-floors")) {
       const [{ e: embedder }] = await sql`SELECT embedder_primary AS e FROM cerefox_chunks WHERE version_id IS NULL LIMIT 1`;
       const path = join(FIXTURE, "floors.json");

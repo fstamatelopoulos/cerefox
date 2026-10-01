@@ -30,6 +30,7 @@ import {
   BENCH_PROJECT,
   ensureCorpus,
   evaluate,
+  floorBreaches,
   type Floors,
   supabaseStore,
   type VocabularyDoc,
@@ -106,15 +107,7 @@ describe("search calibration floors (live)", () => {
       const result = evaluate(queries, ranked, keyById);
 
       // One assertion listing every breach, so a failure names all of them.
-      const breaches: string[] = [];
-      if (result.overall.mrr < floors.overallMrr) breaches.push(`overall MRR ${result.overall.mrr.toFixed(3)} < ${floors.overallMrr}`);
-      for (const [cat, floor] of Object.entries(floors.categoryMrr)) {
-        const got = result.byCategory[cat]?.mrr ?? 0;
-        if (got < floor) breaches.push(`${cat} MRR ${got.toFixed(3)} < ${floor}`);
-      }
-      if (result.negatives.confidentFalsePositives > floors.maxConfidentFalsePositives) {
-        breaches.push(`confident false positives ${result.negatives.confidentFalsePositives} > ${floors.maxConfidentFalsePositives}`);
-      }
+      const breaches = floorBreaches(result, floors);
       expect(breaches).toEqual([]);
     },
     BUDGET_MS,

@@ -197,6 +197,13 @@ knowing about:
 - **v1.13.1 — the flag hides, it does not rewrite.** Agent writes are
   recorded `pending_review` whether or not the workflow is shown (v1.13.0
   stored `approved` while off). Redeploy to pick it up.
+- **v1.17.0 — search scoring recalibrated (schema 0.18.0).** Run
+  `cerefox server deploy` (Cerefox Local does it on container start). Scores in
+  `docs` and `hybrid` search are now between 0 and 1, and rankings shift: mostly
+  for the better on paraphrased and short queries, and fewer unrelated results
+  come back as confident. If you compare scores against a fixed number, or set
+  `min_search_score` / `min_term_coverage` yourself, recheck those values; see
+  [configuration.md](configuration.md) for the new defaults.
 
 ## Notable: v1.8.0 storage reclaim (migration 0027)
 

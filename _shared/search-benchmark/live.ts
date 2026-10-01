@@ -125,6 +125,20 @@ export function floorsFrom(schema: string, e: Evaluation): Floors {
   };
 }
 
+/** Every floor the evaluation falls below, as readable lines (empty = all hold). */
+export function floorBreaches(e: Evaluation, floors: Floors): string[] {
+  const out: string[] = [];
+  if (e.overall.mrr < floors.overallMrr) out.push(`overall MRR ${e.overall.mrr.toFixed(3)} < ${floors.overallMrr}`);
+  for (const [cat, floor] of Object.entries(floors.categoryMrr)) {
+    const got = e.byCategory[cat]?.mrr ?? 0;
+    if (got < floor) out.push(`${cat} MRR ${got.toFixed(3)} < ${floor}`);
+  }
+  if (e.negatives.confidentFalsePositives > floors.maxConfidentFalsePositives) {
+    out.push(`confident false positives ${e.negatives.confidentFalsePositives} > ${floors.maxConfidentFalsePositives}`);
+  }
+  return out;
+}
+
 export interface Metrics { mrr: number; hit1: number; recall5: number; ndcg10: number }
 export interface Evaluation {
   overall: Metrics;
