@@ -73,7 +73,10 @@ function notReady(error: string): IngestResponse {
  * `success: false` and `error` stay in the body, so a client reading either of
  * them keeps working; only the status (and the added `detail`) are new.
  */
-function ingestFailure(err: unknown): [IngestResponse, 400 | 404 | 409 | 422 | 500] {
+function ingestFailure(err: unknown): [IngestResponse, 400 | 404 | 409 | 422 | 500 | 503] {
+  // The local embedder's model could not be fetched (#314): retryable, and the
+  // message says so, rather than a 500 carrying a raw socket error.
+  if (err instanceof Error && err.name === "EmbedderDownloadError") return [notReady(err.message), 503];
   if (err instanceof ConcurrencyConflictError) {
     return [
       {
