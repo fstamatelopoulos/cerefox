@@ -6,8 +6,8 @@
 
 - **1.17.0 shipped two defects that the synthetic benchmark could not see.** Together they made Deployment B search no better than 1.16.1 overall (macro MRR 0.715 against 0.714) and clearly worse for short and multi-word keyword queries:
   - the vector candidates came from an approximate index (fixed in 1.17.1);
-  - `min_term_coverage` 0.67 meant "all three of three words" (fixed in the 1.17.2 candidate).
-- **With both fixed (1.17.2 candidate, schema 0.18.2), search is significantly better than 1.16.1 on both real stores:**
+  - `min_term_coverage` 0.67 meant "all three of three words" (fixed in 1.17.2).
+- **With both fixed (1.17.2, schema 0.18.2), search is significantly better than 1.16.1 on both real stores:**
 
   | Store | macro MRR, 1.16.1 → 1.17.2 | ΔMRR (95% CI) | Hit@1 wins / losses |
   |---|---|---|---|
@@ -31,7 +31,7 @@
 | 1.16.1 | 0.17.0 | Hybrid score = 0.7·cosine + 0.3·raw `ts_rank_cd` (unbounded, up to ~4); `min_term_coverage` 0.5 |
 | 1.17.0 | 0.18.0 | Keyword score bounded to [0, 1) (`ts_rank_cd` normalisation 32); `min_term_coverage` 0.67; built-in confidence floor derived from the store's embedder |
 | 1.17.1 | 0.18.1 | Exact vector candidates (no approximate HNSW scan); keyword matches carry their exact cosine |
-| 1.17.2 (candidate) | 0.18.2 | `min_term_coverage` 0.66: a true two-of-three rule |
+| 1.17.2 | 0.18.2 | `min_term_coverage` 0.66: a true two-of-three rule |
 
 ## Method
 
