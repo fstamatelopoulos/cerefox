@@ -2,6 +2,8 @@
 
 *2026-10-01. An evaluation of Cerefox search across versions 1.16.1 to 1.17.2, on two real deployments of one personal knowledge base. Aggregates only: no document titles, query text or identifiers appear here, and store sizes are rounded.*
 
+**The two deployments.** The study ran on two deployments of the same personal knowledge base, which differ in ways that matter for search. **Deployment B** is the one in daily use. It is about twice the size of A and has kept growing since A was taken from it, so it covers more material, and it carries a long version history (several archived versions behind most documents). **Deployment A** is an older, smaller snapshot of B with a lighter history. B also turned out to have a degraded vector index, which A did not. Comparing the two separates the effect of the scoring changes, visible on both, from the effect of the index defect, visible mainly on B.
+
 ## Summary
 
 - **1.17.0 shipped two defects that the synthetic benchmark could not see.** Together they made Deployment B search no better than 1.16.1 overall (macro MRR 0.715 against 0.714) and clearly worse for short and multi-word keyword queries:
