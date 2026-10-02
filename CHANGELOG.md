@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **Score colors are relative to the best result of the same search.** 1.17.3
+  colored scores against fixed bands, but a score measures how literally the text
+  lines up with the query's words, so it depends on the query's shape more than on
+  how good the match is. A perfect hit for a two-word name scores around 0.4 to 0.5
+  and showed yellow, while a title-shaped query scores 0.65 and up. Now the best
+  result search is confident about is green, results within 90% of it are green too,
+  from 60% yellow, below that faint. The number is still the absolute score, so you
+  can still tell a literal match from a loose one. Results search flags as below
+  confidence stay dimmed, so a search with no good match still looks like one.
 
 ---
 

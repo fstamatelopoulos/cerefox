@@ -9,8 +9,8 @@ const TONE_COLOR: Record<ScoreTone, string> = {
 
 /**
  * Search score ring (SVG donut). The number is the score x 100; the color comes
- * from `scoreTone` (lib/scoreBands.ts), which compares it with the scores of
- * results that turned out right. A dimmed ring marks a below-confidence result.
+ * from `scoreTone` (lib/scoreBands.ts): strength relative to the best confident
+ * result of the same search. A dimmed ring marks a below-confidence result.
  */
 export function ScoreRing({ score, tone, size = 38 }: { score: number; tone: ScoreTone; size?: number }) {
   const clamped = Math.max(0, Math.min(1, score));
