@@ -3,7 +3,7 @@
  * (iteration 29).
  *
  * Thin wrappers over the same RPCs the MCP tools call, so the CLI and agents
- * see identical behaviour: the type dictionary (symmetric types, lifecycle
+ * see identical behavior: the type dictionary (symmetric types, lifecycle
  * side effects) lives in SQL, not here.
  */
 

@@ -182,7 +182,7 @@ async function handler(
   const query = args.query as string;
   const project_name = args.project_name as string | undefined;
   // Sanitised, then clamped, exactly as the Edge Function does it. Clamping
-  // alone left `NaN` for a non-numeric value, which serialises to JSON null,
+  // alone left `NaN` for a non-numeric value, which serializes to JSON null,
   // and `LIMIT NULL` in Postgres means NO limit — the unbounded work the
   // clamp exists to prevent, reachable because the local MCP server passes
   // tool arguments through unvalidated (#265).

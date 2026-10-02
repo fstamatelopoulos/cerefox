@@ -390,7 +390,7 @@ The one restructure that did change titles was a full rewrite, not a partial edi
 Recorded because the removal matters more than the parameter. The whole discipline
 of this document is that sessions outrank reasoning (§8), and a reasoned suggestion
 arriving *inside* session feedback is still reasoning — it does not inherit the
-weight of the observations it travelled with. Rename is now §8 "Still open" and row
+weight of the observations it traveled with. Rename is now §8 "Still open" and row
 13 of the §9 register, which obliges the technical design to keep it addable as a
 non-breaking change rather than merely noting it. If a real session reaches for it,
 it can be added then; delete-then-insert serves it meanwhile, window and all.
@@ -488,7 +488,7 @@ documents quietly. The rules:
   would be inconsistent to reject it there and adopt it here. A path is stable under
   reordering and breaks loudly under renaming, which is the correct direction to
   fail. A path that is still ambiguous is still an error.
-- **Matching is exact on heading text**, after trimming whitespace. Normalised or
+- **Matching is exact on heading text**, after trimming whitespace. Normalized or
   fuzzy matching buys convenience and pays for it in precisely the silent-wrong-
   location failures this design exists to avoid.
 
@@ -634,7 +634,7 @@ So the composition belongs in the **shared MCP tool handlers**
    overwriting
 
 **No new RPC is required**, and the single-implementation principle is preserved:
-local stdio and remote Edge Function get identical behaviour from one handler.
+local stdio and remote Edge Function get identical behavior from one handler.
 
 Two changes to the existing RPC and schema are, though, both from §6.1: the
 `operation` CHECK constraint gains the new values, and `cerefox_ingest_document`
@@ -642,7 +642,7 @@ needs to be *told* which one to record. It writes the audit entry itself — tha
 is deliberate, so the write and its trail are one transaction — and left alone it
 would label every partial edit `update-content`, which is precisely the
 distinction §6.1 exists to preserve. So it takes a nullable operation-label
-parameter, and NULL keeps today's behaviour (`create` on insert,
+parameter, and NULL keeps today's behavior (`create` on insert,
 `update-content` on update).
 
 Nullable, not defaulted to a concrete value: a parameter that silently
@@ -710,7 +710,7 @@ session hit a real conflict on an index document that had been edited from anoth
 thread. Because the conflict surfaced, the agent re-read, saw links the other
 writer had added, and merged. Under the auto-retry design of the second draft, the
 same event would have re-applied the stale version, destroyed the other writer's
-links, and returned success. The one behaviour that draft called a convenience
+links, and returned success. The one behavior that draft called a convenience
 would have caused the exact data loss this design exists to prevent, in the first
 week, on the first conflict.
 
@@ -1062,7 +1062,7 @@ MCP.
   the placement surprised it: the insert landed past three sub-sections rather
   than near the heading, and it took a re-read to find out. Reversed §3.3's
   children-only exemption — see above. The single most valuable finding of the
-  beta, and reasoning had defended the wrong behaviour twice.
+  beta, and reasoning had defended the wrong behavior twice.
 - **The atomic two-operation edit is the headline win.** Two `replace_section`
   ops in one call against a 9.8K document; verified afterwards that only the two
   targeted sections changed size and every other section was byte-identical.
@@ -1191,7 +1191,7 @@ kind: it is not waiting for evidence, it was refused with evidence.
 **For the technical design that follows this spec**, this table is the checklist.
 Every **v1** row needs a mechanism. Every *open, not foreclosed* row needs a
 demonstration that adding it later is additive: a `scope` parameter defaulting to
-today's behaviour (13), and an intra-section anchor form that does not open
+today's behavior (13), and an intra-section anchor form that does not open
 arbitrary-text matching or bind the contract to one block syntax (22). If either
 turns out to require a breaking change, that is a finding about §3 and belongs
 back here, not a footnote in the implementation.

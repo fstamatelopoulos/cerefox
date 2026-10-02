@@ -12,7 +12,7 @@
  * - Neither → no change.
  *
  * Mirrors `supabase/functions/cerefox-mcp/tools/ingest.ts` for v0.4.0
- * extraction (no behaviour change).
+ * extraction (no behavior change).
  */
 
 import { escapedContentNote, escapedTitleNote } from "./escape-heuristic.ts";

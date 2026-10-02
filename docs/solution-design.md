@@ -366,7 +366,7 @@ No version snapshot is created because content is identical.
 
 **Scoring (v1.17.0, schema 0.18.0)**: a chunk's hybrid score is
 `alpha · cosine + (1 − alpha) · r/(r+1)`, where `r` is `ts_rank_cd` and
-`r/(r+1)` is its normalisation 32. Both sides are on a 0 to 1 scale. Before
+`r/(r+1)` is its normalization 32. Both sides are on a 0 to 1 scale. Before
 0.18.0 the keyword side was the raw `ts_rank_cd`, which reaches about 4 when
 every query term matches: one keyword hit then outweighed any semantic
 evidence, and the same document scored 1.2 under one phrasing and 0.3 under
@@ -375,7 +375,7 @@ has a keyword match with enough term coverage, or its cosine clears
 `min_search_score`; otherwise the response is the below-confidence fallback.
 
 The constants were chosen by a benchmark, not by intuition: a synthetic corpus
-and a labelled vocabulary of 13 query categories (exact titles, paraphrases,
+and a labeled vocabulary of 13 query categories (exact titles, paraphrases,
 abbreviations, short names, misspellings, identifiers, long questions,
 no-answer queries…) with variant groups that phrase one need several ways
 (`_shared/search-benchmark/`). `scripts/search_benchmark.ts` reproduces the
@@ -418,7 +418,7 @@ cerefox_search(query) →
 
 **Implementation location — Postgres only (single-implementation principle)**: all threshold/expansion logic lives in two Postgres RPCs:
 - `cerefox_context_expand(p_document_id, p_chunk_ids UUID[], p_context_window INT)` — returns ordered, deduplicated sibling chunks for a set of matched chunk IDs.
-- `cerefox_search_docs` — extended with `p_small_to_big_threshold INT` and `p_context_window INT` params. Internally: if `total_chars > threshold`, calls `cerefox_context_expand`; otherwise reconstructs the full document (current behaviour). Returns `is_partial` flag so callers know which path was taken.
+- `cerefox_search_docs` — extended with `p_small_to_big_threshold INT` and `p_context_window INT` params. Internally: if `total_chars > threshold`, calls `cerefox_context_expand`; otherwise reconstructs the full document (current behavior). Returns `is_partial` flag so callers know which path was taken.
 
 The TS retrieval layer and the `cerefox-search` Edge Function are thin pass-throughs that supply the config values as RPC params — no retrieval logic lives outside Postgres. `cerefox-mcp` and the local `cerefox mcp` call `cerefox_search_docs` directly via the shared `_shared/mcp-tools/search.ts` handler.
 
@@ -546,7 +546,7 @@ AND (p_metadata_filter IS NULL OR d.metadata @> p_metadata_filter)
 ```
 
 When `p_metadata_filter` is `NULL` (omitted), the filter clause is vacuously true and
-behaviour is identical to today — no regression.
+behavior is identical to today — no regression.
 
 The `GIN(metadata)` index supports `@>` natively, so filtering over large document sets
 is efficient even before any vector ranking occurs.
@@ -645,7 +645,7 @@ on form submit. Filters are passed as query parameters to `GET /api/v1/search`.
 
 **API route** (TS web server, `GET /api/v1/search`): the handler collects the paired
 `meta_filter_key` / `meta_filter_value` query parameters into a `{ key: value }` object
-(dropping empty pairs), normalises an all-empty result to `null`, and forwards it as
+(dropping empty pairs), normalizes an all-empty result to `null`, and forwards it as
 `p_metadata_filter` on the `cerefox_search_docs` RPC call — alongside `query`, `projectId`,
 and the other search params. No filtering logic lives in the route itself.
 
@@ -730,7 +730,7 @@ writers always hold the token. Design of record:
 
 **Single-implementation pattern**: chunking + embedding happen in the TypeScript
 caller; *all* write logic (snapshot, archive, insert, audit, cleanup) lives in
-the `cerefox_ingest_document` RPC. New write-side behaviour is added to the RPC,
+the `cerefox_ingest_document` RPC. New write-side behavior is added to the RPC,
 not to the caller.
 
 ### 6.2 Fire-and-Forget Design
@@ -1279,7 +1279,7 @@ All search RPCs remain available for direct SQL execution via the Supabase MCP
 (spec 2025-03-26) as a Supabase Edge Function. It is a thin protocol adapter:
 
 - Handles MCP JSON-RPC 2.0 methods: `initialize`, `initialized`, `ping`, `tools/list`, `tools/call`
-- For `tools/call`, calls the corresponding Postgres RPC **directly** via the shared tool handlers in `_shared/mcp-tools/` (no delegation to the primitive Edge Functions). This halves billable invocations per MCP tool call and keeps behaviour identical to the local TS server, which imports the same handlers. For example:
+- For `tools/call`, calls the corresponding Postgres RPC **directly** via the shared tool handlers in `_shared/mcp-tools/` (no delegation to the primitive Edge Functions). This halves billable invocations per MCP tool call and keeps behavior identical to the local TS server, which imports the same handlers. For example:
   - `cerefox_search`             → `cerefox_hybrid_search` / `cerefox_search_docs` RPC
   - `cerefox_ingest`             → `cerefox_ingest_document` RPC
   - `cerefox_list_metadata_keys` → `cerefox_list_metadata_keys` RPC

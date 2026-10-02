@@ -279,12 +279,12 @@ export function logUsage(supabase: MCPSupabaseClient, params: LogUsageParams): v
  * surfaces and each hand-written copy was wrong in its own way (#267, #268):
  *
  * - **Non-numeric means unset, not unbounded.** `Math.min("lots", CEILING)` is
- *   `NaN`; `NaN` compares false against every `>` check and serialises to JSON
+ *   `NaN`; `NaN` compares false against every `>` check and serializes to JSON
  *   `null`, and `p_max_bytes NULL` means NO limit in Postgres. So the one
  *   parameter that exists to bound a reply, handed a word, removed the bound.
  * - **`null` and `undefined` mean unset too.** `Number(null)` is `0`, which is
  *   finite, so a clamp to `>= 1` turned an explicitly-null budget into a
- *   ONE-BYTE budget — a client that serialises optional fields as `null` asked
+ *   ONE-BYTE budget — a client that serializes optional fields as `null` asked
  *   for content and got none.
  * - **A real number of zero or less means "almost nothing", and is honoured.**
  *   Falling back to the ceiling there would hand a caller whose allowance had

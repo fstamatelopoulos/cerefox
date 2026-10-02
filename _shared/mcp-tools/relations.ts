@@ -17,7 +17,7 @@ import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types
 import type { MCPSupabaseClient } from "./types.ts";
 import { AUTHOR_PARAM_READ, AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
-/** Relation types that carry behaviour; any other string is accepted too. */
+/** Relation types that carry behavior; any other string is accepted too. */
 const KNOWN_TYPES =
   "related_to, references, supersedes, contradicts, duplicates, part_of, follows, reply_to";
 
@@ -78,10 +78,10 @@ export const setRelationTool: ToolDefinition = {
   name: "cerefox_set_relation",
   description:
     "Link two documents with a typed, directed relation (source → target). " +
-    `Known types with behaviour: ${KNOWN_TYPES}. Symmetric types (related_to, ` +
+    `Known types with behavior: ${KNOWN_TYPES}. Symmetric types (related_to, ` +
     "contradicts, duplicates) write both directions. `supersedes` marks the target " +
     "superseded; `contradicts` marks both stale. Any other type string is accepted " +
-    "and stored, just without special behaviour. Re-setting the same edge updates it.",
+    "and stored, just without special behavior. Re-setting the same edge updates it.",
   /** Upsert: re-running with the same edge changes nothing. Adds an edge; removes nothing. */
   annotations: {
     title: "Link two documents",

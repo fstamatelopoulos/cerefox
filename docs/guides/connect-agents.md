@@ -53,7 +53,7 @@ Three top-level paths plus a few special cases:
 > ChatGPT becomes possible on the same server but is not yet documented.)
 
 > **Perplexity** supports stdio-only MCP on macOS Desktop (via Helper App). Remote MCP is
-> "coming soon." Perplexity's CTO has signalled a strategic shift away from MCP (March 2026),
+> "coming soon." Perplexity's CTO has signaled a strategic shift away from MCP (March 2026),
 > so API-based integration may be the long-term path. Not a priority.
 >
 > **Gemini web** (gemini.google.com) does not support custom MCP servers. No integration path.
@@ -174,7 +174,7 @@ set — as it is for a [staging environment](staging-env.md) — the name become
 entry rather than replacing it, and an agent can hold both at once (v1.4.0, #168).
 The command prints the name it used.
 
-A labelled entry additionally carries `CEREFOX_CONFIG_DIR` and `CEREFOX_ENV_LABEL`
+A labeled entry additionally carries `CEREFOX_CONFIG_DIR` and `CEREFOX_ENV_LABEL`
 in its `env` block. That is what makes it actually reach the environment it is named
 after: MCP clients spawn a stdio server with the **client's** environment, not the
 shell you ran `configure-agent` in, and a desktop client launched from the dock has
@@ -344,7 +344,7 @@ https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
 |----------|--------|
 | Default local agent (Claude Code, Cursor, Codex, Gemini, Claude Desktop) | Path A-Local -- preferred; `cerefox configure-agent`, zero Edge Function cost, no token to distribute |
 | Multiple machines / cloud dev environments | Path A-Remote -- one hosted URL works everywhere (needs a Cerefox token) |
-| Minimise Supabase Edge Function usage (free tier limits) | Path A-Local -- zero Edge Function invocations |
+| Minimize Supabase Edge Function usage (free tier limits) | Path A-Local -- zero Edge Function invocations |
 | Offline use or development on the cerefox codebase | Path A-Local -- no network dependency |
 | Lowest latency (same machine, no HTTPS round-trip) | Path A-Local -- slightly faster |
 

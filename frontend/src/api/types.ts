@@ -47,6 +47,8 @@ export interface SearchResponse {
   total_found: number;
   response_bytes: number;
   truncated: boolean;
+  /** Which embedder produced the scores (v1.17.3); absent on older servers. */
+  embedder?: "openai" | "local";
 }
 
 // -- Projects --
@@ -247,7 +249,7 @@ export interface LinkResolveMatch {
 
 /** Response from GET /api/v1/resolve-link. */
 export interface LinkResolveResponse {
-  /** Path used for the lookup (after normalisation; leading ../ stripped). */
+  /** Path used for the lookup (after normalization; leading ../ stripped). */
   tried_path: string;
   /** Fragment from the original link (e.g. "#section"), preserved for navigation. */
   anchor: string | null;

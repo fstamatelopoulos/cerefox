@@ -110,7 +110,7 @@ export function linear(name: string, alpha: number, gates: Gates, bound: (r: num
 }
 
 export const raw = (r: number) => r;
-/** ts_rank_cd normalisation 32: rank / (rank + 1), in [0, 1). */
+/** ts_rank_cd normalization 32: rank / (rank + 1), in [0, 1). */
 export const bounded = (r: number) => r / (r + 1);
 
 /** Reciprocal-rank fusion: Σ 1/(k + rank) over the keyword and vector lists. */

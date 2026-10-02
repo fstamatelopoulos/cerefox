@@ -17,7 +17,7 @@
  * version history was pruned against the operator's explicit instruction.
  *
  * The failure is invisible at runtime: nothing errors, and the config table
- * keeps reporting the setting the operator chose. Only the behaviour disagrees.
+ * keeps reporting the setting the operator chose. Only the behavior disagrees.
  * So the check is static — parse the SQL and assert the declaration.
  *
  * Pure text analysis of `rpcs.sql`. No DB, no network.

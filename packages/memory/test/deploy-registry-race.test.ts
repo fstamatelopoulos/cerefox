@@ -23,11 +23,11 @@ const REAL_FAILURE_2026_09_02 =
   'types.ts:1:37)."}\nTry rerunning the command with --debug to troubleshoot the error.';
 
 describe("upstreamRegistryRace", () => {
-  test("recognises the verbatim 2026-09-02 production failure", () => {
+  test("recognizes the verbatim 2026-09-02 production failure", () => {
     expect(upstreamRegistryRace(REAL_FAILURE_2026_09_02)).toBe(true);
   });
 
-  test("recognises the same race on a different dependency", () => {
+  test("recognizes the same race on a different dependency", () => {
     // Matched on the bundler's phrasing, not on a package name: the race can
     // happen with any transitive dependency, so pinning one name would make
     // the hint silently stop firing.

@@ -107,7 +107,7 @@ describe("configure-agent (local-only)", () => {
     // after the `cerefox-mcp` bin was dropped).
     expect(parsed.serverEntry.command).toBe("npx");
     expect(parsed.serverEntry.args).toEqual(["-y", "--package=@cerefox/memory", "cerefox", "mcp"]);
-    // v1.4.0 (#168): a LABELLED environment additionally pins its config
+    // v1.4.0 (#168): a LABELED environment additionally pins its config
     // directory onto the entry, because MCP clients spawn the server with the
     // client's environment — without it, an entry named `cerefox-staging`
     // would resolve to production. A production entry carries no env at all,

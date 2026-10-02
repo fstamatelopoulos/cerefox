@@ -2,7 +2,7 @@
  * Thin wrapper over `prompts` for the interactive `cerefox init` flow.
  *
  * Why a wrapper? Two reasons:
- *   1. `prompts` is configured here once with the right cancel behaviour
+ *   1. `prompts` is configured here once with the right cancel behavior
  *      (Ctrl-C exits 130, not "the prompt returned undefined").
  *   2. The non-interactive `--config <file>.json` mode of `init` reuses the
  *      same shape: the JSON file's keys map to prompt names, and the same

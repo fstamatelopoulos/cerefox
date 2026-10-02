@@ -3,7 +3,7 @@
  * runner (`scripts/search_benchmark.ts`) and the floor test
  * (`packages/memory/test/search-calibration-floor.test.ts`).
  *
- * Callers must have checked the target is labelled (non-production) first:
+ * Callers must have checked the target is labeled (non-production) first:
  * `ensureCorpus` writes.
  */
 

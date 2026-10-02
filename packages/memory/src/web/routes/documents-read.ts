@@ -132,9 +132,9 @@ function titleToFilename(title: string, maxLen = 80): string {
   // ...).encode("ascii", errors="ignore").decode("ascii")`).
   // The TextEncoder/Decoder approach below works on Bun + Node.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const normalised = (name as any).normalize ? name.normalize("NFKD") : name;
+  const normalized = (name as any).normalize ? name.normalize("NFKD") : name;
   let ascii = "";
-  for (const ch of normalised as string) {
+  for (const ch of normalized as string) {
     const code = ch.codePointAt(0);
     if (code !== undefined && code < 128) ascii += ch;
   }

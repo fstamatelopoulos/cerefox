@@ -1030,7 +1030,7 @@ CLI). pytest as a test runner goes away; `pyproject.toml`,
    deterministic code (chunker output, response shapes, etc.), capture
    the Python output as a fixture under
    `packages/memory/test/fixtures/python-parity/` and assert
-   byte-identical (or normalised-identical) TS output. This is how
+   byte-identical (or normalized-identical) TS output. This is how
    v0.6 verified its 5 critical wire shapes; v0.7's chunker port
    needs the same pattern over `tests/chunking/fixtures/`.
 

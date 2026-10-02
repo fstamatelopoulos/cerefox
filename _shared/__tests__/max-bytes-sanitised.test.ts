@@ -2,12 +2,12 @@
  * Class guard for #268: every surface that accepts a `max_bytes` budget must
  * SANITISE it before it reaches the RPC.
  *
- * Why this is a static scan rather than a behavioural test. The hole is always
+ * Why this is a static scan rather than a behavioral test. The hole is always
  * the same shape and always invisible at the call site:
  *
  *     Math.min(requested_max_bytes ?? MAX_BYTES, MAX_BYTES)   // "lots" -> NaN
  *
- * `NaN` serialises to JSON `null`, and `p_max_bytes NULL` means NO limit in
+ * `NaN` serializes to JSON `null`, and `p_max_bytes NULL` means NO limit in
  * Postgres — so the one parameter that exists to bound the reply, handed a
  * word, removes the bound instead. It was fixed on the search tool (#265),
  * missed on the metadata-search Edge Function, and found only by pointing a

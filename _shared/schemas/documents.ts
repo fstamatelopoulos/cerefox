@@ -140,7 +140,7 @@ export type VersionArchiveRequest = z.infer<typeof VersionArchiveRequest>;
 
 // ── Write-path response shapes (#270) ────────────────────────────────────────
 //
-// These were modelled from live `/api/v1` responses and are asserted against a
+// These were modeled from live `/api/v1` responses and are asserted against a
 // running server by `api-schema-truth.test.ts`, not inferred from the handlers.
 // They exist so the OpenAPI document can describe the write surface an embedder
 // actually uses; before this, every write endpoint was listed with no body.

@@ -73,7 +73,7 @@ export class Acceptance {
   }
 
   /**
-   * Refuse to touch an unlabelled target.
+   * Refuse to touch an unlabeled target.
    *
    * The suite that drives this harness already checks, but a harness that can
    * create documents should not depend on every caller remembering to. Guarded
@@ -83,8 +83,8 @@ export class Acceptance {
   private assertSafeTarget(): void {
     if (!mayWriteToLiveTarget()) {
       throw new Error(
-        "Acceptance harness refuses an unlabelled (production) target. " +
-          "Set CEREFOX_CONFIG_DIR to a labelled environment, or " +
+        "Acceptance harness refuses an unlabeled (production) target. " +
+          "Set CEREFOX_CONFIG_DIR to a labeled environment, or " +
           "CEREFOX_ALLOW_PROD_WRITE_TESTS=1 if you truly mean production.",
       );
     }

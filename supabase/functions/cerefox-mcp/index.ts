@@ -10,7 +10,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  * As of v0.4.0 (iter-22): the per-tool handlers live in `_shared/mcp-tools/`
  * (relative to the repo root) and are imported here verbatim. The new local
  * TS MCP server (`@cerefox/memory`, `packages/memory/`) uses the same
- * modules — single source of truth for tool behaviour across the two
+ * modules — single source of truth for tool behavior across the two
  * transports. This file's only responsibility is the MCP protocol surface
  * (JSON-RPC over HTTP) + Cerefox's identity-enforcement wrapper.
  *

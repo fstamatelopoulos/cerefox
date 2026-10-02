@@ -560,6 +560,9 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       total_found: results.length,
       response_bytes: jsonByteLength(results),
       truncated: false,
+      // Lets a client read scores on the right scale: the local model scores
+      // higher than OpenAI, so the web UI colors them with different bands.
+      embedder: resolveEmbedderKind(),
     });
   });
 
@@ -852,14 +855,14 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       });
     }
 
-    const normalised = path
+    const normalized = path
       .replace(/^(?:\.\.\/)+/, "")
       .replace(/^\.\//, "")
       .replace(/^\/+/, "");
-    if (!normalised) {
+    if (!normalized) {
       return c.json({ tried_path: "", anchor, matches: [] });
     }
-    const basename = normalised.split("/").pop() ?? normalised;
+    const basename = normalized.split("/").pop() ?? normalized;
 
     type MatchRow = { id: string; title: string | null; source_path: string | null };
     const project = (rows: MatchRow[], method: string) =>
@@ -872,24 +875,24 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
           match_method: method,
         }));
 
-    // Tier 1: source_path ends with the full normalised path
+    // Tier 1: source_path ends with the full normalized path
     {
       const { data } = await ctx.supabase
         .from("cerefox_documents")
         .select("id, title, source_path")
         .is("deleted_at", null)
-        .like("source_path", `%/${normalised}`)
+        .like("source_path", `%/${normalized}`)
         .order("updated_at", { ascending: false })
         .limit(limit);
       const rows = (data ?? []) as MatchRow[];
       const matches = project(rows, "source_path_suffix");
       if (matches.length > 0) {
-        return c.json({ tried_path: normalised, anchor, matches });
+        return c.json({ tried_path: normalized, anchor, matches });
       }
     }
 
     // Tier 2: source_path ends with just the basename (distinct from tier 1)
-    if (basename !== normalised) {
+    if (basename !== normalized) {
       const { data } = await ctx.supabase
         .from("cerefox_documents")
         .select("id, title, source_path")
@@ -900,7 +903,7 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
       const rows = (data ?? []) as MatchRow[];
       const matches = project(rows, "basename");
       if (matches.length > 0) {
-        return c.json({ tried_path: normalised, anchor, matches });
+        return c.json({ tried_path: normalized, anchor, matches });
       }
     }
 
@@ -918,11 +921,11 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
         const rows = (data ?? []) as MatchRow[];
         const matches = project(rows, "title_match");
         if (matches.length > 0) {
-          return c.json({ tried_path: normalised, anchor, matches });
+          return c.json({ tried_path: normalized, anchor, matches });
         }
       }
     }
 
-    return c.json({ tried_path: normalised, anchor, matches: [] });
+    return c.json({ tried_path: normalized, anchor, matches: [] });
   });
 }

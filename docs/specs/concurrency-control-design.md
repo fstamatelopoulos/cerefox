@@ -189,5 +189,5 @@ has never carried a token either.
 
 The atomicity that does matter is handled in the RPC: the merge happens inside a
 single `UPDATE` against a row locked `FOR UPDATE`, so concurrent writers of
-different keys serialise rather than interleave. A client-side read-then-merge
+different keys serialize rather than interleave. A client-side read-then-merge
 would have needed a token precisely because it would have had a read to go stale.

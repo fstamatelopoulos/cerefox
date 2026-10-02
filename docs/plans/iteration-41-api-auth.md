@@ -44,7 +44,7 @@ releases; landing an auth change and a platform-baseline drop together makes
       made the second call a no-op forever, including after
       `CEREFOX_CONFIG_DIR` changed. `live-write-guard-coverage.test.ts` sets it
       to a non-existent directory on purpose (proving the production-write
-      guard refuses an unlabelled target), which poisoned the cache for the
+      guard refuses an unlabeled target), which poisoned the cache for the
       whole run: every live suite loaded afterwards saw no credentials and
       skipped. **Effect: the full suite went from 215 pass / 12 skip to 262
       pass / 2 skip** — 47 tests that reported success while running nothing.

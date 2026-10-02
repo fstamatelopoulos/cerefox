@@ -97,7 +97,7 @@ async function action(options: BackupOptions): Promise<void> {
 
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
-  // Stamp the environment into the filename when one is labelled.
+  // Stamp the environment into the filename when one is labeled.
   //
   // `CEREFOX_BACKUP_DIR` does not follow `CEREFOX_CONFIG_DIR`, so a staging
   // snapshot can legitimately land in the shared backup directory — and a

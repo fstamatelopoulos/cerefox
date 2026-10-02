@@ -19,13 +19,13 @@ raises or lowers it per call with `--max-bytes`.
 > **Changed in v0.10.2.** The CLI originally returned everything, like the web UI. It now
 > honours `CEREFOX_MAX_RESPONSE_BYTES` (200 000 default) and prints
 > `(results truncated at N bytes; use --max-bytes to raise)` when results are dropped.
-> This guide described the pre-v0.10.2 behaviour until v1.14.4.
+> This guide described the pre-v0.10.2 behavior until v1.14.4.
 
 ---
 
 ## How each access path handles response size
 
-| Path | Limit behaviour |
+| Path | Limit behavior |
 |------|----------------|
 | Web UI (`/search`) | **No limit** — all results returned |
 | CLI (`cerefox search`) | Defaults to `CEREFOX_MAX_RESPONSE_BYTES` (200 000); raise or lower per call with `--max-bytes`. Announces truncation. |
@@ -203,4 +203,4 @@ threshold (it is a SQL DEFAULT in `rpcs.sql`, changed via `cerefox server deploy
 | Can an agent exceed the server ceiling? | No — always capped |
 | Where is the ceiling configured? | `.env` for local MCP; TypeScript constant in Edge Functions |
 | How are limits applied? | Whole-document drop; never mid-content truncation |
-| Is truncation signalled? | Yes — `truncated: true` in responses |
+| Is truncation signaled? | Yes — `truncated: true` in responses |

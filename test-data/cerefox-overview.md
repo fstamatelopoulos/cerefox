@@ -31,7 +31,7 @@ Documents are split into chunks at heading boundaries. Each chunk inherits a bre
 
 Large sections that exceed the character limit are further split at paragraph boundaries, with a small overlap to maintain continuity.
 
-## Projects and Organisation
+## Projects and Organization
 
 Documents can be grouped into projects. A project might represent a domain (work, personal, research) or a specific endeavour. Projects are optional — documents without a project are accessible globally.
 

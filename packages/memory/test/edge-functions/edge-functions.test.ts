@@ -329,7 +329,7 @@ describe("Edge Functions (live HTTP)", () => {
     });
 
     liveTest("by_author is the entries filter; author is the caller (#244)", async () => {
-      // The one behaviour change of v1.13.2 on this surface, proven with a
+      // The one behavior change of v1.13.2 on this surface, proven with a
       // negative case: a name that wrote nothing gets nothing back, while the
       // name that did write gets its entry, whatever `author` (the caller's
       // identity, tagged by invoke()) says.

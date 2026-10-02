@@ -3,7 +3,7 @@
  * canonical MCP entry point) and verify it speaks MCP over stdio —
  * initialize, tools/list, then close.
  *
- * v0.5.0 had a dedicated `cerefox-mcp` bin; v0.5.1 dropped it in favour
+ * v0.5.0 had a dedicated `cerefox-mcp` bin; v0.5.1 dropped it in favor
  * of the `cerefox mcp` subcommand of the main `cerefox` bin. Same
  * `buildServer()` factory under the hood; this test now exercises the
  * full commander → subcommand → server boot path.

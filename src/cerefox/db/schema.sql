@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS cerefox_document_projects (
 -- ── Document relations (iteration 29) ─────────────────────────────────────────
 -- Typed, directed edges between documents. rel_type is free text by design so
 -- agents can define new types without a migration; the type dictionary lives in
--- the RPCs and gives KNOWN types behaviour (symmetry, lifecycle side effects).
+-- the RPCs and gives KNOWN types behavior (symmetry, lifecycle side effects).
 -- Design: docs/research/document-relations-and-semantic-graph.md §2.2.
 
 CREATE TABLE IF NOT EXISTS cerefox_document_relations (
@@ -408,7 +408,7 @@ ON CONFLICT (key) DO NOTHING;
 -- The review workflow (agent writes land pending_review, a person approves)
 -- is OFF on a fresh install (#241): most stores have no reviewer, and a queue
 -- nobody drains is noise. Migration 0031 seeds TRUE on stores that predate the
--- flag, so an upgrade never changes behaviour. Only this seed and that
+-- flag, so an upgrade never changes behavior. Only this seed and that
 -- migration ever write the value; the toggle itself is `cerefox config set`.
 INSERT INTO cerefox_config (key, value)
 VALUES ('review_workflow_enabled', 'false')
@@ -491,7 +491,7 @@ ALTER TABLE cerefox_document_relations    ENABLE ROW LEVEL SECURITY;
 -- Guarded: on the local (World B) stack this file deploys BEFORE roles.sql
 -- creates service_role, so missing-role must be a no-op (roles.sql re-runs the
 -- grants implicitly via its own PostgREST wiring; the next deploy picks them up).
--- DERIVED from the catalogue, never listed. The list used to be a hand-written
+-- DERIVED from the catalog, never listed. The list used to be a hand-written
 -- ARRAY and it drifted: cerefox_document_relations was added above and never
 -- added to the array, so a FRESH cloud deploy left that table with no Data API
 -- grant. Upgrades hid it (migration 0014 grants it inline) and the self-hosted

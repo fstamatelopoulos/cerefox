@@ -291,7 +291,7 @@ Full setup for every client — plus a manual per-client config appendix for whe
 | [`docs/guides/connect-agents.md`](docs/guides/connect-agents.md) | MCP agent integration |
 | [`docs/guides/cli.md`](docs/guides/cli.md) | Complete CLI reference (all `cerefox` subcommands) |
 | [`docs/guides/agent-coordination.md`](docs/guides/agent-coordination.md) | Multi-agent coordination patterns and best practices |
-| [`docs/guides/response-limits.md`](docs/guides/response-limits.md) | Response size limits: per-path behaviour and tuning |
+| [`docs/guides/response-limits.md`](docs/guides/response-limits.md) | Response size limits: per-path behavior and tuning |
 | [`docs/guides/access-paths.md`](docs/guides/access-paths.md) | All access layers, credentials, and integration paths |
 | [`docs/guides/api.md`](docs/guides/api.md) | The `/api/v1` HTTP API: security posture, caller attribution, endpoints |
 | [`docs/guides/securing-local-access.md`](docs/guides/securing-local-access.md) | Who may call your local server: the loopback rule, when you need an API key, container + proxy recipes |

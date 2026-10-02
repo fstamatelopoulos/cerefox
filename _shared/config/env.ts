@@ -46,7 +46,7 @@ function parseDotenv(content: string): Record<string, string> {
  *
  * That is not a hypothetical either: `live-write-guard-coverage.test.ts` sets
  * `CEREFOX_CONFIG_DIR` to a deliberately non-existent directory to prove the
- * production-write guard refuses an unlabelled target. Under a boolean flag
+ * production-write guard refuses an unlabeled target. Under a boolean flag
  * that one assertion poisoned the cache for the rest of the run, and every
  * live suite loaded afterwards saw no credentials and skipped — passing, while
  * running nothing. Same failure shape as the renamed-probe bug in v1.11.0.

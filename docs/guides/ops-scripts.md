@@ -277,7 +277,7 @@ it is off the field is absent from every other surface, and an export is not the
 place to resurrect it.
 
 Markdown rather than JSON so the sidecars are readable in the same editor as the
-documents. Pass `--no-metadata` for the older content-only behaviour.
+documents. Pass `--no-metadata` for the older content-only behavior.
 
 Two naming details worth knowing:
 
@@ -320,7 +320,7 @@ Two things worth knowing about what it does *not* claim:
 
 - **Coverage is stated, not implied.** `x-cerefox-coverage` in the document lists
   how many routes carry a response schema, which routes legitimately return
-  something other than JSON, and which are unmodelled. An unmodelled route gets
+  something other than JSON, and which are unmodeled. An unmodeled route gets
   **no** schema rather than a guessed one.
 - **`info.version` is the API's, not the release's.** It moves when `/api/v1`
   changes. Binding it to the package version made the committed artifact stale at
@@ -329,7 +329,7 @@ Two things worth knowing about what it does *not* claim:
 
 ## search_benchmark.ts — Search-calibration benchmark
 
-Measures how search ranks against a labelled query vocabulary
+Measures how search ranks against a labeled query vocabulary
 (`_shared/search-benchmark/vocabulary/`: a synthetic corpus, about 150 queries
 in 13 categories, variant groups, no-answer queries) and compares alternative
 scoring formulas and settings. It is how the v1.17.0 defaults were chosen. Design

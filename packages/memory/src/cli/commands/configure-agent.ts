@@ -57,7 +57,7 @@ function action(options: ConfigureAgentOptions): void {
   }
   println(c.dim(`  action: ${result.action}`));
   // #168: name the entry, because it is no longer always "cerefox". A user
-  // configuring from a labelled environment needs to see that production
+  // configuring from a labeled environment needs to see that production
   // was left alone — silence there is what made the old overwrite invisible.
   println(c.dim(`  server name: ${mcpServerName()}`));
   if (result.delegatedCommand) {

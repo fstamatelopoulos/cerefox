@@ -13,7 +13,7 @@
 
   | Store | macro MRR, 1.16.1 → 1.17.2 | ΔMRR (95% CI) | Hit@1 wins / losses |
   |---|---|---|---|
-  | Deployment B (read-only, simulated, live behaviour reproduced 98%) | 0.714 → **0.774** | +0.058 [+0.050, +0.066] | 227 / 41 |
+  | Deployment B (read-only, simulated, live behavior reproduced 98%) | 0.714 → **0.774** | +0.058 [+0.050, +0.066] | 227 / 41 |
   | Deployment A (older snapshot, live) | 0.826 → **0.840** | +0.014 [+0.006, +0.022] | 81 / 41 |
 
   Against 1.17.0 as it ran on Deployment B, the gain is +0.066 MRR (184 / 21).
@@ -31,7 +31,7 @@
 | Version | Schema | Search change |
 |---|---|---|
 | 1.16.1 | 0.17.0 | Hybrid score = 0.7·cosine + 0.3·raw `ts_rank_cd` (unbounded, up to ~4); `min_term_coverage` 0.5 |
-| 1.17.0 | 0.18.0 | Keyword score bounded to [0, 1) (`ts_rank_cd` normalisation 32); `min_term_coverage` 0.67; built-in confidence floor derived from the store's embedder |
+| 1.17.0 | 0.18.0 | Keyword score bounded to [0, 1) (`ts_rank_cd` normalization 32); `min_term_coverage` 0.67; built-in confidence floor derived from the store's embedder |
 | 1.17.1 | 0.18.1 | Exact vector candidates (no approximate HNSW scan); keyword matches carry their exact cosine |
 | 1.17.2 | 0.18.2 | `min_term_coverage` 0.66: a true two-of-three rule |
 
@@ -178,7 +178,7 @@ No real store shows a significant difference, and the synthetic benchmark prefer
 
 ## Synthetic benchmark (for completeness)
 
-On the synthetic calibration vocabulary (158 documents, 147 labelled queries, 13 categories, both embedders), 1.17.2 equals 1.17.0's results except for one more confident false positive per embedder. The per-category floors in `floors.json` are unchanged.
+On the synthetic calibration vocabulary (158 documents, 147 labeled queries, 13 categories, both embedders), 1.17.2 equals 1.17.0's results except for one more confident false positive per embedder. The per-category floors in `floors.json` are unchanged.
 
 The vocabulary missed both defects:
 - **The index defect:** it searches one project, where Postgres always scans exactly.
@@ -186,10 +186,32 @@ The vocabulary missed both defects:
 
 That is the reason for this study, and the process now requires a real-data check on a staging deployment for any ranking change.
 
+## A rejected change: credit for partial keyword matches
+
+After 1.17.2 a search for a document's subject in different words ("search assessment report" for a document titled "Search quality study") did not find it. The cause is how keyword matching escalates. When any document contains every query word, search runs in all-words mode, and documents containing only some of the words get no keyword credit. The two-of-three rule applies only when no document contains them all. Several guides contained all four words, so the target, with three of them, could compete on meaning alone.
+
+The obvious change is to always give partial matches proportional credit and keep the two-of-three rule for confidence. It was measured on Deployment B (read-only, same method, 2,392 queries plus the failing phrasings) against 1.17.2 as deployed:
+
+| Family | 1.17.2 | Partial credit always | ΔMRR (95% CI) | Hit@1 wins / losses |
+|---|---|---|---|---|
+| title | 0.994 | 0.884 | −0.110 [−0.140, −0.082] | 0 / 54 |
+| title-prefix | 0.701 | 0.562 | −0.139 [−0.169, −0.111] | 4 / 65 |
+| title-reordered | 0.983 | 0.840 | −0.143 [−0.179, −0.110] | 1 / 65 |
+| body-sentence | 0.758 | 0.602 | −0.156 [−0.186, −0.126] | 0 / 74 |
+| section-heading | 0.882 | 0.658 | −0.225 [−0.275, −0.174] | 1 / 50 |
+| distinctive-terms | 0.666 | 0.647 | −0.019 [−0.033, −0.005] | 1 / 11 |
+| title-typo | 0.835 | 0.834 | −0.001 | 0 / 1 |
+| paraphrase | 0.374 | 0.386 | +0.013 (not significant) | 2 / 2 |
+| **all** | | | **−0.098 [−0.111, −0.085]** | **10 / 322** |
+
+**Rejected.** All-words mode is what lets a precise query win: an exact title, heading or sentence beats documents that merely share some of its words. Without it those families lose 0.11 to 0.23 MRR, while the phrasings that motivated the change gained little. A document whose title and text use different words from the query is a vocabulary mismatch, best fixed by a more descriptive title, not by weakening precise queries.
+
+The same run checked 1.17.2 after deployment: the model reproduced live search for 97.8% of queries, the rest again mostly typo queries.
+
 ## Limitations
 
 - **Known-item relevance:** each query has one correct document. Near-duplicate documents (dated series, multi-part logs) can make a sensible answer count as a miss, which depresses absolute scores equally for all versions. The comparisons are paired, so the differences are still valid.
-- **Most families are built from the document's own text and so favour keyword matching.** Paraphrases (150 and 120) are the only meaning-only family; they were written by an AI agent with a no-shared-title-word rule, and their intervals are wide.
+- **Most families are built from the document's own text and so favor keyword matching.** Paraphrases (150 and 120) are the only meaning-only family; they were written by an AI agent with a no-shared-title-word rule, and their intervals are wide.
 - **No-answer queries are few (29 per store).** Their intervals are wide; the 1.16.1 → 1.17.2 drop is clear, while 7% against 21–28% within 1.17.x is less certain.
 - **The Deployment B numbers for 1.16.1 and 1.17.x are simulated.** The model reproduced live 1.17.0 for 98% of queries; the rest, mostly typo queries, are a known gap.
 - **Both stores use OpenAI embeddings and a stored confidence floor of 0.7** (the built-in default is 0.5). At 0.5, every version did slightly worse on Deployment A. The local embedder is covered only by the synthetic benchmark.
@@ -199,7 +221,7 @@ That is the reason for this study, and the process now requires a real-data chec
 
 1. **Approximate vector candidates (fixed in 1.17.1).** Ordering by the bare distance let the planner use the HNSW index, which returns at most `ef_search` (40) rows and, after heavy version churn, not the nearest ones. Search now orders by the computed similarity, which forces an exact scan.
 2. **`min_term_coverage` 0.67 meant three of three (fixed in 1.17.2).** The gate is `matched ≥ coverage × words`, and 0.67 × 3 = 2.01. A test now pins the arithmetic.
-3. **Live behaviour depended on the connection.** On Deployment B, the same search used the index on some database connections and an exact scan on others. Resolved by (1), since the index is no longer usable for this query.
+3. **Live behavior depended on the connection.** On Deployment B, the same search used the index on some database connections and an exact scan on others. Resolved by (1), since the index is no longer usable for this query.
 4. **The model download could splice two responses (fixed in 1.17.1, #314).** On a dropped connection, the runtime's fetch can re-issue the request and append the second body to the first. Downloads now use verified fixed-size ranges.
 
 ## Outcome

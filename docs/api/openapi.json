@@ -715,7 +715,7 @@
                   },
                   "value": {
                     "type": "string",
-                    "description": "Stored as text; validated against the key's catalogue entry."
+                    "description": "Stored as text; validated against the key's catalog entry."
                   }
                 },
                 "required": [
@@ -3850,7 +3850,7 @@
     },
     "/api/v1/preferences": {
       "get": {
-        "summary": "Web UI preferences (currently the colour scheme), stored in a file in the user-state dir, not the database. Registers even when Supabase is not configured.",
+        "summary": "Web UI preferences (currently the color scheme), stored in a file in the user-state dir, not the database. Registers even when Supabase is not configured.",
         "operationId": "get_preferences",
         "responses": {
           "200": {
@@ -3903,7 +3903,7 @@
         }
       },
       "put": {
-        "summary": "Web UI preferences (currently the colour scheme), stored in a file in the user-state dir, not the database. Registers even when Supabase is not configured.",
+        "summary": "Web UI preferences (currently the color scheme), stored in a file in the user-state dir, not the database. Registers even when Supabase is not configured.",
         "operationId": "put_preferences",
         "responses": {
           "200": {
@@ -5257,6 +5257,13 @@
                     },
                     "truncated": {
                       "type": "boolean"
+                    },
+                    "embedder": {
+                      "type": "string",
+                      "enum": [
+                        "openai",
+                        "local"
+                      ]
                     }
                   },
                   "required": [

@@ -31,7 +31,7 @@
  * summaries and the zod schemas (#270, shipped in v1.15.1). Its own guards are
  * `api-openapi-spec.test.ts` (the committed artifact is current) and
  * `api-schema-truth.test.ts` (the schemas match what a live server returns).
- * Descriptions remain a human judgement that nothing can check.
+ * Descriptions remain a human judgment that nothing can check.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -56,7 +56,7 @@ const PREFIX = "/api/v1";
  * to `*` and query strings are dropped: this test is about which endpoints
  * exist, not about what the parameters are called.
  */
-function normalise(method: string, path: string): string {
+function normalize(method: string, path: string): string {
   let p = path.split("?")[0]!.trim();
   if (p.startsWith(PREFIX)) p = p.slice(PREFIX.length) || "/";
   p = p.replace(/:\w+\{[^}]*\}/g, "*"); // :path{.+}
@@ -79,7 +79,7 @@ function registeredRoutes(): Map<string, string> {
     // (`.delete("host")`) and for the SPA routes, which are not the API.
     const re = /\.(get|post|put|delete)\(\s*"(\/api\/v1[^"]*)"/g;
     for (const m of source.matchAll(re)) {
-      found.set(normalise(m[1]!, m[2]!), file.replace(REPO_ROOT + "/", ""));
+      found.set(normalize(m[1]!, m[2]!), file.replace(REPO_ROOT + "/", ""));
     }
   }
   return found;
@@ -91,7 +91,7 @@ function documentedRoutes(): Set<string> {
   for (const line of doc.split("\n")) {
     if (!line.trimStart().startsWith("|")) continue; // the endpoint table only
     for (const m of line.matchAll(/`(GET|POST|PUT|DELETE)\s+([^`]+)`/g)) {
-      out.add(normalise(m[1]!, m[2]!));
+      out.add(normalize(m[1]!, m[2]!));
     }
   }
   return out;
@@ -137,16 +137,16 @@ describe("docs/guides/api.md lists exactly the routes the server registers", () 
     expect(unregistered).toEqual(["DELETE /documents/*"]);
   });
 
-  test("normalisation makes the two spellings comparable", () => {
+  test("normalization makes the two spellings comparable", () => {
     // The doc and the code genuinely disagree on spelling; that must not read
-    // as drift. Equally, normalisation must not flatten distinct paths.
-    expect(normalise("get", "/api/v1/documents/:document_id")).toBe(
-      normalise("GET", "/documents/{id}"),
+    // as drift. Equally, normalization must not flatten distinct paths.
+    expect(normalize("get", "/api/v1/documents/:document_id")).toBe(
+      normalize("GET", "/documents/{id}"),
     );
-    expect(normalise("get", "/api/v1/docs/:path{.+}")).toBe(normalise("GET", "/docs/{path}"));
-    expect(normalise("GET", "/search?q=…")).toBe(normalise("get", "/api/v1/search"));
-    expect(normalise("GET", "/documents/{id}")).not.toBe(
-      normalise("GET", "/documents/{id}/chunks"),
+    expect(normalize("get", "/api/v1/docs/:path{.+}")).toBe(normalize("GET", "/docs/{path}"));
+    expect(normalize("GET", "/search?q=…")).toBe(normalize("get", "/api/v1/search"));
+    expect(normalize("GET", "/documents/{id}")).not.toBe(
+      normalize("GET", "/documents/{id}/chunks"),
     );
   });
 });

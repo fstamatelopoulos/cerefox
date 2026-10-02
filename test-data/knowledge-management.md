@@ -12,8 +12,8 @@ system that supplements biological memory. The core idea is that your mind is
 for generating ideas, not for storing them. Offloading storage to a trusted
 external system frees cognitive capacity for deeper thinking.
 
-A second brain typically involves four stages: capture, organise, distil, express
-(the CODE framework). Capture means collecting anything that resonates. Organise
+A second brain typically involves four stages: capture, organize, distil, express
+(the CODE framework). Capture means collecting anything that resonates. Organize
 means sorting by actionability, not by topic. Distil means highlighting the most
 valuable insights. Express means creating something new from what you have stored.
 

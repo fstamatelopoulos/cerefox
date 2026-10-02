@@ -66,7 +66,7 @@ schema-requiring release.
 > `pending_review`" decision out of the clients and into the
 > `cerefox_ingest_document` RPC (#241). A v1.13.0 client no longer decides
 > the status itself, so against an older server every agent write would
-> silently land `approved` — a behaviour change, not a missing feature — and
+> silently land `approved` — a behavior change, not a missing feature — and
 > the new review-status search filter would fail outright. The **minimum
 > supported schema is therefore `0.16.0`**: until you run `cerefox server
 > deploy`, `cerefox web` refuses to start and `doctor` says exactly why.
@@ -84,7 +84,7 @@ schema-requiring release.
 > `pending_review` regardless, so turning the workflow back on shows the
 > statuses the store would have had all along. It is an RPC-only change —
 > `cerefox server deploy` (or `--schema-only`) picks it up; nothing refuses
-> to run until you do, but a 0.16.0 server keeps the v1.13.0 write behaviour.
+> to run until you do, but a 0.16.0 server keeps the v1.13.0 write behavior.
 
 > ### Upgrading to v1.1.0 — `cerefox server deploy` is required
 >

@@ -24,7 +24,7 @@ Audit of 8 Cerefox edge functions (EFs) comparing their OpenAPI schema definitio
 - **EFs with major drift (3+ fields or TYPE CHANGE)**: 2 (cerefox-get-audit-log, cerefox-metadata-search)
 - **Total drift items identified**: 17
 
-**Recommendation**: Medium priority. 4 EFs have actionable issues (added fields, removed parameters, new response fields). The schema needs a minor version bump (1.7.0 → 1.8.0) to reflect actual v0.7 behaviour.
+**Recommendation**: Medium priority. 4 EFs have actionable issues (added fields, removed parameters, new response fields). The schema needs a minor version bump (1.7.0 → 1.8.0) to reflect actual v0.7 behavior.
 
 ---
 

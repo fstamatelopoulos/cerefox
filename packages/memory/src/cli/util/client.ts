@@ -38,7 +38,7 @@ export function getClient(): CerefoxDbClient {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw systemError(
-      `Failed to initialise Supabase client: ${msg}`,
+      `Failed to initialize Supabase client: ${msg}`,
       "Run `cerefox doctor` to verify your credentials.",
     );
   }

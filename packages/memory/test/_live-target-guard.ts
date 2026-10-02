@@ -1,5 +1,5 @@
 /**
- * Refuse to run write-bearing live suites against an UNLABELLED environment.
+ * Refuse to run write-bearing live suites against an UNLABELED environment.
  *
  * The live command suites write real documents through the Data API. They
  * resolve credentials the same way the CLI does — `CEREFOX_CONFIG_DIR`, else
@@ -20,7 +20,7 @@
  * So the gate is the environment LABEL. `CEREFOX_ENV_LABEL` is how every other
  * part of Cerefox distinguishes a scratch environment from the real one — the
  * web banner, `doctor`'s title line, backup filenames, and now the MCP server
- * name (#168). An unlabelled target is production by definition, and these
+ * name (#168). An unlabeled target is production by definition, and these
  * suites skip against it.
  *
  * `CEREFOX_ALLOW_PROD_WRITE_TESTS=1` overrides, for the one case where someone
@@ -45,14 +45,14 @@ function resolvedEnvLabel(): string {
   try {
     loadEnv();
   } catch {
-    // No readable config file — treat as unlabelled, which is the safe answer.
+    // No readable config file — treat as unlabeled, which is the safe answer.
   }
   return (process.env.CEREFOX_ENV_LABEL ?? "").trim();
 }
 
 /** Human-readable target description, for the skip message. */
 export function liveTargetLabel(): string {
-  return resolvedEnvLabel() || "(unlabelled — production)";
+  return resolvedEnvLabel() || "(unlabeled — production)";
 }
 
 /**
@@ -71,7 +71,7 @@ export function liveWriteSkipReason(): string {
   return (
     `Refusing to run WRITE tests against ${liveTargetLabel()}. ` +
     `These suites create real documents and leave permanent audit-log entries. ` +
-    `Point them at a labelled environment — ` +
+    `Point them at a labeled environment — ` +
     `CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test — ` +
     `or set CEREFOX_ALLOW_PROD_WRITE_TESTS=1 if you truly mean production.`
   );

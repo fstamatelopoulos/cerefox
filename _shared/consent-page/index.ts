@@ -1,7 +1,7 @@
 /**
  * consent-page — the OAuth consent page HTML (design §4.2-B), as a single pure
  * function so every host (Cloudflare Worker for free setups, or a Supabase Edge
- * Function on a paid custom domain) renders identical markup and behaviour.
+ * Function on a paid custom domain) renders identical markup and behavior.
  *
  * Why not an Edge Function on the default domain: Supabase rewrites `text/html`
  * to `text/plain` on `*.supabase.co`, so the page would show as source. The

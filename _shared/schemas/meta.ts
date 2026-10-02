@@ -14,7 +14,7 @@ export const VersionResponse = z.object({
   version: z.string(),
   git_commit_short: z.string().nullable(),
   build_date: z.string().nullable(),
-  /** `CEREFOX_ENV_LABEL` (e.g. "STAGING"), or null on an unlabelled target. */
+  /** `CEREFOX_ENV_LABEL` (e.g. "STAGING"), or null on an unlabeled target. */
   env_label: z.string().nullable(),
 });
 export type VersionResponse = z.infer<typeof VersionResponse>;

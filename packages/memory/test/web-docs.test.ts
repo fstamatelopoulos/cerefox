@@ -8,7 +8,7 @@
  * `tests/test_docs_resources.py`; this file covers the equivalent
  * surface for the TS port's listBundledDocs / readDoc functions.
  *
- * No server boot, no Supabase — pure resolver behaviour against the
+ * No server boot, no Supabase — pure resolver behavior against the
  * actual bundled docs.
  */
 

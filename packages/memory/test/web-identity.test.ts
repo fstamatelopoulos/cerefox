@@ -45,7 +45,7 @@ function unwrap(result: ReturnType<typeof resolveCallerIdentity>) {
 }
 
 describe("resolveCallerIdentity — the unchanged default", () => {
-  test("no identity at all resolves to the pre-#226 behaviour", () => {
+  test("no identity at all resolves to the pre-#226 behavior", () => {
     const id = unwrap(resolveCallerIdentity(ctxWith()));
     expect(id).toEqual(WEB_UI_IDENTITY);
     // Spelled out, because "equals the constant" would still pass if someone

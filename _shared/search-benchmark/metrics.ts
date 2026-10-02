@@ -3,7 +3,7 @@
  * Design: docs/specs/search-calibration.md.
  *
  * Pure functions over a ranked list of document keys and graded relevance
- * judgements (2 = the answer, 1 = related, absent = irrelevant). Kept separate
+ * judgments (2 = the answer, 1 = related, absent = irrelevant). Kept separate
  * from the runner so the arithmetic is unit-tested on its own: a benchmark
  * whose numbers are wrong is worse than no benchmark.
  */

@@ -6,7 +6,7 @@ Target: **v1.12.2**. Docker image only — no npm publish needed (see below).
 Closes [#237](https://github.com/fstamatelopoulos/cerefox/issues/237).
 
 Two messages introduced by v1.12.0/v1.12.1 that were **false or misread**. No
-behaviour changes; both releases behave correctly. What was wrong is what
+behavior changes; both releases behave correctly. What was wrong is what
 Cerefox *said* about itself.
 
 ## 1. A false alarm on every boot (#237)

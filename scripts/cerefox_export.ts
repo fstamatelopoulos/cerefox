@@ -28,7 +28,7 @@
  *
  * Markdown rather than JSON on purpose: the point of this export is files that
  * are immediately usable, and a sidecar you need a JSON viewer for is not.
- * `--no-metadata` restores the old content-only behaviour.
+ * `--no-metadata` restores the old content-only behavior.
  *
  * Requires CEREFOX_SUPABASE_URL + CEREFOX_SUPABASE_KEY in your .env.
  */
@@ -160,7 +160,7 @@ export function renderMetadata(
   // The store's total_chars: the sum of the chunks' content. The exported file
   // is those chunks rejoined, so its size can differ by a few characters (a
   // production export matched exactly for 1,017 of 1,179 files, off by 0-228
-  // otherwise). Labelled so nobody reads a mismatch as lost content.
+  // otherwise). Labeled so nobody reads a mismatch as lost content.
   add("Characters (stored)", meta.total_chars?.toLocaleString());
   add("Chunks", meta.chunk_count);
   if (opts.showReview) add("Review status", meta.review_status);

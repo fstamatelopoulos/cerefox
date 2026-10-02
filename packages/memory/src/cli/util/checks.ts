@@ -1073,7 +1073,7 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
       // #127: EF_VERSION bumps unconditionally at stable cuts, so a version
       // delta can be label-only. Only surface the info line when the deployed
       // EFs actually predate the last real EF source change; label-only drift
-      // is a clean ✓ (deployed behaviour is identical to bundled).
+      // is a clean ✓ (deployed behavior is identical to bundled).
       if (compareSemver(deployed, EF_LAST_CHANGED) >= 0) {
         return {
           name: "edge functions",

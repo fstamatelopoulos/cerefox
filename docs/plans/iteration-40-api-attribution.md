@@ -44,7 +44,7 @@ Confirmed with the maintainer 2026-09-01 before implementation.
   This is an approximation and is recorded as one. It reads "named itself" as
   the signal that the caller is not the bundled web app. The known edge: if
   the web app ever passes a real `requestor` (multi-user, SSO), it would begin
-  labelling itself `"api"`. Acceptable now, since it passes nothing, and
+  labeling itself `"api"`. Acceptable now, since it passes nothing, and
   commented at the derivation site so a future reader does not have to
   rediscover the coupling.
 
@@ -63,7 +63,7 @@ Confirmed with the maintainer 2026-09-01 before implementation.
   This is the failure this iteration is most likely to ship by accident.
 
 - **No `/api/v2`.** These are additive optional parameters that reproduce
-  current behaviour byte for byte when omitted, which is what a stable v1
+  current behavior byte for byte when omitted, which is what a stable v1
   absorbs. A v2 would mean two route trees, two test suites, and a permanent
   question about which the bundled app targets. The version bump stays
   available for a change that genuinely breaks callers.
@@ -96,9 +96,9 @@ convention explicitly ("the convention every other web audit site uses, so
 those two routes silently break it: an `author='web-ui'` audit filter misses
 every review-status change and every version archive.
 
-Unifying them on `"web-ui"` is a **behaviour change to existing audit
+Unifying them on `"web-ui"` is a **behavior change to existing audit
 authorship** for those two operations, so it is called out here rather than
-slipped in. Judgement: consistency wins, because the current state makes an
+slipped in. Judgment: consistency wins, because the current state makes an
 audit filter quietly incomplete, which is worse than a visible change in what
 two operations record. Existing rows are not rewritten.
 
@@ -125,7 +125,7 @@ in lockstep and this section is wrong.
 - [x] **#226 domain** — the vocabulary moved to a dependency-free leaf
       (`_shared/mcp-tools/access-paths.ts`); `AccessPath` derives from it, the
       Analytics filter derives from it through a vite alias, and its label map
-      is keyed by the union so an unlabelled path fails the typecheck.
+      is keyed by the union so an unlabeled path fails the typecheck.
       `deriveAccessPathStats()` and the Dashboard learn `api` explicitly.
 - [x] **Audit authorship unification** — the two `author: "user"` routes.
 - [x] **#227** — repo-root `docker-compose.yml` publishes to loopback.

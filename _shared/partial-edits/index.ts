@@ -558,7 +558,7 @@ function applyOne(
     }
     if (m[1].length !== node.level) throw new HeadingLevelChangeError(node.heading, next);
 
-    // Replace the heading LINE only. Not spliceBlock: that normalises
+    // Replace the heading LINE only. Not spliceBlock: that normalizes
     // surrounding blank lines, which is right for a block of body text and
     // wrong for a single line whose neighbours are the section's own spacing.
     const hadNewline = content[node.bodyStart - 1] === "\n";

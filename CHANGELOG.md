@@ -9,7 +9,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **The web UI's score rings read the 0 to 1 scale correctly.** Since 1.17.0 search
+  scores are 0 to 1, but the rings still colored them as if they had been rescaled
+  against the top result, so most good results showed yellow. The color now compares
+  each score with the scores of results that turned out right, measured on real
+  knowledge bases: green when it is as strong as a typical correct top result
+  (OpenAI: 0.55 and up), yellow for the usual range of correct results (0.35 and up),
+  faint below that. A result search flags as below confidence is dimmed whatever its
+  score. The local model scores everything higher, so it has its own, provisional
+  bands (0.65 and 0.45) until a populated local store can be measured. Keyword-only
+  mode, whose scores are raw ranks, still colors against the best result in the list.
+
+### Added
+
+- **Search responses say which embedder produced the scores.** `GET /api/v1/search`
+  returns `embedder: "openai" | "local"`, so a client can read scores on the right
+  scale. Additive; older servers simply omit it.
 
 ---
 

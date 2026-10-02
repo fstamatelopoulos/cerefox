@@ -9,13 +9,13 @@
  *
  * Same shape as every other drift this project has hit — a hand-maintained list
  * that has to match another list, which is why the route table, the Data API
- * grants, the config catalogue and the Node floor are all derived rather than
+ * grants, the config catalog and the Node floor are all derived rather than
  * written. So the list is derived from `scripts/*.ts`, and a script that is NOT
  * operator-facing has to be named in `NOT_OPERATOR_FACING` **with a reason**.
  * That turns an omission from something you forget into something you decide.
  *
- * Deliberately NOT checked: whether a documented script's flags or behaviour are
- * still accurate. That is a human judgement, and a test that pretended to cover
+ * Deliberately NOT checked: whether a documented script's flags or behavior are
+ * still accurate. That is a human judgment, and a test that pretended to cover
  * it would be worse than one that admits the boundary.
  */
 

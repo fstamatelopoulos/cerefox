@@ -108,7 +108,7 @@ export async function spawnWebServer(
   if (!ready) {
     child.kill("SIGTERM");
     // `cerefox web` refuses to boot when the deployed schema is below this
-    // client's minimum. That is correct behaviour, so surface it as a skip
+    // client's minimum. That is correct behavior, so surface it as a skip
     // (null) rather than a failure — the same treatment an unreachable Supabase
     // already gets. Callers already handle a null server by skipping.
     if (/Refusing to start|below the required/.test(stderr)) {

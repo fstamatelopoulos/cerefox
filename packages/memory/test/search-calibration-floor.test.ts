@@ -9,7 +9,7 @@
  *
  * The vocabulary lives in its own project on the target and is left there:
  * re-runs write only documents whose content changed, so they add nothing to the
- * audit log. Write-gated like every live suite (labelled targets only), and
+ * audit log. Write-gated like every live suite (labeled targets only), and
  * skips when the store's embedder has no floors, when the target runs another
  * schema, or when the store overrides a retrieval setting (the floors describe
  * the built-in defaults).
@@ -53,7 +53,7 @@ const LIVE_OK = probeSupabase() && mayWriteToLiveTarget();
 const BUDGET_MS = 600_000;
 
 const setup = await (async () => {
-  if (!LIVE_OK) return { skip: "no labelled live target" } as const;
+  if (!LIVE_OK) return { skip: "no labeled live target" } as const;
   const settings = loadSettings();
   const supabase = createClient(settings.supabaseUrl, settings.supabaseKey, { auth: { persistSession: false } });
   const { data: ver } = await supabase.rpc("cerefox_schema_version");

@@ -169,7 +169,7 @@ async function action(
     println(c.dim(`  (keeping existing title: ${JSON.stringify(title)})`));
   }
   // #193: commander defaulted --source to "cli" and the CLI always sent it, so
-  // re-ingesting an existing document without --source silently relabelled its
+  // re-ingesting an existing document without --source silently relabeled its
   // provenance. #191 made the RPC preserve the stored value when the parameter
   // is OMITTED — which the CLI never did.
   //
@@ -177,7 +177,7 @@ async function action(
   // if the write turns out to be a create. The CLI deliberately does NOT decide
   // that here: `--update-if-exists` against a document that does not exist yet
   // is an update intent that performs a create, and an earlier heuristic based
-  // on the flags labelled exactly that case 'agent' (review bug_005).
+  // on the flags labeled exactly that case 'agent' (review bug_005).
   const resolvedSource = options.source ?? null;
 
   const pipeline = new IngestionPipeline({

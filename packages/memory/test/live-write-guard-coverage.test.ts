@@ -88,7 +88,7 @@ describe("production-write guard covers every live suite", () => {
     expect(liveCapableFiles().length).toBeGreaterThanOrEqual(6);
   });
 
-  test("the guard refuses an unlabelled target by default", async () => {
+  test("the guard refuses an unlabeled target by default", async () => {
     const { mayWriteToLiveTarget } = await import("./_live-target-guard.ts");
     const savedLabel = process.env.CEREFOX_ENV_LABEL;
     const savedOverride = process.env.CEREFOX_ALLOW_PROD_WRITE_TESTS;

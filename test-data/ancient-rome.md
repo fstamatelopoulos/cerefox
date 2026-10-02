@@ -63,5 +63,5 @@ peoples along the frontiers.
 
 The conventional date for the fall of the Western Roman Empire is 476 AD, when
 the Germanic chieftain Odoacer deposed the last emperor, Romulus Augustulus.
-The Eastern Empire, centred on Constantinople, survived as the Byzantine Empire
+The Eastern Empire, centered on Constantinople, survived as the Byzantine Empire
 until 1453 AD.
