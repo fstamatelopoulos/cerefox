@@ -15,7 +15,7 @@ import { useNavigate } from "react-router-dom";
 import type { ChunkSearchResult, DocSearchResult, SearchMode, SearchResponse } from "../api/types";
 import { isDocResult } from "../api/types";
 import { ScoreRing } from "./ScoreRing";
-import { displayScore, isRelativeScale, scoreTone } from "../lib/scoreBands";
+import { bestConfidentScore, displayScore, isRelativeScale, scoreTone } from "../lib/scoreBands";
 import ui from "../styles/redesign.module.css";
 import styles from "../pages/SearchPage.module.css";
 
@@ -100,15 +100,21 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
 
   const kb = (data.response_bytes / 1024).toFixed(1);
 
-  // Since schema 0.18.0 docs/hybrid/semantic scores are 0 to 1, shown as they are
-  // and colored against the scores of results that turned out right (v1.17.3,
-  // lib/scoreBands.ts). Keyword mode (raw ranks) and pre-0.18 servers (scores
-  // above 1) are still shown relative to the list's best.
+  // The ring shows the absolute score (0 to 1 since schema 0.18.0; keyword mode and
+  // pre-0.18 servers show it relative to the best) and is colored by strength
+  // relative to the best CONFIDENT result of this search (v1.17.4,
+  // lib/scoreBands.ts). Below-confidence results are dimmed.
   const rawScores = data.results.map((r) =>
     isDocResult(r) ? (r as DocSearchResult).best_score : (r as ChunkSearchResult).score,
   );
   const maxScore = Math.max(0, ...rawScores);
   const relative = isRelativeScale(data.mode, maxScore);
+  const bestConfident = bestConfidentScore(
+    data.results.map((r, i) => ({
+      score: rawScores[i]!,
+      belowConfidence: (r as DocSearchResult | ChunkSearchResult).below_confidence === true,
+    })),
+  );
 
   // 28I: every-row below_confidence means nothing cleared the relevance
   // threshold and the server returned best-effort candidates instead of empty.
@@ -172,9 +178,8 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
               <div className={styles.resultHead} onClick={() => setExpanded(open ? null : id)}>
                 <ScoreRing
                   score={displayScore(score, maxScore, relative)}
-                  tone={scoreTone(relative ? displayScore(score, maxScore, true) : score, {
-                    embedder: data.embedder,
-                    relative,
+                  tone={scoreTone(score, {
+                    best: bestConfident,
                     belowConfidence: (r as DocSearchResult | ChunkSearchResult).below_confidence === true,
                   })}
                 />
