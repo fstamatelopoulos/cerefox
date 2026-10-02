@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.17.3] -- 2026-10-02
+
 ### Changed
 
 - **The web UI's score rings read the 0 to 1 scale correctly.** Since 1.17.0 search
