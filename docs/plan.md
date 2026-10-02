@@ -29,6 +29,13 @@
 
 ## Current Focus
 
+**2026-10-02 (later): v1.17.4 IS RELEASED, verified on staging; both Local containers
+upgraded.** Score ring colors are now relative to the best confident result of the same
+search (green ≥ 90%, yellow ≥ 60%, faint below, below-confidence results dimmed); the
+number stays absolute. 1.17.3's fixed bands failed on short and name queries, whose
+perfect hits score only ~0.4-0.5. Frontend-only; production needs `self-update` and a web
+restart (`server deploy` is optional, since only the EF version label moved).
+
 **2026-10-02: v1.17.3 IS RELEASED, verified on staging, and both Local containers are
 upgraded; the search announcement is posted on Discord.** 1.17.3 adds score rings
 colored against the scores of correct results (OpenAI 0.55 / 0.35; local provisional
