@@ -29,6 +29,38 @@
 
 ## Current Focus
 
+**2026-10-02: v1.17.3 IS RELEASED, verified on staging, and both Local containers are
+upgraded; the search announcement is posted on Discord.** 1.17.3 adds score rings
+colored against the scores of correct results (OpenAI 0.55 / 0.35; local provisional
+0.65 / 0.45; below-confidence results dimmed) and an `embedder` field on
+`/api/v1/search`. It also extends the search study with the rejected partial-credit
+experiment, and makes spelling American across docs and comments. The `src/cerefox/db/`
+SQL comments are deliberately left until the next schema change, because changing them
+would force a redeploy prompt.
+
+Verified on staging (released package, `server deploy`, 9 EFs):
+- `doctor` green; floors and reproduction exact;
+- package suite 380/0; EF + remote MCP 49/0; Playwright 27 passed, 1 skipped;
+- real-data ranking unchanged from 1.17.2.
+
+Production: the maintainer upgrades.
+
+**Next: 1.18.0, drop the vector indexes.**
+- Search has scanned exactly since 1.17.1, so the HNSW indexes are unused, cost writes
+  and storage, and degrade with version churn.
+- Measured on a 1-CPU / 1 GB local Postgres with synthetic clustered vectors (top-500
+  candidates):
+  - exact scan: 2 ms at 2k chunks, 15 ms at 10k, 56 ms at 50k, **181 ms at 100k**, so
+    NFR-2.3 is met;
+  - default-configured HNSW: recall@250 falls to 65% at 25k and 27% at 100k, and it is
+    slower than exact at 50k+.
+- Plan:
+  - a migration drops `idx_cerefox_chunks_emb_primary` / `_emb_upgrade`;
+  - `doctor` reports the chunk count and warns past ~100k;
+  - an issue tracks large-store support (an adaptive index path, configured for
+    candidate count and filters, measured on real data when a store nears that size);
+  - the SQL comment spelling pass rides along.
+
 **2026-10-01 (later): v1.17.2 IS RELEASED AND VERIFIED on staging and both Local
 containers; production (on 1.17.0) awaits the maintainer, going straight to 1.17.2**
 (`cerefox server deploy`: schema 0.18.2, EF v1.17.2). Fixes to 1.17.0, both found on
