@@ -5,7 +5,7 @@
  * specific order: CLI flag > environment variable > default. Each command
  * that writes (ingest, ingest-dir, delete-doc) or reads with attribution
  * (search, get-doc, list-projects, get-audit-log, etc.) plumbs these
- * resolutions in a consistent way — matching the Python CLI's behaviour
+ * resolutions in a consistent way — matching the Python CLI's behavior
  * exactly so an agent that learned the Python contract sees no shift.
  *
  * `--metadata` and `--metadata-filter` arrive as JSON strings on the
@@ -22,7 +22,7 @@ import { userError } from "./exit.ts";
  *
  * Order: explicit CLI flag > `CEREFOX_AUTHOR_NAME` env > "unknown".
  *
- * Returning "unknown" (rather than throwing) matches the Python behaviour:
+ * Returning "unknown" (rather than throwing) matches the Python behavior:
  * if neither flag nor env is set, the write still happens but the audit
  * log entry attributes to "unknown". The CLI prints a one-line ⚠ when this
  * happens (handled in the command, not here).

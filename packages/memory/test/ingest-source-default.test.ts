@@ -37,7 +37,7 @@ describe("--source default (#193)", () => {
     // Omitting --source sends the null sentinel and a sourceOnCreate label; the
     // pipeline resolves it, because only that layer knows which branch ran.
     // A flag-based heuristic here got --update-if-exists-against-a-missing-doc
-    // wrong, labelling a fresh CLI document 'agent' (review bug_005).
+    // wrong, labeling a fresh CLI document 'agent' (review bug_005).
     expect(SRC).toMatch(/options\.source \?\? null/);
     expect(SRC).toContain('sourceOnCreate: "cli"');
     expect(SRC).not.toContain("isUpdateIntent");

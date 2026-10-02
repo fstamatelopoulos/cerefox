@@ -21,7 +21,7 @@ const APP = "/app";
 const E2E_PREFIX = "[E2E-UI]";
 
 /**
- * Refuse to run against an unlabelled (production) target.
+ * Refuse to run against an unlabeled (production) target.
  *
  * This suite creates documents and projects through the real UI, so it writes
  * to whatever store the server it is talking to is pointed at. It is the last
@@ -52,8 +52,8 @@ function mayWriteToLiveTarget(): boolean {
 test.beforeAll(() => {
   if (!mayWriteToLiveTarget()) {
     throw new Error(
-      "Refusing to run UI e2e against an unlabelled (production) target. " +
-        "These tests create real documents and projects, and the Trash tests empty the whole trash. Point them at a labelled " +
+      "Refusing to run UI e2e against an unlabeled (production) target. " +
+        "These tests create real documents and projects, and the Trash tests empty the whole trash. Point them at a labeled " +
         "environment — CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e — " +
         "or set CEREFOX_ALLOW_PROD_WRITE_TESTS=1 if you truly mean production.",
     );
@@ -371,7 +371,7 @@ test.describe("Audit Log", () => {
 // Asserts the contract rather than a fixed outcome: the banner appears if and
 // only if the server reports an `env_label`. That way the test is meaningful
 // on a normal install (where it guards against a banner ever showing up
-// uninvited) and on a labelled staging server, without needing two harnesses.
+// uninvited) and on a labeled staging server, without needing two harnesses.
 test.describe("Environment banner", () => {
   test("shown only when the server reports an env_label", async ({ page, request }) => {
     const info = await (await request.get("/api/v1/version")).json();

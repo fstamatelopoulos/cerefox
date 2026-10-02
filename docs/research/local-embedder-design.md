@@ -27,8 +27,8 @@ host/container-local model can't serve.
 
 **Model (the only one we ship):** `nomic-ai/nomic-embed-text-v1.5`, dtype `q8`, **768-dim**,
 ~130 MB, ~8k-token context. 768 dims == Cerefox's `vector(768)` schema → **no schema
-change**. (cfcf's other catalogue models are 384-dim → would need a schema change → out of
-scope. Single model, no multi-model catalogue.)
+change**. (cfcf's other catalog models are 384-dim → would need a schema change → out of
+scope. Single model, no multi-model catalog.)
 
 We port cfcf's proven ONNX embedder (`../cfcf/packages/core/src/clio/embedders/`):
 `@huggingface/transformers` (transformers.js) + `onnxruntime-node`,
@@ -154,7 +154,7 @@ paths** — never in the cloud `cerefox init`.
 | cfcf file | → Cerefox | Adaptation |
 |---|---|---|
 | `embedders/onnx-embedder.ts` | `_shared/embeddings/onnx-embedder.ts` | return `number[]` (not `Float32Array`); add `role` → prefix; keep lazy load + warmup + progress |
-| `embedders/catalogue.ts` | inline single nomic entry (or a tiny const) | only nomic-embed-text-v1.5 (q8, 768) |
+| `embedders/catalog.ts` | inline single nomic entry (or a tiny const) | only nomic-embed-text-v1.5 (q8, 768) |
 | `embedders/types.ts` (`l2Normalise`, `Embedder`) | fold into the embedder module | — |
 
 ## Phases

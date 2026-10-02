@@ -125,7 +125,7 @@ describe("cerefox CLI smoke (built bin)", () => {
 
   test("`cerefox web --help` advertises the in-process server options", () => {
     // v0.6 wires the Hono server in-process — the v0.5 deferred-message
-    // stub is gone. Boot-and-bind behaviour lives in web-smoke.test.ts;
+    // stub is gone. Boot-and-bind behavior lives in web-smoke.test.ts;
     // here we just check the CLI surface advertises the right flags.
     const { stdout, status } = run(["web", "--help"]);
     expect(status).toBe(0);

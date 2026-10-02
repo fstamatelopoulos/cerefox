@@ -42,7 +42,7 @@
  * ## What it deliberately does not claim
  *
  * Routes with no zod schema get their path, parameters and description but no
- * response schema. Inventing a shape for an endpoint nobody has modelled would
+ * response schema. Inventing a shape for an endpoint nobody has modeled would
  * produce a spec that lies, which is worse than one that is candid about its
  * coverage. `x-cerefox-coverage` in the output records the split.
  */
@@ -242,8 +242,8 @@ export function routeInputs(route: Route): DerivedInputs {
 
 // ── Descriptions, from the guide's endpoint table ────────────────────────────
 
-/** Same normalisation the route-doc guard uses, so the two agree by construction. */
-export function normalise(method: string, path: string): string {
+/** Same normalization the route-doc guard uses, so the two agree by construction. */
+export function normalize(method: string, path: string): string {
   let p = path.split("?")[0]!.trim();
   if (p.startsWith(PREFIX)) p = p.slice(PREFIX.length) || "/";
   p = p.replace(/\{[^}]*\}/g, "*");
@@ -263,7 +263,7 @@ export function descriptionsFromGuide(): Map<string, string> {
     if (endpoints.length === 0) continue;
     // A cell may list several endpoints sharing one description (project CRUD).
     const desc = descCell!.replace(/\\\|/g, "|").trim();
-    for (const e of endpoints) out.set(normalise(e[1]!, e[2]!), desc);
+    for (const e of endpoints) out.set(normalize(e[1]!, e[2]!), desc);
   }
   return out;
 }
@@ -556,7 +556,7 @@ export function toJsonSchema(s: z.ZodType, io: "input" | "output"): Record<strin
 // ── Assembly ─────────────────────────────────────────────────────────────────
 
 /**
- * Endpoints whose body is served verbatim rather than modelled: markdown, CSV,
+ * Endpoints whose body is served verbatim rather than modeled: markdown, CSV,
  * and this document itself. Declaring a zod-derived schema for these would be a
  * lie of a different kind from an absent one, so they get their real media
  * type and a plain schema.
@@ -624,7 +624,7 @@ export function buildSpec(): Record<string, unknown> {
   let queryParams = 0;
 
   for (const r of routes) {
-    const key = normalise(r.method, r.path);
+    const key = normalize(r.method, r.path);
     const mapping = ROUTE_SCHEMAS[key];
     const inputs = routeInputs(r);
 
@@ -777,7 +777,7 @@ export function buildSpec(): Record<string, unknown> {
       nonJson: Object.keys(NON_JSON),
       uncovered: routes
         .filter((r) => {
-          const k = normalise(r.method, r.path);
+          const k = normalize(r.method, r.path);
           return !ROUTE_SCHEMAS[k]?.response && !NON_JSON[k];
         })
         .map((r) => `${r.method} ${PREFIX}${r.path}`),
@@ -785,7 +785,7 @@ export function buildSpec(): Record<string, unknown> {
   };
 }
 
-/** Canonical serialisation, so `--check` and the test compare like with like. */
+/** Canonical serialization, so `--check` and the test compare like with like. */
 export function specJson(spec: Record<string, unknown>): string {
   return JSON.stringify(spec, null, 2) + "\n";
 }

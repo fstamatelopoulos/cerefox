@@ -5,7 +5,7 @@
  * then calls `cerefox_search_docs` (default) / `cerefox_hybrid_search` /
  * `cerefox_fts_search` based on `--mode`. Same RPC choices the MCP
  * `cerefox_search` tool makes, so an agent that learned the MCP shape
- * sees the same behaviour from the CLI.
+ * sees the same behavior from the CLI.
  *
  * Default mode is `docs`: returns full reconstructed documents (the
  * recommended path for agents). `hybrid` returns ranked chunks. `fts`

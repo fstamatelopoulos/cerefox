@@ -152,7 +152,7 @@ export function registerDoctor(program: Command): void {
   program
     .command("doctor")
     .description("Run diagnostic checks against the installed Cerefox.")
-    .option("--json", "Emit machine-readable JSON (no colours, structured output).")
+    .option("--json", "Emit machine-readable JSON (no colors, structured output).")
     .option("--strict", "Exit non-zero when any check warns (default: only errors fail).")
     .action(action);
 }

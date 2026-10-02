@@ -253,7 +253,7 @@ describe("a search reply never exceeds max_bytes", () => {
   });
 
   test("a non-numeric match_count cannot become an unbounded query (#265)", async () => {
-    // NaN serialises to JSON null, and `LIMIT NULL` in Postgres is no limit.
+    // NaN serializes to JSON null, and `LIMIT NULL` in Postgres is no limit.
     const seen: Array<Record<string, unknown>> = [];
     const spy = {
       rpc: async (name: string, params: Record<string, unknown>) => {
@@ -268,7 +268,7 @@ describe("a search reply never exceeds max_bytes", () => {
 
   test("the below-confidence banner never displaces the answer it warns about", async () => {
     // #265: the ~190-byte advisory was charged to the budget but could not be
-    // shortened, so a result that fit on its own was dropped in favour of a
+    // shortened, so a result that fit on its own was dropped in favor of a
     // LONGER message carrying no content.
     const row = { ...chunk("Doc", "Setup", 0, 400, 0.4), below_confidence: true };
     const out = await search.handler(

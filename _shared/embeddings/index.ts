@@ -10,7 +10,7 @@
  * the module never reads env vars directly.
  *
  * Mirrors `supabase/functions/cerefox-mcp/embeddings.ts` exactly for v0.4.0
- * (extraction commit; no behaviour change). Future tweaks live here.
+ * (extraction commit; no behavior change). Future tweaks live here.
  */
 
 export const OPENAI_EMBEDDING_URL = "https://api.openai.com/v1/embeddings";

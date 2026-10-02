@@ -56,7 +56,7 @@ export function contentHash(text: string): string {
 
 /**
  * Derive a default `source_path` from a document title when none was
- * provided (e.g. paste ingestion). Matches Python's behaviour exactly:
+ * provided (e.g. paste ingestion). Matches Python's behavior exactly:
  *
  *     slug = re.sub(r"[^\w\s-]", "", title.lower())
  *     slug = re.sub(r"[\s_-]+", "-", slug).strip("-") or "document"

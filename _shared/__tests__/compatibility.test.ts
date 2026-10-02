@@ -100,7 +100,7 @@ describe("checkServerCompatibility", () => {
     expect(r.efSkipReason).toContain("predate v0.8");
   });
 
-  test("405 aggregator (pre-0.8 cerefox-mcp GET behaviour) → skipped, not blocking", async () => {
+  test("405 aggregator (pre-0.8 cerefox-mcp GET behavior) → skipped, not blocking", async () => {
     const r = await checkServerCompatibility({
       aggregatorUrl: url,
       bearer: "eyJ-fake",

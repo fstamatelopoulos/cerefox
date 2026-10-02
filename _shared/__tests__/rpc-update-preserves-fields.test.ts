@@ -13,7 +13,7 @@
  * Assign one of those unconditionally and every caller that omits it silently
  * rewrites it to the parameter default. That is what #191 was: `p_source TEXT
  * DEFAULT 'agent'` plus a bare `source = p_source`, so `server migrate-format`
- * relabelled every document it converted and any other partial update quietly
+ * relabeled every document it converted and any other partial update quietly
  * reset provenance to 'agent'. v0.11.1 had already fixed exactly this for
  * `metadata` after content updates were found to be wiping tags; `source` was
  * left out of that fix and took another release to surface.

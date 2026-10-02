@@ -52,7 +52,7 @@ no existing container test to extend, and its absence was not noticed.
   port, makes real requests from the host. Asserts the default publish is
   ungated (the exact v1.12.0 regression), that require-mode gates everyone,
   that a wrong key is refused, and that the key survives a container recreate.
-  **Verified to fail on the v1.12.0 behaviour**: the fix was reverted, the image
+  **Verified to fail on the v1.12.0 behavior**: the fix was reverted, the image
   rebuilt, and the test reproduced `host request got 401, expected 200`.
 - **A boot warning** (`containerGateWarning()`): `cerefox web` now says so
   loudly when a key is configured inside a container without require-mode —

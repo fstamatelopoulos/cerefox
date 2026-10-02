@@ -17,13 +17,13 @@ export const ConfigValueResponse = z.object({
 export type ConfigValueResponse = z.infer<typeof ConfigValueResponse>;
 
 export const SetConfigRequest = IdentityFields.extend({
-  value: z.string().describe("Stored as text; validated against the key's catalogue entry."),
+  value: z.string().describe("Stored as text; validated against the key's catalog entry."),
 });
 export type SetConfigRequest = z.infer<typeof SetConfigRequest>;
 
 // ── Config listing (#270) ────────────────────────────────────────────────────
-// Modelled from a live response and asserted by `api-schema-truth.test.ts`.
-// Every field derives from CONFIG_CATALOG, so this describes the catalogue as
+// Modeled from a live response and asserted by `api-schema-truth.test.ts`.
+// Every field derives from CONFIG_CATALOG, so this describes the catalog as
 // the API presents it.
 
 export const ConfigKeyEntry = z.object({
@@ -45,7 +45,7 @@ export const ConfigKeyEntry = z.object({
   /**
    * The retired environment variable still set for this key, or null. Named as
    * a boolean and is not one: the route sends { name, value } so the UI can
-   * quote the ignored setting back at the operator. Modelled from the live
+   * quote the ignored setting back at the operator. Modeled from the live
    * response after two wrong guesses — see api-schema-truth.test.ts.
    */
   retired_env_set: z.object({ name: z.string(), value: z.string() }).nullable(),

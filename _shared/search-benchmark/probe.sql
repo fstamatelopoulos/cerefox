@@ -1,5 +1,5 @@
 -- Search-calibration probe (iteration 48). NOT part of the schema: the benchmark
--- runner creates this on a LABELLED (non-production) target for one run and drops
+-- runner creates this on a LABELED (non-production) target for one run and drops
 -- it afterwards. Read-only.
 --
 -- Returns, for every current chunk of the documents in one project, the raw

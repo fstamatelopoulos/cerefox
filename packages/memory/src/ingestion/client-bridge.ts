@@ -266,7 +266,7 @@ export class IngestionDbBridge {
       throw new Error(msg);
     }
     // RPC returns either a single object or an array-with-one-object
-    // depending on Supabase client version. Normalise.
+    // depending on Supabase client version. Normalize.
     if (Array.isArray(data) && data.length > 0) {
       return data[0] as IngestDocumentRpcResult;
     }

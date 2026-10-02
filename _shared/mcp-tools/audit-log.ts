@@ -29,7 +29,7 @@ async function handler(
 ): Promise<string> {
   // v1.13.1: the filter is `by_author`; `author` is the caller's identity here
   // as on every other tool. The pre-1.13.1 shape (requestor + author-as-filter)
-  // is recognised and keeps its meaning — see auditLogIdentity().
+  // is recognized and keeps its meaning — see auditLogIdentity().
   const { identity, byAuthor } = auditLogIdentity(args);
   const params: Record<string, unknown> = {};
   if (args.document_id) params.p_document_id = args.document_id;

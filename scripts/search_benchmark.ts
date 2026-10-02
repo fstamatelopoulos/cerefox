@@ -3,7 +3,7 @@
  * search_benchmark.ts — the search-calibration benchmark (iteration 48).
  * Design: docs/specs/search-calibration.md.
  *
- * Ingests the synthetic corpus into a dedicated project on a LABELLED target,
+ * Ingests the synthetic corpus into a dedicated project on a LABELED target,
  * fetches the raw per-chunk ranking signals for every query through a temporary
  * probe function, applies each candidate formula client-side, and reports
  * per-category metrics. It first proves that its reproduction of the CURRENT
@@ -202,7 +202,7 @@ async function main(): Promise<void> {
         // first write
       }
       // Floors describe the built-in defaults, not this store's own tuning (a
-      // labelled store is often tuned): the same formula at the default gates.
+      // labeled store is often tuned): the same formula at the default gates.
       if (!calibrated) throw new Error("--write-floors needs schema >= 0.18.0");
       const defaults = linear("defaults", 0.7, { minScore: defaultFloor, minCoverage: schemaCoverageDefault }, bounded);
       all[embedder as string] = floorsFrom(String(schema), evaluate(defaults, queries, signals, keyById));

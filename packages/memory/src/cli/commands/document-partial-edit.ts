@@ -3,7 +3,7 @@
  * the partial-edit tools (iteration 34).
  *
  * Both go through the same `_shared/mcp-tools` handlers the MCP server uses, so
- * CLI and agent behaviour cannot diverge: same anchors, same ambiguity refusals,
+ * CLI and agent behavior cannot diverge: same anchors, same ambiguity refusals,
  * same concurrency contract, same audit entries. The only difference is the
  * author type recorded (`user` here, `agent` over MCP).
  *

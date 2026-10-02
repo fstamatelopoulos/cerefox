@@ -12,7 +12,7 @@
  * assertion is on the row, not on the response.
  *
  * Probe-and-skip when Supabase + OpenAI aren't both reachable, and refuses an
- * unlabelled (production) target like every other write-bearing suite.
+ * unlabeled (production) target like every other write-bearing suite.
  * Self-cleaning via the `[E2E web-attr]` title prefix.
  */
 
@@ -197,7 +197,7 @@ describe("/api/v1 caller attribution (HTTP boundary)", () => {
 
       // The documented consequence of author_type=agent, identical to MCP:
       // an agent-authored ingest lands in pending_review rather than approved
-      // (#241). Asserted because it is the behaviour most likely to surprise
+      // (#241). Asserted because it is the behavior most likely to surprise
       // someone, and because it is the proof that "matches MCP semantics" is
       // real rather than aspirational. Read straight from the column: the
       // review_workflow_enabled flag decides whether surfaces show the value,

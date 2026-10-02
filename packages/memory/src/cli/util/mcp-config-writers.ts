@@ -100,26 +100,26 @@ export interface ConfigWriter {
 export interface McpServerEntry {
   command: string;
   args: string[];
-  /** Only present for a labelled (non-production) environment — see envForEntry. */
+  /** Only present for a labeled (non-production) environment — see envForEntry. */
   env?: Record<string, string>;
 }
 
 /**
- * Environment to pin onto a LABELLED entry (#168 follow-up).
+ * Environment to pin onto a LABELED entry (#168 follow-up).
  *
  * Naming the entry `cerefox-staging` is only half the job. MCP clients spawn a
  * stdio server with the CLIENT's environment, not the shell where
  * `configure-agent` ran — and for a GUI client launched from the dock there is
  * no shell environment at all. `CEREFOX_CONFIG_DIR` would therefore be absent,
- * `resolveConfigDir()` would fall back to `~/.cerefox/`, and the entry labelled
+ * `resolveConfigDir()` would fall back to `~/.cerefox/`, and the entry labeled
  * `cerefox-staging` would quietly serve PRODUCTION.
  *
- * That is worse than the bug #168 fixed. The old behaviour clobbered the
+ * That is worse than the bug #168 fixed. The old behavior clobbered the
  * production entry visibly — the user noticed it was gone. This would leave
  * both entries in place, both apparently working, both writing to production,
  * with nothing at the agent layer to reveal it.
  *
- * So a labelled entry carries its own config directory. Production entries get
+ * So a labeled entry carries its own config directory. Production entries get
  * no `env` at all, keeping the default form byte-identical to what every
  * existing install already has.
  */
@@ -356,7 +356,7 @@ function directWrite(
  * else (the web banner, `doctor`'s title line, backup filenames), so it names
  * the server too: `cerefox-staging` sits alongside `cerefox` instead of
  * replacing it, and an agent can hold both at once — which is the point, since
- * exercising MCP behaviour against a pre-release server is exactly why staging
+ * exercising MCP behavior against a pre-release server is exactly why staging
  * exists.
  *
  * Unset (the default, and every production install) → `cerefox`, unchanged.

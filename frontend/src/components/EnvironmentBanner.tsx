@@ -11,7 +11,7 @@ import { fetchVersion } from "../api/version";
  * look identical while pointing at different databases — and the destructive
  * actions in this UI (delete, restore, ingest over an existing document) are
  * not ones you want to take against the wrong one. The label is the cheapest
- * possible guard: visible on every page, impossible to miss, zero behaviour
+ * possible guard: visible on every page, impossible to miss, zero behavior
  * change.
  *
  * Renders nothing when the variable is unset, which is every normal install.

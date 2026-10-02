@@ -125,8 +125,8 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     const targetEnv = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
     if (fileEnv !== targetEnv) {
       warn(
-        `This snapshot came from ${fileEnv ? `the "${fileEnv}" environment` : "an unlabelled (production) environment"}, ` +
-          `but you are restoring into ${targetEnv ? `"${targetEnv}"` : "an unlabelled (production) environment"}.`,
+        `This snapshot came from ${fileEnv ? `the "${fileEnv}" environment` : "an unlabeled (production) environment"}, ` +
+          `but you are restoring into ${targetEnv ? `"${targetEnv}"` : "an unlabeled (production) environment"}.`,
       );
     }
   }

@@ -44,7 +44,7 @@ function mint(): string {
   return API_KEY_PREFIX + randomBytes(32).toString("base64url");
 }
 
-/** Enough to recognise a key in a log without being enough to use it. */
+/** Enough to recognize a key in a log without being enough to use it. */
 function mask(key: string): string {
   const body = key.startsWith(API_KEY_PREFIX) ? key.slice(API_KEY_PREFIX.length) : key;
   if (body.length <= 8) return `${API_KEY_PREFIX}****`;

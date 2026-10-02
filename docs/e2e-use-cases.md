@@ -16,7 +16,7 @@ CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts
 CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts
 
 # Release acceptance — 14 cases, live, self-cleaning (staging config dir;
-# refuses unlabelled prod targets)
+# refuses unlabeled prod targets)
 cd packages/memory && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test test/acceptance
 
 # UI e2e tests (Playwright, requires `cerefox web` running)
@@ -203,7 +203,7 @@ probe-and-skip on Supabase reachability **and on deployed schema ≥ 0.5.0**
 
 `packages/memory/test/acceptance/release-acceptance.test.ts` — 14 cases, live,
 self-cleaning. Run: `cd packages/memory && CEREFOX_CONFIG_DIR=~/.cerefox/staging
-bun test test/acceptance` (refuses unlabelled production targets).
+bun test test/acceptance` (refuses unlabeled production targets).
 
 | Suite | Test | Use Case | Status |
 |-------|------|----------|--------|
@@ -225,7 +225,7 @@ Spawns a real `cerefox web` from `packages/memory/dist` and drives `/api/v1`
 over HTTP against a live database, asserting on the **stored rows**, not the
 responses. Probe-and-skip via the shared `_live-probe.ts`, which *throws* if
 the CLI rejects the probe command (the suite had skipped silently from v0.9.0
-to v1.10.1 because its probe used a renamed verb). Refuses an unlabelled
+to v1.10.1 because its probe used a renamed verb). Refuses an unlabeled
 (production) target. Self-cleans `[E2E web-attr]` / `[E2E …]` data.
 
 | Suite | Test | Use Case | Status |

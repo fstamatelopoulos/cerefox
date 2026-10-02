@@ -79,7 +79,7 @@ describe("cerefox web smoke", () => {
       if (!ready) {
         // `cerefox web` deliberately refuses to boot when the deployed schema is
         // below this client's minimum ("Refusing to start"). That is correct
-        // behaviour, not a broken build — a developer whose store is mid-upgrade
+        // behavior, not a broken build — a developer whose store is mid-upgrade
         // should see a skip here, not a red suite. Same probe-and-skip spirit as
         // the Supabase-backed suites.
         if (/Refusing to start|below the required/.test(stderr)) {

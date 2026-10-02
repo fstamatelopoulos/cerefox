@@ -231,7 +231,7 @@ Quick note: Agent → cerefox-ingest Edge Function → OpenAI API → DB
 ### Schema: no changes required
 
 `embedding_primary VECTOR(768)` already works. `text-embedding-3-small` with
-`dimensions=768` outputs L2-normalised 768-dim vectors. Cosine similarity (pgvector `<=>`)
+`dimensions=768` outputs L2-normalized 768-dim vectors. Cosine similarity (pgvector `<=>`)
 works correctly.
 
 ### Tasks
@@ -425,7 +425,7 @@ See `docs/requirements-and-specs.md` FR-4.10–4.14 and FR-11 for detailed speci
 ### 12A: Small-to-Big Retrieval
 
 For large documents, search returns matched chunks + N neighbor chunks instead of the full
-document. Below a configurable threshold, current full-document behaviour is retained.
+document. Below a configurable threshold, current full-document behavior is retained.
 
 **Config parameters**:
 - `CEREFOX_SMALL_TO_BIG_THRESHOLD` — doc size in chars above which chunk-level retrieval
@@ -663,7 +663,7 @@ key-value pairs. Multiple pairs are ANDed. NULL filter = no restriction (backwar
 |---|------|--------|-------|
 | 13.14 | Add Metadata Filter section to `browser.html` | Done | `<details>` collapsible; `<datalist>` autocomplete; dynamic rows via plain JS; ✕ per row |
 | 13.15 | Update `/search` route in `routes.py` to collect and assemble `metadata_filter` | Done | Parallel `meta_filter_key[]` / `meta_filter_value[]` params; all 4 modes get filter |
-| 13.16 | Ensure HTMX search trigger includes metadata filter params | Done | Named inputs in-form; HTMX serialises them automatically; active pairs restored from context |
+| 13.16 | Ensure HTMX search trigger includes metadata filter params | Done | Named inputs in-form; HTMX serializes them automatically; active pairs restored from context |
 
 #### Step 8 — GPT Actions schema
 
@@ -725,10 +725,10 @@ limit (MCP path). Server ceiling enforced via `min(agent_request, SERVER_MAX)`.
 | 13C.3 | Pass `max_bytes=None` in all CLI search commands (`cli.py`) | Done | CLI never truncates |
 | 13C.4 | `cerefox-search` Edge Function: add ceiling enforcement `Math.min(requested ?? MAX_BYTES, MAX_BYTES)` | Done | Agent can request less, never more |
 | 13C.5 | Add optional `max_bytes` to `cerefox-mcp` Edge Function tool schema + pass-through | Done | Agents can control budget via MCP tool parameter |
-| 13C.6 | Rewrite `_handle_search` in `mcp_server.py`: read/cap agent `max_bytes`, enforce ceiling, emit truncation message | Done | Local MCP mirrors Edge Function ceiling behaviour |
+| 13C.6 | Rewrite `_handle_search` in `mcp_server.py`: read/cap agent `max_bytes`, enforce ceiling, emit truncation message | Done | Local MCP mirrors Edge Function ceiling behavior |
 | 13C.7 | Lower `p_small_to_big_threshold` default from 40 000 → 20 000 chars in `rpcs.sql` | Done | 5 docs × 20 KB ≈ 100 KB, comfortably under 200 KB ceiling |
 | 13C.8 | Update unit tests in `tests/retrieval/test_search.py` — split truncation tests, add `TestMaxBytesParameter` class | Done | 8 new tests covering all modes and edge cases |
-| 13C.9 | Create `docs/guides/response-limits.md` | Done | Full guide: per-path behaviour, server ceiling, agent parameter |
+| 13C.9 | Create `docs/guides/response-limits.md` | Done | Full guide: per-path behavior, server ceiling, agent parameter |
 | 13C.10 | Update `docs/solution-design.md` §5.2 and §5.4 | Done | Threshold 40K → 20K; opt-in limit model documented |
 | 13C.11 | Update `docs/guides/configuration.md` — response limits section and threshold default | Done | Threshold 40K → 20K; new opt-in model table |
 | 13C.12 | Update `CLAUDE.md` — fix 65 KB reference → 200 KB + opt-in model note | Done | |
@@ -1054,7 +1054,7 @@ Edge Function count stays at 7 (1 MCP + 6 primitive); MCP tool count stays at 6.
 
 ---
 
-### 16B: Metadata-Only Document Search + Project Name Standardisation
+### 16B: Metadata-Only Document Search + Project Name Standardization
 
 **Goal**: Two related improvements delivered together:
 
@@ -1064,7 +1064,7 @@ Edge Function count stays at 7 (1 MCP + 6 primitive); MCP tool count stays at 6.
    caring about content, or that wants a list of matching document IDs to selectively retrieve
    via `cerefox_get_document`. Resolves [issue #9](https://github.com/fstamatelopoulos/cerefox/issues/9).
 
-2. Project name standardisation across all MCP tool interfaces -- agents interact with project
+2. Project name standardization across all MCP tool interfaces -- agents interact with project
    names everywhere; UUIDs are an internal implementation detail. Includes returning
    `project_names TEXT[]` alongside `project_ids UUID[]` in all document results, and a new
    `cerefox_list_projects` MCP tool for project discovery.
@@ -1234,7 +1234,7 @@ Returns: Array of {id, name, description} for all projects.
 | 16B.32 | Update `CLAUDE.md` -- Edge Function inventory and architecture diagram | Done | 8 Edge Functions, 8 MCP tools; diagram updated with new RPCs |
 | 16B.33 | Update `MEMORY.md` -- revised counts and current state | Done | |
 | 16B.34 | Update `docs/solution-design.md` -- metadata search and project name pattern | Done | Updated in 16A; metadata search noted in access path diagram |
-| 16B.35 | Add entries to Cerefox Decision Log | Done | 3 entries: metadata search as separate primitive, project_name standardisation, list_projects for discovery |
+| 16B.35 | Add entries to Cerefox Decision Log | Done | 3 entries: metadata search as separate primitive, project_name standardization, list_projects for discovery |
 
 **Deliverable**: Agents query by metadata and filter by project name across all MCP paths.
 All document results include human-readable project names. Agents can discover available
@@ -2056,7 +2056,7 @@ users.
 |---|------|--------|-------|
 | 22E.1 | Refactor `src/cerefox/cli.py mcp` command | Done | `_run_mcp()` probes with `npx --no-install @cerefox/memory --version` first. Success → `os.execvp` hands stdio off to the npm bin. Failure (npx missing or probe non-zero) → falls back to `cerefox.mcp_server.run()` with a stderr nudge. Probe uses `--no-install` to avoid hitting the npm registry on every MCP server start. |
 | 22E.2 | Update `src/cerefox/mcp_server.py` with `cerefox_get_help` so the legacy fallback exposes 10 tools too | Done | `_handle_get_help()` reads `AGENT_QUICK_REFERENCE.md` via `cerefox.docs_resources` and returns the same surface as the TS handler: full content + index when no topic, H2 substring match when given a topic. Best-effort `log_usage` records `access_path = "local-mcp"`. |
-| 22E.3 | Unit tests for the soft-wrapper logic | Done | `tests/test_mcp_soft_wrapper.py` covers the three soft-wrapper paths (npx + package present → execvp; npx missing → fallback; package not installed → fallback) and verifies the `--no-install` probe flag. Plus 5 tests pinning the Python `cerefox_get_help` behaviour (full, topic match, unknown topic, log_usage path, log_usage failure-tolerant). |
+| 22E.3 | Unit tests for the soft-wrapper logic | Done | `tests/test_mcp_soft_wrapper.py` covers the three soft-wrapper paths (npx + package present → execvp; npx missing → fallback; package not installed → fallback) and verifies the `--no-install` probe flag. Plus 5 tests pinning the Python `cerefox_get_help` behavior (full, topic match, unknown topic, log_usage path, log_usage failure-tolerant). |
 
 ### 22F: Publishing — `@cerefox/memory` to npm
 
@@ -2349,7 +2349,7 @@ The six brand-new commands. `init` is the headline. `doctor` is the second-most-
 |---|------|--------|-------|
 | 23E.1 | `cerefox init` — interactive bootstrap | Done | 5-step flow with `prompts` (Ctrl-C-safe wrappers in `_shared/cli-core/prompts.ts`). Validates Supabase + OpenAI before writing. Writes `.env` with chmod 0600 (POSIX). **Refinement vs original plan**: schema deploy is *not* in scope for v0.5 — the npm CLI doesn't yet have the Postgres direct connection. Init prints the `uv run python scripts/db_deploy.py` command and links the relevant doc; v0.6 ports the deploy step. Self-doc ingest call is a TODO comment until Part 23F lands. Optional final step wires Claude Code or Claude Desktop via the same writer 23E.5 uses. |
 | 23E.2 | `cerefox init --config <file>.json` non-interactive mode | Done | Same validation pipeline, prompts replaced by JSON-file reads. Strict schema check: `CEREFOX_SUPABASE_URL`/`CEREFOX_SUPABASE_KEY`/`OPENAI_API_KEY` required; `CEREFOX_DATABASE_URL`/`CEREFOX_AUTHOR_*` optional. |
-| 23E.3 | `cerefox doctor` — diagnostic | Done | New `packages/memory/src/cli/util/checks.ts` houses 9 reusable checks (binary, runtime, version, config (mode-0600 warn), supabase, openai, schema, postgres (skipped in v0.5), mcp clients). Each returns `{name, status, detail, hint}`. Statuses include `skipped` for "deferred to v0.6" cases. `doctor --json` emits the full array; human mode renders a coloured-symbol-per-row table. Exit 1 iff any `error`; warns / skipped don't fail. **Refinement vs original plan**: schema-version check no longer asserts `deployed === installed` — those ratchet independently, and the v0.3.0 schema-mismatch banner is a UI concern, not a doctor concern. |
+| 23E.3 | `cerefox doctor` — diagnostic | Done | New `packages/memory/src/cli/util/checks.ts` houses 9 reusable checks (binary, runtime, version, config (mode-0600 warn), supabase, openai, schema, postgres (skipped in v0.5), mcp clients). Each returns `{name, status, detail, hint}`. Statuses include `skipped` for "deferred to v0.6" cases. `doctor --json` emits the full array; human mode renders a colored-symbol-per-row table. Exit 1 iff any `error`; warns / skipped don't fail. **Refinement vs original plan**: schema-version check no longer asserts `deployed === installed` — those ratchet independently, and the v0.3.0 schema-mismatch banner is a UI concern, not a doctor concern. |
 | 23E.4 | `cerefox status` — quick sanity | Done | Three checks: version + config + supabase. Skips OpenAI + schema + MCP-config probes for speed. Tested live: completes in < 200ms on the maintainer's machine. |
 | 23E.5 | `cerefox configure-agent --tool <client>` | Done | New `packages/memory/src/cli/util/mcp-config-writers.ts` houses the per-client config writers (Claude Code + Claude Desktop in v0.5 Phase 1). Each writer: reads existing config → backs up to `<file>.pre-cerefox.bak` → merges (preserves other `mcpServers` entries) → writes back. `--dry-run` prints the planned write. `--config-path` overrides the default location (used by tests). `--no-backup` suppresses the backup. Server entry uses the v0.4.1 canonical spelling: `npx -y --package=@cerefox/memory cerefox-mcp`. Unknown `--tool` → exit 1 with the list of supported values. |
 | 23E.6 | `cerefox self-update` (+ `cerefox upgrade` alias) | Done | Detects installer by inspecting `process.argv[1]` against known prefixes (`.bun/`, `.pnpm/`, `.yarn/`, default npm). Wraps `<rt> install -g @cerefox/memory@<version>` via `child_process.spawnSync` with stdio inherit (so the user sees the runtime's progress). `--check` queries the npm registry and prints current vs target without writing. `--version` pins. `upgrade` is a first-class alias registered on the same action (per maintainer feedback during plan review). After successful upgrade, prints the `cerefox sync-self-docs` nudge — Part 23F wires the automatic call. |
@@ -2367,7 +2367,7 @@ automatically as part of `cerefox init`. v0.4 already shipped Layer 3
 | 23F.3 | Wire `sync-self-docs` into `cerefox init` final step | Done | `init` now dynamic-imports `runSyncSelfDocs` and calls it after writing the .env + validating credentials. Best-effort: if the ingest fails (e.g. schema not deployed yet), warn and continue. `--skip-self-docs` opts out. |
 | 23F.4 | Wire `sync-self-docs` into `cerefox self-update` final step | Done | After a successful package install, self-update calls `runSyncSelfDocs` so bundled-docs ingest follows the version transition. Best-effort: failure prints a yellow ⚠ pointing at the manual `cerefox sync-self-docs` command. |
 | 23F.5 | Web UI: hide `_`-prefixed projects from default listings | Done | `frontend/src/hooks/useProjects.ts` gains an `isSystemProject(name)` predicate (true when name starts with `_`) and a `useProjects({ includeSystem })` parameter (default `false`). Pages that currently call `useProjects()` get the filtered list automatically; a future `--include-system` toggle is one line of UI away. Query-key includes `includeSystem` so React Query caches both variants separately. |
-| 23F.6 | Self-doc ingest live smoke | Done | Smoke-tested against the maintainer's KB by syncing into a throwaway `_e2e-v0.5-self-docs` project: 16 bundled docs detected, 16 ingest-handler calls executed, 6 documents (the ones with no pre-existing identical-title match) ended up tagged with the new `source=cerefox-self-docs` metadata. The other 10 detected pre-existing content from prior `sync_docs.ts` runs and no-op'd — expected behaviour from `ingestTool`'s content-hash dedup. Documented as a non-test smoke step in the manual test plan. |
+| 23F.6 | Self-doc ingest live smoke | Done | Smoke-tested against the maintainer's KB by syncing into a throwaway `_e2e-v0.5-self-docs` project: 16 bundled docs detected, 16 ingest-handler calls executed, 6 documents (the ones with no pre-existing identical-title match) ended up tagged with the new `source=cerefox-self-docs` metadata. The other 10 detected pre-existing content from prior `sync_docs.ts` runs and no-op'd — expected behavior from `ingestTool`'s content-hash dedup. Documented as a non-test smoke step in the manual test plan. |
 
 ### 23G: CLI polish
 
@@ -2746,17 +2746,17 @@ scripts/reindex_all.ts                       # NEW
 
 | # | Risk / open question | Resolves in | Default plan |
 |---|---|---|---|
-| R1 | **Chunking byte-parity across 3 runtimes** (Python + TS + EF). Subtle differences (regex semantics, trim behaviour, line-ending normalisation) could produce 1-character chunk-boundary differences → re-embed cost for the entire corpus. | Part 25A | Cross-runtime fixture tests with the captured Python outputs as ground truth. TS chunker iterated until byte-identical. EF chunker fixture parity recorded as informational (no test failure — EF stays independent), and any drift gets called out in 25K's notes. |
+| R1 | **Chunking byte-parity across 3 runtimes** (Python + TS + EF). Subtle differences (regex semantics, trim behavior, line-ending normalization) could produce 1-character chunk-boundary differences → re-embed cost for the entire corpus. | Part 25A | Cross-runtime fixture tests with the captured Python outputs as ground truth. TS chunker iterated until byte-identical. EF chunker fixture parity recorded as informational (no test failure — EF stays independent), and any drift gets called out in 25K's notes. |
 | R2 | **`_shared/embeddings/` lacks batch-size limiting**. Bulk-ingesting a 100-chunk doc would blow OpenAI's per-request limit (which is 2048 input items but degrades earlier in practice). | Part 25B | Add `batchSize` param (default 96) to `embedBatch()`. Internally `chunk-then-flatten` over the batches. Python pipeline tests cover this; TS tests must too. |
 | R3 | **`content_hash` algorithm duplicated across 3 runtimes**. Drift = dedup breaks. v0.6's `/edit` short-circuit already uses the algorithm inline in `documents-write.ts`. | Part 25C | Promote v0.6's inline `normalizeForHash` into `_shared/ingest/pipeline-helpers.ts`. Single source of truth for TS web + TS CLI pipeline. EF keeps its own implementation; fixture-tested. |
 | R4 | **Postgres SSL / connection-string handling** for `db_deploy.ts` + `db_migrate.ts`. `CEREFOX_DATABASE_URL` may include `?sslmode=require` or similar. | Part 25H | Use `postgres` (Porsager) lib's URL parser; honor `sslmode`; fall back to `{ ssl: 'require' }` for Supabase URLs. Test against actual `CEREFOX_DATABASE_URL` early in 25H. |
 | R5 | **Schema deploy idempotency**. `db_deploy.ts` should refuse to re-deploy unless `--reset` is passed (matches Python). | Part 25H | Detect existing `cerefox_*` tables before applying schema; refuse with clear error message if found; `--reset` prompts then drops + redeploys. |
-| R6 | **Project M2M atomicity**. Python pipeline does `ingest_document_rpc` + `assign_document_projects` as two separate operations; second failure leaves doc with wrong project state. | Part 25D | Match Python's behaviour exactly (two operations, second-step failure logged but non-blocking). Pushing M2M into the RPC is a separate concern, post-v0.7. |
+| R6 | **Project M2M atomicity**. Python pipeline does `ingest_document_rpc` + `assign_document_projects` as two separate operations; second failure leaves doc with wrong project state. | Part 25D | Match Python's behavior exactly (two operations, second-step failure logged but non-blocking). Pushing M2M into the RPC is a separate concern, post-v0.7. |
 | R7 | **Title-change re-embedding**. When metadata-only update changes the title, TS pipeline must re-embed ALL chunks (title-boosted FTS / embeddings). Easy to miss. | Part 25E | Port the exact branch from Python; explicit test in 25E (update title only → assert all chunks' embeddings changed). |
 | R8 | **Review-status auto-transition**. `author_type='agent'` + content change → RPC's `p_review_status='pending_review'`; `author_type='user'` → `'approved'`. | Parts 25D + 25E | Mirror Python's flag construction; test both author types in the test suite for 25D and 25E. |
 | R9 | **`audit-and-governance` test port complexity**. `tests/db/test_audit_and_governance.py` (396 lines, 24 tests) exercises `set_review_status` + `set_version_archived` + audit-entry queries — all logic that's now in the Hono routes (v0.6) PLUS in MCP (Python, stays). | Part 25J | Port the parts that test the v0.6 Hono routes (move to `packages/memory/test/web-integration/governance.test.ts`); leave the MCP-side coverage in pytest under `tests/test_mcp_server.py` (or a focused new file) since Python MCP keeps that surface. |
 | R10 | **`reindex_all.ts` dependency on the TS pipeline**. Python's `reindex_all.py` shells out to `uv run cerefox reindex` which does the actual work via the pipeline. The TS port needs `cerefox reindex` to also work in TS — which requires the pipeline's chunk-update + embedder code paths to be reachable via the CLI. | Part 25I | Verify in Part 25I whether `cerefox reindex` (TS) already exists or needs to be added. If needed, add it as a thin CLI command calling the pipeline. |
-| R11 | **`postgres` lib's behaviour on huge SQL files** (`schema.sql` is ~500 lines; `rpcs.sql` is larger). Multi-statement SQL has historically been tricky in Node Postgres clients. | Part 25H | Test early with the full schema.sql. If multi-statement support is flaky, split into individual statements before sending (the SQL files are statically structured — easy to parse `;` boundaries). |
+| R11 | **`postgres` lib's behavior on huge SQL files** (`schema.sql` is ~500 lines; `rpcs.sql` is larger). Multi-statement SQL has historically been tricky in Node Postgres clients. | Part 25H | Test early with the full schema.sql. If multi-statement support is flaky, split into individual statements before sending (the SQL files are statically structured — easy to parse `;` boundaries). |
 
 **For a fresh-session pickup**: this iter-25 design is self-contained. Read this section + the v0.6.0 closing entry in Cerefox Decision Log Q2 Part 4 + the v0.6 post-cut follow-up entry (test migration policy) + design doc §13 v0.7.0 + design doc §19 (test migration policy). All locked decisions are documented above; R1-R11 risks have default plans for each. No pre-implementation re-deciding needed; nothing should block on day 1.
 
@@ -2816,7 +2816,7 @@ Plus v0.7.x carryovers that don't justify their own patch (write-commands.test.t
 | 8 | **Daemon-mode mirrors cfcf's pattern precisely + uses subcommands** (pidfile JSON shape `{pid, port, startedAt}`, graceful + SIGTERM stop, signal-0 + HTTP probe for status). Surface: `cerefox web start/stop/status` (subcommand-based, matching cfcf). | Don't reinvent. Lifted from `~/src/cfcf/packages/cli/src/{commands/server.ts, server-spawn.ts}` (~412 LOC total). Subcommand surface is cleaner than flag-based; v0.9 will redesign all CLI verbs anyway (Iteration 27), so no point keeping the flag form for one release. |
 | 9 | **Daemon-mode is Unix-first; Windows is a follow-up.** | Cerefox's primary users are on macOS/Linux. Windows daemon-mode requires service/scheduled-task integration. Out of v0.8 scope. |
 | 10 | **`cerefox init` deploys server iff `cerefox_schema_version()` 404s.** | Detection rather than prompt-every-time. Existing users see zero change. |
-| 11 | **GPT Actions OpenAPI sync handled via (a) audit-and-fix in Part 26L; (b) `RELEASING.md` maintainer-facing playbook checklist; (c) CLAUDE.md project-rule one-liner.** No CI gate. | Audit done during this design pass (results in `docs/research/gpt-actions-drift-audit-2026-05-29.md` — 17 drift items, ~1-2 hours to fix). Going forward, the heuristic CI script idea was rejected as too lossy (false-positives on comment-only EF edits; false-negatives on behavioural changes). The discipline lives in the release playbook + project-rule instead. |
+| 11 | **GPT Actions OpenAPI sync handled via (a) audit-and-fix in Part 26L; (b) `RELEASING.md` maintainer-facing playbook checklist; (c) CLAUDE.md project-rule one-liner.** No CI gate. | Audit done during this design pass (results in `docs/research/gpt-actions-drift-audit-2026-05-29.md` — 17 drift items, ~1-2 hours to fix). Going forward, the heuristic CI script idea was rejected as too lossy (false-positives on comment-only EF edits; false-negatives on behavioral changes). The discipline lives in the release playbook + project-rule instead. |
 | 12 | **Python CLI deprecation banner: CLI subcommands only; Python MCP server is silent.** | Per maintainer call 2026-05-28: Python MCP stays as first-class fallback. Banner on MCP would be noise; the user *chose* the Python path. |
 | 13 | **v0.7.x carryovers folded into v0.8's cleanup Part (26K).** | Three small items (write-commands flake purge, resolveSpaDist priority swap, backup/restore ports) fit one Part. Avoids three v0.7.x patch cuts. |
 | 14 | **Compat matrix initial values: `minSchema: "0.3.1"`, `minEdgeFunctions: "0.6.0"`.** | Schema 0.3.1 is the current `@version:` marker. v0.6.0 is the first version where the EFs' response shapes match what the v0.6 TS web consumes; v0.5 EFs predate the iter-24 response-shape locks. Confirmable during 26C. |
@@ -3040,7 +3040,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 1. **CLI verb normalization — RENAME-ONLY — + CLI ↔ web parity.** Redesign the CLI to a resource-verb shape (`cerefox <resource> <verb> [args]`) matching cfcf's convention. **This is a pure rename of the *existing* command surface — no new commands.** Every old top-level verb (`get-doc`, `list-docs`, `delete-doc`, …) becomes a husk that prints "use `cerefox <resource> <verb>` instead" and exits non-zero. Genuinely new commands (`document edit`, `document restore`/undelete, `version archive`, `audit tail/search`) are **deferred to v0.9.1** as deliberate feature adds — captured in the v0.9.1 scope block at the end of this iteration. Also run a CLI↔web parity audit and close a *capped* set of small gaps. v0.9.0 is the last release with the old verbs reachable (as husks).
 2. **Retire the Python surfaces to husks.** (a) **Python web** (`src/cerefox/api/app.py`, `routes_api.py`) collapses to an **almost-empty husk** that prints "the Python web is removed; use `cerefox web` (TypeScript, from `@cerefox/memory`)" and exits — no FastAPI app, no routes. (b) **Python CLI subcommands** all become husks that redirect to the TS CLI equivalent — **except `cerefox mcp`**, which stays functional (it's how git-pull users launch the surviving Python MCP server). (c) The **Python MCP server** (`src/cerefox/mcp_server.py`) + the modules it imports (`embeddings`, `ingestion`, `chunking`, `config`, `db`) stay in the repo **as-is, unmaintained**, purely so `git pull && uv run cerefox mcp` keeps working for people mid-migration. We do **not** maintain or test it going forward.
 3. **Delete ALL Python tests; retire pytest as a test runner.** Per the maintainer (2026-05-30): since the Python side is no longer maintained, delete `tests/**/*.py` wholesale (no subprocess-pattern port). After v0.9: **zero `.py` in `tests/`**, one test runner (`bun test`), `pytest` removed from `pyproject.toml`'s dev deps. `pyproject.toml` / `uv.lock` / `.python-version` STAY (the Python runtime stays for the MCP server). **Accepted tradeoff:** the surviving Python code ships untested — acceptable because it's a frozen, unmaintained fallback, fully superseded by the TS implementation.
-4. **Comprehensive documentation overhaul** (Fotis, 2026-05-29/30). A **major cleanup of every document, everywhere** — not just README/quickstart. Restructure all user-facing docs around **two paths, both kept and clearly labelled**: **(a) End user (no repo checkout)** — install script + `cerefox` CLI (`init` → `deploy-server` → `configure-agent`); **(b) Contributor / "play with the code"** — repo-clone flow (uv, bun, repo scripts). Audit the full `docs/` tree + root markdown for stale Python-CLI/Python-web references, the old verb names, and repo-clone-only assumptions. Detailed scope to be finalized with the maintainer after a first implementation pass.
+4. **Comprehensive documentation overhaul** (Fotis, 2026-05-29/30). A **major cleanup of every document, everywhere** — not just README/quickstart. Restructure all user-facing docs around **two paths, both kept and clearly labeled**: **(a) End user (no repo checkout)** — install script + `cerefox` CLI (`init` → `deploy-server` → `configure-agent`); **(b) Contributor / "play with the code"** — repo-clone flow (uv, bun, repo scripts). Audit the full `docs/` tree + root markdown for stale Python-CLI/Python-web references, the old verb names, and repo-clone-only assumptions. Detailed scope to be finalized with the maintainer after a first implementation pass.
 
 **Locked decisions (2026-05-30 maintainer review):**
 
@@ -3078,7 +3078,7 @@ find /tmp/cerefox-dump -name '*.md' | wc -l              # sanity count
 - **Python web → husk** (L3): reduce `src/cerefox/api/app.py` + `routes_api.py` to an almost-empty husk — no FastAPI app, no routes; any entry point prints "the Python web is removed; use `cerefox web` (TypeScript) — `npm install -g @cerefox/memory`" and exits non-zero. `cli.py`'s `web` subcommand redirects the same way. Drop FastAPI/uvicorn from `pyproject.toml` deps. (Files kept as husks, not deleted, to avoid touching every importer.)
 - **Python CLI → husks except `mcp`** (L4): every Python `cerefox <subcommand>` except `mcp` becomes a husk that prints the TS-CLI equivalent and exits non-zero. `cerefox mcp` stays fully functional (launches the surviving Python MCP server). Remove the `CEREFOX_NO_DEPRECATION_BANNER` opt-out (the banner's job is now done by the husks).
 - **Delete ALL Python tests** (L2): remove `tests/**/*.py` wholesale (including the already-dead `test_mcp_soft_wrapper.py` — soft-wrapper removed v0.5.2). No subprocess-pattern port. Remove `pytest` (+ plugins) from `pyproject.toml` dev deps. CI test job runs only `bun test` (+ `cd _shared && bun test`). `pyproject.toml`/`uv.lock`/`.python-version` stay (runtime).
-- **Comprehensive documentation overhaul** (full `docs/` + root audit): two clearly-labelled paths — **end user** (install script + `cerefox` CLI: `init → deploy-server → configure-agent`, no clone) and **contributor** (repo clone, uv/bun, repo scripts). README "Choose your path" split; reframe `quickstart.md` as the contributor flow; sweep every doc for stale Python-CLI/Python-web references and old verb names; cross-link `setup-supabase.md` + `connect-agents.md`. Final scope confirmed with the maintainer after a first pass.
+- **Comprehensive documentation overhaul** (full `docs/` + root audit): two clearly-labeled paths — **end user** (install script + `cerefox` CLI: `init → deploy-server → configure-agent`, no clone) and **contributor** (repo clone, uv/bun, repo scripts). README "Choose your path" split; reframe `quickstart.md` as the contributor flow; sweep every doc for stale Python-CLI/Python-web references and old verb names; cross-link `setup-supabase.md` + `connect-agents.md`. Final scope confirmed with the maintainer after a first pass.
 - **CHANGELOG v0.9.0** with an old→new verb table + the Python-web/Python-CLI husk transitions + the `CEREFOX_NO_DEPRECATION_BANNER` removal.
 - **Migration guide**: new `docs/guides/migration-v0.9.md` (largest user-impact change since v0.5) — verb rename table, Python-surface husks, what still works (`uv run cerefox mcp`).
 - **CLAUDE.md**: a `CLI verb conventions` section codifying the resource-verb pattern + dead-code cleanup (`_stub.ts` and any remaining `stubAction` callers).
@@ -4081,7 +4081,7 @@ untested against production until a staging Supabase project exists (below).
   disagree about a key's meaning or default, and value validation lives there
   too (the RPC allow-lists the *key* but stores the value as opaque text, so
   `min_search_score = 5` used to be accepted and silently suppress every
-  result). Two deliberate behaviours: keys that change what agents see
+  result). Two deliberate behaviors: keys that change what agents see
   (`relations_enabled`, `require_requestor_identity`) require a confirmation
   naming the consequence, never a bare toggle; and a `CEREFOX_*` variable set on
   the server is shown read-only as an override, because it beats the stored

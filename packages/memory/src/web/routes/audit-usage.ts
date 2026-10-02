@@ -12,7 +12,7 @@
  * doesn't actually stream — it buffers the full CSV in an io.StringIO
  * and returns a single Response (line 1414). At personal-KB scale (the
  * default `limit` is 10000) that's a few MB max. We match Python's
- * behaviour exactly: build the CSV in memory, return it with the same
+ * behavior exactly: build the CSV in memory, return it with the same
  * Content-Type / Content-Disposition headers. Streaming would be a
  * future optimisation if logs ever grew past hundreds of MB.
  */

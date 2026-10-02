@@ -1,7 +1,7 @@
 # Search calibration vocabulary
 
-A synthetic corpus and labelled query set for `docs/specs/search-calibration.md`.
-Everything is invented: people, organisations (Bluefen Systems, Halden & Crewe
+A synthetic corpus and labeled query set for `docs/specs/search-calibration.md`.
+Everything is invented: people, organizations (Bluefen Systems, Halden & Crewe
 Brokers, Brisbeck & Moss, Ventrella Data Consulting), project codenames (Kestrel,
 Larkspur), ticket ids and error codes. Emails use the reserved `.example` TLD and
 phone numbers use `+00 555 …`. Real places (Lisbon, Kyoto, Iceland, Berlin) and
@@ -27,7 +27,7 @@ The corpus grew in two passes. The first 60 documents (below) were enough to
 choose a formula but not to tell candidates apart: 10 of 12 answerable
 categories scored 0.9 to 1.0 under every formula. The second pass (see
 *Distractors* further down) added 98 documents built to compete with the
-labelled answers, which brought the spread down to where a regression shows.
+labeled answers, which brought the spread down to where a regression shows.
 
 ### First pass
 
@@ -73,7 +73,7 @@ Built-in difficulty:
 - **Inflections** present in documents: deploy/deployment/deploying,
   rollback/rolling back, upgrade/upgrading, drain/drains, expire/expired/expiry.
 
-Seven documents are never labelled and act as pure distractors:
+Seven documents are never labeled and act as pure distractors:
 `eng-k8s-cluster-autoscaler`, `rec-cold-brew`, `res-caffeine-half-life`,
 `res-habit-formation`, `spec-bulk-csv-export`, `trv-berlin-infra-summit`,
 `trv-carry-on-packing-list`.
@@ -99,7 +99,7 @@ The table below is the first pass (132). The second added 15 (see *Distractors*)
 | negative | 10 |
 | **total** | **132** |
 
-120 labelled queries have exactly one grade-2 document; 2 have two
+120 labeled queries have exactly one grade-2 document; 2 have two
 (`Kestrel`: kickoff + sync spec; `Jen Okereke-Lund`: both meetings she attends).
 48 queries carry grade-1 labels.
 
@@ -155,10 +155,10 @@ as the spec says.
 ## Distractors (second pass, 98 documents, 15 queries)
 
 Written to make the right answer harder to find, never to answer an existing
-query better than its labelled document. The original 60 documents are
+query better than its labeled document. The original 60 documents are
 unchanged. Clusters:
 
-- **Look-alikes of labelled targets on another subject:** a Redis runbook whose
+- **Look-alikes of labeled targets on another subject:** a Redis runbook whose
   title copies the PostgreSQL one, a Postgres major-version upgrade, an ingress
   migration that mentions drains and PodDisruptionBudgets in passing, a chickpea
   salad, a beef stew, a Tokyo trip with a ryokan, the North Coast 500 for the
@@ -170,28 +170,28 @@ unchanged. Clusters:
   Quillon who quotes for joinery).
 - **Identifier neighbours:** OPS-218 and OPS-222 beside OPS-217/219 (OPS-222
   splits E4012), E4013/E4014, E4032/E4035, E5004, E7101, E2208. A few documents
-  name a queried code only to contrast it; those are left unlabelled on purpose.
+  name a queried code only to contrast it; those are left unlabeled on purpose.
 - **A new home domain** (7 documents) for cross-domain vocabulary.
 
 New queries: surname-only (Ventrella, Brisbeck), short names with context, a
 short name whose answer is one of the new collision cards, three new identifiers,
 an exact title, a paraphrase, and three negatives (OPS-240, E4015, a solar-panel
 quote). Existing queries gained grade-1 labels only where a new document
-genuinely answers part of them (for example, the Kestrel-centred specs for
+genuinely answers part of them (for example, the Kestrel-centered specs for
 "Kestrel", the April incident review for the DNS queries).
 
 Removed in review: a card for a person whose name was one letter from a negative
 query's (it turned that negative into a misspelling test), and a sentence written
 only to put "Alex" into an unrelated card.
 
-## Labelling decisions
+## Labeling decisions
 
 Reviewed 2026-09-30. Resolved in review: the backup-failure incident is a 2 for
 q095 (it states the time outright); passing mentions now carry grade 1 (Alexandra
 Quillon in the checkout postmortem for the Quillon queries, Katherine Fenwright on
 the sync spec for the Kate queries, the broker's card for q032, the checkout
 postmortem's rollback for q084). The notes below are the original caveats, kept
-because they explain the remaining judgement calls.
+because they explain the remaining judgment calls.
 
 ### Original caveats (least certain first)
 
@@ -202,18 +202,18 @@ because they explain the remaining judgement calls.
    attends are graded 2. A ranker that puts either first is right; Hit@1 is fine,
    but nDCG treats them as equals by construction.
 3. **q011 "Kestrel"**: kickoff and sync spec both 2, push notifications and Kate's
-   card 1. The 1:1 and the budget review also mention Kestrel and are unlabelled.
+   card 1. The 1:1 and the budget review also mention Kestrel and are unlabeled.
 4. **Name queries (g04 to g07, Kate, Tom)**: grade 1 is given to meeting notes that
    name the person in the attendee list. Documents that mention them in passing
-   are unlabelled: Alexandra Quillon as incident commander in the checkout
+   are unlabeled: Alexandra Quillon as incident commander in the checkout
    postmortem, Katherine Fenwright as product owner of the sync spec, "Tom" in the
    pension notes. A strict judge might grade those 1.
 5. **q032 "automobile insurance" / q005 "Robert Tavistrom"**: the broker's card
-   (which says he handles the car policy) is unlabelled for the paraphrase; the
+   (which says he handles the car policy) is unlabeled for the paraphrase; the
    home contents doc (which does contain "insurance" and mentions bundling with the
-   car policy) is unlabelled too, and is the intended trap.
-6. **q084 "rolled back deployment"**: only the deploy/rollback how-to is labelled;
-   the checkout postmortem describes an actual rollback and is unlabelled.
+   car policy) is unlabeled too, and is the intended trap.
+6. **q084 "rolled back deployment"**: only the deploy/rollback how-to is labeled;
+   the checkout postmortem describes an actual rollback and is unlabeled.
 7. **q126 "health insurance deductible"** (negative): the car cover, home contents
    and tax docs are topically nearby ("excess", "insurance", "deductible"). None
    answers it, but a judge could call the home contents doc marginally related.

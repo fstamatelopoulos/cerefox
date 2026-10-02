@@ -23,7 +23,7 @@ import {
   RESPONSE_HEADER_DOCS,
   ROUTE_SCHEMAS,
   deriveInputs,
-  normalise,
+  normalize,
   registeredRoutes,
   routeInputs,
   toJsonSchema,
@@ -33,7 +33,7 @@ const IDENTITY = ["author", "requestor", "author_type"];
 const sorted = (xs: Iterable<string>) => [...new Set(xs)].sort();
 
 const routes = registeredRoutes().filter((r) => r.source !== "");
-const withInputs = routes.map((r) => ({ key: normalise(r.method, r.path), route: r, inputs: routeInputs(r) }));
+const withInputs = routes.map((r) => ({ key: normalize(r.method, r.path), route: r, inputs: routeInputs(r) }));
 
 /** Does the handler read identity from its body/form, not only headers? */
 const identityInBody = (src: string) => /resolveCallerIdentity\(\s*c\s*,\s*(body|form)\b/.test(src);

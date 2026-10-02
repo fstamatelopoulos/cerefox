@@ -63,7 +63,7 @@ export interface IngestTextOptions {
    * Origin label to use if this call turns out to be a CREATE while `source`
    * is null. Only this layer knows which branch was taken: `--update-if-exists`
    * against a document that does not exist yet is an update *intent* that
-   * performs a create, and resolving in the caller labelled it 'agent' via the
+   * performs a create, and resolving in the caller labeled it 'agent' via the
    * RPC default (review bug_005).
    */
   sourceOnCreate?: string;

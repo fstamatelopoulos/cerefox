@@ -82,7 +82,7 @@ triggers a purge. That is compatible with the property only because:
 | Surface | Change |
 |---|---|
 | `cerefox_config` | `trash_auto_purge_enabled` (`false`), `trash_retention_days` (`60`, integer 1–3650). Seed rows in `schema.sql`; `v_allowed` in `cerefox_set_config`. |
-| RPCs | New `cerefox_purge_expired_trash(p_max INT DEFAULT 100) RETURNS INT`; `cerefox_delete_document` calls it and returns `auto_purged`. Migration 0033; schema **0.17.0** (new behaviour on the delete path). `minSchema` unchanged: an older server simply never sweeps. |
+| RPCs | New `cerefox_purge_expired_trash(p_max INT DEFAULT 100) RETURNS INT`; `cerefox_delete_document` calls it and returns `auto_purged`. Migration 0033; schema **0.17.0** (new behavior on the delete path). `minSchema` unchanged: an older server simply never sweeps. |
 | Config catalog | Both keys, group Retention, high-impact with notes; integer validation for the days. |
 | Web Settings | High-impact confirmation shows the count the next delete would purge (`GET /api/v1/documents/trash?deleted_before=…` → `X-Total-Count`). |
 | `/api/v1`, MCP, CLI | `DELETE /documents/{id}` returns `auto_purged`; the MCP delete tool and `cerefox document delete` mention it when non-zero. |

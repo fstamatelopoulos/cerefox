@@ -201,7 +201,7 @@ on it. `main` is `cf1f2d4`; no open PRs of ours, no feature branches.
 | # | Change | Reaches a user? |
 |---|---|---|
 | #289 | Web UI blanked when typing in a metadata key/value field | **Yes** — the reason this is a release |
-| #284 | Data API grant list derived from the catalogue (schema **0.16.2**, migration 0032) | Yes, on a fresh cloud deploy |
+| #284 | Data API grant list derived from the catalog (schema **0.16.2**, migration 0032) | Yes, on a fresh cloud deploy |
 | #270 | OpenAPI 3.1 document for `/api/v1` at `docs/api/openapi.json` | No — repo-only |
 | #286 | `cerefox_export.ts` writes a metadata sidecar | No — contributor script |
 
@@ -289,7 +289,7 @@ release picks it up.
   and 7 retitles, all confirmed live — nothing lost.
   Two open nits, neither blocking: the sidecar's `Characters` is the store's `total_chars`
   (sum of chunk content), which differs from the exported file size by 0–228 chars depending
-  on how chunks rejoin — 1,017 of 1,179 match exactly, and relabelling it `Characters
+  on how chunks rejoin — 1,017 of 1,179 match exactly, and relabeling it `Characters
   (stored)` is a one-line change; and one production title holds a literal `&amp;`, which
   matters because titles are boosted in search.
   Operational notes for the next run: `--force` permits a non-empty target but **never

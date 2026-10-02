@@ -216,7 +216,7 @@ describe("web ingest endpoints (HTTP boundary)", () => {
     // that checks `resp.ok` (raise_for_status, curl -f, most retry wrappers)
     // read the old shape as a successful write. Asserting the status is the
     // whole point of this line — the body assertions below would pass either
-    // way, which is exactly how the old behaviour survived.
+    // way, which is exactly how the old behavior survived.
     expect(refused.status).toBe(400);
     const refusedBody = (await refused.json()) as {
       success: boolean;

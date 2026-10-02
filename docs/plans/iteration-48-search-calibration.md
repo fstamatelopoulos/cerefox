@@ -32,9 +32,9 @@ you found it).
 |---|---|
 | Spec (categories, metrics, candidates, decision rule) | done |
 | Metric arithmetic + unit tests (`_shared/search-benchmark/metrics.ts`) | done |
-| Synthetic corpus + labelled query vocabulary (reviewed, no real data) | done: 60 docs, 132 queries, 13 categories, 28 variant groups (4 name groups); `_shared/search-benchmark/vocabulary/`, integrity test |
-| Runner: ingest corpus into a labelled target, probe signals, apply candidates, report | done: `scripts/search_benchmark.ts` |
-| Reproduction check vs live RPC | done: 132/132 exact on both embedders (needed the RPC's count × 10 chunk limit modelled) |
+| Synthetic corpus + labeled query vocabulary (reviewed, no real data) | done: 60 docs, 132 queries, 13 categories, 28 variant groups (4 name groups); `_shared/search-benchmark/vocabulary/`, integrity test |
+| Runner: ingest corpus into a labeled target, probe signals, apply candidates, report | done: `scripts/search_benchmark.ts` |
+| Reproduction check vs live RPC | done: 132/132 exact on both embedders (needed the RPC's count × 10 chunk limit modeled) |
 | Baseline: current formula, both embedders | done (2026-09-30): staging/OpenAI, throwaway Local/nomic |
 | Candidates: bounded FTS rank, RRF, retuned gates; per-category results | done. Leading: bounded `ts_rank_cd` (r/(r+1)), alpha 0.7, `min_term_coverage` 0.67, vector gates unchanged (0.5 OpenAI / 0.6 nomic). RRF loses on both. |
 | Finding: fresh Local (s6 image) never seeds `min_search_score` 0.6 (only the legacy `entrypoint.sh` did); MCP/CLI then search at 0.5, where nomic returns 10/10 negatives confidently | found; fix in 1.17.0 |

@@ -13,7 +13,7 @@
  * worked stops working; it is no longer listed in any schema. No exceptions:
  * on cerefox_get_audit_log, where `author` used to be the entries FILTER,
  * the filter is now `by_author` so that `author` means the same thing there
- * as everywhere else. (That one is a real behaviour change for a caller that
+ * as everywhere else. (That one is a real behavior change for a caller that
  * filtered with `author`; it is called out in the CHANGELOG.)
  */
 

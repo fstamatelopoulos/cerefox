@@ -35,8 +35,8 @@ import {
 
 const PREFIX = "/api/v1";
 
-/** The same normalisation the generator and the route-doc guard both use. */
-function normalise(method: string, path: string): string {
+/** The same normalization the generator and the route-doc guard both use. */
+function normalize(method: string, path: string): string {
   let p = path.split("?")[0]!.trim();
   if (p.startsWith(PREFIX)) p = p.slice(PREFIX.length) || "/";
   p = p.replace(/\{[^}]*\}/g, "*");
@@ -121,7 +121,7 @@ describe("the OpenAPI document for /api/v1", () => {
     // A stale entry in ROUTE_SCHEMAS is the failure mode a generated file hides:
     // the spec still builds, the mapping is simply never consulted, and the
     // renamed route silently loses its documented shape.
-    const live = new Set(registeredRoutes().map((r) => normalise(r.method, r.path)));
+    const live = new Set(registeredRoutes().map((r) => normalize(r.method, r.path)));
     const stale = Object.keys(ROUTE_SCHEMAS).filter((k) => !live.has(k));
     expect(stale).toEqual([]);
   });
@@ -130,10 +130,10 @@ describe("the OpenAPI document for /api/v1", () => {
     // Summaries come from the api.md table, which the route-doc guard keeps in
     // sync both ways. If one is missing, the table and the routes have diverged
     // in a way that guard should already have caught — so this is a canary for
-    // the normalisation agreeing between the two.
+    // the normalization agreeing between the two.
     const descriptions = descriptionsFromGuide();
     const undescribed = registeredRoutes()
-      .filter((r) => !descriptions.has(normalise(r.method, r.path)))
+      .filter((r) => !descriptions.has(normalize(r.method, r.path)))
       .map((r) => `${r.method} ${PREFIX}${r.path}`);
     expect(undescribed).toEqual([]);
   });

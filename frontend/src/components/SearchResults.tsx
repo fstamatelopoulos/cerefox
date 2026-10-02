@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import type { ChunkSearchResult, DocSearchResult, SearchMode, SearchResponse } from "../api/types";
 import { isDocResult } from "../api/types";
 import { ScoreRing } from "./ScoreRing";
+import { displayScore, isRelativeScale, scoreTone } from "../lib/scoreBands";
 import ui from "../styles/redesign.module.css";
 import styles from "../pages/SearchPage.module.css";
 
@@ -99,14 +100,15 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
 
   const kb = (data.response_bytes / 1024).toFixed(1);
 
-  // Docs/FTS scores aren't 0–1 (raw rank can exceed 1); semantic/hybrid are.
-  // Normalize relative to the set only when the scale is clearly >1, so the
-  // ring shows ranking strength without inflating already-normalized scores.
+  // Since schema 0.18.0 docs/hybrid/semantic scores are 0 to 1, shown as they are
+  // and colored against the scores of results that turned out right (v1.17.3,
+  // lib/scoreBands.ts). Keyword mode (raw ranks) and pre-0.18 servers (scores
+  // above 1) are still shown relative to the list's best.
   const rawScores = data.results.map((r) =>
     isDocResult(r) ? (r as DocSearchResult).best_score : (r as ChunkSearchResult).score,
   );
   const maxScore = Math.max(0, ...rawScores);
-  const normScore = (s: number) => (maxScore > 1 ? s / maxScore : Math.max(0, Math.min(1, s)));
+  const relative = isRelativeScale(data.mode, maxScore);
 
   // 28I: every-row below_confidence means nothing cleared the relevance
   // threshold and the server returned best-effort candidates instead of empty.
@@ -168,7 +170,14 @@ export function SearchResults({ data, isLoading, error, hasQuery }: SearchResult
               className={`${ui.card} ${styles.resultCard} ${open ? styles.resultCardOpen : ""} ${ui.rise}`}
             >
               <div className={styles.resultHead} onClick={() => setExpanded(open ? null : id)}>
-                <ScoreRing score={normScore(score)} />
+                <ScoreRing
+                  score={displayScore(score, maxScore, relative)}
+                  tone={scoreTone(relative ? displayScore(score, maxScore, true) : score, {
+                    embedder: data.embedder,
+                    relative,
+                    belowConfidence: (r as DocSearchResult | ChunkSearchResult).below_confidence === true,
+                  })}
+                />
                 <div className={styles.resultTitleWrap}>
                   <div className={ui.row} style={{ gap: 8, marginBottom: 5 }}>
                     <h3 className={styles.resultTitle}>

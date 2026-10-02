@@ -30,7 +30,7 @@ export const EF_VERSION = "1.17.2";
  * would have told a beta tester the last stable number. Since the whole point
  * of surfacing a version to agents (`cerefox_get_help(topic: "server")`) is
  * letting them tell a stale client from a real capability gap, the number has
- * to be the one the user would recognise.
+ * to be the one the user would recognize.
  *
  * Lives here rather than in `packages/memory/src/meta.ts` because `_shared/`
  * is imported by the Deno Edge Functions, which cannot reach into the npm
@@ -42,7 +42,7 @@ export const CEREFOX_VERSION = "1.17.2";
  * The most recent version whose EF-side SOURCE actually changed (#127).
  * `EF_VERSION` bumps unconditionally at stable cuts (so stable deployments
  * never display a pre-release label), which means a version delta no longer
- * implies the deployed behaviour differs. This constant is bumped by
+ * implies the deployed behavior differs. This constant is bumped by
  * `cut_release.ts` ONLY when EF source changed since the last tag; doctor
  * uses it to stay silent on label-only drift.
  */

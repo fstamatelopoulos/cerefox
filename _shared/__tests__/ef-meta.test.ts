@@ -2,7 +2,7 @@
  * Unit tests for the shared Edge Function metadata helpers (iter-26 Part 26B).
  *
  * These cover the pure, runtime-agnostic helpers (request-shape detection,
- * URL derivation, the version constant + peer list). The live EF behaviour
+ * URL derivation, the version constant + peer list). The live EF behavior
  * (actual `GET /version` responses + the cerefox-mcp aggregator probing
  * peers) is validated against a deployed Supabase in Part 26G / the staging
  * walk — those paths need a running Deno EF + network.

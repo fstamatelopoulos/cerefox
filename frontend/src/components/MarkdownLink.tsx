@@ -79,7 +79,7 @@ export function MarkdownLink({ href, children, fromDocId, ...rest }: MarkdownLin
 
     // URL-decode the href before sending to the resolver.
     //
-    // react-markdown / remark-gfm normalises `<Title With Spaces>` markdown
+    // react-markdown / remark-gfm normalizes `<Title With Spaces>` markdown
     // syntax to a URL-encoded href like `Title%20With%20Spaces`. Without
     // decoding here, the encoded form gets re-encoded by URLSearchParams
     // and the server eventually sees the literal "%20" string as the

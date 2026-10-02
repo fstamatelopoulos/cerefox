@@ -204,7 +204,7 @@ describe("containerGateWarning — the v1.12.0 container bug", () => {
    * These tests pin the boot-time detection of that configuration. They pass
    * `isContainerised` implicitly through the real filesystem, so the container
    * branch only asserts the non-container cases here; the real container
-   * behaviour is verified by `docker/local/smoke-auth.sh` against a built
+   * behavior is verified by `docker/local/smoke-auth.sh` against a built
    * image, which is the check that was missing.
    */
   test("says nothing when no key is configured", () => {

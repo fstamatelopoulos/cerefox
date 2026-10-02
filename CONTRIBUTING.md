@@ -70,7 +70,7 @@ cd packages/memory && bun run build && bun test         # CLI/MCP smokes + live 
 
 # The live suites WRITE real documents, and resolve credentials exactly as the
 # CLI does — so a bare `bun test` targets whatever your default config points
-# at. Since v1.4.0 they skip unless the target is labelled; run them against a
+# at. Since v1.4.0 they skip unless the target is labeled; run them against a
 # scratch environment:
 CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test
 
@@ -81,7 +81,7 @@ CEREFOX_CONFIG_DIR=~/.cerefox/staging bun test
 # suite otherwise. A suite that WRITES also gates on `mayWriteToLiveTarget()`.
 
 # UI end-to-end (Playwright). Deliberately NOT in CI: it needs live Supabase and
-# OpenAI credentials plus a labelled target, and putting those in repository
+# OpenAI credentials plus a labeled target, and putting those in repository
 # secrets is a bigger exposure than the coverage is worth. So it is a local step
 # — run it before pushing anything that touches `frontend/`:
 cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e

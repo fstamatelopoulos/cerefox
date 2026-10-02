@@ -19,7 +19,7 @@
  *
  * /edit is the only handler that needs the v0.7 ingestion pipeline
  * for content changes. v0.6's /edit detects content-only changes by
- * comparing SHA-256(normalised content) against the document's stored
+ * comparing SHA-256(normalized content) against the document's stored
  * content_hash:
  *   - hash matches (or content empty) → metadata-only path: title /
  *     metadata / project memberships updated directly, audit entry
@@ -28,7 +28,7 @@
  *     handles via the same toast as the ingestion stubs (Part 24H).
  * The Python /edit always went through IngestionPipeline.update_document
  * which performs the same hash short-circuit internally before doing the
- * expensive re-chunk + re-embed. We surface the same behaviour without
+ * expensive re-chunk + re-embed. We surface the same behavior without
  * the pipeline.
  */
 
@@ -370,7 +370,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     // Opening the surface to identified clients removes that safeguard without
     // replacing it, so: a caller that names itself must present the hash, the
     // same rule it would meet over MCP. An anonymous caller is the bundled web
-    // UI and keeps today's behaviour exactly, which is the compatibility
+    // UI and keeps today's behavior exactly, which is the compatibility
     // promise this whole change is built on.
     const expectedHash = (
       c.req.header("x-cerefox-expected-content-hash") ??

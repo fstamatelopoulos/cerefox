@@ -3,7 +3,7 @@
  *
  * Ported from cfcf's proven `OnnxEmbedder` (packages/core/src/clio/embedders/),
  * adapted per docs/research/local-embedder-design.md:
- *   - single model, no catalogue: `nomic-ai/nomic-embed-text-v1.5` q8 — 768-dim
+ *   - single model, no catalog: `nomic-ai/nomic-embed-text-v1.5` q8 — 768-dim
  *     (matches Cerefox's `vector(768)` schema; no schema change), ~130 MB.
  *   - nomic task prefixes per role: a query embeds as `search_query: <text>`,
  *     a stored chunk as `search_document: <text>` (asymmetric model).
@@ -388,7 +388,7 @@ export async function warmup(): Promise<void> {
 
 /**
  * Embed texts with the local nomic model, applying the role prefix.
- * Mean pooling + L2 normalisation (sentence-transformers convention; nomic
+ * Mean pooling + L2 normalization (sentence-transformers convention; nomic
  * expects both). Returns plain `number[][]` to match the OpenAI path.
  */
 /**

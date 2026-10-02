@@ -119,7 +119,7 @@ RPC for callers that *omit* it; the CLI never omits.
   different surface: a CLI user who creates a document has no token for its
   first edit. Both are `document ingest`, so they land together.
 
-### Phase 7 — ✅ #168 environment-labelled MCP server name
+### Phase 7 — ✅ #168 environment-labeled MCP server name
 `configure-agent` registers under the fixed name `cerefox`, and agent configs are
 global, so running it from staging silently repoints production agents.
 - `CEREFOX_ENV_LABEL` set → derive the server name from it; unset → `cerefox`,
@@ -193,7 +193,7 @@ session, MCP validation by the user's agents over both local and remote.
 
 ### What staging caught that the tests did not
 
-Three things, all wording or behaviour visible only in a real response:
+Three things, all wording or behavior visible only in a real response:
 
 1. **`AmbiguousPositionError` said "No write was performed" on a read.** The
    reassurance exists to stop an agent retrying a half-applied batch; on a read
@@ -229,7 +229,7 @@ turned an explicit null straight back into a relabel — was surfaced by the new
 ### Risk, for the review to probe
 
 - `rename_section` replaces the heading line directly rather than through
-  `spliceBlock`. That is deliberate (blank-line normalisation is wrong for a
+  `spliceBlock`. That is deliberate (blank-line normalization is wrong for a
   single line), but it is the one place in the string layer that does its own
   splicing.
 - `touchedTrailingSection` re-parses the pre-edit document to decide whether the

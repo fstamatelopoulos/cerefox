@@ -13,7 +13,7 @@
  * ## The contract
  *
  * - **Omitted, nothing changes.** No identity supplied means `web-ui` / `user`
- *   / `webapp`, byte-identical to the pre-#226 behaviour. The bundled web app
+ *   / `webapp`, byte-identical to the pre-#226 behavior. The bundled web app
  *   sends nothing and is not modified.
  * - **Headers, then body.** Headers work uniformly on every method (a GET
  *   read cannot carry a body, and reads are half the point), so they are the
@@ -37,7 +37,7 @@
  * because the web app supplies none.
  *
  * **The known edge**: if the web app ever passes a real `requestor`
- * (multi-user, SSO, anything), it will start labelling itself `"api"`. That
+ * (multi-user, SSO, anything), it will start labeling itself `"api"`. That
  * is a coupling, not a bug, and this comment is where a future reader finds
  * out about it before being surprised by a dashboard.
  *

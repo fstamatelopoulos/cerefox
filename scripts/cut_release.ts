@@ -111,7 +111,7 @@ const EF_LAST_CHANGED_LITERAL: VersionLiteralFile = {
 };
 
 /**
- * Paths whose changes since the last tag mean the deployed EF behaviour
+ * Paths whose changes since the last tag mean the deployed EF behavior
  * changed: the EFs themselves + the `_shared` subtrees bundled with them.
  */
 const EF_SOURCE_PATHS = [

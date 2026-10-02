@@ -179,7 +179,7 @@ ingest.
 Three additive changes to `cerefox_ingest_document`; no new RPC:
 
 1. **`p_operations JSONB DEFAULT NULL`** — array of
-   `{"op": "...", "detail": "..."}`. When NULL: exactly today's audit behaviour
+   `{"op": "...", "detail": "..."}`. When NULL: exactly today's audit behavior
    (`create` / `update-content`) — NULL-means-today per the #183 lesson. When
    set: **one audit entry per element**, `operation` = element's `op`,
    `description` = its `detail` (resolved path + position), sizes on the last

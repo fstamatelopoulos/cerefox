@@ -16,7 +16,7 @@ decides from `author_type` alone (agent → `pending_review`, user →
 `approved`) whatever the flag says, and the flag governs only what surfaces
 show and enforce. Turning it off and later back on therefore shows exactly the
 statuses the store would have had all along. Sections below are updated to the
-shipped behaviour; where the original reasoning is kept for the record, the
+shipped behavior; where the original reasoning is kept for the record, the
 change is marked.
 
 ## The request
@@ -118,7 +118,7 @@ Functions, web), because they all resolve through these RPCs."
 |---|---|
 | Key | `review_workflow_enabled` |
 | Kind | boolean |
-| Default | `false` on a **fresh install** (seeded by `schema.sql`); `true` on an **upgraded store** (seeded by migration 0031) — an upgrade never changes behaviour on its own |
+| Default | `false` on a **fresh install** (seeded by `schema.sql`); `true` on an **upgraded store** (seeded by migration 0031) — an upgrade never changes behavior on its own |
 | Group | `Governance` |
 | `highImpact` | yes, so the web UI asks for confirmation before toggling |
 
@@ -139,7 +139,7 @@ state so nobody has to remember it.
 (`usage_tracking_enabled`, `version_cleanup_enabled`, `relations_enabled`) and
 reads naturally as a feature switch, which is what it is. The alternative,
 `agent_writes_require_review`, describes the server-side rule more precisely
-but reads oddly in the UI and under-describes the client behaviour the flag
+but reads oddly in the UI and under-describes the client behavior the flag
 also governs. Worth a moment's disagreement before we commit; renaming a config
 key after release is a migration.
 
@@ -218,7 +218,7 @@ v1.13.1 — a new agent write made while the flag is off is *recorded*
 field is not exposed at all in that state (next section), no surface ever
 *reports* something different from what is stored — the label is simply not
 shown. Turning the flag back on shows exactly what the store would have had all
-along. The v1.13.0 behaviour (store `approved` for everyone while off) broke
+along. The v1.13.0 behavior (store `approved` for everyone while off) broke
 that: a document written during an "off" month came back `approved` once the
 flag was on again, indistinguishable from one a person had actually approved.
 
@@ -250,7 +250,7 @@ schemas now declare the field optional, one shared reader
 (`reviewWorkflowEnabled()` in `_shared/mcp-tools/feature-flags.ts`) answers
 every surface, and the web config route busts its cache on a `PUT` so a flip
 takes effect on the next request. Every stored value is reported exactly as
-stored or not at all; nothing is ever relabelled.
+stored or not at all; nothing is ever relabeled.
 
 The write route returning `404` rather than silently accepting, and the search
 filter returning `400` rather than silently ignoring, are deliberate: a
@@ -266,7 +266,7 @@ Stated explicitly because the blast radius is the first thing to establish:
 - **The audit log.** Untouched.
 - **Retrieval.** Untouched, because it never depended on this.
 - **Versioning and retention.** Untouched.
-- **The column and its CHECK.** Both stay. This is a behaviour switch, not a
+- **The column and its CHECK.** Both stay. This is a behavior switch, not a
   schema removal, and re-enabling must be a clean no-op.
 
 ## The curator question — what this flag should not foreclose
@@ -291,7 +291,7 @@ be a curator agent rather than a person.
 of what is proposed above keep the door open:
 
 - **The column, its CHECK, and the write path all survive.** This is a
-  behaviour switch, not a removal. A curator would use exactly the same storage.
+  behavior switch, not a removal. A curator would use exactly the same storage.
 - **The flag governs the *automatic flagging*, not the concept.** That is
   precisely why it is named `review_workflow_enabled` and not, say,
   `review_status_enabled`. What gets turned off is the rule "an agent write
@@ -337,7 +337,7 @@ curator to serve.
 - **`minSchema` raised to 0.16.0.** The earlier draft argued against raising
   it; the final design makes it necessary. A v1.13 client no longer decides
   the review status itself, so against a 0.15 server the old RPC's sanitizer
-  would fall back to `approved` for *every* agent write — a silent behaviour
+  would fall back to `approved` for *every* agent write — a silent behavior
   change, which is exactly the "the client misbehaves" test `CLAUDE.md` sets
   for raising the minimum. (The search overloads would also fail loudly with
   PGRST202.) `cerefox doctor` errors and `cerefox web` refuses to start until
@@ -368,7 +368,7 @@ settled against in v1.1.0 for the same reason.
 
 1. The name is `review_workflow_enabled`.
 2. "Off" means the feature is hidden everywhere, **including the API** — the
-   field is absent, never relabelled.
+   field is absent, never relabeled.
 3. Stored data is untouched; `approve-all` is dropped, there is no visible
    queue to drain.
 4. Fresh installs default to `false`; upgrades seed `true`.

@@ -13,7 +13,7 @@ test hygiene that this iteration is the right moment to fix.
 
 v1.4.0 was validated over MCP and the Edge Functions, and shipped a read mode
 the CLI cannot reach (#201). Its audit trail gained a fourth partial-edit
-operation the web UI cannot filter or colour. Its timestamps are UTC with the
+operation the web UI cannot filter or color. Its timestamps are UTC with the
 marker stripped, which sent an agent's log entries a day into the future (#199).
 And the dashboard counts transports rather than actors, under-reporting agent
 work by roughly 70% (#195).
@@ -79,7 +79,7 @@ The larger half of the parity gap. `document edit-parts` takes an opaque JSON
 operations array, so `rename_section` reached the CLI for free; `document get`
 takes declared flags, so the section read did not.
 - `--section <anchor>` and `--section-part <own_body|subtree>`.
-- Behaviour identical to the MCP tool, via the same `extractSection`: same
+- Behavior identical to the MCP tool, via the same `extractSection`: same
   anchor rules, same ambiguity refusal naming both options, `--section` +
   `--outline` refused, `--section-part` without `--section` refused, archived
   reads withhold `content_hash`.
@@ -102,7 +102,7 @@ takes declared flags, so the section read did not.
   `list-versions.ts` (which currently emits a bare date), and the CLI renderers.
 - **Do not** convert to local server-side — the reasoning is recorded in #199
   and must not be relitigated silently: "local" is undefined server-side (the
-  remote MCP's local *is* UTC), it breaks the identical-behaviour-per-transport
+  remote MCP's local *is* UTC), it breaks the identical-behavior-per-transport
   principle, and naked local times are not comparable across agents.
 - Optional, if it stays small: a `display_timezone` config key rendering a
   second, parenthesised local value. Both, never one.
@@ -162,7 +162,7 @@ dropped.
 - Staging only. Production is not touched by this iteration.
 - **Tests purge their own fixtures; I do not purge by hand.** Ad-hoc cleanup
   is soft-delete, and the trash is the maintainer's to empty.
-- Live write suites still refuse an unlabelled target; do not override the guard.
+- Live write suites still refuse an unlabeled target; do not override the guard.
 - Every phase green before the next starts.
 - Anchor scripted edits to line-start patterns and assert the match is unique.
 - Private detail from agent reports does not enter the repo, specs, or issues.

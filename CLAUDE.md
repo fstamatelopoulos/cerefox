@@ -187,9 +187,9 @@ Setup and the parallel-environment convention: [`docs/guides/staging-env.md`](do
 | Suite | Command | What it does |
 |-------|---------|-------------|
 | TS unit tests (`_shared/`) | `cd _shared && bun test` | Fast, mocked, no network |
-| Package suite (built bin) | `cd packages/memory && bun run build && bun test` | CLI smoke, MCP stdio handshake, + live read/write commands (probe-and-skip when Supabase isn't reachable); needs `.env` for the live ones. **The write-bearing suites refuse to run against an unlabelled (production) target** — prefix with `CEREFOX_CONFIG_DIR=~/.cerefox/staging` to actually exercise them. |
+| Package suite (built bin) | `cd packages/memory && bun run build && bun test` | CLI smoke, MCP stdio handshake, + live read/write commands (probe-and-skip when Supabase isn't reachable); needs `.env` for the live ones. **The write-bearing suites refuse to run against an unlabeled (production) target** — prefix with `CEREFOX_CONFIG_DIR=~/.cerefox/staging` to actually exercise them. |
 | Frontend unit (`bun test`) | `cd frontend && bun test src/` | Browser-free logic beside its module (`frontend/src/lib/*.test.ts`: the dashboard arithmetic, the "Empty trash" loop). No network. This is CI's frontend test step; a test under `frontend/tests/` is one CI never runs. CI also runs `bun run lint` in the same job (eslint, frontend only) — added after a dependency upgrade was found that would have silently disabled linting while every check stayed green. |
-| UI e2e (Playwright) | `cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e` | Browser tests. Playwright starts its **own** `cerefox web` on port 8123 from `packages/memory/dist`, so a run always tests the build in this repo. It **creates real documents and projects**, so it refuses an unlabelled (production) target. The Empty-trash test **empties the target's trash**: it runs only with `CEREFOX_E2E_EMPTY_TRASH=1`, and even then skips if the trash holds anything not `[E2E`-prefixed. `CEREFOX_E2E_PORT` picks the port; `CEREFOX_E2E_REUSE=1` tests a server already running there instead of starting one — a post-deploy smoke test, never a regression run. Needs `bunx playwright install chromium`. |
+| UI e2e (Playwright) | `cd frontend && CEREFOX_CONFIG_DIR=~/.cerefox/staging bun run test:e2e` | Browser tests. Playwright starts its **own** `cerefox web` on port 8123 from `packages/memory/dist`, so a run always tests the build in this repo. It **creates real documents and projects**, so it refuses an unlabeled (production) target. The Empty-trash test **empties the target's trash**: it runs only with `CEREFOX_E2E_EMPTY_TRASH=1`, and even then skips if the trash holds anything not `[E2E`-prefixed. `CEREFOX_E2E_PORT` picks the port; `CEREFOX_E2E_REUSE=1` tests a server already running there instead of starting one — a post-deploy smoke test, never a regression run. Needs `bunx playwright install chromium`. |
 | Live EF e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/edge-functions/edge-functions.test.ts` | Hits the deployed Edge Functions. Skipped by default. |
 | Live remote-MCP e2e (opt-in) | `CEREFOX_LIVE_E2E=1 bun test test/mcp-remote/mcp-remote.test.ts` | Hits the deployed `cerefox-mcp` EF over JSON-RPC. Skipped by default. |
 
@@ -308,7 +308,7 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 1. Add or modify the RPC in `src/cerefox/db/rpcs.sql`
 2. The TS client (CLI / web app) calls the RPC via `supabase.rpc()`
 3. The dedicated primitive Edge Function calls the same RPC via `supabase.rpc()`
-4. The MCP tool handler in `_shared/mcp-tools/*.ts` calls the same RPC directly. Both the remote `cerefox-mcp` Edge Function and the local `@cerefox/memory` TS server import the same handlers from `_shared/mcp-tools/`, so a tool's behaviour is identical regardless of which transport an agent uses.
+4. The MCP tool handler in `_shared/mcp-tools/*.ts` calls the same RPC directly. Both the remote `cerefox-mcp` Edge Function and the local `@cerefox/memory` TS server import the same handlers from `_shared/mcp-tools/`, so a tool's behavior is identical regardless of which transport an agent uses.
 
 **Do NOT** add business logic directly in Edge Function TypeScript or in the MCP server bin. The only logic in transport-layer code is input validation, RPC call, and JSON response formatting.
 
@@ -387,7 +387,7 @@ and the zod schemas in `_shared/schemas/`. Three consequences worth knowing:
   responses with them against a running server. It found two wrong shapes the
   first time it ran; treat a failure there as the schema being wrong, not the
   test.
-- **An unmodelled endpoint gets no response schema, deliberately.** Coverage
+- **An unmodeled endpoint gets no response schema, deliberately.** Coverage
   lives in `x-cerefox-coverage` inside the document. Do not paper a gap over with
   a guessed shape: a consumer generating a client from it gets code that
   compiles and fails at runtime.

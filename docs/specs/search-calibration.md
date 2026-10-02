@@ -1,7 +1,7 @@
 # Search calibration (iteration 48, target v1.17.0)
 
 Status: **design; benchmark first.** No change to how search scores ships until the
-benchmark below has measured the current behaviour and every candidate.
+benchmark below has measured the current behavior and every candidate.
 
 ## Why
 
@@ -17,7 +17,7 @@ score = alpha × vector_similarity + (1 − alpha) × ts_rank_cd(fts, query)   -
 - `vector_similarity` is a cosine in [0, 1]. `ts_rank_cd(…)` is **unbounded**: it
   reached 3.86 on that store. So when every query term matches, the keyword term
   outweighs the semantic one by about 5×, and when one term does not ("Bob" ≠
-  "Robert"), it contributes almost nothing. `alpha = 0.7` was meant to favour
+  "Robert"), it contributes almost nothing. `alpha = 0.7` was meant to favor
   semantics; in practice keyword dominance flips on and off with a single token, and
   scores are not comparable across queries (1.16 vs 0.27 for the same person).
 - A result is kept if it matched lexically, **or** its vector similarity is at least
@@ -36,7 +36,7 @@ real notes, with structure (titles, headings) and realistic overlap and distract
 For example: engineering how-tos, incident reports, meeting notes with people,
 contact cards, product specs, policies, recipes, travel logs, and research summaries.
 
-**Queries,** each labelled with the documents that are relevant (graded: 2 = the
+**Queries,** each labeled with the documents that are relevant (graded: 2 = the
 answer, 1 = related), grouped by category so no single category decides:
 
 | Category | What it probes | Example shape |
@@ -101,7 +101,7 @@ store (OpenAI) and a throwaway Cerefox Local (nomic). On both, the harness
 reproduced the live `cerefox_search_docs` ranking exactly for every query, under
 the old formula and again under the new one, before any number was compared.
 
-**Chosen:** bounded keyword score (`ts_rank_cd` normalisation 32, `r/(r+1)`),
+**Chosen:** bounded keyword score (`ts_rank_cd` normalization 32, `r/(r+1)`),
 `search_alpha` 0.7, `min_term_coverage` 0.67 (was 0.5), `min_search_score`
 unchanged per embedder (0.5 OpenAI, 0.6 nomic), now derived from the store's
 embeddings when no row is stored.
@@ -129,7 +129,7 @@ occurred; both are reasonable answers, and the drop is within tolerance.
 **Deviation from the decision rule, stated:** top-5 overlap across variants did
 not improve (flat, slightly lower). It was chosen as the consistency measure
 before any results existed, and it turned out to be decided mostly by positions
-2 to 5, which on this corpus are unlabelled distractors. The measure that
+2 to 5, which on this corpus are unlabeled distractors. The measure that
 captures the original complaint, how far the *right* document's score moves
 between phrasings of one need, improved by about a third on both embedders, and
 Hit@1 rose with it. The change ships on that basis; the rule should name the
@@ -156,7 +156,7 @@ An evaluation on real data on a staging environment (thousands of known-item
 queries generated from its documents, AI-written paraphrases and no-answer queries;
 paired statistics with document-clustered bootstrap intervals and Holm-corrected
 McNemar tests) found two things the synthetic vocabulary did not. The full
-study, with store sizes rounded and the deployments anonymised, is
+study, with store sizes rounded and the deployments anonymized, is
 [`docs/research/search-quality-study-1.17.md`](../research/search-quality-study-1.17.md).
 
 1. **The vector candidates came from an approximate index.** Ordering by the bare
@@ -181,7 +181,7 @@ shapes; and a parameter is tested by its arithmetic, not its description.
 ## Wiring
 
 - `scripts/search_benchmark.ts`: ingests the corpus into a dedicated project on a
-  **labelled** (non-production) target, runs every query through the real RPCs, and
+  **labeled** (non-production) target, runs every query through the real RPCs, and
   writes a report (per-category tables plus JSON). It can run candidate formulas side
   by side.
 - A live test (`liveTest`, probe-and-skip, write-guarded) runs the vocabulary against

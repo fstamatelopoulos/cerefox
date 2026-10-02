@@ -68,6 +68,9 @@ export const SearchResponse = z.object({
   total_found: z.number().int(),
   response_bytes: z.number().int(),
   truncated: z.boolean(),
+  /** Which embedder produced the scores, so a client can read them on the right
+   *  scale (the local model scores higher). Since v1.17.3; absent before. */
+  embedder: z.enum(["openai", "local"]).optional(),
 });
 export type SearchResponse = z.infer<typeof SearchResponse>;
 

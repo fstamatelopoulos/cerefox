@@ -359,7 +359,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Apply byte budget — drop whole results (never truncate mid-doc) to stay
-  // under the limit. This mirrors the local MCP server's truncation behaviour.
+  // under the limit. This mirrors the local MCP server's truncation behavior.
   const matched = (data ?? []) as Array<Record<string, unknown>>;
   const { accepted, truncated, usedBytes } = applyByteBudget(matched, max_bytes);
 

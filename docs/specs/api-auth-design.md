@@ -136,7 +136,7 @@ visually distinct from `cfx_pat_` in a log or a paste. Minted with
 
 - `cerefox web`: `CEREFOX_API_KEY` in the resolved `.env`, written with the
   existing `upsertEnvVar` (`cli/util/env-file.ts:35`). Minted on demand by a
-  new `cerefox api-key generate|show|rotate`, modelled on `token.ts`.
+  new `cerefox api-key generate|show|rotate`, modeled on `token.ts`.
 - Cerefox Local: minted in `s6/scripts/db-init` beside the JWT secret, using
   the same env-override → persisted-file → generate ladder (`db-init:11-13`),
   persisted `chmod 600` on the data volume, and emitted into
@@ -212,7 +212,7 @@ asks for it.
 
 The key is minted by an explicit action, never as a side effect of a page load:
 
-- `cerefox api-key generate` (or `rotate`), modelled on `token.ts`, writing to
+- `cerefox api-key generate` (or `rotate`), modeled on `token.ts`, writing to
   the resolved `.env` via `upsertEnvVar`.
 - Cerefox Local mints it at container boot in `s6/scripts/db-init`, beside the
   JWT secret it already mints, persisted on the data volume.

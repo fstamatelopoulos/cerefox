@@ -46,7 +46,7 @@ const DATE_PRESETS = [
 ];
 
 // Derived from the shared vocabulary, not hand-mirrored (#226). The label map
-// is keyed by the union, so a new access path that nobody labelled fails the
+// is keyed by the union, so a new access path that nobody labeled fails the
 // typecheck instead of quietly missing from this dropdown — which is how the
 // filter came to be missing `api` in the first place.
 const ACCESS_PATH_LABELS: Record<AccessPath, string> = {

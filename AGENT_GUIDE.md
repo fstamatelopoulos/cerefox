@@ -16,7 +16,7 @@ It is not a message bus -- it is curated, versioned, searchable memory backed by
 You'll be using **one** of these — whichever your user (or the harness) has configured:
 
 1. **MCP tools (default)** — 15 named tools (`cerefox_search`, `cerefox_ingest`, …, `cerefox_get_help`) exposed by either a local MCP server (`@cerefox/memory` via npm, run as `cerefox mcp`) or the remote `cerefox-mcp` Edge Function. Tool names and parameters are documented in **The 15 Tools** below. This is the recommended path for purpose-built agent clients.
-2. **Shell CLI (Bash tool)** — the same operations exposed as a local `cerefox …` command (the TypeScript CLI from `@cerefox/memory`, resource-verb shape — e.g. `cerefox document get`, `cerefox project list`), invoked via your Bash tool. Used when your user prefers not to install/configure an MCP server. The semantics are identical; only the surface differs. See **Using Cerefox via the CLI** near the bottom of this guide for the MCP-tool → CLI-command mapping and the small list of behavioural differences.
+2. **Shell CLI (Bash tool)** — the same operations exposed as a local `cerefox …` command (the TypeScript CLI from `@cerefox/memory`, resource-verb shape — e.g. `cerefox document get`, `cerefox project list`), invoked via your Bash tool. Used when your user prefers not to install/configure an MCP server. The semantics are identical; only the surface differs. See **Using Cerefox via the CLI** near the bottom of this guide for the MCP-tool → CLI-command mapping and the small list of behavioral differences.
 
 If you're not sure which mode you're in: check whether `cerefox_search` shows up in your tool list. If yes, use MCP. If no, ask your user where the Cerefox checkout lives — they'll have told you, typically in `CLAUDE.md`, `AGENTS.md`, or an equivalent project memory file.
 
@@ -360,7 +360,7 @@ Retrieve Cerefox conventions and quick reference content over MCP — the same c
 | `topic` | No | Case-insensitive substring match against `## H2` section titles. Omit to get the full reference plus a section index. |
 | `author` | No | Your agent name (recorded with `access_path = "remote-mcp"` or `"local-mcp"`). |
 
-**Behaviour:**
+**Behavior:**
 - No `topic` → full quick-reference markdown + an `## Available topics` index.
 - `topic: "tools"` → just the `## Tools` section (no index footer).
 - `topic` matches nothing → `No help topic matched "<topic>"` + available-topics list.
@@ -517,7 +517,7 @@ appears only in the prose.
 
 **Semantic search.** Every chunk is embedded as `# {document title}` followed
 by its heading breadcrumb and its text. The stored content is untouched, but
-the vector each chunk is retrieved by is coloured by the title. A document
+the vector each chunk is retrieved by is colored by the title. A document
 called "Notes" contributes nothing to any of its chunks' vectors; a document
 called "Postgres connection pooling limits on the free tier" contributes to
 all of them.
@@ -631,7 +631,7 @@ Good: `[Quarterly Planning - Q3 Goals](3f2b9c1e-8a47-4d2e-9b6a-1c5e7d0a4f82)`.
 
 ### A note on agents on Path C (CLI via Bash tool)
 
-If you're using Cerefox via the local CLI (Path C from `connect-agents.md`), the same writing conventions apply. The web UI is where resolution happens; the CLI is just how you wrote the content. A user reading your ingested document later in the web UI gets clickable behaviour for free — **as long as you authored the links by UUID**.
+If you're using Cerefox via the local CLI (Path C from `connect-agents.md`), the same writing conventions apply. The web UI is where resolution happens; the CLI is just how you wrote the content. A user reading your ingested document later in the web UI gets clickable behavior for free — **as long as you authored the links by UUID**.
 
 ---
 
@@ -688,7 +688,7 @@ You **MUST** identify yourself on every CLI invocation, exactly as you do via MC
 
 Alternative: have your user set `CEREFOX_AUTHOR_NAME`, `CEREFOX_AUTHOR_TYPE`, `CEREFOX_REQUESTOR_NAME` in their `.env` once. The CLI picks them up automatically — see [`docs/guides/cli.md`](docs/guides/cli.md) for the precedence rules.
 
-### Behavioural differences worth knowing
+### Behavioral differences worth knowing
 
 1. **CLI output is human-formatted by default.** In the default `docs` mode, `cerefox search` prints, per match, a header line `## <title> [id: <uuid>] · score · N chunks · M chars · partial|full` followed by the document body. Grab the document ID from the `[id: <uuid>]` tag, or use `cerefox document list` for a clean tabular listing. For structured output, `cerefox search --json` and `cerefox audit list --json` emit machine-readable JSON (the latter one object per line, ideal for `jq`). `cerefox document get <id>` prints raw Markdown to stdout.
 

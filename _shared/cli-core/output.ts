@@ -17,12 +17,12 @@
 
 import pc from "picocolors";
 
-// ── colour-on-TTY-only helpers ──────────────────────────────────────────────
+// ── color-on-TTY-only helpers ──────────────────────────────────────────────
 
 const STDOUT_TTY = process.stdout.isTTY === true;
 const STDERR_TTY = process.stderr.isTTY === true;
 
-/** Coloured text on stdout only when stdout is a TTY. Plain otherwise. */
+/** Colored text on stdout only when stdout is a TTY. Plain otherwise. */
 export const c = {
   dim: (s: string): string => (STDOUT_TTY ? pc.dim(s) : s),
   bold: (s: string): string => (STDOUT_TTY ? pc.bold(s) : s),

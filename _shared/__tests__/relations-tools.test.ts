@@ -1,7 +1,7 @@
 /**
  * Iteration 29 — the relation MCP tools' input handling and output shaping.
  *
- * RPC behaviour (symmetry, lifecycle side effects, cycle-safe traversal) is
+ * RPC behavior (symmetry, lifecycle side effects, cycle-safe traversal) is
  * covered against a real Postgres; these tests pin the transport layer:
  * validation, parameter mapping, and how results are rendered for an agent.
  */

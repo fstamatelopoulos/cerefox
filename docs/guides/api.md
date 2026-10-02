@@ -139,7 +139,7 @@ whatever `requestor` arrives. Any client can send any name, including a name
 another client uses.
 
 They exist for **attribution and record-keeping**: a legible audit trail, usage
-analytics that can tell callers apart, and the review-queue behaviour of
+analytics that can tell callers apart, and the review-queue behavior of
 `author_type: agent` while the review workflow is on. They are not a security measure, they do not establish an
 authenticated identity, and no access decision is made on them. Treat a name in
 the audit log as "what the caller said", never as "who the caller was".
@@ -171,7 +171,7 @@ asserted against a running server by `api-schema-truth.test.ts`, so the spec
 describes what the API returns rather than what someone believed it returned.
 
 Coverage is stated in the document itself under `x-cerefox-coverage`. Endpoints
-with no modelled shape are listed there and get no response schema rather than
+with no modeled shape are listed there and get no response schema rather than
 an invented one — a spec that guesses is worse than one that admits a gap.
 
 Base URL is wherever `cerefox web` is listening (`http://127.0.0.1:8000` by
@@ -182,7 +182,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `GET /version` | Server version and environment label. |
 | `GET /schema-version` | Deployed schema version. |
 | `GET /openapi.json` | This API's OpenAPI 3.1 description, served by the version you are talking to. Every `/api/v1` response points at it with `Link: </api/v1/openapi.json>; rel="service-desc"` (RFC 8631). |
-| `GET /search?q=…` | Hybrid search (FTS + semantic). `&review_status=approved\|pending_review` filters server-side; `400` while the review workflow is off. |
+| `GET /search?q=…` | Hybrid search (FTS + semantic). `&review_status=approved\|pending_review` filters server-side; `400` while the review workflow is off. The response's `embedder` (`openai` or `local`) says which scale the scores are on. |
 | `GET /dashboard`, `GET /dashboard/recent-docs` | Dashboard aggregates. |
 | `GET /documents/{id}` | Full document, with metadata, projects and versions. |
 | `GET /documents/{id}/chunks` | The document's chunks. |
@@ -205,7 +205,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `GET /projects/{id}/documents` | A project's documents. |
 | `GET /config`, `GET /config/{key}`, `PUT /config/{key}` | Runtime config. |
 | `GET /audit-log` | Audit trail, filterable. |
-| `GET /preferences`, `PUT /preferences` | Web UI preferences (currently the colour scheme), stored in a file in the user-state dir, not the database. Registers even when Supabase is not configured. |
+| `GET /preferences`, `PUT /preferences` | Web UI preferences (currently the color scheme), stored in a file in the user-state dir, not the database. Registers even when Supabase is not configured. |
 | `GET /docs`, `GET /docs/{path}` | The guides bundled with this server: a listing, and one document's markdown. Serves the shipped copies, so it answers the same content regardless of what is in the knowledge base. |
 | `GET /usage-log`, `GET /usage-log/summary`, `GET /usage-log/export.csv` | Usage queries. |
 

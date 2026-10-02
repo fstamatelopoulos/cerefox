@@ -87,7 +87,7 @@ wanted it off — and, on reflection, off **by default** for new installs.
 |---|---|
 | Name | `review_workflow_enabled`, in `cerefox_config`, group Governance, high-impact |
 | Fresh install | `false` (seeded by `schema.sql`) |
-| Upgrade | `true` (seeded by migration 0031) — an upgrade must not change behaviour |
+| Upgrade | `true` (seeded by migration 0031) — an upgrade must not change behavior |
 | What "off" means | The feature is **absent** everywhere. The first draft proposed reporting `approved` on reads to keep required schema fields valid; rejected — "we are changing the data … I would prefer the extra complexity of hiding the flag from the UI and the API". Field absent on every read; search filter `400`; review-status endpoint `404`. |
 | Stored rows | Never touched by a toggle |
 | CLI | Drops the `status` column when off, for consistency |
@@ -177,7 +177,7 @@ Settings test asserts the Governance row.
 - `EF_VERSION` bumps at the cut (two EFs changed).
 - After the cut: `cerefox server deploy` on staging then production (both
   schema and functions); `doctor` should print `review workflow ON` on both
-  (upgraded stores). Production keeps today's behaviour until the maintainer
+  (upgraded stores). Production keeps today's behavior until the maintainer
   flips it.
 - **#154** (Node baseline / commander 15) was pencilled for v1.13.0 and is
   untouched here; it moves to the next minor. Third move; same reasoning as

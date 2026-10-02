@@ -198,7 +198,7 @@ async function embedBatch(texts: string[], apiKey: string): Promise<number[][]> 
   throw lastError ?? new Error(`Embedding API failed after ${EMBEDDING_MAX_RETRIES} attempts`);
 }
 
-// ── Content normalisation + hash (SHA-256 hex) ────────────────────────────
+// ── Content normalization + hash (SHA-256 hex) ────────────────────────────
 // Must stay in sync with pipeline.py::_normalize / _hash.
 // Converts CRLF (and bare CR) to LF, strips leading/trailing whitespace, and
 // collapses 3+ consecutive newlines to two.  The CRLF step is required because

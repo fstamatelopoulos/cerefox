@@ -145,7 +145,7 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 >
 > Resolution order, highest first: **per-call argument** (`--min-score`, the
 > `min_score` MCP parameter) → **`cerefox_config`** → built-in default. A
-> malformed stored value is ignored in favour of the built-in, so a bad setting
+> malformed stored value is ignored in favor of the built-in, so a bad setting
 > can never break search. (Before v1.17.0 the web UI and `/api/v1` search sent
 > their own `min_search_score` and `search_alpha`, so they did not obey a stored
 > value; now every path does.)
@@ -160,7 +160,7 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 > | `search_alpha` | **0.7** | Weight of meaning against keywords. Both sides are on a 0 to 1 scale since v1.17.0, so the weight now means what it says. |
 >
 > Tune only with evidence: `bun scripts/search_benchmark.ts` measures any
-> setting against a labelled query vocabulary on a staging store
+> setting against a labeled query vocabulary on a staging store
 > ([ops-scripts.md](ops-scripts.md#search_benchmarkts--search-calibration-benchmark)).
 > A setting that suits one store's content can cost another kind of query
 > without anything looking wrong.
@@ -243,7 +243,7 @@ longer applies.)
 - MCP tool: `{"query": "...", "max_bytes": 50000}`
 - Edge Function body: `{"query": "...", "max_bytes": 50000}`
 
-See `docs/guides/response-limits.md` for the full guide including behaviour details and examples.
+See `docs/guides/response-limits.md` for the full guide including behavior details and examples.
 
 ### RPC-level retrieval parameters
 
@@ -339,7 +339,7 @@ there matters.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CEREFOX_BACKUP_DIR` | `~/.cerefox/backups` | Local directory where file system backups are stored. Created automatically if it doesn't exist. **Use an absolute path** — a relative value (such as the pre-v0.3.0 `./backups`) resolves against the current working directory, so snapshots scatter depending on where you run the command; `backup create` warns when it sees one. Does **not** follow `CEREFOX_CONFIG_DIR`, so a second environment must set it explicitly. |
-| `CEREFOX_ENV_LABEL` | _(unset)_ | Names a non-production environment (e.g. `staging`). Purely cosmetic and inert when unset. When set: the web UI shows a banner on every page, `doctor` shows `[LABEL]` on its title line, `backup create` puts the label in the snapshot filename and payload, and `backup restore` warns when a snapshot's environment differs from the target's, and `configure-agent` registers the MCP server as `cerefox-<label>` so a labelled environment sits alongside production instead of overwriting it (v1.4.0, #168). See [`staging-env.md`](staging-env.md). |
+| `CEREFOX_ENV_LABEL` | _(unset)_ | Names a non-production environment (e.g. `staging`). Purely cosmetic and inert when unset. When set: the web UI shows a banner on every page, `doctor` shows `[LABEL]` on its title line, `backup create` puts the label in the snapshot filename and payload, and `backup restore` warns when a snapshot's environment differs from the target's, and `configure-agent` registers the MCP server as `cerefox-<label>` so a labeled environment sits alongside production instead of overwriting it (v1.4.0, #168). See [`staging-env.md`](staging-env.md). |
 | `CEREFOX_VERSION_RETENTION_HOURS` | **Retired in v1.1.0 — no longer read.** | Version retention is now a property of the store: `cerefox config set version_retention_hours <hours>`, or the **Settings** page. It moved because it used to be passed per-call from each client's environment, so the surviving history depended on which client wrote last. `cerefox doctor` reports the variable if it is still set. |
 
 ---

@@ -785,7 +785,7 @@ These flat commands handle install, configuration, and health. Run any with `--h
 
 ## Environment variables
 
-The CLI reads its own runtime config from environment (or `.env`). See [`configuration.md`](configuration.md) for the full list. Most relevant to CLI behaviour:
+The CLI reads its own runtime config from environment (or `.env`). See [`configuration.md`](configuration.md) for the full list. Most relevant to CLI behavior:
 
 | Variable | Default | Effect |
 |---|---|---|
@@ -878,7 +878,7 @@ surface).
 
 ## Known issues
 
-None outstanding as of v1.0.1. When new bugs surface, they are tracked in the GitHub issues list; check there before relying on a behaviour the docs imply.
+None outstanding as of v1.0.1. When new bugs surface, they are tracked in the GitHub issues list; check there before relying on a behavior the docs imply.
 
 ## Common recipes
 
