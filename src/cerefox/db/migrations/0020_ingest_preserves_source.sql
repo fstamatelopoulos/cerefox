@@ -55,5 +55,5 @@ BEGIN
         'Migration 0020: cerefox_ingest_document now preserves a document''s '
         'source when p_source is omitted. Before this, any content update '
         'without an explicit source silently rewrote provenance to ''agent'', '
-        'and migrate-format relabeled every document it converted (#191).';
+        'and migrate-format relabelled every document it converted (#191).';
 END $$;

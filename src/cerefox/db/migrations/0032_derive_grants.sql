@@ -32,7 +32,7 @@ BEGIN
 
     GRANT USAGE ON SCHEMA public TO service_role;
 
-    -- Derived from the catalog, not from a list someone has to remember.
+    -- Derived from the catalogue, not from a list someone has to remember.
     FOR t IN
         SELECT c.relname
         FROM pg_class c

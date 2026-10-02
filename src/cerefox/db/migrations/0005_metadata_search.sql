@@ -1,4 +1,4 @@
--- Migration 0005: Metadata search + project name standardization (Iteration 16B)
+-- Migration 0005: Metadata search + project name standardisation (Iteration 16B)
 --
 -- Changes:
 --   1. Add project_names TEXT[] to all chunk-level search RPCs (hybrid, fts, semantic)

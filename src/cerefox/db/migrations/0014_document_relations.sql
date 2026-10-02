@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS cerefox_document_relations (
     source_id    UUID        NOT NULL REFERENCES cerefox_documents(id) ON DELETE CASCADE,
     target_id    UUID        NOT NULL REFERENCES cerefox_documents(id) ON DELETE CASCADE,
     -- Free-text by design: agents define new types without a migration. The
-    -- type dictionary (in the RPCs) gives known types behavior; unknown types
+    -- type dictionary (in the RPCs) gives known types behaviour; unknown types
     -- are stored and returned, just without special handling.
     rel_type     TEXT        NOT NULL,
     metadata     JSONB       NOT NULL DEFAULT '{}'::jsonb,
