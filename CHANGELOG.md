@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.17.4] -- 2026-10-02
+
 ### Changed
 
 - **Score colors are relative to the best result of the same search.** 1.17.3
