@@ -29,6 +29,10 @@
 
 ## Current Focus
 
+**2026-10-04: every environment is on v1.17.4, production included** (client 1.17.4,
+schema 0.18.2, EFs v1.17.3, which is current since 1.17.4 only moved the label; doctor
+green). Nothing is in flight. Next: 1.18.0 (below), when the maintainer says start.
+
 **2026-10-02 (later): v1.17.4 IS RELEASED, verified on staging; both Local containers
 upgraded.** Score ring colors are now relative to the best confident result of the same
 search (green ≥ 90%, yellow ≥ 60%, faint below, below-confidence results dimmed); the
