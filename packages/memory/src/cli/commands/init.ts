@@ -451,7 +451,7 @@ async function postWriteLifecycle(envPath: string, options: InitOptions): Promis
       await runSyncSelfDocs({});
     } catch (err) {
       warn(
-        `Self-doc ingest failed: ${err instanceof Error ? err.message : String(err)}. Run \`cerefox sync-self-docs\` manually after init.`,
+        `Self-doc ingest failed: ${err instanceof Error ? err.message : String(err)}. Run \`cerefox guides ingest\` manually after init.`,
       );
     }
     println("");
@@ -483,9 +483,9 @@ async function postWriteLifecycle(envPath: string, options: InitOptions): Promis
 
   println("");
   println(c.green("Done. Try:"));
-  println(c.dim("  cerefox doctor              # verify everything"));
-  println(c.dim("  cerefox search \"…\"          # search the KB"));
-  println(c.dim("  cerefox ingest <file>       # add a doc"));
+  println(c.dim("  cerefox doctor                  # verify everything"));
+  println(c.dim("  cerefox search \"…\"              # search the KB"));
+  println(c.dim("  cerefox document ingest <file>  # add a doc"));
   // Help users locate the file we just touched.
   println("");
   println(c.dim(`  Config in effect: ${envPath}`));

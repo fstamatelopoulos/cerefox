@@ -61,7 +61,7 @@ export function SchemaVersionBanner() {
         Redeploy with the Cerefox CLI:
       </Text>
       <Code block mt="xs">
-        cerefox deploy-server --schema-only
+        cerefox server deploy --schema-only
       </Code>
     </Alert>
   );

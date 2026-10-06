@@ -47,17 +47,17 @@ async function bareEntryPoint(): Promise<void> {
     println("  " + c.bold("cerefox init") + "    # interactive first-run setup (~2 min)");
     println("");
     println(c.dim("Once configured, try:"));
-    println(c.dim("  cerefox doctor               # verify your install"));
-    println(c.dim("  cerefox search \"…\"           # search the KB"));
-    println(c.dim("  cerefox ingest <file>        # add a doc"));
+    println(c.dim("  cerefox doctor                  # verify your install"));
+    println(c.dim("  cerefox search \"…\"              # search the KB"));
+    println(c.dim("  cerefox document ingest <file>  # add a doc"));
   } else {
     println(c.green("✓ Config detected. You're good to go."));
     println("");
     println("Common commands:");
-    println(c.dim("  cerefox doctor               # diagnose your install"));
-    println(c.dim("  cerefox search \"…\"           # search the KB"));
-    println(c.dim("  cerefox ingest <file>        # add a doc"));
-    println(c.dim("  cerefox configure-agent      # wire up an MCP client"));
+    println(c.dim("  cerefox doctor                  # diagnose your install"));
+    println(c.dim("  cerefox search \"…\"              # search the KB"));
+    println(c.dim("  cerefox document ingest <file>  # add a doc"));
+    println(c.dim("  cerefox configure-agent         # wire up an MCP client"));
     println("");
     println(c.dim("Run `cerefox --help` for the full command list."));
   }

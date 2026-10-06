@@ -9,7 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Hints no longer point at renamed commands.** The commands renamed in v0.9.0
+  still exist under their old names only to fail with a pointer, but a few hints
+  kept suggesting them. The web UI's "schema out of date" banner said
+  `cerefox deploy-server --schema-only`, and the tips printed by a bare `cerefox`
+  and at the end of `cerefox init` said `cerefox ingest <file>`. Following any of
+  them failed. They now say `cerefox server deploy --schema-only` and
+  `cerefox document ingest <file>`, along with three smaller hints, and a test
+  keeps every old name out of anything the CLI or web UI tells you to run.
 
 ---
 
