@@ -15,6 +15,7 @@ import { Hono } from "hono";
 
 import { bundledSchemaVersion } from "../../../../../_shared/server-assets/index.ts";
 import { PKG_VERSION } from "../../meta.ts";
+import { newerRelease, readCache, updateCheckDisabled, upgradeCommand } from "../../update-check.ts";
 import type { WebContext } from "../context.ts";
 import { listBundledDocs, readDoc, readOpenApiDocument } from "../docs.ts";
 import {
@@ -61,9 +62,18 @@ export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
   // Purely cosmetic, and deliberately so — it exists to stop someone acting on
   // a staging tab believing it is production. Empty/whitespace is treated as
   // unset so a stray `CEREFOX_ENV_LABEL=` never paints a blank badge.
+  //
+  // `latest` / `update_command` (#323) come from the update-check cache the
+  // server refreshes daily; the request itself never touches the network.
   app.get("/api/v1/version", (c) => {
     const label = (process.env.CEREFOX_ENV_LABEL ?? "").trim();
-    return c.json({ ...VERSION_INFO, env_label: label.length > 0 ? label : null });
+    const latest = updateCheckDisabled() ? null : (readCache()?.latest ?? null);
+    return c.json({
+      ...VERSION_INFO,
+      env_label: label.length > 0 ? label : null,
+      latest,
+      update_command: newerRelease(latest) ? upgradeCommand() : null,
+    });
   });
 
   app.get("/api/v1/docs", (c) => c.json(listBundledDocs()));

@@ -10,6 +10,10 @@ export interface VersionInfo {
    * nothing is rendered unless the operator explicitly opted in.
    */
   env_label?: string | null;
+  /** The newest release on npm, as the server last checked it (#323). */
+  latest?: string | null;
+  /** Set only when `latest` is newer than `version`: what to run to upgrade. */
+  update_command?: string | null;
 }
 
 export async function fetchVersion(): Promise<VersionInfo> {

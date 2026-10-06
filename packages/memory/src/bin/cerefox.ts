@@ -91,6 +91,7 @@ async function main(): Promise<void> {
   // friendly entry instead of commander's default help dump.
   if (process.argv.length === 2) {
     await bareEntryPoint();
+    await printUpdateNotice();
     return;
   }
 
@@ -108,6 +109,36 @@ async function main(): Promise<void> {
   });
 
   await program.parseAsync(process.argv);
+  await printUpdateNotice();
+}
+
+/**
+ * Commands that never get the "newer release" line (#323): `mcp` speaks the
+ * protocol on stdout and runs until the client goes; `completion` output is
+ * sourced by a shell; `self-update`/`upgrade` is the answer to the notice;
+ * `doctor` has its own `updates` row.
+ */
+const NO_UPDATE_NOTICE = new Set(["mcp", "completion", "self-update", "upgrade", "doctor"]);
+
+/**
+ * Print the update notice after the command's own output, to stderr, for a
+ * person at a terminal. Reads the cache only: the network is left to the
+ * long-running processes (see `update-check.ts`).
+ */
+async function printUpdateNotice(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (!process.stderr.isTTY || args.includes("--json")) return;
+  if (args[0] && NO_UPDATE_NOTICE.has(args[0])) return;
+  try {
+    const { takeCliNotice } = await import("../update-check.ts");
+    const line = takeCliNotice();
+    if (line) {
+      const { cErr } = await import("../../../../_shared/cli-core/index.ts");
+      process.stderr.write("\n" + cErr.yellow(line) + "\n");
+    }
+  } catch {
+    // Never let the notice turn a successful command into a failure.
+  }
 }
 
 main().catch((err: unknown) => {

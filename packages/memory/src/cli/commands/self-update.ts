@@ -27,6 +27,7 @@ import {
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { PKG_VERSION } from "../../meta.ts";
+import { fetchLatestVersion, newerRelease, recordLatest } from "../../update-check.ts";
 import { restartCommand, statusDaemon } from "../../web/daemon.ts";
 
 interface SelfUpdateOptions {
@@ -86,24 +87,21 @@ function detectRuntime(): ResolvedRuntime {
   };
 }
 
-async function fetchLatestVersion(): Promise<string> {
-  const resp = await fetch("https://registry.npmjs.org/@cerefox%2Fmemory/latest");
-  if (!resp.ok) {
-    throw systemError(
-      `Could not query npm registry: ${resp.status} ${resp.statusText}`,
-    );
+async function fetchLatest(): Promise<string> {
+  try {
+    const latest = await fetchLatestVersion({ timeoutMs: 15_000 });
+    // We have the answer anyway: refresh the update-notice cache with it.
+    recordLatest(latest);
+    return latest;
+  } catch (err) {
+    throw systemError(`Could not query the npm registry: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const body = (await resp.json()) as { version?: string };
-  if (!body.version) {
-    throw systemError("npm registry response missing version field.");
-  }
-  return body.version;
 }
 
 async function action(options: SelfUpdateOptions): Promise<void> {
   let target: string;
   try {
-    target = options.version ?? (await fetchLatestVersion());
+    target = options.version ?? (await fetchLatest());
   } catch (err) {
     if (err instanceof Error) throw err;
     throw systemError(String(err));
@@ -112,13 +110,15 @@ async function action(options: SelfUpdateOptions): Promise<void> {
   println(c.dim(`Installed: ${PKG_VERSION}`));
   println(c.dim(`Target:    ${target}`));
 
-  if (target === PKG_VERSION && !options.version) {
+  // Compared as versions, not strings: a prerelease or local build newer than
+  // `latest` is up to date, not something to "upgrade" backwards.
+  if (!options.version && !newerRelease(target)) {
     println(c.green("✓ Already up to date."));
     return;
   }
 
   if (options.check) {
-    if (target !== PKG_VERSION) {
+    if (newerRelease(target)) {
       println(c.yellow(`Update available: ${PKG_VERSION} → ${target}`));
       println(c.dim("Run `cerefox self-update` to upgrade."));
     }

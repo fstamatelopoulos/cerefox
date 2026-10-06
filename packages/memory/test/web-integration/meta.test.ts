@@ -31,14 +31,18 @@ describe("meta endpoints (HTTP boundary)", () => {
 
   // ── /api/v1/version ────────────────────────────────────────────────────────
 
-  liveTest("/version returns {version, git_commit_short, build_date, env_label}", async () => {
+  liveTest("/version returns {version, git_commit_short, build_date, env_label, latest, update_command}", async () => {
     if (!server) return;
     const resp = await fetch(`${server.base}/api/v1/version`);
     expect(resp.status).toBe(200);
     const body = await resp.json();
     expect(Object.keys(body).sort()).toEqual(
-      ["build_date", "env_label", "git_commit_short", "version"].sort(),
+      ["build_date", "env_label", "git_commit_short", "latest", "update_command", "version"].sort(),
     );
+    // #323: both null until the server has checked npm (or with the check off);
+    // `update_command` is set only when `latest` is newer.
+    expect(body.latest === null || typeof body.latest === "string").toBe(true);
+    if (body.update_command !== null) expect(typeof body.latest).toBe("string");
     expect(typeof body.version).toBe("string");
     expect(body.version).toMatch(/^\d+\.\d+\.\d+/);
     // Null unless CEREFOX_ENV_LABEL names an environment. The web UI banner

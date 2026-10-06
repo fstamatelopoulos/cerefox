@@ -16,6 +16,13 @@ export const VersionResponse = z.object({
   build_date: z.string().nullable(),
   /** `CEREFOX_ENV_LABEL` (e.g. "STAGING"), or null on an unlabeled target. */
   env_label: z.string().nullable(),
+  /** The npm registry's `latest` release as last checked (daily, by the
+   *  server); null when not yet known or when the check is turned off
+   *  (`CEREFOX_NO_UPDATE_CHECK`). */
+  latest: z.string().nullable(),
+  /** What to run to upgrade, when `latest` is newer than `version`; else
+   *  null. `cerefox-local upgrade` inside the Cerefox Local container. */
+  update_command: z.string().nullable(),
 });
 export type VersionResponse = z.infer<typeof VersionResponse>;
 

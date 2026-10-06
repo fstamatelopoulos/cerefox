@@ -17,6 +17,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { PKG_VERSION } from "../../meta.ts";
+import {
+  fetchLatestVersion,
+  newerRelease,
+  recordLatest,
+  releaseNotesUrl,
+  updateCheckDisabled,
+  upgradeCommand,
+} from "../../update-check.ts";
 import { EF_LAST_CHANGED, EF_VERSION } from "../../../../../_shared/ef-meta/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import {
@@ -102,6 +110,34 @@ export function checkVersion(): CheckResult {
     name: "version",
     status: "ok",
     detail: `cerefox v${PKG_VERSION}`,
+  };
+}
+
+/**
+ * Is a newer release on npm? (#323) Live, since the user is already waiting
+ * on the network here, and it refreshes the cache the CLI notice reads.
+ * Never `warn`/`error`: being offline, or one release behind, is not a fault,
+ * and must never make `doctor` fail.
+ */
+export async function checkUpdates(): Promise<CheckResult> {
+  const name = "updates";
+  if (updateCheckDisabled()) {
+    return { name, status: "skipped", detail: "update check is off (CEREFOX_NO_UPDATE_CHECK, NO_UPDATE_NOTIFIER or CI)" };
+  }
+  let latest: string;
+  try {
+    latest = await fetchLatestVersion();
+    recordLatest(latest);
+  } catch {
+    return { name, status: "skipped", detail: "could not reach the npm registry to check for a newer release" };
+  }
+  const newer = newerRelease(latest);
+  if (!newer) return { name, status: "ok", detail: `up to date (latest release: v${latest})` };
+  return {
+    name,
+    status: "skipped",
+    detail: `v${newer} is available (installed: v${PKG_VERSION})`,
+    hint: `Run \`${upgradeCommand()}\`. Release notes: ${releaseNotesUrl(newer)}`,
   };
 }
 
@@ -1159,6 +1195,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "binary", phase: "Locating binary", run: () => checkBinary() },
     { name: "runtime", phase: "Inspecting runtime", run: () => checkRuntime() },
     { name: "version", phase: "Reading package version", run: () => checkVersion() },
+    { name: "updates", phase: "Checking npm for a newer release", run: () => checkUpdates() },
     { name: "config", phase: "Resolving config", run: () => checkConfig() },
     { name: "legacy env", phase: "Checking legacy env shadowing", run: () => checkLegacyShadowEnv() },
     { name: "retired env", phase: "Checking retired env vars", run: () => checkRetiredEnvVars() },
