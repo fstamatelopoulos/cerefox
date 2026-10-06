@@ -179,6 +179,13 @@ the Bearer token is the gate); the #110 query is parameterized.
   `argparse` is imported only by mammoth's own command-line tool (`bin/mammoth`).
   Cerefox uses mammoth as a library for `.docx` conversion, so the code is never
   loaded. Retire it when mammoth drops `argparse` 1.x or a fix ships.
+  The Cerefox Local image's runtime audit gained two the same day, both
+  **accepted for the image only**: `sharp` GHSA-wq5f-xc86-pv6w (high; librsvg,
+  the SVG path of image processing, on the same reasoning as the two `sharp`
+  entries above), and the same `sprintf-js` advisory, reached there only through
+  `onnxruntime-node`'s postinstall downloader (`script/install.js` →
+  `global-agent` → `roarr`), which runs when the image is built and is never
+  loaded by the embedder. Both retire with the move to transformers 4.x (#300).
 - The container-minted `service_role` JWT has no expiry; it never leaves the
   container, and rotating it is deleting `.cerefox_jwt_secret` from the data
   volume.
