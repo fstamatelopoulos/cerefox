@@ -21,7 +21,10 @@
     "js-yaml": "^4.3.2",
     "adm-zip": "^0.6.1",
     "ip-address": "^10.5.1",
-    "brace-expansion": "^5.0.11"
+    "brace-expansion": "^5.0.11",
+    "proxy-addr": "^2.0.8",
+    "source-map-js": "^1.2.2",
+    "postcss-selector-parser": "^7.1.6"
   },
   "scripts": {
     "test": "cd _shared && bun test",

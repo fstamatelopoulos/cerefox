@@ -187,11 +187,15 @@ jobs:
         # 2026-09-08, adm-zip entries retired 2026-09-22, sharp entries
         # retired 2026-09-30 — transformers 4.3 brought sharp 0.35.5):
         #   GHSA-qwww-vcr4-c8h2  react-router — RSC mode, unused in the SPA
+        #   GHSA-hp3w-g68c-fv3c  sprintf-js — only via mammoth's own CLI
+        #                        (bin/mammoth → argparse); no fixed release
         # Fixed by overrides in the root package.json instead of accepted:
         # hono (>=4.13.5), js-yaml (>=4.3.2), adm-zip (>=0.6.1), ip-address
         # (>=10.5.1, via @modelcontextprotocol/sdk → express-rate-limit),
-        # fast-uri (>=3.1.8) and brace-expansion (>=5.0.11, frontend lint
-        # only, via eslint → minimatch). The three
+        # fast-uri (>=3.1.8), brace-expansion (>=5.0.11, frontend lint
+        # only, via eslint → minimatch), proxy-addr (>=2.0.8, via the MCP
+        # SDK's express), source-map-js (>=1.2.2) and postcss-selector-parser
+        # (>=7.1.6), the last two frontend build only. The three
         # adm-zip advisories used to be accepted here on the grounds that no
         # fixed release existed; 0.6.1 shipped, so the override retired all
         # three at once, including the one published 2026-09-21 that broke
@@ -201,6 +205,7 @@ jobs:
         run: >
           bun audit
           --ignore=GHSA-qwww-vcr4-c8h2
+          --ignore=GHSA-hp3w-g68c-fv3c
       - name: bun audit — Cerefox Local image embedder runtime
         # docker/local/runtime is what the Local image installs (pinned, #300).
         # It was outside every audit until it had a lockfile. Accepted here, for
@@ -208,12 +213,19 @@ jobs:
         # sharp ^0.34; sharp serves the image-processing path, which a text
         # embedding model never loads). Retired by moving the image to
         # transformers 4.x (#300, second half). See security-audit-1.0.md.
+        # Added 2026-10-06: a third sharp advisory (GHSA-wq5f-xc86-pv6w,
+        # librsvg, same path and reasoning) and sprintf-js
+        # (GHSA-hp3w-g68c-fv3c), reached only via onnxruntime-node's
+        # postinstall downloader (script/install.js → global-agent → roarr),
+        # which never runs inside the embedder.
         working-directory: docker/local/runtime
         run: >
           bun install --frozen-lockfile --ignore-scripts &&
           bun audit
           --ignore=GHSA-f88m-g3jw-g9cj
           --ignore=GHSA-rgj7-g3m4-5g8c
+          --ignore=GHSA-wq5f-xc86-pv6w
+          --ignore=GHSA-hp3w-g68c-fv3c
 
   gitleaks:
     name: Secret scan (gitleaks)

@@ -166,6 +166,26 @@ the Bearer token is the gate); the #110 query is parameterized.
   (`eslint` → `minimatch ^10` → `brace-expansion ^5`), never at runtime, and the
   tree holds a single copy on the 5.x line, so an override to `^5.0.11` is
   safe. Nothing newly accepted.
+- **2026-10-06 addendum — four fixed, one accepted.** `@modelcontextprotocol/sdk`
+  GHSA-6qxp-vccf-f47h (high; the SDK's OAuth *client*, which Cerefox does not
+  use, since it only runs the SDK's server): the floor moved to `^1.32.1`.
+  `proxy-addr` GHSA-jqcg-44mw-7w3h (critical, via the SDK's `express`; Cerefox
+  serves HTTP with Hono, not express): override `^2.0.8`. `source-map-js`
+  GHSA-68fv-2mgg-jv7q (high, frontend build only): override `^1.2.2`.
+  `postcss-selector-parser` GHSA-rj75-hqrm-r3gf (moderate, frontend build only,
+  via `postcss-preset-mantine` → `postcss-nested ^7`): override `^7.1.6`.
+  **Accepted:** `sprintf-js` GHSA-hp3w-g68c-fv3c (moderate; no fixed release, as
+  1.1.3 is affected). It is reached only through `mammoth` → `argparse`, and
+  `argparse` is imported only by mammoth's own command-line tool (`bin/mammoth`).
+  Cerefox uses mammoth as a library for `.docx` conversion, so the code is never
+  loaded. Retire it when mammoth drops `argparse` 1.x or a fix ships.
+  The Cerefox Local image's runtime audit gained two the same day, both
+  **accepted for the image only**: `sharp` GHSA-wq5f-xc86-pv6w (high; librsvg,
+  the SVG path of image processing, on the same reasoning as the two `sharp`
+  entries above), and the same `sprintf-js` advisory, reached there only through
+  `onnxruntime-node`'s postinstall downloader (`script/install.js` →
+  `global-agent` → `roarr`), which runs when the image is built and is never
+  loaded by the embedder. Both retire with the move to transformers 4.x (#300).
 - The container-minted `service_role` JWT has no expiry; it never leaves the
   container, and rotating it is deleting `.cerefox_jwt_secret` from the data
   volume.
