@@ -29,6 +29,20 @@
 
 ## Current Focus
 
+**2026-10-06: merged to `main` for the next release (1.18.0), unreleased:**
+- #324: "a newer release is available" (#323). npm `latest`, cached a day in the
+  state dir, refreshed only by `web` / `mcp` / `doctor` / `self-update`; shown as a
+  CLI stderr line (TTY, once a day), a `doctor` `updates` row and a web footer note;
+  `/api/v1/version` gains `latest` + `update_command`; opt out with
+  `CEREFOX_NO_UPDATE_CHECK`. Also fixes `self-update` offering to downgrade a newer
+  prerelease.
+- #321: hints that named renamed verbs (the schema banner's `deploy-server`, the
+  first-run `cerefox ingest`), plus a guard test derived from `RENAMED_VERBS`.
+- #322: the 2026-10-06 audit advisories (four fixed, `sprintf-js` and one image-only
+  `sharp` accepted; see `docs/specs/security-audit-1.0.md`).
+CHANGELOG `[Unreleased]` carries all three. The 1.18.0 index work below is still
+waiting for the maintainer's go-ahead.
+
 **2026-10-04: every environment is on v1.17.4, production included** (client 1.17.4,
 schema 0.18.2, EFs v1.17.3, which is current since 1.17.4 only moved the label; doctor
 green). Nothing is in flight. Next: 1.18.0 (below), when the maintainer says start.
