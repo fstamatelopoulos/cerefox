@@ -90,9 +90,11 @@ function moveInto(parent: Command, register: (p: Command) => void, newName: stri
  * Old flat verb → new resource-verb form. v0.9.0 husks: the old name stays
  * registered (hidden) and exits non-zero with a pointer to the new form.
  * `backup` is intentionally absent — it's a resource group whose own
- * no-subcommand action prints the notice. Remove these in v1.0.
+ * no-subcommand action prints the notice. Kept indefinitely (decision
+ * 2026-08-02). `test/stale-command-names.test.ts` derives from this list to
+ * keep the old names out of anything the CLI or web UI tells a user to run.
  */
-const RENAMED_VERBS: ReadonlyArray<readonly [string, string]> = [
+export const RENAMED_VERBS: ReadonlyArray<readonly [string, string]> = [
   ["get-doc", "document get"],
   ["list-docs", "document list"],
   ["delete-doc", "document delete"],

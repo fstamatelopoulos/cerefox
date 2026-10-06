@@ -52,7 +52,7 @@ async function action(options: {
       throw systemError(`Project lookup failed: ${projectError.message}`);
     }
     if (!project) {
-      throw userError(`Project "${options.project}" not found.`, "Run `cerefox list-projects` to see available names.");
+      throw userError(`Project "${options.project}" not found.`, "Run `cerefox project list` to see available names.");
     }
     projectId = project.id;
   }

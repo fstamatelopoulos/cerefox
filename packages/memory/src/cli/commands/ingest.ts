@@ -78,7 +78,7 @@ async function readContent(
   if (!path) {
     throw userError(
       "Provide a file path or use --paste.",
-      "Example: cerefox ingest notes.md --title 'My Note'",
+      "Example: cerefox document ingest notes.md --title 'My Note'",
     );
   }
   let content: string;

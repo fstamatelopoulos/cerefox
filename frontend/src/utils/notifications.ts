@@ -41,7 +41,7 @@ export function showV07DeferredToast(err: unknown): boolean {
       title: "Ingestion lands in v0.7",
       message:
         err.note ??
-        "Use `cerefox ingest <file>` from the CLI for now — it still works against your Cerefox.",
+        "Use `cerefox document ingest <file>` from the CLI for now — it still works against your Cerefox.",
       color: "yellow",
       autoClose: 8000,
     });
