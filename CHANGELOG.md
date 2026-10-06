@@ -9,7 +9,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **Cerefox tells you when a newer release is out.** Until now nothing did; you
+  found out by running `cerefox self-update` or reading the release page. The CLI
+  prints one line after a command when a newer release is on npm (at most once a
+  day, and only at a terminal), `cerefox doctor` gains an `updates` row, and the
+  web UI footer shows "vX.Y.Z available" with a link to the release notes. Inside
+  the Cerefox Local container it points at `cerefox-local upgrade` instead of
+  `self-update`. Only the long-running `cerefox web` and `cerefox mcp`, plus
+  `doctor` and `self-update`, ask npm, at most daily; every other command reads
+  the saved answer, so nothing gets slower. Offline, it stays quiet. Turn it off
+  with `CEREFOX_NO_UPDATE_CHECK=1` (`NO_UPDATE_NOTIFIER` and `CI` work too).
+  `GET /api/v1/version` gains `latest` and `update_command`. (#323)
+
 ### Fixed
+
+- **`self-update` no longer offers to downgrade a newer prerelease.** It treated
+  any difference from npm's `latest` as an update, so on a beta newer than
+  `latest` it proposed installing the older release. It now compares versions.
 
 - **Hints no longer point at renamed commands.** The commands renamed in v0.9.0
   still exist under their old names only to fail with a pointer, but a few hints

@@ -5731,7 +5731,7 @@
     },
     "/api/v1/version": {
       "get": {
-        "summary": "Server version and environment label.",
+        "summary": "Server version, environment label, and the newest release on npm as the server last checked it (`latest`, plus `update_command` when it is newer).",
         "operationId": "get_version",
         "responses": {
           "200": {
@@ -5761,13 +5761,27 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "latest": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "update_command": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
                     "version",
                     "git_commit_short",
                     "build_date",
-                    "env_label"
+                    "env_label",
+                    "latest",
+                    "update_command"
                   ],
                   "additionalProperties": false
                 }

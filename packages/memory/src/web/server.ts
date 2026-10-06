@@ -56,6 +56,7 @@ import {
   resolveStaticDir,
 } from "./static.ts";
 import { PKG_VERSION } from "../meta.ts";
+import { startPeriodicRefresh } from "../update-check.ts";
 import { EF_VERSION } from "../../../../_shared/ef-meta/index.ts";
 import { localTimestamp } from "../../../../_shared/cli-core/index.ts";
 import { loadSettings } from "../../../../_shared/config/index.ts";
@@ -338,6 +339,10 @@ export async function buildWebServer(
   // warmup; npm + CEREFOX_EMBEDDER=local). Broken since v1.0.1; masked because
   // the installer warms the model up in a separate process first.
   const server = serve({ fetch: app.fetch, hostname: host, port, overrideGlobalObjects: false });
+
+  // The web server is the main refresher of the "newer release" cache (#323):
+  // it runs for days, so it checks at boot and then once a day.
+  startPeriodicRefresh();
 
   return {
     host,

@@ -2,5 +2,7 @@
   "version": "0.5.4",
   "git_commit_short": "314c184",
   "build_date": null,
-  "env_label": null
+  "env_label": null,
+  "latest": null,
+  "update_command": null
 }

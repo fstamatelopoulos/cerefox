@@ -344,6 +344,27 @@ there matters.
 
 ---
 
+## Update check
+
+Cerefox tells you when a newer release is on npm (v1.18.0, #323): one line after
+a CLI command (at most once a day, only at a terminal), an `updates` row in
+`cerefox doctor`, and a note in the web UI footer. Inside the Cerefox Local
+container it points at `cerefox-local upgrade` instead of `cerefox self-update`.
+
+The only network call is a GET of the `latest` release from the npm registry
+(`registry.npmjs.org`), the same request `cerefox self-update` makes. It is made
+by `cerefox web` (at startup, then daily), `cerefox mcp` (at startup, when the
+last answer is over a day old), `cerefox doctor` and `cerefox self-update`.
+Every other command only reads the saved answer, `update-check.json` in
+`~/.cerefox` (or in `CEREFOX_CONFIG_DIR`, when set), so it never adds latency.
+Offline, the check stays quiet.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CEREFOX_NO_UPDATE_CHECK` | _(unset)_ | Set to `1` to turn the check off entirely: no request to npm, and no notice anywhere. `NO_UPDATE_NOTIFIER` (the convention other CLIs use) and `CI` do the same. |
+
+---
+
 ## Logging
 
 | Variable | Default | Description |

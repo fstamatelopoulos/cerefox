@@ -773,11 +773,11 @@ These flat commands handle install, configuration, and health. Run any with `--h
 | Command | Purpose |
 |---|---|
 | `cerefox init` | Interactive first-run setup; writes `~/.cerefox/.env`, offers `server deploy` + self-docs ingest. |
-| `cerefox doctor` | Diagnose the install (credentials, DB reachability, schema version, whether the review workflow is on). |
+| `cerefox doctor` | Diagnose the install (credentials, DB reachability, schema version, whether the review workflow is on, whether a newer release is out). |
 | `cerefox status` | Show connection + schema status. |
 | `cerefox configure-agent --tool <client>` | Write MCP client config (`claude-code`, `claude-desktop`, `cursor`, `codex`, `gemini`). |
 | `cerefox token generate` / `rotate` / `list` | Manage the Cerefox access token (`cfx_pat_…`) — the Edge Function Bearer credential (remote MCP, GPT Actions, curl). See the [`cerefox token`](#cerefox-token-generate--cerefox-token-rotate--cerefox-token-list) section above. |
-| `cerefox self-update` | Update the installed `@cerefox/memory` package. |
+| `cerefox self-update` | Update the installed `@cerefox/memory` package. Other commands print a one-line notice when a newer release is out; see [configuration.md → Update check](configuration.md#update-check) to turn it off. |
 | `cerefox completion` | Emit a shell completion script. |
 | `cerefox backup create` / `cerefox backup restore` | File-system backup / restore of the knowledge base (see [`ops-scripts.md`](ops-scripts.md)). |
 

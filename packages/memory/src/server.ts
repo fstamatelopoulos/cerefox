@@ -72,6 +72,12 @@ export function buildServer(): ServerHandle {
   // that'd kill agents mid-session.
   void warnIfSchemaVersionMismatch(supabase);
 
+  // Keep the "newer release" cache fresh (#323). An agent session starts this
+  // server far more often than anyone runs `cerefox web`, so this is what
+  // covers users who never open the web UI. Silent: it only writes the cache
+  // (and only when stale); stdout here is the MCP protocol channel.
+  void import("./update-check.ts").then((m) => m.refreshLatest()).catch(() => {});
+
   const ctx: ToolContext = {
     accessPath: "local-mcp",
     openaiApiKey: settings.openaiApiKey || undefined,
