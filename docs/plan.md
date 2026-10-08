@@ -29,6 +29,21 @@
 
 ## Current Focus
 
+**2026-10-08: v1.18.0 IS RELEASED and every environment is on it** (client 1.18.0,
+schema 0.19.0, EF v1.18.0). Contents: the update notice (#323), doctor `chunks` row,
+HNSW indexes dropped (migration 0034, #328 for large stores), hint fixes (#321), the
+advisories (#322), and the ChatGPT Custom GPT retirement docs (#326/#327).
+- **Staging** (installed package): `server deploy` (9 EFs), doctor green; EF + remote
+  MCP 49/0; Playwright 27 passed, 1 skipped. Before the cut: benchmark reproduction
+  exact with identical live metrics before/after the migration; package suite 402/0.
+- **Cerefox Local (:8010)** via `cerefox-local upgrade v1.18.0`, and the second Local
+  container (:8011) recreated by hand on the v1.18.0 image (its only non-default
+  setting is `CEREFOX_EMBEDDER=local`); pg_dump backups in `~/.cerefox/local/backups/`;
+  data and config identical; doctor green.
+- **Production**: `backup create`, `self-update`, `server deploy`, web daemon restarted
+  on 127.0.0.1:8000; doctor green; no HNSW index left; read-only search check.
+- Next: #326 Phase 2 (ChatGPT OAuth connector on staging).
+
 **2026-10-06: merged to `main` for the next release (1.18.0), unreleased:**
 - #324: "a newer release is available" (#323). npm `latest`, cached a day in the
   state dir, refreshed only by `web` / `mcp` / `doctor` / `self-update`; shown as a
