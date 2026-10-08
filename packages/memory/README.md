@@ -17,7 +17,7 @@ curated knowledge layer that multiple AI tools can read and write.
 
 **Why cloud-backed?** Cerefox is designed as a *cloud-backed* memory layer so
 the same knowledge is reachable from every agent you run — Claude Code on
-your laptop, Cursor on a second machine, ChatGPT on the web, a script in CI.
+your laptop, Codex or Cursor on a second machine, Claude on your phone, a script in CI.
 Postgres + pgvector deliver hybrid (semantic + full-text) search across that
 shared memory; Supabase provides the always-on endpoint that makes "same
 memory, any device, any agent" work. You own the data and the endpoint; this

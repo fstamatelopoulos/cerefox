@@ -86,7 +86,14 @@ waiting for client ID metadata documents (CIMD), which Supabase does not yet sup
 
 ## 4. Plan
 
-### Phase 1: docs now (no testing needed)
+### Phase 1: docs now (no testing needed). Done 2026-10-08
+
+Shipped in the docs PR for #326: retirement notices on every user-facing ChatGPT
+mention (README, `connect-agents.md`, `access-paths.md`, `setup-supabase.md`,
+`quickstart.md`, `upgrading.md`, `solution-design.md`, the `CLAUDE.md` client table),
+the rewritten "ChatGPT Desktop and Codex" section, and the two small fixes below.
+Historical records (CHANGELOG, plans, specs, research) were left as written.
+
 
 1. Add a **retirement notice** at the top of the Custom GPT section in `connect-agents.md`:
    working until December 11, 2026, then gone; link this document.
@@ -99,6 +106,14 @@ waiting for client ID metadata documents (CIMD), which Supabase does not yet sup
      `cerefox token rotate` for a new one alongside it";
    - the Path B system prompt should tell the model to pass `author` on every call, or its
      writes are unattributed in the audit log.
+
+### Validation log
+
+| Date | Client | Result |
+|---|---|---|
+| 2026-10-08 | Codex CLI, local MCP (entry pointing at the installed `cerefox` binary) | **Works.** `cerefox_get_help` reports the server version; all 15 core tools listed (the 4 relation tools hidden, as expected with `relations_enabled` off). Read and write round trip: create, insert, audit log (author and `local-mcp` access path recorded), delete with a reason. |
+| 2026-10-08 | Codex CLI, after `cerefox configure-agent --tool codex` (the `npx` form) | **Works** in a new session. |
+| 2026-10-08 | ChatGPT desktop app, regular chat | **No Cerefox tools.** The app's log shows the local server starting for Codex threads only; plain chats do not get local MCP servers. |
 
 ### Phase 2: validate option A, on staging first
 

@@ -220,6 +220,11 @@ FTS-only `mcp.supabase.com` path). This needs a one-time OAuth setup — see
 [Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) below.
 
 **For cloud ChatGPT** — create a Custom GPT with GPT Actions pointing at the Edge Functions.
+This works until **December 11, 2026**, when OpenAI retires Custom GPTs (custom actions do
+not carry over to its plugins). ChatGPT's replacement connection, an MCP connector over
+OAuth like the cloud Claude one, is being validated in
+[#326](https://github.com/fstamatelopoulos/cerefox/issues/326). **For Codex**, use the local
+MCP: `cerefox configure-agent --tool codex`.
 
 See `docs/guides/connect-agents.md` for the complete guide including system prompts,
 architecture explanation, and ChatGPT GPT Actions setup.

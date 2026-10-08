@@ -24,7 +24,7 @@ client; you can also run both in parallel.
 Three top-level paths plus a few special cases:
 
 - **Path A** — MCP server (local subprocess or remote Edge Function). Best for purpose-built agent clients like Claude Desktop, Cursor, and Claude Code's MCP integration.
-- **Path B** — direct Edge Function HTTP. Best for ChatGPT Custom GPTs and any HTTP caller (curl, scripts).
+- **Path B** — direct Edge Function HTTP. For any HTTP caller (curl, scripts), and for ChatGPT Custom GPTs until OpenAI retires them on December 11, 2026.
 - **Path C** — local shell CLI invoked by a coding agent's Bash tool. Best for Claude Code, Codex CLI, opencode, OpenClaw, Hermes, and similar local-agent CLIs **when the user prefers not to configure MCP** but still wants the agent to read and write Cerefox.
 
 | Client | Path | Search | Requirements / caveats |
@@ -33,7 +33,8 @@ Three top-level paths plus a few special cases:
 | Claude Code (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token only; no local install. Advanced/fallback — prefer Path A-Local |
 | Cursor (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token only; no local install. Advanced/fallback — prefer Path A-Local |
 | OpenAI Codex CLI (remote) | Path A-Remote — `cerefox-mcp` Edge Function | Hybrid | URL + Cerefox token env var; TOML config. Advanced/fallback — prefer Path A-Local |
-| ChatGPT (chatgpt.com or desktop) | Path B — Custom GPT → Edge Functions | Hybrid | ChatGPT Plus required |
+| ChatGPT (chatgpt.com or desktop) | Path B — Custom GPT → Edge Functions | Hybrid | ChatGPT Plus required. **Ends 2026-12-11** when Custom GPTs retire; see [ChatGPT Custom GPT](#chatgpt-custom-gpt-cloud--chatgptcom) |
+| OpenAI Codex (CLI, and Codex threads in the ChatGPT desktop app) (local) | Path A-Local — `cerefox configure-agent --tool codex` | Hybrid | Writes `~/.codex/config.toml`; all 15 tools; zero Edge Function invocations. **Recommended for Codex** |
 | Claude Desktop (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; Node.js; zero Edge Function invocations |
 | Claude Code (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
 | Cursor (local) | Path A-Local — `@cerefox/memory` via `npx` | Hybrid | Local alternative; zero Edge Function invocations |
@@ -50,7 +51,8 @@ Three top-level paths plus a few special cases:
 > over the standard tool surface — no Cloud Run needed. Setup:
 > [setup-supabase Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)
 > + [Cloud Claude](#cloud-claude-claudeai-web--mobile-oauth) below. (An OAuth connector for
-> ChatGPT becomes possible on the same server but is not yet documented.)
+> ChatGPT is expected to replace the Custom GPT path when Custom GPTs retire; it is being
+> validated in [#326](https://github.com/fstamatelopoulos/cerefox/issues/326).)
 
 > **Perplexity** supports stdio-only MCP on macOS Desktop (via Helper App). Remote MCP is
 > "coming soon." Perplexity's CTO has signaled a strategic shift away from MCP (March 2026),
@@ -265,15 +267,26 @@ For the manual JSON (for the curious, or to debug if the CLI can't write your co
 
 ---
 
-### ChatGPT Desktop
+### ChatGPT Desktop and Codex
 
-> **ChatGPT Desktop does not support local stdio MCP servers.**
-> OpenAI's MCP implementation for ChatGPT only supports remote servers via SSE or
-> streaming HTTP — not local subprocess (stdio) servers like `cerefox mcp`.
-> The "dev mode" MCP connector visible in the app also requires a public URL.
->
-> **Use Path B (Custom GPT + Edge Functions) for all ChatGPT access** — both the web
-> app and the desktop app. The Custom GPT approach is fully validated and works well.
+The ChatGPT desktop app hosts two different things, and they connect differently:
+
+- **Codex threads** (and the Codex CLI) run local stdio MCP servers. Set them up with
+  `cerefox configure-agent --tool codex`, which writes the `cerefox` entry into
+  `~/.codex/config.toml`; the app's **Plugins → MCPs** screen edits the same entry. Start
+  a new Codex session after changing it (it reads the config at session start), then ask
+  it to call `cerefox_get_help`: the reply begins with the server version. All 15 tools
+  are available.
+- **Regular ChatGPT chats** do not get local MCP servers, in the desktop app or anywhere
+  else. ChatGPT only connects to **remote** MCP servers (OAuth or no auth). Today ChatGPT
+  chats reach Cerefox through the [Custom GPT](#chatgpt-custom-gpt-cloud--chatgptcom)
+  path, which ends on December 11, 2026; see the notice there.
+
+> **Tip**: `configure-agent` writes the `npx` form, which runs whatever version npx has
+> cached. To keep Codex on the same version as your installed CLI (and start faster),
+> point the entry at the binary instead: `command = "<path to cerefox>"`, `args = ["mcp"]`
+> (`which cerefox` prints the path; use the full path, since GUI apps may not see your
+> shell's `PATH`).
 
 ---
 
@@ -593,6 +606,8 @@ You have access to a personal knowledge base via the searchKnowledgeBase action.
 When the user asks a question, always search the knowledge base first using a
 relevant query. Present results by document title, citing the source for every claim.
 Use ingestNote to save any new information the user asks you to remember.
+Pass author: "ChatGPT" on every action call, so your reads and writes are
+attributed in the audit and usage logs.
 When UPDATING an existing document, first call getDocument and note its
 content_hash, then pass it as expected_content_hash on ingestNote. If you get a
 409 conflict, the document changed underneath you: call getDocument again, merge
@@ -619,6 +634,14 @@ Expected: JSON response with `results` array containing documents.
 ---
 
 ### ChatGPT Custom GPT (cloud — chatgpt.com)
+
+> **Retiring on December 11, 2026.** OpenAI is retiring Custom GPTs in favor of plugins,
+> and **custom actions do not carry over**: they have to be rebuilt as a connector or a
+> custom MCP server. This section works until then, but do not build a new setup on it.
+> ChatGPT will need a new connection, an MCP connector to `cerefox-mcp` over OAuth (the
+> way [cloud Claude](#cloud-claude-claudeai-web--mobile-oauth) connects), which is being
+> validated in [#326](https://github.com/fstamatelopoulos/cerefox/issues/326). Background and plan: [`chatgpt-after-custom-gpts.md`](../research/chatgpt-after-custom-gpts.md).
+> For **Codex**, use the local MCP instead (see [ChatGPT Desktop and Codex](#chatgpt-desktop-and-codex)).
 
 A Custom GPT with Actions pointing at the Edge Functions gives ChatGPT full hybrid search from
 any browser — no local install, no MCP client, works free with ChatGPT Plus.
@@ -1084,15 +1107,16 @@ paths:
 In the action's **Authentication** settings:
 - Type: **API Key**
 - Auth type: **Bearer**
-- API key: your **Cerefox access token** (`cfx_pat_…`). Generate it with
-  `cerefox token generate` (it prints the token once and sets it on Supabase).
+- API key: your **Cerefox access token** (`cfx_pat_…`). If you already have one
+  (`cerefox token list` shows it; the value is `CEREFOX_ACCESS_TOKEN` in your `.env`),
+  reuse it. Only on a first setup run `cerefox token generate`: it **replaces** the
+  server's token, which breaks every client still using the old one. To add a second
+  token alongside the first, use `cerefox token rotate`.
   The legacy Supabase anon key is no longer accepted (iter-28E).
 
-> **Important:** ChatGPT resets the stored API key when you update the action
-> schema. This release bumps the schema `info.version`, so on your next schema
-> paste ChatGPT will clear the key — re-enter your **Cerefox access token** in the
-> authentication settings. (That reset is expected here: it's what swaps you off
-> the old anon key.)
+> **Important:** ChatGPT clears the stored API key whenever you save a changed action
+> schema. After pasting a new schema version, re-enter your **Cerefox access token** in
+> the authentication settings.
 
 **Step 4 — Save and test**
 

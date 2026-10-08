@@ -443,7 +443,7 @@ cerefox server deploy --functions-only
 
 Contributors with a repo clone can instead redeploy individual functions with `npx supabase functions deploy cerefox-search` (and `cerefox-ingest`), or through the Supabase Dashboard → Edge Functions → Deploy.
 
-> **If you only use the local MCP server** (Claude Desktop, ChatGPT Desktop, Cursor), Step 3 is
+> **If you only use the local MCP server** (Claude Code, Claude Desktop, Codex, Cursor), Step 3 is
 > optional — the Edge Functions are only used for GPT Actions and direct HTTP access.
 
 > **Future improvement**: the Edge Functions will be updated to read model config from Supabase

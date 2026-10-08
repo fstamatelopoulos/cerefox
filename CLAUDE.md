@@ -356,7 +356,7 @@ The migrate/deploy logic is shared with `scripts/db_migrate.ts` /
 
 ### Rule: keep the GPT Actions OpenAPI block in sync with the EFs
 
-**When you change an Edge Function's request body or response shape, update the GPT Actions OpenAPI block in `docs/guides/connect-agents.md` in the same PR, and bump its `info.version` per SemVer.** That block is what ChatGPT users paste into a Custom GPT's Actions config; if it drifts from what the EFs actually accept/return, those GPTs silently break. There is no CI gate for this (a path-diff heuristic was too lossy) — the discipline lives here + in the release playbook (`RELEASING.md`). When an EF's `EF_VERSION` surface changes, also consider whether the client compatibility matrix (`_shared/compatibility/index.ts`) needs a `minEdgeFunctions` bump (see CONTRIBUTING.md).
+**Until Custom GPTs retire on 2026-12-11 (then this rule goes, #326): when you change an Edge Function's request body or response shape, update the GPT Actions OpenAPI block in `docs/guides/connect-agents.md` in the same PR, and bump its `info.version` per SemVer.** That block is what ChatGPT users paste into a Custom GPT's Actions config; if it drifts from what the EFs actually accept/return, those GPTs silently break. There is no CI gate for this (a path-diff heuristic was too lossy) — the discipline lives here + in the release playbook (`RELEASING.md`). When an EF's `EF_VERSION` surface changes, also consider whether the client compatibility matrix (`_shared/compatibility/index.ts`) needs a `minEdgeFunctions` bump (see CONTRIBUTING.md).
 
 ### Rule: keep `docs/guides/api.md` in sync with the `/api/v1` routes
 
@@ -440,11 +440,10 @@ For **local** agents (Claude Code, Cursor, Codex, Gemini, Desktop) the **preferr
 |---|---|---|
 | Claude Code | Preferred: `cerefox configure-agent --tool claude-code` (local MCP). Advanced (remote): `claude mcp add --transport http cerefox <url> --header "Authorization: Bearer <cerefox-access-token>"` | Direct Streamable HTTP |
 | Cursor | `url` + `headers.Authorization` in mcp.json | Same as Claude Code |
-| OpenAI Codex CLI | `url` + `bearer_token_env_var` in `~/.codex/config.toml` | Direct Streamable HTTP; TOML config; **tested, working** |
+| OpenAI Codex (CLI + desktop-app Codex threads) | Preferred: `cerefox configure-agent --tool codex` (local MCP, `~/.codex/config.toml`). Advanced (remote): `url` + `bearer_token_env_var` | Local: **verified 2026-10-08**, all 15 tools. Remote: Direct Streamable HTTP; **tested, working** |
 | Gemini CLI | `httpUrl` + `headers` in `~/.gemini/settings.json` | Direct Streamable HTTP; **untested, expected to work** |
 | Claude Desktop | `npx supergateway` or `npx mcp-remote` (see connect-agents.md) | `supergateway` tested and working; `mcp-remote` may work (untested for Desktop) |
-| ChatGPT | Custom GPT + GPT Actions (OpenAPI spec pointing at Edge Functions) | Streamable HTTP MCP not supported by ChatGPT |
-| ChatGPT Desktop | Developer Mode MCP (beta) or Custom GPT + GPT Actions | Dev Mode requires Plus/Pro; **untested for MCP path** |
+| ChatGPT (web, desktop, mobile chats) | Today: Custom GPT + GPT Actions (OpenAPI spec pointing at Edge Functions). **Custom GPTs retire 2026-12-11 and custom actions do not migrate**; the replacement is expected to be a Developer Mode MCP connector to `cerefox-mcp` over OAuth | Connector path **untested**; tracked in #326 (`docs/research/chatgpt-after-custom-gpts.md`). Plain ChatGPT chats never get local MCP servers |
 | Claude.ai web + mobile | Custom connector over **OAuth 2.1** to `cerefox-mcp` | **Working** (iter-28A). Optional feature; needs the Supabase OAuth setup + a free Cloudflare Worker consent page. Register the OAuth App with **`client_secret_post`**. See `docs/guides/setup-supabase.md` Step 7 + `connect-agents.md` → Cloud Claude. |
 
 ---

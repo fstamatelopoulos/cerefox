@@ -83,7 +83,8 @@ in place, so re-run it after upgrading. Detailed walkthrough:
 ## 3b. Generate the Edge Function access token
 
 The Edge Functions authenticate callers with a **Cerefox access token**. You need it
-if you'll connect a **Custom GPT** (GPT Actions) or a **remote HTTP MCP** client, and
+if you'll connect a **Custom GPT** (GPT Actions, until OpenAI retires Custom GPTs on
+December 11, 2026) or a **remote HTTP MCP** client, and
 for a fully-green `cerefox doctor`. The **local MCP** (local agents), **cloud Claude**
 (OAuth), and the CLI/web reach Supabase over the Data API and don't use it — so this
 step is optional if that's your whole setup, but it's quick and harmless to run:
@@ -147,8 +148,11 @@ clone the repo, run `bun install`, and use the contributor scripts
 - **Search from the CLI**: `cerefox search "your query"`
 - **Discover all commands**: `cerefox --help`
 - **Run the web UI**: `cerefox web` (TypeScript — Hono backend + React SPA); see [`cli.md`](cli.md)
-- **Connect more AI clients** (Cursor, Codex, ChatGPT GPT Actions, etc.):
-  [`connect-agents.md`](connect-agents.md)
+- **Connect more AI clients** (Cursor, Codex, Gemini, cloud Claude, etc.):
+  [`connect-agents.md`](connect-agents.md). Codex works with the local MCP
+  (`cerefox configure-agent --tool codex`). ChatGPT's Custom GPT path ends on
+  December 11, 2026; see
+  [`chatgpt-after-custom-gpts.md`](../research/chatgpt-after-custom-gpts.md)
 - **Configuration reference**: [`configuration.md`](configuration.md)
 - **Backup + restore**: [`ops-scripts.md`](ops-scripts.md)
 
