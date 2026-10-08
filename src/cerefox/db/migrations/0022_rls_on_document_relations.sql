@@ -26,7 +26,7 @@
 
 ALTER TABLE cerefox_document_relations ENABLE ROW LEVEL SECURITY;
 
--- Defence in depth: revoke the legacy blanket grants so the table is denied by
+-- Defense in depth: revoke the legacy blanket grants so the table is denied by
 -- privilege as well as by RLS. Harmless where the grants were never made.
 REVOKE ALL ON TABLE cerefox_document_relations FROM anon;
 

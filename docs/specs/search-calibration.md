@@ -178,6 +178,30 @@ Lessons kept in the process: a ranking change is checked on real data on staging
 well as on the vocabulary; the benchmark's results are only as broad as its query
 shapes; and a parameter is tested by its arithmetic, not its description.
 
+## Scale: no vector index (v1.18.0, schema 0.19.0)
+
+With the exact scan of 0.18.1 the two HNSW indexes served no query, but every
+chunk write still maintained them and their quality kept degrading with version
+churn. Migration 0034 drops them. Measured on synthetic clustered 768-dim vectors,
+on a deliberately small local Postgres (1 CPU, 1 GB), top-500 candidates:
+
+| Current chunks | Exact scan | Default HNSW (m 16, ef_construction 64, ef_search 40) |
+|---|---|---|
+| 2k | 2 ms | |
+| 10k | 15 ms | |
+| 25k | | recall@250 65% |
+| 50k | 56 ms | slower than exact |
+| 100k | 181 ms | recall@250 27%, slower than exact |
+
+So the exact scan meets NFR-2.3 up to about 100k current chunks, and an index with
+default settings is both slower and wrong long before that. `cerefox doctor`
+reports the current chunk count and warns past 100k. A tuned index path for larger
+stores (candidate-sized `ef_search`, filter-aware plans, exact below a threshold)
+is [#328](https://github.com/fstamatelopoulos/cerefox/issues/328), to be measured on
+real data at that size before anything ships. The guard
+`_shared/__tests__/search-exact-vector-pool.test.ts` fails if `schema.sql` or a
+later migration creates a vector index.
+
 ## Wiring
 
 - `scripts/search_benchmark.ts`: ingests the corpus into a dedicated project on a

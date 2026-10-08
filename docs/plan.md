@@ -40,8 +40,15 @@
   first-run `cerefox ingest`), plus a guard test derived from `RENAMED_VERBS`.
 - #322: the 2026-10-06 audit advisories (four fixed, `sprintf-js` and one image-only
   `sharp` accepted; see `docs/specs/security-audit-1.0.md`).
-CHANGELOG `[Unreleased]` carries all three. The 1.18.0 index work below is still
-waiting for the maintainer's go-ahead.
+CHANGELOG `[Unreleased]` carries all three.
+
+**2026-10-08: 1.18.0 vector-index work done on a branch (schema 0.19.0).** Migration
+0034 drops `idx_cerefox_chunks_emb_primary` / `_emb_upgrade`; `doctor` gains a
+`chunks` row (warns past 100k current chunks); #328 tracks large-store support; the
+`src/cerefox/db/` comment spelling pass rode along. Verified on staging before the
+cut: migration applied, indexes gone, benchmark reproduction exact (147/147) with
+identical live metrics before and after, floors hold, package suite 402/0. Also
+#326 (ChatGPT after Custom GPTs) Phase 1 docs merged in #327.
 
 **2026-10-04: every environment is on v1.17.4, production included** (client 1.17.4,
 schema 0.18.2, EFs v1.17.3, which is current since 1.17.4 only moved the label; doctor

@@ -2,7 +2,7 @@
 --
 -- Records how each chunk's content reconstructs into full document text:
 --   1 = legacy    — chunk contents were trimmed sections; reconstruction re-joins
---                   them with E'\n\n' (the pre-28D behaviour). All existing chunks.
+--                   them with E'\n\n' (the pre-28D behavior). All existing chunks.
 --   2 = blind-stitch — chunk contents are an exact, gapless partition of the
 --                   document; reconstruction is a plain concatenation (no separator
 --                   synthesized on read). Written by the exact-partition chunker.

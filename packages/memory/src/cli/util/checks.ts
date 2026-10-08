@@ -697,6 +697,65 @@ async function probeRpcJson<T>(
   }
 }
 
+/**
+ * Past this many current chunks the exact vector scan search uses (no vector
+ * index since schema 0.19.0) may start to feel slow: it measured 181 ms for
+ * the top-500 candidates at 100k chunks on a 1-CPU / 1 GB Postgres. Not a
+ * fault, a heads-up; a tuned index path for large stores is #328.
+ */
+export const CHUNK_COUNT_WARN_AT = 100_000;
+
+/** The `chunks` row for a given count of current (non-archived) chunks. */
+export function classifyChunkCount(count: number): CheckResult {
+  const n = count.toLocaleString("en-US");
+  if (count <= CHUNK_COUNT_WARN_AT) {
+    return { name: "chunks", status: "ok", detail: `${n} current chunk(s)` };
+  }
+  return {
+    name: "chunks",
+    status: "warn",
+    detail: `${n} current chunks: past ${CHUNK_COUNT_WARN_AT.toLocaleString("en-US")}, search's exact vector scan may slow down`,
+    hint: "Search still returns correct results; it may just take longer. Large-store support (a tuned vector index) is tracked in https://github.com/fstamatelopoulos/cerefox/issues/328; comment there with your chunk count.",
+  };
+}
+
+/**
+ * How many current chunks the store holds, for the scale heads-up above. One
+ * HEAD request with an exact count; archived chunks are excluded, since search
+ * never scans them.
+ */
+export async function checkChunkCount(): Promise<CheckResult> {
+  const settings = loadSettings();
+  if (!settings.supabaseUrl || !settings.supabaseKey) {
+    return { name: "chunks", status: "skipped", detail: "Supabase config missing; skipped." };
+  }
+  try {
+    const url =
+      `${settings.supabaseUrl.replace(/\/$/, "")}/rest/v1/cerefox_chunks` +
+      `?select=id&version_id=is.null`;
+    const resp = await fetch(url, {
+      method: "HEAD",
+      headers: {
+        apikey: settings.supabaseKey,
+        Authorization: `Bearer ${settings.supabaseKey}`,
+        Prefer: "count=exact",
+      },
+    });
+    // Content-Range: "0-24/12345" or "*/0".
+    const total = Number((resp.headers.get("content-range") ?? "").split("/")[1]);
+    if (!resp.ok || !Number.isFinite(total)) {
+      return { name: "chunks", status: "skipped", detail: `chunk count unavailable (HTTP ${resp.status})` };
+    }
+    return classifyChunkCount(total);
+  } catch (err) {
+    return {
+      name: "chunks",
+      status: "skipped",
+      detail: `chunk count unavailable (${err instanceof Error ? err.message : String(err)})`,
+    };
+  }
+}
+
 const CONTENT_FORMAT_CHECK_NAME = "content format";
 
 /**
@@ -1205,6 +1264,7 @@ export async function runAllChecks(opts: RunChecksOptions = {}): Promise<CheckRe
     { name: "review workflow", phase: "Reading review workflow flag", run: () => checkReviewWorkflow() },
     { name: "trash auto-purge", phase: "Reading trash auto-purge settings", run: () => checkTrashAutoPurge() },
     { name: "embedder", phase: "Checking embedder consistency", run: () => checkEmbedderMismatch() },
+    { name: "chunks", phase: "Counting current chunks", run: () => checkChunkCount() },
     { name: "content format", phase: "Checking chunk reconstruction format", run: () => checkContentFormat() },
     { name: "metadata health", phase: "Checking metadata well-formedness", run: () => checkMetadataHealth() },
     { name: "edge functions", phase: "Probing Edge Function versions", run: () => checkEdgeFunctionsCompat() },
