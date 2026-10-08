@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const RPCS = readFileSync(join(import.meta.dir, "..", "..", "src", "cerefox", "db", "rpcs.sql"), "utf8");
@@ -45,5 +45,41 @@ describe("search RPCs order vector candidates exactly (0.18.1)", () => {
     const hybrid = body("cerefox_hybrid_search");
     expect(hybrid).toContain("AS fts_vec_score");
     expect(hybrid).toContain("COALESCE(v.vec_score, f.fts_vec_score, 0.0)");
+  });
+});
+
+/**
+ * 0.19.0 dropped the HNSW indexes outright (migration 0034): with the exact
+ * scan above they served no query, while every chunk write paid to maintain
+ * them. A vector index added back to schema.sql, or by a later migration,
+ * would be maintained for nothing at best and, if a future ORDER BY let the
+ * planner use it, would bring the 0.18.1 bug back. Adding one is a measured
+ * decision (#328), so it has to delete this test on purpose.
+ */
+const DB = join(import.meta.dir, "..", "..", "src", "cerefox", "db");
+const VECTOR_INDEX = /CREATE\s+INDEX[^;]*USING\s+(hnsw|ivfflat)/i;
+
+describe("no vector index (0.19.0)", () => {
+  test("the detector matches the DDL it exists to catch", () => {
+    expect(VECTOR_INDEX.test("CREATE INDEX IF NOT EXISTS x\n    ON t USING hnsw (e vector_cosine_ops);")).toBe(true);
+    expect(VECTOR_INDEX.test("create index x on t using ivfflat (e);")).toBe(true);
+    expect(VECTOR_INDEX.test("CREATE INDEX x ON t USING GIN(fts);")).toBe(false);
+  });
+
+  test("schema.sql creates none", () => {
+    expect(readFileSync(join(DB, "schema.sql"), "utf8")).not.toMatch(VECTOR_INDEX);
+  });
+
+  test("migration 0034 drops both former indexes", () => {
+    const m = readFileSync(join(DB, "migrations", "0034_drop_vector_indexes.sql"), "utf8");
+    expect(m).toContain("DROP INDEX IF EXISTS idx_cerefox_chunks_emb_primary;");
+    expect(m).toContain("DROP INDEX IF EXISTS idx_cerefox_chunks_emb_upgrade;");
+  });
+
+  test("no later migration creates one", () => {
+    const later = readdirSync(join(DB, "migrations")).filter((f) => f.endsWith(".sql") && f > "0034");
+    for (const f of later) {
+      expect(readFileSync(join(DB, "migrations", f), "utf8")).not.toMatch(VECTOR_INDEX);
+    }
   });
 });

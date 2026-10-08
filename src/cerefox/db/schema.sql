@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.18.2
+-- @version: 0.19.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS cerefox_document_projects (
 -- ── Document relations (iteration 29) ─────────────────────────────────────────
 -- Typed, directed edges between documents. rel_type is free text by design so
 -- agents can define new types without a migration; the type dictionary lives in
--- the RPCs and gives KNOWN types behaviour (symmetry, lifecycle side effects).
+-- the RPCs and gives KNOWN types behavior (symmetry, lifecycle side effects).
 -- Design: docs/research/document-relations-and-semantic-graph.md §2.2.
 
 CREATE TABLE IF NOT EXISTS cerefox_document_relations (
@@ -267,17 +267,11 @@ CREATE INDEX IF NOT EXISTS idx_cerefox_chunks_fts
     ON cerefox_chunks USING GIN(fts)
     WHERE version_id IS NULL;
 
--- Vector similarity — primary embedding, current chunks only
-CREATE INDEX IF NOT EXISTS idx_cerefox_chunks_emb_primary
-    ON cerefox_chunks USING hnsw (embedding_primary vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64)
-    WHERE version_id IS NULL;
-
--- Vector similarity — upgrade embedding, current chunks only
-CREATE INDEX IF NOT EXISTS idx_cerefox_chunks_emb_upgrade
-    ON cerefox_chunks USING hnsw (embedding_upgrade vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64)
-    WHERE version_id IS NULL;
+-- Vector similarity: deliberately NO index (0.19.0, migration 0034). Search
+-- ranks vector candidates by an exact scan, which is both correct and fast at
+-- knowledge-base scale; the HNSW indexes it replaced returned too few, mostly
+-- wrong candidates on stores with version churn. Do not add one back without
+-- the measurements in docs/specs/search-calibration.md (scale section).
 
 -- Partial unique index: enforces (document_id, chunk_index) uniqueness for
 -- current chunks. Archived chunks are excluded and may share chunk_index values
@@ -408,7 +402,7 @@ ON CONFLICT (key) DO NOTHING;
 -- The review workflow (agent writes land pending_review, a person approves)
 -- is OFF on a fresh install (#241): most stores have no reviewer, and a queue
 -- nobody drains is noise. Migration 0031 seeds TRUE on stores that predate the
--- flag, so an upgrade never changes behaviour. Only this seed and that
+-- flag, so an upgrade never changes behavior. Only this seed and that
 -- migration ever write the value; the toggle itself is `cerefox config set`.
 INSERT INTO cerefox_config (key, value)
 VALUES ('review_workflow_enabled', 'false')
@@ -491,7 +485,7 @@ ALTER TABLE cerefox_document_relations    ENABLE ROW LEVEL SECURITY;
 -- Guarded: on the local (World B) stack this file deploys BEFORE roles.sql
 -- creates service_role, so missing-role must be a no-op (roles.sql re-runs the
 -- grants implicitly via its own PostgREST wiring; the next deploy picks them up).
--- DERIVED from the catalogue, never listed. The list used to be a hand-written
+-- DERIVED from the catalog, never listed. The list used to be a hand-written
 -- ARRAY and it drifted: cerefox_document_relations was added above and never
 -- added to the array, so a FRESH cloud deploy left that table with no Data API
 -- grant. Upgrades hid it (migration 0014 grants it inline) and the self-hosted

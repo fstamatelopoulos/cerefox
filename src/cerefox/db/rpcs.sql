@@ -236,7 +236,7 @@ BEGIN
         fts_results AS (
             SELECT
                 c.id,
-                -- 0.18.0: normalisation 32 bounds the keyword score to
+                -- 0.18.0: normalization 32 bounds the keyword score to
                 -- rank/(rank+1), in [0, 1) like the cosine it is fused with.
                 -- Unbounded (up to ~4 when every term matches), one keyword
                 -- hit outweighed any semantic evidence, and the same document
@@ -305,7 +305,8 @@ BEGIN
             -- hnsw.ef_search (40) rows: on a store with heavy version churn it
             -- returned far fewer candidates than asked for, mostly not the
             -- nearest ones. An exact scan is also faster at knowledge-base
-            -- scale (thousands of chunks).
+            -- scale (thousands of chunks). 0.19.0 dropped the HNSW indexes
+            -- altogether (migration 0034).
             ORDER BY vec_score DESC
             LIMIT candidate_count
         ),
@@ -2005,7 +2006,7 @@ AS $$
         -- would share a timestamp and the order of operations inside the batch
         -- would be unrecoverable from the trail (iter-33). clock_timestamp()
         -- advances within a transaction, so entries stay orderable. Outside a
-        -- batch this is indistinguishable from the old behaviour.
+        -- batch this is indistinguishable from the old behavior.
         clock_timestamp()
     )
     RETURNING id AS audit_id, cerefox_audit_log.created_at;
@@ -2516,7 +2517,7 @@ $$;
 -- docs/research/document-relations-and-semantic-graph.md
 --
 -- Type dictionary: rel_type is free text (any string is accepted and returned),
--- but a few KNOWN types carry behaviour. Keeping the dictionary in one place
+-- but a few KNOWN types carry behavior. Keeping the dictionary in one place
 -- here — rather than scattered CASE expressions — is what lets the set/delete
 -- RPCs stay symmetric with each other.
 --   symmetric   both directions are written/removed together
@@ -3235,6 +3236,8 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.19.0: migration 0034 drops the unused HNSW vector indexes (search has
+    -- scanned exactly since 0.18.1). No RPC behavior change.
     -- 0.18.2: min_term_coverage built-in default 0.66 (two of three terms).
     -- 0.18.0's 0.67 required all three for a three-term query. RPC-only.
     -- 0.18.1: exact vector candidates. Hybrid and semantic search ordered by
@@ -3243,7 +3246,7 @@ AS $$
     -- they now order by the computed similarity (exact scan). Keyword matches
     -- carry their exact cosine into fusion. RPC-only.
     -- 0.18.0 (iteration 48): search calibration, RPC-only. Bounded keyword
-    -- score in hybrid fusion (ts_rank_cd normalisation 32); min_term_coverage
+    -- score in hybrid fusion (ts_rank_cd normalization 32); min_term_coverage
     -- default 0.67; built-in min_search_score follows the store's embedder
     -- (new cerefox_default_min_search_score). docs/specs/search-calibration.md.
     -- 0.17.0 (#251): trash auto-purge. New cerefox_purge_expired_trash, called
@@ -3287,7 +3290,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.18.2'::TEXT;
+    SELECT '0.19.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

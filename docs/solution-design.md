@@ -185,16 +185,8 @@ Retrieving version content: `SELECT content FROM cerefox_chunks WHERE version_id
 CREATE INDEX idx_cerefox_chunks_fts ON cerefox_chunks USING GIN(fts)
   WHERE version_id IS NULL;
 
--- Vector similarity — HNSW (current chunks only)
-CREATE INDEX idx_cerefox_chunks_emb_primary
-  ON cerefox_chunks USING hnsw (embedding_primary vector_cosine_ops)
-  WITH (m = 16, ef_construction = 64)
-  WHERE version_id IS NULL;
-
-CREATE INDEX idx_cerefox_chunks_emb_upgrade
-  ON cerefox_chunks USING hnsw (embedding_upgrade vector_cosine_ops)
-  WITH (m = 16, ef_construction = 64)
-  WHERE version_id IS NULL;
+-- Vector similarity: no index, by design (schema 0.19.0). Search ranks vector
+-- candidates by an exact scan; see docs/specs/search-calibration.md, "Scale".
 
 -- Uniqueness of current-version chunks per document: one chunk_index per doc in the current version
 -- Partial index (WHERE version_id IS NULL) allows the same chunk_index in archived versions.
@@ -216,7 +208,7 @@ CREATE INDEX idx_cerefox_docs_metadata ON cerefox_documents USING GIN(metadata);
 CREATE INDEX idx_cerefox_versions_doc ON cerefox_document_versions(document_id, version_number DESC);
 ```
 
-**Important**: the partial FTS and HNSW indexes (`WHERE version_id IS NULL`) mean that archived chunks are automatically excluded from all FTS and vector searches at the index level — no explicit filter needed in queries. All search RPCs must still include `AND c.version_id IS NULL` in their WHERE clauses for clarity and correctness on small tables where indexes may not be used.
+**Important**: the partial FTS index (`WHERE version_id IS NULL`) excludes archived chunks from keyword search at the index level, and archived chunks carry no embeddings (v1.8.0), so the exact vector scan cannot match them either. All search RPCs must still include `AND c.version_id IS NULL` in their WHERE clauses for clarity and correctness. There is no vector index since schema 0.19.0 (v1.18.0): with exact candidate ranking (0.18.1) the HNSW indexes served no query; see `docs/specs/search-calibration.md` → "Scale".
 
 ### 2.3 Entity Relationships
 
@@ -927,9 +919,9 @@ This preserves a full audit trail — the "bad" state becomes a version, and the
 
 ### 7.5 Why Versions Are Not Searchable
 
-Archived chunks exist in `cerefox_chunks` but are excluded from all search indexes (`WHERE version_id IS NULL` on FTS and HNSW partial indexes). Beyond the partial indexes, archived chunks since v1.8.0 carry no search artifacts at all — `embedding_primary`, `embedding_upgrade`, and `fts` are nulled at archive time (an invariant, not a config or a maintenance command; nothing can read them). This means:
+Archived chunks exist in `cerefox_chunks` but are excluded from search (`WHERE version_id IS NULL` on the FTS partial index and in every search RPC). Beyond the partial indexes, archived chunks since v1.8.0 carry no search artifacts at all — `embedding_primary`, `embedding_upgrade`, and `fts` are nulled at archive time (an invariant, not a config or a maintenance command; nothing can read them). This means:
 - Search always operates on current-version content only
-- The HNSW index does not grow with version history (predictable performance)
+- The exact vector scan covers current chunks only, so its cost does not grow with version history (predictable performance)
 - No search RPC changes are needed to prevent version leakage into results
 
 For time-series or journaling use cases, the correct pattern is **append, not update** — each entry is a separate document. Versioning is a safety net for accidental overwrites, not a temporal search feature.

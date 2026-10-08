@@ -477,7 +477,7 @@ Cerefox is an open source project. Documentation is treated as a first-class del
 - **Hosting**: Supabase (primary) or local Docker
 - **Vector dimensions**: 768 (fixed)
 - **FTS config**: English (`to_tsvector('english', ...)`)
-- **Index types**: GIN for FTS, HNSW for vectors, GIN for JSONB metadata
+- **Index types**: GIN for FTS, GIN for JSONB metadata. No vector index since schema 0.19.0: vector candidates are ranked by an exact scan, measured fast enough up to about 100k current chunks (`docs/specs/search-calibration.md` → "Scale"; larger stores: #328)
 
 ### 4.2 Embeddings
 

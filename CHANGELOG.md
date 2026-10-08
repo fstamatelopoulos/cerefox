@@ -22,6 +22,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the saved answer, so nothing gets slower. Offline, it stays quiet. Turn it off
   with `CEREFOX_NO_UPDATE_CHECK=1` (`NO_UPDATE_NOTIFIER` and `CI` work too).
   `GET /api/v1/version` gains `latest` and `update_command`. (#323)
+- **`cerefox doctor` reports how many chunks your store holds** (a new `chunks`
+  row) and warns past 100,000, the size at which search may start to slow down.
+  Results stay correct either way; support for stores that large is tracked in
+  #328.
+
+### Changed
+
+- **The two vector indexes are gone (schema 0.19.0).** Since 1.17.1 search
+  compares the query against every chunk directly, which is both correct and
+  fast at knowledge-base sizes, so the indexes no longer served any search. They
+  still slowed down every write and took up space. Migration 0034 drops them.
+  Search results do not change. **Run `cerefox server deploy`** after upgrading;
+  until you do, `doctor` and the web UI say the schema is out of date (everything
+  keeps working).
 
 ### Fixed
 
