@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.18.0] -- 2026-10-08
+
 ### Added
 
 - **Cerefox tells you when a newer release is out.** Until now nothing did; you
