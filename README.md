@@ -31,7 +31,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 - **Cross-agent coordination**: agents on separate machines and runtimes coordinate through persistent shared context (see `docs/guides/agent-coordination.md`)
 - **Not a note-taking app**: Cerefox is knowledge *infrastructure*, not a replacement for Obsidian, Notion, or Bear; those tools handle authoring, Cerefox handles indexing and agent access
 - **Hybrid search**: full-text + semantic search finds relevant knowledge even with fuzzy or conceptual queries
-- **Any agent, anywhere**: remote MCP via Supabase Edge Functions; ChatGPT via Custom GPT + GPT Actions
+- **Any agent, anywhere**: local MCP (Claude Code, Codex, Cursor, Gemini, Claude Desktop); remote MCP via Supabase Edge Functions; cloud Claude over OAuth; ChatGPT via Custom GPT + GPT Actions until OpenAI retires Custom GPTs on December 11, 2026 (see [Connecting AI agents](#connecting-ai-agents))
 - **Keep it cheap**: Supabase free tier + low-cost cloud embeddings; see `docs/guides/operational-cost.md`
 
 ### Example use cases
@@ -143,6 +143,7 @@ cerefox configure-agent --tool claude-code      # local MCP (preferred) — also
 #   Cloud Claude (claude.ai/app): connect over OAuth (setup-supabase Step 7).
 #   Custom GPT (ChatGPT): paste the token from step 2 into the Action's
 #   Authentication → API Key (Bearer). See docs/guides/connect-agents.md.
+#   Works until 2026-12-11, when OpenAI retires Custom GPTs (see below).
 
 # 4. Use it:
 cerefox document ingest my-notes.md --title "My notes"
@@ -256,10 +257,19 @@ claude mcp add --transport http cerefox \
   --header "Authorization: Bearer <cerefox-access-token>"
 ```
 
-**3 — ChatGPT.** Custom GPT + GPT Actions pointing at the Edge Functions
-(requires ChatGPT Plus). Paste the OpenAPI block from
+**3 — OpenAI: Codex today, ChatGPT changing.** **Codex** (the CLI, and Codex
+threads in the ChatGPT desktop app) works with the local stdio MCP:
+`cerefox configure-agent --tool codex`. **ChatGPT chats** connect today through a
+Custom GPT with GPT Actions pointing at the Edge Functions (requires ChatGPT
+Plus): paste the OpenAPI block from
 [`connect-agents.md`](docs/guides/connect-agents.md) and set the Action's Bearer
-auth to your Cerefox access token (`cerefox token generate`).
+auth to your Cerefox access token. **OpenAI retires Custom GPTs on December 11,
+2026, and custom actions do not carry over to its replacement (plugins)**, so
+this path stops working then. ChatGPT will need a new connection: an MCP
+connector to `cerefox-mcp` over OAuth, the way cloud Claude connects below. That
+is being validated in
+[#326](https://github.com/fstamatelopoulos/cerefox/issues/326)
+([research and plan](docs/research/chatgpt-after-custom-gpts.md)).
 
 **4 — Shell CLI.** Local coding agents with a Bash tool (Claude Code, Codex,
 opencode, …) can read and write Cerefox by running the installed `cerefox`

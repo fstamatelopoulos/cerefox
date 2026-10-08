@@ -1089,7 +1089,9 @@ subprocess via npx (Node ≥24 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Functio
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
 as the local server, so both expose the identical 15 core tools. Path 3's primitive
-Edge Functions back ChatGPT GPT Actions and direct HTTP callers. All callers
+Edge Functions back ChatGPT GPT Actions (until OpenAI retires Custom GPTs on
+2026-12-11; the planned replacement is an OAuth MCP connector to `cerefox-mcp`, #326)
+and direct HTTP callers. All callers
 authenticate with a **Cerefox access token** (`cerefox token generate`),
 validated in-function; Edge Functions use the service-role key internally. The
 legacy anon JWT was retired as an Edge Function credential in iter-28E.

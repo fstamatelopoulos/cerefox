@@ -223,7 +223,8 @@ MCP path needs no reconfiguration; for the local stdio server, restart the
 client. `cerefox configure-agent --tool <client>` (re)writes a client's config
 if you need it.
 
-**ChatGPT Custom GPT (GPT Actions):** after an upgrade, check the OpenAPI schema
+**ChatGPT Custom GPT (GPT Actions, until December 11, 2026, when OpenAI retires
+Custom GPTs):** after an upgrade, check the OpenAPI schema
 version in [`connect-agents.md`](connect-agents.md); if it changed, paste the new
 schema into the Custom GPT editor and **re-enter your Cerefox access token**
 (`cfx_pat_…`, from `cerefox token generate`) as the Bearer token. (The editor
