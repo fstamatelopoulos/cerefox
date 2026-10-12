@@ -117,6 +117,18 @@ Historical records (CHANGELOG, plans, specs, research) were left as written.
 
 ### Phase 2: validate option A, on staging first
 
+**Step 0 (added 2026-10-12): read Supabase's "MCP server for your app" block first.**
+Supabase announced it at Select 2026
+([blog post](https://supabase.com/blog/select-2026-build-anything)): an authenticated
+Edge Function on `@supabase/server` and the Supabase Middleware, using the Auth OAuth
+server and asymmetric signing keys. It overlaps what `cerefox-mcp` does by hand. Its
+source should answer: whether it handles the authorize/consent step (which could retire
+the Cloudflare Worker consent page), how it registers clients (DCR or pre-registered;
+which redirect URIs and token-endpoint auth methods work with ChatGPT and claude.ai), how
+it validates tokens compared with `_shared/mcp-auth/`, and whether adopting it is simpler
+than keeping our own given the single-owner `sub` pin. The answers decide whether the
+checks below run against the current OAuth path or a simplified one.
+
 A staging environment ([`staging-env.md`](../guides/staging-env.md)) has its own Supabase
 project, so the OAuth experiment cannot disturb a production claude.ai connector.
 
