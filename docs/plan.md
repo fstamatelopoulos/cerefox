@@ -67,14 +67,14 @@ identical live metrics before and after, floors hold, package suite 402/0. Also
 schema 0.18.2, EFs v1.17.3, which is current since 1.17.4 only moved the label; doctor
 green). Nothing is in flight. Next: 1.18.0 (below), when the maintainer says start.
 
-**2026-10-02 (later): v1.17.4 IS RELEASED, verified on staging; both Local containers
+**2026-10-02 (later): v1.17.4 IS RELEASED, verified on staging; Cerefox Local
 upgraded.** Score ring colors are now relative to the best confident result of the same
 search (green ≥ 90%, yellow ≥ 60%, faint below, below-confidence results dimmed); the
 number stays absolute. 1.17.3's fixed bands failed on short and name queries, whose
 perfect hits score only ~0.4-0.5. Frontend-only; production needs `self-update` and a web
 restart (`server deploy` is optional, since only the EF version label moved).
 
-**2026-10-02: v1.17.3 IS RELEASED, verified on staging, and both Local containers are
+**2026-10-02: v1.17.3 IS RELEASED, verified on staging, and Cerefox Local is
 upgraded; the search announcement is posted on Discord.** 1.17.3 adds score rings
 colored against the scores of correct results (OpenAI 0.55 / 0.35; local provisional
 0.65 / 0.45; below-confidence results dimmed) and an `embedder` field on
@@ -106,8 +106,8 @@ Production: the maintainer upgrades.
     candidate count and filters, measured on real data when a store nears that size);
   - the SQL comment spelling pass rides along.
 
-**2026-10-01 (later): v1.17.2 IS RELEASED AND VERIFIED on staging and both Local
-containers; production (on 1.17.0) awaits the maintainer, going straight to 1.17.2**
+**2026-10-01 (later): v1.17.2 IS RELEASED AND VERIFIED on staging and Cerefox
+Local; production (on 1.17.0) awaits the maintainer, going straight to 1.17.2**
 (`cerefox server deploy`: schema 0.18.2, EF v1.17.2). Fixes to 1.17.0, both found on
 real data rather than the synthetic vocabulary:
 - **1.17.1:** exact vector candidates (the HNSW index could answer the RPC's bare-distance
@@ -148,7 +148,7 @@ Verified on staging (released package, `server deploy` incl. 9 EFs, doctor green
 - web, CLI and the RPC return identical rankings, where the old forced-0.5 web path
   returned more results.
 
-Verified on Local (pg_dump in `~/.cerefox/local/backups/pre-v1.17.0-*`): data, config and
+Verified on Local (backup taken first): data, config and
 embedder identical, schema 0.18.0, doctor green, search fine, auto-purge still ON at 60 days.
 
 Fresh v1.17.0 store, no warmup: derives 0.6 with no config row; a no-answer query is
@@ -157,10 +157,8 @@ write failed when the 131 MB model download's connection dropped (231 s, raw soc
 error, no resume). Bun and runtime are identical to 1.16.1. Filed as #314.
 
 Staging keeps its own `min_search_score` 0.7, so the floor test skips there. The
-"Search calibration benchmark" project stays on staging for reuse. The agent's second
-Local container (`cerefox-staging`, :8011) is upgraded too (recreated by hand with its
-own settings; backup `~/.cerefox/local/backups/cerefox-staging-pre-v1.17.0-*`); it had no
-`min_search_score` row and now derives 0.6. The download fragility is #314.
+"Search calibration benchmark" project stays on staging for reuse. A Local store
+with no `min_search_score` row derives 0.6. The download fragility is #314.
 
 **2026-09-30 (later) — v1.16.1 IS RELEASED; staging and Cerefox Local are on it.**
 Fixes: (1) the local embedder could not download its model inside `cerefox web`
@@ -170,11 +168,9 @@ printing help, and `uninstall --purge --help` would have deleted the data volume
 (3) `server deploy` from inside an npm workspace (#308). Verified: staging (installed
 1.16.1, `server deploy` from the package, 9 EFs, doctor green, smoke 37/37, Playwright
 27/1); the released image on a FRESH store with no warmup (model downloads, first write
-succeeds, search finds it); Local upgraded (backup in `~/.cerefox/local/backups/`,
+succeeds, search finds it); Local upgraded (backup first,
 data identical, embedder runtime unchanged, auto-purge still ON at 60 days, refreshed
-host script refuses `stop now` and answers `--help` without acting). The agent's second
-Local container (`cerefox-staging`) is still on the 1.16.0 image and the maintainer's
-agent tests it. Production is still on 1.15.3; its upgrade can go straight to 1.16.1
+host script refuses `stop now` and answers `--help` without acting). Production is still on 1.15.3; its upgrade can go straight to 1.16.1
 (it does not use the local embedder or cerefox-local, so either version is fine).
 
 **2026-09-30 — v1.16.0 IS RELEASED AND VERIFIED on staging and Cerefox Local;
@@ -193,7 +189,7 @@ upcoming release number into `api.md`'s endpoint table.
 
 Verified: staging (released package, `server deploy`, doctor green incl. the new
 auto-purge line; the smoke test; an auto-purge round trip on the released build;
-Playwright 27/1) and Local (`pg_dump` in `~/.cerefox/local/backups/`, upgrade, data
+Playwright 27/1) and Local (backup first, upgrade, data
 identical, embedder runtime unchanged, migration applied on start, settings seeded
 off/60). Auto-purge was left OFF on both; turning it on for Local is the maintainer's
 call. Discord announcement drafted (two messages), not yet posted.
@@ -223,11 +219,11 @@ Local image sets `ORT_DISABLE_TELEMETRY`, because the in-process opt-out does no
 onnxruntime under Bun) and #303 (every guide ships; `GET /api/v1/openapi.json`, with an
 RFC 8631 `Link: rel="service-desc"` on every `/api/v1` response).
 
-Verified: **staging** (own 1.15.3 tree, `server deploy` with 9 EFs, web :8030 restarted,
+Verified: **staging** (own 1.15.3 tree, `server deploy` with 9 EFs, web server restarted,
 `doctor` green, a 34-check smoke against the running server including the served spec
 byte-identical to the tagged artifact, Playwright 26/1-skip, the deployed ingest EF and
 the stdio MCP tool both omitting the note unless `false` is sent). **Local** (fresh
-`pg_dump` in `~/.cerefox/local/backups/`, `upgrade v1.15.3`, data identical to baseline,
+backup, `upgrade v1.15.3`, data identical to baseline,
 `doctor` green, embedder runtime unchanged from 1.15.2, the same smoke passing, the CLI
 silent on a cached model, `ORT_DISABLE_TELEMETRY=1` in the container).
 
@@ -250,17 +246,14 @@ embedder file, which EFs never execute, so `server deploy` just refreshes the EF
 
 Verified after publish:
 - **Staging** (own install tree, 1.15.2): `server deploy` (0 migrations, 9 EFs), web
-  daemon :8030 restarted, `doctor` all green (EF 1.15.2, schema 0.16.2); a 33-check
+  daemon restarted, `doctor` all green (EF 1.15.2, schema 0.16.2); a 33-check
   contract smoke against the running server, every response parsed with the published
-  schemas; Playwright 26/1-skip against :8030; CLI, stdio MCP (15 tools) and one remote
+  schemas; Playwright 26/1-skip against it; CLI, stdio MCP (15 tools) and one remote
   MCP `tools/list` call.
-- **Cerefox Local** (`cerefox-local`, :8010): full `pg_dump` taken first
-  (`~/.cerefox/local/backups/cerefox-local-pre-v1.15.2-*.sql.gz`, kept apart from production's `~/.cerefox/backups`), `upgrade v1.15.2`; data
-  identical to the pre-upgrade baseline (179 docs / 205 chunks / 22 projects / 1,808
-  trashed); `doctor` green; embedder runtime identical to the 1.15.1 image
+- **Cerefox Local**: full backup taken first, `upgrade v1.15.2`; data
+  identical to the pre-upgrade baseline; `doctor` green; embedder runtime identical to the 1.15.1 image
   (transformers 3.8.1 + nested onnxruntime 1.21.0, so existing chunks stay valid);
   contract smoke passes.
-- `cerefox-staging` (second Local container) is still on v1.15.0, untouched.
 
 Open follow-ups: #300 (Local image resolves its embedder runtime fresh per build, still
 on transformers 3.x); `GET /schema-version` reports `bundled: null` inside the Local
@@ -325,13 +318,10 @@ will object.
 Staging: `doctor` all-green (schema 0.16.2 deployed *and* bundled, EF 1.15.1),
 `_shared` 1171/0, frontend unit 31/0, package suite 321 pass / 2 skip / 0 fail,
 Playwright 24 passed / 1 skipped, plus `render-crash.spec.ts` against the **released**
-:8030 server. All 10 `cerefox_*` tables reachable over the Data API, including
+staging server. All 10 `cerefox_*` tables reachable over the Data API, including
 `cerefox_document_relations` — the one #284 was actually about. Cerefox Local
-(`cerefox-local`, :8010) on the published image: version 1.15.1, schema 0.16.2,
+on the published image: version 1.15.1, schema 0.16.2,
 bundled guides present, projects/search/metadata-keys/trash/get-document all good.
-
-**`cerefox-staging`, the second Local container, is still on v1.15.0.** Not upgraded
-here; the maintainer upgrades it separately.
 
 ### In `[Unreleased]` now
 
