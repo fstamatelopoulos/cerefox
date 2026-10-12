@@ -29,6 +29,12 @@
 
 ## Current Focus
 
+**2026-10-12: on `main`, unreleased:** dependency bumps #330 (GitHub Actions) and #331
+(17 minor/patch updates incl. hono, Mantine, supabase-js, Playwright 1.64, which needs
+`bunx playwright install chromium`), verified on staging (package suite 402/0,
+Playwright 27/1) and installed there from a `main` build. No release planned until the
+next user-facing change; #300 and #328 deferred.
+
 **2026-10-08: v1.18.0 IS RELEASED** (client 1.18.0, schema 0.19.0, EF v1.18.0).
 Contents: the update notice (#323), doctor `chunks` row, HNSW indexes dropped
 (migration 0034, #328 for large stores), hint fixes (#321), the advisories (#322), and
