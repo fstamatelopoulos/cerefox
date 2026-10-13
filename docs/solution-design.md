@@ -736,11 +736,16 @@ Ingestion is designed to be non-blocking where the caller allows it:
 ### 6.3 Deduplication
 
 - Content hash (SHA-256) computed on raw markdown
-- If hash exists in `cerefox_documents.content_hash`, ingestion is skipped (or optionally updates metadata if `update_if_exists=True` and content is identical — skip re-chunking, skip version snapshot since content unchanged)
+- On **create**, if a **live** document already has the same hash, ingestion is skipped and the existing document is returned (or optionally updates metadata if `update_if_exists=True` and content is identical — skip re-chunking, skip version snapshot since content unchanged)
 - This prevents accidental double-ingestion of the same file
-- The hash constraint is store-wide including trashed documents, so a hash
-  match on a soft-deleted document reports "identical content is in the
-  TRASH — restore it" rather than a bare skip (v1.7.0)
+- The hash is **not unique** across the store (schema 0.20.0, #332). Until then
+  a `UNIQUE (content_hash)` constraint covered every document, trashed ones
+  included, which also refused legitimate writes: an update whose new body
+  matched any other document, and any write matching something in the trash.
+  The check now lives only in `cerefox_ingest_document`'s create path (the
+  authoritative copy, serialized by an advisory lock on the hash), with an
+  advisory pre-check in each caller to save the embedding spend. Updates and
+  restores never de-duplicate.
 
 ### 6.3b Write-time guards in `cerefox_ingest_document` (v1.7.0)
 

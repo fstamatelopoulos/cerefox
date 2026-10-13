@@ -89,7 +89,7 @@ Save a new document or update an existing one.
 2. Call `cerefox_ingest` with the **exact same title**, `update_if_exists: true`, and `expected_content_hash`.
 3. If you use a different title, a **new** document is created (the old one remains). This is almost never what you want when revising.
 
-**Deduplication**: Content is SHA-256 hashed. Identical content is skipped (no re-indexing, no concurrency check needed — identical content cannot lose data). Metadata-only changes update metadata without creating a version.
+**Deduplication**: Content is SHA-256 hashed. Re-saving a document with its own unchanged content is skipped (no re-indexing, no concurrency check needed — identical content cannot lose data). Creating a new document whose content matches a live document returns that document instead of a copy. Nothing else de-duplicates: an update may leave two documents with the same content, and a document in the trash never blocks a write. Metadata-only changes update metadata without creating a version.
 
 #### Concurrent writers (optimistic concurrency)
 

@@ -1,0 +1,21 @@
+-- 0035_drop_content_hash_unique.sql — content no longer has to be unique
+-- across the store (schema 0.20.0, #332).
+--
+-- `cerefox_documents_hash_unique` made every document's body unique store-wide,
+-- trashed documents included. It was meant to stop the same file being
+-- ingested twice, but as an unconditional constraint it also refused
+-- legitimate writes: an update whose new body matched any OTHER document (two
+-- unrelated documents converging on a short or templated body, a revision
+-- back to an earlier state), and any write matching a document in the trash,
+-- which the caller cannot see.
+--
+-- Duplicate detection now happens only where it is useful, when CREATING a
+-- document, and only against live documents: `cerefox_ingest_document`
+-- returns the existing document with operation 'skipped' instead of inserting
+-- a copy. Updates are never refused for matching another document.
+--
+-- The plain index idx_cerefox_docs_hash keeps hash lookups fast.
+--
+-- Idempotent: safe to re-run.
+
+ALTER TABLE cerefox_documents DROP CONSTRAINT IF EXISTS cerefox_documents_hash_unique;

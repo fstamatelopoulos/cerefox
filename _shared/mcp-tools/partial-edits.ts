@@ -329,18 +329,6 @@ async function applyAndWrite(
     if (message.includes("CEREFOX_CONFLICT")) {
       throw conflictError(documentId, expectedHash, extractConflictHashes(message).current);
     }
-    if (message.includes("cerefox_documents_hash_unique")) {
-      // content_hash is UNIQUE store-wide, so an edit whose result matches
-      // ANOTHER document collides. Raw, this reads as a database fault; it is
-      // actually a meaningful statement about the store.
-      throw new Error(
-        `This edit would make "${doc.title}" (id: ${documentId}) byte-identical to another ` +
-          `document in the store, and content must be unique. No write was performed. ` +
-          `Usually this means the two documents have converged and one should be removed or ` +
-          `merged, or that this edit was already applied to the other one — ` +
-          `cerefox_search for the resulting content to find it.`,
-      );
-    }
     if (message.includes("CEREFOX_UNRESOLVED_LINKS")) {
       // Only ids INTRODUCED by this write reject (the RPC tolerates dead
       // links the document already carried), so the diagnosis is specific.

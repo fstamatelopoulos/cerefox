@@ -156,11 +156,6 @@ async function action(options: MigrateOptions): Promise<void> {
 
   let converted = 0;
   let skipped = 0;
-  // Documents whose content is byte-identical to another document: the
-  // ingestion pipeline refuses those by design (content-hash dedup), so they
-  // cannot be converted by re-ingesting. That is a data-hygiene finding, not a
-  // migration failure — surface them instead of failing the run.
-  const duplicates: Array<{ document: string; reason: string }> = [];
   const failures: Array<{ document: string; reason: string }> = [];
 
   for (let i = 0; i < targets.length; i++) {
@@ -230,8 +225,6 @@ async function action(options: MigrateOptions): Promise<void> {
       const message = err instanceof Error ? err.message : String(err);
       if (/conflict/i.test(message)) {
         skipped++;
-      } else if (/identical content already exists/i.test(message)) {
-        duplicates.push({ document: `${doc.doc_title} (${id})`, reason: message });
       } else {
         failures.push({ document: `${doc.doc_title} (${id})`, reason: message });
       }
@@ -247,22 +240,6 @@ async function action(options: MigrateOptions): Promise<void> {
   );
   if (targets.length < docIds.length) {
     println(c.dim(`  ${docIds.length - targets.length} document(s) still pending — re-run to continue.`));
-  }
-  if (duplicates.length > 0) {
-    println("");
-    println(
-      c.yellow(
-        `⚠ ${duplicates.length} document(s) could not be converted because their content is ` +
-          "byte-identical to another document.",
-      ),
-    );
-    println(
-      c.dim(
-        "  Re-ingesting them would collide with the content-hash dedup check. They keep working " +
-          "on the legacy format; de-duplicate them if you want them converted.",
-      ),
-    );
-    printTable(duplicates.map((d) => ({ document: d.document })));
   }
   if (failures.length > 0) {
     println("");

@@ -153,6 +153,11 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   let errors = 0;
   const errorDetails: Array<{ title: string; error: string }> = [];
 
+  // Ids this backup restores. Content is not unique (#332), so two documents
+  // in one backup can share a body; the hash arm below must not let the first
+  // one's arrival skip the second.
+  const payloadIds = new Set(payload.documents.map((d) => d.id));
+
   for (const doc of payload.documents) {
     // Skip if this document is already present — by id *or* by content hash.
     //
@@ -169,12 +174,20 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     // with an older revision. Recovering a *specific* superseded document is a
     // deliberate act — restore that snapshot into an empty store, or use
     // `document version` — not something a bulk re-run should do silently.
-    const { data: existing } = await client.raw
+    //
+    // The hash arm follows the create-time rule (#332): it counts only a LIVE
+    // document from outside this backup, and only for a live backup document.
+    // An id match always counts, trashed or not (it is the primary key).
+    const { data: matches } = await client.raw
       .from("cerefox_documents")
-      .select("id")
+      .select("id, deleted_at")
       .or(`id.eq.${doc.id},content_hash.eq.${doc.content_hash}`)
-      .limit(1)
-      .maybeSingle();
+      .limit(1000);
+    const existing = ((matches ?? []) as Array<{ id: string; deleted_at: string | null }>).some(
+      (m) =>
+        m.id === doc.id ||
+        (!doc.deleted_at && !m.deleted_at && !payloadIds.has(m.id)),
+    );
 
     if (existing) {
       skipped++;

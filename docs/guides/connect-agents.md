@@ -1155,7 +1155,7 @@ curl -s -X POST \
   }'
 ```
 
-If the same content was already ingested (SHA-256 hash match), returns `"skipped": true`.
+If a live document already has the same content (SHA-256 hash match), a create returns that document with `"skipped": true` instead of a copy. Documents in the trash do not count, and updates never de-duplicate.
 
 **Edge Function parameters — `cerefox-search`:**
 

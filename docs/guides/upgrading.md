@@ -194,6 +194,9 @@ knowing about:
   document must be restored before its content can be updated.
 - **v1.13.0 — the review workflow is a store setting.** Upgraded stores keep
   it on; fresh installs start with it off. See the callout above.
+- **Schema 0.20.0 — content no longer has to be unique.** Updates that match
+  another document, or a document in the trash, are accepted; only creating a
+  document de-duplicates, against live documents. Needs `cerefox server deploy`.
 - **v1.13.1 — the flag hides, it does not rewrite.** Agent writes are
   recorded `pending_review` whether or not the workflow is shown (v1.13.0
   stored `approved` while off). Redeploy to pick it up.

@@ -90,7 +90,8 @@ export interface IngestDocumentRpcResult {
   document_id: string;
   chunk_count: number;
   total_chars: number;
-  operation: "create" | "update-content";
+  /** 'skipped': a create matched a live document with the same content (#332). */
+  operation: "create" | "update-content" | "skipped";
   version_id: string | null;
 }
 
@@ -117,15 +118,15 @@ export class IngestionDbBridge {
   }
 
   async getDocumentByHash(contentHash: string): Promise<DocumentRow | null> {
-    // No `deleted_at` filter, deliberately: soft-deleted docs still occupy
-    // the store-wide unique constraint on `content_hash`, so a create with
-    // identical content WILL collide with a trashed doc. Finding it lets the
-    // pipeline return action=skipped with a note saying the content is in
-    // the trash, instead of crashing on insert.
+    // LIVE documents only (#332): content is not unique across the store, and
+    // a document in the trash no longer blocks creating one with the same
+    // content. Oldest first, matching the RPC's authoritative check.
     const { data } = await this.supabase
       .from("cerefox_documents")
       .select("*")
       .eq("content_hash", contentHash)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
       .limit(1);
     const rows = (data ?? []) as DocumentRow[];
     return rows.length > 0 ? rows[0] : null;

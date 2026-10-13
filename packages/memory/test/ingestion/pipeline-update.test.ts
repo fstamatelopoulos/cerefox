@@ -49,6 +49,9 @@ describe("IngestionPipeline.updateDocument (live)", () => {
   let supabase: SupabaseClient | null = null;
   let pipeline: IngestionPipeline | null = null;
   let schemaTooOld = false;
+  // #332: the uniqueness tests need schema 0.20.0; against an older server
+  // they skip rather than fail on a constraint this branch removes.
+  let uniquenessDropped = false;
   const created: string[] = [];
 
   beforeAll(async () => {
@@ -63,6 +66,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     try {
       const { data: ver } = await client.rpc("cerefox_schema_version");
       const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
+      uniquenessDropped = maj > 0 || min >= 20;
       if (maj === 0 && min < 6) {
         schemaTooOld = true;
         console.log(
@@ -244,35 +248,151 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     // version. Several real round trips, well past bun's 5s default.
   }, 60_000);
 
-  liveTest("collision with a different doc → throws ValueError-like", async () => {
-    if (!pipeline || !supabase) return;
-    const text = "# Collision body\n\nUnique content for run " + RUN_TAG + ".\n";
+  // #332 (schema 0.20.0): content is no longer unique across the store. Only a
+  // CREATE de-duplicates, and only against live documents; an update is never
+  // refused for matching another document, trashed or not.
+  liveTest("update to another live document's content succeeds (#332)", async () => {
+    if (!pipeline || !supabase || !uniquenessDropped) return;
+    const text = "# Converged body\n\nShared content for run " + RUN_TAG + ".\n";
 
-    // Create two docs: one with the text, one without.
     const docA = await pipeline.ingestText({
       text,
-      title: `${TITLE_PREFIX} collision-A-${RUN_TAG}`,
+      title: `${TITLE_PREFIX} converge-A-${RUN_TAG}`,
       author: "pipeline-update-test",
     });
     created.push(docA.documentId);
-
     const docB = await pipeline.ingestText({
       text: "# Other\n\nDifferent content for run " + RUN_TAG + ".\n",
-      title: `${TITLE_PREFIX} collision-B-${RUN_TAG}`,
+      title: `${TITLE_PREFIX} converge-B-${RUN_TAG}`,
       author: "pipeline-update-test",
     });
     created.push(docB.documentId);
 
-    // Try to update docB's content to be the same as docA's — should throw.
-    await expect(
-      pipeline.updateDocument({
-        documentId: docB.documentId,
-        text,
-        title: docB.title,
-        author: "pipeline-update-test",
-      }),
-    ).rejects.toThrow(/Identical content already exists/);
-  });
+    const updated = await pipeline.updateDocument({
+      documentId: docB.documentId,
+      text,
+      title: docB.title,
+      author: "pipeline-update-test",
+      expectedContentHash: docB.contentHash,
+    });
+    expect(updated.documentId).toBe(docB.documentId);
+    expect(updated.reindexed).toBe(true);
+    expect(updated.contentHash).toBe(docA.contentHash);
+
+    const { data: rows } = await supabase
+      .from("cerefox_documents")
+      .select("id")
+      .eq("content_hash", docA.contentHash)
+      .is("deleted_at", null);
+    expect((rows ?? []).map((r) => r.id).sort()).toEqual(
+      [docA.documentId, docB.documentId].sort(),
+    );
+  }, 60_000);
+
+  liveTest("a trashed document blocks neither update, create nor its own restore (#332)", async () => {
+    if (!pipeline || !supabase || !uniquenessDropped) return;
+    const text = "# Trashed body\n\nContent that ends up in the trash, run " + RUN_TAG + ".\n";
+
+    const trashed = await pipeline.ingestText({
+      text,
+      title: `${TITLE_PREFIX} trashed-${RUN_TAG}`,
+      author: "pipeline-update-test",
+    });
+    created.push(trashed.documentId);
+    const { error: delErr } = await supabase.rpc("cerefox_delete_document", {
+      p_document_id: trashed.documentId,
+      p_author: "pipeline-update-test",
+      p_author_type: "user",
+    });
+    expect(delErr).toBeNull();
+
+    // Update a live document to the trashed one's body.
+    const live = await pipeline.ingestText({
+      text: "# Live\n\nStarts different, run " + RUN_TAG + ".\n",
+      title: `${TITLE_PREFIX} trashed-twin-${RUN_TAG}`,
+      author: "pipeline-update-test",
+    });
+    created.push(live.documentId);
+    const updated = await pipeline.updateDocument({
+      documentId: live.documentId,
+      text,
+      title: live.title,
+      author: "pipeline-update-test",
+      expectedContentHash: live.contentHash,
+    });
+    expect(updated.reindexed).toBe(true);
+
+    // Restore the trashed one while a live document holds the same body.
+    const { error: restoreErr } = await supabase.rpc("cerefox_restore_document", {
+      p_document_id: trashed.documentId,
+      p_author: "pipeline-update-test",
+      p_author_type: "user",
+    });
+    expect(restoreErr).toBeNull();
+
+    // Trash it again; a create whose only match is in the trash creates.
+    await supabase.rpc("cerefox_delete_document", {
+      p_document_id: live.documentId,
+      p_author: "pipeline-update-test",
+      p_author_type: "user",
+    });
+    await supabase.rpc("cerefox_delete_document", {
+      p_document_id: trashed.documentId,
+      p_author: "pipeline-update-test",
+      p_author_type: "user",
+    });
+    const fresh = await pipeline.ingestText({
+      text,
+      title: `${TITLE_PREFIX} trashed-recreate-${RUN_TAG}`,
+      author: "pipeline-update-test",
+    });
+    created.push(fresh.documentId);
+    expect(fresh.action).toBe("created");
+    expect(fresh.documentId).not.toBe(trashed.documentId);
+  }, 120_000);
+
+  liveTest("RPC create with a live document's hash returns it as 'skipped' (#332)", async () => {
+    if (!pipeline || !supabase || !uniquenessDropped) return;
+    const text = "# RPC dedup\n\nAuthoritative create-time check, run " + RUN_TAG + ".\n";
+    const first = await pipeline.ingestText({
+      text,
+      title: `${TITLE_PREFIX} rpc-dedup-${RUN_TAG}`,
+      author: "pipeline-update-test",
+    });
+    created.push(first.documentId);
+
+    // Straight to the RPC, as a caller that skipped the pre-check (or lost a
+    // race to it) would arrive. The embedding is a dummy: nothing is written.
+    const { data, error } = await supabase.rpc("cerefox_ingest_document", {
+      p_document_id: null,
+      p_title: `${TITLE_PREFIX} rpc-dedup-copy-${RUN_TAG}`,
+      p_content_hash: first.contentHash,
+      p_chunks: [
+        {
+          chunk_index: 0,
+          heading_path: [],
+          heading_level: 0,
+          title: "",
+          content: text,
+          char_count: text.length,
+          embedding: new Array(768).fill(0.01),
+          embedder: "test",
+        },
+      ],
+      p_author: "pipeline-update-test",
+      p_author_type: "user",
+    });
+    expect(error).toBeNull();
+    const row = (Array.isArray(data) ? data[0] : data) as { document_id: string; operation: string };
+    expect(row.operation).toBe("skipped");
+    expect(row.document_id).toBe(first.documentId);
+
+    const { data: copies } = await supabase
+      .from("cerefox_documents")
+      .select("id")
+      .eq("title", `${TITLE_PREFIX} rpc-dedup-copy-${RUN_TAG}`);
+    expect(copies ?? []).toEqual([]);
+  }, 60_000);
 
   liveTest("RPC: p_metadata NULL on update keeps existing metadata (v0.11.1)", async () => {
     if (!pipeline || !supabase) return;
