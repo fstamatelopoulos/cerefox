@@ -286,7 +286,10 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           // content-changing save too, not silently vanish.
           metadata: metadataCarried ? metadata : undefined,
           // Whole-form semantics, as on the metadata-only branch below (#333).
-          replaceMetadata: metadataCarried,
+          // Against a pre-0.21.0 server (no metadata_revision on the row) the
+          // flag is left off: that RPC lacks the parameter, and it replaces
+          // metadata on a content update anyway.
+          replaceMetadata: metadataCarried && doc.metadata_revision != null,
           expectedMetadataRevision: metadataCarried ? expectedMetadataRevision : null,
           author: who.identity.author,
           authorType: who.identity.authorType,

@@ -31,7 +31,7 @@ import { resolveOrCreateProject } from "../../../../_shared/mcp-tools/_projects.
 import type { MCPSupabaseClient } from "../../../../_shared/mcp-tools/types.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
-import { extractConflictHashes } from "../../../../_shared/mcp-tools/_utils.ts";
+import { extractConflictHashes, metadataTokenParams } from "../../../../_shared/mcp-tools/_utils.ts";
 
 import {
   ConcurrencyConflictError,
@@ -223,8 +223,7 @@ export class IngestionDbBridge {
       p_replace: args.replace,
       p_author: args.author,
       p_author_type: args.authorType,
-      p_expected_metadata_revision: args.expectedMetadataRevision ?? null,
-      p_last_write_wins: args.lastWriteWins ?? false,
+      ...metadataTokenParams(args.expectedMetadataRevision, args.lastWriteWins),
     });
     if (error) {
       const msg = error.message ?? JSON.stringify(error);

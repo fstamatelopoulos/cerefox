@@ -24,6 +24,7 @@ import {
   userError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
+import { metadataTokenParams } from "../../../../../_shared/mcp-tools/_utils.ts";
 
 interface SetMetadataResult {
   document_id: string;
@@ -129,8 +130,7 @@ async function action(
       p_replace: Boolean(options.replace),
       p_author: resolveAuthor(options.author),
       p_author_type: options.authorType === "agent" ? "agent" : "user",
-      p_expected_metadata_revision: expectedRevision,
-      p_last_write_wins: Boolean(options.lastWriteWins),
+      ...metadataTokenParams(expectedRevision, options.lastWriteWins),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

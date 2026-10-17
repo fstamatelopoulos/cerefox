@@ -24,7 +24,7 @@
 
 import type { AccessPath, MCPSupabaseClient } from "./types.ts";
 
-import { MetadataConcurrencyError, logUsage, storeWriteRemediation } from "./_utils.ts";
+import { MetadataConcurrencyError, logUsage, metadataTokenParams, storeWriteRemediation } from "./_utils.ts";
 
 export interface FacetActor {
   author: string;
@@ -347,8 +347,7 @@ export async function updateDocumentFacets(
           p_author: opts.author,
           p_author_type: opts.authorType,
           // #333: a replace must prove a read (or say last-write-wins).
-          p_expected_metadata_revision: opts.expectedMetadataRevision ?? null,
-          p_last_write_wins: opts.metadataLastWriteWins ?? false,
+          ...metadataTokenParams(opts.expectedMetadataRevision, opts.metadataLastWriteWins),
         });
         if (rpcErr) {
           const msg = rpcErr.message ?? String(rpcErr);

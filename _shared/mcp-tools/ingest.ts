@@ -27,7 +27,7 @@ import {
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
-import { extractConflictHashes, logUsage, metadataTokenError } from "./_utils.ts";
+import { extractConflictHashes, logUsage, metadataTokenError, metadataTokenParams } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
@@ -224,7 +224,7 @@ async function handler(
       p_expected_content_hash: expected_content_hash,
       p_last_write_wins: last_write_wins,
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
-      p_expected_metadata_revision: expected_metadata_revision,
+      ...metadataTokenParams(expected_metadata_revision, false),
     });
 
     if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);
@@ -326,7 +326,7 @@ async function handler(
         p_expected_content_hash: expected_content_hash,
         p_last_write_wins: last_write_wins,
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
-      p_expected_metadata_revision: expected_metadata_revision,
+      ...metadataTokenParams(expected_metadata_revision, false),
       });
 
       if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);

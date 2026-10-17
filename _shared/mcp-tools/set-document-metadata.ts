@@ -19,7 +19,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage, metadataTokenError } from "./_utils.ts";
+import { logUsage, metadataTokenError, metadataTokenParams } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
@@ -68,8 +68,7 @@ async function handler(
     p_replace: replace,
     p_author: author ?? "unknown",
     p_author_type: authorType,
-    p_expected_metadata_revision: expectedRevision ?? null,
-    p_last_write_wins: lastWriteWins,
+    ...metadataTokenParams(expectedRevision as number | null | undefined, lastWriteWins),
   });
 
   if (error) throw metadataTokenError(error.message) ?? new Error(`RPC error: ${error.message}`);

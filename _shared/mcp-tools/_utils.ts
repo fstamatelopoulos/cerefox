@@ -178,6 +178,20 @@ export class MetadataConcurrencyError extends Error {
   }
 }
 
+/** The #333 metadata-token RPC parameters, only when set. Sending them as
+ *  null/false would name a signature a server older than schema 0.21.0 does
+ *  not have, and PostgREST would fail the whole write with "function not
+ *  found"; omitted, an older server runs the write exactly as before. */
+export function metadataTokenParams(
+  expected: number | null | undefined,
+  lastWriteWins: boolean | undefined,
+): Record<string, unknown> {
+  return {
+    ...(expected != null ? { p_expected_metadata_revision: expected } : {}),
+    ...(lastWriteWins ? { p_last_write_wins: true } : {}),
+  };
+}
+
 /** Agent-first text for the metadata token errors (#333), or null when the
  *  message is not one. Shared by every tool that writes metadata, so the
  *  remedy reads the same whichever path the agent took. */
