@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.19.0] -- 2026-10-17
+
 ### Changed
 
 - **Metadata has its own concurrency token, and a history (schema 0.21.0).**
