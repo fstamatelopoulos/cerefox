@@ -105,7 +105,7 @@ fi
 # Preserve any config overrides the user added to a prior local .env (we only manage
 # OPENAI + port), and forward them into the container. Same whitelist cerefox-local uses;
 # never the container-managed SUPABASE/DB/JWT vars.
-PASSTHROUGH_VARS="CEREFOX_EMBEDDER CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME"
+PASSTHROUGH_VARS="CEREFOX_EMBEDDER CEREFOX_MAX_RESPONSE_BYTES CEREFOX_MAX_CHUNK_CHARS CEREFOX_MIN_CHUNK_CHARS CEREFOX_OPENAI_BASE_URL CEREFOX_OPENAI_EMBEDDING_MODEL CEREFOX_OPENAI_EMBEDDING_DIMENSIONS CEREFOX_AUTHOR_NAME CEREFOX_AUTHOR_TYPE CEREFOX_REQUESTOR_NAME CEREFOX_ONNX_BATCH"
 # --local-embedder (curl … | sh -s -- --local-embedder) selects the in-container
 # nomic ONNX embedder (fully offline; ~130 MB model downloads on first use).
 # Equivalent env form: CEREFOX_EMBEDDER=local. Default stays OpenAI.
@@ -122,8 +122,9 @@ warn_if_small_vm() {
   _mem=$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)
   if [ "${_mem:-0}" -gt 0 ] && [ "$_mem" -lt 3221225472 ]; then
     _gb=$(awk "BEGIN{printf \"%.1f\", $_mem/1073741824}")
-    echo "ℹ Your Docker VM has ${_gb} GB of memory. The local embedder works but is"
-    echo "  happier with ≥ 4 GB (Colima: colima start --memory 4)."
+    echo "ℹ Your Docker VM has ${_gb} GB of memory. With the local embedder each instance"
+    echo "  can reach ~1.5 GB while ingesting; 4 GB is comfortable for one instance"
+    echo "  (Colima: colima start --memory 4)."
   fi
 }
 

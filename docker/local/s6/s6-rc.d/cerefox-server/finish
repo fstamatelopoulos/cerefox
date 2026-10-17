@@ -1,0 +1,22 @@
+#!/bin/sh
+# Runs each time the web process exits, before s6 restarts it (#335).
+# s6 passes the exit code as $1 (256 when a signal killed it) and the signal as $2.
+#
+# Without this an out-of-memory kill was silent: the kernel SIGKILLs the
+# process, s6 restarts it a few seconds later, every request in flight fails
+# with "socket connection closed", and the container log shows nothing but the
+# restart. The only evidence was the Docker VM's kernel log.
+if [ "$1" = "256" ]; then
+  case "$2" in
+    9)
+      echo "[cerefox-server] The web process was killed (SIGKILL), most likely by the kernel's out-of-memory killer. Restarting. Check the Docker VM's kernel log (Colima: colima ssh -- sudo dmesg | grep -i 'out of memory') and give the VM more memory: see 'Memory' in docs/guides/setup-local.md." >&2
+      ;;
+    15) ;;  # a normal stop or restart
+    *)
+      echo "[cerefox-server] The web process was killed by signal $2. Restarting." >&2
+      ;;
+  esac
+elif [ "$1" != "0" ]; then
+  echo "[cerefox-server] The web process exited with status $1. Restarting." >&2
+fi
+exit 0

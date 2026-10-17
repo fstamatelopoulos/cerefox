@@ -81,7 +81,8 @@ RUN cd /opt/cerefox \
 COPY docker/local/s6/s6-rc.d /etc/s6-overlay/s6-rc.d
 COPY docker/local/s6/scripts /etc/s6-overlay/scripts
 RUN chmod +x /etc/s6-overlay/scripts/* \
- && chmod +x /etc/s6-overlay/s6-rc.d/postgres/run /etc/s6-overlay/s6-rc.d/postgrest/run /etc/s6-overlay/s6-rc.d/cerefox-server/run
+ && chmod +x /etc/s6-overlay/s6-rc.d/postgres/run /etc/s6-overlay/s6-rc.d/postgrest/run /etc/s6-overlay/s6-rc.d/cerefox-server/run \
+ && chmod +x /etc/s6-overlay/s6-rc.d/cerefox-server/finish
 
 # Postgres first-boot init (base image reads these) + local wiring.
 # ORT_DISABLE_TELEMETRY: onnxruntime >= 1.29 posts usage telemetry. The embedder

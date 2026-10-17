@@ -29,13 +29,20 @@
 
 ## Current Focus
 
+**2026-10-16: #335 on `fix/335-local-embedder-memory`, for 1.19.0.** ONNX CPU arena off,
+`CEREFOX_ONNX_BATCH` default 4 → 1 and forwarded by `cerefox-local`, an s6 `finish` script
+that names an out-of-memory kill. Measured in a throwaway container capped at 3 GB:
+v1.18.0 was killed on token-dense 20k-char documents; the branch image peaks ~1.5 GB,
+idles ~0.4 GB, no kill; batch 1 is not slower. Memory figures in `setup-local.md`.
+
 **2026-10-16: #333 on `feat/333-metadata-revision` (schema 0.21.0), for 1.19.0.** Migration
 0036: `metadata_revision` + trigger, audit `metadata_before/after`. Shared SQL helpers
 `cerefox_metadata_apply` / `cerefox_check_metadata_revision`; content updates merge
 metadata; replace needs the token; the web edit form replaces with the revision it loaded.
 Verified on staging: live suites 68/0 (incl. the new metadata-revision suite), web
 integration 50/0, Playwright 30/1-skip (incl. 3 new edit-form metadata tests), EF +
-remote MCP 49/0. #332 merged (#334). Next: Codex review, then #335 (Cerefox Local memory).
+remote MCP 49/0. Codex review: round 1 found 2 real Highs (edit-page token capture, EF
+null param) and 4 Mediums, fixed; round 2 clean. Merged (#336).
 
 **2026-10-12: #332 on `fix/332-content-uniqueness` (schema 0.20.0), for 1.19.0.** Migration
 0035 drops `cerefox_documents_hash_unique`; the duplicate check moves into

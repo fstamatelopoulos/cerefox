@@ -49,9 +49,14 @@ install; switching later requires a re-index (see below).
 The local model (~130 MB) downloads once — at install/init when selected — into the
 data volume, so it survives `cerefox-local upgrade`.
 
-> **Memory**: give the Docker VM **≥ 4 GB** for comfortable local-embedder use
-> (Colima defaults to 2 GB: `colima start --memory 4`). Inference is
-> sub-batched to keep peak memory flat, so smaller VMs work — just slower.
+> **Memory**: with the local embedder, each Cerefox Local instance's web
+> process sits around **0.3–0.5 GB** idle and reaches about **1.5 GB** while
+> ingesting long documents dense with tables, ids or code (measured on
+> synthetic 20,000-character documents; Postgres and PostgREST add a little
+> more). Give the Docker VM room for **each** instance you run, plus everything
+> else in it: **4 GB is comfortable for one instance**, not two. Colima defaults
+> to 2 GB (`colima start --memory 4`, or `--memory 8` for two instances). If the
+> VM runs out, the kernel kills the web process; see Troubleshooting.
 
 > **Switching embedders on existing data is breaking**: the two models produce
 > incompatible vector spaces, so documents embedded with one are invisible to
@@ -192,6 +197,23 @@ check). After a reboot the container may be stopped depending on your Docker set
 Re-run the installer with the key, or set it and `cerefox-local upgrade`.
 
 **Port already in use** — re-install with a free port: `PORT=8017 sh -c "$(curl -fsSL …/install-local.sh)"`.
+
+**Requests fail with "socket connection closed", or the web process restarts on
+its own** — usually the Docker VM ran out of memory and the kernel killed the
+web process (most often during ingest with the local embedder). s6 restarts it
+within seconds, so the container keeps running. Since v1.19.0 the container log
+says so (`docker logs cerefox-local` shows "killed (SIGKILL), most likely by the
+kernel's out-of-memory killer"); on older versions the log shows only the
+restart. Confirm it in the VM's kernel log:
+
+```sh
+colima ssh -- sudo dmesg | grep -i "out of memory"   # Colima
+```
+
+(Docker Desktop: the same `dmesg` from a privileged container, e.g.
+`docker run --rm --privileged alpine dmesg | grep -i "out of memory"`.) The fix is
+more memory for the VM, or fewer instances in it; see **Memory** above.
+`CEREFOX_ONNX_BATCH` (default 1) trades memory for nothing useful above 1, so leave it.
 
 ---
 
