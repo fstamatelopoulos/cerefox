@@ -177,7 +177,7 @@ Output: `backup-data/cerefox-20260308T143022Z-before-v2-migration.json`
 
 ## backup_restore.ts — Restore from a backup
 
-Restores documents and chunks from a previously created backup file. Idempotent — documents with the same content hash are skipped. (End users use `cerefox backup restore`.)
+Restores documents and chunks from a previously created backup file. Idempotent — a document is skipped when its id is already present, or when a live document outside the backup already has the same content. (End users use `cerefox backup restore`.)
 
 ```bash
 bun scripts/backup_restore.ts BACKUP_FILE [OPTIONS]

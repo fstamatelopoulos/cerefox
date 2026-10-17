@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.19.0
+-- @version: 0.20.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -40,7 +40,9 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     source          TEXT        NOT NULL DEFAULT 'manual',
     -- source values: 'file' | 'paste' | 'agent' | 'url' | 'manual'
     source_path     TEXT,
-    -- SHA-256 of raw markdown content; used for deduplication
+    -- SHA-256 of raw markdown content: the optimistic-concurrency token, and
+    -- the create-time duplicate check (live documents only, in
+    -- cerefox_ingest_document). Deliberately NOT unique (0.20.0, #332).
     content_hash    TEXT        NOT NULL,
     -- #212 (0.12.2): must be a JSON OBJECT — jsonb accepts any JSON value,
     -- but every reader assumes an object, and non-object values were silently
@@ -71,7 +73,6 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     -- Search indexes exclude soft-deleted docs. Purge does the real CASCADE DELETE.
     deleted_at      TIMESTAMPTZ DEFAULT NULL,
 
-    CONSTRAINT cerefox_documents_hash_unique UNIQUE (content_hash),
     CONSTRAINT cerefox_documents_review_status_check CHECK (review_status IN ('approved', 'pending_review'))
 );
 
@@ -289,7 +290,7 @@ CREATE INDEX IF NOT EXISTS idx_cerefox_chunks_version
 CREATE INDEX IF NOT EXISTS idx_cerefox_docs_metadata
     ON cerefox_documents USING GIN(metadata);
 
--- Documents by content_hash (unique constraint covers equality; this covers range/prefix)
+-- Documents by content_hash (the create-time duplicate check and hash lookups)
 CREATE INDEX IF NOT EXISTS idx_cerefox_docs_hash
     ON cerefox_documents(content_hash);
 

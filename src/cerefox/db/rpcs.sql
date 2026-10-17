@@ -1539,8 +1539,11 @@ $$;
 --                       flows where an external source of truth makes conflicts
 --                       meaningless). Recorded in the audit description when used.
 --
--- Returns: document_id, chunk_count, total_chars, operation ('create' or 'update-content'),
---          version_id (UUID of snapshot, null on create)
+-- Returns: document_id, chunk_count, total_chars, operation ('create',
+--          'update-content', or 'skipped' when a create matched a LIVE document
+--          with the same content_hash: nothing is written and the existing
+--          document is returned, 0.20.0 #332), version_id (UUID of snapshot,
+--          null on create and skip)
 
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN);
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN);
@@ -1834,6 +1837,34 @@ BEGIN
     ELSE
         -- ── CREATE PATH ──────────────────────────────────────────────
         v_operation := 'create';
+
+        -- Duplicate check (0.20.0, #332). Content is no longer UNIQUE across
+        -- the store: that constraint refused updates that happened to match
+        -- some other document, including ones in the trash. Duplicates are
+        -- now caught only here, on CREATE, and only against LIVE documents:
+        -- a match returns the existing document as 'skipped' and writes
+        -- nothing. Callers pre-check the same thing before embedding (to save
+        -- the spend); this is the authoritative copy, and the advisory lock
+        -- makes it race-free between two identical concurrent creates.
+        IF NULLIF(BTRIM(p_content_hash), '') IS NOT NULL THEN
+            PERFORM pg_advisory_xact_lock(
+                hashtextextended('cerefox_content_hash:' || p_content_hash, 0));
+
+            -- Returned straight from the query, never via SELECT … INTO the
+            -- create's own variables: a no-row SELECT INTO sets its targets to
+            -- NULL, which wiped v_chunk_count before the INSERT below.
+            RETURN QUERY
+                SELECT d.id, d.chunk_count, d.total_chars, 'skipped'::TEXT,
+                       NULL::UUID, p_content_hash, FALSE
+                FROM cerefox_documents d
+                WHERE d.content_hash = p_content_hash
+                  AND d.deleted_at IS NULL
+                ORDER BY d.created_at
+                LIMIT 1;
+            IF FOUND THEN
+                RETURN;
+            END IF;
+        END IF;
 
         INSERT INTO cerefox_documents (
             title, source, source_path, content_hash, metadata,
@@ -3236,6 +3267,9 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.20.0: migration 0035 drops the store-wide UNIQUE on content_hash; the
+    -- duplicate check moves into cerefox_ingest_document's create path, live
+    -- documents only, returning operation 'skipped' (#332).
     -- 0.19.0: migration 0034 drops the unused HNSW vector indexes (search has
     -- scanned exactly since 0.18.1). No RPC behavior change.
     -- 0.18.2: min_term_coverage built-in default 0.66 (two of three terms).
@@ -3290,7 +3324,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.19.0'::TEXT;
+    SELECT '0.20.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

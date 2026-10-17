@@ -339,26 +339,19 @@ async function handler(
   }
 
   // ── Hash deduplication (create path) ─────────────────────────────────────
-  // content_hash is unique STORE-WIDE, trashed documents included, so this
-  // check deliberately sees them: an insert would collide either way.
+  // Creates only, against LIVE documents (#332): content is not unique across
+  // the store, and a trashed document no longer blocks a new one. This saves
+  // the embedding spend; the RPC repeats the check authoritatively.
   const { data: hashMatch } = await supabase
     .from("cerefox_documents")
-    .select("id, title, deleted_at")
+    .select("id, title")
     .eq("content_hash", contentHash)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true })
     .limit(1);
 
   if (hashMatch?.length) {
-    if (hashMatch[0].deleted_at) {
-      // "Already up-to-date" while search shows nothing is the classic
-      // re-upload-after-delete confusion. Say where the content actually is.
-      return (
-        `This exact content is already in the TRASH as "${hashMatch[0].title}" ` +
-        `(soft-deleted, id: ${hashMatch[0].id}). Restore it with ` +
-        `cerefox_restore_document instead of re-ingesting — or have your user ` +
-        `purge it from the web UI Trash to start fresh.`
-      );
-    }
-    return `Document already up-to-date: "${hashMatch[0].title}" (id: ${hashMatch[0].id}). Content hash unchanged (${contentHash}) — pass it as expected_content_hash to edit it.`;
+    return alreadyExistsMessage(hashMatch[0].title, hashMatch[0].id, contentHash);
   }
 
   const chunks = chunkMarkdown(content);
@@ -397,6 +390,17 @@ async function handler(
 
   const documentId = ingestResult[0].document_id;
 
+  // The RPC's duplicate check caught an identical create that landed after
+  // the pre-check above. Nothing was written.
+  if (ingestResult[0].operation === "skipped") {
+    const { data: existing } = await supabase
+      .from("cerefox_documents")
+      .select("title")
+      .eq("id", documentId)
+      .maybeSingle();
+    return alreadyExistsMessage(existing?.title ?? title, documentId, contentHash);
+  }
+
   if (project_names !== null && project_names.length > 0) {
     await setDocumentProjectsByName(supabase, documentId, project_names, { author, authorType: author_type });
   } else if (project_name) {
@@ -422,6 +426,10 @@ async function handler(
     escapedContentNote(content) +
     escapedTitleNote(title)
   );
+}
+
+function alreadyExistsMessage(title: string, id: string, contentHash: string): string {
+  return `Document already up-to-date: "${title}" (id: ${id}). Content hash unchanged (${contentHash}) — pass it as expected_content_hash to edit it.`;
 }
 
 export const ingestTool: ToolDefinition = {

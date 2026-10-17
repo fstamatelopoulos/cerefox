@@ -66,24 +66,11 @@ interface IngestRequest {
 // Map the RPC's expected/validation errors to proper HTTP responses:
 //   CEREFOX_CONFLICT                → 409 (stale optimistic-concurrency token)
 //   CEREFOX_TOKEN_REQUIRED          → 400 (missing expected_content_hash)
-//   cerefox_documents_hash_unique   → 409 (content de-dup: another doc already
-//                                          holds identical content)
 // Returns null for genuinely unexpected errors (→ 500 at the call site).
 function concurrencyErrorResponse(
   message: string,
   headers: Record<string, string>,
 ): Response | null {
-  if (message.includes("cerefox_documents_hash_unique")) {
-    return new Response(
-      JSON.stringify({
-        error: "duplicate_content",
-        message:
-          "Another document already has identical content. Cerefox de-duplicates by content hash — update that document instead of creating or editing a second copy to match it.",
-        detail: message,
-      }),
-      { status: 409, headers },
-    );
-  }
   if (message.includes("CEREFOX_CONFLICT")) {
     return new Response(
       JSON.stringify({
@@ -600,10 +587,14 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Hash deduplication (normal create path) ────────────────────────────────
+  // Creates only, against LIVE documents (#332). Saves the embedding spend;
+  // the RPC repeats the check authoritatively.
   const { data: hashMatch } = await supabase
     .from("cerefox_documents")
     .select("id, title")
     .eq("content_hash", contentHash)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true })
     .limit(1);
 
   if (hashMatch?.length) {
@@ -673,6 +664,20 @@ Deno.serve(async (req: Request) => {
   }
 
   const documentId = ingestResult[0].document_id;
+
+  // The RPC's duplicate check caught an identical create that landed after
+  // the pre-check above. Nothing was written; answer as the pre-check does.
+  if (ingestResult[0].operation === "skipped") {
+    return new Response(
+      JSON.stringify({
+        document_id: documentId,
+        title: title.trim(),
+        skipped: true,
+        message: "Document already exists (content hash match)",
+      }),
+      { headers },
+    );
+  }
 
   // Project assignment on CREATE:
   // - project_names (list) → assign all

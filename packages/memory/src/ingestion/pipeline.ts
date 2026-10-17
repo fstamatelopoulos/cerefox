@@ -265,6 +265,8 @@ export class IngestionPipeline {
     const validatedMeta = metadata ?? {};
 
     // ── (4) Hash + dedup ─────────────────────────────────────────────────
+    // Creates only, against LIVE documents (#332). This pre-check saves the
+    // embedding spend; the RPC repeats it authoritatively.
     const hash = contentHash(text);
     const existingByHash = await this.db.getDocumentByHash(hash);
     if (existingByHash) {
@@ -279,15 +281,7 @@ export class IngestionPipeline {
         action: "skipped",
         reindexed: false,
         projectIds: existingProjectIds,
-        // A hash match on a TRASHED document reads as "already up-to-date"
-        // while search shows nothing — the classic re-upload-after-delete
-        // confusion (#211 round 3). Say where the content actually is.
-        note: existingByHash.deleted_at
-          ? `Identical content is in the TRASH as "${existingByHash.title}" ` +
-            `(soft-deleted ${existingByHash.deleted_at.slice(0, 10)}). Restore it ` +
-            `(\`cerefox document restore ${existingByHash.id}\` or the web UI Trash page) ` +
-            `instead of re-ingesting, or purge it first to start fresh.`
-          : "",
+        note: "",
         contentHash: existingByHash.content_hash ?? hash,
       };
     }
@@ -340,6 +334,23 @@ export class IngestionPipeline {
     });
     const newDocumentId = rpcResult.document_id;
 
+    // The RPC's own duplicate check won a race against the pre-check above:
+    // an identical document was created in between. Nothing was written.
+    if (rpcResult.operation === "skipped") {
+      const existingRow = await this.db.getDocumentById(newDocumentId);
+      return {
+        documentId: newDocumentId,
+        title: existingRow?.title ?? title,
+        chunkCount: rpcResult.chunk_count,
+        totalChars: rpcResult.total_chars,
+        action: "skipped",
+        reindexed: false,
+        projectIds: await this.db.getDocumentProjectIds(newDocumentId),
+        note: "",
+        contentHash: hash,
+      };
+    }
+
     // ── (9) Project M2M ──────────────────────────────────────────────────
     if (resolvedIds.length > 0) {
       await this.db.assignDocumentProjects(newDocumentId, resolvedIds);
@@ -379,8 +390,8 @@ export class IngestionPipeline {
    * `projectId`) is explicitly provided. `null` / `undefined` leaves
    * the existing assignments unchanged; `[]` removes from all projects.
    *
-   * @throws if the document is not found, or if the new content
-   *   collides with a DIFFERENT document's content_hash.
+   * @throws if the document is not found or is in the trash. Content that
+   *   matches another document is fine (#332): only creates de-duplicate.
    */
   async updateDocument(opts: UpdateDocumentOptions): Promise<IngestResult> {
     const {
@@ -416,7 +427,7 @@ export class IngestionPipeline {
       );
     }
 
-    // ── (2) Hash + collision check ───────────────────────────────────────
+    // ── (2) Hash + concurrency check ─────────────────────────────────────
     const newHash = contentHash(text);
     const contentUnchanged = newHash === existing.content_hash;
 
@@ -443,14 +454,6 @@ export class IngestionPipeline {
           `CEREFOX_CONFLICT: document ${documentId} changed since it was read ` +
             `(expected hash ${expectedHashTrimmed}, current hash ${existing.content_hash}). ` +
             `Re-read the document, merge your changes, and retry with the new hash.`,
-        );
-      }
-
-      const collision = await this.db.getDocumentByHash(newHash);
-      if (collision && collision.id !== documentId) {
-        throw new Error(
-          `Identical content already exists as document ${JSON.stringify(collision.title)}. ` +
-            "Edit that document or change the content before saving.",
         );
       }
     }

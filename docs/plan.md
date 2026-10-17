@@ -29,6 +29,16 @@
 
 ## Current Focus
 
+**2026-10-12: #332 on `fix/332-content-uniqueness` (schema 0.20.0), for 1.19.0.** Migration
+0035 drops `cerefox_documents_hash_unique`; the duplicate check moves into
+`cerefox_ingest_document`'s create path (live documents only, advisory lock on the hash,
+returns operation `skipped`), and the callers' pre-checks ignore the trash. Updates,
+restores and `migrate-format` never de-duplicate; `backup restore`'s hash match follows
+the create rule. Verified on staging: live ingestion/write/partial-edit suites 45/0 (the
+three new #332 tests ran), EF suite 23/0, web ingest + acceptance 20/0, a local-MCP
+create/trash/re-create probe. Next: #333 (metadata token + history, Part A then B), same
+release.
+
 **2026-10-12: on `main`, unreleased:** dependency bumps #330 (GitHub Actions) and #331
 (17 minor/patch updates incl. hono, Mantine, supabase-js, Playwright 1.64, which needs
 `bunx playwright install chromium`), verified on staging (package suite 402/0,

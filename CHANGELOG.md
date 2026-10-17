@@ -9,7 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **An update is no longer refused because its content matches another
+  document (schema 0.20.0).** Every document's content had to be unique across
+  the whole store, trash included. That was meant to stop the same file being
+  ingested twice, but it also refused ordinary edits: changing a document to
+  text that some other document already had (common for short or templated
+  documents), and any write matching a document in the trash, which you cannot
+  see in search. Now only **creating** a document checks for duplicates, and
+  only against live documents: a match returns the existing document instead of
+  a copy, as before. Updates and restores never check. `backup restore` follows
+  the same rule. Run `cerefox server deploy` after upgrading. (#332)
 
 ---
 

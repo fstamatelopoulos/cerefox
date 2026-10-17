@@ -196,7 +196,7 @@ export interface IngestResponse {
   skipped: boolean;
   updated: boolean;
   error: string | null;
-  /** The WHY on a skip — e.g. "identical content is in the TRASH; restore it". */
+  /** The WHY on a skip, when the server gives one. */
   note?: string;
 }
 

@@ -55,8 +55,7 @@ export function IngestPage() {
     // own ["dashboard-recent"] query, and search/project lists show the new
     // document too.
     if (res.success) invalidateDocumentViews(queryClient);
-    // A skip is not an error, but its WHY matters — especially "identical
-    // content is in the trash", the re-upload-after-delete case.
+    // A skip is not an error, but its WHY matters when the server gives one.
     if (res.skipped && res.note) showError("Ingest skipped", res.note);
   };
   const onIngestError = (err: unknown) => {
