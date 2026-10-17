@@ -47,6 +47,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Cerefox Local with the local embedder no longer runs out of memory on long
+  documents.** Ingesting long Markdown dense with tables, ids or code could get
+  the web process killed by the kernel: every request in flight failed with
+  "socket connection closed", and the container log showed nothing but the
+  restart. Two causes, both fixed. The embedder kept its peak memory for the
+  life of the process, so it ratcheted up with every document and never came
+  back down; and it embedded four chunks at a time, padded to the longest,
+  which needed more than 2.5 GB for four token-dense chunks. On synthetic
+  20,000-character documents, the web process now peaks around 1.5 GB and
+  settles near 0.4 GB idle (it used to sit at 1.8 GB, or be killed), at the
+  same speed. `CEREFOX_ONNX_BATCH` now defaults to 1 and is forwarded from
+  Cerefox Local's `.env` (it was documented but never reached the container;
+  a value set there takes effect from the first `cerefox-local init` after
+  upgrading, since the upgrade itself still runs the previous launcher).
+  If the web process is killed anyway, the container log now says so and points
+  at the VM's kernel log. `setup-local.md` states the memory each instance
+  needs. Run `cerefox-local upgrade`. (#335)
+
 - **An update is no longer refused because its content matches another
   document (schema 0.20.0).** Every document's content had to be unique across
   the whole store, trash included. That was meant to stop the same file being

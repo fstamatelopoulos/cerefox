@@ -264,6 +264,20 @@ type FeaturePipeline = (texts: string[], opts?: unknown) => Promise<any>;
 let pipelinePromise: Promise<FeaturePipeline> | null = null;
 
 /**
+ * ONNX Runtime's CPU memory arena is OFF (#335). The arena keeps its
+ * high-water mark for the life of the process and grew with every long
+ * document, so the web process never came back down: measured on synthetic
+ * 20,000-character, token-dense documents, idle memory after five ingests was
+ * 1.8 GB with the arena and 0.36 GB without, and peak fell from 2.05 GB to
+ * 1.39 GB, at the same speed. In a container sharing a small Docker VM, that
+ * retained memory is what the kernel's out-of-memory killer finds.
+ */
+const PIPELINE_OPTIONS = {
+  dtype: ONNX_MODEL_DTYPE,
+  session_options: { enableCpuMemArena: false },
+};
+
+/**
  * Download (first use) + materialise the inference pipeline, with progress to
  * stderr. Ported from cfcf including its hard-won progress-rendering fixes
  * (indeterminate totals under Bun, in-place TTY line finalisation).
@@ -275,9 +289,7 @@ async function ensurePipeline(): Promise<FeaturePipeline> {
     // A cached model is a local read: no banner, no per-file lines, no
     // "ready" line. The narration is for the one run that downloads.
     if (isModelCached()) {
-      const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, {
-        dtype: ONNX_MODEL_DTYPE,
-      });
+      const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, PIPELINE_OPTIONS);
       return pipe as unknown as FeaturePipeline;
     }
     const mb = ONNX_MODEL_APPROX_MB;
@@ -367,9 +379,7 @@ async function ensurePipeline(): Promise<FeaturePipeline> {
     );
     // Every file is on disk now, so this is a local load: no progress callback,
     // which would only report each file "done" a second time.
-    const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, {
-      dtype: ONNX_MODEL_DTYPE,
-    });
+    const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, PIPELINE_OPTIONS);
     process.stderr.write(`[cerefox-embed] embedder ready.\n`);
     return pipe as unknown as FeaturePipeline;
   })();
@@ -395,10 +405,16 @@ export async function warmup(): Promise<void> {
  * Per-inference sub-batch. Peak tensor memory scales with the batch, and the
  * container shares a (often small) Docker VM with Postgres + PostgREST + the
  * web server — a 12-text single call was OOM-killed on Colima's default 2 GB
- * VM (rc.2 dogfood, exit 137). 4 keeps peak memory flat at personal scale;
- * override with CEREFOX_ONNX_BATCH.
+ * VM (rc.2 dogfood, exit 137).
+ *
+ * 1 since #335 (was 4). A batch is padded to its longest chunk and attention
+ * memory grows with the square of that length, so four full-size, token-dense
+ * chunks (tables, ids, code) needed more than 2.5 GB and got the web process
+ * OOM-killed, while one at a time peaked at 1.4 GB. It is not slower on CPU:
+ * without the padding, batch 1 ingested prose slightly FASTER (about 1.7 s vs
+ * 1.9 s per 20,000-character document). Override with CEREFOX_ONNX_BATCH.
  */
-const DEFAULT_ONNX_BATCH = 4;
+const DEFAULT_ONNX_BATCH = 1;
 
 function onnxBatchSize(): number {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })

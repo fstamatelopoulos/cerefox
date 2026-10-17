@@ -183,7 +183,7 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 | `CEREFOX_MIN_TERM_COVERAGE` | **Retired in v1.1.0 — no longer read.** | Now a store setting: `cerefox config set min_term_coverage <value>`, or the **Settings** page. A per-call override still works (`cerefox search --min-term-coverage`, the MCP `min_term_coverage` param). `cerefox doctor` and the Settings page report the variable if it is still set. |
 | `CEREFOX_EMBED_MAX_INPUT_CHARS` | `20000` | Safety cap on the characters sent to the embedding model per input. The full chunk content is always stored and reconstructed untouched; only the embedding uses the (rare) truncated prefix, so an oversized chunk can never fail an ingest. |
 | `CEREFOX_MODELS_DIR` | `~/.cerefox/models` (in-container: inside the data volume) | Where the local embedder caches downloaded model weights (Cerefox Local; `CEREFOX_EMBEDDER=local`). |
-| `CEREFOX_ONNX_BATCH` | `4` | Texts per local-embedder inference call. Peak memory scales with this; the small default keeps ingest/reindex safe on small Docker VMs. |
+| `CEREFOX_ONNX_BATCH` | `1` | Texts per local-embedder inference call. Peak memory grows with this (each batch is padded to its longest chunk), and on CPU a larger batch is not faster, so leave it at 1. Was 4 before v1.19.0 (#335). Cerefox Local forwards it from its `.env` (from v1.19.0; after upgrading, run `cerefox-local init` once for a value set there to apply). |
 
 ### Metadata filter
 
