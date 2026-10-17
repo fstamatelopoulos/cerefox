@@ -1920,6 +1920,12 @@
                     },
                     "projectsChanged": {
                       "type": "boolean"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
