@@ -58,7 +58,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   20,000-character documents, the web process now peaks around 1.5 GB and
   settles near 0.4 GB idle (it used to sit at 1.8 GB, or be killed), at the
   same speed. `CEREFOX_ONNX_BATCH` now defaults to 1 and is forwarded from
-  Cerefox Local's `.env` (it was documented but never reached the container).
+  Cerefox Local's `.env` (it was documented but never reached the container;
+  a value set there takes effect from the first `cerefox-local init` after
+  upgrading, since the upgrade itself still runs the previous launcher).
   If the web process is killed anyway, the container log now says so and points
   at the VM's kernel log. `setup-local.md` states the memory each instance
   needs. Run `cerefox-local upgrade`. (#335)

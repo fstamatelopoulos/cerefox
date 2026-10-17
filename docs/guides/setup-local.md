@@ -4,9 +4,11 @@ Run Cerefox **fully on your own machine** — no hosted Supabase, no cloud datab
 Docker container bundles everything: Postgres + pgvector, the PostgREST Data API, and the
 Cerefox web server. You get the same web UI, CLI, and MCP server as the cloud setup.
 
-> **Embeddings still use the OpenAI API.** An `OPENAI_API_KEY` is required even for a
-> local setup (the database and web server are local; embedding generation is not). A
-> fully offline embedder is on the roadmap.
+> **Two embedding choices.** By default embeddings use the OpenAI API (an
+> `OPENAI_API_KEY` is needed). Or choose the **local embedder**
+> (`--local-embedder`, `CEREFOX_EMBEDDER=local`): a model that runs inside the
+> container, fully offline, no API key. See
+> [Choose your embedder](#choose-your-embedder-openai-vs-fully-local).
 
 ## Cloud vs. Local — pick one
 
