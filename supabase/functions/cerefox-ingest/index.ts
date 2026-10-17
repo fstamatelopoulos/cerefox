@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
-import { duplicateContentDocumentId } from "../../../_shared/mcp-tools/_utils.ts";
+import { duplicateContentDocumentId, legacyContentUniqueError } from "../../../_shared/mcp-tools/_utils.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
 import {
   ensureDocumentInProject,
@@ -698,6 +698,10 @@ Deno.serve(async (req: Request) => {
     );
   }
   if (ingestErr || !ingestResult?.length) {
+    // Functions deployed ahead of the schema still meet the pre-0.20.0
+    // store-wide content constraint.
+    const legacy = legacyContentUniqueError(ingestErr?.message ?? "");
+    if (legacy) return new Response(JSON.stringify({ error: legacy.message }), { status: 409, headers });
     return new Response(
       JSON.stringify({ error: `Ingest RPC failed: ${ingestErr?.message ?? "no data returned"}` }),
       { status: 500, headers },

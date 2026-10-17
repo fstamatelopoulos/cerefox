@@ -157,10 +157,6 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   // in one backup can share a body; the hash arm below must not let the first
   // one's arrival skip the second.
   const payloadIds = new Set(payload.documents.map((d) => d.id));
-  const payloadHashCounts = new Map<string, number>();
-  for (const d of payload.documents) {
-    if (d.content_hash) payloadHashCounts.set(d.content_hash, (payloadHashCounts.get(d.content_hash) ?? 0) + 1);
-  }
 
   for (const doc of payload.documents) {
     // Skip if this document is already present — by id *or* by content hash.
@@ -184,9 +180,9 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     // An id match always counts, trashed or not (it is the primary key).
     //
     // Two lookups, each exact: one shared .or() query capped at N rows could
-    // drop the very row that decides it (#334 review). The hash lookup asks
-    // for one more live row than this backup itself holds with that hash, so
-    // a match from outside the backup always makes it into the window.
+    // drop the very row that decides it (#334 review). The hash lookup pages
+    // past rows that belong to this backup, so the server's row cap cannot
+    // hide a match from outside it.
     const { data: byId } = await client.raw
       .from("cerefox_documents")
       .select("id")
@@ -194,13 +190,19 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       .limit(1);
     let existing = (byId ?? []).length > 0;
     if (!existing && !doc.deleted_at && doc.content_hash) {
-      const { data: byHash } = await client.raw
-        .from("cerefox_documents")
-        .select("id")
-        .eq("content_hash", doc.content_hash)
-        .is("deleted_at", null)
-        .limit((payloadHashCounts.get(doc.content_hash) ?? 0) + 1);
-      existing = ((byHash ?? []) as Array<{ id: string }>).some((m) => !payloadIds.has(m.id));
+      const PAGE = 500;
+      for (let from = 0; !existing; from += PAGE) {
+        const { data: byHash } = await client.raw
+          .from("cerefox_documents")
+          .select("id")
+          .eq("content_hash", doc.content_hash)
+          .is("deleted_at", null)
+          .order("id")
+          .range(from, from + PAGE - 1);
+        const rows = (byHash ?? []) as Array<{ id: string }>;
+        existing = rows.some((m) => !payloadIds.has(m.id));
+        if (rows.length < PAGE) break;
+      }
     }
 
     if (existing) {
