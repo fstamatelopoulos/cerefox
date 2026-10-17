@@ -44,3 +44,28 @@ export function auditDocLabel(
   if (documentId) return documentId.slice(0, 8) + "…";
   return isStoreLevelAuditOp(operation) ? "(store)" : "(deleted)";
 }
+
+/**
+ * One line describing a metadata change (#333): the keys set (with their new
+ * values) and the keys removed. Built from an `update-metadata` audit entry's
+ * metadata_before / metadata_after; null when the entry carries neither (older
+ * entries, other operations) or nothing actually changed.
+ */
+export function metadataChangeSummary(
+  before: Record<string, unknown> | null | undefined,
+  after: Record<string, unknown> | null | undefined,
+): string | null {
+  if (before == null && after == null) return null;
+  const b = before ?? {};
+  const a = after ?? {};
+  const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
+  const set = Object.keys(a)
+    .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]))
+    .map((k) => `${k}=${show(a[k])}`);
+  const removed = Object.keys(b).filter((k) => !(k in a));
+  if (set.length === 0 && removed.length === 0) return null;
+  const parts: string[] = [];
+  if (set.length) parts.push(`set ${set.join(", ")}`);
+  if (removed.length) parts.push(`removed ${removed.join(", ")}`);
+  return parts.join("; ");
+}

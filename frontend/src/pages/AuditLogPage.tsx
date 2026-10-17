@@ -9,7 +9,7 @@ import { fetchAuditLog } from "../api/audit";
 import { CliHint } from "../components/CliHint";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { formatDateTime } from "../utils/dates";
-import { STORE_LEVEL_AUDIT_OPS } from "@cerefox/audit-ops";
+import { STORE_LEVEL_AUDIT_OPS, metadataChangeSummary } from "@cerefox/audit-ops";
 import ui from "../styles/redesign.module.css";
 import { usePageTitle } from "../hooks/usePageTitle";
 
@@ -134,9 +134,18 @@ export function AuditLogPage() {
     {
       key: "delta",
       label: "Change",
-      width: 110,
+      width: 200,
       align: "right",
       render: (e) => {
+        // #333: a metadata change shows what changed, not a size.
+        const metaChange = metadataChangeSummary(e.metadata_before, e.metadata_after);
+        if (metaChange) {
+          return (
+            <span className={ui.mono} style={{ fontSize: 12 }} title={metaChange}>
+              {metaChange.length > 40 ? `${metaChange.slice(0, 39)}…` : metaChange}
+            </span>
+          );
+        }
         if (e.size_before == null && e.size_after == null) {
           return <span className={`${ui.faint} ${ui.mono}`} style={{ fontSize: 12 }}>—</span>;
         }

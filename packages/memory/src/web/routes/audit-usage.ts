@@ -105,6 +105,9 @@ export function registerAuditUsageRoutes(app: Hono, ctx: WebContext): void {
         size_after: (e.size_after as number | null) ?? null,
         description: (e.description as string) ?? "",
         created_at: (e.created_at as string) ?? "",
+        // #333: on update-metadata entries; null elsewhere and on older rows.
+        metadata_before: (e.metadata_before as Record<string, unknown> | null) ?? null,
+        metadata_after: (e.metadata_after as Record<string, unknown> | null) ?? null,
       })),
     );
   });

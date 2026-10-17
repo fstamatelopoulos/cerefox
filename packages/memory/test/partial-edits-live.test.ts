@@ -78,10 +78,9 @@ function hashFrom(text: string): string {
 }
 
 let seq = 0;
-// content_hash carries a UNIQUE constraint across the whole store, so seed text
-// must be unique per document AND per run — otherwise a re-run collides with
-// documents an interrupted earlier run left behind, and the failure surfaces as
-// an opaque duplicate-key error rather than anything about this feature.
+// Seed text is unique per document AND per run: a create whose content matches
+// a live document is skipped (#332), so a re-run would otherwise get back a
+// document an interrupted earlier run left behind instead of a fresh one.
 const RUN = Math.random().toString(36).slice(2, 10);
 async function seedDoc(title: string): Promise<{ id: string; hash: string }> {
   const content = SEED.replace("# Daily log", `# Daily log ${RUN}-${++seq}`);

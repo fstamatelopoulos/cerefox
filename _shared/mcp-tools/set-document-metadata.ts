@@ -19,7 +19,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage } from "./_utils.ts";
+import { logUsage, metadataTokenError } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
@@ -31,6 +31,14 @@ async function handler(
   const document_id = args.document_id as string | undefined;
   const metadata = args.metadata as Record<string, unknown> | undefined;
   const replace = (args.replace as boolean | undefined) ?? false;
+  const expectedRevision = args.expected_metadata_revision;
+  if (
+    expectedRevision !== undefined && expectedRevision !== null &&
+    !(typeof expectedRevision === "number" && Number.isInteger(expectedRevision))
+  ) {
+    throw new McpInvalidParams("expected_metadata_revision must be an integer (the metadata_revision you read)");
+  }
+  const lastWriteWins = (args.last_write_wins as boolean | undefined) ?? false;
 
   if (!document_id) throw new McpInvalidParams("document_id is required");
   if (metadata === undefined || metadata === null) {
@@ -60,12 +68,20 @@ async function handler(
     p_replace: replace,
     p_author: author ?? "unknown",
     p_author_type: authorType,
+    p_expected_metadata_revision: expectedRevision ?? null,
+    p_last_write_wins: lastWriteWins,
   });
 
-  if (error) throw new Error(`RPC error: ${error.message}`);
+  if (error) throw metadataTokenError(error.message) ?? new Error(`RPC error: ${error.message}`);
 
   const row = data?.[0] as
-    | { document_id?: string; metadata?: Record<string, unknown>; keys_set?: number; keys_removed?: number }
+    | {
+        document_id?: string;
+        metadata?: Record<string, unknown>;
+        keys_set?: number;
+        keys_removed?: number;
+        metadata_revision?: number;
+      }
     | undefined;
   if (!row) throw new Error("cerefox_set_document_metadata returned no data");
 
@@ -89,6 +105,7 @@ async function handler(
   return (
     `Metadata ${replace ? "replaced" : "merged"} on ${document_id}. ${summary}\n` +
     `Now: ${JSON.stringify(row.metadata ?? {})}\n` +
+    (row.metadata_revision != null ? `metadata_revision: ${row.metadata_revision}\n` : "") +
     `Content untouched — no new version, no re-embedding.`
   );
 }
@@ -96,7 +113,7 @@ async function handler(
 export const setDocumentMetadataTool: ToolDefinition = {
   name: "cerefox_set_document_metadata",
   description:
-    "Change a document's metadata WITHOUT resending its content. MERGES by default: the keys you pass are set, every other key is left alone — so you do not need to read the document first, and you cannot accidentally drop tags another agent set. To REMOVE a key, pass it with a null value ({\"stale_key\": null}). Pass replace: true to set the metadata to exactly the object given, discarding everything else (rare; the same destructive contract as cerefox_set_document_projects). Content, chunks and embeddings are untouched and no new version is created. Use this instead of cerefox_ingest whenever only the tags are changing.",
+    "Change a document's metadata WITHOUT resending its content. MERGES by default: the keys you pass are set, every other key is left alone — so you do not need to read the document first, and you cannot accidentally drop tags another agent set. To REMOVE a key, pass it with a null value ({\"stale_key\": null}). Pass replace: true to set the metadata to exactly the object given, discarding everything else (rare; it requires expected_metadata_revision or last_write_wins). To make a merge fail if anyone changed the metadata since you read it, pass expected_metadata_revision. Content, chunks and embeddings are untouched and no new version is created. Use this instead of cerefox_ingest whenever only the tags are changing.",
   annotations: {
     title: "Set document metadata",
     readOnlyHint: false,
@@ -118,7 +135,17 @@ export const setDocumentMetadataTool: ToolDefinition = {
       replace: {
         type: "boolean",
         description:
-          "Set the metadata to EXACTLY this object, discarding any key not listed. Defaults to false (merge). Use only when you mean to reset a document's tags wholesale.",
+          "Set the metadata to EXACTLY this object, discarding any key not listed. Defaults to false (merge). Use only when you mean to reset a document's tags wholesale. Requires expected_metadata_revision (or last_write_wins).",
+      },
+      expected_metadata_revision: {
+        type: "integer",
+        description:
+          "The metadata_revision you read (from cerefox_get_document or cerefox_metadata_search). Optional on a merge: when given, the write fails if the metadata changed since. Required with replace: true.",
+      },
+      last_write_wins: {
+        type: "boolean",
+        description:
+          "Replace without a metadata_revision, regardless of concurrent changes (default false). Recorded in the audit log. Use only when an external source of truth makes conflicts meaningless.",
       },
       author: AUTHOR_PARAM_WRITE,
     },

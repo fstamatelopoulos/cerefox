@@ -308,6 +308,83 @@ test.describe("Document detail", () => {
   });
 });
 
+// ── Edit form metadata (#333) ───────────────────────────────────────────
+// Content updates MERGE metadata since schema 0.21.0, so a whole-form editor
+// that only sent the keys it kept would silently resurrect removed ones. The
+// edit route replaces with the metadata_revision the page loaded; these pin
+// both halves: a removed key is gone, and a tag changed elsewhere meanwhile is
+// a conflict, not a silent revert.
+test.describe("Edit form metadata (#333)", () => {
+  async function createDoc(
+    request: import("@playwright/test").APIRequestContext,
+    title: string,
+    metadata: Record<string, string>,
+  ): Promise<string> {
+    const r = await request.post("/api/v1/ingest", {
+      data: { title, content: `# ${title}\n\nbody ${crypto.randomUUID()}`, metadata },
+    });
+    expect(r.ok()).toBeTruthy();
+    return ((await r.json()) as { document_id: string }).document_id;
+  }
+
+  async function metadataOf(request: import("@playwright/test").APIRequestContext, id: string) {
+    return ((await (await request.get(`/api/v1/documents/${id}`)).json()) as { doc_metadata: Record<string, unknown> })
+      .doc_metadata;
+  }
+
+  async function removeKey(page: import("@playwright/test").Page, key: string): Promise<void> {
+    await page
+      .locator(".mantine-Group-root", { has: page.locator(`input[placeholder="Key"][value="${key}"]`) })
+      .getByRole("button")
+      .click();
+    await expect(page.locator(`input[placeholder="Key"][value="${key}"]`)).toHaveCount(0);
+  }
+
+  for (const withContent of [false, true]) {
+    test(`removing a key removes it (${withContent ? "with a content change" : "metadata only"})`, async ({ page, request }) => {
+      const title = uniqueTitle(`Edit Meta ${withContent ? "content" : "only"}`);
+      try {
+        const id = await createDoc(request, title, { keep: "1", drop: "2" });
+        await page.goto(`${APP}/document/${id}/edit`);
+        await expect(page.locator('input[placeholder="Key"][value="drop"]')).toBeVisible({ timeout: 15_000 });
+        await removeKey(page, "drop");
+        if (withContent) {
+          const editor = page.locator("textarea").first();
+          await editor.fill(`# ${title}\n\nchanged ${crypto.randomUUID()}`);
+        }
+        await page.getByRole("button", { name: "Save" }).first().click();
+        await expect(page.getByText("Document saved")).toBeVisible({ timeout: 30_000 });
+        expect(await metadataOf(request, id)).toEqual({ keep: "1" });
+      } finally {
+        await purgeDocByTitle(title);
+      }
+    });
+  }
+
+  test("a tag changed elsewhere while editing is a conflict, not a silent revert", async ({ page, request }) => {
+    const title = uniqueTitle("Edit Meta conflict");
+    try {
+      const id = await createDoc(request, title, { status: "draft" });
+      await page.goto(`${APP}/document/${id}/edit`);
+      await expect(page.locator('input[placeholder="Key"][value="status"]')).toBeVisible({ timeout: 15_000 });
+      // Another writer adds a tag after the page loaded.
+      const client = createClient(loadSettings());
+      await client.raw.rpc("cerefox_set_document_metadata", {
+        p_document_id: id,
+        p_metadata: { owner: "other" },
+        p_author: "e2e-ui",
+        p_author_type: "user",
+      });
+      await page.locator('input[placeholder="Value"]').first().fill("final");
+      await page.getByRole("button", { name: "Save" }).first().click();
+      await expect(page.getByText("Metadata changed", { exact: true })).toBeVisible({ timeout: 30_000 });
+      expect(await metadataOf(request, id)).toEqual({ status: "draft", owner: "other" });
+    } finally {
+      await purgeDocByTitle(title);
+    }
+  });
+});
+
 // ── Metadata Search ──────────────────────────────────────────────────────
 test.describe("Metadata Search", () => {
   test("page loads with filter builder", async ({ page }) => {

@@ -206,6 +206,34 @@
                       "created_at": {
                         "default": "",
                         "type": "string"
+                      },
+                      "metadata_before": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "metadata_after": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -1498,6 +1526,18 @@
                         "null"
                       ]
                     },
+                    "metadata_revision": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "versions": {
                       "default": [],
                       "type": "array",
@@ -2007,7 +2047,7 @@
                     }
                   },
                   "metadata": {
-                    "description": "Replaces the metadata. `{}` clears every key; omit to leave it unchanged.",
+                    "description": "Replaces the metadata (this route edits it as a whole form). `{}` clears every key; omit to leave it unchanged. Send expected_metadata_revision with it.",
                     "type": "object",
                     "propertyNames": {
                       "type": "string"
@@ -2019,6 +2059,19 @@
                     "type": [
                       "string",
                       "null"
+                    ]
+                  },
+                  "expected_metadata_revision": {
+                    "description": "The metadata_revision you read (GET /documents/{id}). Required with `metadata` for an identified caller; a stale one is a 409.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
                     ]
                   },
                   "last_write_wins": {
@@ -3471,11 +3524,18 @@
                     "type": "string"
                   },
                   "metadata": {
+                    "description": "On an update it MERGES into the stored metadata: a null value removes a key, omitted keys are kept.",
                     "type": "object",
                     "propertyNames": {
                       "type": "string"
                     },
                     "additionalProperties": {}
+                  },
+                  "expected_metadata_revision": {
+                    "description": "Optional, with metadata on an update: the metadata_revision you read. A stale one is a 409.",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
                   },
                   "source": {
                     "description": "Origin label. Defaults to \"paste\".",

@@ -88,6 +88,9 @@ export interface DocumentDetail {
   /** Optimistic-concurrency token (iter-32): send back as
    * expected_content_hash when saving a content edit. */
   content_hash: string | null;
+  /** The metadata's token (#333): send back as expected_metadata_revision.
+   * Null against a server older than schema 0.21.0. */
+  metadata_revision?: number | null;
   versions: DocumentVersion[];
 }
 
@@ -134,6 +137,9 @@ export interface AuditEntry {
   size_after: number | null;
   description: string;
   created_at: string;
+  /** #333: set on update-metadata entries (null elsewhere / older rows). */
+  metadata_before?: Record<string, unknown> | null;
+  metadata_after?: Record<string, unknown> | null;
 }
 
 export interface DocumentChunk {

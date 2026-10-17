@@ -24,7 +24,7 @@
 
 import type { AccessPath, MCPSupabaseClient } from "./types.ts";
 
-import { logUsage, storeWriteRemediation } from "./_utils.ts";
+import { MetadataConcurrencyError, logUsage, storeWriteRemediation } from "./_utils.ts";
 
 export interface FacetActor {
   author: string;
@@ -297,6 +297,9 @@ export async function updateDocumentFacets(
     documentId: string;
     title?: string;
     metadata?: Record<string, unknown>;
+    /** #333: the metadata token for the replace below; see the RPC. */
+    expectedMetadataRevision?: number | null;
+    metadataLastWriteWins?: boolean;
     projectIds?: string[];
     accessPath: AccessPath;
   } & FacetActor,
@@ -343,9 +346,13 @@ export async function updateDocumentFacets(
           p_replace: true,
           p_author: opts.author,
           p_author_type: opts.authorType,
+          // #333: a replace must prove a read (or say last-write-wins).
+          p_expected_metadata_revision: opts.expectedMetadataRevision ?? null,
+          p_last_write_wins: opts.metadataLastWriteWins ?? false,
         });
         if (rpcErr) {
           const msg = rpcErr.message ?? String(rpcErr);
+          if (msg.includes("CEREFOX_METADATA_")) throw new MetadataConcurrencyError(msg);
           if (/not found/i.test(msg)) throw new FacetNotFoundError(msg);
           throw new Error(`Metadata update failed: ${msg}`);
         }

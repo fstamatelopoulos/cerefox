@@ -157,7 +157,60 @@ matching — cleverness there buys little and complicates the RPC contract).
 
 ---
 
+## Metadata has its own token, optional on a merge (#333, schema 0.21.0)
+
+*Revises the v1.6.0 section below, which is kept for its reasoning.* That
+section was right about merges and wrong in three places, all found by an agent
+harness that keeps state in metadata:
+
+1. **Two writers setting the same key** overwrite each other silently, merge or
+   not. "Nothing for a token to protect" holds only for disjoint keys.
+2. **`replace: true` carried no token**, so the destructive path was the
+   unguarded one.
+3. **A content update that passed `metadata` replaced the whole object**,
+   checked only against `content_hash`. A caller holding a perfectly valid body
+   token could wipe a tag written since its read. `content_hash` covers the body
+   only, so it never moved on a metadata change.
+
+Metadata also had no history: content versions never captured it, and audit
+entries recorded key counts, not values.
+
+**Design:**
+
+- **`cerefox_documents.metadata_revision`** (INT, starts at 1) is the metadata's
+  own token, independent of `content_hash`, so a tag change never invalidates a
+  body edit in flight and vice versa. A `BEFORE UPDATE` trigger bumps it when,
+  and only when, `metadata` actually changes, and pins it otherwise: every
+  writer is covered (the RPCs, older clients' direct table writes) and no caller
+  can set it. A counter rather than a hash: cheaper, unambiguous, readable in a
+  conflict message, and it doubles as the metadata version number.
+- **Token rules** (one copy, `cerefox_check_metadata_revision`): a merge MAY pass
+  `expected_metadata_revision` and is strict when it does; a **replace MUST**
+  pass it or `last_write_wins`. Stale → `CEREFOX_METADATA_CONFLICT` under
+  `PT409`; missing on a replace → `CEREFOX_METADATA_TOKEN_REQUIRED` (22023).
+  Keeping it optional on merges preserves what the v1.6.0 section got right: a
+  disjoint-key merge needs no read.
+- **Content updates merge metadata** (`cerefox_metadata_apply`, RFC 7386: a JSON
+  null removes a key) unless `p_replace_metadata`, and check the metadata token
+  when given. `{}` is now a no-op merge; clearing is a replace. The pipeline no
+  longer reads the stored metadata and writes it back (a snapshot a concurrent
+  change could already have replaced); it passes NULL and lets the RPC decide
+  under its row lock.
+- **Whole-form editors replace with the token.** The web edit route sends the
+  `metadata_revision` the page loaded, so a tag changed elsewhere while the form
+  was open is a 409 (`metadata_conflict`), not a silent revert. An identified
+  `/api/v1` caller must send it; an anonymous one without it (a tab loaded before
+  the upgrade) gets the current revision, which is the old behavior.
+- **History:** every `update-metadata` audit entry records `metadata_before` and
+  `metadata_after`, including the one a content update writes when it changed
+  metadata. The MCP audit tool, `cerefox audit list` and the web Audit Log show
+  the diff ("set status=done; removed stale").
+- **Reads** return `metadata_revision` next to `content_hash`: get document,
+  search, metadata search, `/api/v1/documents/{id}`, the CLI.
+
 ## Metadata writes take no token, deliberately (#204, v1.6.0)
+
+*Superseded in part by the section above (#333).*
 
 `cerefox_set_document_metadata` is the one write path that does **not** require
 `expected_content_hash`. That is a decision, not an omission.

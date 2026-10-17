@@ -81,6 +81,11 @@ DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID,
 DROP FUNCTION IF EXISTS cerefox_hybrid_search(TEXT, VECTOR(768), INT, FLOAT, BOOLEAN, UUID, FLOAT, JSONB, FLOAT);
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB, FLOAT);
 
+-- #333 (0.21.0): metadata_revision added to the return types of the
+-- document-shaped reads, next to content_hash. Drop the current signatures.
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB, FLOAT, TEXT);
+DROP FUNCTION IF EXISTS cerefox_metadata_search(JSONB, UUID, TIMESTAMPTZ, TIMESTAMPTZ, INT, BOOLEAN, INT);
+
 -- ── Shared return type note ────────────────────────────────────────────────────
 -- All chunk-level search RPCs return the same shape for consistency:
 --   chunk_id, document_id, chunk_index, title, content, heading_path,
@@ -788,7 +793,10 @@ RETURNS TABLE (
     content_hash             TEXT,
     -- 28I: TRUE when this is a below-confidence fallback response (nothing
     -- cleared the hybrid pass-filter). See cerefox_hybrid_search.
-    below_confidence         BOOLEAN
+    below_confidence         BOOLEAN,
+    -- #333: the metadata's concurrency token, to pass back as
+    -- expected_metadata_revision on a metadata write.
+    metadata_revision        INT
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -825,7 +833,8 @@ AS $$
             cr.version_count,
             cr.below_confidence,
             d.updated_at       AS doc_updated_at,
-            d.content_hash
+            d.content_hash,
+            d.metadata_revision
         FROM chunk_results cr
         JOIN cerefox_documents d ON d.id = cr.document_id
         ORDER BY cr.document_id, cr.score DESC
@@ -910,7 +919,8 @@ AS $$
         td.version_count,
         ac.is_partial,
         td.content_hash,
-        td.below_confidence
+        td.below_confidence,
+        td.metadata_revision
     FROM top_docs td
     JOIN doc_sizes ds ON ds.document_id = td.document_id
     JOIN all_content ac ON ac.document_id = td.document_id
@@ -1069,7 +1079,9 @@ RETURNS TABLE (
     -- Current content_hash of the document — the optimistic-concurrency token
     -- to pass back as expected_content_hash on update (iter-32). Note: always
     -- the CURRENT hash, even when an archived version is being retrieved.
-    content_hash    TEXT
+    content_hash    TEXT,
+    -- #333: the metadata's concurrency token (always the current one).
+    metadata_revision INT
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -1091,7 +1103,8 @@ AS $$
         COUNT(*)::INT   AS chunk_count,
         SUM(c.char_count)::INT AS total_chars,
         d.created_at,
-        d.content_hash
+        d.content_hash,
+        d.metadata_revision
     FROM cerefox_documents d
     JOIN cerefox_chunks c ON c.document_id = d.id
     WHERE d.id = p_document_id
@@ -1099,7 +1112,8 @@ AS $$
           (p_version_id IS NULL     AND c.version_id IS NULL) OR
           (p_version_id IS NOT NULL AND c.version_id = p_version_id)
       )
-    GROUP BY d.id, d.title, d.source, d.metadata, d.created_at, d.content_hash;
+    GROUP BY d.id, d.title, d.source, d.metadata, d.created_at, d.content_hash,
+             d.metadata_revision;
 $$;
 
 -- ── cerefox_list_document_versions ────────────────────────────────────────────
@@ -1512,8 +1526,11 @@ $$;
 --                       p_source_label, which records how THIS write was
 --                       triggered and is stored on the version row.
 --   p_metadata        : JSONB metadata. NULL = "not provided" → create uses '{}',
---                       update keeps the existing metadata (v0.11.1). Pass '{}'
---                       explicitly to clear all metadata.
+--                       update keeps the existing metadata (v0.11.1). On update
+--                       it MERGES (JSON null removes a key) unless
+--                       p_replace_metadata (#333, 0.21.0); '{}' is a no-op merge.
+--   p_expected_metadata_revision, p_replace_metadata : the metadata token and
+--                       the replace switch (#333); see cerefox_check_metadata_revision.
 --   p_review_status   : ACCEPTED AND IGNORED since 0.16.0 (#241). The status is
 --                       decided here from p_author_type alone (agent →
 --                       pending_review, user → approved), so every transport
@@ -1545,6 +1562,62 @@ $$;
 --          document is returned, 0.20.0 #332), version_id (UUID of snapshot,
 --          null on create and skip)
 
+-- ── Metadata helpers (#333, 0.21.0) ──────────────────────────────────────────
+-- One copy of the merge/replace rule and of the token rule, shared by
+-- cerefox_set_document_metadata and cerefox_ingest_document.
+--
+-- cerefox_metadata_apply: RFC 7386-style. Merge = stored || patch; replace =
+-- the patch alone. Either way, keys whose value is JSON null are REMOVED, never
+-- stored (Cerefox metadata values are strings by convention, so a null is
+-- never a legitimate value).
+CREATE OR REPLACE FUNCTION cerefox_metadata_apply(
+    p_stored  JSONB,
+    p_patch   JSONB,
+    p_replace BOOLEAN
+)
+RETURNS JSONB
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public, pg_catalog
+AS $$
+    SELECT (CASE WHEN p_replace THEN p_patch
+                 ELSE COALESCE(p_stored, '{}'::jsonb) || p_patch END)
+           - COALESCE((SELECT array_agg(key) FROM jsonb_each(p_patch)
+                       WHERE value = 'null'::jsonb), ARRAY[]::TEXT[]);
+$$;
+
+-- cerefox_check_metadata_revision: raise unless the write may proceed.
+--   expected passed and stale         → CEREFOX_METADATA_CONFLICT (PT409)
+--   replace without token or LWW      → CEREFOX_METADATA_TOKEN_REQUIRED (22023)
+-- PT409, never a retryable SQLSTATE: a stale token fails identically forever
+-- (see the CEREFOX_CONFLICT note in cerefox_ingest_document).
+CREATE OR REPLACE FUNCTION cerefox_check_metadata_revision(
+    p_document_id     UUID,
+    p_current         INT,
+    p_expected        INT,
+    p_replace         BOOLEAN,
+    p_last_write_wins BOOLEAN
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+BEGIN
+    IF p_expected IS NOT NULL AND p_expected <> p_current THEN
+        RAISE EXCEPTION
+            'CEREFOX_METADATA_CONFLICT: the metadata of document % changed since it was read (expected metadata_revision %, current %). Re-read the document, reapply your change, and retry with the new metadata_revision.',
+            p_document_id, p_expected, p_current
+            USING ERRCODE = 'PT409';
+    END IF;
+    IF p_replace AND p_expected IS NULL AND NOT COALESCE(p_last_write_wins, FALSE) THEN
+        RAISE EXCEPTION
+            'CEREFOX_METADATA_TOKEN_REQUIRED: replacing all metadata deletes keys, so it requires expected_metadata_revision (the metadata_revision you read) or last_write_wins=true. Current metadata_revision: %',
+            p_current
+            USING ERRCODE = '22023';
+    END IF;
+END;
+$$;
+
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN);
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN);
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN, SMALLINT);
@@ -1552,6 +1625,9 @@ DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JS
 -- must be dropped before the 17-arg CREATE below (Postgres will not replace a
 -- function whose RETURNS TABLE changed).
 DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN, SMALLINT, JSONB);
+-- #333 (0.21.0): + p_expected_metadata_revision, p_replace_metadata; returns
+-- metadata_revision.
+DROP FUNCTION IF EXISTS cerefox_ingest_document(UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TEXT, INT, BOOLEAN, TEXT, BOOLEAN, SMALLINT, JSONB, INT, BOOLEAN);
 CREATE FUNCTION cerefox_ingest_document(
     p_document_id       UUID        DEFAULT NULL,
     p_title             TEXT        DEFAULT 'Untitled',
@@ -1563,7 +1639,9 @@ CREATE FUNCTION cerefox_ingest_document(
     p_content_hash      TEXT        DEFAULT '',
     -- NULL = "not provided": create uses '{}', update KEEPS existing metadata
     -- (v0.11.1 fix — content updates without metadata used to wipe tags).
-    -- Pass '{}' explicitly to deliberately clear all metadata.
+    -- #333 (0.21.0): on update this MERGES (a JSON null removes a key), unless
+    -- p_replace_metadata. It used to replace the whole object, checked only
+    -- against the content token, which could wipe another writer's change.
     p_metadata          JSONB       DEFAULT NULL,
     p_review_status     TEXT        DEFAULT 'approved',
     p_chunks            JSONB       DEFAULT '[]',
@@ -1591,7 +1669,15 @@ CREATE FUNCTION cerefox_ingest_document(
     -- flattening to 'update-content'. NULL-means-today, per the #183 lesson:
     -- a parameter that substitutes its own concrete default is how store policy
     -- got silently overridden for a whole release.
-    p_operations        JSONB       DEFAULT NULL
+    p_operations        JSONB       DEFAULT NULL,
+    -- #333: the metadata's concurrency token. Checked on update when
+    -- p_metadata is passed: strict when given; required (or p_last_write_wins)
+    -- when p_replace_metadata. Ignored on create.
+    p_expected_metadata_revision INT DEFAULT NULL,
+    -- #333: replace the whole metadata object instead of merging. For callers
+    -- whose metadata has an external source of truth (front matter synced
+    -- with last_write_wins); everyone else merges.
+    p_replace_metadata  BOOLEAN     DEFAULT FALSE
 )
 RETURNS TABLE (
     document_id     UUID,
@@ -1606,7 +1692,9 @@ RETURNS TABLE (
     -- iter-33: true when the new size crosses `document_size_warning_chars`
     -- (dormant when that config is unset/0). A signal, never a refusal: an
     -- insert-only workflow otherwise never sees a document grow.
-    size_warning    BOOLEAN
+    size_warning    BOOLEAN,
+    -- #333: the metadata's token after this write.
+    metadata_revision INT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -1629,6 +1717,9 @@ DECLARE
     v_doc_deleted   TIMESTAMPTZ;
     v_scannable     TEXT;
     v_missing       TEXT[];
+    v_meta_before   JSONB;
+    v_meta_after    JSONB;
+    v_meta_rev      INT;
 BEGIN
     -- ── Zero-chunk guard (v0.3.1) ────────────────────────────────────────
     -- Refuse to create or update a document with no chunks. Three reasons:
@@ -1739,8 +1830,9 @@ BEGIN
         -- updaters serialize here, and the second one sees the first one's
         -- hash — the race window (chunk + embed latency) is closed at the
         -- only place all transports share (iter-32).
-        SELECT COALESCE(d.total_chars, 0), d.content_hash, d.deleted_at
-        INTO v_old_chars, v_current_hash, v_doc_deleted
+        SELECT COALESCE(d.total_chars, 0), d.content_hash, d.deleted_at,
+               d.metadata, d.metadata_revision
+        INTO v_old_chars, v_current_hash, v_doc_deleted, v_meta_before, v_meta_rev
         FROM cerefox_documents d WHERE d.id = v_doc_id
         FOR UPDATE;
 
@@ -1814,6 +1906,21 @@ BEGIN
             END IF;
         END IF;
 
+        -- ── Metadata token (#333) ─────────────────────────────────────
+        -- Only when this write touches metadata. Checked after the content
+        -- token, so a caller holding a stale body learns that first.
+        IF p_metadata IS NOT NULL THEN
+            PERFORM cerefox_check_metadata_revision(
+                v_doc_id, v_meta_rev, p_expected_metadata_revision,
+                p_replace_metadata, p_last_write_wins);
+            v_meta_after := cerefox_metadata_apply(
+                CASE WHEN jsonb_typeof(v_meta_before) = 'object'
+                     THEN v_meta_before ELSE '{}'::jsonb END,
+                p_metadata, p_replace_metadata);
+        ELSE
+            v_meta_after := v_meta_before;
+        END IF;
+
         -- Snapshot old version (archives current chunks, runs retention cleanup)
         SELECT sv.version_id INTO v_version_id
         FROM cerefox_snapshot_version(v_doc_id, p_source_label, p_retention_hours, p_cleanup_enabled) sv;
@@ -1827,7 +1934,7 @@ BEGIN
             source = COALESCE(p_source, source),
             source_path = COALESCE(p_source_path, source_path),
             content_hash = p_content_hash,
-            metadata = COALESCE(p_metadata, metadata),
+            metadata = v_meta_after,
             chunk_count = v_chunk_count,
             total_chars = v_total_chars,
             review_status = v_status,
@@ -1855,7 +1962,7 @@ BEGIN
             -- NULL, which wiped v_chunk_count before the INSERT below.
             RETURN QUERY
                 SELECT d.id, d.chunk_count, d.total_chars, 'skipped'::TEXT,
-                       NULL::UUID, p_content_hash, FALSE
+                       NULL::UUID, p_content_hash, FALSE, d.metadata_revision
                 FROM cerefox_documents d
                 WHERE d.content_hash = p_content_hash
                   AND d.deleted_at IS NULL
@@ -1870,7 +1977,8 @@ BEGIN
             title, source, source_path, content_hash, metadata,
             chunk_count, total_chars, review_status
         ) VALUES (
-            p_title, COALESCE(p_source, 'agent'), p_source_path, p_content_hash, COALESCE(p_metadata, '{}'::JSONB),
+            p_title, COALESCE(p_source, 'agent'), p_source_path, p_content_hash,
+            cerefox_metadata_apply('{}'::jsonb, COALESCE(p_metadata, '{}'::jsonb), TRUE),
             v_chunk_count, v_total_chars, v_status
         )
         RETURNING id INTO v_doc_id;
@@ -1952,6 +2060,24 @@ BEGIN
         );
     END IF;
 
+    -- ── Metadata history (#333) ──────────────────────────────────────
+    -- A content update that changed metadata also records it as its own
+    -- 'update-metadata' entry, with the before/after values, so the metadata
+    -- history is complete whichever path wrote it.
+    IF v_operation = 'update-content' AND v_meta_after IS DISTINCT FROM v_meta_before THEN
+        PERFORM cerefox_create_audit_entry(
+            p_document_id := v_doc_id,
+            p_version_id := v_version_id,
+            p_operation := 'update-metadata',
+            p_author := p_author,
+            p_author_type := p_author_type,
+            p_description := format('Metadata %s on "%s" (with a content update)',
+                CASE WHEN p_replace_metadata THEN 'replaced' ELSE 'merged' END, p_title),
+            p_metadata_before := v_meta_before,
+            p_metadata_after := v_meta_after
+        );
+    END IF;
+
     -- ── Size signal (iter-33) ────────────────────────────────────────
     -- Dormant unless an operator sets a threshold. Never blocks the write: a
     -- size policy is not a correctness rule, and an agent that only ever
@@ -1962,7 +2088,9 @@ BEGIN
     END IF;
 
     RETURN QUERY SELECT v_doc_id, v_chunk_count, v_total_chars, v_operation,
-                        v_version_id, p_content_hash, v_size_warning;
+                        v_version_id, p_content_hash, v_size_warning,
+                        (SELECT d.metadata_revision FROM cerefox_documents d
+                         WHERE d.id = v_doc_id);
 END;
 $$;
 
@@ -2006,6 +2134,8 @@ $$;
 -- Returns the created entry's id and created_at.
 
 DROP FUNCTION IF EXISTS cerefox_create_audit_entry(UUID, UUID, TEXT, TEXT, TEXT, INT, INT, TEXT);
+-- #333 (0.21.0): + metadata before/after, for 'update-metadata' entries.
+DROP FUNCTION IF EXISTS cerefox_create_audit_entry(UUID, UUID, TEXT, TEXT, TEXT, INT, INT, TEXT, JSONB, JSONB);
 CREATE FUNCTION cerefox_create_audit_entry(
     p_document_id   UUID    DEFAULT NULL,
     p_version_id    UUID    DEFAULT NULL,
@@ -2014,7 +2144,9 @@ CREATE FUNCTION cerefox_create_audit_entry(
     p_author_type   TEXT    DEFAULT 'user',
     p_size_before   INT     DEFAULT NULL,
     p_size_after    INT     DEFAULT NULL,
-    p_description   TEXT    DEFAULT ''
+    p_description   TEXT    DEFAULT '',
+    p_metadata_before JSONB DEFAULT NULL,
+    p_metadata_after  JSONB DEFAULT NULL
 )
 RETURNS TABLE (
     audit_id    UUID,
@@ -2026,12 +2158,13 @@ SET search_path = public, pg_catalog
 AS $$
     INSERT INTO cerefox_audit_log (
         document_id, version_id, operation, author, author_type,
-        size_before, size_after, description, created_at
+        size_before, size_after, description, metadata_before, metadata_after,
+        created_at
     )
     VALUES (
         p_document_id, p_version_id, p_operation, p_author,
         CASE WHEN p_author_type IN ('user', 'agent') THEN p_author_type ELSE 'user' END,
-        p_size_before, p_size_after, p_description,
+        p_size_before, p_size_after, p_description, p_metadata_before, p_metadata_after,
         -- clock_timestamp(), not the NOW() default: NOW() is the TRANSACTION's
         -- start time, so every audit entry written by one cerefox_edit batch
         -- would share a timestamp and the order of operations inside the batch
@@ -2075,7 +2208,10 @@ RETURNS TABLE (
     size_before     INT,
     size_after      INT,
     description     TEXT,
-    created_at      TIMESTAMPTZ
+    created_at      TIMESTAMPTZ,
+    -- #333 (0.21.0): set on 'update-metadata' entries, NULL otherwise.
+    metadata_before JSONB,
+    metadata_after  JSONB
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -2093,7 +2229,9 @@ AS $$
         a.size_before,
         a.size_after,
         a.description,
-        a.created_at
+        a.created_at,
+        a.metadata_before,
+        a.metadata_after
     FROM cerefox_audit_log a
     LEFT JOIN cerefox_documents d ON d.id = a.document_id
     WHERE (p_document_id IS NULL OR a.document_id = p_document_id)
@@ -2468,7 +2606,9 @@ RETURNS TABLE (
     -- Optimistic-concurrency token (iter-32): pass back as
     -- expected_content_hash on update.
     content_hash    TEXT,
-    content         TEXT
+    content         TEXT,
+    -- #333: pass back as expected_metadata_revision on a metadata write.
+    metadata_revision INT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -2498,6 +2638,7 @@ BEGIN
             (SELECT COUNT(*)::INT FROM cerefox_document_versions dv
              WHERE dv.document_id = d.id) AS version_count,
             d.content_hash,
+            d.metadata_revision,
             CASE WHEN p_include_content THEN
                 (SELECT CASE WHEN MAX(c.content_format) >= 2 THEN STRING_AGG(c.content, '' ORDER BY c.chunk_index) ELSE STRING_AGG(c.content, E'\n\n' ORDER BY c.chunk_index) END
                  FROM cerefox_chunks c
@@ -2538,6 +2679,7 @@ BEGIN
         version_count := v_row.version_count;
         content_hash  := v_row.content_hash;
         content       := v_row.content;
+        metadata_revision := v_row.metadata_revision;
         RETURN NEXT;
     END LOOP;
 END;
@@ -3149,19 +3291,29 @@ $$;
 --
 -- Metadata-only: no re-chunk, no re-embed, no content version snapshot. The
 -- audit trail records it as 'update-metadata', which the CHECK already allows.
+-- #333 (0.21.0): a concurrency token for metadata. `metadata_revision` goes up
+-- by one on every actual change (trigger). Merge writes MAY pass
+-- p_expected_metadata_revision (strict when passed); a replace MUST pass it, or
+-- p_last_write_wins, because a replace deletes keys. A merge of disjoint keys
+-- was already safe, and requiring a token there would force a read before
+-- every tag. The audit entry now records the metadata before and after.
 DROP FUNCTION IF EXISTS cerefox_set_document_metadata(UUID, JSONB, BOOLEAN, TEXT, TEXT);
+DROP FUNCTION IF EXISTS cerefox_set_document_metadata(UUID, JSONB, BOOLEAN, TEXT, TEXT, INT, BOOLEAN);
 CREATE FUNCTION cerefox_set_document_metadata(
     p_document_id   UUID,
     p_metadata      JSONB,
     p_replace       BOOLEAN DEFAULT FALSE,
     p_author        TEXT    DEFAULT 'unknown',
-    p_author_type   TEXT    DEFAULT 'user'
+    p_author_type   TEXT    DEFAULT 'user',
+    p_expected_metadata_revision INT DEFAULT NULL,
+    p_last_write_wins BOOLEAN DEFAULT FALSE
 )
 RETURNS TABLE (
     document_id     UUID,
     metadata        JSONB,
     keys_set        INT,
-    keys_removed    INT
+    keys_removed    INT,
+    metadata_revision INT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -3169,11 +3321,12 @@ SET search_path = public, pg_catalog
 AS $$
 DECLARE
     v_before      JSONB;
+    v_stored      JSONB;
     v_after       JSONB;
-    v_null_keys   TEXT[];
     v_title       TEXT;
     v_removed     INT;
     v_set         INT;
+    v_revision    INT;
 BEGIN
     IF p_metadata IS NULL OR jsonb_typeof(p_metadata) <> 'object' THEN
         RAISE EXCEPTION 'metadata must be a JSON object'
@@ -3181,8 +3334,8 @@ BEGIN
     END IF;
 
     -- Lock the row so a concurrent metadata write cannot interleave between
-    -- the read and the merge.
-    SELECT d.metadata, d.title INTO v_before, v_title
+    -- the read, the token check and the merge.
+    SELECT d.metadata, d.title, d.metadata_revision INTO v_stored, v_title, v_revision
     FROM cerefox_documents d
     WHERE d.id = p_document_id AND d.deleted_at IS NULL
     FOR UPDATE;
@@ -3192,17 +3345,21 @@ BEGIN
             USING ERRCODE = 'P0002';
     END IF;
 
+    PERFORM cerefox_check_metadata_revision(
+        p_document_id, v_revision, p_expected_metadata_revision,
+        p_replace, p_last_write_wins);
+
     -- #212: a legacy row can hold NON-OBJECT metadata (the ingest RPC did not
     -- validate its input until 0.12.2). Merging onto it with || would produce
     -- an ARRAY — Postgres treats both sides as arrays — burying the stored
     -- value one level deeper and leaving the row still corrupt. Only replace
     -- actually repairs such a row, so refuse the merge and say so. jsonb
     -- 'null' is treated like SQL NULL (empty), matching the CLI.
-    IF NOT p_replace AND v_before IS NOT NULL
-       AND jsonb_typeof(v_before) NOT IN ('object', 'null') THEN
+    IF NOT p_replace AND v_stored IS NOT NULL
+       AND jsonb_typeof(v_stored) NOT IN ('object', 'null') THEN
         RAISE EXCEPTION
             'CEREFOX_BAD_METADATA: stored metadata on document % is not an object (%). A merge cannot repair it — retry with replace (CLI: --replace; MCP: replace: true), passing the full intended object.',
-            p_document_id, jsonb_typeof(v_before)
+            p_document_id, jsonb_typeof(v_stored)
             USING ERRCODE = '22023';
     END IF;
 
@@ -3212,35 +3369,27 @@ BEGIN
     -- errors, which would roll back the repair itself (round-5 review,
     -- verified live).
     v_before := CASE
-        WHEN v_before IS NULL OR jsonb_typeof(v_before) <> 'object' THEN '{}'::jsonb
-        ELSE v_before
+        WHEN v_stored IS NULL OR jsonb_typeof(v_stored) <> 'object' THEN '{}'::jsonb
+        ELSE v_stored
     END;
 
-    -- Keys explicitly set to null are removals, never stored values.
-    SELECT COALESCE(array_agg(key), ARRAY[]::TEXT[]) INTO v_null_keys
-    FROM jsonb_each(p_metadata)
-    WHERE value = 'null'::jsonb;
+    v_after := cerefox_metadata_apply(v_before, p_metadata, p_replace);
 
-    IF p_replace THEN
-        v_after := p_metadata - v_null_keys;
-    ELSE
-        v_after := (COALESCE(v_before, '{}'::jsonb) || p_metadata) - v_null_keys;
-    END IF;
-
-    UPDATE cerefox_documents
+    UPDATE cerefox_documents d
     SET metadata = v_after, updated_at = NOW()
-    WHERE id = p_document_id;
+    WHERE d.id = p_document_id
+    RETURNING d.metadata_revision INTO v_revision;
 
     -- Report what actually changed, not what was asked for: a caller that sets
     -- a key to the value it already had should see 0, so "nothing happened" is
     -- distinguishable from "it worked".
     SELECT count(*)::INT INTO v_removed
-    FROM jsonb_object_keys(COALESCE(v_before, '{}'::jsonb)) k
+    FROM jsonb_object_keys(v_before) k
     WHERE NOT v_after ? k;
 
     SELECT count(*)::INT INTO v_set
     FROM jsonb_each(v_after) e
-    WHERE COALESCE(v_before, '{}'::jsonb) -> e.key IS DISTINCT FROM e.value;
+    WHERE v_before -> e.key IS DISTINCT FROM e.value;
 
     PERFORM cerefox_create_audit_entry(
         p_document_id := p_document_id,
@@ -3248,13 +3397,18 @@ BEGIN
         p_author      := p_author,
         p_author_type := p_author_type,
         p_description := format(
-            'Metadata %s on "%s": %s key(s) set, %s removed',
+            'Metadata %s on "%s": %s key(s) set, %s removed%s',
             CASE WHEN p_replace THEN 'replaced' ELSE 'merged' END,
-            v_title, v_set, v_removed
-        )
+            v_title, v_set, v_removed,
+            CASE WHEN p_replace AND p_last_write_wins
+                      AND p_expected_metadata_revision IS NULL
+                 THEN ' [last-write-wins]' ELSE '' END
+        ),
+        p_metadata_before := v_stored,
+        p_metadata_after  := v_after
     );
 
-    RETURN QUERY SELECT p_document_id, v_after, v_set, v_removed;
+    RETURN QUERY SELECT p_document_id, v_after, v_set, v_removed, v_revision;
 END;
 $$;
 
@@ -3267,6 +3421,9 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.21.0: migration 0036 adds metadata_revision (+ trigger) and audit
+    -- metadata_before/after; the metadata RPC and ingest RPC check the token,
+    -- content updates merge metadata instead of replacing it (#333).
     -- 0.20.0: migration 0035 drops the store-wide UNIQUE on content_hash; the
     -- duplicate check moves into cerefox_ingest_document's create path, live
     -- documents only, returning operation 'skipped' (#332).
@@ -3324,7 +3481,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.20.0'::TEXT;
+    SELECT '0.21.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

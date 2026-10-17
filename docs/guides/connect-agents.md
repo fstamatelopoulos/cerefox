@@ -661,7 +661,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 4.3.0
+  version: 4.4.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -793,9 +793,10 @@ paths:
                 metadata:
                   type: object
                   description: >
-                    Arbitrary JSON metadata. On an UPDATE, omitting this keeps
-                    the document's existing metadata (v2.1.0); pass {} to
-                    deliberately clear all tags.
+                    Arbitrary JSON metadata. On an UPDATE it is MERGED into the
+                    existing metadata (v4.4.0): keys you pass are set, a null
+                    value removes that key, keys you omit are kept. Omitting
+                    the field keeps the metadata as it is.
                 update_if_exists:
                   type: boolean
                   default: false
@@ -813,6 +814,13 @@ paths:
                     If the document changed since it was read, the update fails
                     with HTTP 409 — re-read the document, merge your changes,
                     retry with the new hash. Not needed when creating.
+                expected_metadata_revision:
+                  type: integer
+                  description: >
+                    Optional, with metadata on an update (v4.4.0): the
+                    metadata_revision returned by getDocument. If the metadata
+                    changed since, the update fails with HTTP 409
+                    (error "metadata_conflict").
                 last_write_wins:
                   type: boolean
                   default: false
@@ -862,7 +870,9 @@ paths:
             changes, and retry with the new hash — do not overwrite blindly),
             or the target document is soft-deleted (error
             "document_deleted") — restore it first, then retry, or create a
-            new document.
+            new document, or the metadata changed since it was read (error
+            "metadata_conflict") — re-read with getDocument and retry with
+            the new metadata_revision.
         '422':
           description: >
             Unresolved document links (error "unresolved_links") — the content
@@ -922,7 +932,8 @@ paths:
           description: >
             Document content and metadata:
             { document_id, doc_title, full_content, chunk_count, total_chars,
-              is_archived, version_id, content_hash }.
+              is_archived, version_id, content_hash, metadata,
+              metadata_revision }.
             content_hash is the document's CURRENT hash — pass it back as
             expected_content_hash when updating via ingestNote.
         '404':

@@ -53,6 +53,7 @@ import {
   ConcurrencyTokenRequiredError,
   IngestionPipeline,
 } from "../../ingestion/pipeline.ts";
+import { MetadataConcurrencyError } from "../../ingestion/types.ts";
 import type { WebContext } from "../context.ts";
 import { resolveCallerIdentity } from "../identity.ts";
 
@@ -110,6 +111,7 @@ export const EDIT_FIELDS = new Set([
   "project_ids",
   "metadata",
   "expected_content_hash",
+  "expected_metadata_revision",
   "last_write_wins",
   "author",
   "requestor",
@@ -133,6 +135,15 @@ function conflictBody(currentHash: string | null | undefined): Record<string, un
     detail: message,
     ...(currentHash ? { current_hash: currentHash } : {}),
   };
+}
+
+/** The metadata 409 (#333). Distinct `error` so the web UI can say which part
+ *  moved: a tag changed elsewhere is a different fix from a body that did. */
+function metadataConflictBody(): Record<string, unknown> {
+  const message =
+    "This document's metadata changed while you were editing it (another writer changed its tags). " +
+    "Open it again in a new tab, reapply your changes, and save from there.";
+  return { success: false, error: "metadata_conflict", message, detail: message };
 }
 
 export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
@@ -214,6 +225,29 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
     if (expectedHash !== null && !lastWriteWins && currentHash !== null && expectedHash !== currentHash) {
       return c.json(conflictBody(currentHash), 409);
     }
+    // The metadata token (#333). This route edits metadata as a whole form, so
+    // a carried `metadata` REPLACES and must prove a read: an identified
+    // caller sends expected_metadata_revision (as it sends the content hash to
+    // delete). An anonymous caller is the bundled web UI, which sends it too;
+    // one that does not (a tab loaded before the upgrade) gets today's
+    // behavior, the current revision, rather than a refused save.
+    const metadataCarried = body.metadata != null;
+    const sentRevision =
+      typeof body.expected_metadata_revision === "number" &&
+      Number.isInteger(body.expected_metadata_revision)
+        ? body.expected_metadata_revision
+        : null;
+    if (metadataCarried && sentRevision === null && who.identity.named && !lastWriteWins) {
+      const message =
+        "CEREFOX_METADATA_TOKEN_REQUIRED: this route replaces the metadata, so an identified caller " +
+        "must send expected_metadata_revision (the metadata_revision it read) or last_write_wins.";
+      return c.json(
+        { success: false, error: "expected_metadata_revision required", message, detail: message },
+        400,
+      );
+    }
+    const expectedMetadataRevision =
+      sentRevision ?? ((doc.metadata_revision as number | null | undefined) ?? null);
     const proposedHash = content.trim() ? contentHash(content) : null;
     const contentChanged =
       proposedHash !== null && currentHash !== null && proposedHash !== currentHash;
@@ -250,7 +284,10 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
             : undefined,
           // Carried-vs-absent (round 2): {} must CLEAR metadata on a
           // content-changing save too, not silently vanish.
-          metadata: body.metadata != null ? metadata : undefined,
+          metadata: metadataCarried ? metadata : undefined,
+          // Whole-form semantics, as on the metadata-only branch below (#333).
+          replaceMetadata: metadataCarried,
+          expectedMetadataRevision: metadataCarried ? expectedMetadataRevision : null,
           author: who.identity.author,
           authorType: who.identity.authorType,
           // Optimistic concurrency (iter-32): the SPA sends the content_hash
@@ -262,6 +299,11 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       } catch (err) {
         if (err instanceof ConcurrencyConflictError) {
           return c.json(conflictBody(err.currentHash), 409);
+        }
+        if (err instanceof MetadataConcurrencyError) {
+          return err.tokenRequired
+            ? c.json({ success: false, error: "expected_metadata_revision required", message: err.message, detail: err.message }, 400)
+            : c.json(metadataConflictBody(), 409);
         }
         if (err instanceof ConcurrencyTokenRequiredError) {
           return c.json(
@@ -329,7 +371,9 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
         // editor used to be a silent no-op that toasted success).
         // != null: an explicit JSON null is "not provided", NOT carried-{}
         // (which clears every key) — round 2 caught null wiping metadata.
-        metadata: body.metadata != null ? metadata : undefined,
+        metadata: metadataCarried ? metadata : undefined,
+        expectedMetadataRevision,
+        metadataLastWriteWins: lastWriteWins,
         projectIds: Array.isArray(body.project_ids) ? projectIds : undefined,
         author: who.identity.author,
         authorType: who.identity.authorType,
@@ -349,6 +393,11 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       }
       if (cause instanceof FacetValidationError) {
         return c.json({ success: false, error: msg, detail: msg }, 400);
+      }
+      if (cause instanceof MetadataConcurrencyError) {
+        return cause.tokenRequired
+          ? c.json({ success: false, error: "expected_metadata_revision required", message: msg, detail: msg }, 400)
+          : c.json(metadataConflictBody(), 409);
       }
       return c.json({ success: false, error: msg, detail: msg }, 500);
     }

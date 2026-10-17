@@ -44,6 +44,10 @@ export const DocumentDetailResponse = z.object({
    *  on an edit, an ingest by `document_id`, an upload or a delete. Always the
    *  CURRENT hash, even when `version_id` selects an archived version. */
   content_hash: z.string().nullable(),
+  /** The metadata's concurrency token (#333): send it back as
+   *  `expected_metadata_revision` when writing metadata. Null against a server
+   *  older than schema 0.21.0. */
+  metadata_revision: z.number().int().nullable().optional(),
   versions: z.array(DocumentVersionResponse).default([]),
 });
 export type DocumentDetailResponse = z.infer<typeof DocumentDetailResponse>;
@@ -103,8 +107,18 @@ export const EditRequest = IdentityFields.extend({
   metadata: z
     .record(z.string(), z.unknown())
     .optional()
-    .describe("Replaces the metadata. `{}` clears every key; omit to leave it unchanged."),
+    .describe(
+      "Replaces the metadata (this route edits it as a whole form). `{}` clears every key; omit to leave it unchanged. Send expected_metadata_revision with it.",
+    ),
   expected_content_hash: z.string().nullable().optional().describe(HASH_DESCRIPTION),
+  expected_metadata_revision: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe(
+      "The metadata_revision you read (GET /documents/{id}). Required with `metadata` for an identified caller; a stale one is a 409.",
+    ),
   last_write_wins: z.boolean().optional().describe(LWW_DESCRIPTION),
 }).strict();
 export type EditRequest = z.infer<typeof EditRequest>;
@@ -168,7 +182,15 @@ export const IngestRequest = IdentityFields.extend({
     .optional()
     .describe("Project names, created if they do not exist; the full set of memberships."),
   project_name: z.string().optional().describe("One project name, added to the memberships."),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  metadata: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("On an update it MERGES into the stored metadata: a null value removes a key, omitted keys are kept."),
+  expected_metadata_revision: z
+    .number()
+    .int()
+    .optional()
+    .describe("Optional, with metadata on an update: the metadata_revision you read. A stale one is a 409."),
   source: z.string().optional().describe('Origin label. Defaults to "paste".'),
   mode: z.string().optional().describe("Ignored. Sent by the bundled web UI."),
 }).strict();

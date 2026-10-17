@@ -5,7 +5,7 @@
 
 import type { MCPSupabaseClient } from "./types.ts";
 
-import { logUsage, auditDocLabel, AUDIT_OPERATIONS } from "./_utils.ts";
+import { logUsage, auditDocLabel, AUDIT_OPERATIONS, metadataChangeSummary } from "./_utils.ts";
 import type { ToolContext, ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_READ, auditLogIdentity } from "./identity.ts";
 
@@ -54,6 +54,8 @@ async function handler(
     size_after: number | null;
     description: string;
     created_at: string;
+    metadata_before?: Record<string, unknown> | null;
+    metadata_after?: Record<string, unknown> | null;
   }>;
 
   logUsage(supabase, {
@@ -73,7 +75,9 @@ async function handler(
         : e.size_after != null
           ? ` | ${e.size_after} chars`
           : "";
-    return `${utcStamp(e.created_at)} | ${e.operation} | ${e.author} (${e.author_type}) | ${docLabel}${sizeInfo} | ${e.description}`;
+    // #333: the actual metadata change, so the trail can undo a mistake.
+    const change = metadataChangeSummary(e.metadata_before, e.metadata_after);
+    return `${utcStamp(e.created_at)} | ${e.operation} | ${e.author} (${e.author_type}) | ${docLabel}${sizeInfo} | ${e.description}${change ? ` | ${change}` : ""}`;
   });
   return `Audit log (${entries.length} entries, newest first):\n\n${lines.join("\n")}`;
 }

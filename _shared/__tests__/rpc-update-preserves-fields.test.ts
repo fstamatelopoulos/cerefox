@@ -63,7 +63,7 @@ function ingestBody(): string {
  * Document columns a caller may omit on an update. `metadata` and `source_path`
  * carry the v0.11.1 fix; `source` joined them in #191.
  */
-const PRESERVED_ON_UPDATE = ["source", "source_path", "metadata"] as const;
+const PRESERVED_ON_UPDATE = ["source", "source_path"] as const;
 
 /** Parameters whose absence must be distinguishable from a real value. */
 const OMITTABLE_PARAMS = ["p_source", "p_source_path", "p_metadata"] as const;
@@ -82,6 +82,14 @@ describe("cerefox_ingest_document preserves omitted document fields (#191)", () 
       expect(match![1].trim().replace(/,$/, "")).toBe(`COALESCE(p_${column}, ${column})`);
     });
   }
+
+  // #333 (0.21.0): metadata is no longer COALESCEd in the UPDATE list. It is
+  // computed first: kept when p_metadata is NULL, merged (or replaced) through
+  // cerefox_metadata_apply otherwise. Omission must still keep the stored value.
+  test("metadata is kept when omitted and merged when given", () => {
+    expect(body).toMatch(/^\s*metadata\s*=\s*v_meta_after,?$/m);
+    expect(body).toMatch(/IF p_metadata IS NOT NULL THEN[\s\S]*?cerefox_metadata_apply\([\s\S]*?ELSE\s+v_meta_after := v_meta_before;/);
+  });
 
   for (const param of OMITTABLE_PARAMS) {
     test(`${param} declares DEFAULT NULL so omission is detectable`, () => {

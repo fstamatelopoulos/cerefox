@@ -30,6 +30,8 @@ interface SetMetadataResult {
   metadata: Record<string, unknown>;
   keys_set: number;
   keys_removed: number;
+  /** #333: the metadata's token after this write. */
+  metadata_revision?: number;
 }
 
 async function action(
@@ -39,6 +41,8 @@ async function action(
     remove?: string[];
     json?: string;
     replace?: boolean;
+    expectedMetadataRevision?: string;
+    lastWriteWins?: boolean;
     author?: string;
     authorType?: string;
     jsonOut?: boolean;
@@ -108,6 +112,14 @@ async function action(
     );
   }
 
+  let expectedRevision: number | null = null;
+  if (options.expectedMetadataRevision !== undefined) {
+    expectedRevision = Number(options.expectedMetadataRevision);
+    if (!Number.isInteger(expectedRevision)) {
+      throw userError("--expected-metadata-revision must be an integer (the metadata_revision you read).");
+    }
+  }
+
   const client = getClient();
   let rows: SetMetadataResult[] | null;
   try {
@@ -117,10 +129,25 @@ async function action(
       p_replace: Boolean(options.replace),
       p_author: resolveAuthor(options.author),
       p_author_type: options.authorType === "agent" ? "agent" : "user",
+      p_expected_metadata_revision: expectedRevision,
+      p_last_write_wins: Boolean(options.lastWriteWins),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/not found/i.test(msg)) throw notFound(`Document ${documentId} not found (or is deleted).`);
+    if (msg.includes("CEREFOX_METADATA_CONFLICT")) {
+      throw userError(
+        `The metadata of ${documentId} changed since you read it. Re-read it ` +
+          `(cerefox document get ${documentId} --outline), reapply your change, and retry ` +
+          `with the new --expected-metadata-revision.`,
+      );
+    }
+    if (msg.includes("CEREFOX_METADATA_TOKEN_REQUIRED")) {
+      throw userError(
+        `--replace discards every key you do not list, so it needs --expected-metadata-revision ` +
+          `(from cerefox document get ${documentId} --outline) or --last-write-wins.`,
+      );
+    }
     throw systemError(`Could not set metadata: ${msg}`);
   }
 
@@ -150,6 +177,7 @@ async function action(
     );
   }
   println(c.dim(`  Now: ${JSON.stringify(row.metadata ?? {})}`));
+  if (row.metadata_revision != null) println(c.dim(`  metadata_revision: ${row.metadata_revision}`));
   println(c.dim("  Content untouched — no new version, no re-embedding."));
 }
 
@@ -166,8 +194,13 @@ export function registerDocumentSetMetadata(parent: Command): void {
     .option("--json <object>", "A JSON object of keys to set; a null value removes that key.")
     .option(
       "--replace",
-      "Set the metadata to EXACTLY what was given, discarding every key not listed. Default is merge.",
+      "Set the metadata to EXACTLY what was given, discarding every key not listed. Default is merge. Needs --expected-metadata-revision or --last-write-wins.",
     )
+    .option(
+      "--expected-metadata-revision <n>",
+      "The metadata_revision you read (document get). Fails if the metadata changed since. Required with --replace.",
+    )
+    .option("--last-write-wins", "Replace without --expected-metadata-revision (recorded in the audit log).")
     .option("-a, --author <name>", "Caller identity (audit log).")
     .option("--author-type <type>", "'user' or 'agent' (default: user).", "user")
     .option("--json-out", "Emit the result as JSON.")

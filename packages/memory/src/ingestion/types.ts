@@ -40,6 +40,8 @@ export interface IngestResult {
    * it created.
    */
   contentHash: string;
+  /** The document's metadata_revision after this write (#333), when known. */
+  metadataRevision?: number;
 }
 
 /**
@@ -97,6 +99,18 @@ export interface IngestTextOptions {
   /** Explicitly skip the concurrency check (filesystem-sync flows). */
   lastWriteWins?: boolean;
   /**
+   * The metadata's concurrency token (#333): the metadata_revision this edit
+   * was based on. Optional on a merge (strict when given); required with
+   * `replaceMetadata` unless `lastWriteWins`. Ignored on create.
+   */
+  expectedMetadataRevision?: number | null;
+  /**
+   * Replace the whole metadata object instead of merging (#333). For callers
+   * whose metadata has an external source of truth (front matter synced with
+   * `lastWriteWins`). Default false: `metadata` merges, a null value removes a key.
+   */
+  replaceMetadata?: boolean;
+  /**
    * Re-chunk and re-embed even when the content is byte-identical.
    *
    * Normally identical content takes the metadata-only path — re-doing the
@@ -128,6 +142,18 @@ export interface UpdateDocumentOptions {
   expectedContentHash?: string | null;
   /** Explicitly skip the concurrency check (filesystem-sync flows). */
   lastWriteWins?: boolean;
+  /**
+   * The metadata's concurrency token (#333): the metadata_revision this edit
+   * was based on. Optional on a merge (strict when given); required with
+   * `replaceMetadata` unless `lastWriteWins`. Ignored on create.
+   */
+  expectedMetadataRevision?: number | null;
+  /**
+   * Replace the whole metadata object instead of merging (#333). For callers
+   * whose metadata has an external source of truth (front matter synced with
+   * `lastWriteWins`). Default false: `metadata` merges, a null value removes a key.
+   */
+  replaceMetadata?: boolean;
   /**
    * Re-chunk and re-embed even when the content is byte-identical.
    *
@@ -162,6 +188,9 @@ export class ConcurrencyConflictError extends Error {
  * Thrown when a content update supplies neither expectedContentHash nor
  * lastWriteWins. The web routes map this to HTTP 400.
  */
+// #333: defined in _shared so the facet orchestrator can throw it too.
+export { MetadataConcurrencyError } from "../../../../_shared/mcp-tools/_utils.ts";
+
 export class ConcurrencyTokenRequiredError extends Error {
   constructor(message: string) {
     super(message);

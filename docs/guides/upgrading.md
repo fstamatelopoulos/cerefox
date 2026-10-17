@@ -197,6 +197,11 @@ knowing about:
 - **Schema 0.20.0 — content no longer has to be unique.** Updates that match
   another document, or a document in the trash, are accepted; only creating a
   document de-duplicates, against live documents. Needs `cerefox server deploy`.
+- **Schema 0.21.0 — metadata merges on content updates and has its own token.**
+  A content update's `metadata` now merges (`null` removes a key) instead of
+  replacing, so `{}` no longer clears tags; `replace` needs
+  `expected_metadata_revision`. Scripts that relied on replace-on-update should
+  use `document set-metadata --replace`. Needs `cerefox server deploy`.
 - **v1.13.1 — the flag hides, it does not rewrite.** Agent writes are
   recorded `pending_review` whether or not the workflow is shown (v1.13.0
   stored `approved` while off). Redeploy to pick it up.

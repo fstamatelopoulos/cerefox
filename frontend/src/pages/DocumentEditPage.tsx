@@ -143,6 +143,9 @@ export function DocumentEditPage() {
         // The hash the document was loaded with — lets the server detect a
         // concurrent change (another writer saved while we were editing).
         expected_content_hash: doc?.content_hash ?? null,
+        // Same for the metadata (#333): the form holds the WHOLE object, so
+        // saving it over a tag another writer changed meanwhile would revert it.
+        expected_metadata_revision: doc?.metadata_revision ?? null,
       });
     },
     onSuccess: (result) => {
@@ -172,6 +175,14 @@ export function DocumentEditPage() {
         }
         if (err.status === 422) {
           showError("Broken document links", body.message ?? "The content links document id(s) that don't exist — fix or remove them.");
+          return;
+        }
+        if (err.status === 409 && body.error === "metadata_conflict") {
+          showError(
+            "Metadata changed",
+            body.message ??
+              "This document's tags changed while you were editing it. Open it in a new tab, reapply your changes, then save again.",
+          );
           return;
         }
         if (err.status === 409) {

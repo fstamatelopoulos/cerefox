@@ -46,6 +46,8 @@ describe("the /api/v1 write contract, live (#296)", () => {
     });
   const post = (path: string, body: unknown) => api(path, { method: "POST", body: JSON.stringify(body) });
   const hashOf = async (id: string) => ((await (await api(`/documents/${id}`)).json()) as Json).content_hash as string;
+  const revisionOf = async (id: string) =>
+    ((await (await api(`/documents/${id}`)).json()) as Json).metadata_revision as number;
 
   beforeAll(async () => {
     if (!LIVE_OK) return;
@@ -117,11 +119,38 @@ describe("the /api/v1 write contract, live (#296)", () => {
 
   liveTest("edit: a stale hash is refused on the metadata-only branch; the current one succeeds", async () => {
     if (!LIVE_OK || !server || !docId) return;
-    const stale = await post(`/documents/${docId}/edit`, { metadata: { e2e: "1" }, expected_content_hash: STALE });
+    const rev = await revisionOf(docId);
+    const stale = await post(`/documents/${docId}/edit`, {
+      metadata: { e2e: "1" },
+      expected_content_hash: STALE,
+      expected_metadata_revision: rev,
+    });
     expect(stale.status).toBe(409);
-    const ok = await post(`/documents/${docId}/edit`, { metadata: { e2e: "1" }, expected_content_hash: await hashOf(docId) });
+    const ok = await post(`/documents/${docId}/edit`, {
+      metadata: { e2e: "1" },
+      expected_content_hash: await hashOf(docId),
+      expected_metadata_revision: rev,
+    });
     expect(ok.status).toBe(200);
     conforms(S.EditResponse, await ok.json());
+  }, LIVE_TEST_BUDGET_MS);
+
+  // #333: this route replaces the metadata (whole-form), so an identified
+  // caller must prove its read with expected_metadata_revision.
+  liveTest("edit: metadata needs expected_metadata_revision; a stale one is a metadata_conflict", async () => {
+    if (!LIVE_OK || !server || !docId) return;
+    const missing = await post(`/documents/${docId}/edit`, { metadata: { e2e: "2" } });
+    expect(missing.status).toBe(400);
+    const rev = await revisionOf(docId);
+    const stale = await post(`/documents/${docId}/edit`, {
+      metadata: { e2e: "2" },
+      expected_metadata_revision: rev - 1,
+    });
+    expect(stale.status).toBe(409);
+    expect(((await stale.json()) as Json).error).toBe("metadata_conflict");
+    const ok = await post(`/documents/${docId}/edit`, { metadata: { e2e: "2" }, expected_metadata_revision: rev });
+    expect(ok.status).toBe(200);
+    expect(await revisionOf(docId)).toBe(rev + 1);
   }, LIVE_TEST_BUDGET_MS);
 
   liveTest("archive: a version that is not this document's is a 404", async () => {

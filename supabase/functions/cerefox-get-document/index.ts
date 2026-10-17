@@ -19,7 +19,8 @@ import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
  *   { document_id: string, version_id?: string | null }
  *
  * Response (200):
- *   { document_id, doc_title, full_content, chunk_count, total_chars, is_archived, version_id, content_hash }
+ *   { document_id, doc_title, full_content, chunk_count, total_chars, is_archived, version_id, content_hash,
+ *     metadata, metadata_revision }
  * Response (404):
  *   { error: "Document not found" }
  * Response (400):
@@ -108,6 +109,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       chunk_count?: number;
       total_chars?: number;
       content_hash?: string;
+      doc_metadata?: Record<string, unknown> | null;
+      metadata_revision?: number | null;
     } | undefined;
 
     if (!row) {
@@ -138,6 +141,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // Optimistic-concurrency token (iter-32): always the CURRENT hash —
         // pass back as expected_content_hash when updating via ingest.
         content_hash: row.content_hash ?? null,
+        // #333: the metadata and its own token — pass metadata_revision back as
+        // expected_metadata_revision when changing metadata via ingest.
+        metadata: row.doc_metadata ?? {},
+        metadata_revision: version_id === null ? (row.metadata_revision ?? null) : null,
       }),
       { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
     );

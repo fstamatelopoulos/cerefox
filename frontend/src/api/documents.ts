@@ -31,6 +31,9 @@ export async function editDocument(
     /** Optimistic-concurrency token: the content_hash the document was
      * loaded with. A concurrent change → HTTP 409 (iter-32). */
     expected_content_hash?: string | null;
+    /** The metadata_revision the document was loaded with: this form replaces
+     * the metadata, so a tag changed elsewhere meanwhile → HTTP 409 (#333). */
+    expected_metadata_revision?: number | null;
   },
 ): Promise<EditResponse> {
   return apiFetch<EditResponse>(`/documents/${documentId}/edit`, {

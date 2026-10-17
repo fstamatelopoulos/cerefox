@@ -51,6 +51,7 @@ interface IngestOptions {
   source?: string;
   updateIfExists?: boolean;
   expectedContentHash?: string;
+  expectedMetadataRevision?: string;
   lastWriteWins?: boolean;
   documentId?: string;
   author?: string;
@@ -90,6 +91,16 @@ async function readContent(
   }
   const titleFromPath = basename(path, extname(path));
   return { content, titleFromPath };
+}
+
+/** `--expected-metadata-revision` as an integer, or null when absent (#333). */
+function parseRevision(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const n = Number(raw);
+  if (!Number.isInteger(n)) {
+    throw userError("--expected-metadata-revision must be an integer (the metadata_revision you read).");
+  }
+  return n;
 }
 
 async function action(
@@ -200,6 +211,7 @@ async function action(
             author,
             authorType: authorType as "user" | "agent",
             expectedContentHash: options.expectedContentHash ?? null,
+            expectedMetadataRevision: parseRevision(options.expectedMetadataRevision),
             lastWriteWins: Boolean(options.lastWriteWins),
           })
         : await pipeline.ingestText({
@@ -215,6 +227,7 @@ async function action(
             author,
             authorType: authorType as "user" | "agent",
             expectedContentHash: options.expectedContentHash ?? null,
+            expectedMetadataRevision: parseRevision(options.expectedMetadataRevision),
             lastWriteWins: Boolean(options.lastWriteWins),
           });
 
@@ -289,6 +302,10 @@ export function registerIngest(program: Command): void {
     .option(
       "-i, --document-id <uuid>",
       "Update a specific document by UUID (overrides --update-if-exists).",
+    )
+    .option(
+      "--expected-metadata-revision <n>",
+      "With --metadata on an update: the metadata_revision you read. Fails if the metadata changed since (metadata merges; a null value removes a key).",
     )
     .option(
       "--expected-content-hash <sha256>",

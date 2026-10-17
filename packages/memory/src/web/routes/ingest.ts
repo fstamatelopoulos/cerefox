@@ -28,6 +28,7 @@ import { IngestionPipeline } from "../../ingestion/pipeline.ts";
 import {
   ConcurrencyConflictError,
   ConcurrencyTokenRequiredError,
+  MetadataConcurrencyError,
 } from "../../ingestion/types.ts";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
@@ -89,6 +90,9 @@ function ingestFailure(err: unknown): [IngestResponse, 400 | 404 | 409 | 422 | 5
   if (err instanceof ConcurrencyTokenRequiredError) {
     return [notReady(err.message), 400];
   }
+  if (err instanceof MetadataConcurrencyError) {
+    return [notReady(err.message), err.tokenRequired ? 400 : 409];
+  }
   const msg = err instanceof Error ? err.message : String(err);
   // Caller-state failures are not server faults (#296). Classified by the
   // pipeline's own wording, the same way `documents-write.ts` classifies the
@@ -109,6 +113,7 @@ export const INGEST_FIELDS = new Set([
   "content",
   "document_id",
   "expected_content_hash",
+  "expected_metadata_revision",
   "last_write_wins",
   "update_existing",
   "update_if_exists",
@@ -136,6 +141,9 @@ function ingestShapeError(body: Record<string, unknown>): string | null {
   }
   for (const k of ["last_write_wins", "update_existing", "update_if_exists"]) {
     if (body[k] != null && typeof body[k] !== "boolean") return `${k} must be a boolean.`;
+  }
+  if (body.expected_metadata_revision != null && !Number.isInteger(body.expected_metadata_revision)) {
+    return "expected_metadata_revision must be an integer.";
   }
   return null;
 }
@@ -209,6 +217,7 @@ export function registerIngestRoutes(app: Hono, ctx: WebContext): void {
             ? body.expected_content_hash.trim()
             : null,
         lastWriteWins: body.last_write_wins === true,
+        expectedMetadataRevision: (body.expected_metadata_revision as number | undefined) ?? null,
       });
       const skipped = result.action === "skipped";
       const resp: IngestResponse = {

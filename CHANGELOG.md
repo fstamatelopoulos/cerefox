@@ -9,6 +9,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Changed
+
+- **Metadata has its own concurrency token, and a history (schema 0.21.0).**
+  Optimistic concurrency used to cover a document's body only, so metadata
+  writes could silently overwrite each other: two writers setting the same key,
+  a `replace`, or a content update carrying `metadata` (which replaced the whole
+  object even though its body token was valid). Now:
+  - Every document has a `metadata_revision`, shown next to `content_hash` on
+    every read (get, search, metadata search, `/api/v1`, the CLI). It goes up by
+    one whenever the metadata changes.
+  - Writes may pass `expected_metadata_revision` and fail with a metadata
+    conflict if the tags changed since. It is optional on a merge and
+    **required with `replace`** (or `last_write_wins`). New flags:
+    `document set-metadata --expected-metadata-revision / --last-write-wins`,
+    `document ingest --expected-metadata-revision`.
+  - **A content update that passes `metadata` now merges it** instead of
+    replacing it: keys you pass are set, a `null` value removes a key, keys you
+    leave out are kept. **`metadata: {}` no longer clears everything**; use
+    `set-metadata --replace` for that. A caller that resends the full object
+    gets the same result as before.
+  - The web UI's edit form sends the revision it loaded, so a tag another agent
+    changed while you were editing is reported as a conflict instead of being
+    silently reverted. An identified `/api/v1` caller editing metadata through
+    `POST /documents/{id}/edit` must send `expected_metadata_revision`.
+  - Every metadata change is recorded in the audit log with the values before
+    and after, shown by `cerefox audit list`, `cerefox_get_audit_log` and the web
+    Audit Log, so a mistaken change can be undone.
+  Run `cerefox server deploy` after upgrading. (#333)
+
 ### Fixed
 
 - **An update is no longer refused because its content matches another
