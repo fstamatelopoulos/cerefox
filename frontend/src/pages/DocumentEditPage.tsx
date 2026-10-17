@@ -82,6 +82,14 @@ export function DocumentEditPage() {
     [],
   );
   const [initialized, setInitialized] = useState(false);
+  // The concurrency tokens of the version the FORM was filled from, captured
+  // once with it (#333 review). Reading them off the live query instead sent a
+  // refetched (fresh) token with stale form values after a window-focus
+  // refetch, which defeated both checks.
+  const [baseTokens, setBaseTokens] = useState<{
+    contentHash: string | null;
+    metadataRevision: number | null;
+  }>({ contentHash: null, metadataRevision: null });
   // Editing is a mode, so the tab says so; the leading dot marks unsaved work
   // the way an editor does. Every editable field counts: a metadata-only or
   // membership-only change is still unsaved work, and the dot is the page's
@@ -114,6 +122,10 @@ export function DocumentEditPage() {
         value: displayMetaValue(value),
       })),
     );
+    setBaseTokens({
+      contentHash: doc.content_hash ?? null,
+      metadataRevision: doc.metadata_revision ?? null,
+    });
     setInitialized(true);
   }
 
@@ -142,10 +154,10 @@ export function DocumentEditPage() {
         metadata,
         // The hash the document was loaded with — lets the server detect a
         // concurrent change (another writer saved while we were editing).
-        expected_content_hash: doc?.content_hash ?? null,
+        expected_content_hash: baseTokens.contentHash,
         // Same for the metadata (#333): the form holds the WHOLE object, so
         // saving it over a tag another writer changed meanwhile would revert it.
-        expected_metadata_revision: doc?.metadata_revision ?? null,
+        expected_metadata_revision: baseTokens.metadataRevision,
       });
     },
     onSuccess: (result) => {

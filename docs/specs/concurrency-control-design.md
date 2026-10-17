@@ -207,6 +207,12 @@ entries recorded key counts, not values.
   the diff ("set status=done; removed stale").
 - **Reads** return `metadata_revision` next to `content_hash`: get document,
   search, metadata search, `/api/v1/documents/{id}`, the CLI.
+- **Known limits.** History is written by the RPCs, so a pre-1.19.0 client that
+  updates the metadata column directly bumps the revision (the trigger) but
+  leaves no before/after entry; moving history into the trigger would lose the
+  author. An INSERT may set its own revision (backup restore relies on carrying
+  rows over); only UPDATEs are pinned. An old client's token-less `replace` is
+  refused by design: the alternative is an unguarded destructive path.
 
 ## Metadata writes take no token, deliberately (#204, v1.6.0)
 

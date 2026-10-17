@@ -62,7 +62,9 @@ export function metadataChangeSummary(
   const set = Object.keys(a)
     .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]))
     .map((k) => `${k}=${show(a[k])}`);
-  const removed = Object.keys(b).filter((k) => !(k in a));
+  // Own keys only: `in` also finds inherited ones, so removing a key named
+  // like an Object.prototype member ("constructor") went unreported.
+  const removed = Object.keys(b).filter((k) => !Object.hasOwn(a, k));
   if (set.length === 0 && removed.length === 0) return null;
   const parts: string[] = [];
   if (set.length) parts.push(`set ${set.join(", ")}`);

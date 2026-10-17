@@ -50,6 +50,7 @@ interface DocResult {
   version_count: number;
   doc_project_ids: string[] | null;
   content_hash: string | null;
+  metadata_revision?: number | null;
   below_confidence?: boolean;
 }
 
@@ -287,7 +288,10 @@ async function action(
       const updated = doc.doc_updated_at ? doc.doc_updated_at.slice(0, 10) : null;
       // content_hash = the concurrency token for `document ingest
       // --expected-content-hash` (iter-32).
-      const hash = doc.content_hash ? `hash: ${doc.content_hash}` : null;
+      const hash = doc.content_hash
+        ? `hash: ${doc.content_hash}` +
+          (doc.metadata_revision != null ? ` · metadata_revision: ${doc.metadata_revision}` : "")
+        : null;
       if (bestMatch || updated || hash) {
         const bits = [
           bestMatch ? `best match: ${bestMatch}` : null,

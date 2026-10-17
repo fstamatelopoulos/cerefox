@@ -16,9 +16,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   writes could silently overwrite each other: two writers setting the same key,
   a `replace`, or a content update carrying `metadata` (which replaced the whole
   object even though its body token was valid). Now:
-  - Every document has a `metadata_revision`, shown next to `content_hash` on
-    every read (get, search, metadata search, `/api/v1`, the CLI). It goes up by
-    one whenever the metadata changes.
+  - Every document has a `metadata_revision`, shown wherever `content_hash` is
+    (get, search and metadata search over MCP, `GET /api/v1/documents/{id}`,
+    `document get` and `search` in the CLI). It goes up by one whenever the
+    metadata changes.
   - Writes may pass `expected_metadata_revision` and fail with a metadata
     conflict if the tags changed since. It is optional on a merge and
     **required with `replace`** (or `last_write_wins`). New flags:
@@ -33,9 +34,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
     changed while you were editing is reported as a conflict instead of being
     silently reverted. An identified `/api/v1` caller editing metadata through
     `POST /documents/{id}/edit` must send `expected_metadata_revision`.
-  - Every metadata change is recorded in the audit log with the values before
-    and after, shown by `cerefox audit list`, `cerefox_get_audit_log` and the web
-    Audit Log, so a mistaken change can be undone.
+  - Every metadata change made through Cerefox is recorded in the audit log with
+    the values before and after, shown by `cerefox audit list`,
+    `cerefox_get_audit_log` and the web Audit Log, so a mistaken change can be
+    undone. (A client older than 1.19.0 that writes the metadata column directly
+    still bumps the revision but is not recorded.)
+  - **Restart your MCP clients and the web server after upgrading.** A client
+    older than 1.19.0 that asks for a metadata `replace` gets "requires
+    expected_metadata_revision" from the upgraded server, because it cannot send
+    the token. Merges are unaffected.
   Run `cerefox server deploy` after upgrading. (#333)
 
 ### Fixed

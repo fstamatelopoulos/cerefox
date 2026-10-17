@@ -438,7 +438,9 @@ Deno.serve(async (req: Request) => {
       p_source_label: source,
       p_expected_content_hash: expected_content_hash,
       p_last_write_wins: last_write_wins,
-      p_expected_metadata_revision: expected_metadata_revision,
+      // Only when set (#333 review): a null would name a signature a pre-0.21.0
+      // schema lacks, failing the whole update.
+      ...(expected_metadata_revision != null ? { p_expected_metadata_revision: expected_metadata_revision } : {}),
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
     });
 
@@ -557,7 +559,9 @@ Deno.serve(async (req: Request) => {
         p_source_label: source,
         p_expected_content_hash: expected_content_hash,
         p_last_write_wins: last_write_wins,
-        p_expected_metadata_revision: expected_metadata_revision,
+        // Only when set (#333 review): a null would name a signature a pre-0.21.0
+      // schema lacks, failing the whole update.
+      ...(expected_metadata_revision != null ? { p_expected_metadata_revision: expected_metadata_revision } : {}),
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
       });
 

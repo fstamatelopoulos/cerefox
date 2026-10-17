@@ -201,7 +201,9 @@ knowing about:
   A content update's `metadata` now merges (`null` removes a key) instead of
   replacing, so `{}` no longer clears tags; `replace` needs
   `expected_metadata_revision`. Scripts that relied on replace-on-update should
-  use `document set-metadata --replace`. Needs `cerefox server deploy`.
+  use `document set-metadata --replace`. Needs `cerefox server deploy`; then
+  restart MCP clients and `cerefox web`, since an older client's metadata
+  `replace` is refused for lack of the token.
 - **v1.13.1 — the flag hides, it does not rewrite.** Agent writes are
   recorded `pending_review` whether or not the workflow is shown (v1.13.0
   stored `approved` while off). Redeploy to pick it up.

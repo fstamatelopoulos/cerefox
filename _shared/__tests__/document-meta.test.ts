@@ -22,6 +22,7 @@ import {
   updateDocumentFacets,
 } from "../mcp-tools/_document-meta.ts";
 import type { MCPSupabaseClient } from "../mcp-tools/types.ts";
+import { MetadataConcurrencyError } from "../mcp-tools/_utils.ts";
 
 const DOC = "11111111-2222-3333-4444-555555555555";
 const P1 = "aaaaaaaa-1111-2222-3333-444444444444";
@@ -35,6 +36,8 @@ interface Captured {
 function mockClient(fix: {
   docLive?: boolean;
   metadata?: Record<string, unknown>;
+  /** #333: the stored metadata_revision (absent = a pre-0.21.0 server). */
+  metadataRevision?: number;
   memberships?: string[];
   projects?: Array<{ id: string; name: string }>;
   renamed?: boolean;
@@ -45,7 +48,8 @@ function mockClient(fix: {
     if (table === "cerefox_documents") {
       if ((fix.docLive ?? true) === false) return [];
       const row: Record<string, unknown> = { id: DOC };
-      if (wanted.includes("metadata")) row.metadata = fix.metadata ?? {};
+      if (wanted === "*" || wanted.includes("metadata")) row.metadata = fix.metadata ?? {};
+      if (wanted === "*" && fix.metadataRevision !== undefined) row.metadata_revision = fix.metadataRevision;
       return [row];
     }
     if (table === "cerefox_document_projects") {
@@ -241,6 +245,35 @@ describe("updateDocumentFacets", () => {
     );
     expect(r.metadataChanged).toBe(false);
     expect(captured.rpcs).toEqual([]);
+  });
+
+  // #333 review: a supplied revision is checked even when the metadata would
+  // not change, so a stale form cannot slip its other facets through.
+  test("a stale expected_metadata_revision is refused even when nothing would change", async () => {
+    const captured: Captured = { rpcs: [], tableWrites: [] };
+    let caught: unknown;
+    try {
+      await updateDocumentFacets(
+        mockClient({ metadata: { a: "1" }, metadataRevision: 5, captured }),
+        { documentId: DOC, metadata: { a: "1" }, expectedMetadataRevision: 4, title: "new", accessPath: "webapp", ...WHO },
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(FacetUpdateError);
+    expect((caught as FacetUpdateError).cause).toBeInstanceOf(MetadataConcurrencyError);
+    expect(captured.rpcs).toEqual([]);
+  });
+
+  test("the current revision, or a pre-0.21.0 server, passes the no-op through", async () => {
+    for (const fix of [{ metadataRevision: 5 }, {}]) {
+      const captured: Captured = { rpcs: [], tableWrites: [] };
+      const r = await updateDocumentFacets(
+        mockClient({ metadata: { a: "1" }, ...fix, captured }),
+        { documentId: DOC, metadata: { a: "1" }, expectedMetadataRevision: 5, accessPath: "webapp", ...WHO },
+      );
+      expect(r.metadataChanged).toBe(false);
+    }
   });
 
   test("mid-way failure names the facets that already committed", async () => {

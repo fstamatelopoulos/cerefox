@@ -494,7 +494,8 @@ export class IngestionPipeline {
       // which merges (or replaces) under a row lock, checks the metadata token
       // and records before/after. Writing the column here used to replace the
       // whole object with no token at all.
-      await this.db.updateDocumentRow(documentId, { title });
+      // Metadata FIRST (#333 review): its token check is the one that can
+      // refuse this save, and a refused save must not have changed the title.
       const metadataGiven = metadata !== undefined && metadata !== null;
       let metadataRevision: number | undefined;
       if (metadataGiven) {
@@ -509,6 +510,7 @@ export class IngestionPipeline {
         });
         metadataRevision = r.metadata_revision;
       }
+      await this.db.updateDocumentRow(documentId, { title });
 
       // Title-change re-embed (contextual enrichment).
       if (titleChanged) {

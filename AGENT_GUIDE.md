@@ -309,7 +309,7 @@ Change a document's metadata (tags) **without resending its content** (v1.6.0, #
 | `document_id` | Yes | UUID of the document to tag. |
 | `metadata` | Yes | Keys to set. Values are JSON strings by convention (a `metadata_filter` matches JSONB as strings). A `null` value REMOVES that key. Keys you do not mention are left alone unless `replace` is true. |
 | `replace` | No | Set the metadata to EXACTLY this object, discarding any key not listed. Rare. Requires `expected_metadata_revision` (or `last_write_wins`). |
-| `expected_metadata_revision` | No | The `metadata_revision` you read (every read shows it next to `content_hash`). Optional on a merge: pass it when your change depends on the current values (a status transition, a counter), and the write fails if anyone changed the tags since. Required with `replace`. |
+| `expected_metadata_revision` | No | The `metadata_revision` you read (shown next to `content_hash` by `cerefox_get_document`, `cerefox_search` and `cerefox_metadata_search`). Optional on a merge: pass it when your change depends on the current values (a status transition, a counter), and the write fails if anyone changed the tags since. Required with `replace`. |
 | `last_write_wins` | No | Replace without a revision, regardless of concurrent changes. Recorded in the audit log. |
 | `author` | No | Your agent name (audit + usage log). |
 

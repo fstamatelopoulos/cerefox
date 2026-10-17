@@ -325,7 +325,7 @@ export async function updateDocumentFacets(
     await step(async () => {
       const { data: doc, error } = await supabase
         .from("cerefox_documents")
-        .select("metadata")
+        .select("*")
         .eq("id", opts.documentId)
         .is("deleted_at", null)
         .limit(1);
@@ -334,6 +334,22 @@ export async function updateDocumentFacets(
         throw new FacetNotFoundError(`Document not found (or in the trash): ${opts.documentId}`);
       }
       const stored = (doc[0].metadata ?? {}) as Record<string, unknown>;
+      // Strict when given (#333 review), even when nothing would change: a
+      // stale form must not slip through just because its tags happen to
+      // match, and go on to apply its other facets. `*` rather than naming
+      // the column keeps a pre-0.21.0 server (no column, no check) working.
+      const storedRevision = (doc[0] as { metadata_revision?: number | null }).metadata_revision;
+      if (
+        opts.expectedMetadataRevision != null &&
+        storedRevision != null &&
+        storedRevision !== opts.expectedMetadataRevision &&
+        !opts.metadataLastWriteWins
+      ) {
+        throw new MetadataConcurrencyError(
+          `CEREFOX_METADATA_CONFLICT: the metadata of document ${opts.documentId} changed since it was read ` +
+            `(expected metadata_revision ${opts.expectedMetadataRevision}, current ${storedRevision}).`,
+        );
+      }
       const wanted = normalizeMetadata(opts.metadata!);
       if (stableStringify(stored) !== stableStringify(wanted)) {
         // Replace mode: the save surface edits the whole object (an empty
