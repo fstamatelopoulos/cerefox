@@ -205,7 +205,9 @@ entries recorded key counts, not values.
   breaking change, to be announced ahead. On the metadata-only branch the
   audit entry is marked `[last-write-wins]`; on a content-changing edit the
   ingest RPC's `last_write_wins` would also waive the content check, so there
-  the missing token stands in as the revision the route just read.
+  the missing token stands in as the revision the route just read. So that
+  branch is not pure last-write-wins: a metadata change landing between the
+  route's read and the RPC (during embedding) is still a 409.
 - **History:** every `update-metadata` audit entry records `metadata_before` and
   `metadata_after`, including the one a content update writes when it changed
   metadata. The MCP audit tool, `cerefox audit list` and the web Audit Log show

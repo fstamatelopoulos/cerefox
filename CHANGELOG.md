@@ -18,7 +18,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   it as breaking. Such an edit is accepted again, as a last-write-wins replace
   (what it was before 1.19.0), and the response carries a `warnings` entry
   asking for the token. A metadata-only edit is also marked
-  `[last-write-wins]` in the audit log. A future release will require the
+  `[last-write-wins]` in the audit log. (An edit that also changes the content
+  is checked against the metadata as it stood when the request arrived, so a
+  tag change landing while it embeds is still a conflict rather than
+  overwritten.) A future release will require the
   token again, announced in advance as a breaking change. No server deploy is
   needed.
 
