@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.19.1] -- 2026-10-17
+
 ### Fixed
 
 - **API clients editing metadata without a token work again.** 1.19.0 made
@@ -35,8 +41,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   merges `metadata`** instead of replacing it. A client that relied on the
   replace to remove keys must send `null` for each key to remove (or use
   `cerefox document set-metadata --replace`).
-
-Open roadmap.
 
 ---
 
