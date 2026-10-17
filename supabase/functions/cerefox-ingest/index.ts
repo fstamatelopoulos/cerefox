@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { isVersionRequest, versionResponse } from "../../../_shared/ef-meta/index.ts";
 import { efAuthGate } from "../../../_shared/ef-auth/index.ts";
 import { callerIdentity } from "../../../_shared/mcp-tools/identity.ts";
+import { duplicateContentDocumentId, legacyContentUniqueError } from "../../../_shared/mcp-tools/_utils.ts";
 import { capEmbeddingInput } from "../../../_shared/embeddings/index.ts";
 import {
   ensureDocumentInProject,
@@ -677,7 +678,30 @@ Deno.serve(async (req: Request) => {
     p_content_format: CONTENT_FORMAT_BLIND_STITCH,
   });
 
+  // The RPC's duplicate check caught an identical create that landed after
+  // the pre-check above. Nothing was written; answer as the pre-check does.
+  const duplicateId = duplicateContentDocumentId(ingestErr?.message ?? "");
+  if (duplicateId) {
+    const { data: existing } = await supabase
+      .from("cerefox_documents")
+      .select("title")
+      .eq("id", duplicateId)
+      .maybeSingle();
+    return new Response(
+      JSON.stringify({
+        document_id: duplicateId,
+        title: existing?.title ?? title.trim(),
+        skipped: true,
+        message: "Document already exists (content hash match)",
+      }),
+      { headers },
+    );
+  }
   if (ingestErr || !ingestResult?.length) {
+    // Functions deployed ahead of the schema still meet the pre-0.20.0
+    // store-wide content constraint.
+    const legacy = legacyContentUniqueError(ingestErr?.message ?? "");
+    if (legacy) return new Response(JSON.stringify({ error: legacy.message }), { status: 409, headers });
     return new Response(
       JSON.stringify({ error: `Ingest RPC failed: ${ingestErr?.message ?? "no data returned"}` }),
       { status: 500, headers },
@@ -685,20 +709,6 @@ Deno.serve(async (req: Request) => {
   }
 
   const documentId = ingestResult[0].document_id;
-
-  // The RPC's duplicate check caught an identical create that landed after
-  // the pre-check above. Nothing was written; answer as the pre-check does.
-  if (ingestResult[0].operation === "skipped") {
-    return new Response(
-      JSON.stringify({
-        document_id: documentId,
-        title: title.trim(),
-        skipped: true,
-        message: "Document already exists (content hash match)",
-      }),
-      { headers },
-    );
-  }
 
   // Project assignment on CREATE:
   // - project_names (list) → assign all

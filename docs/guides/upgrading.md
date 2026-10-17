@@ -197,6 +197,10 @@ knowing about:
 - **Schema 0.20.0 — content no longer has to be unique.** Updates that match
   another document, or a document in the trash, are accepted; only creating a
   document de-duplicates, against live documents. Needs `cerefox server deploy`.
+  Until the server is deployed, a 1.19.0 client writing content another
+  document (trashed ones included) already has gets an error telling it to
+  deploy. A client older than 1.19.0 against the new server is safe: when two
+  identical creates race, the loser gets an error, as it did before.
 - **Schema 0.21.0 — metadata merges on content updates and has its own token.**
   A content update's `metadata` now merges (`null` removes a key) instead of
   replacing, so `{}` no longer clears tags; `replace` needs

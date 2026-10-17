@@ -74,7 +74,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   see in search. Now only **creating** a document checks for duplicates, and
   only against live documents: a match returns the existing document instead of
   a copy, as before. Updates and restores never check. `backup restore` follows
-  the same rule. Run `cerefox server deploy` after upgrading. (#332)
+  the same rule. The web Ingest page now says when a submission was skipped
+  for that reason, with a link to the existing document; before, it showed
+  nothing. A client older than the server, or newer, gets a clear error
+  instead of a wrong result in the cases the two disagree about. Run
+  `cerefox server deploy` after upgrading (schema 0.21.1). (#332)
 
 ---
 

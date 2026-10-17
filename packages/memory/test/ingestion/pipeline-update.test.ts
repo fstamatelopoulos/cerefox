@@ -54,6 +54,8 @@ describe("IngestionPipeline.updateDocument (live)", () => {
   let uniquenessDropped = false;
   // #333: content updates merge metadata from schema 0.21.0.
   let metadataMerges = false;
+  // #334 review: a lost duplicate race raises from schema 0.21.1.
+  let duplicateRaises = false;
   const created: string[] = [];
 
   beforeAll(async () => {
@@ -67,8 +69,9 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     // server, leave the suite skipped instead of failing.
     try {
       const { data: ver } = await client.rpc("cerefox_schema_version");
-      const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
+      const [maj = 0, min = 0, patch = 0] = String(ver ?? "0.0.0").split(".").map(Number);
       uniquenessDropped = maj > 0 || min >= 20;
+      duplicateRaises = maj > 0 || min > 21 || (min === 21 && patch >= 1);
       metadataMerges = maj > 0 || min >= 21;
       if (maj === 0 && min < 6) {
         schemaTooOld = true;
@@ -354,8 +357,8 @@ describe("IngestionPipeline.updateDocument (live)", () => {
     expect(fresh.documentId).not.toBe(trashed.documentId);
   }, 120_000);
 
-  liveTest("RPC create with a live document's hash returns it as 'skipped' (#332)", async () => {
-    if (!pipeline || !supabase || !uniquenessDropped) return;
+  liveTest("RPC create with a live document's hash raises CEREFOX_DUPLICATE_CONTENT (#332)", async () => {
+    if (!pipeline || !supabase || !duplicateRaises) return;
     const text = "# RPC dedup\n\nAuthoritative create-time check, run " + RUN_TAG + ".\n";
     const first = await pipeline.ingestText({
       text,
@@ -385,10 +388,12 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       p_author: "pipeline-update-test",
       p_author_type: "user",
     });
-    expect(error).toBeNull();
-    const row = (Array.isArray(data) ? data[0] : data) as { document_id: string; operation: string };
-    expect(row.operation).toBe("skipped");
-    expect(row.document_id).toBe(first.documentId);
+    // Raised, not returned (0.21.1): a 1.18 client never read `operation`
+    // and would have treated a returned winner as its own create.
+    expect(data).toBeNull();
+    expect(error?.code).toBe("23505");
+    expect(error?.message).toContain("CEREFOX_DUPLICATE_CONTENT");
+    expect(error?.message).toContain(first.documentId);
 
     const { data: copies } = await supabase
       .from("cerefox_documents")
@@ -396,6 +401,38 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       .eq("title", `${TITLE_PREFIX} rpc-dedup-copy-${RUN_TAG}`);
     expect(copies ?? []).toEqual([]);
   }, 60_000);
+
+  liveTest("pipeline losing the duplicate race reports a skip and leaves the winner's projects alone", async () => {
+    if (!pipeline || !supabase || !duplicateRaises) return;
+    const text = "# Race loser\n\nPipeline race check, run " + RUN_TAG + ".\n";
+    const winnerProject = `${TITLE_PREFIX} race-winner-${RUN_TAG}`;
+    const loserProject = `${TITLE_PREFIX} race-loser-${RUN_TAG}`;
+    const first = await pipeline.ingestText({
+      text,
+      title: `${TITLE_PREFIX} race-${RUN_TAG}`,
+      author: "pipeline-update-test",
+      projectNames: [winnerProject],
+    });
+    created.push(first.documentId);
+
+    // Blind the pre-check, as a create that started before the winner landed.
+    const racer = new IngestionPipeline({ supabase, openAiApiKey: OPENAI_API_KEY });
+    (racer as unknown as { db: { getDocumentByHash: () => Promise<null> } }).db.getDocumentByHash =
+      async () => null;
+    try {
+      const second = await racer.ingestText({
+        text,
+        title: `${TITLE_PREFIX} race-copy-${RUN_TAG}`,
+        author: "pipeline-update-test",
+        projectNames: [loserProject],
+      });
+      expect(second.action).toBe("skipped");
+      expect(second.documentId).toBe(first.documentId);
+      expect(second.projectIds).toEqual(first.projectIds);
+    } finally {
+      await supabase.from("cerefox_projects").delete().in("name", [winnerProject, loserProject]);
+    }
+  }, 120_000);
 
   liveTest("RPC: p_metadata NULL on update keeps existing metadata (v0.11.1)", async () => {
     if (!pipeline || !supabase) return;

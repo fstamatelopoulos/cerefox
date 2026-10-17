@@ -31,7 +31,13 @@ import { resolveOrCreateProject } from "../../../../_shared/mcp-tools/_projects.
 import type { MCPSupabaseClient } from "../../../../_shared/mcp-tools/types.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
-import { extractConflictHashes, metadataTokenParams } from "../../../../_shared/mcp-tools/_utils.ts";
+import {
+  DuplicateContentError,
+  duplicateContentDocumentId,
+  extractConflictHashes,
+  legacyContentUniqueError,
+  metadataTokenParams,
+} from "../../../../_shared/mcp-tools/_utils.ts";
 
 import {
   ConcurrencyConflictError,
@@ -309,7 +315,9 @@ export class IngestionDbBridge {
         throw new ConcurrencyTokenRequiredError(msg);
       }
       if (msg.includes("CEREFOX_METADATA_")) throw new MetadataConcurrencyError(msg);
-      throw new Error(msg);
+      const duplicateId = duplicateContentDocumentId(msg);
+      if (duplicateId) throw new DuplicateContentError(duplicateId, msg);
+      throw legacyContentUniqueError(msg) ?? new Error(msg);
     }
     // RPC returns either a single object or an array-with-one-object
     // depending on Supabase client version. Normalize.

@@ -178,16 +178,32 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     // The hash arm follows the create-time rule (#332): it counts only a LIVE
     // document from outside this backup, and only for a live backup document.
     // An id match always counts, trashed or not (it is the primary key).
-    const { data: matches } = await client.raw
+    //
+    // Two lookups, each exact: one shared .or() query capped at N rows could
+    // drop the very row that decides it (#334 review). The hash lookup pages
+    // past rows that belong to this backup, so the server's row cap cannot
+    // hide a match from outside it.
+    const { data: byId } = await client.raw
       .from("cerefox_documents")
-      .select("id, deleted_at")
-      .or(`id.eq.${doc.id},content_hash.eq.${doc.content_hash}`)
-      .limit(1000);
-    const existing = ((matches ?? []) as Array<{ id: string; deleted_at: string | null }>).some(
-      (m) =>
-        m.id === doc.id ||
-        (!doc.deleted_at && !m.deleted_at && !payloadIds.has(m.id)),
-    );
+      .select("id")
+      .eq("id", doc.id)
+      .limit(1);
+    let existing = (byId ?? []).length > 0;
+    if (!existing && !doc.deleted_at && doc.content_hash) {
+      const PAGE = 500;
+      for (let from = 0; !existing; from += PAGE) {
+        const { data: byHash } = await client.raw
+          .from("cerefox_documents")
+          .select("id")
+          .eq("content_hash", doc.content_hash)
+          .is("deleted_at", null)
+          .order("id")
+          .range(from, from + PAGE - 1);
+        const rows = (byHash ?? []) as Array<{ id: string }>;
+        existing = rows.some((m) => !payloadIds.has(m.id));
+        if (rows.length < PAGE) break;
+      }
+    }
 
     if (existing) {
       skipped++;

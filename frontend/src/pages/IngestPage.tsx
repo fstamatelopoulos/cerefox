@@ -56,6 +56,7 @@ export function IngestPage() {
     // document too.
     if (res.success) invalidateDocumentViews(queryClient);
     // A skip is not an error, but its WHY matters when the server gives one.
+    // Without a note it is a plain duplicate, shown by the alert below.
     if (res.skipped && res.note) showError("Ingest skipped", res.note);
   };
   const onIngestError = (err: unknown) => {
@@ -170,6 +171,27 @@ export function IngestPage() {
           {result.updated
             ? `"${result.title}" updated and re-indexed.`
             : `"${result.title}" ingested successfully.`}{" "}
+          {result.document_id && (
+            <span
+              style={{ cursor: "pointer", textDecoration: "underline", color: "var(--primary)" }}
+              onClick={() => navigate(`/document/${result.document_id}`)}
+            >
+              View document
+            </span>
+          )}
+        </Alert>
+      )}
+      {result?.skipped && !result.note && (
+        <Alert
+          icon={<IconCheck size={16} />}
+          title="Already in memory"
+          color="blue"
+          mb="md"
+          withCloseButton
+          onClose={() => setResult(null)}
+          data-testid="ingest-skipped"
+        >
+          {`"${result.title}" already has exactly this content, so nothing was written.`}{" "}
           {result.document_id && (
             <span
               style={{ cursor: "pointer", textDecoration: "underline", color: "var(--primary)" }}

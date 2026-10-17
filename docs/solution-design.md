@@ -745,7 +745,14 @@ Ingestion is designed to be non-blocking where the caller allows it:
   The check now lives only in `cerefox_ingest_document`'s create path (the
   authoritative copy, serialized by an advisory lock on the hash), with an
   advisory pre-check in each caller to save the embedding spend. Updates and
-  restores never de-duplicate.
+  restores never de-duplicate. A create that passes the pre-check and then
+  loses the race is **raised** (`CEREFOX_DUPLICATE_CONTENT`, SQLSTATE 23505,
+  naming the existing document), not returned as a skip (0.21.1): clients
+  before 1.19.0 never read the RPC's `operation`, and a returned winner would
+  have been taken for their own create, projects and all. Current callers map
+  the error to a skip. `backup restore` writes rows directly and does not take
+  the lock; two concurrent restores of the same content could both insert,
+  which is accepted for a maintainer's bulk operation.
 
 ### 6.3b Write-time guards in `cerefox_ingest_document` (v1.7.0)
 
