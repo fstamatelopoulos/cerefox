@@ -134,6 +134,9 @@ export const EditResponse = z.object({
   titleChanged: z.boolean().optional(),
   metadataChanged: z.boolean().optional(),
   projectsChanged: z.boolean().optional(),
+  /** 1.19.1: present when the request used a deprecated form, e.g. metadata
+   *  replaced without expected_metadata_revision (accepted as last-write-wins). */
+  warnings: z.array(z.string()).optional(),
 });
 export type EditResponse = z.infer<typeof EditResponse>;
 

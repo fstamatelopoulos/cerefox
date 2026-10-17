@@ -198,9 +198,14 @@ entries recorded key counts, not values.
   under its row lock.
 - **Whole-form editors replace with the token.** The web edit route sends the
   `metadata_revision` the page loaded, so a tag changed elsewhere while the form
-  was open is a 409 (`metadata_conflict`), not a silent revert. An identified
-  `/api/v1` caller must send it; an anonymous one without it (a tab loaded before
-  the upgrade) gets the current revision, which is the old behavior.
+  was open is a 409 (`metadata_conflict`), not a silent revert. A caller that
+  sends no token is accepted as last-write-wins and gets a `warnings` entry
+  saying so (1.19.1). 1.19.0 refused an identified caller without one, which
+  broke existing API clients in a minor release; requiring it again is a
+  breaking change, to be announced ahead. On the metadata-only branch the
+  audit entry is marked `[last-write-wins]`; on a content-changing edit the
+  ingest RPC's `last_write_wins` would also waive the content check, so there
+  the missing token stands in as the revision the route just read.
 - **History:** every `update-metadata` audit entry records `metadata_before` and
   `metadata_after`, including the one a content update writes when it changed
   metadata. The MCP audit tool, `cerefox audit list` and the web Audit Log show

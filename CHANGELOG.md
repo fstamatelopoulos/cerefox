@@ -9,6 +9,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- **API clients editing metadata without a token work again.** 1.19.0 made
+  `POST /api/v1/documents/{id}/edit` refuse, with a 400, any identified caller
+  that sent `metadata` without `expected_metadata_revision`. That broke
+  existing API clients in a minor release, and the 1.19.0 notes did not flag
+  it as breaking. Such an edit is accepted again, as a last-write-wins replace
+  (what it was before 1.19.0), and the response carries a `warnings` entry
+  asking for the token. A metadata-only edit is also marked
+  `[last-write-wins]` in the audit log. A future release will require the
+  token again, announced in advance as a breaking change. No server deploy is
+  needed.
+
+### Notes for API clients (since 1.19.0)
+
+- **Send `expected_metadata_revision` with `metadata` on
+  `POST /documents/{id}/edit`**: the `metadata_revision` you read from
+  `GET /documents/{id}`. That route replaces the whole metadata object, and
+  without the token a tag another writer added since your read is overwritten.
+- **A content update through `POST /ingest` (or MCP `cerefox_ingest`) now
+  merges `metadata`** instead of replacing it. A client that relied on the
+  replace to remove keys must send `null` for each key to remove (or use
+  `cerefox document set-metadata --replace`).
+
 Open roadmap.
 
 ---

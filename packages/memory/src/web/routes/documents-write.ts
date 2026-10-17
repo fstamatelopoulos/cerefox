@@ -118,6 +118,12 @@ export const EDIT_FIELDS = new Set([
   "author_type",
 ]);
 
+/** 1.19.1: sent when an edit replaces metadata without a token (see the route). */
+const METADATA_TOKEN_DEPRECATION =
+  "deprecated: metadata was replaced without expected_metadata_revision, as last-write-wins, " +
+  "so a concurrent metadata change may have been overwritten. Send the metadata_revision " +
+  "you read (GET /api/v1/documents/{id}); a future release will require it.";
+
 const TRASHED_MESSAGE =
   "This document was moved to the trash while you were editing. " +
   "Restore it from the Trash page first, then save again.";
@@ -226,26 +232,23 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
       return c.json(conflictBody(currentHash), 409);
     }
     // The metadata token (#333). This route edits metadata as a whole form, so
-    // a carried `metadata` REPLACES and must prove a read: an identified
-    // caller sends expected_metadata_revision (as it sends the content hash to
-    // delete). An anonymous caller is the bundled web UI, which sends it too;
-    // one that does not (a tab loaded before the upgrade) gets today's
-    // behavior, the current revision, rather than a refused save.
+    // a carried `metadata` REPLACES and should prove a read with
+    // expected_metadata_revision. 1.19.0 refused an identified caller that sent
+    // none, which broke existing API clients in a minor release; from 1.19.1 a
+    // missing token is accepted for every caller as a last-write-wins replace,
+    // with a deprecation warning in the response. Enforcing it again is a
+    // breaking change, announced ahead in the release notes.
     const metadataCarried = body.metadata != null;
     const sentRevision =
       typeof body.expected_metadata_revision === "number" &&
       Number.isInteger(body.expected_metadata_revision)
         ? body.expected_metadata_revision
         : null;
-    if (metadataCarried && sentRevision === null && who.identity.named && !lastWriteWins) {
-      const message =
-        "CEREFOX_METADATA_TOKEN_REQUIRED: this route replaces the metadata, so an identified caller " +
-        "must send expected_metadata_revision (the metadata_revision it read) or last_write_wins.";
-      return c.json(
-        { success: false, error: "expected_metadata_revision required", message, detail: message },
-        400,
-      );
-    }
+    const metadataTokenMissing = metadataCarried && sentRevision === null && !lastWriteWins;
+    const warnings = metadataTokenMissing ? [METADATA_TOKEN_DEPRECATION] : undefined;
+    // The content branch replaces metadata inside the ingest RPC, whose
+    // last_write_wins also waives the CONTENT check, so a missing token there
+    // stands in as the revision just read rather than as last_write_wins.
     const expectedMetadataRevision =
       sentRevision ?? ((doc.metadata_revision as number | null | undefined) ?? null);
     const proposedHash = content.trim() ? contentHash(content) : null;
@@ -298,7 +301,7 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
           expectedContentHash: expectedHash,
           lastWriteWins,
         });
-        return c.json({ success: true, reindexed: result.reindexed });
+        return c.json({ success: true, reindexed: result.reindexed, ...(warnings ? { warnings } : {}) });
       } catch (err) {
         if (err instanceof ConcurrencyConflictError) {
           return c.json(conflictBody(err.currentHash), 409);
@@ -375,14 +378,16 @@ export function registerDocumentWriteRoutes(app: Hono, ctx: WebContext): void {
         // != null: an explicit JSON null is "not provided", NOT carried-{}
         // (which clears every key) — round 2 caught null wiping metadata.
         metadata: metadataCarried ? metadata : undefined,
-        expectedMetadataRevision,
-        metadataLastWriteWins: lastWriteWins,
+        // A missing token is an explicit last-write-wins here, which the RPC
+        // records in the audit entry ('[last-write-wins]').
+        expectedMetadataRevision: metadataTokenMissing ? null : expectedMetadataRevision,
+        metadataLastWriteWins: lastWriteWins || metadataTokenMissing,
         projectIds: Array.isArray(body.project_ids) ? projectIds : undefined,
         author: who.identity.author,
         authorType: who.identity.authorType,
         accessPath: who.identity.accessPath,
       });
-      return c.json({ success: true, reindexed: false, ...facets });
+      return c.json({ success: true, reindexed: false, ...facets, ...(warnings ? { warnings } : {}) });
     } catch (err) {
       // Typed errors from the cores (review round 1: no status-by-prose).
       // FacetUpdateError wraps the real cause and names any facets that

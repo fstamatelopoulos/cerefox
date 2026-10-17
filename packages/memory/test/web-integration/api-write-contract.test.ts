@@ -135,12 +135,32 @@ describe("the /api/v1 write contract, live (#296)", () => {
     conforms(S.EditResponse, await ok.json());
   }, LIVE_TEST_BUDGET_MS);
 
-  // #333: this route replaces the metadata (whole-form), so an identified
-  // caller must prove its read with expected_metadata_revision.
-  liveTest("edit: metadata needs expected_metadata_revision; a stale one is a metadata_conflict", async () => {
+  // #333: this route replaces the metadata (whole-form). A stale
+  // expected_metadata_revision is a conflict; a missing one is accepted as
+  // last-write-wins with a deprecation warning (1.19.1: 1.19.0 refused it,
+  // which broke existing API clients in a minor release).
+  liveTest("edit: a missing metadata token is last-write-wins with a warning; a stale one is a metadata_conflict", async () => {
     if (!LIVE_OK || !server || !docId) return;
-    const missing = await post(`/documents/${docId}/edit`, { metadata: { e2e: "2" } });
-    expect(missing.status).toBe(400);
+    const before = await revisionOf(docId);
+    const missing = await post(`/documents/${docId}/edit`, { metadata: { e2e: "2", legacy: "x" } });
+    expect(missing.status).toBe(200);
+    const missingBody = (await missing.json()) as Json;
+    conforms(S.EditResponse, missingBody);
+    expect(String((missingBody.warnings as string[] | undefined)?.[0] ?? "")).toContain("expected_metadata_revision");
+    expect(await revisionOf(docId)).toBe(before + 1);
+    const audit = (await (
+      await api(`/audit-log?document_id=${docId}&operation=update-metadata&limit=1`)
+    ).json()) as Json[];
+    expect(String(audit[0]?.description ?? "")).toContain("[last-write-wins]");
+
+    // A token-carrying edit gets no warning.
+    const withToken = await post(`/documents/${docId}/edit`, {
+      metadata: { e2e: "2" },
+      expected_metadata_revision: await revisionOf(docId),
+    });
+    expect(withToken.status).toBe(200);
+    expect(((await withToken.json()) as Json).warnings).toBeUndefined();
+
     const rev = await revisionOf(docId);
     const stale = await post(`/documents/${docId}/edit`, {
       metadata: { e2e: "2" },
@@ -148,7 +168,7 @@ describe("the /api/v1 write contract, live (#296)", () => {
     });
     expect(stale.status).toBe(409);
     expect(((await stale.json()) as Json).error).toBe("metadata_conflict");
-    const ok = await post(`/documents/${docId}/edit`, { metadata: { e2e: "2" }, expected_metadata_revision: rev });
+    const ok = await post(`/documents/${docId}/edit`, { metadata: { e2e: "3" }, expected_metadata_revision: rev });
     expect(ok.status).toBe(200);
     expect(await revisionOf(docId)).toBe(rev + 1);
   }, LIVE_TEST_BUDGET_MS);
