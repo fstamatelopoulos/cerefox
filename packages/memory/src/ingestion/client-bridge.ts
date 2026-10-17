@@ -31,11 +31,12 @@ import { resolveOrCreateProject } from "../../../../_shared/mcp-tools/_projects.
 import type { MCPSupabaseClient } from "../../../../_shared/mcp-tools/types.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "../../../../_shared/db-client/paginate.ts";
-import { extractConflictHashes } from "../../../../_shared/mcp-tools/_utils.ts";
+import { extractConflictHashes, metadataTokenParams } from "../../../../_shared/mcp-tools/_utils.ts";
 
 import {
   ConcurrencyConflictError,
   ConcurrencyTokenRequiredError,
+  MetadataConcurrencyError,
 } from "./types.ts";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -47,6 +48,8 @@ export interface DocumentRow {
   source_path: string | null;
   content_hash: string | null;
   metadata: Record<string, unknown> | null;
+  /** #333: the metadata's concurrency token. */
+  metadata_revision?: number | null;
   chunk_count: number;
   total_chars: number;
   review_status: string;
@@ -93,6 +96,8 @@ export interface IngestDocumentRpcResult {
   /** 'skipped': a create matched a live document with the same content (#332). */
   operation: "create" | "update-content" | "skipped";
   version_id: string | null;
+  /** #333: the document's metadata_revision after this write. */
+  metadata_revision?: number;
 }
 
 export interface ProjectRow {
@@ -199,6 +204,37 @@ export class IngestionDbBridge {
   // ── Documents (write) ─────────────────────────────────────────────────────
 
   /**
+   * Call `cerefox_set_document_metadata` (#204, #333): merge (or replace) the
+   * metadata under a row lock, with the optional metadata token, writing the
+   * audit entry with before/after values. Returns the new metadata_revision.
+   */
+  async setDocumentMetadataRpc(args: {
+    documentId: string;
+    metadata: Record<string, unknown>;
+    replace: boolean;
+    author: string;
+    authorType: "user" | "agent";
+    expectedMetadataRevision?: number | null;
+    lastWriteWins?: boolean;
+  }): Promise<{ metadata_revision?: number }> {
+    const { data, error } = await this.supabase.rpc("cerefox_set_document_metadata", {
+      p_document_id: args.documentId,
+      p_metadata: args.metadata,
+      p_replace: args.replace,
+      p_author: args.author,
+      p_author_type: args.authorType,
+      ...metadataTokenParams(args.expectedMetadataRevision, args.lastWriteWins),
+    });
+    if (error) {
+      const msg = error.message ?? JSON.stringify(error);
+      if (msg.includes("CEREFOX_METADATA_")) throw new MetadataConcurrencyError(msg);
+      throw new Error(msg);
+    }
+    const row = (Array.isArray(data) ? data[0] : data) as { metadata_revision?: number } | null;
+    return row ?? {};
+  }
+
+  /**
    * Call the `cerefox_ingest_document` RPC — atomic transaction that
    * either INSERTs (when `documentId === null`) or UPDATEs (when
    * `documentId` is a UUID; old chunks are snapshotted to a version)
@@ -211,7 +247,8 @@ export class IngestionDbBridge {
     source: string | null;
     sourcePath: string | null;
     contentHash: string;
-    metadata: Record<string, unknown>;
+    /** null = keep the stored metadata (update) / {} (create). Merges on update (#333). */
+    metadata: Record<string, unknown> | null;
     chunks: ChunkInsertRow[];
     author: string;
     authorType: "user" | "agent";
@@ -222,6 +259,9 @@ export class IngestionDbBridge {
     lastWriteWins?: boolean;
     /** iter-28D: chunk reconstruction format (2 = exact-partition/blind-stitch). */
     contentFormat?: number;
+    /** #333: the metadata token / replace switch; see the RPC. */
+    expectedMetadataRevision?: number | null;
+    replaceMetadata?: boolean;
   }): Promise<IngestDocumentRpcResult> {
     const params: Record<string, unknown> = {
       p_document_id: args.documentId,
@@ -245,6 +285,10 @@ export class IngestionDbBridge {
     if (args.documentId !== null) {
       params.p_expected_content_hash = args.expectedContentHash ?? null;
       params.p_last_write_wins = args.lastWriteWins ?? false;
+      if (args.expectedMetadataRevision != null) {
+        params.p_expected_metadata_revision = args.expectedMetadataRevision;
+      }
+      if (args.replaceMetadata) params.p_replace_metadata = true;
     }
 
     const { data, error } = await this.supabase.rpc(
@@ -264,6 +308,7 @@ export class IngestionDbBridge {
       if (msg.includes("CEREFOX_TOKEN_REQUIRED")) {
         throw new ConcurrencyTokenRequiredError(msg);
       }
+      if (msg.includes("CEREFOX_METADATA_")) throw new MetadataConcurrencyError(msg);
       throw new Error(msg);
     }
     // RPC returns either a single object or an array-with-one-object

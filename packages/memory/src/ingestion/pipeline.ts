@@ -117,6 +117,8 @@ export class IngestionPipeline {
       expectedContentHash,
       lastWriteWins = false,
       forceRechunk = false,
+      expectedMetadataRevision = null,
+      replaceMetadata = false,
     } = opts;
 
     const listFormProvided =
@@ -151,6 +153,8 @@ export class IngestionPipeline {
         expectedContentHash,
         lastWriteWins,
         forceRechunk,
+        expectedMetadataRevision,
+        replaceMetadata,
       });
       if (!listFormProvided && (projectId || projectName)) {
         const singular = await resolveProjectIds(
@@ -238,6 +242,8 @@ export class IngestionPipeline {
           authorType,
           expectedContentHash,
           lastWriteWins,
+          expectedMetadataRevision,
+          replaceMetadata,
         });
         if (!listFormProvided && (projectId || projectName)) {
           const singular = await resolveProjectIds(
@@ -366,6 +372,7 @@ export class IngestionPipeline {
       projectIds: resolvedIds,
       note: "",
       contentHash: hash,
+      metadataRevision: rpcResult.metadata_revision,
     };
   }
 
@@ -408,6 +415,8 @@ export class IngestionPipeline {
       expectedContentHash,
       lastWriteWins = false,
       forceRechunk = false,
+      expectedMetadataRevision = null,
+      replaceMetadata = false,
     } = opts;
 
     // ── (1) Verify document exists ───────────────────────────────────────
@@ -481,11 +490,27 @@ export class IngestionPipeline {
       const oldTitle = existing.title ?? "";
       const titleChanged = oldTitle !== title;
 
-      const updates: Record<string, unknown> = { title };
-      if (metadata !== undefined && metadata !== null) {
-        updates.metadata = metadata;
+      // Title directly; metadata through cerefox_set_document_metadata (#333),
+      // which merges (or replaces) under a row lock, checks the metadata token
+      // and records before/after. Writing the column here used to replace the
+      // whole object with no token at all.
+      // Metadata FIRST (#333 review): its token check is the one that can
+      // refuse this save, and a refused save must not have changed the title.
+      const metadataGiven = metadata !== undefined && metadata !== null;
+      let metadataRevision: number | undefined;
+      if (metadataGiven) {
+        const r = await this.db.setDocumentMetadataRpc({
+          documentId,
+          metadata,
+          replace: replaceMetadata,
+          author,
+          authorType,
+          expectedMetadataRevision,
+          lastWriteWins,
+        });
+        metadataRevision = r.metadata_revision;
       }
-      await this.db.updateDocumentRow(documentId, updates);
+      await this.db.updateDocumentRow(documentId, { title });
 
       // Title-change re-embed (contextual enrichment).
       if (titleChanged) {
@@ -530,15 +555,21 @@ export class IngestionPipeline {
       const chunkCount = existing.chunk_count ?? 0;
       const totalChars = existing.total_chars ?? 0;
 
-      await this.db.createAuditEntry({
-        operation: "update-metadata",
-        author,
-        authorType,
-        documentId,
-        sizeBefore: totalChars,
-        sizeAfter: totalChars,
-        description: `Updated metadata for '${title}' (content unchanged)`,
-      });
+      // The metadata RPC wrote its own entry (with before/after); this one
+      // covers a save that changed only the title, or nothing.
+      if (!metadataGiven || titleChanged) {
+        await this.db.createAuditEntry({
+          operation: "update-metadata",
+          author,
+          authorType,
+          documentId,
+          sizeBefore: totalChars,
+          sizeAfter: totalChars,
+          description: titleChanged
+            ? `Title changed on '${title}' (was '${oldTitle}'; content unchanged)`
+            : `Updated metadata for '${title}' (content unchanged)`,
+        });
+      }
 
       return {
         documentId,
@@ -550,6 +581,7 @@ export class IngestionPipeline {
         projectIds: finalProjectIds,
         note: "",
         contentHash: existing.content_hash ?? newHash,
+        metadataRevision: metadataRevision ?? existing.metadata_revision ?? undefined,
       };
     }
 
@@ -577,13 +609,13 @@ export class IngestionPipeline {
       }));
     }
 
-    // metadata semantics: undefined/null → keep existing; otherwise use new.
-    const metaToWrite =
-      metadata !== undefined && metadata !== null
-        ? metadata
-        : (existing.metadata as Record<string, unknown>) ?? {};
+    // metadata: null = keep what is stored, decided inside the RPC under its
+    // row lock. Sending the value read above instead (as this used to) wrote
+    // back a snapshot that a concurrent metadata change had already replaced.
+    // Given metadata merges unless replaceMetadata (#333).
+    const metaToWrite = metadata ?? null;
 
-    await this.db.ingestDocumentRpc({
+    const rpcResult = await this.db.ingestDocumentRpc({
       documentId,
       title,
       source,
@@ -618,6 +650,8 @@ export class IngestionPipeline {
         expectedHashTrimmed ??
         (forceRechunk && contentUnchanged ? existing.content_hash : null),
       lastWriteWins,
+      expectedMetadataRevision,
+      replaceMetadata,
     });
 
     // Update project membership if explicitly provided.
@@ -639,6 +673,7 @@ export class IngestionPipeline {
       projectIds: finalProjectIds,
       note: "",
       contentHash: newHash,
+      metadataRevision: rpcResult.metadata_revision,
     };
   }
 

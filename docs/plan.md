@@ -29,6 +29,14 @@
 
 ## Current Focus
 
+**2026-10-16: #333 on `feat/333-metadata-revision` (schema 0.21.0), for 1.19.0.** Migration
+0036: `metadata_revision` + trigger, audit `metadata_before/after`. Shared SQL helpers
+`cerefox_metadata_apply` / `cerefox_check_metadata_revision`; content updates merge
+metadata; replace needs the token; the web edit form replaces with the revision it loaded.
+Verified on staging: live suites 68/0 (incl. the new metadata-revision suite), web
+integration 50/0, Playwright 30/1-skip (incl. 3 new edit-form metadata tests), EF +
+remote MCP 49/0. #332 merged (#334). Next: Codex review, then #335 (Cerefox Local memory).
+
 **2026-10-12: #332 on `fix/332-content-uniqueness` (schema 0.20.0), for 1.19.0.** Migration
 0035 drops `cerefox_documents_hash_unique`; the duplicate check moves into
 `cerefox_ingest_document`'s create path (live documents only, advisory lock on the hash,

@@ -25,6 +25,10 @@ export const AuditEntryResponse = z.object({
   size_after: z.number().int().nullable().optional(),
   description: z.string().default(""),
   created_at: z.string().default(""),
+  /** #333: the document's metadata before and after an `update-metadata`
+   *  entry; null on other operations and on entries older than schema 0.21.0. */
+  metadata_before: z.record(z.string(), z.unknown()).nullable().optional(),
+  metadata_after: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type AuditEntryResponse = z.infer<typeof AuditEntryResponse>;
 

@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.20.0
+-- @version: 0.21.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS cerefox_documents (
     metadata        JSONB       NOT NULL DEFAULT '{}'::jsonb
                     CONSTRAINT cerefox_documents_metadata_object
                     CHECK (jsonb_typeof(metadata) = 'object'),
+    -- #333 (0.21.0): the metadata's optimistic-concurrency token, independent
+    -- of content_hash (which covers the body only). Starts at 1 and goes up by
+    -- one whenever `metadata` actually changes; maintained by the
+    -- trig_cerefox_documents_metadata_revision trigger below, so every writer
+    -- is covered and no caller can set it.
+    metadata_revision INT       NOT NULL DEFAULT 1,
     chunk_count     INT         NOT NULL DEFAULT 0,
     total_chars     INT         NOT NULL DEFAULT 0,
     -- review_status: human governance flag. 'approved' = validated by human,
@@ -128,6 +134,11 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
     -- author_type: 'user' (human via web UI/CLI) or 'agent' (AI via MCP/Edge Function)
     size_before     INT,
     size_after      INT,
+    -- #333 (0.21.0): on 'update-metadata' entries, the document's metadata
+    -- before and after the change, so every metadata change is recoverable
+    -- (content versions never captured metadata). NULL on other operations.
+    metadata_before JSONB,
+    metadata_after  JSONB,
     description     TEXT        NOT NULL DEFAULT '',
     -- description: free-text explaining what changed and why.
     -- Auto-generated for system actions (approval, archival, retention cleanup).
@@ -344,6 +355,31 @@ CREATE OR REPLACE TRIGGER trig_cerefox_documents_updated
 CREATE OR REPLACE TRIGGER trig_cerefox_chunks_updated
     BEFORE UPDATE ON cerefox_chunks
     FOR EACH ROW EXECUTE FUNCTION cerefox_set_updated_at();
+
+-- ── metadata_revision trigger (#333, 0.21.0) ─────────────────────────────────
+-- Bumps metadata_revision when, and only when, metadata actually changes. A
+-- trigger rather than per-RPC code because metadata has several writers (the
+-- metadata RPC, the ingest RPC, direct table updates from older clients), and
+-- a counter that one of them forgets to bump is a token that lies. It also
+-- pins the column on every other UPDATE, so no caller can set it directly.
+CREATE OR REPLACE FUNCTION cerefox_bump_metadata_revision()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+BEGIN
+    IF NEW.metadata IS DISTINCT FROM OLD.metadata THEN
+        NEW.metadata_revision := OLD.metadata_revision + 1;
+    ELSE
+        NEW.metadata_revision := OLD.metadata_revision;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER trig_cerefox_documents_metadata_revision
+    BEFORE UPDATE ON cerefox_documents
+    FOR EACH ROW EXECUTE FUNCTION cerefox_bump_metadata_revision();
 
 
 -- ── Live-database migration ───────────────────────────────────────────────────

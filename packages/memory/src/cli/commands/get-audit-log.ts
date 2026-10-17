@@ -8,7 +8,7 @@
 
 import type { Command } from "commander";
 
-import { AUDIT_OPERATIONS, auditDocLabel } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { AUDIT_OPERATIONS, auditDocLabel, metadataChangeSummary } from "../../../../../_shared/mcp-tools/_utils.ts";
 
 import {
   parsePositiveInt,
@@ -32,6 +32,8 @@ interface AuditRow {
   size_after: number | null;
   description: string | null;
   created_at: string;
+  metadata_before?: Record<string, unknown> | null;
+  metadata_after?: Record<string, unknown> | null;
 }
 
 async function action(options: {
@@ -103,6 +105,8 @@ async function action(options: {
         row.size_before !== null && row.size_after !== null
           ? `${row.size_before} → ${row.size_after}`
           : "",
+      // #333: what the metadata change actually was (update-metadata entries).
+      change: (metadataChangeSummary(row.metadata_before, row.metadata_after) ?? "").slice(0, 60),
     })),
   );
 }

@@ -43,6 +43,7 @@ interface SearchRow {
   chunk_count?: number;
   total_chars?: number;
   content_hash?: string;
+  metadata_revision?: number;
   below_confidence?: boolean;
 }
 
@@ -104,6 +105,14 @@ function shortLabel(row: SearchRow): string {
   return `${leaf ? `${doc} › ${leaf}` : doc}${chunk}${id}`;
 }
 
+/** The concurrency tokens: content_hash for cerefox_ingest updates (iter-32),
+ *  metadata_revision for metadata writes (#333). */
+function hashLine(row: SearchRow): string {
+  if (!row.content_hash) return "";
+  const rev = row.metadata_revision != null ? ` · metadata_revision: ${row.metadata_revision}` : "";
+  return `\nhash: ${row.content_hash}${rev}`;
+}
+
 /** One rendered result: heading, score, then the row's text. */
 function renderRow(row: SearchRow): string {
   const raw = row.best_score ?? row.score;
@@ -112,7 +121,7 @@ function renderRow(row: SearchRow): string {
     ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
     : "";
   // content_hash = the concurrency token for cerefox_ingest updates (iter-32).
-  const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
+  const hash = hashLine(row);
   // Whichever column this mode returns (#259): `cerefox_search_docs` gives
   // `full_content`, the chunk RPCs give `content`, and reading only the first
   // rendered every hybrid/fts result as a title with an empty body.
@@ -124,7 +133,7 @@ function headerLine(row: SearchRow): string {
   const raw = row.best_score ?? row.score;
   const score = raw != null ? ` (score: ${raw.toFixed(3)})` : "";
   const size = row.total_chars != null ? ` -- ${row.total_chars.toLocaleString()} chars` : "";
-  const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
+  const hash = hashLine(row);
   return `## ${rowHeading(row)}${score}${size}${hash}`;
 }
 

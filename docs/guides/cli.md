@@ -278,7 +278,9 @@ cerefox document set-metadata [OPTIONS] DOCUMENT_ID
 | `-s, --set <key=value...>` | Set a key. Repeatable. |
 | `-r, --remove <key...>` | Remove a key. Repeatable. |
 | `--json <object>` | A JSON object of keys to set; a `null` value removes that key. |
-| `--replace` | Set the metadata to **exactly** what was given, discarding every key not listed. |
+| `--replace` | Set the metadata to **exactly** what was given, discarding every key not listed. Needs `--expected-metadata-revision` or `--last-write-wins` (v1.19.0). |
+| `--expected-metadata-revision <n>` | The `metadata_revision` you read (`document get` shows it). The write fails if the metadata changed since. Optional on a merge, required with `--replace`. |
+| `--last-write-wins` | Replace without a revision, regardless of concurrent changes (recorded in the audit log). |
 | `-a, --author <name>` | Caller identity (audit log). |
 | `--author-type <type>` | `user` (default) or `agent`. |
 | `--json-out` | Emit the result as JSON. |

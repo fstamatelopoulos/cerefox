@@ -24,7 +24,7 @@
 
 import type { AccessPath, MCPSupabaseClient } from "./types.ts";
 
-import { logUsage, storeWriteRemediation } from "./_utils.ts";
+import { MetadataConcurrencyError, logUsage, metadataTokenParams, storeWriteRemediation } from "./_utils.ts";
 
 export interface FacetActor {
   author: string;
@@ -297,6 +297,9 @@ export async function updateDocumentFacets(
     documentId: string;
     title?: string;
     metadata?: Record<string, unknown>;
+    /** #333: the metadata token for the replace below; see the RPC. */
+    expectedMetadataRevision?: number | null;
+    metadataLastWriteWins?: boolean;
     projectIds?: string[];
     accessPath: AccessPath;
   } & FacetActor,
@@ -322,7 +325,7 @@ export async function updateDocumentFacets(
     await step(async () => {
       const { data: doc, error } = await supabase
         .from("cerefox_documents")
-        .select("metadata")
+        .select("*")
         .eq("id", opts.documentId)
         .is("deleted_at", null)
         .limit(1);
@@ -331,6 +334,22 @@ export async function updateDocumentFacets(
         throw new FacetNotFoundError(`Document not found (or in the trash): ${opts.documentId}`);
       }
       const stored = (doc[0].metadata ?? {}) as Record<string, unknown>;
+      // Strict when given (#333 review), even when nothing would change: a
+      // stale form must not slip through just because its tags happen to
+      // match, and go on to apply its other facets. `*` rather than naming
+      // the column keeps a pre-0.21.0 server (no column, no check) working.
+      const storedRevision = (doc[0] as { metadata_revision?: number | null }).metadata_revision;
+      if (
+        opts.expectedMetadataRevision != null &&
+        storedRevision != null &&
+        storedRevision !== opts.expectedMetadataRevision &&
+        !opts.metadataLastWriteWins
+      ) {
+        throw new MetadataConcurrencyError(
+          `CEREFOX_METADATA_CONFLICT: the metadata of document ${opts.documentId} changed since it was read ` +
+            `(expected metadata_revision ${opts.expectedMetadataRevision}, current ${storedRevision}).`,
+        );
+      }
       const wanted = normalizeMetadata(opts.metadata!);
       if (stableStringify(stored) !== stableStringify(wanted)) {
         // Replace mode: the save surface edits the whole object (an empty
@@ -343,9 +362,12 @@ export async function updateDocumentFacets(
           p_replace: true,
           p_author: opts.author,
           p_author_type: opts.authorType,
+          // #333: a replace must prove a read (or say last-write-wins).
+          ...metadataTokenParams(opts.expectedMetadataRevision, opts.metadataLastWriteWins),
         });
         if (rpcErr) {
           const msg = rpcErr.message ?? String(rpcErr);
+          if (msg.includes("CEREFOX_METADATA_")) throw new MetadataConcurrencyError(msg);
           if (/not found/i.test(msg)) throw new FacetNotFoundError(msg);
           throw new Error(`Metadata update failed: ${msg}`);
         }

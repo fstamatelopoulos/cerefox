@@ -61,16 +61,31 @@ interface IngestRequest {
   expected_content_hash?: string;
   // Explicitly skip the concurrency check (external source of truth).
   last_write_wins?: boolean;
+  // #333: the metadata's token, checked when `metadata` is passed on an update
+  // (metadata merges; a null value removes a key).
+  expected_metadata_revision?: number;
 }
 
 // Map the RPC's expected/validation errors to proper HTTP responses:
 //   CEREFOX_CONFLICT                → 409 (stale optimistic-concurrency token)
 //   CEREFOX_TOKEN_REQUIRED          → 400 (missing expected_content_hash)
+//   CEREFOX_METADATA_CONFLICT       → 409 (stale expected_metadata_revision, #333)
 // Returns null for genuinely unexpected errors (→ 500 at the call site).
 function concurrencyErrorResponse(
   message: string,
   headers: Record<string, string>,
 ): Response | null {
+  if (message.includes("CEREFOX_METADATA_CONFLICT")) {
+    return new Response(
+      JSON.stringify({
+        error: "metadata_conflict",
+        message:
+          "The document's metadata changed since it was read. Re-read it (getDocument), reapply your change, and retry with the new expected_metadata_revision.",
+        detail: message,
+      }),
+      { status: 409, headers },
+    );
+  }
   if (message.includes("CEREFOX_CONFLICT")) {
     return new Response(
       JSON.stringify({
@@ -265,7 +280,7 @@ Deno.serve(async (req: Request) => {
   // metadata: null = "not provided" — the RPC keeps existing metadata on
   // update and uses {} on create (v0.11.1; a `= {}` default here used to wipe
   // a document's tags on every content update that didn't re-pass them).
-  const { title, content, document_id = null, project_name, source = "agent", metadata = null, update_if_exists = false, author_type = "agent", expected_content_hash = null, last_write_wins = false } = body;
+  const { title, content, document_id = null, project_name, source = "agent", metadata = null, update_if_exists = false, author_type = "agent", expected_content_hash = null, last_write_wins = false, expected_metadata_revision = null } = body;
   const callerName = callerIdentity(body as unknown as Record<string, unknown>);
   const author = callerName ?? "agent";
 
@@ -423,6 +438,9 @@ Deno.serve(async (req: Request) => {
       p_source_label: source,
       p_expected_content_hash: expected_content_hash,
       p_last_write_wins: last_write_wins,
+      // Only when set (#333 review): a null would name a signature a pre-0.21.0
+      // schema lacks, failing the whole update.
+      ...(expected_metadata_revision != null ? { p_expected_metadata_revision: expected_metadata_revision } : {}),
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
     });
 
@@ -541,6 +559,9 @@ Deno.serve(async (req: Request) => {
         p_source_label: source,
         p_expected_content_hash: expected_content_hash,
         p_last_write_wins: last_write_wins,
+        // Only when set (#333 review): a null would name a signature a pre-0.21.0
+      // schema lacks, failing the whole update.
+      ...(expected_metadata_revision != null ? { p_expected_metadata_revision: expected_metadata_revision } : {}),
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
       });
 

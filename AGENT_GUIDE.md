@@ -74,7 +74,8 @@ Save a new document or update an existing one.
 | `last_write_wins` | No | Explicitly skip the concurrency check (default `false`). Use ONLY when an external source of truth makes conflicts meaningless (file re-sync). Recorded in the audit log. **Never use it to silence a conflict.** |
 | `project_name` | No | **Single** project name (created if absent). On update: **non-destructive add** — ensures this membership exists, preserves others. See "Project membership semantics" below. |
 | `project_names` | No | **List** of project names (each created if absent). On update: **destructive replace** — sets the document's full project set to exactly this list. Use when you want to set multiple projects at once, or deliberately change the membership list. Wins over `project_name` when both are passed. |
-| `metadata` | No | Arbitrary JSON. Use at minimum: `type` and `status`. **On update, omitting this keeps the document's existing metadata** (v0.11.1); pass `{}` to deliberately clear all tags. |
+| `metadata` | No | Arbitrary JSON. Use at minimum: `type` and `status`. **On update it MERGES** (v1.19.0): keys you pass are set, a `null` value removes that key, keys you omit are kept; omitting the field keeps the metadata as is. To clear or reset tags wholesale, use `cerefox_set_document_metadata` with `replace: true`. |
+| `expected_metadata_revision` | No | With `metadata` on an update: the `metadata_revision` you read. The write fails with a metadata conflict if the tags changed since. |
 | `author` | No | Your agent name for audit attribution. Always set this. |
 | `source` | No | Origin label (default "agent"). |
 
@@ -307,8 +308,12 @@ Change a document's metadata (tags) **without resending its content** (v1.6.0, #
 |-----------|----------|-------------|
 | `document_id` | Yes | UUID of the document to tag. |
 | `metadata` | Yes | Keys to set. Values are JSON strings by convention (a `metadata_filter` matches JSONB as strings). A `null` value REMOVES that key. Keys you do not mention are left alone unless `replace` is true. |
-| `replace` | No | Set the metadata to EXACTLY this object, discarding any key not listed. Rare — the same destructive contract as `cerefox_set_document_projects`. |
+| `replace` | No | Set the metadata to EXACTLY this object, discarding any key not listed. Rare. Requires `expected_metadata_revision` (or `last_write_wins`). |
+| `expected_metadata_revision` | No | The `metadata_revision` you read (shown next to `content_hash` by `cerefox_get_document`, `cerefox_search` and `cerefox_metadata_search`). Optional on a merge: pass it when your change depends on the current values (a status transition, a counter), and the write fails if anyone changed the tags since. Required with `replace`. |
+| `last_write_wins` | No | Replace without a revision, regardless of concurrent changes. Recorded in the audit log. |
 | `author` | No | Your agent name (audit + usage log). |
+
+**Metadata has its own concurrency token** (v1.19.0, #333): `metadata_revision`, separate from `content_hash`, so a tag change never invalidates a body edit and vice versa. A stale one returns a *metadata conflict*: re-read, reapply your change, retry with the new value. Every metadata change is recorded in the audit log with the values before and after, so a mistake can be undone.
 
 Content, chunks and embeddings are untouched; no new version is created. The response reports what *changed* (keys set / removed), not what was asked for. Use this instead of `cerefox_ingest` whenever only the tags are changing.
 

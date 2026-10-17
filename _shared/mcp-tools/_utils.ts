@@ -164,6 +164,65 @@ export interface LogUsageParams {
  *  Differs from the EF's `logUsage` only in that `accessPath` is a required
  *  parameter (was hardcoded to `"remote-mcp"` in the EF) so the local TS
  *  MCP server can pass `"local-mcp"` for the same call site. */
+/**
+ * Thrown when a metadata write loses the race (#333): metadata_revision moved
+ * between read and write, or a replace came without a token. The web routes
+ * map a conflict to HTTP 409 and a missing token to 400.
+ */
+export class MetadataConcurrencyError extends Error {
+  readonly tokenRequired: boolean;
+  constructor(message: string) {
+    super(message);
+    this.name = "MetadataConcurrencyError";
+    this.tokenRequired = message.includes("CEREFOX_METADATA_TOKEN_REQUIRED");
+  }
+}
+
+/** The #333 metadata-token RPC parameters, only when set. Sending them as
+ *  null/false would name a signature a server older than schema 0.21.0 does
+ *  not have, and PostgREST would fail the whole write with "function not
+ *  found"; omitted, an older server runs the write exactly as before. */
+export function metadataTokenParams(
+  expected: number | null | undefined,
+  lastWriteWins: boolean | undefined,
+): Record<string, unknown> {
+  return {
+    ...(expected != null ? { p_expected_metadata_revision: expected } : {}),
+    ...(lastWriteWins ? { p_last_write_wins: true } : {}),
+  };
+}
+
+/** Agent-first text for the metadata token errors (#333), or null when the
+ *  message is not one. Shared by every tool that writes metadata, so the
+ *  remedy reads the same whichever path the agent took. */
+export function metadataTokenError(message: string): Error | null {
+  if (message.includes("CEREFOX_METADATA_CONFLICT")) {
+    const id = message.match(/document ([0-9a-f-]{36})/)?.[1] ?? "(unknown)";
+    const expected = message.match(/expected metadata_revision (\d+)/)?.[1] ?? "?";
+    const current = message.match(/current (\d+)/)?.[1] ?? "?";
+    return new Error(
+      `Metadata conflict: the metadata of document ${id} changed since you read it ` +
+        `(your metadata_revision: ${expected}, current: ${current}). Nothing was written. ` +
+        `To resolve: (1) cerefox_get_document("${id}", outline: true) for the current metadata ` +
+        `and metadata_revision, (2) reapply your change to it, (3) retry with ` +
+        `expected_metadata_revision set to the new value. Do not overwrite blindly — ` +
+        `another writer's keys may be in there.`,
+    );
+  }
+  if (message.includes("CEREFOX_METADATA_TOKEN_REQUIRED")) {
+    const current = message.match(/Current metadata_revision: (\d+)/)?.[1];
+    return new Error(
+      `Replacing all metadata deletes every key you do not list, so it needs ` +
+        `expected_metadata_revision: the metadata_revision you read (returned by ` +
+        `cerefox_get_document and cerefox_metadata_search).` +
+        (current ? ` The document's current metadata_revision is ${current}; pass it ONLY if you read the current metadata.` : "") +
+        ` To change some keys, drop replace and merge instead (null removes a key). ` +
+        `To overwrite regardless, pass last_write_wins=true.`,
+    );
+  }
+  return null;
+}
+
 /** Pull the two hashes out of an RPC `CEREFOX_CONFLICT` message.
  *
  *  The ONE site coupled to the SQL `RAISE` wording ("expected hash %, current
@@ -202,6 +261,7 @@ export {
   AUDIT_OPERATIONS,
   auditDocLabel,
   isStoreLevelAuditOp,
+  metadataChangeSummary,
   STORE_LEVEL_AUDIT_OPS,
 } from "./audit-ops.ts";
 

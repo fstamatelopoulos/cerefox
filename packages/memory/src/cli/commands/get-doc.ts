@@ -30,6 +30,15 @@ interface DocPayload {
   is_archived: boolean;
   version_id: string | null;
   content_hash: string | null;
+  /** #333: the metadata's token (pass to set-metadata --expected-metadata-revision). */
+  metadata_revision?: number | null;
+}
+
+/** ` · metadata_revision: N` for the current version (#333); empty otherwise. */
+function revisionSuffix(doc: DocPayload): string {
+  return !doc.version_id && doc.metadata_revision != null
+    ? ` · metadata_revision: ${doc.metadata_revision}`
+    : "";
 }
 
 async function action(
@@ -100,6 +109,7 @@ async function action(
       printJson({
         title: doc.doc_title,
         content_hash: doc.content_hash,
+        metadata_revision: doc.metadata_revision ?? null,
         total_chars: doc.total_chars,
         outline: nodes.map((n) => ({ path: n.path, level: n.level, chars: n.chars })),
       });
@@ -107,7 +117,7 @@ async function action(
     }
     println(c.bold(`# ${doc.doc_title}`));
     println(c.dim(`[${doc.document_id}] · chars: ${doc.total_chars}`));
-    if (doc.content_hash) println(c.dim(`content_hash: ${doc.content_hash}`));
+    if (doc.content_hash) println(c.dim(`content_hash: ${doc.content_hash}${revisionSuffix(doc)}`));
     println("");
     if (nodes.length === 0) {
       println(c.dim("No headings: only --position end_of_document applies to this document."));
@@ -184,7 +194,7 @@ async function action(
   // The concurrency token: pass back via `document ingest
   // --expected-content-hash` when updating this document (iter-32).
   if (doc.content_hash) {
-    println(c.dim(`content_hash: ${doc.content_hash}`));
+    println(c.dim(`content_hash: ${doc.content_hash}${revisionSuffix(doc)}`));
   }
   println("");
   println(doc.full_content);

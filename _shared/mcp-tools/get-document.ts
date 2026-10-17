@@ -49,6 +49,8 @@ async function handler(
         chunk_count?: number;
         total_chars?: number;
         content_hash?: string;
+        doc_metadata?: Record<string, unknown> | null;
+        metadata_revision?: number;
       }
     | undefined;
 
@@ -84,6 +86,8 @@ async function handler(
       {
         title: row.doc_title ?? "Untitled",
         content_hash: archived ? null : (row.content_hash ?? null),
+        metadata: row.doc_metadata ?? {},
+        metadata_revision: archived ? null : (row.metadata_revision ?? null),
         total_chars: row.total_chars ?? (row.full_content ?? "").length,
         outline: nodes,
         note: archived
@@ -140,7 +144,13 @@ async function handler(
   const label = version_id !== null ? " (archived version)" : " (current)";
   // content_hash is the optimistic-concurrency token: pass it back as
   // expected_content_hash when updating this document via cerefox_ingest.
-  const hashLine = row.content_hash ? `content_hash: ${row.content_hash}\n\n` : "";
+  // metadata_revision is the metadata's own token (#333): pass it back as
+  // expected_metadata_revision on a metadata write.
+  const revision =
+    version_id === null && row.metadata_revision != null
+      ? ` · metadata_revision: ${row.metadata_revision}`
+      : "";
+  const hashLine = row.content_hash ? `content_hash: ${row.content_hash}${revision}\n\n` : "";
   return `# ${row.doc_title ?? "Untitled"}${label}\n${hashLine}${row.full_content ?? ""}`;
 }
 

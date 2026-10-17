@@ -52,6 +52,8 @@ describe("IngestionPipeline.updateDocument (live)", () => {
   // #332: the uniqueness tests need schema 0.20.0; against an older server
   // they skip rather than fail on a constraint this branch removes.
   let uniquenessDropped = false;
+  // #333: content updates merge metadata from schema 0.21.0.
+  let metadataMerges = false;
   const created: string[] = [];
 
   beforeAll(async () => {
@@ -67,6 +69,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       const { data: ver } = await client.rpc("cerefox_schema_version");
       const [maj = 0, min = 0] = String(ver ?? "0.0.0").split(".").map(Number);
       uniquenessDropped = maj > 0 || min >= 20;
+      metadataMerges = maj > 0 || min >= 21;
       if (maj === 0 && min < 6) {
         schemaTooOld = true;
         console.log(
@@ -440,7 +443,9 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       .maybeSingle();
     expect(row?.metadata).toEqual({ type: "e2e-meta", keep: "me" });
 
-    // And an explicit '{}' DOES clear (the deliberate-clear contract).
+    // An explicit '{}' MERGES nothing since 0.21.0 (#333): content updates
+    // merge metadata, so clearing takes p_replace_metadata (which needs a
+    // metadata token or last_write_wins). Before that '{}' cleared everything.
     const { error: clearErr } = await supabase.rpc("cerefox_ingest_document", {
       p_document_id: createdDoc.documentId,
       p_title: title,
@@ -462,6 +467,7 @@ describe("IngestionPipeline.updateDocument (live)", () => {
       p_author: "pipeline-update-test",
       p_author_type: "agent",
       p_last_write_wins: true,
+      ...(uniquenessDropped && metadataMerges ? { p_replace_metadata: true } : {}),
     });
     expect(clearErr).toBeNull();
     const { data: cleared } = await supabase

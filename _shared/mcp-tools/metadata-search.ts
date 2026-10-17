@@ -89,6 +89,7 @@ async function handler(
     project_names: string[];
     version_count: number;
     content_hash: string | null;
+    metadata_revision?: number | null;
     content: string | null;
   }>;
 
@@ -203,7 +204,8 @@ async function handler(
     const meta = Object.entries(row.doc_metadata ?? {})
       .map(([k, v]) => `${k}=${v}`)
       .join(", ");
-    const hash = row.content_hash ? `\nhash: ${row.content_hash}` : "";
+    const rev = row.metadata_revision != null ? ` · metadata_revision: ${row.metadata_revision}` : "";
+    const hash = row.content_hash ? `\nhash: ${row.content_hash}${rev}` : "";
     const header =
       `## ${row.title} [id: ${row.document_id}]\n` +
       `${meta}${projects} | ${row.total_chars} chars | ${showReview ? `${row.review_status} | ` : ""}updated ${row.updated_at?.slice(0, 10) ?? "?"}${hash}`;

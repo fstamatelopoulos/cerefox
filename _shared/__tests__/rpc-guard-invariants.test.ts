@@ -39,7 +39,11 @@ describe("cerefox_ingest_document guards (#212, #214)", () => {
 
   test("metadata must be a JSON object; NULL stays legal (means 'not provided')", () => {
     expect(body).toMatch(/p_metadata IS NOT NULL AND jsonb_typeof\(p_metadata\) <> 'object'/);
-    expect(body).toContain("metadata = COALESCE(p_metadata, metadata)");
+    // #333: an omitted p_metadata keeps the stored value; a given one merges
+    // (or replaces) through the shared helper, after the metadata token check.
+    expect(body).toMatch(/IF p_metadata IS NOT NULL THEN\s+PERFORM cerefox_check_metadata_revision/);
+    expect(body).toMatch(/ELSE\s+v_meta_after := v_meta_before;/);
+    expect(body).toContain("metadata = v_meta_after");
   });
 
   test("trashed documents refuse content updates (CEREFOX_DELETED)", () => {
@@ -77,7 +81,7 @@ describe("cerefox_set_document_metadata guards (#212)", () => {
   test("the before-value is normalized so replace can REPAIR a corrupt row", () => {
     // jsonb_object_keys on a scalar errors and rolls the repair back — the
     // exact failure round 5 verified live. Normalization must precede use.
-    const normalize = body.indexOf("jsonb_typeof(v_before) <> 'object' THEN '{}'::jsonb");
+    const normalize = body.indexOf("jsonb_typeof(v_stored) <> 'object' THEN '{}'::jsonb");
     // "FROM jsonb_object_keys" is the USE; a bare indexOf would match the
     // comment explaining the hazard, which precedes the normalization.
     const reporting = body.indexOf("FROM jsonb_object_keys");

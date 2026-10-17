@@ -27,7 +27,7 @@ import {
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
-import { extractConflictHashes, logUsage } from "./_utils.ts";
+import { extractConflictHashes, logUsage, metadataTokenError, metadataTokenParams } from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
@@ -49,6 +49,8 @@ function conflictError(documentId: string, expectedHash: string, currentHash: st
 
 /** Map RPC-side CEREFOX_CONFLICT / CEREFOX_TOKEN_REQUIRED errors to agent-first text. */
 function mapIngestRpcError(message: string, documentId: string): Error {
+  const metaErr = metadataTokenError(message);
+  if (metaErr) return metaErr;
   if (message.includes("CEREFOX_CONFLICT")) {
     const { expected, current } = extractConflictHashes(message);
     return conflictError(documentId, expected, current);
@@ -118,6 +120,14 @@ async function handler(
   const author_type = "agent"; // MCP path is always agent
   const expected_content_hash = (args.expected_content_hash as string | undefined)?.trim() || null;
   const last_write_wins = (args.last_write_wins as boolean | undefined) ?? false;
+  const expectedMetaRaw = args.expected_metadata_revision;
+  if (
+    expectedMetaRaw !== undefined && expectedMetaRaw !== null &&
+    !(typeof expectedMetaRaw === "number" && Number.isInteger(expectedMetaRaw))
+  ) {
+    throw new McpInvalidParams("expected_metadata_revision must be an integer (the metadata_revision you read)");
+  }
+  const expected_metadata_revision = (expectedMetaRaw as number | undefined) ?? null;
 
   if (!title || !content?.trim()) {
     throw new McpInvalidParams("title and content are required");
@@ -214,6 +224,7 @@ async function handler(
       p_expected_content_hash: expected_content_hash,
       p_last_write_wins: last_write_wins,
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
+      ...metadataTokenParams(expected_metadata_revision, false),
     });
 
     if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);
@@ -315,6 +326,7 @@ async function handler(
         p_expected_content_hash: expected_content_hash,
         p_last_write_wins: last_write_wins,
       p_content_format: CONTENT_FORMAT_BLIND_STITCH,
+      ...metadataTokenParams(expected_metadata_revision, false),
       });
 
       if (ingestErr) throw mapIngestRpcError(ingestErr.message, existingDoc.id);
@@ -485,7 +497,16 @@ export const ingestTool: ToolDefinition = {
         description:
           "Explicitly skip the concurrency check and overwrite regardless of concurrent changes (default: false). Use ONLY when an external source of truth makes conflicts meaningless (e.g. re-syncing from files). Recorded in the audit log.",
       },
-      metadata: { type: "object", description: "Arbitrary JSON metadata (optional)" },
+      metadata: {
+        type: "object",
+        description:
+          "JSON metadata (optional). On an UPDATE it is MERGED into the existing metadata: keys you pass are set, a null value removes that key, keys you omit are kept. To change only metadata, use cerefox_set_document_metadata instead.",
+      },
+      expected_metadata_revision: {
+        type: "integer",
+        description:
+          "Optional, with metadata on an update: the metadata_revision you read (cerefox_get_document / cerefox_metadata_search). The write fails if the metadata changed since.",
+      },
       author: AUTHOR_PARAM_WRITE,
     },
   },
