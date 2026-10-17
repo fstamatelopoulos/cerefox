@@ -27,7 +27,14 @@ import {
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
 import { ensureDocumentInProject, setDocumentProjectsByName } from "./_projects.ts";
-import { extractConflictHashes, logUsage, metadataTokenError, metadataTokenParams } from "./_utils.ts";
+import {
+  duplicateContentDocumentId,
+  extractConflictHashes,
+  legacyContentUniqueError,
+  logUsage,
+  metadataTokenError,
+  metadataTokenParams,
+} from "./_utils.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
@@ -84,7 +91,7 @@ function mapIngestRpcError(message: string, documentId: string): Error {
         `regardless of concurrent changes, pass last_write_wins=true.`,
     );
   }
-  return new Error(`Ingest RPC failed: ${message}`);
+  return legacyContentUniqueError(message) ?? new Error(`Ingest RPC failed: ${message}`);
 }
 
 async function handler(
@@ -396,22 +403,24 @@ async function handler(
     p_content_format: CONTENT_FORMAT_BLIND_STITCH,
   });
 
+  // The RPC's duplicate check caught an identical create that landed after
+  // the pre-check above. Nothing was written.
+  const duplicateId = duplicateContentDocumentId(ingestErr?.message ?? "");
+  if (duplicateId) {
+    const { data: existing } = await supabase
+      .from("cerefox_documents")
+      .select("title")
+      .eq("id", duplicateId)
+      .maybeSingle();
+    return alreadyExistsMessage(existing?.title ?? title, duplicateId, contentHash);
+  }
   if (ingestErr || !ingestResult?.length) {
+    const legacy = legacyContentUniqueError(ingestErr?.message ?? "");
+    if (legacy) throw legacy;
     throw new Error(`Ingest RPC failed: ${ingestErr?.message ?? "no data returned"}`);
   }
 
   const documentId = ingestResult[0].document_id;
-
-  // The RPC's duplicate check caught an identical create that landed after
-  // the pre-check above. Nothing was written.
-  if (ingestResult[0].operation === "skipped") {
-    const { data: existing } = await supabase
-      .from("cerefox_documents")
-      .select("title")
-      .eq("id", documentId)
-      .maybeSingle();
-    return alreadyExistsMessage(existing?.title ?? title, documentId, contentHash);
-  }
 
   if (project_names !== null && project_names.length > 0) {
     await setDocumentProjectsByName(supabase, documentId, project_names, { author, authorType: author_type });

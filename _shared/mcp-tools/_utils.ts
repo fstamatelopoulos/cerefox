@@ -275,6 +275,38 @@ export function isAuditCheckError(message: string): boolean {
   return /cerefox_audit_log_operation_check/.test(message);
 }
 
+/**
+ * A create that lost the duplicate-content race (0.21.1, #334 review): the RPC
+ * raises CEREFOX_DUPLICATE_CONTENT naming the live document that already has
+ * this content, and nothing was written. Callers report it as a skip.
+ */
+export class DuplicateContentError extends Error {
+  constructor(public readonly existingDocumentId: string, message: string) {
+    super(message);
+    this.name = "DuplicateContentError";
+  }
+}
+
+/** The existing document's id from a CEREFOX_DUPLICATE_CONTENT error, or null. */
+export function duplicateContentDocumentId(message: string): string | null {
+  if (!message.includes("CEREFOX_DUPLICATE_CONTENT")) return null;
+  return message.match(/document ([0-9a-f-]{36})/i)?.[1] ?? null;
+}
+
+/**
+ * The store-wide content constraint a server below schema 0.20.0 still has
+ * (#332). A current client meets it when it writes content that some other
+ * document, trashed ones included, already has: only the server can fix that.
+ */
+export function legacyContentUniqueError(message: string): Error | null {
+  if (!message.includes("cerefox_documents_hash_unique")) return null;
+  return new Error(
+    "Another document (possibly one in the trash) already has exactly this content, " +
+      "and this server predates schema 0.20.0, which still refuses that. " +
+      `Run \`cerefox server deploy\`, then retry. (${message})`,
+  );
+}
+
 /** Postgres 23505 through PostgREST — one predicate, not N copied regexes. */
 export function isDuplicateKeyError(message: string): boolean {
   return /duplicate key|unique constraint|23505/i.test(message);

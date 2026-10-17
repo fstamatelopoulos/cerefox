@@ -37,6 +37,7 @@ import {
   type ChunkInsertRow,
 } from "./client-bridge.ts";
 import { fileToMarkdown } from "./file-to-markdown.ts";
+import { DuplicateContentError } from "../../../../_shared/mcp-tools/_utils.ts";
 import {
   ConcurrencyConflictError,
   loadPipelineSettings,
@@ -321,41 +322,44 @@ export class IngestionPipeline {
     }
 
     // ── (8) Atomic RPC write ─────────────────────────────────────────────
-    const rpcResult = await this.db.ingestDocumentRpc({
-      documentId: null,
-      title,
-      // `null` means "caller omitted source, keep what is stored" — but on a
-      // create there is nothing stored to keep, and letting null through lands
-      // on the RPC's 'agent' default, mislabelling a document a CLI user just
-      // made (review bug_005). This branch is where create-vs-update is finally
-      // known, so it is where the sentinel resolves.
-      source: source ?? sourceOnCreate ?? null,
-      sourcePath,
-      contentHash: hash,
-      metadata: validatedMeta,
-      chunks: chunkRows,
-      contentFormat: CONTENT_FORMAT_BLIND_STITCH,
-      author,
-      authorType,
-    });
-    const newDocumentId = rpcResult.document_id;
-
-    // The RPC's own duplicate check won a race against the pre-check above:
-    // an identical document was created in between. Nothing was written.
-    if (rpcResult.operation === "skipped") {
-      const existingRow = await this.db.getDocumentById(newDocumentId);
+    let rpcResult: Awaited<ReturnType<IngestionDbBridge["ingestDocumentRpc"]>>;
+    try {
+      rpcResult = await this.db.ingestDocumentRpc({
+        documentId: null,
+        title,
+        // `null` means "caller omitted source, keep what is stored" — but on a
+        // create there is nothing stored to keep, and letting null through lands
+        // on the RPC's 'agent' default, mislabelling a document a CLI user just
+        // made (review bug_005). This branch is where create-vs-update is finally
+        // known, so it is where the sentinel resolves.
+        source: source ?? sourceOnCreate ?? null,
+        sourcePath,
+        contentHash: hash,
+        metadata: validatedMeta,
+        chunks: chunkRows,
+        contentFormat: CONTENT_FORMAT_BLIND_STITCH,
+        author,
+        authorType,
+      });
+    } catch (err) {
+      // The RPC's own duplicate check won a race against the pre-check above:
+      // an identical document was created in between. Nothing was written.
+      if (!(err instanceof DuplicateContentError)) throw err;
+      const existingId = err.existingDocumentId;
+      const existingRow = await this.db.getDocumentById(existingId);
       return {
-        documentId: newDocumentId,
+        documentId: existingId,
         title: existingRow?.title ?? title,
-        chunkCount: rpcResult.chunk_count,
-        totalChars: rpcResult.total_chars,
+        chunkCount: existingRow?.chunk_count ?? 0,
+        totalChars: existingRow?.total_chars ?? 0,
         action: "skipped",
         reindexed: false,
-        projectIds: await this.db.getDocumentProjectIds(newDocumentId),
+        projectIds: await this.db.getDocumentProjectIds(existingId),
         note: "",
         contentHash: hash,
       };
     }
+    const newDocumentId = rpcResult.document_id;
 
     // ── (9) Project M2M ──────────────────────────────────────────────────
     if (resolvedIds.length > 0) {

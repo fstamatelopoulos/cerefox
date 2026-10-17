@@ -1556,11 +1556,11 @@ $$;
 --                       flows where an external source of truth makes conflicts
 --                       meaningless). Recorded in the audit description when used.
 --
--- Returns: document_id, chunk_count, total_chars, operation ('create',
---          'update-content', or 'skipped' when a create matched a LIVE document
---          with the same content_hash: nothing is written and the existing
---          document is returned, 0.20.0 #332), version_id (UUID of snapshot,
---          null on create and skip)
+-- Returns: document_id, chunk_count, total_chars, operation ('create' or
+--          'update-content'), version_id (UUID of snapshot, null on create).
+--          A create whose content_hash matches a LIVE document raises
+--          CEREFOX_DUPLICATE_CONTENT (23505) naming that document; nothing is
+--          written (0.20.0 #332; raised rather than returned since 0.21.1)
 
 -- ── Metadata helpers (#333, 0.21.0) ──────────────────────────────────────────
 -- One copy of the merge/replace rule and of the token rule, shared by
@@ -1702,6 +1702,7 @@ SET search_path = public, pg_catalog
 AS $$
 DECLARE
     v_doc_id        UUID;
+    v_duplicate_id  UUID;
     v_chunk_count   INT;
     v_total_chars   INT;
     v_operation     TEXT;
@@ -1948,28 +1949,33 @@ BEGIN
         -- Duplicate check (0.20.0, #332). Content is no longer UNIQUE across
         -- the store: that constraint refused updates that happened to match
         -- some other document, including ones in the trash. Duplicates are
-        -- now caught only here, on CREATE, and only against LIVE documents:
-        -- a match returns the existing document as 'skipped' and writes
-        -- nothing. Callers pre-check the same thing before embedding (to save
-        -- the spend); this is the authoritative copy, and the advisory lock
-        -- makes it race-free between two identical concurrent creates.
+        -- now caught only on CREATE, and only against LIVE documents. Every
+        -- caller pre-checks before embedding (to save the spend) and reports
+        -- a match as skipped; this is the authoritative copy, made race-free
+        -- by the advisory lock.
+        --
+        -- Losing the race RAISES rather than returning the winner (0.21.1,
+        -- #334 review). A 1.18 client never read `operation`: handed the
+        -- winner's id, it reported a create and replaced the winner's
+        -- projects with its own. Raising under 23505 gives such a client what
+        -- the old constraint gave it (a failed write, nothing after it), and
+        -- current clients turn CEREFOX_DUPLICATE_CONTENT into a skip.
         IF NULLIF(BTRIM(p_content_hash), '') IS NOT NULL THEN
             PERFORM pg_advisory_xact_lock(
                 hashtextextended('cerefox_content_hash:' || p_content_hash, 0));
 
-            -- Returned straight from the query, never via SELECT … INTO the
-            -- create's own variables: a no-row SELECT INTO sets its targets to
-            -- NULL, which wiped v_chunk_count before the INSERT below.
-            RETURN QUERY
-                SELECT d.id, d.chunk_count, d.total_chars, 'skipped'::TEXT,
-                       NULL::UUID, p_content_hash, FALSE, d.metadata_revision
-                FROM cerefox_documents d
-                WHERE d.content_hash = p_content_hash
-                  AND d.deleted_at IS NULL
-                ORDER BY d.created_at
-                LIMIT 1;
-            IF FOUND THEN
-                RETURN;
+            -- Read into a dedicated variable, never into the create's own:
+            -- a no-row SELECT INTO sets its targets to NULL, which once wiped
+            -- v_chunk_count before the INSERT below.
+            SELECT d.id INTO v_duplicate_id
+            FROM cerefox_documents d
+            WHERE d.content_hash = p_content_hash
+              AND d.deleted_at IS NULL
+            ORDER BY d.created_at
+            LIMIT 1;
+            IF v_duplicate_id IS NOT NULL THEN
+                RAISE EXCEPTION 'CEREFOX_DUPLICATE_CONTENT: document % already has this content; nothing was written', v_duplicate_id
+                    USING ERRCODE = '23505';
             END IF;
         END IF;
 
@@ -3421,6 +3427,8 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.21.1: a create that loses the duplicate race raises
+    -- CEREFOX_DUPLICATE_CONTENT (23505) instead of returning 'skipped'.
     -- 0.21.0: migration 0036 adds metadata_revision (+ trigger) and audit
     -- metadata_before/after; the metadata RPC and ingest RPC check the token,
     -- content updates merge metadata instead of replacing it (#333).
@@ -3481,7 +3489,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.21.0'::TEXT;
+    SELECT '0.21.1'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────

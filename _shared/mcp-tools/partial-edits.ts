@@ -36,7 +36,12 @@ import {
   sha256hex,
 } from "./_chunker.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../embeddings/index.ts";
-import { extractConflictHashes, isMissingFunctionError, logUsage } from "./_utils.ts";
+import {
+  extractConflictHashes,
+  isMissingFunctionError,
+  legacyContentUniqueError,
+  logUsage,
+} from "./_utils.ts";
 import { McpInvalidParams, type MCPSupabaseClient, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_WRITE, DEFAULT_IDENTITY, callerIdentity } from "./identity.ts";
 
@@ -353,6 +358,8 @@ async function applyAndWrite(
           `Run \`cerefox server deploy\`, then retry. (${message})`,
       );
     }
+    const legacy = legacyContentUniqueError(message);
+    if (legacy) throw legacy;
     throw new Error(`Edit failed: ${message}`);
   }
 

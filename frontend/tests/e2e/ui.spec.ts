@@ -123,6 +123,34 @@ test.describe("Ingest (paste)", () => {
   });
 });
 
+// A duplicate create is skipped, and the page must say so (#334 review): it
+// used to clear the form and show nothing at all.
+test.describe("Ingest: duplicate content", () => {
+  test("pasting the same content again says it is already in memory", async ({ page }) => {
+    const title = uniqueTitle("Duplicate Paste");
+    const body = `# Duplicate\n\nPlaywright e2e ${crypto.randomUUID()}.`;
+    try {
+      await page.goto(`${APP}/ingest`);
+      await page.fill('input[placeholder="Document title"]', title);
+      await page.fill('textarea[placeholder="# Paste your Markdown here…"]', body);
+      await page.click('button[type="submit"]:has-text("Ingest")');
+      await expect(page.getByText("ingested successfully")).toBeVisible({ timeout: 30_000 });
+
+      await page.goto(`${APP}/ingest`);
+      await page.fill('input[placeholder="Document title"]', `${title} copy`);
+      await page.fill('textarea[placeholder="# Paste your Markdown here…"]', body);
+      await page.click('button[type="submit"]:has-text("Ingest")');
+      const alert = page.getByTestId("ingest-skipped");
+      await expect(alert).toBeVisible({ timeout: 30_000 });
+      await expect(alert).toContainText(title);
+      await expect(alert.getByText("View document")).toBeVisible();
+    } finally {
+      await purgeDocByTitle(title);
+      await purgeDocByTitle(`${title} copy`);
+    }
+  });
+});
+
 // "Update existing" must actually update when the content changed (#298). It
 // sent no concurrency token, so the server refused exactly the case the toggle
 // exists for; these walk it through the real UI on both tabs and then check the

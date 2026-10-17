@@ -157,6 +157,10 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   // in one backup can share a body; the hash arm below must not let the first
   // one's arrival skip the second.
   const payloadIds = new Set(payload.documents.map((d) => d.id));
+  const payloadHashCounts = new Map<string, number>();
+  for (const d of payload.documents) {
+    if (d.content_hash) payloadHashCounts.set(d.content_hash, (payloadHashCounts.get(d.content_hash) ?? 0) + 1);
+  }
 
   for (const doc of payload.documents) {
     // Skip if this document is already present — by id *or* by content hash.
@@ -178,16 +182,26 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     // The hash arm follows the create-time rule (#332): it counts only a LIVE
     // document from outside this backup, and only for a live backup document.
     // An id match always counts, trashed or not (it is the primary key).
-    const { data: matches } = await client.raw
+    //
+    // Two lookups, each exact: one shared .or() query capped at N rows could
+    // drop the very row that decides it (#334 review). The hash lookup asks
+    // for one more live row than this backup itself holds with that hash, so
+    // a match from outside the backup always makes it into the window.
+    const { data: byId } = await client.raw
       .from("cerefox_documents")
-      .select("id, deleted_at")
-      .or(`id.eq.${doc.id},content_hash.eq.${doc.content_hash}`)
-      .limit(1000);
-    const existing = ((matches ?? []) as Array<{ id: string; deleted_at: string | null }>).some(
-      (m) =>
-        m.id === doc.id ||
-        (!doc.deleted_at && !m.deleted_at && !payloadIds.has(m.id)),
-    );
+      .select("id")
+      .eq("id", doc.id)
+      .limit(1);
+    let existing = (byId ?? []).length > 0;
+    if (!existing && !doc.deleted_at && doc.content_hash) {
+      const { data: byHash } = await client.raw
+        .from("cerefox_documents")
+        .select("id")
+        .eq("content_hash", doc.content_hash)
+        .is("deleted_at", null)
+        .limit((payloadHashCounts.get(doc.content_hash) ?? 0) + 1);
+      existing = ((byHash ?? []) as Array<{ id: string }>).some((m) => !payloadIds.has(m.id));
+    }
 
     if (existing) {
       skipped++;
