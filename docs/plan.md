@@ -44,6 +44,14 @@ integration 50/0, Playwright 30/1-skip (incl. 3 new edit-form metadata tests), E
 remote MCP 49/0. Codex review: round 1 found 2 real Highs (edit-page token capture, EF
 null param) and 4 Mediums, fixed; round 2 clean. Merged (#336).
 
+**2026-10-17: #334 Codex review follow-up, merged (#338), schema 0.21.1.** A create that
+loses the duplicate race now RAISES `CEREFOX_DUPLICATE_CONTENT` (23505) instead of returning
+`skipped`: a 1.18 client never read `operation` and would have replaced the winner's
+projects. Current clients map it to a skip; the pre-0.20.0 constraint maps to a deploy
+instruction; the web Ingest page shows duplicate skips; restore's lookups are exact and
+paged. Two Codex rounds. Staging: package 420/3/0, EF + remote MCP 49/0, Playwright 31/1.
+Next: cut 1.19.0 (awaiting go-ahead).
+
 **2026-10-12: #332 on `fix/332-content-uniqueness` (schema 0.20.0), for 1.19.0.** Migration
 0035 drops `cerefox_documents_hash_unique`; the duplicate check moves into
 `cerefox_ingest_document`'s create path (live documents only, advisory lock on the hash,
