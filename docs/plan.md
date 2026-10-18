@@ -50,7 +50,7 @@ loses the duplicate race now RAISES `CEREFOX_DUPLICATE_CONTENT` (23505) instead 
 projects. Current clients map it to a skip; the pre-0.20.0 constraint maps to a deploy
 instruction; the web Ingest page shows duplicate skips; restore's lookups are exact and
 paged. Two Codex rounds. Staging: package 420/3/0, EF + remote MCP 49/0, Playwright 31/1.
-Next: cut 1.19.0 (awaiting go-ahead).
+1.19.0 cut 2026-10-17; 1.19.1 the same day (the /edit metadata token accepted again as last-write-wins with a warning, #339). Staging + the shared Cerefox Local on 1.19.1. Next: production upgrade (with a backup first), when the maintainer is present.
 
 **2026-10-12: #332 on `fix/332-content-uniqueness` (schema 0.20.0), for 1.19.0.** Migration
 0035 drops `cerefox_documents_hash_unique`; the duplicate check moves into
