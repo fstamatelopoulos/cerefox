@@ -11,6 +11,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { EnvironmentBanner } from "./EnvironmentBanner";
 import { SchemaVersionBanner } from "./SchemaVersionBanner";
+import { UpdateBadge } from "./UpdateBadge";
 import { VersionFooter } from "./VersionFooter";
 
 const NAV_ITEMS = [
@@ -64,6 +65,7 @@ export function Layout() {
             >
               Cere<span style={{ color: "var(--primary)" }}>fox</span>
             </Text>
+            <UpdateBadge />
           </Group>
 
           <Group gap="lg">

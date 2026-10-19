@@ -497,6 +497,63 @@ test.describe("Environment banner", () => {
   });
 });
 
+test.describe("Update notice (#323)", () => {
+  // The server only reports `latest` when npm has something newer, so the
+  // response is mocked: the build under test is usually the newest release.
+  test("a newer release shows in the header, with a readable upgrade command", async ({ page, request }) => {
+    const info = await (await request.get("/api/v1/version")).json();
+    await page.route("**/api/v1/version*", (route) =>
+      route.fulfill({ json: { ...info, latest: "99.0.0", update_command: "cerefox self-update" } }),
+    );
+    await page.goto(`${APP}/`);
+
+    const badge = page.locator("header").getByTestId("update-badge");
+    await expect(badge).toBeVisible({ timeout: 15_000 });
+    await expect(badge).toHaveText("v99.0.0 available");
+    await expect(badge).toHaveAttribute("href", /\/releases\/tag\/v99\.0\.0$/);
+
+    // The command used to render in its own background color, in both
+    // themes: a blank pill. Measure the contrast it is actually drawn with.
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.mouse.move(0, 0);
+      await badge.hover();
+      const tip = page.getByRole("tooltip");
+      await expect(tip).toContainText("Run cerefox self-update to upgrade");
+      const ratio = await tip.locator("code").evaluate((el) => {
+        // "rgb(a)(0-255 …)", or "color(srgb 0-1 … / a)" for a color-mix().
+        const rgba = (c: string) => {
+          const n = (c.match(/[\d.]+/g) ?? []).map(Number);
+          return c.startsWith("color(") ? n.map((v, i) => (i < 3 ? v * 255 : v)) : n;
+        };
+        const [r, g, b, a = 1] = rgba(getComputedStyle(el).backgroundColor);
+        const under = rgba(getComputedStyle(el.closest("[role=tooltip]")!).backgroundColor);
+        const bg = [r, g, b].map((v, i) => v * a + under[i] * (1 - a));
+        const lum = (c: number[]) => {
+          const [R, G, B] = c.map((v) => {
+            const s = v / 255;
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+        };
+        const [l1, l2] = [lum(rgba(getComputedStyle(el).color).slice(0, 3)), lum(bg)].sort((x, y) => y - x);
+        return (l1 + 0.05) / (l2 + 0.05);
+      });
+      expect(ratio, `${colorScheme} contrast`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test("no badge when the server reports nothing newer", async ({ page, request }) => {
+    const info = await (await request.get("/api/v1/version")).json();
+    await page.route("**/api/v1/version*", (route) =>
+      route.fulfill({ json: { ...info, latest: null, update_command: null } }),
+    );
+    await page.goto(`${APP}/`);
+    await expect(page.getByText("Cerefox v", { exact: false })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("update-badge")).toHaveCount(0);
+  });
+});
+
 // ── Settings ──────────────────────────────────────────────────────────────
 test.describe("Settings", () => {
   test("page loads and lists config groups", async ({ page }) => {
