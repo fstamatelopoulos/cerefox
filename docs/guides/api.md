@@ -233,6 +233,20 @@ so you can re-read without a second round trip. Sending no hash (and no
 (a file you are syncing, say) makes a conflict meaningless; there is no implicit
 default. Creating a new document needs no hash.
 
+**Metadata has its own token** (v1.19.0). `GET /documents/{id}` also returns
+`metadata_revision`, which goes up by one whenever the metadata changes.
+
+- `POST /documents/{id}/edit` **replaces** the whole metadata object, so send
+  `expected_metadata_revision` with `metadata`. A stale one is a `409` with
+  `error: "metadata_conflict"`: re-read, reapply your change and retry. Sending
+  none is accepted for now as last-write-wins, with a `warnings` entry in the
+  response and `[last-write-wins]` in the audit log; a future release will
+  require it, announced in advance.
+- A content update through `POST /ingest` **merges** `metadata`: keys you send
+  are set, keys you leave out are kept, and a key sent as `null` is removed.
+  `metadata: {}` changes nothing. `expected_metadata_revision` is optional
+  there.
+
 **Check the status code, not just the body.** Every refusal is a real HTTP
 status: `400` for a malformed or incomplete request (including a body field the
 route does not know, which is refused rather than ignored), `404` for a missing
