@@ -22,12 +22,12 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-function findPackageRoot(): string {
+export function findPackageRoot(start = dirname(fileURLToPath(import.meta.url))): string {
   // bun build collapses the bundle into a single .js; for that case
   // `import.meta.dir` ends with `/dist/bin/` (or `/dist/`).
   // For source-tree runs it ends in `/packages/memory/src/cli/util/`.
   // In both cases, walking up until we find package.json works.
-  let dir = dirname(fileURLToPath(import.meta.url));
+  let dir = start;
   for (let i = 0; i < 10; i++) {
     const pkgJson = join(dir, "package.json");
     if (existsSync(pkgJson)) {
@@ -38,13 +38,19 @@ function findPackageRoot(): string {
         // ignore malformed package.json
       }
     }
+    // An install without our package.json: the Cerefox Local image copies
+    // dist/ and docs/ to /opt/cerefox, whose package.json is the embedder
+    // runtime's. Without this, `guides` found no docs there.
+    if (existsSync(join(dir, "dist", "bin", "cerefox.js")) && existsSync(join(dir, "docs", "guides"))) {
+      return dir;
+    }
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
   // Fallback: assume we're running from source, two levels up from
   // `packages/memory/` is the repo root.
-  return resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  return resolve(start, "..", "..", "..");
 }
 
 const PACKAGE_ROOT = findPackageRoot();
