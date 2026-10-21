@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.19.2] -- 2026-10-21
+
 ### Changed
 
 - **The web UI shows a newer release next to the logo.** The "vX.Y.Z
