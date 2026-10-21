@@ -9,7 +9,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **The web UI shows a newer release next to the logo.** The "vX.Y.Z
+  available" notice was in the footer, which most pages only reach after a
+  scroll. It is now a badge in the header; hover it for the upgrade command,
+  click it for the release notes. (#323)
+
+### Fixed
+
+- **The upgrade command in that notice's tooltip is readable.** It rendered as
+  a blank pill, in its own background color, in both light and dark themes.
+- **The HTTP API guide covers the metadata token.** `api.md` (also served by
+  `cerefox guides` and loaded into a store by `guides ingest`) described only
+  `content_hash`. It now covers `metadata_revision`, the
+  `expected_metadata_revision` that `POST /documents/{id}/edit` should send,
+  and the metadata merge on `POST /ingest`. Run `cerefox guides ingest` after
+  upgrading to refresh the copy in your store.
 
 ---
 
