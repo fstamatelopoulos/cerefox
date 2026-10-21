@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.19.3] -- 2026-10-21
+
 ### Fixed
 
 - **`cerefox guides` works inside Cerefox Local.** `guides list`, `show`,
