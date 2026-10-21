@@ -9,7 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`cerefox guides` works inside Cerefox Local.** `guides list`, `show`,
+  `open` and `ingest` found no bundled docs in the container, so
+  `cerefox-local guides ingest` never loaded the guides into a Local store, and
+  a guide fix in a release (1.19.2's API guide, say) never reached it. The web
+  Help page was not affected. Run `cerefox-local upgrade`, then
+  `cerefox-local guides ingest`.
 
 ---
 
