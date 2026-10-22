@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.19.4] -- 2026-10-22
+
 ### Security
 
 - **The Cerefox Local image now runs Bun 1.4.4**, which carries the fix for
