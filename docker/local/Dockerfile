@@ -44,6 +44,12 @@ RUN set -eux; \
 COPY --from=postgrest/postgrest:v14.12 /bin/postgrest /usr/local/bin/postgrest
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 
+# `oven/bun:1` floats, so a stale cached base could ship an old runtime. Fail the
+# build below MIN_BUN: 1.4.4 is the first Bun with the Brotli decoder fix
+# (CVE-2026-111497, brotli 1.2.1), which fetch() reaches on any `br` response.
+ARG MIN_BUN=1.4.4
+RUN bun -e "if (Bun.semver.order(Bun.version, '${MIN_BUN}') < 0) { console.error('bun ' + Bun.version + ' < ${MIN_BUN}: pull a newer oven/bun:1'); process.exit(1) }"
+
 # App = the self-contained bundled dist (bin + frontend + server-assets).
 COPY --from=builder /src/packages/memory/dist /opt/cerefox/dist
 # Bundled docs + agent guides — the /api/v1/docs (Help) resolver looks for these at

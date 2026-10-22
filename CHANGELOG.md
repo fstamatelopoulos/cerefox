@@ -9,7 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Security
+
+- **The Cerefox Local image now runs Bun 1.4.4**, which carries the fix for
+  the Brotli decoder vulnerability (CVE-2026-111497) in Bun's bundled Brotli.
+  Cerefox never decodes Brotli from an untrusted source (it only reaches the
+  decoder through `fetch()` replies from the embedding provider, Supabase, the
+  npm registry, GitHub and Hugging Face, all over TLS), so the practical risk
+  was low, but every earlier image shipped an affected runtime. The image build
+  now fails if the Bun it copies in is older than 1.4.4.
+- **If you run Cerefox on your own Node.js or Bun, upgrade the runtime**: the
+  same fix is in Node.js 24.22.1 (and 22.23.4, 26.12.1) and Bun 1.4.4. Node's
+  release also fixes two TLS hostname-check bypasses. Restart `cerefox web`
+  and your MCP clients afterwards, since running processes keep the old
+  runtime. Nothing in the npm package changes.
 
 ---
 
