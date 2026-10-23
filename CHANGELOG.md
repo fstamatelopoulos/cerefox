@@ -9,7 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **Dependencies:** minor and patch updates, including `@supabase/supabase-js`
+  2.118.0, `zod` 4.6.7, `@hono/node-server` 2.1.5, React 19.3.1 and
+  Mantine 9.7.2 (#340).
+
+### Fixed
+
+- **Building the Cerefox Local image yourself on Apple Silicon no longer
+  produces an image that crashes at random on startup.** Without BuildKit,
+  `docker build` leaves `TARGETARCH` unset, and the Dockerfile then installed
+  the x86-64 build of its process supervisor into an arm64 image, where it
+  ran emulated and intermittently segfaulted. The build now uses the image's
+  own architecture when `TARGETARCH` is unset, and fails on an architecture it
+  does not support instead of guessing. Published images were not affected.
 
 ---
 

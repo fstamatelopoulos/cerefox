@@ -28,10 +28,14 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends curl xz-utils ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
-    case "${TARGETARCH:-amd64}" in \
+    # A plain `docker build` (no BuildKit/buildx) leaves TARGETARCH empty; fall
+    # back to the image's own arch, never a guess (x86-64 s6 on an arm64 image
+    # runs emulated and segfaults at random during startup).
+    arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$arch" in \
       amd64) S6_ARCH=x86_64 ;; \
       arm64) S6_ARCH=aarch64 ;; \
-      *)     S6_ARCH=x86_64 ;; \
+      *)     echo "unsupported architecture: $arch" >&2; exit 1 ;; \
     esac; \
     base="https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}"; \
     curl -fsSL "${base}/s6-overlay-noarch.tar.xz"      -o /tmp/s6-noarch.tar.xz; \
