@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.19.5] -- 2026-10-23
+
 ### Changed
 
 - **Dependencies:** minor and patch updates, including `@supabase/supabase-js`
