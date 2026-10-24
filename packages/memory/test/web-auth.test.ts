@@ -17,6 +17,7 @@ import {
   decideAuth,
   isContainerised,
   isLoopbackAddress,
+  restGatewayKeys,
 } from "../src/web/auth.ts";
 
 const KEY = `${API_KEY_PREFIX}testkeytestkeytestkeytestkey`;
@@ -227,5 +228,45 @@ describe("containerGateWarning — the v1.12.0 container bug", () => {
     expect(
       containerGateWarning({ CEREFOX_API_KEY: KEY } as NodeJS.ProcessEnv),
     ).toBeNull();
+  });
+});
+
+describe("restGatewayKeys — the container's own data calls (v1.19.6)", () => {
+  /**
+   * In a gated container the server's data client reaches PostgREST through
+   * its own /rest/v1 proxy, signing with the service-role JWT. Before v1.19.6
+   * the gate accepted only the API key there, so every data route of a gated
+   * Cerefox Local failed while /api/v1/version stayed green.
+   */
+  const JWT = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.sig";
+  const LOCAL = {
+    CEREFOX_API_KEY: KEY,
+    CEREFOX_POSTGREST_UPSTREAM: "http://127.0.0.1:3000",
+    CEREFOX_SUPABASE_KEY: JWT,
+  } as NodeJS.ProcessEnv;
+
+  const gate = (env: NodeJS.ProcessEnv, authorization: string | null) =>
+    decide({ configuredKeys: restGatewayKeys(env), requireKeyEverywhere: true, authorization });
+
+  test("a gated container accepts its own service JWT on /rest/v1", () => {
+    expect(gate(LOCAL, `Bearer ${JWT}`)).toMatchObject({ allow: true, reason: "valid_key" });
+  });
+
+  test("the API key is still accepted, and anything else is still refused", () => {
+    expect(gate(LOCAL, `Bearer ${KEY}`).allow).toBe(true);
+    expect(gate(LOCAL, `Bearer ${OTHER}`)).toMatchObject({ allow: false, reason: "bad_key" });
+    expect(gate(LOCAL, null)).toMatchObject({ allow: false, reason: "no_key" });
+  });
+
+  test("a gate that is off stays off: no key configured adds nothing", () => {
+    const env = { ...LOCAL, CEREFOX_API_KEY: "" } as NodeJS.ProcessEnv;
+    expect(restGatewayKeys(env)).toBe("");
+    expect(decide({ configuredKeys: restGatewayKeys(env) })).toMatchObject({ allow: true, reason: "disabled" });
+  });
+
+  test("outside Cerefox Local (no proxy upstream) the JWT is not a credential", () => {
+    const env = { ...LOCAL, CEREFOX_POSTGREST_UPSTREAM: "" } as NodeJS.ProcessEnv;
+    expect(restGatewayKeys(env)).toBe(KEY);
+    expect(gate(env, `Bearer ${JWT}`).allow).toBe(false);
   });
 });

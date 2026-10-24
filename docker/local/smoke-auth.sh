@@ -91,6 +91,16 @@ ok "correct key → 200"
 c=$(code -H "Authorization: Bearer cfx_lak_wrong" "http://127.0.0.1:$PORT/api/v1/version")
 [ "$c" = "401" ] || fail "wrong key got $c, expected 401"
 ok "wrong key → 401"
+# A route that reads the database. /api/v1/version never touches it, which is
+# how v1.12.1 through v1.19.5 shipped a gated container whose own data calls
+# (server → its /rest/v1 proxy, signed with the service JWT) were refused by
+# this same gate: every data route was a 500 while everything above passed.
+c=$(code -H "Authorization: Bearer $KEY" "http://127.0.0.1:$PORT/api/v1/projects")
+[ "$c" = "200" ] || fail "data route WITH the key got $c, expected 200 (the server's own calls are being gated)"
+ok "data route with the key → 200"
+docker exec "$NAME" sh -c 'set -a; . /run/cerefox-runtime.env; set +a; cerefox project list >/dev/null' \
+  || fail "in-container CLI could not reach the data API (cerefox-local commands would fail)"
+ok "in-container CLI reaches the data API"
 # The key survived the recreate, because it lives on the volume. A key that
 # changed on every recreate would silently break every configured client.
 KEY2=$(docker exec "$NAME" cat /var/lib/postgresql/data/.cerefox_api_key)

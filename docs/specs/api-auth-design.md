@@ -188,6 +188,19 @@ probing liveness without a credential is precisely what this ticket exists to
 stop. One rule with no exceptions is also easier to reason about than one rule
 plus a carve-out, and liveness can still be answered by a TCP connect.
 
+*Correction (v1.19.6).* "The CLI talks to the Supabase Data API directly" holds
+in the cloud, but on Cerefox Local the Data API **is** this server's
+`/rest/v1` proxy, and the server's own data client calls it too, signed with
+the container's service-role JWT. In a gated container every caller is remote,
+so from v1.12.1 to v1.19.5 the gate refused the server's own calls and every
+data route returned a 500, while `/api/v1/version` (the only route
+`smoke-auth.sh` checked) stayed green. `/rest/v1` now also accepts that JWT
+(`restGatewayKeys` in `web/auth.ts`), only when the proxy is mounted and a key
+is configured. It widens nothing: the JWT never leaves the container, and its
+holder already has full PostgREST access. `smoke-auth.sh` now checks a data
+route and the in-container CLI with the gate on, and the image publish
+workflow runs it before pushing.
+
 **3 — Purge stays reachable over the API.** It cannot be removed without
 breaking the web UI's own trash-purge button, and the maintainer wants it
 reachable from both surfaces. Hiding it was a defensive measure against

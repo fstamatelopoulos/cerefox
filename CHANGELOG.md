@@ -9,7 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Cerefox Local with the API key gate on could not read or write any
+  data.** When the container is published beyond localhost
+  (`CEREFOX_LOCAL_BIND=0.0.0.0`, or `CEREFOX_API_REQUIRE_KEY=1` set by hand),
+  the gate also refused the server's own internal database calls, so every
+  data route (projects, documents, search, ingest) failed with a 500 even with
+  the correct key, and so did `cerefox-local` commands. `/api/v1/version` kept
+  answering, which hid it. Affected v1.12.1 through v1.19.5. Containers
+  published only on localhost, the default, were not affected. The gate now
+  accepts the container's own internal credential on its database proxy;
+  callers from outside still need the API key, exactly as before.
+- **The Local image is now tested with the gate on before it is published.**
+  The container auth smoke test checks a data route and the in-container CLI,
+  and the publish workflow runs it on every release.
 
 ---
 
