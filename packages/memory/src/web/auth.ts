@@ -185,20 +185,43 @@ export function decideAuth(input: AuthInputs): AuthDecision {
 }
 
 /**
+ * The credentials `/rest/v1/*` accepts: the API key(s), plus, on Cerefox Local,
+ * the container's own service-role JWT.
+ *
+ * The server's data client (and the CLI run inside the container) reaches
+ * PostgREST through this same port, signing with `CEREFOX_SUPABASE_KEY`. In a
+ * gated container every caller counts as remote, so before v1.19.6 the gate
+ * refused the server's own calls and every data route failed with a 500
+ * while `/api/v1/version` stayed green. This does add a second credential to
+ * the gate, on `/rest/v1` only. It is contained like the API key: minted inside
+ * the container, kept in its runtime env, never published or written to the
+ * host, and its holder gets no more than the API key's holder already reaches.
+ * It is accepted only where the proxy exists (`CEREFOX_POSTGREST_UPSTREAM`) and
+ * only when a key is configured, so a gate that is off stays off.
+ */
+export function restGatewayKeys(env: NodeJS.ProcessEnv = process.env): string {
+  const keys = env.CEREFOX_API_KEY ?? "";
+  if (!keys.trim() || !(env.CEREFOX_POSTGREST_UPSTREAM ?? "").trim()) return keys;
+  const internal = (env.CEREFOX_SUPABASE_KEY ?? "").trim();
+  return internal ? `${keys},${internal}` : keys;
+}
+
+/**
  * Hono middleware enforcing {@link decideAuth}.
  *
  * Mounted on `/api/v1/*` AND `/rest/v1/*`. The second one is not optional:
  * `registerPostgrestProxy` puts a PostgREST passthrough on the same port and
  * forwards caller headers verbatim, and it is live on Cerefox Local
  * specifically — the deployment most likely to run unattended. Gating only
- * `/api/v1` would move the hole rather than close it.
+ * `/api/v1` would move the hole rather than close it. The `/rest/v1` mount
+ * passes {@link restGatewayKeys}.
  */
-export function apiAuth(): MiddlewareHandler {
+export function apiAuth(keys: () => string = () => process.env.CEREFOX_API_KEY ?? ""): MiddlewareHandler {
   return async (c, next) => {
     const decision = decideAuth({
       remoteAddress: remoteAddressOf(c),
       authorization: c.req.header("Authorization") ?? null,
-      configuredKeys: process.env.CEREFOX_API_KEY ?? "",
+      configuredKeys: keys(),
       requireKeyEverywhere: (process.env.CEREFOX_API_REQUIRE_KEY ?? "") === "1",
     });
 

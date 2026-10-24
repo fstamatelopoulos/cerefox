@@ -66,6 +66,23 @@ jobs:
             org.opencontainers.image.description=Self-hosted, all-in-one Cerefox knowledge-memory backend for AI agents (Postgres+pgvector, PostgREST, and the Cerefox server + web UI in one container; optional fully-offline embeddings, no API key). Don't pull this image directly — install with the one-liner, which provisions the container, data volume, and host helper: curl -fsSL https://github.com/fstamatelopoulos/cerefox/releases/latest/download/install-local.sh | sh — full guide: https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-local.md
             org.opencontainers.image.documentation=https://github.com/fstamatelopoulos/cerefox/blob/main/docs/guides/setup-local.md
 
+      # Gate the push on the container auth smoke test. A gated container whose
+      # own data calls were refused shipped from v1.12.1 to v1.19.5 because this
+      # script existed but nothing ran it. amd64 only: native on this runner.
+      - name: Build amd64 for the smoke test
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/local/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: cerefox-smoke-auth:ci
+          provenance: false
+          cache-from: type=gha
+
+      - name: Container auth smoke test
+        run: CEREFOX_SMOKE_IMAGE=cerefox-smoke-auth:ci sh docker/local/smoke-auth.sh
+
       - name: Build + push (multi-arch)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:

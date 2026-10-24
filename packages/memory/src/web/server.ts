@@ -32,6 +32,7 @@ import {
   containerGateWarning,
   isContainerised,
   isLoopbackAddress,
+  restGatewayKeys,
 } from "./auth.ts";
 import { existsSync } from "node:fs";
 import { readFileSync, statSync } from "node:fs";
@@ -111,7 +112,7 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
     c.res.headers.set("Link", `<${OPENAPI_PATH}>; rel="service-desc"`);
   });
   app.use("/api/v1/*", apiAuth());
-  app.use("/rest/v1/*", apiAuth());
+  app.use("/rest/v1/*", apiAuth(() => restGatewayKeys()));
 
   // (1) JSON API — registered first.
   registerMetaRoutes(app, ctx);
