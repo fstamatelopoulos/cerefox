@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.19.6] -- 2026-10-24
+
 ### Fixed
 
 - **Cerefox Local with the API key gate on could not read or write any
