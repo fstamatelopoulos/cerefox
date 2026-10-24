@@ -192,11 +192,12 @@ export function decideAuth(input: AuthInputs): AuthDecision {
  * PostgREST through this same port, signing with `CEREFOX_SUPABASE_KEY`. In a
  * gated container every caller counts as remote, so before v1.19.6 the gate
  * refused the server's own calls and every data route failed with a 500
- * while `/api/v1/version` stayed green. Accepting the JWT widens nothing: it is
- * minted inside the container, never published, and whoever holds it already
- * has full access to PostgREST. It is accepted only where the proxy exists
- * (`CEREFOX_POSTGREST_UPSTREAM`) and only when a key is configured, so a gate
- * that is off stays off.
+ * while `/api/v1/version` stayed green. This does add a second credential to
+ * the gate, on `/rest/v1` only. It is contained like the API key: minted inside
+ * the container, kept in its runtime env, never published or written to the
+ * host, and its holder gets no more than the API key's holder already reaches.
+ * It is accepted only where the proxy exists (`CEREFOX_POSTGREST_UPSTREAM`) and
+ * only when a key is configured, so a gate that is off stays off.
  */
 export function restGatewayKeys(env: NodeJS.ProcessEnv = process.env): string {
   const keys = env.CEREFOX_API_KEY ?? "";

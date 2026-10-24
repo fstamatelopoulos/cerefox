@@ -19,8 +19,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the correct key, and so did `cerefox-local` commands. `/api/v1/version` kept
   answering, which hid it. Affected v1.12.1 through v1.19.5. Containers
   published only on localhost, the default, were not affected. The gate now
-  accepts the container's own internal credential on its database proxy;
-  callers from outside still need the API key, exactly as before.
+  also accepts the container's own internal credential on its database proxy.
+  That credential is created inside the container and never leaves it, so
+  callers from outside still need the API key. Unchanged: the web UI in a
+  browser still cannot use a container with the gate on, because it sends no
+  key (see `docs/guides/securing-local-access.md`); MCP, the CLI and the HTTP
+  API with the key all work.
 - **The Local image is now tested with the gate on before it is published.**
   The container auth smoke test checks a data route and the in-container CLI,
   and the publish workflow runs it on every release.

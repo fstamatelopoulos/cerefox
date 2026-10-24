@@ -196,8 +196,12 @@ so from v1.12.1 to v1.19.5 the gate refused the server's own calls and every
 data route returned a 500, while `/api/v1/version` (the only route
 `smoke-auth.sh` checked) stayed green. `/rest/v1` now also accepts that JWT
 (`restGatewayKeys` in `web/auth.ts`), only when the proxy is mounted and a key
-is configured. It widens nothing: the JWT never leaves the container, and its
-holder already has full PostgREST access. `smoke-auth.sh` now checks a data
+is configured. That is a second credential on the gate, accepted deliberately
+on the assumption it rests on: like the API key, the JWT is minted inside the
+container and never published or written to the host, so who can present it
+does not change. The browser is unaffected either way: the SPA sends no
+credential, so a gated container still cannot be used from a browser (see
+`docs/guides/securing-local-access.md`). `smoke-auth.sh` now checks a data
 route and the in-container CLI with the gate on, and the image publish
 workflow runs it before pushing.
 
