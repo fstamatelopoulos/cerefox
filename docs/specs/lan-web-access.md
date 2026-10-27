@@ -138,8 +138,8 @@ script that runs on the Cerefox origin. That is the trade, stated plainly:
 
 ## Packaging
 
-**(b) Cerefox Local on a LAN host.** No image change. Docs: a "LAN or NAS
-deployment" section in `docs/guides/setup-local.md`, cross-linked from
+**(b) Cerefox Local on a LAN host.** No image change. Docs: a new guide,
+`docs/guides/setup-lan.md` (both shapes), cross-linked from `setup-local.md` and
 `securing-local-access.md`: publish one port, `CEREFOX_API_REQUIRE_KEY=1`,
 inject a known key with `CEREFOX_API_KEY` (for hosts whose GUI gives no shell to
 read the minted one), a compose file for GUIs that take one, and loading the
@@ -150,8 +150,9 @@ must load to show the prompt), and a hashed asset it references is a 200.
 **(a) Web UI container.** The root `Dockerfile` (marked untested, never
 published) becomes a supported image:
 
-- a `CEREFOX_VERSION` build argument, defaulting to the release being built, so
-  an image is reproducible;
+- built from the repo tree in a Bun builder stage, exactly like the Local image,
+  so the image is the commit it was built from and CI can test it before
+  anything is published (no `npm install` of whatever is latest);
 - runs as the image's non-root `node` user;
 - **refuses to start without `CEREFOX_API_KEY`**, and sets
   `CEREFOX_API_REQUIRE_KEY=1` unless the operator sets it. This image exists to

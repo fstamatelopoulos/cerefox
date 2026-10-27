@@ -201,7 +201,9 @@ on the assumption it rests on: like the API key, the JWT is minted inside the
 container and never published or written to the host, so who can present it
 does not change. The browser is unaffected either way: the SPA sends no
 credential, so a gated container still cannot be used from a browser (see
-`docs/guides/securing-local-access.md`). `smoke-auth.sh` now checks a data
+`docs/guides/securing-local-access.md`). *(v1.20.0: it can now. The web UI asks
+for the key when the gate refuses it, so the browser holds a key on a gated
+server only, typed in by the user; see `lan-web-access.md`.)* `smoke-auth.sh` now checks a data
 route and the in-container CLI with the gate on, and the image publish
 workflow runs it before pushing.
 

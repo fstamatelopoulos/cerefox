@@ -199,6 +199,8 @@ function assertSchemaVersionGuard(): void {
   }
 }
 
+/** The ghcr image workflows `--docker-publish` dispatches: Cerefox Local and the web image (#346). */
+const IMAGE_WORKFLOWS = ["local-image.yml", "web-image.yml"] as const;
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:[.-][A-Za-z0-9.-]+)?$/;
 
 // ── tiny shell helper ────────────────────────────────────────────────────
@@ -625,7 +627,7 @@ function parseArgs(argv: string[]): Args {
           "Usage:",
           "  bun scripts/cut_release.ts <version>                       cut tag + GitHub Release",
           "  bun scripts/cut_release.ts <version> --npm-publish         + trigger npm publish workflow",
-          "  bun scripts/cut_release.ts <version> --docker-publish      + trigger ghcr image publish workflow",
+          "  bun scripts/cut_release.ts <version> --docker-publish      + trigger the ghcr image publish workflows",
           "  bun scripts/cut_release.ts <version> --dry-run             show actions only",
           "  bun scripts/cut_release.ts --check                         report current version",
           "",
@@ -636,8 +638,8 @@ function parseArgs(argv: string[]): Args {
           "                   workflow with publish_to_npm=true so it ships to npm.",
           "                   Default off — cut a tag without immediately publishing",
           "                   (lets you spot a problem in the staging window).",
-          "  --docker-publish After the tag + GitHub Release, trigger local-image.yml to",
-          "                   build + push the all-in-one image to ghcr.io (+ :latest for a",
+          "  --docker-publish After the tag + GitHub Release, trigger local-image.yml and",
+          "                   web-image.yml to build + push both images to ghcr.io (+ :latest for a",
           "                   stable, non-prerelease version). Default off — same policy as",
           "                   --npm-publish: a Release is a milestone, shipping is opt-in.",
           "  --check          Report the current VERSION; suggest the next obvious bump.",
@@ -929,7 +931,9 @@ async function main(): Promise<void> {
     info(`DRY-RUN: would upload install.sh + docker/local/install-local.sh as Release assets`);
     if (args.dockerPublish) {
       const publishLatest = !newVersion.includes("-");
-      info(`DRY-RUN: would 'gh workflow run local-image.yml -f tag=${tag} -f publish_latest=${publishLatest}'`);
+      for (const wf of IMAGE_WORKFLOWS) {
+        info(`DRY-RUN: would 'gh workflow run ${wf} -f tag=${tag} -f publish_latest=${publishLatest}'`);
+      }
     } else {
       info("DRY-RUN: --docker-publish not set; no ghcr image would be published.");
     }
@@ -1011,23 +1015,16 @@ async function main(): Promise<void> {
   // for a stable (non-prerelease) version.
   if (args.dockerPublish) {
     const publishLatest = !newVersion.includes("-");
-    info(`Triggering local-image.yml to publish the ghcr image (publish_latest=${publishLatest})…`);
-    runOrDie("gh", [
-      "workflow",
-      "run",
-      "local-image.yml",
-      "-f",
-      `tag=${tag}`,
-      "-f",
-      `publish_latest=${publishLatest}`,
-    ]);
-    ok(`Workflow triggered. Watch at: gh run list --workflow=local-image.yml`);
+    for (const wf of IMAGE_WORKFLOWS) {
+      info(`Triggering ${wf} to publish its ghcr image (publish_latest=${publishLatest})…`);
+      runOrDie("gh", ["workflow", "run", wf, "-f", `tag=${tag}`, "-f", `publish_latest=${publishLatest}`]);
+      ok(`Workflow triggered. Watch at: gh run list --workflow=${wf}`);
+    }
   } else {
     info(
       "--docker-publish not set; no ghcr image published.\n" +
-        "  When ready: gh workflow run local-image.yml -f tag=" +
-        tag +
-        " -f publish_latest=true",
+        IMAGE_WORKFLOWS.map((wf) => `  When ready: gh workflow run ${wf} -f tag=${tag} -f publish_latest=true`)
+          .join("\n"),
     );
   }
 

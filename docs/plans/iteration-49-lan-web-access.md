@@ -14,12 +14,25 @@ calls; this iteration fixes the browser.
 ## Steps
 
 1. [x] Design spec (`docs/specs/lan-web-access.md`).
-2. [ ] Codex design review (one round), findings folded into the spec.
-3. [ ] Frontend: key store, challenge detection, header on every call, the prompt, "Forget
-   key", raw `fetch` sites and `/api/v1` links moved onto the client; source scan.
-4. [ ] Frontend unit tests + gated Playwright project.
-5. [ ] (b) docs: LAN/NAS section in `setup-local.md`; `smoke-auth.sh` SPA-under-gate checks.
-6. [ ] (a) web image: root `Dockerfile` hardened, `web-image.yml` with a smoke test,
-   `setup-cloud-run.md` updated.
-7. [ ] Housekeeping: `fast-uri` override floor to `^3.1.9`.
-8. [ ] CHANGELOG, docs, suites green, reference-deployment acceptance (#346 checklist).
+2. [x] Codex design review, round 1 (about 76K tokens, "revise first"): one High (keyless
+   Cloud Run deployments break on upgrade: kept as a deliberate break with a migration and
+   `CEREFOX_WEB_NO_KEY=1`) and six Mediums, all folded into the spec's review log.
+3. [x] Frontend: key store (`lib/apiKey.ts`), challenge detection, header on every call,
+   the prompt and "Forget key" (`components/ApiKeyPrompt.tsx`), downloads and `/api/v1`
+   links through the client, no requests while the prompt waits, a late keyless refusal
+   cannot drop a key just entered (found by the Playwright session test).
+4. [x] Tests: frontend unit 70/0 (incl. `apiKey.test.ts`, the `api-key-surface` scan with
+   fixtures); Playwright 41 passed / 1 skipped with the new `gated` project (8 tests),
+   and the same 8 against a gated Cerefox Local container built from the branch.
+5. [x] (b) `docs/guides/setup-lan.md`; `smoke-auth.sh` checks the SPA loads under the gate
+   (PASS on a branch build).
+6. [x] (a) web image: root `Dockerfile` built from the tree, non-root, Node floor,
+   keyed healthcheck, `docker/web/entrypoint.sh` (refuses keyless start),
+   `docker/web/smoke.sh` (PASS), `web-image.yml`, `--docker-publish` dispatches both image
+   workflows; `setup-cloud-run.md` migrated to a Secret Manager key. Verified against
+   staging: data routes 200 with the key, `healthy`.
+7. [x] `fast-uri` override floor to `^3.1.9`.
+8. [x] CHANGELOG; `_shared` 1264/0, package suite on staging 426/3/0.
+9. [ ] Reference deployment acceptance (#346 checklist) on the LAN host, with a 1.20.0
+   build.
+10. [ ] PR, Codex code review, release.

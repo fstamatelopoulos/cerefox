@@ -10,6 +10,10 @@ Cerefox web server. You get the same web UI, CLI, and MCP server as the cloud se
 > container, fully offline, no API key. See
 > [Choose your embedder](#choose-your-embedder-openai-vs-fully-local).
 
+> **On another machine on your network?** To run this image on a NAS or a home
+> server and use it from your other machines (browser included), follow
+> [`setup-lan.md`](setup-lan.md) instead of the installer below.
+
 ## Cloud vs. Local — pick one
 
 Cerefox has two independent "worlds". Most people run **one or the other**:

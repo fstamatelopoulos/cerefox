@@ -94,11 +94,18 @@ while making the common case worse for everyone. On a single-user machine,
 loopback access and key-file access are the same trust boundary, so the gate is
 drawn at the place where the trust actually changes: the network.
 
-This is also why **the browser never holds a key**. The web UI is a static
-file, so a key embedded in the page could be read by anything that can load the
-page — precisely the attacker the key exists to stop. A key in an
+This is also why **the browser holds no key on a local install**. The web UI is
+a static file, so a key embedded in the page could be read by anything that can
+load the page — precisely the attacker the key exists to stop. A key in an
 unauthenticated page is not a secret. The UI works because it is local, not
 because it holds a credential.
+
+**When the gate is on for the browser too** (a container published beyond
+loopback, `CEREFOX_API_REQUIRE_KEY=1`, a native server opened from another
+machine), the web UI asks for the key once, keeps it in that browser for that
+address only, and sends it like any other client (v1.20.0+). Nothing is ever
+embedded in the page; the key comes from you. Running Cerefox on another
+machine on your network is covered in [`setup-lan.md`](setup-lan.md).
 
 ## Getting a key
 
@@ -171,9 +178,9 @@ KEY="cfx_lak_$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-43)"
 { echo "CEREFOX_API_KEY=$KEY"; echo "CEREFOX_API_REQUIRE_KEY=1"; } >> ~/.cerefox/local/.env
 cerefox-local restart
 
-# Note: with the gate on, YOUR BROWSER needs the key too. If you use the web UI
-# daily, prefer leaving Cerefox published on loopback with the gate off and
-# giving your harness host networking instead.
+# Note: with the gate on, YOUR BROWSER needs the key too: the web UI asks for it
+# once (v1.20.0+). If you would rather not, leave Cerefox published on loopback
+# with the gate off and give your harness host networking instead.
 
 # 3. Give the same value to your client container, however it takes config.
 docker run -e CEREFOX_API_KEY="$KEY" … your-harness
@@ -203,8 +210,8 @@ The answer is to stop exempting loopback:
 CEREFOX_API_REQUIRE_KEY=1
 ```
 
-Now every caller presents the key, proxy included. Your browser will need it
-too, so this mode suits headless deployments rather than daily UI use.
+Now every caller presents the key, proxy included. The web UI asks for it once
+per browser (v1.20.0+).
 
 ## What this does not protect
 
@@ -238,6 +245,11 @@ a Docker network, not loopback. Give it the key (see the recipe above).
 **Everything gets 401 from a Cerefox Local container, including the web UI.**
 That is the v1.12.0 bug, not a configuration problem. Run
 `cerefox-local upgrade` to get v1.12.1 or newer.
+
+**The web UI asks for an API key.** The server refused the browser, so the gate
+is on for it: paste the key (`cerefox api-key show`, `cerefox-local api-key`, or
+the `CEREFOX_API_KEY` you set). On v1.19.x and older the UI cannot send a key
+at all and a gated server is unusable from a browser; upgrade.
 
 **`cerefox-local api-key` says no key was found.** The image predates v1.12.0.
 Run `cerefox-local upgrade`.

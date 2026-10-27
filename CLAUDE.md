@@ -505,6 +505,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `quickstart.md` | Zero to first ingested document in < 15 minutes |
 | `setup-supabase.md` | Full Supabase deployment (schema, MCP, config) |
 | `setup-local.md` | Full local Docker deployment |
+| `setup-lan.md` | Cerefox on a LAN host (NAS, home server): Cerefox Local or the web image, the gate on, the web UI's key prompt |
 | `setup-cloud-run.md` | GCP Cloud Run deployment |
 | `access-paths.md` | All access layers, credentials, and integration paths |
 | `api.md` | The `/api/v1` HTTP API: auth posture, caller attribution, endpoint list |
