@@ -14,7 +14,7 @@
     "postgres": "^3.4.9"
   },
   "overrides": {
-    "fast-uri": "^3.1.8",
+    "fast-uri": "^3.1.9",
     "qs": "^6.16.0",
     "@xmldom/xmldom": "^0.8.15",
     "hono": "^4.13.7",

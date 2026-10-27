@@ -36,6 +36,13 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   guide: <IconBook size={16} />,
 };
 
+/** Show the loaded markdown as plain text in a new tab. */
+function openRaw(text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  window.open(url, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export function HelpPage() {
   const navigate = useNavigate();
   const { "*": docPath } = useParams();
@@ -166,12 +173,14 @@ export function HelpPage() {
                 </Title>
                 <Group gap="sm" wrap="nowrap">
                   <CliHint cmd="cerefox guides show" args={selectedPath} />
+                  {/* The text is already loaded; a link to /api/v1 would be a
+                      navigation without the API key (#346). */}
                   <Anchor
                     size="xs"
                     c="dimmed"
-                    href={`/api/v1/docs/${selectedPath}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    component="button"
+                    type="button"
+                    onClick={() => openRaw(contentQuery.data)}
                   >
                     raw
                   </Anchor>

@@ -10,6 +10,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
+import { AuthRequiredError } from "./api/client";
 import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { theme } from "./theme";
@@ -18,7 +19,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      // A refusal by the API key gate waits for the key prompt; retrying it
+      // would only repeat the 401.
+      retry: (failures, error) => !(error instanceof AuthRequiredError) && failures < 1,
     },
   },
 });

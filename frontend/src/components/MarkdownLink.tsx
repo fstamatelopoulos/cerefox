@@ -2,6 +2,7 @@ import { Anchor, Button, List, Loader, Popover, Stack, Text } from "@mantine/cor
 import { useState, type AnchorHTMLAttributes, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { apiPathOf, downloadApiFile } from "../api/client";
 import { resolveLink } from "../api/links";
 import type { LinkResolveResponse } from "../api/types";
 
@@ -50,6 +51,25 @@ export function MarkdownLink({ href, children, fromDocId, ...rest }: MarkdownLin
   if (kind === "external") {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" {...rest}>
+        {children}
+      </a>
+    );
+  }
+  // A link into the API itself: a navigation would go without the key on a
+  // gated server (#346), so it is fetched through the client and opened.
+  const apiPath = kind === "absolute" && href ? apiPathOf(href) : null;
+  if (apiPath) {
+    return (
+      <a
+        href={href}
+        {...rest}
+        onClick={(event) => {
+          event.preventDefault();
+          downloadApiFile(apiPath, "download", "open").catch(() => {
+            /* refused (the key prompt opens) or unreachable: nothing to open */
+          });
+        }}
+      >
         {children}
       </a>
     );

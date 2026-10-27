@@ -69,7 +69,7 @@
     },
     "packages/memory": {
       "name": "@cerefox/memory",
-      "version": "1.19.5",
+      "version": "1.19.6",
       "bin": {
         "cerefox": "dist/bin/cerefox.js",
       },
@@ -105,7 +105,7 @@
     "@xmldom/xmldom": "^0.8.15",
     "adm-zip": "^0.6.1",
     "brace-expansion": "^5.0.11",
-    "fast-uri": "^3.1.8",
+    "fast-uri": "^3.1.9",
     "hono": "^4.13.7",
     "ip-address": "^10.5.1",
     "js-yaml": "^4.3.2",

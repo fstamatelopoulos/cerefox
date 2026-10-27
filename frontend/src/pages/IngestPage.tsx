@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { detectV07FromResponse, uploadFailureMessage } from "../api/client";
+import { apiRequest, detectV07FromResponse, uploadFailureMessage } from "../api/client";
 import { checkFilename, ingestPaste } from "../api/documents";
 import type { FilenameCheckResponse, IngestResponse } from "../api/types";
 import { invalidateDocumentViews } from "../lib/invalidate";
@@ -97,7 +97,7 @@ export function IngestPage() {
       if (projectIds.length > 0) formData.append("project_ids", projectIds.join(","));
       const meta = collectMeta();
       if (Object.keys(meta).length > 0) formData.append("metadata", JSON.stringify(meta));
-      const resp = await fetch("/api/v1/ingest/file", { method: "POST", body: formData });
+      const resp = await apiRequest("/ingest/file", { method: "POST", body: formData });
       if (!resp.ok) {
         const v07 = await detectV07FromResponse(resp);
         if (v07) throw v07;

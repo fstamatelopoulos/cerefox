@@ -311,7 +311,7 @@ test.describe("Document detail", () => {
     await docRows.first().click();
     await page.waitForTimeout(2000);
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Download" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
   });
 
   test("review status toggle follows review_workflow_enabled", async ({ page, request }) => {
@@ -451,7 +451,7 @@ test.describe("Analytics", () => {
     await page.goto(`${APP}/analytics`);
     await expect(page.getByRole("heading", { name: "Analytics" })).toBeVisible();
     await expect(page.getByText("Period")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Export CSV" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export CSV" })).toBeVisible();
   });
 
   test("run analysis renders results", async ({ page }) => {

@@ -9,6 +9,7 @@ import {
 import { IconCheck, IconDeviceDesktop, IconMoon, IconSun } from "@tabler/icons-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useThemePreference } from "../hooks/useThemePreference";
+import { ApiKeyPrompt, ForgetApiKeyButton } from "./ApiKeyPrompt";
 import { EnvironmentBanner } from "./EnvironmentBanner";
 import { SchemaVersionBanner } from "./SchemaVersionBanner";
 import { UpdateBadge } from "./UpdateBadge";
@@ -81,6 +82,8 @@ export function Layout() {
               </UnstyledButton>
             ))}
 
+            <ForgetApiKeyButton />
+
             <Menu position="bottom-end" withArrow shadow="md" width={150}>
               <Menu.Target>
                 <ActionIcon variant="subtle" size="lg" title="Color theme" aria-label="Color theme">
@@ -122,6 +125,7 @@ export function Layout() {
       </AppShell.Header>
 
       <AppShell.Main>
+        <ApiKeyPrompt />
         <EnvironmentBanner />
         <SchemaVersionBanner />
         <Outlet />

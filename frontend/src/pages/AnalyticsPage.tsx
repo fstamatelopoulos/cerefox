@@ -25,13 +25,13 @@ import {
   fetchUsageSummary,
   fetchUsageLog,
   getConfig,
-  getUsageExportUrl,
+  exportUsageCsv,
   setConfig,
   type UsageFilters,
   type UsageSummary,
 } from "../api/analytics";
 import { fetchProjects } from "../api/projects";
-import { showSuccess } from "../utils/notifications";
+import { showCallError, showSuccess } from "../utils/notifications";
 import ui from "../styles/redesign.module.css";
 import { WordCloudChart } from "../components/WordCloudChart";
 import { HEBChart } from "../components/HEBChart";
@@ -212,9 +212,9 @@ export function AnalyticsPage() {
           <Button
             variant="subtle"
             leftSection={<IconDownload size={16} />}
-            component="a"
-            href={getUsageExportUrl(exportFilters)}
-            download
+            onClick={() =>
+              exportUsageCsv(exportFilters).catch((err) => showCallError("Export failed", err))
+            }
             size="sm"
           >
             Export CSV
