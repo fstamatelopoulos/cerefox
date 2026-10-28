@@ -184,6 +184,105 @@ export function decideAuth(input: AuthInputs): AuthDecision {
   };
 }
 
+export interface BrowserGuardInputs {
+  /** The request's `Host` header. */
+  host: string | null;
+  /** The request's `Origin` header. */
+  origin: string | null;
+  /** The request's `Sec-Fetch-Site` header. */
+  secFetchSite: string | null;
+  /** `CEREFOX_ALLOWED_HOSTS`: extra host names, comma-separated; `*` for any. */
+  allowedHosts: string;
+}
+
+/** Host names a page cannot point at this server through its own DNS. */
+const LOCAL_HOST_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** `example.com:8000` → `example.com`; `[::1]:8000` → `[::1]`. Lowercased. */
+export function hostnameOf(hostHeader: string): string {
+  const h = hostHeader.trim().toLowerCase();
+  if (h.startsWith("[")) {
+    const end = h.indexOf("]");
+    return end === -1 ? h : h.slice(0, end + 1);
+  }
+  const colon = h.lastIndexOf(":");
+  return colon === -1 ? h : h.slice(0, colon);
+}
+
+function isIpLiteral(hostname: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || /^\[[0-9a-f:.]+\]$/.test(hostname);
+}
+
+/**
+ * The browser-facing half of the gate, for requests admitted WITHOUT a key
+ * (`api-auth-design.md`, "ride-along hardening"; built in v1.20.0).
+ *
+ * The loopback exemption trusts the machine, and a browser on the machine runs
+ * pages from anywhere. Two ways such a page can use a keyless server:
+ *
+ * - **Cross-site requests.** The server sends no CORS headers, so a foreign
+ *   page cannot read an answer, but a form post or a `no-cors` fetch still
+ *   reaches the server and can change or delete data. Refused when the
+ *   browser says so: `Sec-Fetch-Site: cross-site`, or an `Origin` that is
+ *   neither this server nor a page served from this machine (the Vite dev
+ *   server on another localhost port is one).
+ * - **DNS rebinding.** A page on `evil.example` re-points its own name at
+ *   127.0.0.1 and then calls the server *same-origin*, reading the whole
+ *   store. Its requests carry the attacker's name in `Host`, so a keyless
+ *   request must name the server by an IP address or `localhost`, which no
+ *   outside DNS can claim. A name reached on purpose (a `.local` name, a
+ *   Compose service name) goes in `CEREFOX_ALLOWED_HOSTS`.
+ *
+ * Requests that present the key skip all of this: a foreign page cannot send
+ * an `Authorization` header cross-origin without a CORS preflight this server
+ * never answers, and a rebinding page runs on another origin, so it cannot
+ * read the key the SPA keeps in its own origin's storage.
+ *
+ * Clients that are not browsers (agents, curl, the CLI) send neither `Origin`
+ * nor `Sec-Fetch-Site`, so only the `Host` rule can touch them.
+ */
+export function browserGuard(input: BrowserGuardInputs): { allow: true } | { allow: false; message: string } {
+  if ((input.secFetchSite ?? "").trim().toLowerCase() === "cross-site") {
+    return { allow: false, message: "Refused a cross-site request: a page from another site cannot use this server." };
+  }
+
+  const host = (input.host ?? "").trim().toLowerCase();
+  if (host) {
+    const name = hostnameOf(host);
+    const extra = input.allowedHosts
+      .split(",")
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
+    if (!LOCAL_HOST_NAMES.has(name) && !isIpLiteral(name) && !extra.includes("*") && !extra.includes(name)) {
+      return {
+        allow: false,
+        message:
+          `Refused: this server was reached as "${name}". Without an API key it answers only to ` +
+          "an IP address or localhost, so a web page cannot re-point its own name at it. If you " +
+          "use this name on purpose, add it to CEREFOX_ALLOWED_HOSTS, or turn the API key on.",
+      };
+    }
+  }
+
+  const origin = input.origin?.trim();
+  if (origin) {
+    let originHost: string | null = null;
+    try {
+      // `Origin: null` (a sandboxed frame, a file:// page) fails to parse.
+      originHost = new URL(origin).host.toLowerCase();
+    } catch {
+      originHost = null;
+    }
+    const sameAsHost = originHost !== null && originHost === host;
+    const fromThisMachine = originHost !== null && LOCAL_HOST_NAMES.has(hostnameOf(originHost));
+    if (!sameAsHost && !fromThisMachine) {
+      return { allow: false, message: `Refused a request from the page at ${origin}: a page from another site cannot use this server.` };
+    }
+  }
+
+  return { allow: true };
+}
+
 /**
  * The credentials `/rest/v1/*` accepts: the API key(s), plus, on Cerefox Local,
  * the container's own service-role JWT.
@@ -225,7 +324,23 @@ export function apiAuth(keys: () => string = () => process.env.CEREFOX_API_KEY ?
       requireKeyEverywhere: (process.env.CEREFOX_API_REQUIRE_KEY ?? "") === "1",
     });
 
-    if (decision.allow) return next();
+    if (decision.allow) {
+      // A request let in without a key (loopback, or a gate that is off) is
+      // trusted for where it came from, and a browser on this machine is also
+      // "from here" when a web page drives it. See `browserGuard`.
+      if (decision.reason !== "valid_key") {
+        const guard = browserGuard({
+          host: c.req.header("Host") ?? null,
+          origin: c.req.header("Origin") ?? null,
+          secFetchSite: c.req.header("Sec-Fetch-Site") ?? null,
+          allowedHosts: process.env.CEREFOX_ALLOWED_HOSTS ?? "",
+        });
+        // 403, not 401: no key would change the answer for a page that is
+        // not ours, and a 401 challenge would make our own SPA ask for one.
+        if (!guard.allow) return c.json({ detail: guard.message }, 403);
+      }
+      return next();
+    }
 
     // 401 with a challenge, matching the Edge Functions' surface. The body
     // uses `detail` because that is the field every other /api/v1 error uses

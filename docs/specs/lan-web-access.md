@@ -132,7 +132,8 @@ script that runs on the Cerefox origin. That is the trade, stated plainly:
 - **The `Origin` check that `api-auth-design.md` planned was never built.** It
   defends the loopback, gate-off case: a malicious page in the user's browser
   posting to `127.0.0.1`. It does not affect this design (no ambient credential
-  on a gated server), so it gets its own issue rather than riding along.
+  on a gated server), so it got its own issue, #347, and shipped in the same
+  release with a `Host` check against DNS rebinding.
 - **A browser sign-in with accounts.** Cerefox is single-user; one key is the
   whole model.
 

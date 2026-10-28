@@ -157,6 +157,13 @@ so a malicious page in the user's browser cannot drive the API even though the
 browser is on loopback. This is the one real gap the loopback design leaves,
 and it closes it.
 
+> **Built in v1.20.0 (#347)**, as `browserGuard` in `web/auth.ts`, and wider
+> than planned: an `Origin` check alone misses DNS rebinding, where the page's
+> requests are same-origin and only `Host` carries the attacker's name. Keyless
+> requests must use an IP address or `localhost` as `Host` (extra names via
+> `CEREFOX_ALLOWED_HOSTS`), and `Sec-Fetch-Site: cross-site` is refused too.
+> Requests that present the key are not checked.
+
 ## Decisions
 
 Settled with the maintainer 2026-09-02.

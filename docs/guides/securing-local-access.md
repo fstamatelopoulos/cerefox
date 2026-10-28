@@ -107,6 +107,30 @@ address only, and sends it like any other client (v1.20.0+). Nothing is ever
 embedded in the page; the key comes from you. Running Cerefox on another
 machine on your network is covered in [`setup-lan.md`](setup-lan.md).
 
+### Web pages in your browser (v1.20.0+)
+
+Trusting the machine has one catch: your browser is on the machine, and it runs
+pages from anywhere. So a request the server lets in **without a key** (from
+loopback, or with the gate off) also has to pass two browser checks:
+
+- **No cross-site requests.** A page from another site cannot post to Cerefox:
+  the server refuses a request the browser marks as cross-site
+  (`Sec-Fetch-Site`), or one whose `Origin` is neither this server nor a page
+  served from this machine. Agents, curl and the CLI send neither header, so
+  they are not affected.
+- **Only local names.** A keyless request must reach the server by an IP
+  address or `localhost` (the `Host` header). This stops *DNS rebinding*, where
+  a page re-points its own domain name at `127.0.0.1` and reads your store as
+  if it were Cerefox. If you reach a gate-off server by a name on purpose (a
+  `.local` name, a Docker Compose service name), list it:
+
+  ```bash
+  CEREFOX_ALLOWED_HOSTS=nas.local,cerefox   # comma-separated; * turns the check off
+  ```
+
+Both refusals are a `403` whose message says which rule applied. A request
+that presents the key skips both checks: a foreign page cannot send one.
+
 ## Getting a key
 
 ### `cerefox web` (npm install)
@@ -250,6 +274,16 @@ That is the v1.12.0 bug, not a configuration problem. Run
 is on for it: paste the key (`cerefox api-key show`, `cerefox-local api-key`, or
 the `CEREFOX_API_KEY` you set). On v1.19.x and older the UI cannot send a key
 at all and a gated server is unusable from a browser; upgrade.
+
+**A `403` that says "a page from another site cannot use this server".** A web
+page tried to call Cerefox from another site. If it was a tool of yours, call
+the API from a script or give the tool the key; a browser page from another
+site is exactly what this refuses.
+
+**A `403` that says the server "was reached as" some name.** You reached a
+server with no key by a host name. Use `127.0.0.1` or `localhost`, add the name
+to `CEREFOX_ALLOWED_HOSTS` (in `~/.cerefox/local/.env` for Cerefox Local, then
+`cerefox-local restart`), or turn the key on.
 
 **`cerefox-local api-key` says no key was found.** The image predates v1.12.0.
 Run `cerefox-local upgrade`.

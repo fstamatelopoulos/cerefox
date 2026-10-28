@@ -143,7 +143,9 @@ docker run -d --name cerefox-web --restart unless-stopped \
   on the network would hand out full access to your cloud store.
 - **`CEREFOX_WEB_NO_KEY=1`** starts it without a key. Use it only when
   something in front of the container already controls who can reach it (an
-  authenticating proxy, Cloud Run IAM). It logs a warning at every start.
+  authenticating proxy, Cloud Run IAM). It logs a warning at every start, and
+  sets `CEREFOX_ALLOWED_HOSTS=*` unless you set it, since the container is then
+  reached by the proxy's host name.
 - The image runs as an unprivileged user and has a healthcheck that uses the
   key from its own environment.
 - The local offline embedder is not included: it runs only in Cerefox Local.

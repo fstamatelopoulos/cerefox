@@ -65,11 +65,20 @@ ok "healthcheck → healthy"
 
 echo "CEREFOX_WEB_NO_KEY=1 starts open, and says so"
 # shellcheck disable=SC2086
-docker run -d --name "$NAME-open" $BACKEND -e CEREFOX_WEB_NO_KEY=1 "$IMAGE" >/dev/null || fail "docker run failed"
+docker run -d --name "$NAME-open" -p "127.0.0.1:$((PORT + 1)):8000" $BACKEND -e CEREFOX_WEB_NO_KEY=1 "$IMAGE" >/dev/null \
+  || fail "docker run failed"
 i=0; until docker logs "$NAME-open" 2>&1 | grep -q "listening"; do
   i=$((i + 1)); [ "$i" -lt 60 ] || fail "open container never started"; sleep 1
 done
 docker logs "$NAME-open" 2>&1 | grep -q "WITHOUT an API key" || fail "no warning when open"
 ok "starts with a warning"
+O="http://127.0.0.1:$((PORT + 1))"
+# Behind a proxy it is reached by the proxy's name, so the keyless Host rule
+# (#347) is off by default here; the cross-site rules still hold.
+[ "$(code -H "Host: cerefox-abc.a.run.app" "$O/api/v1/version")" = "200" ] || fail "proxy host name refused"
+ok "reached by a proxy's host name → 200"
+[ "$(code -H "Sec-Fetch-Site: cross-site" "$O/api/v1/version")" = "403" ] || fail "cross-site request admitted"
+[ "$(code -H "Origin: https://evil.example" "$O/api/v1/version")" = "403" ] || fail "foreign Origin admitted"
+ok "cross-site and foreign-Origin requests → 403"
 
 echo "WEB-SMOKE PASS"

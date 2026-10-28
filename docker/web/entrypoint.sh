@@ -14,6 +14,11 @@ if [ -z "${CEREFOX_API_KEY:-}" ]; then
     echo "cerefox-web: CEREFOX_WEB_NO_KEY=1: starting WITHOUT an API key. Anyone who can" >&2
     echo "  reach this port can read and change the store. Only do this when something" >&2
     echo "  in front of it (Cloud Run IAM, an authenticating proxy) already controls access." >&2
+    # The proxy in front is reached by its own name (*.run.app, a domain), so the
+    # keyless Host rule (#347) would refuse every request. That rule stops DNS
+    # rebinding, which cannot get past an authenticating proxy; the Origin and
+    # cross-site rules still apply. An explicit value wins.
+    export CEREFOX_ALLOWED_HOSTS="${CEREFOX_ALLOWED_HOSTS:-*}"
   else
     echo "cerefox-web: refusing to start without CEREFOX_API_KEY." >&2
     echo "  Set CEREFOX_API_KEY to a long random value (for example" >&2

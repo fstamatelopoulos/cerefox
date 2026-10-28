@@ -44,6 +44,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Security
 
+- **A web page can no longer use a Cerefox server that needs no key** (#347).
+  The server trusts requests from your own machine, and your browser is on your
+  machine, so a malicious page could post to it (cross-site requests) or, by
+  pointing its own domain name at `127.0.0.1`, read the whole store (DNS
+  rebinding). A request without a key is now refused (`403`, with the reason)
+  when the browser marks it cross-site, when its `Origin` is another site, or
+  when it reaches the server by a host name rather than an IP address or
+  `localhost`. Agents, curl and the CLI are not affected unless they reach a
+  keyless server by a name: list such names in the new
+  `CEREFOX_ALLOWED_HOSTS`. Requests that present the API key are not checked,
+  and nothing the server refused before is admitted now.
 - Raised the `fast-uri` override floor to `^3.1.9`, the version that fixes
   CVE-2026-110306 and CVE-2026-110180. v1.19.6 already shipped 3.1.9; this keeps
   a future lockfile from resolving below it.
