@@ -25,7 +25,7 @@ ok()   { echo "  ✓ $1"; }
 code() { curl -s -m 8 -o /dev/null -w '%{http_code}' "$@" 2>/dev/null || echo 000; }
 
 if [ -z "${CEREFOX_SMOKE_IMAGE:-}" ]; then
-  echo "Building $IMAGE…"
+  echo "Building ${IMAGE}…"
   docker build -q -t "$IMAGE" "$REPO_ROOT" >/dev/null || fail "image build failed"
 fi
 
