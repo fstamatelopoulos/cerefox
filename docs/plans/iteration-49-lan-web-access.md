@@ -33,6 +33,11 @@ calls; this iteration fixes the browser.
    staging: data routes 200 with the key, `healthy`.
 7. [x] `fast-uri` override floor to `^3.1.9`.
 8. [x] CHANGELOG; `_shared` 1264/0, package suite on staging 426/3/0.
+8a. [x] `qs` pinned to 6.16.1 (GHSA-6pq8-jhm2-2vcw; v1.19.6 resolved 6.16.0).
+8b. [x] #347, keyless browser guard: `browserGuard` in `web/auth.ts` refuses
+   cross-site, foreign-Origin and non-local-Host (DNS rebinding) requests that
+   were admitted without a key; `CEREFOX_ALLOWED_HOSTS`; the web image defaults it
+   to `*` under `CEREFOX_WEB_NO_KEY=1`. Can only refuse, never admit (tested).
 9. [ ] Reference deployment acceptance (#346 checklist) on the LAN host, with a 1.20.0
    build.
-10. [ ] PR, Codex code review, release.
+10. [ ] PR #348 (open), Codex code review, release.
