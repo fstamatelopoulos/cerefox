@@ -932,7 +932,7 @@ async function main(): Promise<void> {
     if (args.dockerPublish) {
       const publishLatest = !newVersion.includes("-");
       for (const wf of IMAGE_WORKFLOWS) {
-        info(`DRY-RUN: would 'gh workflow run ${wf} -f tag=${tag} -f publish_latest=${publishLatest}'`);
+        info(`DRY-RUN: would 'gh workflow run ${wf} --ref ${tag} -f tag=${tag} -f publish_latest=${publishLatest}'`);
       }
     } else {
       info("DRY-RUN: --docker-publish not set; no ghcr image would be published.");
@@ -1017,13 +1017,14 @@ async function main(): Promise<void> {
     const publishLatest = !newVersion.includes("-");
     for (const wf of IMAGE_WORKFLOWS) {
       info(`Triggering ${wf} to publish its ghcr image (publish_latest=${publishLatest})…`);
-      runOrDie("gh", ["workflow", "run", wf, "-f", `tag=${tag}`, "-f", `publish_latest=${publishLatest}`]);
+      // --ref: build the release tag's tree, not whatever main has moved on to.
+      runOrDie("gh", ["workflow", "run", wf, "--ref", tag, "-f", `tag=${tag}`, "-f", `publish_latest=${publishLatest}`]);
       ok(`Workflow triggered. Watch at: gh run list --workflow=${wf}`);
     }
   } else {
     info(
       "--docker-publish not set; no ghcr image published.\n" +
-        IMAGE_WORKFLOWS.map((wf) => `  When ready: gh workflow run ${wf} -f tag=${tag} -f publish_latest=true`)
+        IMAGE_WORKFLOWS.map((wf) => `  When ready: gh workflow run ${wf} --ref ${tag} -f tag=${tag} -f publish_latest=true`)
           .join("\n"),
     );
   }

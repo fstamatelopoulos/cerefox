@@ -50,8 +50,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   pointing its own domain name at `127.0.0.1`, read the whole store (DNS
   rebinding). A request without a key is now refused (`403`, with the reason)
   when the browser marks it cross-site, when its `Origin` is another site, or
-  when it reaches the server by a host name rather than an IP address or
-  `localhost`. Agents, curl and the CLI are not affected unless they reach a
+  when it reaches the server by a host name rather than an IP address,
+  `localhost` or `host.docker.internal`. Agents, curl and the CLI are not affected unless they reach a
   keyless server by a name: list such names in the new
   `CEREFOX_ALLOWED_HOSTS`. Requests that present the API key are not checked,
   and nothing the server refused before is admitted now.

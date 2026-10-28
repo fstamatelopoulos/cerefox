@@ -144,26 +144,32 @@ export interface AuthInputs {
  *    to existing installs: nobody's setup breaks on upgrade. It is *not* a
  *    silent downgrade, because `cerefox web` warns at boot when it binds a
  *    non-loopback host with no key configured (see `server.ts`).
- * 2. **Loopback → allow**, unless the operator asked for the key everywhere.
- * 3. **Otherwise → require a valid key.**
+ * 2. **A valid key → allow**, from anywhere (reason `valid_key`).
+ * 3. **Loopback → allow**, unless the operator asked for the key everywhere.
+ *    A wrong key from loopback is admitted here, as it always was.
+ * 4. **Otherwise → refuse.**
  */
 export function decideAuth(input: AuthInputs): AuthDecision {
   const keys = input.configuredKeys.trim();
   if (!keys) return { allow: true, reason: "disabled" };
 
-  const local = isLoopbackAddress(input.remoteAddress);
-  if (local && !input.requireKeyEverywhere) {
-    return { allow: true, reason: "loopback" };
-  }
-
   // Reuse the Edge Functions' checker rather than writing a second one: it
   // compares against every accepted token WITHOUT short-circuiting, so timing
   // does not leak which or how many matched, and it fails closed on an empty
   // set. One audited comparison beats two plausible ones.
+  //
+  // The key is checked before the loopback exemption so that a caller who
+  // presents it is admitted as `valid_key` from anywhere: `apiAuth` skips the
+  // browser checks for that reason only, as the docs promise.
   const result = checkAccessToken(input.authorization, {
     tokens: parseAccessTokens(keys),
   });
   if (result.ok) return { allow: true, reason: "valid_key" };
+
+  const local = isLoopbackAddress(input.remoteAddress);
+  if (local && !input.requireKeyEverywhere) {
+    return { allow: true, reason: "loopback" };
+  }
 
   if (result.reason === "no_token") {
     return {
@@ -195,8 +201,16 @@ export interface BrowserGuardInputs {
   allowedHosts: string;
 }
 
-/** Host names a page cannot point at this server through its own DNS. */
+/** Origins served from this machine. */
 const LOCAL_HOST_NAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Host names a page cannot point at this server through its own DNS: the
+ * local ones, plus `host.docker.internal`, the name Docker gives the host
+ * inside a container (`.internal` is reserved for private use, so no public
+ * DNS answers for it), which the container recipes in the guide use.
+ */
+const SAFE_HOST_NAMES = new Set([...LOCAL_HOST_NAMES, "host.docker.internal"]);
 
 /** `example.com:8000` → `example.com`; `[::1]:8000` → `[::1]`. Lowercased. */
 export function hostnameOf(hostHeader: string): string {
@@ -253,7 +267,7 @@ export function browserGuard(input: BrowserGuardInputs): { allow: true } | { all
       .split(",")
       .map((h) => h.trim().toLowerCase())
       .filter(Boolean);
-    if (!LOCAL_HOST_NAMES.has(name) && !isIpLiteral(name) && !extra.includes("*") && !extra.includes(name)) {
+    if (!SAFE_HOST_NAMES.has(name) && !isIpLiteral(name) && !extra.includes("*") && !extra.includes(name)) {
       return {
         allow: false,
         message:

@@ -73,6 +73,17 @@ echo -n "cfx_lak_$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-43)" | \
   gcloud secrets create cerefox-api-key --data-file=-
 ```
 
+Let the service read it. Cloud Run runs as the project's default compute
+service account unless you deployed with `--service-account`; grant that
+account access to this one secret, or the revision cannot start:
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+gcloud secrets add-iam-policy-binding cerefox-api-key \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role=roles/secretmanager.secretAccessor
+```
+
 ```bash
 gcloud run deploy $SERVICE_NAME \
   --image $IMAGE \
@@ -122,7 +133,8 @@ gcloud run deploy $SERVICE_NAME --image $IMAGE --region $REGION --platform manag
 ```
 
 Upgrading a service deployed before v1.20.0 without a key: create the secret
-(Step 3) first, or the new revision refuses to start.
+and grant the service account access to it (Step 3) first, or the new revision
+refuses to start.
 
 Cloud Run performs a zero-downtime rolling update.
 

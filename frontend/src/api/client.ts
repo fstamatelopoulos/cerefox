@@ -10,7 +10,7 @@
  * link anywhere else.
  */
 
-import { getApiKey, getAuthPrompt, isCerefoxChallenge, noteChallenge } from "../lib/apiKey";
+import { getApiKey, getAuthPrompt, getKeyGeneration, isCerefoxChallenge, noteChallenge } from "../lib/apiKey";
 
 const BASE_URL = "/api/v1";
 
@@ -137,6 +137,7 @@ export async function apiFetchResponse(
  */
 export async function apiRequest(path: string, options?: RequestInit): Promise<Response> {
   const key = getApiKey();
+  const sentGeneration = getKeyGeneration();
   // While the prompt waits for a key, every call would be refused the same
   // way: answer locally, so polling and retries cannot stream 401s.
   if (!key && getAuthPrompt()) throw new AuthRequiredError("");
@@ -150,7 +151,7 @@ export async function apiRequest(path: string, options?: RequestInit): Promise<R
     },
   });
   if (isCerefoxChallenge(response.status, response.headers.get("WWW-Authenticate"))) {
-    noteChallenge(key);
+    noteChallenge(key, sentGeneration);
     throw new AuthRequiredError(await response.text());
   }
   return response;

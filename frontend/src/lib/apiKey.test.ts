@@ -17,6 +17,7 @@ import {
   forgetApiKey,
   getApiKey,
   getAuthPrompt,
+  getKeyGeneration,
   isCerefoxChallenge,
   noteChallenge,
   resetApiKeyStateForTests,
@@ -162,6 +163,36 @@ describe("challenge detection", () => {
     // Nor does a late refusal of an older key.
     noteChallenge("cfx_lak_older");
     expect(getApiKey()).toBe("cfx_lak_new");
+  });
+
+  test("a late refusal does not drop the same key typed again", () => {
+    setApiKey("cfx_lak_k", false);
+    const sentUnder = getKeyGeneration();
+    noteChallenge("cfx_lak_k", sentUnder); // the first refusal drops it
+    expect(getApiKey()).toBeNull();
+    setApiKey("cfx_lak_k", false); // re-entered, and accepted by the check
+    noteChallenge("cfx_lak_k", sentUnder); // a second call from before, late
+    expect(getApiKey()).toBe("cfx_lak_k");
+    expect(getAuthPrompt()).toBeNull();
+  });
+
+  test("through the client: a slow refused call cannot clear a re-entered key", async () => {
+    setApiKey("cfx_lak_k", false);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const stub = globalThis.fetch;
+    globalThis.fetch = (async (i: RequestInfo | URL, init?: RequestInit) => {
+      if (String(i).endsWith("/projects")) await gate;
+      return stub(i, init);
+    }) as typeof fetch;
+    respond = refused;
+    const slow = apiFetch("/projects").catch((e) => e); // sent with K
+    await apiFetch("/dashboard").catch(() => {}); // refused now: K dropped
+    expect(getApiKey()).toBeNull();
+    setApiKey("cfx_lak_k", false); // the user types K again
+    release();
+    expect(await slow).toBeInstanceOf(AuthRequiredError);
+    expect(getApiKey()).toBe("cfx_lak_k");
   });
 });
 

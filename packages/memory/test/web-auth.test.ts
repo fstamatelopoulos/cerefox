@@ -129,6 +129,16 @@ describe("decideAuth — the decision table", () => {
   });
 });
 
+describe("a valid key is recognized before the loopback exemption (v1.20.0)", () => {
+  test("loopback with the right key is admitted as valid_key, so the browser checks are skipped", () => {
+    expect(decide({ remoteAddress: "127.0.0.1", authorization: `Bearer ${KEY}` })).toMatchObject({ allow: true, reason: "valid_key" });
+  });
+
+  test("loopback with a wrong key is still admitted by the exemption, as before", () => {
+    expect(decide({ remoteAddress: "127.0.0.1", authorization: `Bearer ${OTHER}` })).toMatchObject({ allow: true, reason: "loopback" });
+  });
+});
+
 describe("CEREFOX_API_REQUIRE_KEY", () => {
   test("makes loopback present the key too", () => {
     const d = decide({ remoteAddress: "127.0.0.1", requireKeyEverywhere: true });
@@ -286,7 +296,7 @@ describe("browserGuard — a web page driving a keyless server (v1.20.0)", () =>
   });
 
   test("agents and curl (no Origin, no Sec-Fetch-Site) on a local name pass", () => {
-    for (const host of ["localhost:8000", "127.0.0.1:8000", "[::1]:8000", "192.168.1.20:8000", "localhost"]) {
+    for (const host of ["localhost:8000", "127.0.0.1:8000", "[::1]:8000", "192.168.1.20:8000", "localhost", "host.docker.internal:8000"]) {
       expect(guard({ host }).allow).toBe(true);
     }
   });

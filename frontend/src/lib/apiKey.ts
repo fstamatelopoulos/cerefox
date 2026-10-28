@@ -19,6 +19,10 @@ export type AuthPrompt = null | "missing" | "rejected";
 
 let memoryKey: string | null = null;
 let prompt: AuthPrompt = null;
+/** Bumped whenever the user sets or forgets the key, so a refusal can be
+ *  matched to the key state its request was sent under, not just the value
+ *  (the user can re-enter the very key a late refusal is about). */
+let generation = 0;
 const listeners = new Set<() => void>();
 
 function storages(): Storage[] {
@@ -49,6 +53,7 @@ export function getApiKey(): string | null {
 export function setApiKey(key: string, remember: boolean): void {
   forgetStored();
   memoryKey = key;
+  generation++;
   try {
     (remember ? safeLocal() : safeSession())?.setItem(STORAGE_KEY, key);
   } catch {
@@ -61,6 +66,7 @@ export function setApiKey(key: string, remember: boolean): void {
 /** Drop the key everywhere. The next refused call brings the prompt back. */
 export function forgetApiKey(): void {
   memoryKey = null;
+  generation++;
   forgetStored();
   notify();
 }
@@ -107,9 +113,12 @@ export function isCerefoxChallenge(status: number, wwwAuthenticate: string | nul
  * was refused is dropped (rotated, or the container recreated with a new one),
  * so the prompt says so rather than repeating the call with it. Only THAT key:
  * a call sent before the user entered a key can be refused after they did, and
- * must not take the new one with it.
+ * must not take the new one with it, even when it is the same value typed
+ * again: `sentGeneration` (from {@link getKeyGeneration} when the call was
+ * sent) marks a refusal from before the user's last change as stale.
  */
-export function noteChallenge(sentKey: string | null): void {
+export function noteChallenge(sentKey: string | null, sentGeneration?: number): void {
+  if (sentGeneration !== undefined && sentGeneration !== generation) return;
   const hadKey = sentKey !== null && getApiKey() === sentKey;
   if (!hadKey && getApiKey() !== null) return;
   if (hadKey) {
@@ -121,6 +130,10 @@ export function noteChallenge(sentKey: string | null): void {
     prompt = next;
     notify();
   }
+}
+
+export function getKeyGeneration(): number {
+  return generation;
 }
 
 export function getAuthPrompt(): AuthPrompt {
@@ -136,5 +149,6 @@ export function subscribeApiKey(listener: () => void): () => void {
 export function resetApiKeyStateForTests(): void {
   memoryKey = null;
   prompt = null;
+  generation = 0;
   listeners.clear();
 }

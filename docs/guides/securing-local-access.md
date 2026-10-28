@@ -119,7 +119,7 @@ loopback, or with the gate off) also has to pass two browser checks:
   served from this machine. Agents, curl and the CLI send neither header, so
   they are not affected.
 - **Only local names.** A keyless request must reach the server by an IP
-  address or `localhost` (the `Host` header). This stops *DNS rebinding*, where
+  address, `localhost`, or `host.docker.internal` (the `Host` header). This stops *DNS rebinding*, where
   a page re-points its own domain name at `127.0.0.1` and reads your store as
   if it were Cerefox. If you reach a gate-off server by a name on purpose (a
   `.local` name, a Docker Compose service name), list it:

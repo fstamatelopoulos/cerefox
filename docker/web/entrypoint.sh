@@ -9,7 +9,9 @@
 # every caller.
 set -eu
 
-if [ -z "${CEREFOX_API_KEY:-}" ]; then
+# The server trims the key list and treats blank as "no gate", so a key of
+# only whitespace or commas must count as missing here too.
+if [ -z "$(printf '%s' "${CEREFOX_API_KEY:-}" | tr -d '[:space:],')" ]; then
   if [ "${CEREFOX_WEB_NO_KEY:-}" = "1" ]; then
     echo "cerefox-web: CEREFOX_WEB_NO_KEY=1: starting WITHOUT an API key. Anyone who can" >&2
     echo "  reach this port can read and change the store. Only do this when something" >&2

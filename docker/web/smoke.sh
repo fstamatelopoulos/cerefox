@@ -34,6 +34,9 @@ echo "Keyless start must be refused"
 if out=$(docker run --rm $BACKEND "$IMAGE" 2>&1); then fail "started without CEREFOX_API_KEY"; fi
 echo "$out" | grep -q "refusing to start without CEREFOX_API_KEY" || fail "no explanation on refusal: $out"
 ok "refused, with the reason"
+# shellcheck disable=SC2086
+if docker run --rm $BACKEND -e CEREFOX_API_KEY="  , " "$IMAGE" >/dev/null 2>&1; then fail "started with a blank key"; fi
+ok "a blank key is refused too"
 
 echo "With a key: the gate covers every caller"
 # shellcheck disable=SC2086
