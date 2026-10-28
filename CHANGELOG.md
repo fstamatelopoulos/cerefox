@@ -47,6 +47,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - Raised the `fast-uri` override floor to `^3.1.9`, the version that fixes
   CVE-2026-110306 and CVE-2026-110180. v1.19.6 already shipped 3.1.9; this keeps
   a future lockfile from resolving below it.
+- `qs` raised to 6.16.1 (CVE-2026-110816, GHSA-6pq8-jhm2-2vcw: a denial of
+  service in `stringify` with the comma array format). v1.19.6 resolved 6.16.0.
+  Pinned to the exact version for now, since the newer releases are a day old.
 
 ---
 
