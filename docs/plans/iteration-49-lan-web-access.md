@@ -38,6 +38,6 @@ calls; this iteration fixes the browser.
    cross-site, foreign-Origin and non-local-Host (DNS rebinding) requests that
    were admitted without a key; `CEREFOX_ALLOWED_HOSTS`; the web image defaults it
    to `*` under `CEREFOX_WEB_NO_KEY=1`. Can only refuse, never admit (tested).
-9. [ ] Reference deployment acceptance (#346 checklist) on the LAN host, with a 1.20.0
+9. [x] Reference deployment acceptance (#346 checklist) on the LAN host, with a 1.20.0
    build.
-10. [ ] PR #348 (open), Codex code review, release.
+10. [x] PR #348 merged, Codex code review (1 round, 6 fixes), released as v1.20.0.

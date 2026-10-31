@@ -33,6 +33,11 @@
 server: prompt for the API key on a Cerefox 401, keep it per origin, send it as a Bearer
 header; LAN/NAS docs for Cerefox Local; a supported web-only image. Design:
 `docs/specs/lan-web-access.md`. Plan: `docs/plans/iteration-49-lan-web-access.md`.
+**2026-10-30: merged (#348) with #347 (the keyless browser guard) and the qs pin; 1.20.0 cut.**
+Accepted on the reference LAN host (browser prompt, key, data). Verified on staging (package
+440/3/0, Playwright 41/1 incl. the gated project) and on a throwaway Cerefox Local container
+built from the branch (package 440/3/0; Playwright 38/1 with 3 failures that reproduce
+identically on v1.19.6 against a fresh Local store: data-dependent tests, not regressions).
 
 **2026-10-16: #335 on `fix/335-local-embedder-memory`, for 1.19.0.** ONNX CPU arena off,
 `CEREFOX_ONNX_BATCH` default 4 → 1 and forwarded by `cerefox-local`, an s6 `finish` script
@@ -414,7 +419,7 @@ release picks it up.
 ## Active iteration
 
 **[Iteration 49 — the web UI on a gated server](plans/iteration-49-lan-web-access.md)** —
-in progress, target **v1.20.0**. #346.
+shipped in **v1.20.0** (2026-10-30). #346, #347.
 
 **[Iteration 47 — Trash auto-purge](plans/iteration-47-trash-auto-purge.md)** —
 ✅ merged (#306), releasing as **v1.16.0**. The delete that adds to the trash also
