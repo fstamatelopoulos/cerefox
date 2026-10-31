@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.20.0] -- 2026-10-31
+
 ### Added
 
 - **The web UI works on a server that requires the API key** (#346). When the
