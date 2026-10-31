@@ -21,6 +21,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   their address, and the PDF prints characters outside Latin, Greek and Cyrillic
   (such as CJK and emoji) as blanks; the Word file keeps them.
 
+### Fixed
+
+- **`cerefox server deploy` run through `npx`** (`npx --package=@cerefox/memory
+  cerefox server deploy`) reported "Supabase CLI reachable" as failed and would
+  not deploy. npm passed its package selection on to the `npx supabase` that
+  Cerefox starts, which then looked for the Supabase CLI inside the Cerefox
+  package. The same applied to `cerefox token generate` and `rotate` when they
+  set the Function secret. A global install was not affected.
+
 ### Security
 
 - `minimatch` raised to 11.0.3 (GHSA-g3hv-75wg-m249, a denial of service from

@@ -51,6 +51,7 @@ import {
   runDbDeploy,
   runDbMigrate,
 } from "../../../../../_shared/db-deploy/index.ts";
+import { nestedNpxEnv } from "../util/npx-env.ts";
 
 interface DeployServerOptions {
   dryRun?: boolean;
@@ -69,7 +70,7 @@ interface Preflight {
 
 function commandSucceeds(cmd: string, args: string[]): boolean {
   try {
-    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 15_000 });
+    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 15_000, env: nestedNpxEnv() });
     return r.status === 0;
   } catch {
     return false;
@@ -371,6 +372,7 @@ async function action(options: DeployServerOptions): Promise<void> {
         stdio: ["inherit", "pipe", "pipe"],
         cwd: workdir,
         timeout: 120_000,
+        env: nestedNpxEnv(),
       });
       if (r.stdout) process.stdout.write(r.stdout);
       if (r.stderr) process.stderr.write(r.stderr);
