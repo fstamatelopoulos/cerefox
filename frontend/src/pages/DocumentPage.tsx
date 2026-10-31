@@ -28,7 +28,7 @@ import {
   fetchChunks,
   fetchDocument,
   fetchDocumentVersion,
-  getDownloadUrl,
+  downloadDocument,
 } from "../api/documents";
 import { purgeDocument, restoreDocument } from "../api/trash";
 import { DiffViewer } from "../components/DiffViewer";
@@ -37,7 +37,7 @@ import { useProjects } from "../hooks/useProjects";
 import { useReviewWorkflow } from "../hooks/useReviewWorkflow";
 import { formatDateTime } from "../utils/dates";
 import { invalidateDocumentViews } from "../lib/invalidate";
-import { showError, showSuccess } from "../utils/notifications";
+import { showCallError, showError, showSuccess } from "../utils/notifications";
 import md from "../components/MarkdownViewer.module.css";
 import ui from "../styles/redesign.module.css";
 import styles from "./DocumentPage.module.css";
@@ -180,6 +180,8 @@ export function DocumentPage() {
     },
     onError: (err) => showError("Status update failed", String(err)),
   });
+  const download = (versionId?: string) =>
+    downloadDocument(id!, versionId).catch((err) => showCallError("Download failed", err));
   const archiveMutation = useMutation({
     mutationFn: ({ versionId, archived }: { versionId: string; archived: boolean }) =>
       setVersionArchived(id!, versionId, archived),
@@ -345,13 +347,14 @@ export function DocumentPage() {
           {isVersionView ? (
             /* Older-version view: only Download + Protect/Unprotect for this snapshot. */
             <>
-              <a
+              <button
+                type="button"
                 className={`${ui.btn} ${ui.btnGhost}`}
-                href={getDownloadUrl(id!, viewedVersion!.version_id)}
+                onClick={() => download(viewedVersion!.version_id)}
               >
                 <IconDownload size={14} />
                 Download
-              </a>
+              </button>
               <button
                 type="button"
                 className={`${ui.btn} ${ui.btnGhost} ${viewedVersion!.archived ? ui.btnWarn : ""}`}
@@ -376,10 +379,10 @@ export function DocumentPage() {
           <>
           {/* Download is useful either way. Edit/Delete only for live docs;
               deleted docs get Restore/Purge instead. */}
-          <a className={`${ui.btn} ${ui.btnGhost}`} href={getDownloadUrl(id!)}>
+          <button type="button" className={`${ui.btn} ${ui.btnGhost}`} onClick={() => download()}>
             <IconDownload size={14} />
             Download
-          </a>
+          </button>
 
           {doc.deleted_at ? (
             <>
@@ -709,8 +712,7 @@ export function DocumentPage() {
                           </Menu.Item>
                           <Menu.Item
                             leftSection={<IconDownload size={14} />}
-                            component="a"
-                            href={getDownloadUrl(id!, v.version_id)}
+                            onClick={() => download(v.version_id)}
                           >
                             Download
                           </Menu.Item>

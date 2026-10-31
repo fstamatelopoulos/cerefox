@@ -10,11 +10,15 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { Hono } from "hono";
 
 import {
   API_KEY_PREFIX,
+  apiAuth,
+  browserGuard,
   containerGateWarning,
   decideAuth,
+  hostnameOf,
   isContainerised,
   isLoopbackAddress,
   restGatewayKeys,
@@ -122,6 +126,16 @@ describe("decideAuth — the decision table", () => {
     // parseAccessTokens drops empties for exactly this reason; pinned here
     // because the consequence is an auth bypass rather than a parsing quirk.
     expect(decide({ configuredKeys: `${KEY},`, authorization: "Bearer " }).allow).toBe(false);
+  });
+});
+
+describe("a valid key is recognized before the loopback exemption (v1.20.0)", () => {
+  test("loopback with the right key is admitted as valid_key, so the browser checks are skipped", () => {
+    expect(decide({ remoteAddress: "127.0.0.1", authorization: `Bearer ${KEY}` })).toMatchObject({ allow: true, reason: "valid_key" });
+  });
+
+  test("loopback with a wrong key is still admitted by the exemption, as before", () => {
+    expect(decide({ remoteAddress: "127.0.0.1", authorization: `Bearer ${OTHER}` })).toMatchObject({ allow: true, reason: "loopback" });
   });
 });
 
@@ -268,5 +282,143 @@ describe("restGatewayKeys — the container's own data calls (v1.19.6)", () => {
     const env = { ...LOCAL, CEREFOX_POSTGREST_UPSTREAM: "" } as NodeJS.ProcessEnv;
     expect(restGatewayKeys(env)).toBe(KEY);
     expect(gate(env, `Bearer ${JWT}`).allow).toBe(false);
+  });
+});
+
+describe("browserGuard — a web page driving a keyless server (v1.20.0)", () => {
+  const guard = (over: Partial<Parameters<typeof browserGuard>[0]> = {}) =>
+    browserGuard({ host: "localhost:8000", origin: null, secFetchSite: null, allowedHosts: "", ...over });
+
+  test("hostnameOf strips the port, keeps IPv6 brackets", () => {
+    expect(hostnameOf("LocalHost:8000")).toBe("localhost");
+    expect(hostnameOf("[::1]:8000")).toBe("[::1]");
+    expect(hostnameOf("example.com")).toBe("example.com");
+  });
+
+  test("agents and curl (no Origin, no Sec-Fetch-Site) on a local name pass", () => {
+    for (const host of ["localhost:8000", "127.0.0.1:8000", "[::1]:8000", "192.168.1.20:8000", "localhost", "host.docker.internal:8000"]) {
+      expect(guard({ host }).allow).toBe(true);
+    }
+  });
+
+  test("the SPA's own requests pass: same origin, or a dev server on this machine", () => {
+    expect(guard({ origin: "http://localhost:8000", secFetchSite: "same-origin" }).allow).toBe(true);
+    expect(guard({ host: "192.168.1.20:8000", origin: "http://192.168.1.20:8000" }).allow).toBe(true);
+    // Vite on :5173 proxies /api/v1 with changeOrigin, so Host is the server's.
+    expect(guard({ origin: "http://localhost:5173", secFetchSite: "same-site" }).allow).toBe(true);
+    // A typed URL or a bookmark.
+    expect(guard({ secFetchSite: "none" }).allow).toBe(true);
+  });
+
+  test("a cross-site request is refused, with or without an Origin", () => {
+    expect(guard({ secFetchSite: "cross-site" }).allow).toBe(false);
+    expect(guard({ origin: "https://evil.example", secFetchSite: "cross-site" }).allow).toBe(false);
+    // An older browser that sends Origin but no fetch metadata.
+    expect(guard({ origin: "https://evil.example" }).allow).toBe(false);
+    // A sandboxed frame or a file:// page.
+    expect(guard({ origin: "null" }).allow).toBe(false);
+  });
+
+  test("another site on the same LAN host is refused", () => {
+    expect(guard({ host: "192.168.1.20:8000", origin: "http://192.168.1.20:5000" }).allow).toBe(false);
+  });
+
+  /**
+   * DNS rebinding: the page re-points its own name at 127.0.0.1 and calls the
+   * server same-origin, so Origin and Sec-Fetch-Site both look clean. Only the
+   * Host header gives it away, which is why that rule must not be relaxed to
+   * "any name that resolves here".
+   */
+  test("DNS rebinding: a same-origin request under a foreign name is refused", () => {
+    const d = guard({ host: "rebind.evil.example:8000", origin: "http://rebind.evil.example:8000", secFetchSite: "same-origin" });
+    expect(d.allow).toBe(false);
+    if (!d.allow) expect(d.message).toContain("CEREFOX_ALLOWED_HOSTS");
+    // Names that merely contain a local one are foreign too.
+    for (const host of ["localhost.evil.example", "127.0.0.1.nip.io:8000", "evil.localhost:8000"]) {
+      expect(guard({ host }).allow).toBe(false);
+    }
+  });
+
+  test("CEREFOX_ALLOWED_HOSTS admits a name on purpose; * admits any", () => {
+    expect(guard({ host: "nas.local:8000", allowedHosts: "cerefox, NAS.local" }).allow).toBe(true);
+    expect(guard({ host: "other.local:8000", allowedHosts: "nas.local" }).allow).toBe(false);
+    expect(guard({ host: "anything.example", allowedHosts: "*" }).allow).toBe(true);
+    // It does not relax the Origin rule.
+    expect(guard({ host: "nas.local:8000", allowedHosts: "*", origin: "https://evil.example" }).allow).toBe(false);
+  });
+});
+
+describe("apiAuth applies browserGuard only to requests admitted without a key", () => {
+  function app(keys: string) {
+    const a = new Hono();
+    a.use("/api/v1/*", apiAuth(() => keys));
+    a.get("/api/v1/projects", (c) => c.json([]));
+    return a;
+  }
+
+  test("gate off: a cross-site request gets a 403 with no key challenge", async () => {
+    const res = await app("").request("http://localhost:8000/api/v1/projects", {
+      headers: { Host: "localhost:8000", "Sec-Fetch-Site": "cross-site" },
+    });
+    expect(res.status).toBe(403);
+    expect(res.headers.get("WWW-Authenticate")).toBeNull();
+    expect((await res.json()).detail).toContain("cross-site");
+  });
+
+  test("gate off: a rebinding Host gets a 403; an IP or localhost does not", async () => {
+    const call = (host: string) => app("").request(`http://${host}/api/v1/projects`, { headers: { Host: host } });
+    expect((await call("rebind.evil.example:8000")).status).toBe(403);
+    expect((await call("127.0.0.1:8000")).status).toBe(200);
+    expect((await call("localhost:8000")).status).toBe(200);
+  });
+
+  test("gate on: a request with the key is not subject to the browser rules", async () => {
+    const res = await app(KEY).request("http://nas.local:8000/api/v1/projects", {
+      headers: { Host: "nas.local:8000", Authorization: `Bearer ${KEY}`, Origin: "http://nas.local:8000" },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test("gate on, no key: still a 401 challenge, so the SPA asks for the key", async () => {
+    const res = await app(KEY).request("http://nas.local:8000/api/v1/projects", {
+      headers: { Host: "nas.local:8000" },
+    });
+    expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate")).toContain('realm="cerefox"');
+  });
+});
+
+describe("browserGuard can only refuse, never admit", () => {
+  /**
+   * The browser checks run AFTER decideAuth has admitted a request and can
+   * only turn that into a 403. Whatever headers a caller sends, a request the
+   * gate refuses stays refused with the 401 challenge: no header combination
+   * (a friendly Origin, Sec-Fetch-Site, an allowlisted Host) opens anything.
+   */
+  test("a gated server refuses a keyless or wrong-key caller under every header combination", async () => {
+    const a = new Hono();
+    a.use("/api/v1/*", apiAuth(() => KEY));
+    a.get("/api/v1/projects", (c) => c.json([]));
+    const prev = process.env.CEREFOX_ALLOWED_HOSTS;
+    process.env.CEREFOX_ALLOWED_HOSTS = "*";
+    try {
+      for (const host of ["localhost:8000", "127.0.0.1:8000", "nas.local:8000"]) {
+        for (const origin of [null, `http://${host}`, "http://localhost:5173"]) {
+          for (const site of [null, "same-origin", "none"]) {
+            for (const auth of [null, `Bearer ${OTHER}`, "Basic abc"]) {
+              const headers: Record<string, string> = { Host: host };
+              if (origin) headers.Origin = origin;
+              if (site) headers["Sec-Fetch-Site"] = site;
+              if (auth) headers.Authorization = auth;
+              const res = await a.request(`http://${host}/api/v1/projects`, { headers });
+              expect(res.status).toBe(401);
+            }
+          }
+        }
+      }
+    } finally {
+      if (prev === undefined) delete process.env.CEREFOX_ALLOWED_HOSTS;
+      else process.env.CEREFOX_ALLOWED_HOSTS = prev;
+    }
   });
 });

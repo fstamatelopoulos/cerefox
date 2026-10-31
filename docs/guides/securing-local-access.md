@@ -94,11 +94,42 @@ while making the common case worse for everyone. On a single-user machine,
 loopback access and key-file access are the same trust boundary, so the gate is
 drawn at the place where the trust actually changes: the network.
 
-This is also why **the browser never holds a key**. The web UI is a static
-file, so a key embedded in the page could be read by anything that can load the
-page — precisely the attacker the key exists to stop. A key in an
+This is also why **the browser holds no key on a local install**. The web UI is
+a static file, so a key embedded in the page could be read by anything that can
+load the page — precisely the attacker the key exists to stop. A key in an
 unauthenticated page is not a secret. The UI works because it is local, not
 because it holds a credential.
+
+**When the gate is on for the browser too** (a container published beyond
+loopback, `CEREFOX_API_REQUIRE_KEY=1`, a native server opened from another
+machine), the web UI asks for the key once, keeps it in that browser for that
+address only, and sends it like any other client (v1.20.0+). Nothing is ever
+embedded in the page; the key comes from you. Running Cerefox on another
+machine on your network is covered in [`setup-lan.md`](setup-lan.md).
+
+### Web pages in your browser (v1.20.0+)
+
+Trusting the machine has one catch: your browser is on the machine, and it runs
+pages from anywhere. So a request the server lets in **without a key** (from
+loopback, or with the gate off) also has to pass two browser checks:
+
+- **No cross-site requests.** A page from another site cannot post to Cerefox:
+  the server refuses a request the browser marks as cross-site
+  (`Sec-Fetch-Site`), or one whose `Origin` is neither this server nor a page
+  served from this machine. Agents, curl and the CLI send neither header, so
+  they are not affected.
+- **Only local names.** A keyless request must reach the server by an IP
+  address, `localhost`, or `host.docker.internal` (the `Host` header). This stops *DNS rebinding*, where
+  a page re-points its own domain name at `127.0.0.1` and reads your store as
+  if it were Cerefox. If you reach a gate-off server by a name on purpose (a
+  `.local` name, a Docker Compose service name), list it:
+
+  ```bash
+  CEREFOX_ALLOWED_HOSTS=nas.local,cerefox   # comma-separated; * turns the check off
+  ```
+
+Both refusals are a `403` whose message says which rule applied. A request
+that presents the key skips both checks: a foreign page cannot send one.
 
 ## Getting a key
 
@@ -171,9 +202,9 @@ KEY="cfx_lak_$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-43)"
 { echo "CEREFOX_API_KEY=$KEY"; echo "CEREFOX_API_REQUIRE_KEY=1"; } >> ~/.cerefox/local/.env
 cerefox-local restart
 
-# Note: with the gate on, YOUR BROWSER needs the key too. If you use the web UI
-# daily, prefer leaving Cerefox published on loopback with the gate off and
-# giving your harness host networking instead.
+# Note: with the gate on, YOUR BROWSER needs the key too: the web UI asks for it
+# once (v1.20.0+). If you would rather not, leave Cerefox published on loopback
+# with the gate off and give your harness host networking instead.
 
 # 3. Give the same value to your client container, however it takes config.
 docker run -e CEREFOX_API_KEY="$KEY" … your-harness
@@ -203,8 +234,8 @@ The answer is to stop exempting loopback:
 CEREFOX_API_REQUIRE_KEY=1
 ```
 
-Now every caller presents the key, proxy included. Your browser will need it
-too, so this mode suits headless deployments rather than daily UI use.
+Now every caller presents the key, proxy included. The web UI asks for it once
+per browser (v1.20.0+).
 
 ## What this does not protect
 
@@ -238,6 +269,21 @@ a Docker network, not loopback. Give it the key (see the recipe above).
 **Everything gets 401 from a Cerefox Local container, including the web UI.**
 That is the v1.12.0 bug, not a configuration problem. Run
 `cerefox-local upgrade` to get v1.12.1 or newer.
+
+**The web UI asks for an API key.** The server refused the browser, so the gate
+is on for it: paste the key (`cerefox api-key show`, `cerefox-local api-key`, or
+the `CEREFOX_API_KEY` you set). On v1.19.x and older the UI cannot send a key
+at all and a gated server is unusable from a browser; upgrade.
+
+**A `403` that says "a page from another site cannot use this server".** A web
+page tried to call Cerefox from another site. If it was a tool of yours, call
+the API from a script or give the tool the key; a browser page from another
+site is exactly what this refuses.
+
+**A `403` that says the server "was reached as" some name.** You reached a
+server with no key by a host name. Use `127.0.0.1` or `localhost`, add the name
+to `CEREFOX_ALLOWED_HOSTS` (in `~/.cerefox/local/.env` for Cerefox Local, then
+`cerefox-local restart`), or turn the key on.
 
 **`cerefox-local api-key` says no key was found.** The image predates v1.12.0.
 Run `cerefox-local upgrade`.

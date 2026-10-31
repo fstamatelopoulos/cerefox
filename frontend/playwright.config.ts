@@ -37,6 +37,13 @@ import { defineConfig, devices } from "@playwright/test";
 const E2E_PORT = process.env.CEREFOX_E2E_PORT ?? "8123";
 const E2E_REUSE = process.env.CEREFOX_E2E_REUSE === "1";
 
+// A second server with the API key gate on everywhere (#346), so the key
+// prompt is tested against the same build. Its own port, so the ungated suite
+// can never reach it, and a fresh key per run, which `gated.spec.ts` reads from
+// the environment Playwright passes down.
+const GATED_PORT = process.env.CEREFOX_E2E_GATED_PORT ?? "8124";
+process.env.CEREFOX_E2E_GATED_KEY ??= `cfx_lak_e2e${crypto.randomUUID().replaceAll("-", "")}`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
@@ -48,8 +55,19 @@ export default defineConfig({
     trace: "retain-on-failure",
     headless: true,
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
+  projects: [
+    {
+      name: "chromium",
+      testIgnore: /gated\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "gated",
+      testMatch: /gated\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${GATED_PORT}` },
+    },
+  ],
+  webServer: [{
     // Rebuild the SPA and refresh the copy the server actually serves.
     // `cerefox web` serves packages/memory/dist/frontend, which is populated
     // by `bundle-frontend` — and that only ran at publish time. So a plain
@@ -66,5 +84,20 @@ export default defineConfig({
     reuseExistingServer: E2E_REUSE,
     // The rebuild runs inside this timeout.
     timeout: 120_000,
-  },
+  }, {
+    // Waits for the first server, which is up only once the rebuild is done:
+    // the server reads index.html once at boot, so starting mid-build would
+    // serve a stale shell.
+    command:
+      `until curl -sf -o /dev/null http://127.0.0.1:${E2E_PORT}/api/v1/version; do sleep 1; done && ` +
+      `cd ../packages/memory && node dist/bin/cerefox.js web --port ${GATED_PORT}`,
+    // A 401 counts as ready for Playwright, which is what this server answers.
+    url: `http://127.0.0.1:${GATED_PORT}/api/v1/version`,
+    env: {
+      CEREFOX_API_REQUIRE_KEY: "1",
+      CEREFOX_API_KEY: process.env.CEREFOX_E2E_GATED_KEY,
+    },
+    reuseExistingServer: E2E_REUSE,
+    timeout: 180_000,
+  }],
 });

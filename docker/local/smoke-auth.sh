@@ -101,6 +101,14 @@ ok "data route with the key → 200"
 docker exec "$NAME" sh -c 'set -a; . /run/cerefox-runtime.env; set +a; cerefox project list >/dev/null' \
   || fail "in-container CLI could not reach the data API (cerefox-local commands would fail)"
 ok "in-container CLI reaches the data API"
+# The web UI must still LOAD without a key: on a gated server it asks for the
+# key (#346), and it cannot ask if the page itself is refused.
+c=$(code "http://127.0.0.1:$PORT/app/")
+[ "$c" = "200" ] || fail "web UI page got $c under the gate, expected 200 (the key prompt could never show)"
+asset=$(curl -s -m 8 "http://127.0.0.1:$PORT/app/" | grep -o '/app/assets/[^"]*\.js' | head -1)
+[ -n "$asset" ] && [ "$(code "http://127.0.0.1:$PORT$asset")" = "200" ] \
+  || fail "web UI asset not served under the gate"
+ok "web UI and its assets → 200 without a key (the key prompt can load)"
 # The key survived the recreate, because it lives on the volume. A key that
 # changed on every recreate would silently break every configured client.
 KEY2=$(docker exec "$NAME" cat /var/lib/postgresql/data/.cerefox_api_key)

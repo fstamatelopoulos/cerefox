@@ -4,7 +4,7 @@
  * schema-mismatch banner.
  */
 
-const BASE_URL = "/api/v1";
+import { apiRequest } from "./client";
 
 export interface DocEntry {
   path: string;
@@ -13,7 +13,7 @@ export interface DocEntry {
 }
 
 export async function fetchDocsIndex(): Promise<DocEntry[]> {
-  const response = await fetch(`${BASE_URL}/docs`);
+  const response = await apiRequest("/docs");
   if (!response.ok) {
     throw new Error(`Failed to load docs index: ${response.status}`);
   }
@@ -21,8 +21,8 @@ export async function fetchDocsIndex(): Promise<DocEntry[]> {
 }
 
 export async function fetchDocContent(path: string): Promise<string> {
-  const response = await fetch(
-    `${BASE_URL}/docs/${path.split("/").map(encodeURIComponent).join("/")}`,
+  const response = await apiRequest(
+    `/docs/${path.split("/").map(encodeURIComponent).join("/")}`,
   );
   if (!response.ok) {
     throw new Error(`Failed to load doc '${path}': ${response.status}`);
@@ -47,7 +47,7 @@ export interface SchemaVersionInfo {
 }
 
 export async function fetchSchemaVersion(): Promise<SchemaVersionInfo> {
-  const response = await fetch(`${BASE_URL}/schema-version`);
+  const response = await apiRequest("/schema-version");
   if (!response.ok) {
     throw new Error(`Failed to load schema version: ${response.status}`);
   }

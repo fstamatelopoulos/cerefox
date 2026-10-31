@@ -9,7 +9,58 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **The web UI works on a server that requires the API key** (#346). When the
+  server refuses the browser (Cerefox on a NAS or home server, a container
+  published beyond localhost, or `CEREFOX_API_REQUIRE_KEY=1`), the web UI now
+  asks for the key once, checks it with the server, and sends it with every
+  call. It is kept in that browser for that address only: until the tab closes,
+  or on the browser if you tick "Remember". A key-off icon in the header forgets
+  it, and a saved key the server stops accepting brings the prompt back.
+  Installs on your own machine with the gate off never see the prompt. Until
+  now a gated server could not be used from a browser at all.
+- **A guide for running Cerefox on another machine on your network**,
+  `docs/guides/setup-lan.md`: Cerefox Local on a NAS or home server (including
+  compose files for NAS Docker apps and loading the image from a file when the
+  host cannot pull it), or the web container with your Supabase backend.
+- **A published web image, `ghcr.io/fstamatelopoulos/cerefox-web`**: the
+  server and web UI for a Supabase-backed Cerefox, built from the repo like the
+  Cerefox Local image, running as an unprivileged user, with a healthcheck that
+  works under the gate.
+
+### Changed
+
+- **The web container (the repo's `Dockerfile`) requires `CEREFOX_API_KEY`**
+  and turns the gate on for every caller. It holds your Supabase secret key, so
+  without a key anyone who can reach its port can read and change your whole
+  store. A deployment that followed the Cloud Run guide (public URL, no key)
+  will not start after a rebuild until you add the key; the guide shows how,
+  with Secret Manager. `CEREFOX_WEB_NO_KEY=1` starts it without a key when
+  something in front of it already controls access, and logs a warning.
+- Download, CSV export and the Help page's "raw" view now go through the same
+  client as every other call, so they work on a gated server. Links inside a
+  document that point at `/api/v1/…` do too.
+
+### Security
+
+- **A web page can no longer use a Cerefox server that needs no key** (#347).
+  The server trusts requests from your own machine, and your browser is on your
+  machine, so a malicious page could post to it (cross-site requests) or, by
+  pointing its own domain name at `127.0.0.1`, read the whole store (DNS
+  rebinding). A request without a key is now refused (`403`, with the reason)
+  when the browser marks it cross-site, when its `Origin` is another site, or
+  when it reaches the server by a host name rather than an IP address,
+  `localhost` or `host.docker.internal`. Agents, curl and the CLI are not affected unless they reach a
+  keyless server by a name: list such names in the new
+  `CEREFOX_ALLOWED_HOSTS`. Requests that present the API key are not checked,
+  and nothing the server refused before is admitted now.
+- Raised the `fast-uri` override floor to `^3.1.9`, the version that fixes
+  CVE-2026-110306 and CVE-2026-110180. v1.19.6 already shipped 3.1.9; this keeps
+  a future lockfile from resolving below it.
+- `qs` raised to 6.16.1 (CVE-2026-110816, GHSA-6pq8-jhm2-2vcw: a denial of
+  service in `stringify` with the comma array format). v1.19.6 resolved 6.16.0.
+  Pinned to the exact version for now, since the newer releases are a day old.
 
 ---
 

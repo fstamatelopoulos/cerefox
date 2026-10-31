@@ -1,7 +1,8 @@
 import { useMantineColorScheme } from "@mantine/core";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { fetchPreferences, savePreferences, type ThemePref } from "../api/preferences";
+import { getApiKey, subscribeApiKey } from "../lib/apiKey";
 
 /**
  * Color-scheme state with two storage layers (mirrors cfcf's useTheme):
@@ -14,6 +15,9 @@ import { fetchPreferences, savePreferences, type ThemePref } from "../api/prefer
  */
 export function useThemePreference(): { theme: ThemePref; setTheme: (t: ThemePref) => void } {
   const { colorScheme, setColorScheme } = useMantineColorScheme();
+  // On a gated server the read at mount is refused until the key is entered
+  // (#346), so it runs again when a key appears.
+  const hasKey = useSyncExternalStore(subscribeApiKey, () => getApiKey() !== null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,9 +31,9 @@ export function useThemePreference(): { theme: ThemePref; setTheme: (t: ThemePre
     return () => {
       cancelled = true;
     };
-    // Run once on mount; later changes go through setTheme.
+    // Run on mount and when a key appears; later changes go through setTheme.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasKey]);
 
   const setTheme = (next: ThemePref) => {
     setColorScheme(next);

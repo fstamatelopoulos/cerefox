@@ -1,4 +1,4 @@
-import { apiFetch, buildQueryString } from "./client";
+import { apiFetch, buildQueryString, downloadApiFile } from "./client";
 
 export interface UsageLogEntry {
   id: string;
@@ -43,9 +43,9 @@ export async function fetchUsageLog(
   return apiFetch<UsageLogEntry[]>(`/usage-log${qs}`);
 }
 
-export function getUsageExportUrl(filters: UsageFilters = {}): string {
+export function exportUsageCsv(filters: UsageFilters = {}): Promise<void> {
   const qs = buildQueryString({ ...filters } as Record<string, string | number | undefined>);
-  return `/api/v1/usage-log/export.csv${qs}`;
+  return downloadApiFile(`/usage-log/export.csv${qs}`, "cerefox-usage-log.csv");
 }
 
 export async function getConfig(key: string): Promise<string | null> {

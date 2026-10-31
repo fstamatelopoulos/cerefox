@@ -1,9 +1,16 @@
 /**
  * Base HTTP client for the Cerefox JSON API.
  *
- * In development, Vite proxies /api/v1/* to the FastAPI backend.
- * In production, same-origin requests go directly to FastAPI.
+ * In development, Vite proxies /api/v1/* to `cerefox web`.
+ * In production, requests are same-origin.
+ *
+ * EVERY call to /api/v1 goes through `apiFetchResponse`, because it is the one
+ * place that adds the API key on a gated server (#346).
+ * `src/lib/api-key-surface.test.ts` fails on a bare `fetch(` or an `/api/v1`
+ * link anywhere else.
  */
+
+import { getApiKey, getAuthPrompt, getKeyGeneration, isCerefoxChallenge, noteChallenge } from "../lib/apiKey";
 
 const BASE_URL = "/api/v1";
 
@@ -28,6 +35,19 @@ export class ApiError extends Error {
     this.status = status;
     this.statusText = statusText;
     this.body = body;
+  }
+}
+
+/**
+ * Raised when the server's API key gate refused the call. The key prompt
+ * (`ApiKeyPrompt`) is already open by the time a caller sees this, so pages
+ * should treat it as "waiting for the key", not as a failure to report.
+ */
+export class AuthRequiredError extends ApiError {
+  constructor(body: string) {
+    super(401, "Unauthorized", body);
+    this.message = "This server needs its API key.";
+    this.name = "AuthRequiredError";
   }
 }
 
@@ -95,14 +115,7 @@ export async function apiFetchResponse(
   path: string,
   options?: RequestInit,
 ): Promise<Response> {
-  const url = `${BASE_URL}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  const response = await apiRequest(path, options);
 
   if (!response.ok) {
     const body = await response.text();
@@ -114,6 +127,109 @@ export async function apiFetchResponse(
   }
 
   return response;
+}
+
+/**
+ * The raw request: the API key when one is held, the JSON content type unless
+ * the body is a form (the browser must set a multipart boundary itself), and
+ * the challenge check. Returns non-OK responses as they are, for the upload
+ * paths that read their own error bodies.
+ */
+export async function apiRequest(path: string, options?: RequestInit): Promise<Response> {
+  const key = getApiKey();
+  const sentGeneration = getKeyGeneration();
+  // While the prompt waits for a key, every call would be refused the same
+  // way: answer locally, so polling and retries cannot stream 401s.
+  if (!key && getAuthPrompt()) throw new AuthRequiredError("");
+  const isForm = typeof FormData !== "undefined" && options?.body instanceof FormData;
+  const response = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
+      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      ...options?.headers,
+    },
+  });
+  if (isCerefoxChallenge(response.status, response.headers.get("WWW-Authenticate"))) {
+    noteChallenge(key, sentGeneration);
+    throw new AuthRequiredError(await response.text());
+  }
+  return response;
+}
+
+/**
+ * Does the server accept `key`? Used by the key prompt before it stores
+ * anything, so a mistyped key is refused in the dialog instead of being saved
+ * and then dropped by the first real call.
+ */
+export async function checkApiKey(key: string): Promise<"ok" | "rejected" | "unreachable"> {
+  try {
+    const response = await fetch(`${BASE_URL}/version`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    if (response.ok) return "ok";
+    return response.status === 401 ? "rejected" : "unreachable";
+  } catch {
+    return "unreachable";
+  }
+}
+
+/**
+ * Save (or open) an /api/v1 resource that a plain link would fetch without the
+ * key. A navigation sends no `Authorization` header, so downloads go through
+ * the client and are handed to the browser as a blob.
+ */
+export async function downloadApiFile(
+  path: string,
+  fallbackName: string,
+  mode: "save" | "open" = "save",
+): Promise<void> {
+  // Opened before the await: a window opened after it counts as a popup.
+  const tab = mode === "open" ? window.open("", "_blank") : null;
+  try {
+    const response = await apiFetchResponse(path);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filenameFrom(response.headers.get("Content-Disposition")) ?? fallbackName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
+}
+
+/**
+ * The API path of a link written as `/api/v1/…` (the part after the prefix),
+ * or null for any other link. Only this same-origin path form is fetched with
+ * the key; the key is never attached to any other URL.
+ */
+export function apiPathOf(href: string): string | null {
+  const trimmed = href.trim();
+  return trimmed.startsWith(`${BASE_URL}/`) ? trimmed.slice(BASE_URL.length) : null;
+}
+
+/** The filename in a `Content-Disposition` header, if it names one. */
+export function filenameFrom(disposition: string | null): string | null {
+  if (!disposition) return null;
+  const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(disposition);
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].trim());
+    } catch {
+      /* malformed; try the plain form */
+    }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(disposition);
+  return plain ? plain[1].trim() : null;
 }
 
 /**

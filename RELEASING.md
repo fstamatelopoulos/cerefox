@@ -87,7 +87,8 @@ bun scripts/cut_release.ts <version> --npm-publish
 
 # Stable cuts: ALSO pass --docker-publish. --npm-publish alone does NOT build
 # the Cerefox Local image (it only triggers the npm release workflow); the
-# image is a separate explicit dispatch of local-image.yml. Forgetting it has
+# images are separate explicit dispatches of local-image.yml and web-image.yml
+# (--docker-publish triggers both). Forgetting it has
 # bitten twice (1.0.0 betas, 1.0.1-beta.1).
 bun scripts/cut_release.ts <version> --npm-publish --docker-publish
 ```

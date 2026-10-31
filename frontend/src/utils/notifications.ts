@@ -1,5 +1,7 @@
 import { notifications } from "@mantine/notifications";
 
+import { AuthRequiredError } from "../api/client";
+
 export function showSuccess(title: string, message?: string) {
   notifications.show({
     title,
@@ -7,6 +9,15 @@ export function showSuccess(title: string, message?: string) {
     color: "green",
     autoClose: 4000,
   });
+}
+
+/**
+ * `showError` for a failed call, except a refusal by the API key gate: the key
+ * prompt is already open for that one, and a red toast would repeat it.
+ */
+export function showCallError(title: string, err: unknown) {
+  if (err instanceof AuthRequiredError) return;
+  showError(title, err instanceof Error ? err.message : String(err));
 }
 
 export function showError(title: string, message?: string) {

@@ -307,6 +307,7 @@ Full setup for every client — plus a manual per-client config appendix for whe
 | [`docs/guides/securing-local-access.md`](docs/guides/securing-local-access.md) | Who may call your local server: the loopback rule, when you need an API key, container + proxy recipes |
 | [`docs/guides/setup-local.md`](docs/guides/setup-local.md) | Local / self-hosted (Docker) backend — install, `cerefox-local`, MCP |
 | [`docs/guides/ops-scripts.md`](docs/guides/ops-scripts.md) | Backup, restore, migrate, sync docs |
+| [`docs/guides/setup-lan.md`](docs/guides/setup-lan.md) | Cerefox on a NAS or home server, used from your other machines (browser included) |
 | [`docs/guides/setup-cloud-run.md`](docs/guides/setup-cloud-run.md) | Google Cloud Run deployment |
 | [`docs/guides/operational-cost.md`](docs/guides/operational-cost.md) | Cost breakdown for all deployment options |
 | [`docs/guides/upgrading.md`](docs/guides/upgrading.md) | Upgrade checklist + notable cross-version transitions |

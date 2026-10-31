@@ -29,6 +29,11 @@
 
 ## Current Focus
 
+**2026-10-27: iteration 49 on `feat/lan-web-key`, for 1.20.0 (#346).** The web UI on a gated
+server: prompt for the API key on a Cerefox 401, keep it per origin, send it as a Bearer
+header; LAN/NAS docs for Cerefox Local; a supported web-only image. Design:
+`docs/specs/lan-web-access.md`. Plan: `docs/plans/iteration-49-lan-web-access.md`.
+
 **2026-10-16: #335 on `fix/335-local-embedder-memory`, for 1.19.0.** ONNX CPU arena off,
 `CEREFOX_ONNX_BATCH` default 4 → 1 and forwarded by `cerefox-local`, an s6 `finish` script
 that names an out-of-memory kill. Measured in a throwaway container capped at 3 GB:
@@ -407,6 +412,9 @@ release picks it up.
 ---
 
 ## Active iteration
+
+**[Iteration 49 — the web UI on a gated server](plans/iteration-49-lan-web-access.md)** —
+in progress, target **v1.20.0**. #346.
 
 **[Iteration 47 — Trash auto-purge](plans/iteration-47-trash-auto-purge.md)** —
 ✅ merged (#306), releasing as **v1.16.0**. The delete that adds to the trash also

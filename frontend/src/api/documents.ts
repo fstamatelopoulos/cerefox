@@ -1,4 +1,4 @@
-import { apiFetch, buildQueryString } from "./client";
+import { apiFetch, buildQueryString, downloadApiFile } from "./client";
 import type {
   DocumentChunk,
   DocumentDetail,
@@ -81,11 +81,8 @@ export async function fetchDocumentVersion(
   );
 }
 
-export function getDownloadUrl(
-  documentId: string,
-  versionId?: string,
-): string {
-  const base = `/api/v1/documents/${documentId}/download`;
-  if (versionId) return `${base}?version_id=${versionId}`;
-  return base;
+/** Download the document's markdown (or one stored version of it). */
+export function downloadDocument(documentId: string, versionId?: string): Promise<void> {
+  const base = `/documents/${documentId}/download`;
+  return downloadApiFile(versionId ? `${base}?version_id=${versionId}` : base, "document.md");
 }
