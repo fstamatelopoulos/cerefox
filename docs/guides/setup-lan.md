@@ -189,13 +189,13 @@ that would let a document inject script.
 ## What this does not protect
 
 **Traffic on the wire.** Plain `http://` on your network sends the key, and
-everything else, unencrypted. That is usually acceptable on a home network you
-control; it is not on a shared one. For TLS, put a reverse proxy in front (see
-[`securing-local-access.md`](securing-local-access.md#recipe-a-reverse-proxy-on-the-same-machine));
-the gate stays on, since a proxy makes every request look local.
+everything else, unencrypted. That is acceptable on a home network you control;
+do not run these setups on a network you share with people or devices you do
+not trust.
 
-**The internet.** Do not forward the port from your router. These setups are
-for your own network.
+**The internet.** These setups are for your own network only. Do not forward
+the port from your router, and do not publish the host's Cerefox port through
+a remote-access service or a proxy.
 
 **Anyone with the key**, or with access to the host's files, the data folder or
 the compose file.
