@@ -77,7 +77,7 @@
     },
     "packages/memory": {
       "name": "@cerefox/memory",
-      "version": "1.20.0",
+      "version": "1.21.0",
       "bin": {
         "cerefox": "dist/bin/cerefox.js",
       },
