@@ -20,11 +20,27 @@ import { exportableUrl, parseMarkdown } from "./markdown";
 
 const CODE_FILL = "#f2f2f2";
 
+/** A4 width minus the page margins, in points. */
+const CONTENT_WIDTH = 515;
+/** What a blockquote's bar and padding take from the width inside it. */
+const QUOTE_INSET = 16;
+/** What a list's marker column takes from the width of its nested blocks. */
+const LIST_INSET = 24;
+
 /**
- * Hard-wrap code lines that cannot fit the page. pdfmake breaks lines only at
- * spaces, so a long unbroken token (a hash, a URL, minified code) ran off the
- * page and was clipped. The width is the code block's: 90 Courier columns at
- * 9 pt, and a conservative 64 for proportional Roboto.
+ * How many characters of 9 pt code fit on a line `inset` points in from the
+ * margin: Courier is 5.4 pt per character (5.5 for slack); for Roboto, 7.8 is
+ * about its widest common glyph, so the wrap is conservative, never short.
+ */
+export function codeColumns(text: string, inset: number): number {
+  const width = CONTENT_WIDTH - 16 - inset; // 16: the code block's own padding
+  return Math.max(16, Math.floor(width / (codeFont(text).font ? 5.5 : 7.8)));
+}
+
+/**
+ * Hard-wrap code lines that cannot fit. pdfmake breaks lines only at spaces,
+ * so a long unbroken token (a hash, a URL, minified code) ran off the page
+ * and was clipped; {@link codeColumns} gives the width at that nesting depth.
  */
 export function wrapCode(text: string, columns: number): string {
   return text
@@ -103,7 +119,8 @@ function inline(nodes: PhrasingContent[], marks: Marks = {}): Inline[] {
   return out;
 }
 
-function blocks(nodes: RootContent[]): Content[] {
+/** `inset`: points already taken from the left by enclosing quotes and lists. */
+function blocks(nodes: RootContent[], inset = 0): Content[] {
   const out: Content[] = [];
   for (const node of nodes) {
     switch (node.type) {
@@ -115,7 +132,10 @@ function blocks(nodes: RootContent[]): Content[] {
         break;
       case "blockquote":
         out.push({
-          table: { widths: ["*"], body: [[{ stack: blocks(node.children), italics: true, color: "#555555" }]] },
+          table: {
+            widths: ["*"],
+            body: [[{ stack: blocks(node.children, inset + QUOTE_INSET), italics: true, color: "#555555" }]],
+          },
           layout: {
             hLineWidth: () => 0,
             vLineWidth: (i: number) => (i === 0 ? 2 : 0),
@@ -132,7 +152,7 @@ function blocks(nodes: RootContent[]): Content[] {
             body: [
               [
                 {
-                  text: wrapCode(node.value, codeFont(node.value).font ? 90 : 64),
+                  text: wrapCode(node.value, codeColumns(node.value, inset)),
                   ...codeFont(node.value),
                   fontSize: 9,
                   preserveLeadingSpaces: true,
@@ -154,14 +174,14 @@ function blocks(nodes: RootContent[]): Content[] {
         });
         break;
       case "list":
-        out.push(list(node));
+        out.push(list(node, inset));
         break;
       case "table":
         out.push(table(node));
         break;
       case "thematicBreak":
         out.push({
-          canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: RULE }],
+          canvas: [{ type: "line", x1: 0, y1: 0, x2: CONTENT_WIDTH - inset, y2: 0, lineWidth: 0.5, lineColor: RULE }],
           margin: [0, 6, 0, 10],
         });
         break;
@@ -169,7 +189,7 @@ function blocks(nodes: RootContent[]): Content[] {
         out.push({ text: node.value, style: "p", fontSize: 9, preserveLeadingSpaces: true });
         break;
       case "footnoteDefinition":
-        out.push({ stack: [{ text: `[^${node.identifier}]`, sup: true }, ...blocks(node.children)], fontSize: 9 });
+        out.push({ stack: [{ text: `[^${node.identifier}]`, sup: true }, ...blocks(node.children, inset)], fontSize: 9 });
         break;
       default:
         break;
@@ -178,7 +198,7 @@ function blocks(nodes: RootContent[]): Content[] {
   return out;
 }
 
-function list(node: List): Content {
+function list(node: List, inset: number): Content {
   const items: Content[] = node.children.map((item) => {
     const marker = item.checked === true ? "[x] " : item.checked === false ? "[ ] " : "";
     const [first, ...rest] = item.children;
@@ -186,7 +206,8 @@ function list(node: List): Content {
       first && first.type === "paragraph"
         ? { text: [marker, ...inline(first.children)], margin: [0, 0, 0, 2] }
         : { text: marker };
-    const tail = first && first.type === "paragraph" ? blocks(rest) : blocks(item.children);
+    const nested = inset + LIST_INSET;
+    const tail = first && first.type === "paragraph" ? blocks(rest, nested) : blocks(item.children, nested);
     return tail.length ? { stack: [head, ...tail] } : head;
   });
   return node.ordered

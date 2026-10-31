@@ -81,9 +81,10 @@ async function purgeDocByTitle(title: string): Promise<void> {
 async function purgeProjectByName(name: string): Promise<void> {
   try {
     const client = createClient(loadSettings());
-    await client.raw.from("cerefox_projects").delete().eq("name", name);
-  } catch {
-    /* best-effort */
+    const { error } = await client.raw.from("cerefox_projects").delete().eq("name", name);
+    if (error) console.warn(`cleanup: could not delete project "${name}": ${error.message}`);
+  } catch (err) {
+    console.warn(`cleanup: could not delete project "${name}": ${String(err)}`);
   }
 }
 

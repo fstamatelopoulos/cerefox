@@ -11,7 +11,7 @@ import JSZip from "jszip";
 
 import { markdownToDocxDocument } from "./docx";
 import { exportableUrl, withExtension } from "./markdown";
-import { codeFont, markdownToPdf, markdownToPdfDefinition, wrapCode } from "./pdf";
+import { codeColumns, codeFont, markdownToPdf, markdownToPdfDefinition, wrapCode } from "./pdf";
 
 const SAMPLE = `# Title
 
@@ -228,5 +228,27 @@ ${"X".repeat(300)}TAIL
     expect(wrapCode("short\nline", 10)).toBe("short\nline");
     expect(wrapCode("abcdefghij", 4)).toBe("abcd\nefgh\nij");
     expect(wrapCode("😀😀😀", 2)).toBe("😀😀\n😀");
+  });
+});
+
+// Codex round 2 of #349.
+describe("round 2", () => {
+  test("the first of two definitions for a label wins, as in CommonMark", () => {
+    const json = JSON.stringify(
+      markdownToPdfDefinition("[go][r]\n\n[r]: https://first.example\n[r]: https://second.example\n", "x"),
+    );
+    expect(json).toContain("https://first.example");
+    expect(json).not.toContain("https://second.example");
+  });
+
+  test("code inside nested quotes and lists wraps to the narrower width", () => {
+    const deep = `${"> ".repeat(6)}\`\`\`\n${"> ".repeat(6)}${"X".repeat(300)}\n${"> ".repeat(6)}\`\`\``;
+    const json = JSON.stringify(markdownToPdfDefinition(deep, "x"));
+    const code = /"text":"(X[X\\n]*)"/.exec(json)?.[1] ?? "";
+    const lines = code.split("\\n");
+    expect(lines.join("")).toBe("X".repeat(300));
+    expect(Math.max(...lines.map((l) => l.length))).toBe(codeColumns("X", 6 * 16));
+    expect(codeColumns("X", 6 * 16)).toBeLessThan(codeColumns("X", 0));
+    expect(codeColumns("Γ", 0)).toBeLessThan(codeColumns("X", 0));
   });
 });

@@ -28,7 +28,10 @@ export function parseMarkdown(markdown: string): Root {
 function resolveReferences(root: Root): void {
   const urls = new Map<string, string>();
   const collect = (node: Nodes) => {
-    if (node.type === "definition") urls.set(node.identifier.toLowerCase(), node.url);
+    // The first definition of a label wins, as in CommonMark.
+    if (node.type === "definition" && !urls.has(node.identifier.toLowerCase())) {
+      urls.set(node.identifier.toLowerCase(), node.url);
+    }
     if ("children" in node) for (const child of node.children) collect(child);
   };
   collect(root);
