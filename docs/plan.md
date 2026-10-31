@@ -29,6 +29,15 @@
 
 ## Current Focus
 
+**2026-10-30: `feat/download-formats`, for 1.21.0.** The document Download button becomes a
+menu: Markdown, Word (.docx) or PDF, converted in the browser (`frontend/src/lib/export/`,
+`docx` and `pdfmake` loaded on demand; the main bundle grew about 2 KB).
+Also on the branch: `minimatch` 11.0.3 override (GHSA-g3hv-75wg-m249, dev-only).
+1.20.0 rolled out 2026-10-30: staging, production and the Mac Cerefox Local upgraded
+(backups first), both web daemons restarted on 1.20.0. Staging package 440/3/0, Playwright
+42/1, EF + remote MCP 49/0; Local (published image, throwaway copy) package 440/0, Playwright
+39/1 with the 3 known data-dependent failures.
+
 **2026-10-27: iteration 49 on `feat/lan-web-key`, for 1.20.0 (#346).** The web UI on a gated
 server: prompt for the API key on a Cerefox 401, keep it per origin, send it as a Bearer
 header; LAN/NAS docs for Cerefox Local; a supported web-only image. Design:

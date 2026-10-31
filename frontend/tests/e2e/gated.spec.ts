@@ -41,11 +41,14 @@ test.beforeAll(() => {
 });
 
 async function purgeDocByTitle(title: string): Promise<void> {
+  // Best-effort, so a cleanup problem never masks the test's own result, but
+  // never silent: a leaked [E2E fixture should show up in the run's output.
   try {
     const client = createClient(loadSettings());
-    await client.raw.from("cerefox_documents").delete().eq("title", title);
-  } catch {
-    /* best-effort */
+    const { error } = await client.raw.from("cerefox_documents").delete().eq("title", title);
+    if (error) console.warn(`cleanup: could not delete "${title}": ${error.message}`);
+  } catch (err) {
+    console.warn(`cleanup: could not delete "${title}": ${String(err)}`);
   }
 }
 
@@ -123,8 +126,9 @@ test.describe("Gated server", () => {
       await page.getByText(title).first().click();
       await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
 
-      const download = page.waitForEvent("download");
       await page.getByRole("button", { name: "Download" }).click();
+      const download = page.waitForEvent("download");
+      await page.getByRole("menuitem", { name: "Markdown (.md)" }).click();
       const file = await download;
       const path = await file.path();
       const { readFileSync } = await import("node:fs");

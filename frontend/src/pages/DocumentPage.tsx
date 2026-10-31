@@ -4,13 +4,17 @@ import {
   IconArrowsDiff,
   IconDots,
   IconArrowBackUp,
+  IconChevronDown,
   IconDownload,
   IconEdit,
   IconFileText,
+  IconFileTypeDocx,
+  IconFileTypePdf,
   IconHistory,
   IconLock,
   IconLockOpen,
   IconMapPin,
+  IconMarkdown,
   IconSparkles,
   IconStack2,
   IconTerminal2,
@@ -29,6 +33,7 @@ import {
   fetchDocument,
   fetchDocumentVersion,
   downloadDocument,
+  type DownloadFormat,
 } from "../api/documents";
 import { purgeDocument, restoreDocument } from "../api/trash";
 import { DiffViewer } from "../components/DiffViewer";
@@ -110,6 +115,34 @@ function originChip(source: string | null): { icon: typeof IconMapPin; label: st
   return { icon: IconMapPin, label: s, agent: false };
 }
 
+const DOWNLOAD_FORMATS: Array<{ format: DownloadFormat; label: string; icon: typeof IconMarkdown }> = [
+  { format: "md", label: "Markdown (.md)", icon: IconMarkdown },
+  { format: "docx", label: "Word (.docx)", icon: IconFileTypeDocx },
+  { format: "pdf", label: "PDF (.pdf)", icon: IconFileTypePdf },
+];
+
+/** The Download button: a menu of formats. */
+function DownloadMenu({ busy, onPick }: { busy: boolean; onPick: (format: DownloadFormat) => void }) {
+  return (
+    <Menu position="bottom-end" withinPortal>
+      <Menu.Target>
+        <button type="button" className={`${ui.btn} ${ui.btnGhost}`} disabled={busy}>
+          {busy ? <Loader size={12} /> : <IconDownload size={14} />}
+          Download
+          <IconChevronDown size={12} />
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {DOWNLOAD_FORMATS.map(({ format, label, icon: Icon }) => (
+          <Menu.Item key={format} leftSection={<Icon size={14} />} onClick={() => onPick(format)}>
+            {label}
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 export function DocumentPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -180,8 +213,13 @@ export function DocumentPage() {
     },
     onError: (err) => showError("Status update failed", String(err)),
   });
-  const download = (versionId?: string) =>
-    downloadDocument(id!, versionId).catch((err) => showCallError("Download failed", err));
+  const [downloading, setDownloading] = useState(false);
+  const download = (versionId?: string, format: DownloadFormat = "md") => {
+    setDownloading(true);
+    downloadDocument(id!, versionId, format, doc?.doc_title || "document")
+      .catch((err) => showCallError("Download failed", err))
+      .finally(() => setDownloading(false));
+  };
   const archiveMutation = useMutation({
     mutationFn: ({ versionId, archived }: { versionId: string; archived: boolean }) =>
       setVersionArchived(id!, versionId, archived),
@@ -347,14 +385,7 @@ export function DocumentPage() {
           {isVersionView ? (
             /* Older-version view: only Download + Protect/Unprotect for this snapshot. */
             <>
-              <button
-                type="button"
-                className={`${ui.btn} ${ui.btnGhost}`}
-                onClick={() => download(viewedVersion!.version_id)}
-              >
-                <IconDownload size={14} />
-                Download
-              </button>
+              <DownloadMenu busy={downloading} onPick={(f) => download(viewedVersion!.version_id, f)} />
               <button
                 type="button"
                 className={`${ui.btn} ${ui.btnGhost} ${viewedVersion!.archived ? ui.btnWarn : ""}`}
@@ -379,10 +410,7 @@ export function DocumentPage() {
           <>
           {/* Download is useful either way. Edit/Delete only for live docs;
               deleted docs get Restore/Purge instead. */}
-          <button type="button" className={`${ui.btn} ${ui.btnGhost}`} onClick={() => download()}>
-            <IconDownload size={14} />
-            Download
-          </button>
+          <DownloadMenu busy={downloading} onPick={(f) => download(undefined, f)} />
 
           {doc.deleted_at ? (
             <>
@@ -710,12 +738,15 @@ export function DocumentPage() {
                           >
                             Diff vs current
                           </Menu.Item>
-                          <Menu.Item
-                            leftSection={<IconDownload size={14} />}
-                            onClick={() => download(v.version_id)}
-                          >
-                            Download
-                          </Menu.Item>
+                          {DOWNLOAD_FORMATS.map(({ format, label, icon: Icon }) => (
+                            <Menu.Item
+                              key={format}
+                              leftSection={<Icon size={14} />}
+                              onClick={() => download(v.version_id, format)}
+                            >
+                              Download {label}
+                            </Menu.Item>
+                          ))}
                           <Menu.Item
                             leftSection={<IconLock size={14} />}
                             color={v.archived ? "yellow" : undefined}

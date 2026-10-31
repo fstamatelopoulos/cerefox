@@ -9,7 +9,35 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **Download a document as Word or PDF** from the web UI. The Download button
+  on a document (and on each stored version) is now a menu: Markdown (.md), as
+  before, Word (.docx) or PDF (.pdf). Word and PDF are converted in the browser
+  from the same Markdown, with real headings, lists, tables and code blocks, and
+  work on a server that requires the API key. The converters load only when you
+  pick one of those formats, so the web UI does not get slower to open. Images
+  appear as "[image: alt text]", links to other documents keep their text but
+  not their address, very long code lines wrap in the PDF, and the PDF prints
+  characters outside Latin, Greek and Cyrillic (such as CJK and emoji) as
+  blanks; the Word file keeps them.
+
+### Fixed
+
+- **`cerefox server deploy` run through `npx`** (`npx --package=@cerefox/memory
+  cerefox server deploy`) reported "Supabase CLI reachable" as failed and would
+  not deploy. npm passed its package selection on to the `npx supabase` that
+  Cerefox starts, which then looked for the Supabase CLI inside the Cerefox
+  package. The same applied to `cerefox token generate` and `rotate` when they
+  set the Function secret. A global install was not affected.
+
+### Security
+
+- `minimatch` raised to 11.0.3 (GHSA-g3hv-75wg-m249, a denial of service from
+  a crafted glob pattern). It is used only by the development linters, never
+  shipped, and only with the project's own patterns, so no release was exposed.
+  Forced with an override, since ESLint still asks for 10.x, whose line has no
+  fix; linting was checked to apply its rules and ignores under 11.
 
 ---
 

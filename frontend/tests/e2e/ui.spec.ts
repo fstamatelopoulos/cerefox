@@ -66,11 +66,14 @@ function uniqueTitle(label: string): string {
 
 /** Hard-delete a document by exact title (cascades to chunks). Best-effort. */
 async function purgeDocByTitle(title: string): Promise<void> {
+  // Best-effort, so a cleanup problem never masks the test's own result, but
+  // never silent: a leaked [E2E fixture should show up in the run's output.
   try {
     const client = createClient(loadSettings());
-    await client.raw.from("cerefox_documents").delete().eq("title", title);
-  } catch {
-    /* best-effort */
+    const { error } = await client.raw.from("cerefox_documents").delete().eq("title", title);
+    if (error) console.warn(`cleanup: could not delete "${title}": ${error.message}`);
+  } catch (err) {
+    console.warn(`cleanup: could not delete "${title}": ${String(err)}`);
   }
 }
 
@@ -78,9 +81,10 @@ async function purgeDocByTitle(title: string): Promise<void> {
 async function purgeProjectByName(name: string): Promise<void> {
   try {
     const client = createClient(loadSettings());
-    await client.raw.from("cerefox_projects").delete().eq("name", name);
-  } catch {
-    /* best-effort */
+    const { error } = await client.raw.from("cerefox_projects").delete().eq("name", name);
+    if (error) console.warn(`cleanup: could not delete project "${name}": ${error.message}`);
+  } catch (err) {
+    console.warn(`cleanup: could not delete project "${name}": ${String(err)}`);
   }
 }
 
@@ -211,7 +215,13 @@ test.describe("Ingest: Update existing (#298)", () => {
         mimeType: "text/markdown",
         buffer: Buffer.from(body),
       });
-      if (update) await toggleUpdateExisting(page);
+      if (update) {
+        // A file whose name is already stored switches "Update existing" on by
+        // itself once the name check answers. Wait for that instead of clicking:
+        // on a fast backend the check lands first and a click turns it back off.
+        await expect(page.getByText(/already exists/)).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+      }
       await page.click('button[type="submit"]:has-text("Upload & ingest")');
     };
     try {
@@ -239,9 +249,19 @@ test.describe("Search", () => {
     await expect(page.getByTestId("page-title")).toHaveText(/Search/i);
   });
 
-  test("search returns results", async ({ page }) => {
-    await page.goto(`${APP}/search?q=cerefox&mode=docs`);
-    await expect(page.getByText(/\d+ results? ·/)).toBeVisible({ timeout: 15_000 });
+  test("search returns results", async ({ page, request }) => {
+    // Seeds what it searches for, so it does not depend on the store's content.
+    const title = uniqueTitle("Search Probe");
+    const marker = `searchprobe${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    try {
+      const r = await request.post("/api/v1/ingest", { data: { title, content: `# ${title}\n\n${marker}\n` } });
+      expect(r.ok()).toBeTruthy();
+      await page.goto(`${APP}/search?q=${marker}&mode=docs`);
+      await expect(page.getByText(/\d+ results? ·/)).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(title).first()).toBeVisible();
+    } finally {
+      await purgeDocByTitle(title);
+    }
   });
 });
 
@@ -312,6 +332,34 @@ test.describe("Document detail", () => {
     await page.waitForTimeout(2000);
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
+  });
+
+  test("Download offers Markdown, Word and PDF, each a real file", async ({ page, request }) => {
+    const title = uniqueTitle("Download Formats");
+    const marker = `fmt-${crypto.randomUUID()}`;
+    try {
+      const r = await request.post("/api/v1/ingest", {
+        data: { title, content: `# ${title}\n\nBody ${marker} with **bold** text.\n\n- one\n- two\n` },
+      });
+      expect(r.ok()).toBeTruthy();
+      const id = ((await r.json()) as { document_id: string }).document_id;
+      await page.goto(`${APP}/document/${id}`);
+      const { readFileSync } = await import("node:fs");
+      for (const [label, ext, check] of [
+        ["Markdown (.md)", "md", (b: Buffer) => b.toString("utf8").includes(marker)],
+        ["Word (.docx)", "docx", (b: Buffer) => b.subarray(0, 2).toString() === "PK"],
+        ["PDF (.pdf)", "pdf", (b: Buffer) => b.subarray(0, 5).toString() === "%PDF-"],
+      ] as const) {
+        await page.getByRole("button", { name: "Download", exact: true }).click();
+        const download = page.waitForEvent("download");
+        await page.getByRole("menuitem", { name: label }).click();
+        const file = await download;
+        expect(file.suggestedFilename()).toMatch(new RegExp(`\\.${ext}$`));
+        expect(check(readFileSync(await file.path()))).toBe(true);
+      }
+    } finally {
+      await purgeDocByTitle(title);
+    }
   });
 
   test("review status toggle follows review_workflow_enabled", async ({ page, request }) => {
@@ -422,26 +470,29 @@ test.describe("Metadata Search", () => {
     await expect(page.getByTestId("metadata-search-submit")).toBeVisible();
   });
 
-  test("returns results or empty message", async ({ page }) => {
-    await page.goto(`${APP}/metadata-search`);
-    await page.waitForTimeout(1000);
+  test("finds a document by a metadata key and value", async ({ page, request }) => {
+    // Seeds its own document: the Key picker offers only keys the store holds,
+    // so a test that assumed one (it used "author") failed on a fresh store.
+    const title = uniqueTitle("Metadata Search");
+    const value = `e2e-${crypto.randomUUID().slice(0, 8)}`;
+    try {
+      const r = await request.post("/api/v1/ingest", {
+        data: { title, content: `# ${title}\n\nbody`, metadata: { e2e_probe: value } },
+      });
+      expect(r.ok()).toBeTruthy();
 
-    const keyInput = page.locator('input[placeholder="Key"]').first();
-    await keyInput.click();
-    await page.waitForTimeout(500);
-    await keyInput.fill("author");
-    await page.waitForTimeout(500);
-    const option = page.locator('[role="option"]').first();
-    if (await option.isVisible().catch(() => false)) {
-      await option.click();
+      await page.goto(`${APP}/metadata-search`);
+      const keyInput = page.locator('input[placeholder="Key"]').first();
+      await keyInput.click();
+      await keyInput.fill("e2e_probe");
+      await page.getByRole("option", { name: "e2e_probe" }).first().click();
+      await page.locator('input[placeholder="Value"]').first().fill(value);
+      await page.getByTestId("metadata-search-submit").click();
+
+      await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await purgeDocByTitle(title);
     }
-    await page.locator('input[placeholder="Value"]').first().fill("e2e-test-suite");
-    await page.getByTestId("metadata-search-submit").click();
-    await page.waitForTimeout(5000);
-
-    await expect(
-      page.getByText("found").or(page.getByText("No documents match the metadata filter")),
-    ).toBeVisible({ timeout: 10_000 });
   });
 });
 
@@ -459,7 +510,8 @@ test.describe("Analytics", () => {
     await page.getByRole("button", { name: "Run Analysis" }).click();
     await page.waitForTimeout(5000);
     await expect(
-      page.getByText("Total Calls").or(page.getByText("No usage data")),
+      // A store with no usage shows both the zeroed tiles and the empty notice.
+      page.getByText("Total Calls").or(page.getByText("No usage data")).first(),
     ).toBeVisible({ timeout: 10_000 });
   });
 });

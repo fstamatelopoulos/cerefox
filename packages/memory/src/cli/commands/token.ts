@@ -20,6 +20,7 @@ import type { Command } from "commander";
 import { c, eprintln, println, userError } from "../../../../../_shared/cli-core/index.ts";
 import { loadSettings, resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import { envGitignoreWarning, readEnvVar, upsertEnvVar } from "../util/env-file.ts";
+import { nestedNpxEnv } from "../util/npx-env.ts";
 
 const SECRET_NAME = "CEREFOX_ACCESS_TOKENS"; // server-side accepted set (plural)
 const LOCAL_NAME = "CEREFOX_ACCESS_TOKEN"; // local .env, what this machine presents
@@ -67,7 +68,7 @@ function setSecret(setValue: string, projectRef: string | null, dryRun?: boolean
       (projectRef ? ` --project-ref ${projectRef}` : "")));
     return;
   }
-  const r = spawnSync("npx", args, { encoding: "utf8", stdio: "inherit" });
+  const r = spawnSync("npx", args, { encoding: "utf8", stdio: "inherit", env: nestedNpxEnv() });
   if (r.status !== 0) {
     throw userError(
       `Failed to set the ${SECRET_NAME} Function secret.`,
