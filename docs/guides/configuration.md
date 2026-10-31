@@ -354,8 +354,10 @@ container it points at `cerefox-local upgrade` instead of `cerefox self-update`.
 
 The only network call is a GET of the `latest` release from the npm registry
 (`registry.npmjs.org`), the same request `cerefox self-update` makes. It is made
-by `cerefox web` (at startup, then daily), `cerefox mcp` (at startup, when the
-last answer is over a day old), `cerefox doctor` and `cerefox self-update`.
+by `cerefox web` (at startup, then whenever the saved answer is over an hour old,
+so a new release shows in the web UI within about an hour), `cerefox mcp` (at
+startup, when the last answer is over an hour old), `cerefox doctor` and
+`cerefox self-update`.
 Every other command only reads the saved answer, `update-check.json` in
 `~/.cerefox` (or in `CEREFOX_CONFIG_DIR`, when set), so it never adds latency.
 Offline, the check stays quiet.

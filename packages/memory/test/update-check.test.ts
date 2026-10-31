@@ -13,6 +13,7 @@ import {
   CACHE_TTL_MS,
   LATEST_URL,
   NOTIFY_INTERVAL_MS,
+  REFRESH_TICK_MS,
   fetchLatestVersion,
   newerRelease,
   readCache,
@@ -161,5 +162,33 @@ describe("takeCliNotice", () => {
   test("opted out: no notice even when one is due", () => {
     recordLatest("1.18.0", path, NOW);
     expect(takeCliNotice({ path, now: NOW, installed: "1.17.4", env: { CEREFOX_NO_UPDATE_CHECK: "1" } })).toBeNull();
+  });
+});
+
+describe("how soon the web server learns of a release", () => {
+  /**
+   * The 1.21.0 incident: the server's daily timer was set at 03:49, doctor
+   * refreshed the cache at 03:57, and the release came out at 05:20. The next
+   * tick found the answer 8 minutes short of stale and skipped it, so the web
+   * UI would have announced 1.21.0 about 46 hours late. This replays the same
+   * timeline through refreshLatest, tick by tick.
+   */
+  test("a release reaches the cache within TTL + one tick, however the clocks line up", async () => {
+    expect(REFRESH_TICK_MS).toBeLessThan(CACHE_TTL_MS);
+    const start = NOW.getTime(); // the server's timer starts here
+    for (const offsetMin of [0, 1, 8, 14, 59]) {
+      // Some other command refreshes the cache offsetMin after the timer started.
+      writeFileSync(path, JSON.stringify({ latest: "1.20.0", checkedAt: new Date(start + offsetMin * 60_000).toISOString() }));
+      const releasedAt = start + (offsetMin + 1) * 60_000; // a release right after
+      const f = stubFetch("1.21.0");
+      let learnedAt: number | null = null;
+      for (let t = start + REFRESH_TICK_MS; t < start + 3 * CACHE_TTL_MS && learnedAt === null; t += REFRESH_TICK_MS) {
+        const latest = await refreshLatest({ path, now: new Date(t), fetchImpl: f.impl, env: ON });
+        if (latest === "1.21.0") learnedAt = t;
+      }
+      expect(learnedAt).not.toBeNull();
+      expect(learnedAt! - releasedAt).toBeLessThanOrEqual(CACHE_TTL_MS + REFRESH_TICK_MS);
+      expect(f.calls.length).toBe(1); // npm asked once, not on every tick
+    }
   });
 });

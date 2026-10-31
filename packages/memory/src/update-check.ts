@@ -2,7 +2,7 @@
  * "A newer Cerefox release is available" (#323).
  *
  * One check, against the npm registry's `latest` dist-tag (the same source
- * `cerefox self-update` installs from), cached in the state dir for a day.
+ * `cerefox self-update` installs from), cached in the state dir for an hour.
  *
  * Who fetches, and why only them: the long-running processes (`cerefox web`,
  * `cerefox mcp`) and the ones where the user is already waiting on the network
@@ -27,8 +27,18 @@ import { resolveStateDir } from "./web/daemon.ts";
 export const LATEST_URL = "https://registry.npmjs.org/@cerefox%2Fmemory/latest";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 /** How long a fetched answer is trusted before a long-running process refetches. */
-export const CACHE_TTL_MS = DAY_MS;
+export const CACHE_TTL_MS = HOUR_MS;
+/**
+ * How often `cerefox web` looks at the saved answer. Shorter than the TTL on
+ * purpose: when both were a day, any other command that refreshed the cache
+ * shortly after the server's timer was set (doctor, an upgrade) made the next
+ * tick find the answer a few minutes short of stale and skip it, so a release
+ * reached the web UI up to two days late. With a 15-minute tick a release
+ * shows within about 75 minutes, and npm is still asked at most once an hour.
+ */
+export const REFRESH_TICK_MS = 15 * 60 * 1000;
 /** How often the CLI may print the notice. Once a day reads as news; every command reads as nagging. */
 export const NOTIFY_INTERVAL_MS = DAY_MS;
 
@@ -126,13 +136,14 @@ export async function refreshLatest(
 }
 
 /**
- * Refresh now, then once a day, for as long as the process runs. The timer is
+ * Refresh now, then whenever the saved answer goes stale (checked every
+ * {@link REFRESH_TICK_MS}), for as long as the process runs. The timer is
  * unref'd so it never keeps a process alive that would otherwise exit.
  */
 export function startPeriodicRefresh(): void {
   if (updateCheckDisabled()) return;
   void refreshLatest();
-  const timer = setInterval(() => void refreshLatest(), CACHE_TTL_MS);
+  const timer = setInterval(() => void refreshLatest(), REFRESH_TICK_MS);
   timer.unref?.();
 }
 

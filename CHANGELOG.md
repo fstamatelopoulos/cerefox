@@ -9,7 +9,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **The web UI could take up to two days to say a new release is out.** The
+  web server checked npm once a day, and any command that refreshed the saved
+  answer in between (`cerefox doctor`, an upgrade) pushed its next check back
+  another day. It now checks the saved answer every 15 minutes and asks npm
+  when it is over an hour old, so a release shows within about an hour.
 
 ---
 
