@@ -74,6 +74,9 @@ describe("cerefox read commands (live)", () => {
   liveTest("list-projects: table mode has a header line", () => {
     const { stdout, status } = run(["project", "list"]);
     expect(status).toBe(0);
+    // A fresh store (a new Cerefox Local) has no projects and prints a notice
+    // instead of a table; this suite is read-only, so it does not create one.
+    if (stdout.includes("(no projects)")) return;
     // Header is `id  name  description`; not all columns must appear,
     // but at least "id" + "name".
     expect(stdout).toContain("id");
