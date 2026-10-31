@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.21.0] -- 2026-10-31
+
 ### Added
 
 - **Download a document as Word or PDF** from the web UI. The Download button
