@@ -29,7 +29,7 @@
 
 ## Current Focus
 
-**2026-10-30: `feat/download-formats`, for 1.21.0.** The document Download button becomes a
+**2026-10-31: 1.21.0 cut (#349, plus Dependabot #344/#345).** The document Download button becomes a
 menu: Markdown, Word (.docx) or PDF, converted in the browser (`frontend/src/lib/export/`,
 `docx` and `pdfmake` loaded on demand; the main bundle grew about 2 KB).
 Also on the branch: `minimatch` 11.0.3 override (GHSA-g3hv-75wg-m249, dev-only).
