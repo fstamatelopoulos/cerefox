@@ -29,6 +29,10 @@
 
 ## Current Focus
 
+**2026-10-30: `feat/download-formats`, for 1.21.0.** The document Download button becomes a
+menu: Markdown, Word (.docx) or PDF, converted in the browser (`frontend/src/lib/export/`,
+`docx` and `pdfmake` loaded on demand; the main bundle grew about 2 KB).
+
 **2026-10-27: iteration 49 on `feat/lan-web-key`, for 1.20.0 (#346).** The web UI on a gated
 server: prompt for the API key on a Cerefox 401, keep it per origin, send it as a Bearer
 header; LAN/NAS docs for Cerefox Local; a supported web-only image. Design:

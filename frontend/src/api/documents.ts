@@ -1,4 +1,4 @@
-import { apiFetch, buildQueryString, downloadApiFile } from "./client";
+import { apiFetch, buildQueryString, downloadApiFile, fetchApiFile, saveBlob } from "./client";
 import type {
   DocumentChunk,
   DocumentDetail,
@@ -81,8 +81,31 @@ export async function fetchDocumentVersion(
   );
 }
 
-/** Download the document's markdown (or one stored version of it). */
-export function downloadDocument(documentId: string, versionId?: string): Promise<void> {
+export type DownloadFormat = "md" | "docx" | "pdf";
+
+/**
+ * Download the document (or one stored version of it) as Markdown, Word or PDF.
+ *
+ * Word and PDF are converted in the browser from the same Markdown download,
+ * so they carry its file name and version, and work on a gated server. The
+ * converters load only when asked for.
+ */
+export async function downloadDocument(
+  documentId: string,
+  versionId?: string,
+  format: DownloadFormat = "md",
+  title = "document",
+): Promise<void> {
   const base = `/documents/${documentId}/download`;
-  return downloadApiFile(versionId ? `${base}?version_id=${versionId}` : base, "document.md");
+  const path = versionId ? `${base}?version_id=${versionId}` : base;
+  if (format === "md") return downloadApiFile(path, "document.md");
+
+  const { blob, filename } = await fetchApiFile(path, "document.md");
+  const markdown = await blob.text();
+  const { withExtension } = await import("../lib/export/markdown");
+  const out =
+    format === "docx"
+      ? await (await import("../lib/export/docx")).markdownToDocx(markdown, title)
+      : await (await import("../lib/export/pdf")).markdownToPdf(markdown, title);
+  saveBlob(out, withExtension(filename, format));
 }

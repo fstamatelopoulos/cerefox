@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **Download a document as Word or PDF** from the web UI. The Download button
+  on a document (and on each stored version) is now a menu: Markdown (.md), as
+  before, Word (.docx) or PDF (.pdf). Word and PDF are converted in the browser
+  from the same Markdown, with real headings, lists, tables and code blocks, and
+  work on a server that requires the API key. The converters load only when you
+  pick one of those formats, so the web UI does not get slower to open. Images
+  are listed by their alt text, links to other documents keep their text but not
+  their address, and the PDF prints characters outside Latin, Greek and Cyrillic
+  (such as CJK and emoji) as blanks; the Word file keeps them.
 
 ---
 

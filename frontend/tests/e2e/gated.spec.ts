@@ -123,8 +123,9 @@ test.describe("Gated server", () => {
       await page.getByText(title).first().click();
       await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
 
-      const download = page.waitForEvent("download");
       await page.getByRole("button", { name: "Download" }).click();
+      const download = page.waitForEvent("download");
+      await page.getByRole("menuitem", { name: "Markdown (.md)" }).click();
       const file = await download;
       const path = await file.path();
       const { readFileSync } = await import("node:fs");

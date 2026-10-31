@@ -187,24 +187,39 @@ export async function downloadApiFile(
   // Opened before the await: a window opened after it counts as a popup.
   const tab = mode === "open" ? window.open("", "_blank") : null;
   try {
-    const response = await apiFetchResponse(path);
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+    const { blob, filename } = await fetchApiFile(path, fallbackName);
     if (tab) {
+      const url = URL.createObjectURL(blob);
       tab.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } else {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filenameFrom(response.headers.get("Content-Disposition")) ?? fallbackName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      saveBlob(blob, filename);
     }
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (err) {
     tab?.close();
     throw err;
   }
+}
+
+/** An API file with the name the server gave it (`fallbackName` if none). */
+export async function fetchApiFile(path: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
+  const response = await apiFetchResponse(path);
+  return {
+    blob: await response.blob(),
+    filename: filenameFrom(response.headers.get("Content-Disposition")) ?? fallbackName,
+  };
+}
+
+/** Hand a blob to the browser as a download named `filename`. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /**

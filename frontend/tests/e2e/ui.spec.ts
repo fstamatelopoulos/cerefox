@@ -314,6 +314,34 @@ test.describe("Document detail", () => {
     await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
   });
 
+  test("Download offers Markdown, Word and PDF, each a real file", async ({ page, request }) => {
+    const title = uniqueTitle("Download Formats");
+    const marker = `fmt-${crypto.randomUUID()}`;
+    try {
+      const r = await request.post("/api/v1/ingest", {
+        data: { title, content: `# ${title}\n\nBody ${marker} with **bold** text.\n\n- one\n- two\n` },
+      });
+      expect(r.ok()).toBeTruthy();
+      const id = ((await r.json()) as { document_id: string }).document_id;
+      await page.goto(`${APP}/document/${id}`);
+      const { readFileSync } = await import("node:fs");
+      for (const [label, ext, check] of [
+        ["Markdown (.md)", "md", (b: Buffer) => b.toString("utf8").includes(marker)],
+        ["Word (.docx)", "docx", (b: Buffer) => b.subarray(0, 2).toString() === "PK"],
+        ["PDF (.pdf)", "pdf", (b: Buffer) => b.subarray(0, 5).toString() === "%PDF-"],
+      ] as const) {
+        await page.getByRole("button", { name: "Download", exact: true }).click();
+        const download = page.waitForEvent("download");
+        await page.getByRole("menuitem", { name: label }).click();
+        const file = await download;
+        expect(file.suggestedFilename()).toMatch(new RegExp(`\\.${ext}$`));
+        expect(check(readFileSync(await file.path()))).toBe(true);
+      }
+    } finally {
+      await purgeDocByTitle(title);
+    }
+  });
+
   test("review status toggle follows review_workflow_enabled", async ({ page, request }) => {
     // Off → the toggle does not exist (#241); on → it renders the CURRENT
     // state, either of which is correct. Read the flag, do not set it.
