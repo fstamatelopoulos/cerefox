@@ -17,9 +17,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   from the same Markdown, with real headings, lists, tables and code blocks, and
   work on a server that requires the API key. The converters load only when you
   pick one of those formats, so the web UI does not get slower to open. Images
-  are listed by their alt text, links to other documents keep their text but not
-  their address, and the PDF prints characters outside Latin, Greek and Cyrillic
-  (such as CJK and emoji) as blanks; the Word file keeps them.
+  appear as "[image: alt text]", links to other documents keep their text but
+  not their address, very long code lines wrap in the PDF, and the PDF prints
+  characters outside Latin, Greek and Cyrillic (such as CJK and emoji) as
+  blanks; the Word file keeps them.
 
 ### Fixed
 

@@ -6,16 +6,46 @@
  * strikethrough, autolinks. Raw HTML is kept as text, never interpreted.
  */
 
-import type { Root } from "mdast";
+import type { Nodes, Root } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
 export function parseMarkdown(markdown: string): Root {
-  return fromMarkdown(markdown, {
+  const root = fromMarkdown(markdown, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
   });
+  resolveReferences(root);
+  return root;
+}
+
+/**
+ * Turn reference-style links and images (`[text][id]`, `![alt][id]` with a
+ * `[id]: url` definition elsewhere) into plain links and images, so the
+ * converters handle one form and neither the target nor the alt text is lost.
+ */
+function resolveReferences(root: Root): void {
+  const urls = new Map<string, string>();
+  const collect = (node: Nodes) => {
+    if (node.type === "definition") urls.set(node.identifier.toLowerCase(), node.url);
+    if ("children" in node) for (const child of node.children) collect(child);
+  };
+  collect(root);
+
+  const rewrite = (node: Nodes) => {
+    if (!("children" in node)) return;
+    const children = node.children as Nodes[];
+    children.forEach((child, i) => {
+      if (child.type === "linkReference") {
+        children[i] = { type: "link", url: urls.get(child.identifier.toLowerCase()) ?? "", children: child.children };
+      } else if (child.type === "imageReference") {
+        children[i] = { type: "image", url: urls.get(child.identifier.toLowerCase()) ?? "", alt: child.alt };
+      }
+      rewrite(children[i]);
+    });
+  };
+  rewrite(root);
 }
 
 /**

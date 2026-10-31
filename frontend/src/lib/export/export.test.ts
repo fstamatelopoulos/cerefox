@@ -11,7 +11,7 @@ import JSZip from "jszip";
 
 import { markdownToDocxDocument } from "./docx";
 import { exportableUrl, withExtension } from "./markdown";
-import { codeFont, markdownToPdf, markdownToPdfDefinition } from "./pdf";
+import { codeFont, markdownToPdf, markdownToPdfDefinition, wrapCode } from "./pdf";
 
 const SAMPLE = `# Title
 
@@ -170,5 +170,63 @@ describe("PDF file", () => {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
     expect(bytes.length).toBeGreaterThan(5_000);
+  });
+});
+
+// Codex review of #349: each case below lost content before its fix.
+describe("content that must survive both exports", () => {
+  const TRICKY = `See [the ref][r] and ![REF ALT][img].
+
+[![LINKED ALT](https://example.org/i.png)](https://example.org)
+
+Body[^h].
+
+[^h]:
+    # FOOTHEAD
+
+    footnote tail
+
+\`\`\`
+${"X".repeat(300)}TAIL
+\`\`\`
+
+[r]: https://ref.example/page
+[img]: https://ref.example/i.png
+`;
+
+  test("Word: reference link keeps its target, reference and linked images their alt", async () => {
+    const buffer = await Packer.toBuffer(markdownToDocxDocument(TRICKY, "T"));
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")!.async("string");
+    const rels = await zip.file("word/_rels/document.xml.rels")!.async("string");
+    expect(rels).toContain("https://ref.example/page");
+    expect(xml).toContain("the ref");
+    expect(xml).toContain("REF ALT");
+    expect(xml).toContain("LINKED ALT");
+  });
+
+  test("Word: a footnote whose first block is not a paragraph keeps it", async () => {
+    const xml = await documentXml(TRICKY);
+    expect(xml).toContain("FOOTHEAD");
+    expect(xml).toContain("footnote tail");
+  });
+
+  test("PDF: references resolved, alt kept, long code wrapped with nothing lost", () => {
+    const def = markdownToPdfDefinition(TRICKY, "T");
+    const json = JSON.stringify(def);
+    expect(json).toContain('"link":"https://ref.example/page"');
+    expect(json).toContain("REF ALT");
+    expect(json).toContain("LINKED ALT");
+    expect(json).toContain("FOOTHEAD");
+    const code = /"text":"(X+[^"]*TAIL)"/.exec(json)?.[1] ?? "";
+    const lines = code.split("\\n");
+    expect(lines.every((l) => l.length <= 90)).toBe(true);
+    expect(lines.join("")).toBe(`${"X".repeat(300)}TAIL`);
+  });
+
+  test("wrapCode wraps only lines past the width, by characters not code units", () => {
+    expect(wrapCode("short\nline", 10)).toBe("short\nline");
+    expect(wrapCode("abcdefghij", 4)).toBe("abcd\nefgh\nij");
+    expect(wrapCode("😀😀😀", 2)).toBe("😀😀\n😀");
   });
 });

@@ -45,6 +45,8 @@ interface Marks {
   bold?: boolean;
   italics?: boolean;
   strike?: boolean;
+  /** A character style, e.g. "Hyperlink" for runs inside a link. */
+  style?: string;
 }
 
 interface Block {
@@ -94,17 +96,18 @@ function inline(nodes: PhrasingContent[], marks: Marks = {}): ParagraphChild[] {
         break;
       case "link": {
         const url = exportableUrl(node.url);
-        const runs = inline(node.children, marks);
         if (url) {
-          const text = runs.length ? textOf(node.children) : url;
+          // The rendered runs, not a flattened string: an image inside the
+          // link keeps its "[image: alt]" text.
+          const runs = inline(node.children, { ...marks, style: "Hyperlink" });
           out.push(
             new ExternalHyperlink({
               link: url,
-              children: [new TextRun({ text, ...marks, style: "Hyperlink" })],
+              children: runs.length ? runs : [new TextRun({ text: url, ...marks, style: "Hyperlink" })],
             }),
           );
         } else {
-          out.push(...runs);
+          out.push(...inline(node.children, marks));
         }
         break;
       }
@@ -118,18 +121,12 @@ function inline(nodes: PhrasingContent[], marks: Marks = {}): ParagraphChild[] {
         out.push(new TextRun({ text: `[^${node.identifier}]`, ...marks, superScript: true }));
         break;
       default:
-        // linkReference, imageReference: keep their text.
+        // References are resolved into links and images by parseMarkdown.
         if ("children" in node) out.push(...inline(node.children as PhrasingContent[], marks));
         else if ("value" in node) out.push(new TextRun({ text: String(node.value), ...marks }));
     }
   }
   return out;
-}
-
-function textOf(nodes: PhrasingContent[]): string {
-  return nodes
-    .map((n) => ("value" in n ? String(n.value) : "children" in n ? textOf(n.children as PhrasingContent[]) : ""))
-    .join("");
 }
 
 /** Indentation for a paragraph inside a list item or a blockquote. */
@@ -186,31 +183,24 @@ function blocks(nodes: RootContent[], ctx: Block, numbering: Numbering): Array<P
       case "html":
         out.push(new Paragraph({ children: [new TextRun({ text: node.value, font: MONO })] }));
         break;
-      case "footnoteDefinition":
-        out.push(
-          ...blocks(node.children, ctx, numbering).map((b, i) =>
-            i === 0 && b instanceof Paragraph
-              ? new Paragraph({
-                  children: [
-                    new TextRun({ text: `[^${node.identifier}] `, superScript: true }),
-                    ...inline(firstParagraphChildren(node.children)),
-                  ],
-                })
-              : b,
-          ),
-        );
+      case "footnoteDefinition": {
+        // The label joins the first paragraph; any other first block (a
+        // heading, code) gets the label on a line of its own and stays whole.
+        const label = new TextRun({ text: `[^${node.identifier}] `, superScript: true });
+        const [first, ...rest] = node.children;
+        if (first && first.type === "paragraph") {
+          out.push(new Paragraph({ children: [label, ...inline(first.children)] }), ...blocks(rest, ctx, numbering));
+        } else {
+          out.push(new Paragraph({ children: [label] }), ...blocks(node.children, ctx, numbering));
+        }
         break;
+      }
       default:
         // definition, yaml and the like: nothing to show.
         break;
     }
   }
   return out;
-}
-
-function firstParagraphChildren(nodes: RootContent[]): PhrasingContent[] {
-  const first = nodes[0];
-  return first && first.type === "paragraph" ? first.children : [];
 }
 
 function list(node: List, ctx: Block, numbering: Numbering): Array<Paragraph | Table> {

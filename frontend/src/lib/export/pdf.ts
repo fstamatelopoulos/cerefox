@@ -20,6 +20,25 @@ import { exportableUrl, parseMarkdown } from "./markdown";
 
 const CODE_FILL = "#f2f2f2";
 
+/**
+ * Hard-wrap code lines that cannot fit the page. pdfmake breaks lines only at
+ * spaces, so a long unbroken token (a hash, a URL, minified code) ran off the
+ * page and was clipped. The width is the code block's: 90 Courier columns at
+ * 9 pt, and a conservative 64 for proportional Roboto.
+ */
+export function wrapCode(text: string, columns: number): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      const chars = Array.from(line);
+      if (chars.length <= columns) return line;
+      const parts: string[] = [];
+      for (let i = 0; i < chars.length; i += columns) parts.push(chars.slice(i, i + columns).join(""));
+      return parts.join("\n");
+    })
+    .join("\n");
+}
+
 /** Courier when every character is in its Latin-1 range; otherwise Roboto. */
 export function codeFont(text: string): { font?: string } {
   return /^[\t\n\r\x20-\x7e\xa0-\xff]*$/.test(text) ? { font: "Courier" } : {};
@@ -110,7 +129,17 @@ function blocks(nodes: RootContent[]): Content[] {
         out.push({
           table: {
             widths: ["*"],
-            body: [[{ text: node.value, ...codeFont(node.value), fontSize: 9, preserveLeadingSpaces: true, lineHeight: 1.3 }]],
+            body: [
+              [
+                {
+                  text: wrapCode(node.value, codeFont(node.value).font ? 90 : 64),
+                  ...codeFont(node.value),
+                  fontSize: 9,
+                  preserveLeadingSpaces: true,
+                  lineHeight: 1.3,
+                },
+              ],
+            ],
           },
           layout: {
             hLineWidth: () => 0,
