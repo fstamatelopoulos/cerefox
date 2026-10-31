@@ -21,6 +21,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   their address, and the PDF prints characters outside Latin, Greek and Cyrillic
   (such as CJK and emoji) as blanks; the Word file keeps them.
 
+### Security
+
+- `minimatch` raised to 11.0.3 (GHSA-g3hv-75wg-m249, a denial of service from
+  a crafted glob pattern). It is used only by the development linters, never
+  shipped, and only with the project's own patterns, so no release was exposed.
+  Forced with an override, since ESLint still asks for 10.x, whose line has no
+  fix; linting was checked to apply its rules and ignores under 11.
+
 ---
 
 ## [v1.20.0] -- 2026-10-31
