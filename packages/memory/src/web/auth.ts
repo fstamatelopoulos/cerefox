@@ -118,8 +118,17 @@ export function isLoopbackAddress(address: string | undefined): boolean {
   return LOOPBACK_ADDRESSES.has(address.trim().toLowerCase());
 }
 
+export type AdmitReason = "loopback" | "valid_key" | "disabled";
+
+declare module "hono" {
+  interface ContextVariableMap {
+    /** Why the gate let this request in. The PostgREST proxy reads it (#351). */
+    cerefoxAuthReason: AdmitReason;
+  }
+}
+
 export type AuthDecision =
-  | { allow: true; reason: "loopback" | "valid_key" | "disabled" }
+  | { allow: true; reason: AdmitReason }
   | { allow: false; reason: "no_key" | "bad_key" | "not_configured"; message: string };
 
 export interface AuthInputs {
@@ -353,6 +362,7 @@ export function apiAuth(keys: () => string = () => process.env.CEREFOX_API_KEY ?
         // not ours, and a 401 challenge would make our own SPA ask for one.
         if (!guard.allow) return c.json({ detail: guard.message }, 403);
       }
+      c.set("cerefoxAuthReason", decision.reason);
       return next();
     }
 

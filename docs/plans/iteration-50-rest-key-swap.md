@@ -1,6 +1,6 @@
 # Iteration 50 — the CLI and local MCP against a gated Cerefox Local on another host
 
-**Status:** planned on `feat/351-rest-key-swap`. Target **v1.22.0** (minor, additive; no
+**Status:** in progress on `feat/351-rest-key-swap`. Target **v1.22.0** (minor, additive; no
 schema or Edge Function change). Issue #351. Unblocks the coding-agent part of #350.
 
 ## Why
@@ -44,16 +44,18 @@ from the container (agents only, not the CLI; possible later); the CLI on `/api/
 
 ## Steps
 
-1. [ ] The swap: the `/rest/v1` gate records the decision; the proxy rewrites both auth
+1. [x] The swap (`upstreamCredentials` in `web/routes/postgrest-proxy.ts`; the gate sets
+   `cerefoxAuthReason`): the `/rest/v1` gate records the decision; the proxy rewrites both auth
    headers only on `valid_key`.
-2. [ ] Unit tests (verified to fail before the fix): keyless, wrong, blank and valid keys;
+2. [x] `test/web-rest-key-swap.test.ts`, 8 tests (2 fail with the swap call removed): keyless, wrong, blank and valid keys;
    gate on and off; loopback exemption; `apikey` only, `Authorization` only, both; the
    internal JWT passes through; no response carries it.
 3. [ ] `doctor`: on a gated Local target, recognize the PostgREST JWT error and say the
    container needs 1.22+.
-4. [ ] Live: a gated throwaway Local container from the branch image, reached from a
+4. [~] Live: done with the unchanged 1.21.0 client against a gated throwaway Local container from the branch image, reached from a
    separate config dir with only the URL and the key: `doctor`, `project list`, `search`,
-   an ingest, the MCP stdio handshake; `smoke-auth.sh` extended. Gate-off Local suites
+   an ingest, semantic search, an MCP tool call all pass; keyless, wrong and `apikey`-only
+   calls 401; the internal JWT in no response, errors included. Still to do: `smoke-auth.sh`. Gate-off Local suites
    unchanged.
 5. [ ] Docs: `setup-lan.md` (agents and CLI from other machines), `securing-local-access.md`
    (what the key reaches), `connect-agents.md`; CHANGELOG `[Unreleased]`.
