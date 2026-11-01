@@ -50,14 +50,14 @@ from the container (agents only, not the CLI; possible later); the CLI on `/api/
 2. [x] `test/web-rest-key-swap.test.ts`, 8 tests (2 fail with the swap call removed): keyless, wrong, blank and valid keys;
    gate on and off; loopback exemption; `apikey` only, `Authorization` only, both; the
    internal JWT passes through; no response carries it.
-3. [ ] `doctor`: on a gated Local target, recognize the PostgREST JWT error and say the
+3. [x] `doctor` (`dataApiHint` in `cli/util/checks.ts`): on a gated Local target, recognize the PostgREST JWT error and say the
    container needs 1.22+.
-4. [~] Live: done with the unchanged 1.21.0 client against a gated throwaway Local container from the branch image, reached from a
+4. [x] Live: done with the unchanged 1.21.0 client against a gated throwaway Local container from the branch image, reached from a
    separate config dir with only the URL and the key: `doctor`, `project list`, `search`,
    an ingest, semantic search, an MCP tool call all pass; keyless, wrong and `apikey`-only
-   calls 401; the internal JWT in no response, errors included. Still to do: `smoke-auth.sh`. Gate-off Local suites
+   calls 401; the internal JWT in no response, errors included. `smoke-auth.sh` checks the Data API with the key, the refusals and the JWT (PASS). Gate-off Local suites
    unchanged.
-5. [ ] Docs: `setup-lan.md` (agents and CLI from other machines), `securing-local-access.md`
+5. [x] Docs: `setup-lan.md` (agents and CLI from other machines), `securing-local-access.md`
    (what the key reaches), `connect-agents.md`; CHANGELOG `[Unreleased]`.
 6. [ ] Codex review (read-only worktree, max two rounds).
 7. [ ] Acceptance on the reference LAN host, together with the move to a Container Manager

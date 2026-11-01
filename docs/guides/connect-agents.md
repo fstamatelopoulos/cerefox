@@ -77,6 +77,10 @@ in the container.
   to `cerefox mcp` in the container; the same 15 core tools, identical behavior to every other path.
 - The cloud paths above (remote Edge Function, GPT Actions) **do not apply** to a local-only
   install — there are no Edge Functions.
+- **Cerefox Local on another machine** (a NAS or home server, v1.22.0+): `docker exec` is not
+  available from your other machines, so they use the ordinary local MCP server instead, with
+  the host's URL and its API key in a separate config directory, and
+  `cfx-lan configure-agent`. See [`setup-lan.md`](setup-lan.md#the-cli-and-coding-agents-cerefox-local-only).
 
 ---
 

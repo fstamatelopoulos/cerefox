@@ -2,7 +2,8 @@
 
 Run Cerefox on an always-on machine on your home or office network (a NAS, a
 mini PC, a home server) and use it from your other machines: agents, the CLI,
-and the web UI in a browser. Requires **v1.20.0 or newer**.
+and the web UI in a browser. Requires **v1.20.0 or newer** (the CLI and coding
+agents against Cerefox Local: **v1.22.0**).
 
 There are two ways to do it, and they do not depend on each other:
 
@@ -186,7 +187,47 @@ read it. It is readable by scripts running in the Cerefox page itself; the page
 renders documents without raw HTML, and the project's tests fail on any change
 that would let a document inject script.
 
-## What this does not protect
+### The CLI and coding agents (Cerefox Local only)
+
+Requires **v1.22.0 or newer** on the LAN host. Your other machines run the
+ordinary `cerefox` client (`npm install -g @cerefox/memory`) against the host,
+the same way they would run it against a Supabase project: a URL and a key in a
+`.env`. With the web container (B), point the client at your Supabase project as
+usual instead; the web container plays no part in it.
+
+Keep this setup in its own config directory, as you would a staging
+environment ([`staging-env.md`](staging-env.md)), so it never mixes with another
+Cerefox you use:
+
+```bash
+mkdir -p ~/.cerefox/lan && chmod 700 ~/.cerefox/lan
+cat > ~/.cerefox/lan/.env <<'ENV'
+CEREFOX_SUPABASE_URL=http://192.168.1.20:8000
+CEREFOX_SUPABASE_KEY=cfx_lak_YOUR-KEY
+CEREFOX_ENV_LABEL=lan
+CEREFOX_EMBEDDER=openai
+OPENAI_API_KEY=sk-YOUR-OPENAI-KEY
+ENV
+chmod 600 ~/.cerefox/lan/.env
+alias cfx-lan='CEREFOX_CONFIG_DIR=~/.cerefox/lan cerefox'
+
+cfx-lan doctor
+cfx-lan configure-agent --tool claude-code   # adds an MCP server named cerefox-lan
+```
+
+- **The embedder must match the LAN host's.** The client computes the
+  embeddings for what it ingests and searches, as it does against Supabase, so
+  it needs the same `CEREFOX_EMBEDDER` as the host, and for `openai` its own
+  OpenAI key. A host that runs the local embedder needs `CEREFOX_EMBEDDER=local`
+  here, and the client then downloads the model once (about 130 MB).
+- **How the key gets in.** The client sends the key where a Supabase client
+  sends its secret key. The server checks it, then passes the request to the
+  database with the container's own internal credential, which never leaves
+  the container. This is the same exchange Supabase's gateway makes for an
+  `sb_secret_` key.
+- `configure-agent` pins the config directory into the agent's MCP entry, so
+  the agent reaches the LAN host whichever directory it starts in.
+
 
 **Traffic on the wire.** Plain `http://` on your network sends the key, and
 everything else, unencrypted. That is acceptable on a home network you control;
@@ -198,7 +239,9 @@ the port from your router, and do not publish the host's Cerefox port through
 a remote-access service or a proxy.
 
 **Anyone with the key**, or with access to the host's files, the data folder or
-the compose file.
+the compose file. On Cerefox Local the key is the store's master key: besides
+the web UI and the HTTP API, it opens the database API the CLI uses, which can
+read and change every table directly.
 
 ## Troubleshooting
 
@@ -208,6 +251,11 @@ planned.
 
 **Every data route returns 500 with the key, but `/version` works.** The image
 is older than v1.19.6. Upgrade.
+
+**The CLI or an agent fails with `Expected 3 parts in JWT; got 1`.** The
+Cerefox Local image on the LAN host is older than v1.22.0, which passed the key
+to the database unchanged. Upgrade the image; the client needs no change.
+`cerefox doctor` says the same.
 
 **The web UI shows a white page or keeps failing after the key.** The image is
 older than v1.20.0, which is the first version whose web UI can send a key.

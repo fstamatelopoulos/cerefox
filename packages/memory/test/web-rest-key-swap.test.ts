@@ -15,6 +15,7 @@ import { Hono } from "hono";
 
 import { API_KEY_PREFIX, apiAuth, restGatewayKeys } from "../src/web/auth.ts";
 import { registerPostgrestProxy, upstreamCredentials } from "../src/web/routes/postgrest-proxy.ts";
+import { dataApiHint } from "../src/cli/util/checks.ts";
 
 const KEY = `${API_KEY_PREFIX}testkeytestkeytestkeytestkey`;
 const OTHER = `${API_KEY_PREFIX}differentdifferentdifferent`;
@@ -161,5 +162,22 @@ describe("the gated proxy end to end", () => {
       // only proves the swap happened. The real PostgREST never echoes headers.
       expect(r.body.authorization).toBe(`Bearer ${JWT}`);
     }
+  });
+});
+
+describe("doctor's hint for a refused Data API probe", () => {
+  test("an API key refused by PostgREST points at the container upgrade", () => {
+    const body = '{"code":"PGRST301","details":null,"hint":null,"message":"Expected 3 parts in JWT; got 1"}';
+    expect(dataApiHint(401, body, KEY)).toContain("older than 1.22.0");
+  });
+
+  test("an API key refused by the Cerefox gate is the wrong key", () => {
+    const body = '{"detail":"The API key presented is not valid for this server."}';
+    expect(dataApiHint(401, body, KEY)).toContain("does not accept this API key");
+  });
+
+  test("Supabase keys and other statuses keep their hints", () => {
+    expect(dataApiHint(401, '{"message":"Invalid API key"}', "sb_secret_abc")).toContain("sb_secret");
+    expect(dataApiHint(404, "", KEY)).toContain("CEREFOX_SUPABASE_URL");
   });
 });
