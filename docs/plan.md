@@ -29,6 +29,11 @@
 
 ## Current Focus
 
+**2026-11-01: iteration 50 on `feat/351-rest-key-swap`, for 1.22.0 (#351).** The CLI and
+local MCP cannot use a gated Cerefox Local on another host: the `/rest/v1` proxy forwards
+the API key to PostgREST, which wants a JWT. Fix: swap a valid key for the container's
+internal JWT on the way to PostgREST. Plan: `docs/plans/iteration-50-rest-key-swap.md`.
+
 **2026-10-31: 1.21.0 cut (#349, plus Dependabot #344/#345).** The document Download button becomes a
 menu: Markdown, Word (.docx) or PDF, converted in the browser (`frontend/src/lib/export/`,
 `docx` and `pdfmake` loaded on demand; the main bundle grew about 2 KB).
@@ -426,6 +431,9 @@ release picks it up.
 ---
 
 ## Active iteration
+
+**[Iteration 50 — the CLI and local MCP against a gated Local on another host](plans/iteration-50-rest-key-swap.md)** —
+planned, target **v1.22.0**. #351.
 
 **[Iteration 49 — the web UI on a gated server](plans/iteration-49-lan-web-access.md)** —
 shipped in **v1.20.0** (2026-10-30). #346, #347.
