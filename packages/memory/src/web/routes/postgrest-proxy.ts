@@ -47,6 +47,10 @@ const STRIP_RESPONSE_HEADERS = [
  * without a key (gate off, the loopback exemption) must never gain the
  * service role from this proxy. So must a request that reached here without
  * passing the gate at all, which has no reason set.
+ *
+ * Responses are passed through as PostgREST sends them, so "never returned"
+ * rests on PostgREST, which does not echo request headers. The proxy itself
+ * adds the JWT to no response and no log line.
  */
 export function upstreamCredentials(
   headers: Headers,

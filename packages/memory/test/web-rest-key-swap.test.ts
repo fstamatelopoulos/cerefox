@@ -152,6 +152,15 @@ describe("the gated proxy end to end", () => {
     expect(bare.body).toMatchObject({ authorization: null, apikey: null });
   });
 
+  test("a proxy reached without passing the gate forwards the caller's headers unchanged", async () => {
+    process.env.CEREFOX_API_KEY = KEY;
+    process.env.CEREFOX_API_REQUIRE_KEY = "1";
+    const app = new Hono();
+    registerPostgrestProxy(app); // no gate in front: no admit reason is ever set
+    const r = await call(app, { apikey: KEY, Authorization: `Bearer ${KEY}` });
+    expect(r.body).toMatchObject({ authorization: `Bearer ${KEY}`, apikey: KEY });
+  });
+
   test("the proxy puts the internal JWT in no response header, success or upstream error", async () => {
     const app = gatedApp(KEY);
     for (const path of ["/cerefox_projects", "/fail"]) {

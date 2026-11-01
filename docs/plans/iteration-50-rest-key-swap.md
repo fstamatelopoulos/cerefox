@@ -59,6 +59,8 @@ from the container (agents only, not the CLI; possible later); the CLI on `/api/
    unchanged.
 5. [x] Docs: `setup-lan.md` (agents and CLI from other machines), `securing-local-access.md`
    (what the key reaches), `connect-agents.md`; CHANGELOG `[Unreleased]`.
-6. [ ] Codex review (read-only worktree, max two rounds).
+6. [x] Codex review round 1 (about 77K tokens): "merge", no High or Medium; the Lows fixed
+   (a proxy-without-gate test, gate-off Data API checks in `smoke-auth.sh`, the leak guarantee
+   worded as resting on PostgREST).
 7. [ ] Acceptance on the reference LAN host, together with the move to a Container Manager
    Project (#350).

@@ -73,6 +73,16 @@ ok "web UI page → 200"
 docker exec "$NAME" test -f /var/lib/postgresql/data/.cerefox_api_key \
   || fail "no key was minted/persisted"
 ok "key minted + persisted (not enforced, by design)"
+# The Data API with the gate off: the host CLI's JWT works as before, and an
+# API key is NOT swapped for the internal JWT (#351), so PostgREST refuses it.
+R="http://127.0.0.1:$PORT/rest/v1/cerefox_projects?select=id&limit=1"
+JWT=$(docker exec "$NAME" sh -c 'grep "^CEREFOX_SUPABASE_KEY=" /run/cerefox-runtime.env | cut -d= -f2-')
+c=$(code -H "apikey: $JWT" -H "Authorization: Bearer $JWT" "$R")
+[ "$c" = "200" ] || fail "Data API with the internal JWT got $c with the gate off, expected 200"
+KEY0=$(docker exec "$NAME" cat /var/lib/postgresql/data/.cerefox_api_key)
+c=$(code -H "apikey: $KEY0" -H "Authorization: Bearer $KEY0" "$R")
+[ "$c" = "401" ] || fail "gate off: an API key on the Data API got $c, expected PostgREST's 401 (no swap)"
+ok "gate off: Data API unchanged (JWT → 200, API key not swapped → 401)"
 
 # ── Case 2: require-mode. The gate must be ON for everyone. ──────────────────
 # What `cerefox-local` passes automatically when CEREFOX_LOCAL_BIND is widened.
