@@ -29,10 +29,20 @@
 
 ## Current Focus
 
-**2026-11-01: iteration 50 on `feat/351-rest-key-swap`, for 1.22.0 (#351).** The CLI and
-local MCP cannot use a gated Cerefox Local on another host: the `/rest/v1` proxy forwards
-the API key to PostgREST, which wants a JWT. Fix: swap a valid key for the container's
-internal JWT on the way to PostgREST. Plan: `docs/plans/iteration-50-rest-key-swap.md`.
+**2026-11-01: 1.22.0 cut (#354, #355, #356).** (1) Iteration 50 (#351): on a gated Cerefox
+Local, `/rest/v1` swaps a valid API key for the container's internal JWT, so the CLI and the
+local MCP work against a Local on another host; LAN guide gains the CLI section and a
+Synology section (#350). Plan: `docs/plans/iteration-50-rest-key-swap.md`. (2) #352: CLI hints
+and help name the command the user types (`CEREFOX_PROG_NAME`, settable in an environment's
+`.env`; else the explicit `CEREFOX_CONFIG_DIR=<dir>` form). (3) #353: the audit log shows what a
+config or project change did; labels `(setting)` / `(project)`. Codex: per-PR rounds plus one
+release review, all findings fixed. Rolled out: staging (client, schema no-op, 9 EFs, web
+daemon): package 460/3 + 3 test-isolation failures fixed on main (7c0bd72), Playwright 42/1,
+remote MCP 26/0, config-change audit checked on CLI and remote MCP. Mac Cerefox Local
+upgraded: doctor clean, smoke-auth PASS on the published image, read-only checks.
+Production not yet upgraded. Open: `cerefox-local backup create` writes inside the
+container, so an upgrade's recreate discards it; the reference LAN host still runs the
+pre-release image (move to the published v1.22.0).
 
 **2026-10-31: 1.21.0 cut (#349, plus Dependabot #344/#345).** The document Download button becomes a
 menu: Markdown, Word (.docx) or PDF, converted in the browser (`frontend/src/lib/export/`,
