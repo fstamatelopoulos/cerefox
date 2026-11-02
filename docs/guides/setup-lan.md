@@ -209,10 +209,10 @@ CEREFOX_EMBEDDER=openai
 OPENAI_API_KEY=sk-YOUR-OPENAI-KEY
 ENV
 chmod 600 ~/.cerefox/lan/.env
-alias cfx-lan='CEREFOX_CONFIG_DIR=~/.cerefox/lan cerefox'
+alias cerefox-lan='CEREFOX_CONFIG_DIR=~/.cerefox/lan cerefox'
 
-cfx-lan doctor
-cfx-lan configure-agent --tool claude-code   # adds an MCP server named cerefox-lan
+cerefox-lan doctor
+cerefox-lan configure-agent --tool claude-code   # adds an MCP server named cerefox-lan
 ```
 
 - **The embedder must match the LAN host's.** The client computes the

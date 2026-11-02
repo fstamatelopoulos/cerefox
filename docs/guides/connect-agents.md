@@ -80,7 +80,7 @@ in the container.
 - **Cerefox Local on another machine** (a NAS or home server, v1.22.0+): `docker exec` is not
   available from your other machines, so they use the ordinary local MCP server instead, with
   the host's URL and its API key in a separate config directory, and
-  `cfx-lan configure-agent`. See [`setup-lan.md`](setup-lan.md#the-cli-and-coding-agents-cerefox-local-only).
+  `cerefox-lan configure-agent`. See [`setup-lan.md`](setup-lan.md#the-cli-and-coding-agents-cerefox-local-only).
 
 ---
 
