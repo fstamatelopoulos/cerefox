@@ -9,7 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **Postgres.js 4** (#358). The driver `cerefox server deploy` uses for schema
+  and migrations, and that Cerefox Local runs on every container start, moves
+  from 3.4.9 to 4.0.0. Nothing changes for you: fresh installs, upgrades from
+  older schemas and the `postgres` check in `cerefox doctor` behave as before.
+- **Dependency refresh** (#357): minor and patch updates to the MCP SDK, Hono,
+  Mantine, TanStack Query, React Router and the PDF and Word export libraries.
+  The local-embedding runtime stays on the version it already used.
 
 ---
 
