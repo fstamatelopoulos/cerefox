@@ -95,6 +95,10 @@ RUN chmod +x /etc/s6-overlay/scripts/* \
  && chmod +x /etc/s6-overlay/s6-rc.d/cerefox-server/finish
 
 # Postgres first-boot init (base image reads these) + local wiring.
+# CEREFOX_BACKUP_DIR (#359): `backup create` runs in here, and its default
+# (~/.cerefox/backups) is the container's own filesystem, which every recreate
+# (`cerefox-local upgrade`/`init`, a compose or NAS rebuild) throws away. Keep
+# snapshots in the data volume, beside the embedder models.
 # ORT_DISABLE_TELEMETRY: onnxruntime >= 1.29 posts usage telemetry. The embedder
 # also sets it in-process, but under Bun (this image's runtime) a process.env
 # assignment does not reach the native library, so it must be set here.
@@ -105,6 +109,7 @@ ENV POSTGRES_USER=cerefox \
     CEREFOX_SUPABASE_URL=http://127.0.0.1:8000 \
     CEREFOX_POSTGREST_UPSTREAM=http://127.0.0.1:3000 \
     CEREFOX_MODELS_DIR=/var/lib/postgresql/data/.cerefox-models \
+    CEREFOX_BACKUP_DIR=/var/lib/postgresql/data/.cerefox-backups \
     ORT_DISABLE_TELEMETRY=1 \
     PGRST_DB_URI=postgresql://authenticator:authenticator@127.0.0.1:5432/cerefox \
     PGRST_DB_SCHEMAS=public \

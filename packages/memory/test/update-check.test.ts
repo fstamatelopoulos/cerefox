@@ -20,6 +20,7 @@ import {
   recordLatest,
   refreshLatest,
   takeCliNotice,
+  upgradeCommand,
   updateCheckDisabled,
 } from "../src/update-check.ts";
 
@@ -162,6 +163,24 @@ describe("takeCliNotice", () => {
   test("opted out: no notice even when one is due", () => {
     recordLatest("1.18.0", path, NOW);
     expect(takeCliNotice({ path, now: NOW, installed: "1.17.4", env: { CEREFOX_NO_UPDATE_CHECK: "1" } })).toBeNull();
+  });
+});
+
+describe("upgradeCommand (#360)", () => {
+  test("outside a container: self-update", () => {
+    expect(upgradeCommand({}, false)).toBe("cerefox self-update");
+  });
+
+  test("inside a container reached through cerefox-local: that script's upgrade", () => {
+    expect(upgradeCommand({ CEREFOX_PROG_NAME: "cerefox-local" }, true)).toBe("cerefox-local upgrade");
+  });
+
+  // The web server in the image, compose or a NAS app, `docker exec` by hand,
+  // the cerefox-web image: none of them is upgraded by `cerefox-local upgrade`,
+  // and on a LAN host that command would upgrade the laptop's instance instead.
+  test("inside any other container: no command", () => {
+    expect(upgradeCommand({}, true)).toBeNull();
+    expect(upgradeCommand({ CEREFOX_PROG_NAME: "cerefox-lan" }, true)).toBeNull();
   });
 });
 

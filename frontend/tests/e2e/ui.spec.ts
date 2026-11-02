@@ -555,7 +555,7 @@ test.describe("Update notice (#323)", () => {
   test("a newer release shows in the header, with a readable upgrade command", async ({ page, request }) => {
     const info = await (await request.get("/api/v1/version")).json();
     await page.route("**/api/v1/version*", (route) =>
-      route.fulfill({ json: { ...info, latest: "99.0.0", update_command: "cerefox self-update" } }),
+      route.fulfill({ json: { ...info, latest: "99.0.0", update_available: true, update_command: "cerefox self-update" } }),
     );
     await page.goto(`${APP}/`);
 
@@ -595,10 +595,23 @@ test.describe("Update notice (#323)", () => {
     }
   });
 
+  test("in a container the badge shows without an upgrade command (#360)", async ({ page, request }) => {
+    const info = await (await request.get("/api/v1/version")).json();
+    await page.route("**/api/v1/version*", (route) =>
+      route.fulfill({ json: { ...info, latest: "99.0.0", update_available: true, update_command: null } }),
+    );
+    await page.goto(`${APP}/`);
+    const badge = page.locator("header").getByTestId("update-badge");
+    await expect(badge).toHaveText("v99.0.0 available", { timeout: 15_000 });
+    await badge.hover();
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+  });
+
   test("no badge when the server reports nothing newer", async ({ page, request }) => {
     const info = await (await request.get("/api/v1/version")).json();
     await page.route("**/api/v1/version*", (route) =>
-      route.fulfill({ json: { ...info, latest: null, update_command: null } }),
+      route.fulfill({ json: { ...info, latest: null, update_available: false, update_command: null } }),
     );
     await page.goto(`${APP}/`);
     await expect(page.getByText("Cerefox v", { exact: false })).toBeVisible({ timeout: 15_000 });

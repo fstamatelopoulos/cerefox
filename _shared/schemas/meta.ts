@@ -20,8 +20,12 @@ export const VersionResponse = z.object({
    *  server); null when not yet known or when the check is turned off
    *  (`CEREFOX_NO_UPDATE_CHECK`). */
   latest: z.string().nullable(),
-  /** What to run to upgrade, when `latest` is newer than `version`; else
-   *  null. `cerefox-local upgrade` inside the Cerefox Local container. */
+  /** True when `latest` is newer than `version`. */
+  update_available: z.boolean(),
+  /** What to run to upgrade, when `latest` is newer than `version` and the
+   *  server knows how it was installed; else null. Always null inside a
+   *  container: the same image runs under `cerefox-local`, compose, a NAS app
+   *  or as `cerefox-web`, and the server cannot tell which (#360). */
   update_command: z.string().nullable(),
 });
 export type VersionResponse = z.infer<typeof VersionResponse>;

@@ -72,6 +72,9 @@ export function registerMetaRoutes(app: Hono, ctx: WebContext | null): void {
       ...VERSION_INFO,
       env_label: label.length > 0 ? label : null,
       latest,
+      // Separate from the command: inside a container the server cannot know
+      // how this instance is upgraded, so it says only that it should be (#360).
+      update_available: newerRelease(latest) !== null,
       update_command: newerRelease(latest) ? upgradeCommand() : null,
     });
   });

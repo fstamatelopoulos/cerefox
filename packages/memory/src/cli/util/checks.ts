@@ -134,11 +134,12 @@ export async function checkUpdates(): Promise<CheckResult> {
   }
   const newer = newerRelease(latest);
   if (!newer) return { name, status: "ok", detail: `up to date (latest release: v${latest})` };
+  const cmd = upgradeCommand();
   return {
     name,
     status: "skipped",
     detail: `v${newer} is available (installed: v${PKG_VERSION})`,
-    hint: `Run \`${upgradeCommand()}\`. Release notes: ${releaseNotesUrl(newer)}`,
+    hint: `${cmd ? `Run \`${cmd}\`. ` : ""}Release notes: ${releaseNotesUrl(newer)}`,
   };
 }
 
