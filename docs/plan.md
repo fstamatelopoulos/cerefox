@@ -29,6 +29,17 @@
 
 ## Current Focus
 
+**2026-11-02: 1.22.1 cut (#361).** (1) #359: `cerefox-local backup create` wrote inside the
+container, so an upgrade's recreate deleted the snapshot; the image now sets
+`CEREFOX_BACKUP_DIR` into the data volume and the host script copies each snapshot to
+`~/.cerefox/local/backups`; `backup restore` copies a host file in. (2) #360: inside a
+container the update badge and CLI notice no longer say `cerefox-local upgrade` (only a CLI
+reached through that script gets it); `/api/v1/version` gains `update_available`. Opus review:
+merge, Low items folded in. Verified on a throwaway container built from the branch (backup,
+recreate, restore). 1.22.0 is now on production (client, schema no-op, 9 EFs, web daemon
+restarted). README gained a LAN/Synology section. Next: Mac Local to 1.22.1, then the
+reference LAN host (maintainer). The EF code is unchanged since 1.22.0 (EF_LAST_CHANGED).
+
 **2026-11-01: 1.22.0 cut (#354, #355, #356).** (1) Iteration 50 (#351): on a gated Cerefox
 Local, `/rest/v1` swaps a valid API key for the container's internal JWT, so the CLI and the
 local MCP work against a Local on another host; LAN guide gains the CLI section and a
