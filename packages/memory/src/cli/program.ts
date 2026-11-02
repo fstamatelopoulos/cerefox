@@ -73,6 +73,7 @@ import { registerApiKey } from "./commands/api-key.ts";
 import { registerToken } from "./commands/token.ts";
 import { registerSyncSelfDocs } from "./commands/sync-self-docs.ts";
 import { registerWeb } from "./commands/web.ts";
+import { progName as hintName } from "./util/prog-name.ts";
 
 /**
  * Register a command via its existing `register*(parent)` function, then
@@ -123,8 +124,8 @@ function registerRenameHusks(program: Command): void {
       .allowExcessArguments(true)
       .argument("[args...]", "(renamed)")
       .action(() => {
-        eprintln(c.yellow(`✗ \`cerefox ${oldName}\` was renamed.`));
-        eprintln(`  Use \`cerefox ${newForm}\` instead (run \`cerefox ${newForm.split(" ")[0]} --help\`).`);
+        eprintln(c.yellow(`✗ \`${hintName()} ${oldName}\` was renamed.`));
+        eprintln(`  Use \`${hintName()} ${newForm}\` instead (run \`${hintName()} ${newForm.split(" ")[0]} --help\`).`);
         process.exit(1);
       });
   }
@@ -251,8 +252,8 @@ export function buildProgram(): Command {
     .command("backup")
     .description("Backup + restore the knowledge base: create, restore.")
     .action(() => {
-      eprintln(c.yellow("`cerefox backup` needs a subcommand."));
-      eprintln("  Use `cerefox backup create` or `cerefox backup restore`.");
+      eprintln(c.yellow(`\`${hintName()} backup\` needs a subcommand.`));
+      eprintln(`  Use \`${hintName()} backup create\` or \`${hintName()} backup restore\`.`);
       process.exit(1);
     });
   moveInto(backup, registerBackup, "create");

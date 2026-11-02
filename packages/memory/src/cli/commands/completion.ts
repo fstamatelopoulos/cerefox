@@ -339,7 +339,7 @@ async function action(target: string, options: { shell?: string; yes?: boolean }
   // Raw emit: print the script to stdout (pipe/redirect it yourself).
   println(scriptFor(target));
   if (process.stdout.isTTY) {
-    eprintln(c.dim(`\n# Tip: \`cerefox completion install\` writes this + wires your shell rc automatically.`));
+    eprintln(c.dim(`\n# Tip: \`${progName()} completion install\` writes this + wires your shell rc automatically.`));
   }
 }
 

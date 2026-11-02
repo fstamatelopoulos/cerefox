@@ -97,8 +97,10 @@ describe("cerefox web daemon CLI", () => {
       expect(await proc.exited).toBe(0);
       expect(stdout).toContain("running");
       expect(stdout).toContain("0.0.1-stale");
-      // The remediation has to be in the output, not just the diagnosis.
-      expect(stdout).toContain("cerefox web stop && cerefox web start");
+      // The remediation has to be in the output, not just the diagnosis, and
+      // it names this config dir, so copying it cannot restart another one (#352).
+      const named = `CEREFOX_CONFIG_DIR=${dir} cerefox`;
+      expect(stdout).toContain(`${named} web stop && ${named} web start`);
     } finally {
       await stub.stop(true);
       rmSync(dir, { recursive: true, force: true });

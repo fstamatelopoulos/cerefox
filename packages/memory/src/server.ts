@@ -34,6 +34,7 @@ import {
   type ToolContext,
 } from "../../../_shared/mcp-tools/index.ts";
 import { PKG_VERSION } from "./meta.ts";
+import { progName } from "./cli/util/prog-name.ts";
 
 // Bun workspaces install a separate copy of @supabase/supabase-js into each
 // member's node_modules. The runtime instances are structurally identical
@@ -165,7 +166,7 @@ async function warnIfSchemaVersionMismatch(
     if (compareSemver(deployed, bundled) < 0) {
       process.stderr.write(
         `[cerefox-mcp] ⚠  schema version mismatch: this client bundles v${bundled} ` +
-          `but the deployed schema is v${deployed}. Run \`cerefox server deploy\` ` +
+          `but the deployed schema is v${deployed}. Run \`${progName()} server deploy\` ` +
           `to update it. Tools may behave unexpectedly until then.\n`,
       );
     }

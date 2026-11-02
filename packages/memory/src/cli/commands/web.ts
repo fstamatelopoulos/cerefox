@@ -27,6 +27,7 @@ import {
   stopDaemon,
 } from "../../web/daemon.ts";
 import { PKG_VERSION } from "../../meta.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface WebOptions {
   host: string;
@@ -128,7 +129,7 @@ export function registerWeb(program: Command): void {
           case "port-conflict":
             eprintln(
               `A Cerefox web daemon is already running on :${outcome.info.port} (pid ${outcome.info.pid}).\n` +
-                `Stop it first (\`cerefox web stop\`) or start on its port.`,
+                `Stop it first (\`${progName()} web stop\`) or start on its port.`,
             );
             process.exit(1);
             break;

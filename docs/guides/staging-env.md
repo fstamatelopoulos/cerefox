@@ -73,6 +73,7 @@ CEREFOX_CONFIG_DIR=~/.cerefox/staging cerefox init
 
 ```bash
 CEREFOX_ENV_LABEL=staging
+CEREFOX_PROG_NAME=cfx-stg                       # the alias below; hints then say `cfx-stg …`
 CEREFOX_SUPABASE_URL=https://<staging-ref>.supabase.co
 CEREFOX_SUPABASE_KEY=sb_secret_…                 # staging project's secret key
 CEREFOX_DATABASE_URL=postgresql://postgres.<staging-ref>:…@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
@@ -261,6 +262,11 @@ otherwise:
 | `doctor` | Title line reads `Cerefox doctor [STAGING]` |
 | `backup create` | Filename becomes `cerefox-staging-<stamp>.json`, and the label is stored in the payload |
 | `backup restore` | Warns when the snapshot's environment differs from the target's |
+
+Also set `CEREFOX_PROG_NAME` to your alias (`cfx-stg`). Hints that tell you what
+to run next, such as `doctor`'s `config set …` suggestions, then name the alias,
+so copying one acts on staging. Without it, they spell out
+`CEREFOX_CONFIG_DIR=… cerefox …`, which is just as safe, only longer.
 
 The filename and restore warning matter because `CEREFOX_BACKUP_DIR` does not
 follow `CEREFOX_CONFIG_DIR`: staging and production snapshots can end up in one

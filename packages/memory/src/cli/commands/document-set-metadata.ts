@@ -25,6 +25,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
 import { metadataTokenParams } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface SetMetadataResult {
   document_id: string;
@@ -154,7 +155,7 @@ async function action(
   if (!rows || rows.length === 0) {
     throw systemError(
       "cerefox_set_document_metadata returned no data.",
-      "Verify the RPC is deployed: `cerefox server deploy`.",
+      `Verify the RPC is deployed: \`${progName()} server deploy\`.`,
     );
   }
   const row = rows[0];

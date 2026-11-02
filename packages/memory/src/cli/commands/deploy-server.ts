@@ -52,6 +52,7 @@ import {
   runDbMigrate,
 } from "../../../../../_shared/db-deploy/index.ts";
 import { nestedNpxEnv } from "../util/npx-env.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface DeployServerOptions {
   dryRun?: boolean;
@@ -214,7 +215,7 @@ async function action(options: DeployServerOptions): Promise<void> {
       eprintln(`\n  ${c.red("✗")} ${ch.label}`);
       eprintln(c.dim(`    → ${ch.remediation}`));
     }
-    eprintln("\nFix the above and re-run `cerefox server deploy` (it's idempotent).");
+    eprintln(`\nFix the above and re-run \`${progName()} server deploy\` (it's idempotent).`);
     process.exit(1);
   }
   println(c.green("\n✓ All prerequisites satisfied."));
@@ -402,7 +403,7 @@ async function action(options: DeployServerOptions): Promise<void> {
         eprintln(c.dim("     still serving, so nothing is down."));
         eprintln(c.cyan("   → Wait a few minutes, then re-run: cerefox server deploy --functions-only"));
       } else {
-        eprintln(c.dim("   Re-run `cerefox server deploy --functions-only` after fixing the cause."));
+        eprintln(c.dim(`   Re-run \`${progName()} server deploy --functions-only\` after fixing the cause.`));
       }
       process.exit(1);
     }
@@ -437,8 +438,8 @@ async function action(options: DeployServerOptions): Promise<void> {
         c.cyan(
           "\n   ℹ  The primitive Edge Functions now require the Cerefox access token.\n" +
             "      If CEREFOX_ACCESS_TOKENS is unset they reject ALL callers (fail closed) —\n" +
-            "      GPT Actions, remote HTTP, and `cerefox doctor`. Generate it now:\n" +
-            "        cerefox token generate\n" +
+            `      GPT Actions, remote HTTP, and \`${progName()} doctor\`. Generate it now:\n` +
+            `        ${progName()} token generate\n` +
             `      (or manually: supabase secrets set CEREFOX_ACCESS_TOKENS=<token> --project-ref ${ref})\n` +
             "      Migration + client cutover: docs/specs/ef-auth-migration-design.md §6.",
         ),

@@ -29,6 +29,7 @@ import {
 import { PKG_VERSION } from "../../meta.ts";
 import { fetchLatestVersion, newerRelease, recordLatest } from "../../update-check.ts";
 import { restartCommand, statusDaemon } from "../../web/daemon.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface SelfUpdateOptions {
   check?: boolean;
@@ -120,7 +121,7 @@ async function action(options: SelfUpdateOptions): Promise<void> {
   if (options.check) {
     if (newerRelease(target)) {
       println(c.yellow(`Update available: ${PKG_VERSION} → ${target}`));
-      println(c.dim("Run `cerefox self-update` to upgrade."));
+      println(c.dim(`Run \`${progName()} self-update\` to upgrade.`));
     }
     return;
   }

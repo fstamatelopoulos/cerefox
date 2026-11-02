@@ -32,6 +32,7 @@ import {
 } from "../../../../../_shared/mcp-tools/_document-meta.ts";
 import type { MCPSupabaseClient } from "../../../../../_shared/mcp-tools/types.ts";
 import { getClient } from "../util/client.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface EditOptions {
   title?: string;
@@ -145,7 +146,7 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
 
   println(c.green(`✓ Edited "${newTitle}" (id: ${documentId}).`));
   if (titleChanged) {
-    println(c.dim("  Title changed: FTS refreshed; semantic embeddings update on next `cerefox server reindex`."));
+    println(c.dim(`  Title changed: FTS refreshed; semantic embeddings update on next \`${progName()} server reindex\`.`));
   }
 }
 

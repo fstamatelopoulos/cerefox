@@ -21,6 +21,7 @@ import { c, eprintln, println, userError } from "../../../../../_shared/cli-core
 import { loadSettings, resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import { envGitignoreWarning, readEnvVar, upsertEnvVar } from "../util/env-file.ts";
 import { nestedNpxEnv } from "../util/npx-env.ts";
+import { progName } from "../util/prog-name.ts";
 
 const SECRET_NAME = "CEREFOX_ACCESS_TOKENS"; // server-side accepted set (plural)
 const LOCAL_NAME = "CEREFOX_ACCESS_TOKEN"; // local .env, what this machine presents
@@ -105,7 +106,7 @@ function printTokenOnce(token: string): void {
   println(c.dim("     • Custom GPT → Configure → Actions → Authentication → API Key (Bearer)"));
   println(c.dim("     • Remote HTTP MCP → the Authorization: Bearer header"));
   println(c.dim("   If the GPT Actions schema changed this release, re-paste it too"));
-  println(c.dim("   (see docs/guides/connect-agents.md). Lose the token → `cerefox token rotate`."));
+  println(c.dim(`   (see docs/guides/connect-agents.md). Lose the token → \`${progName()} token rotate\`.`));
 }
 
 function generateAction(opts: TokenOptions): void {
@@ -128,7 +129,7 @@ function rotateAction(opts: TokenOptions): void {
     if (!current) {
       throw userError(
         `No ${LOCAL_NAME} in ${envPath} to finalize to.`,
-        "Run `cerefox token generate` or `cerefox token rotate` first.",
+        `Run \`${progName()} token generate\` or \`${progName()} token rotate\` first.`,
       );
     }
     println(c.bold("Finalizing rotation (dropping the previous token)…"));
@@ -150,7 +151,7 @@ function rotateAction(opts: TokenOptions): void {
     println(
       c.yellow(
         "   Both the new and previous tokens are accepted right now. Update every\n" +
-          "   client to the new token, then run `cerefox token rotate --finalize`\n" +
+          `   client to the new token, then run \`${progName()} token rotate --finalize\`\n` +
           "   to stop accepting the old one.",
       ),
     );
@@ -164,7 +165,7 @@ function listAction(): void {
   println(
     local
       ? `   local (${LOCAL_NAME} in ${envPath}): ${c.green(mask(local))}`
-      : c.dim(`   no ${LOCAL_NAME} in ${envPath} — run \`cerefox token generate\``),
+      : c.dim(`   no ${LOCAL_NAME} in ${envPath} — run \`${progName()} token generate\``),
   );
   println(
     c.dim(

@@ -20,6 +20,7 @@ import {
 } from "../../../../../_shared/db-client/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { systemError } from "../../../../../_shared/cli-core/index.ts";
+import { progName } from "./prog-name.ts";
 
 /**
  * Build a Cerefox DB client for the current CLI invocation. Surfaces a
@@ -30,7 +31,7 @@ export function getClient(): CerefoxDbClient {
   if (!settings.supabaseUrl || !settings.supabaseKey) {
     throw systemError(
       "CEREFOX_SUPABASE_URL and CEREFOX_SUPABASE_KEY must be set in your .env file.",
-      "Run `cerefox init` to create a config, or see docs/guides/setup-supabase.md.",
+      `Run \`${progName()} init\` to create a config, or see docs/guides/setup-supabase.md.`,
     );
   }
   try {
@@ -39,7 +40,7 @@ export function getClient(): CerefoxDbClient {
     const msg = err instanceof Error ? err.message : String(err);
     throw systemError(
       `Failed to initialize Supabase client: ${msg}`,
-      "Run `cerefox doctor` to verify your credentials.",
+      `Run \`${progName()} doctor\` to verify your credentials.`,
     );
   }
 }

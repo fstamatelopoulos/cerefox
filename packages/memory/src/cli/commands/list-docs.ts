@@ -17,6 +17,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
 import { getClient } from "../util/client.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface DocRow {
   id: string;
@@ -52,7 +53,7 @@ async function action(options: {
       throw systemError(`Project lookup failed: ${projectError.message}`);
     }
     if (!project) {
-      throw userError(`Project "${options.project}" not found.`, "Run `cerefox project list` to see available names.");
+      throw userError(`Project "${options.project}" not found.`, `Run \`${progName()} project list\` to see available names.`);
     }
     projectId = project.id;
   }

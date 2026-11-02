@@ -25,6 +25,7 @@ import {
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface RestoreOptions {
   dryRun?: boolean;
@@ -140,7 +141,7 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     println(
       c.dim(
         `  trashed documents in file: ${trashedInFile} — restored as trash ` +
-          "(still deleted; recover with `cerefox document restore`)",
+          `(still deleted; recover with \`${progName()} document restore\`)`,
       ),
     );
   }

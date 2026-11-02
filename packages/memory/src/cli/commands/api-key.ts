@@ -31,6 +31,7 @@ import { c, eprintln, println, userError } from "../../../../../_shared/cli-core
 import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import { envGitignoreWarning, readEnvVar, upsertEnvVar } from "../util/env-file.ts";
 import { API_KEY_PREFIX } from "../../web/auth.ts";
+import { progName } from "../util/prog-name.ts";
 
 const ENV_NAME = "CEREFOX_API_KEY";
 
@@ -99,7 +100,7 @@ function generateAction(opts: ApiKeyOptions): void {
     // running the command, not by the type checker.
     throw userError(
       `${ENV_NAME} is already set in ${envPath} (${mask(existing)}).`,
-      "Use `cerefox api-key show` to see it, or `cerefox api-key rotate` to replace it. " +
+      `Use \`${progName()} api-key show\` to see it, or \`${progName()} api-key rotate\` to replace it. ` +
         "Refusing to overwrite silently: any client already configured with the old key " +
         "would start getting 401s with no indication why.",
     );
@@ -115,7 +116,7 @@ function rotateAction(opts: ApiKeyOptions): void {
   if (!existing) {
     throw userError(
       `No ${ENV_NAME} in ${envPath} — nothing to rotate.`,
-      "Run `cerefox api-key generate` first.",
+      `Run \`${progName()} api-key generate\` first.`,
     );
   }
   println(c.bold("Rotating the local API key"));

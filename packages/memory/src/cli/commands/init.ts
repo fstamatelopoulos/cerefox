@@ -77,6 +77,7 @@ import {
 } from "../../../../../_shared/config/index.ts";
 import { COMPATIBILITY, compareSemver } from "../../../../../_shared/compatibility/index.ts";
 import { WRITERS, writeMcpConfig } from "../util/mcp-config-writers.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface InitOptions {
   config?: string;
@@ -161,7 +162,7 @@ function answersFromEnvFile(path: string): ConfigAnswers {
     if (!parsed[key] || parsed[key].trim() === "") {
       throw userError(
         `Existing .env at ${path} is missing required key "${key}".`,
-        `Fix it manually or run \`cerefox init --force\` to start fresh.`,
+        `Fix it manually or run \`${progName()} init --force\` to start fresh.`,
       );
     }
   }
@@ -217,7 +218,7 @@ async function promptForAnswers(): Promise<ConfigAnswers> {
   println(c.cyan("▶ Step 4/5 — Direct Postgres connection (optional for npm-installed users)"));
   println(
     c.dim(
-      "  Only needed for `cerefox server deploy` (schema deploy + migrations).\n" +
+      `  Only needed for \`${progName()} server deploy\` (schema deploy + migrations).\n` +
         "  You can skip this and set CEREFOX_DATABASE_URL later — press Enter.\n" +
         "  Format: postgresql://postgres.<project-ref>:<pw>@…:5432/postgres?sslmode=require",
     ),
@@ -407,7 +408,7 @@ async function maybeOfferServerDeploy(): Promise<void> {
     println(c.dim("  No Cerefox schema detected on this Supabase project."));
     const yes = await confirm("  Deploy the server now (schema + RPCs + Edge Functions)?", false);
     if (yes) launchDeployServer();
-    else println(c.dim("  Skipped. Run `cerefox server deploy` later (or `cerefox doctor` to recheck)."));
+    else println(c.dim(`  Skipped. Run \`${progName()} server deploy\` later (or \`${progName()} doctor\` to recheck).`));
     println("");
     return;
   }
@@ -421,7 +422,7 @@ async function maybeOfferServerDeploy(): Promise<void> {
     );
     const yes = await confirm("  Update the server now (applies pending migrations, refreshes RPCs + EFs)?", true);
     if (yes) launchDeployServer();
-    else println(c.dim("  Skipped. Run `cerefox server deploy` when ready."));
+    else println(c.dim(`  Skipped. Run \`${progName()} server deploy\` when ready.`));
     println("");
     return;
   }
@@ -451,7 +452,7 @@ async function postWriteLifecycle(envPath: string, options: InitOptions): Promis
       await runSyncSelfDocs({});
     } catch (err) {
       warn(
-        `Self-doc ingest failed: ${err instanceof Error ? err.message : String(err)}. Run \`cerefox guides ingest\` manually after init.`,
+        `Self-doc ingest failed: ${err instanceof Error ? err.message : String(err)}. Run \`${progName()} guides ingest\` manually after init.`,
       );
     }
     println("");
@@ -483,9 +484,9 @@ async function postWriteLifecycle(envPath: string, options: InitOptions): Promis
 
   println("");
   println(c.green("Done. Try:"));
-  println(c.dim("  cerefox doctor                  # verify everything"));
-  println(c.dim("  cerefox search \"…\"              # search the KB"));
-  println(c.dim("  cerefox document ingest <file>  # add a doc"));
+  println(c.dim(`  ${progName()} doctor                  # verify everything`));
+  println(c.dim(`  ${progName()} search "…"              # search the KB`));
+  println(c.dim(`  ${progName()} document ingest <file>  # add a doc`));
   // Help users locate the file we just touched.
   println("");
   println(c.dim(`  Config in effect: ${envPath}`));
@@ -608,7 +609,7 @@ async function action(options: InitOptions): Promise<void> {
       println("");
       println(c.green(`✓ Using existing config at ${cwdEnv}`));
       println(c.dim(`  TS reads it via the legacy dev-mode fallback (~/.cerefox/.env not present).`));
-      println(c.dim(`  Run \`cerefox init\` again later to migrate to the new home.`));
+      println(c.dim(`  Run \`${progName()} init\` again later to migrate to the new home.`));
       println("");
       await postWriteLifecycle(cwdEnv, options);
       return;
