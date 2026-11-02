@@ -64,6 +64,7 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 | **Embeddings** | OpenAI `text-embedding-3-small` (768-dim) via API — or, on Cerefox Local, an optional **fully-offline local model** (`nomic-embed-text-v1.5`, in-container ONNX): no API key, text never leaves your machine |
 | **Remote MCP endpoint** | `cerefox-mcp` Supabase Edge Function — MCP Streamable HTTP; connect Claude Desktop, Claude Code, or Cursor with just a URL and a Cerefox access token (`cerefox token generate`); no Python install needed |
 | **Local MCP server** | `cerefox mcp` stdio server (TypeScript, from `@cerefox/memory`) -- local alternative with zero Edge Function usage, lower latency, and offline support; `npm install -g @cerefox/memory`. |
+| **Runs on your network** | Cerefox Local on a NAS or home server (tested on a Synology NAS), used from your other machines: web UI, CLI and coding agents, with the API key required on every request. See [docs/guides/setup-lan.md](docs/guides/setup-lan.md) |
 | **Web UI** | React + TypeScript SPA (Mantine UI) at `/app/`; Hono (TypeScript) JSON API backend served by `cerefox web`; Markdown viewer, search with 4 modes, document editing, project management |
 | **Markdown-first ingest** | `.md` / `.txt` / `.docx` (Markdown is the storage format; `.docx` is converted via `mammoth` on ingest, fidelity varies. PDF is not supported — convert upstream) |
 | **Batch ingest** | `cerefox document ingest-dir` recurses directories |
@@ -187,6 +188,24 @@ cerefox-local search "what did I decide about auth?"
 > **Full walkthrough:** [`docs/guides/setup-local.md`](docs/guides/setup-local.md).
 > Cloud and local are independent — different installer, different command name —
 > so they never collide if you happen to run both.
+
+### On a NAS or home server (your network)
+
+Cerefox Local also runs on an always-on machine on your home or office network,
+such as a NAS, a mini PC or a home server. The data stays on that machine, and
+your other machines use it over the network: the web UI in a browser, the
+`cerefox` CLI, and coding agents such as Claude Code and Codex. Tested on a
+**Synology NAS** with Container Manager. Already on Supabase? The `cerefox-web`
+image serves the web UI and API from your network while the data stays in
+Supabase.
+
+On a network host every request needs the API key, because a container cannot
+tell your laptop from any other device on the network. Keep the host on your
+LAN; it is not meant to be reachable from the internet.
+
+> **Walkthrough:** [`docs/guides/setup-lan.md`](docs/guides/setup-lan.md), including a
+> step-by-step [Synology section](docs/guides/setup-lan.md#on-a-synology-nas).
+> The CLI and coding agents need v1.22.0 or newer on the host.
 
 ### Run from source (contributors)
 
