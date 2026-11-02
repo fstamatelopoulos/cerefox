@@ -63,4 +63,7 @@ from the container (agents only, not the CLI; possible later); the CLI on `/api/
    (a proxy-without-gate test, gate-off Data API checks in `smoke-auth.sh`, the leak guarantee
    worded as resting on PostgREST).
 7. [ ] Acceptance on the reference LAN host, together with the move to a Container Manager
-   Project (#350).
+   Project (#350). Done so far (branch image, the unchanged 1.21.0 client, its own config dir):
+   the Project starts on amd64; `doctor`, `document list`, semantic search, an ingest + soft
+   delete, `backup create`. MCP deliberately not configured. The Synology section of
+   `setup-lan.md` is written from this run; still to confirm the DSM menu names in it.
