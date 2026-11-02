@@ -133,7 +133,7 @@ export function AuditLogPage() {
     {
       key: "delta",
       label: "Change",
-      width: 200,
+      width: 300,
       align: "right",
       render: (e) => {
         // #333: a metadata change shows what changed, not a size; so does a
@@ -142,8 +142,8 @@ export function AuditLogPage() {
           metadataChangeSummary(e.metadata_before, e.metadata_after) ?? storeChangeSummary(e.operation, e.description);
         if (change) {
           return (
-            <span className={ui.mono} style={{ fontSize: 12 }} title={change}>
-              {change.length > 40 ? `${change.slice(0, 39)}…` : change}
+            <span className={ui.mono} style={{ fontSize: 12, whiteSpace: "nowrap" }} title={change}>
+              {change.length > 50 ? `${change.slice(0, 49)}…` : change}
             </span>
           );
         }
