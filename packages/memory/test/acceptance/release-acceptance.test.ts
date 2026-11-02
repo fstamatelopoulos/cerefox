@@ -484,8 +484,9 @@ describe("release acceptance (live)", () => {
     expect(edits).toContain("description changed");
     const deletes = (await A.mcp("cerefox_get_audit_log", { operation: "project-delete", limit: 10 })).text;
     expect(deletes).toContain(`Project '${RENAMED}' deleted`);
-    // Store-level rows render as "(store)", never "(deleted)".
-    expect(deletes).toContain("(store)");
+    // Store-level rows say what they are about, never "(deleted)" (#353).
+    expect(deletes).toContain("(project)");
+    expect(deletes).not.toContain("(deleted)");
 
     // A repeat delete is refused and — critically — adds NO second entry.
     const again = A.cli(["project", "delete", RENAMED, "--yes", "--author", "acceptance"]);
