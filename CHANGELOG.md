@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.22.2] -- 2026-11-02
+
 ### Changed
 
 - **Postgres.js 4** (#358). The driver `cerefox server deploy` uses for schema
