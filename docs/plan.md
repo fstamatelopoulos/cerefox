@@ -29,6 +29,19 @@
 
 ## Current Focus
 
+**2026-11-02: 1.22.2 cut (#357, #358).** Dependency release. (1) #358: Postgres.js 3.4.9 →
+4.0.0 (drives `server deploy` and every Local boot); the doctor check's import is typed for
+v4's default export. Verified on staging (schema deploy, doctor) and on throwaway Local
+containers: fresh boot, upgrade boot, and a v1.18.0 store applying 0035 and 0036. (2) #357:
+17 minor/patch bumps, except `onnxruntime-node` stays at ^1.21.0 so the lockfile keeps the
+one copy transformers pins; dependabot.yml now ignores it. Opus review: merge. Rolled out:
+staging (client via `--prefix`, schema, web daemon), Mac Local, production (backup first,
+client, schema, web daemon). EFs not redeployed: unchanged since 1.22.0, and the Supabase CLI
+now refuses `functions deploy` from an agent without its own consent (deploy them by hand
+when an EF change ships). Follow-ups: two live tests time out on a store with many projects
+(`list-docs … at scale`, 30 s) and in `pipeline-update`'s cleanup hook (bun's 5 s hook
+default), which left fixtures behind on staging (purged).
+
 **2026-11-02: 1.22.1 cut (#361).** (1) #359: `cerefox-local backup create` wrote inside the
 container, so an upgrade's recreate deleted the snapshot; the image now sets
 `CEREFOX_BACKUP_DIR` into the data volume and the host script copies each snapshot to
