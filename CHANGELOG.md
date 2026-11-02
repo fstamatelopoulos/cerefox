@@ -9,6 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **The CLI and coding agents can use a Cerefox Local on another machine**
+  (#351), such as a NAS on your network. Point the ordinary client at the host's
+  URL with its API key, the way you would point it at a Supabase project, and
+  `cerefox configure-agent` wires up the local MCP server. Before, the container
+  passed the key to the database unchanged and every call failed with
+  `Expected 3 parts in JWT; got 1`. The server now checks the key and lets the
+  request through with the container's own internal credential, which never
+  leaves the container. Only the Cerefox Local image is affected, and only with
+  the API key gate on: Supabase deployments and a Cerefox Local without the
+  gate behave exactly as before. On such a host the key now opens the database
+  API too, so treat it as the store's master key. `cerefox doctor` says when a
+  container is too old for this. Guide: `docs/guides/setup-lan.md`.
+
 ### Fixed
 
 - **The web UI could take up to two days to say a new release is out.** The

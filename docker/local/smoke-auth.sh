@@ -73,6 +73,16 @@ ok "web UI page → 200"
 docker exec "$NAME" test -f /var/lib/postgresql/data/.cerefox_api_key \
   || fail "no key was minted/persisted"
 ok "key minted + persisted (not enforced, by design)"
+# The Data API with the gate off: the host CLI's JWT works as before, and an
+# API key is NOT swapped for the internal JWT (#351), so PostgREST refuses it.
+R="http://127.0.0.1:$PORT/rest/v1/cerefox_projects?select=id&limit=1"
+JWT=$(docker exec "$NAME" sh -c 'grep "^CEREFOX_SUPABASE_KEY=" /run/cerefox-runtime.env | cut -d= -f2-')
+c=$(code -H "apikey: $JWT" -H "Authorization: Bearer $JWT" "$R")
+[ "$c" = "200" ] || fail "Data API with the internal JWT got $c with the gate off, expected 200"
+KEY0=$(docker exec "$NAME" cat /var/lib/postgresql/data/.cerefox_api_key)
+c=$(code -H "apikey: $KEY0" -H "Authorization: Bearer $KEY0" "$R")
+[ "$c" = "401" ] || fail "gate off: an API key on the Data API got $c, expected PostgREST's 401 (no swap)"
+ok "gate off: Data API unchanged (JWT → 200, API key not swapped → 401)"
 
 # ── Case 2: require-mode. The gate must be ON for everyone. ──────────────────
 # What `cerefox-local` passes automatically when CEREFOX_LOCAL_BIND is widened.
@@ -101,6 +111,23 @@ ok "data route with the key → 200"
 docker exec "$NAME" sh -c 'set -a; . /run/cerefox-runtime.env; set +a; cerefox project list >/dev/null' \
   || fail "in-container CLI could not reach the data API (cerefox-local commands would fail)"
 ok "in-container CLI reaches the data API"
+# A client on another machine (the CLI, the local MCP server) reaches the Data
+# API with the API key alone (#351): the proxy exchanges it for the container's
+# JWT. Before 1.22.0 it forwarded the key and PostgREST refused it.
+R="http://127.0.0.1:$PORT/rest/v1/cerefox_projects?select=id&limit=1"
+c=$(code -H "apikey: $KEY" -H "Authorization: Bearer $KEY" "$R")
+[ "$c" = "200" ] || fail "Data API with the API key got $c, expected 200 (remote CLI/MCP would fail)"
+ok "Data API with the API key → 200 (remote CLI and MCP)"
+for h in "" "Authorization: Bearer cfx_lak_wrong" "apikey: $KEY"; do
+  c=$(code ${h:+-H "$h"} "$R")
+  [ "$c" = "401" ] || fail "Data API with '${h%%:*}' only got $c, expected 401"
+done
+ok "Data API keyless, wrong key or apikey header alone → 401"
+JWT=$(docker exec "$NAME" sh -c 'grep "^CEREFOX_SUPABASE_KEY=" /run/cerefox-runtime.env | cut -d= -f2-')
+if curl -s -m 8 -D - -H "Authorization: Bearer $KEY" "$R" | grep -qF "$JWT"; then
+  fail "the internal JWT appeared in a Data API response"
+fi
+ok "the internal JWT is not in the response"
 # The web UI must still LOAD without a key: on a gated server it asks for the
 # key (#346), and it cannot ask if the page itself is refused.
 c=$(code "http://127.0.0.1:$PORT/app/")

@@ -181,6 +181,23 @@ The key authenticates; it does not identify. `X-Cerefox-Requestor` and
 described in [`api.md`](api.md#attribution-is-not-authentication). Holding the
 key does not make the name you send true.
 
+## What the key opens on Cerefox Local
+
+On Cerefox Local the gate covers two routes on the same port: `/api/v1`, the
+HTTP API, and `/rest/v1`, the database API the CLI and the local MCP server use.
+Since v1.22.0 (#351) a request that presents a valid key on `/rest/v1` reaches
+the database as the container's service role: the server swaps the key for the
+container's internal credential on the way in, the way Supabase's gateway does
+for an `sb_secret_` key, and that credential never leaves the container. This
+is what lets the CLI and coding agents on other machines use a Cerefox Local
+on a LAN host ([`setup-lan.md`](setup-lan.md)).
+
+It also means the key is the store's master key there: the database API can
+read and change every table directly, below the safeguards the RPCs apply
+(version history, the audit log). Give it only to clients you would give the
+whole store to. A request let in without a key (the gate off, or the loopback
+exemption) is forwarded exactly as before and gains nothing.
+
 ## Recipe: a harness in its own container
 
 The case where a key is genuinely needed, and the one worth automating.

@@ -304,6 +304,26 @@ export async function checkRetiredEnvVars(): Promise<CheckResult> {
   };
 }
 
+/**
+ * What to do about a refused Data API probe. A Cerefox Local API key
+ * (`cfx_lak_`) refused by PostgREST itself means the container is older than
+ * 1.22.0, which forwarded the key instead of exchanging it for its own JWT
+ * (#351); refused by the Cerefox gate, it is simply the wrong key.
+ */
+export function dataApiHint(status: number, body: string, key: string): string {
+  if (status !== 401) return "Verify CEREFOX_SUPABASE_URL.";
+  if (key.trim().startsWith("cfx_lak_")) {
+    if (/PGRST30\d|JWT/.test(body)) {
+      return (
+        "This Cerefox Local container is older than 1.22.0 and cannot accept an API key here. " +
+        "Upgrade the container image to 1.22.0 or later."
+      );
+    }
+    return "The server does not accept this API key. Check CEREFOX_SUPABASE_KEY against the server's key.";
+  }
+  return "Verify CEREFOX_SUPABASE_KEY (use the service-role / sb_secret key).";
+}
+
 export async function checkSupabase(): Promise<CheckResult> {
   let settings;
   try {
@@ -336,14 +356,12 @@ export async function checkSupabase(): Promise<CheckResult> {
       },
     });
     if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
       return {
         name: "supabase",
         status: "error",
         detail: `Data API returned ${resp.status} ${resp.statusText}`,
-        hint:
-          resp.status === 401
-            ? "Verify CEREFOX_SUPABASE_KEY (use the service-role / sb_secret key)."
-            : "Verify CEREFOX_SUPABASE_URL.",
+        hint: dataApiHint(resp.status, body, settings.supabaseKey),
       };
     }
     return {
