@@ -88,8 +88,10 @@ describe("cerefox web daemon CLI", () => {
       // loop, so the in-process stub cannot answer the child's probe and the
       // daemon reads as "alive but not responding". That cost an hour; the
       // comment is cheaper than the second hour.
+      // Without an inherited CEREFOX_PROG_NAME (#352), so the hint uses the dir.
+      const { CEREFOX_PROG_NAME: _name, ...inherited } = process.env;
       const proc = Bun.spawn(["node", BIN, "web", "status"], {
-        env: { ...process.env, CEREFOX_CONFIG_DIR: dir },
+        env: { ...inherited, CEREFOX_CONFIG_DIR: dir },
         stdout: "pipe",
         stderr: "pipe",
       });

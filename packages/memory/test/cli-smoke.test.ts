@@ -25,13 +25,23 @@ import { fileURLToPath } from "node:url";
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BIN = join(PKG_ROOT, "dist", "bin", "cerefox.js");
 
-function run(args: string[]): { stdout: string; stderr: string; status: number } {
+/**
+ * The runner's environment without the variables that rename the program
+ * (#352): run against a staging dir whose .env sets CEREFOX_PROG_NAME, the
+ * child would call itself by that name and the name assertions would fail.
+ */
+function defaultNameEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
+  const { CEREFOX_PROG_NAME: _name, CEREFOX_CONFIG_DIR: _dir, ...rest } = process.env;
+  return { ...rest, ...extra };
+}
+
+function run(args: string[], env = { ...process.env }): { stdout: string; stderr: string; status: number } {
   if (!existsSync(BIN)) {
     throw new Error(`Built bin not found at ${BIN}. Run \`bun run build\` first.`);
   }
   const result = spawnSync("node", [BIN, ...args], {
     encoding: "utf8",
-    env: { ...process.env },
+    env,
   });
   return {
     stdout: result.stdout ?? "",
@@ -94,7 +104,7 @@ describe("cerefox CLI smoke (built bin)", () => {
   });
 
   test("completion command emits a shell-specific script", () => {
-    const { stdout, status } = run(["completion", "bash"]);
+    const { stdout, status } = run(["completion", "bash"], defaultNameEnv());
     expect(status).toBe(0);
     expect(stdout).toContain("_cerefox_completion()");
     expect(stdout).toContain("complete -F _cerefox_completion cerefox");
@@ -290,7 +300,7 @@ describe("cerefox CLI smoke (built bin)", () => {
   test("`completion install` writes the script + an idempotent rc block (sandbox HOME)", () => {
     const home = mkdtempSync(join(tmpdir(), "cf-comp-"));
     try {
-      const env = { ...process.env, HOME: home };
+      const env = defaultNameEnv({ HOME: home });
       const r1 = spawnSync("node", [BIN, "completion", "install", "--shell", "zsh", "--yes"], {
         encoding: "utf8",
         env,
