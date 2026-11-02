@@ -25,6 +25,11 @@ updates:
       # Move this together with the floor. Declined in #294.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # onnxruntime-node is the native runtime @huggingface/transformers loads,
+      # and transformers pins it exactly. Raising our optional dependency past
+      # that pin installs a second copy that nothing runs (#300). Let it move
+      # only when transformers moves its pin.
+      - dependency-name: "onnxruntime-node"
 
   # GitHub Actions — understands our SHA pins and bumps SHA + version comment.
   - package-ecosystem: "github-actions"
