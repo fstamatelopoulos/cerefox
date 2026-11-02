@@ -16,6 +16,7 @@ import type { Command } from "commander";
 
 import { c, printJson, println } from "../../../../../_shared/cli-core/index.ts";
 import { CONFIG_CATALOG } from "../../../../../_shared/config-catalog/index.ts";
+import { progName } from "../util/prog-name.ts";
 
 function action(options: { json?: boolean }): void {
   if (options.json) {
@@ -33,7 +34,7 @@ function action(options: { json?: boolean }): void {
     });
     return;
   }
-  println(c.bold("Runtime config keys (stored in cerefox_config; read with `cerefox config get <key>`):"));
+  println(c.bold(`Runtime config keys (stored in cerefox_config; read with \`${progName()} config get <key>\`):`));
   let group: string | null = null;
   for (const spec of CONFIG_CATALOG) {
     if (spec.group !== group) {

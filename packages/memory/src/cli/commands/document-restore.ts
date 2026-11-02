@@ -21,6 +21,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface RestoreOptions {
   reason?: string;
@@ -67,9 +68,9 @@ async function action(documentId: string, options: RestoreOptions): Promise<void
       throw systemError(
         options.reason
           ? `This server is behind: \`--reason\` needs schema 0.12.0 or newer. ` +
-              `Run \`cerefox server deploy\` and retry, or retry without --reason.`
+              `Run \`${progName()} server deploy\` and retry, or retry without --reason.`
           : `The restore did not run: the server has no matching cerefox_restore_document ` +
-              `(mid-deploy window, or an old schema). Run \`cerefox server deploy\` and retry.`,
+              `(mid-deploy window, or an old schema). Run \`${progName()} server deploy\` and retry.`,
       );
     }
     throw e;
@@ -89,7 +90,7 @@ async function action(documentId: string, options: RestoreOptions): Promise<void
     if (checkError) {
       warn(
         `Restore submitted, but the follow-up verification read failed (${checkError.message}). ` +
-          `Confirm with: cerefox document get ${documentId}`,
+          `Confirm with: ${progName()} document get ${documentId}`,
       );
       return;
     }
@@ -102,7 +103,7 @@ async function action(documentId: string, options: RestoreOptions): Promise<void
       throw systemError(
         `The restore did not take effect — the server has no matching ` +
           `cerefox_restore_document (mid-deploy window, or an old schema). ` +
-          `Run \`cerefox server deploy\` and retry.`,
+          `Run \`${progName()} server deploy\` and retry.`,
       );
     }
   }

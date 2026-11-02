@@ -26,6 +26,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Fixed
 
+- **Hints now name the command you actually use.** `doctor`, `init`, `token`,
+  the delete and restore commands and others printed `cerefox …` as the next
+  step even under `cerefox-local` or an alias for a second environment, so a
+  copied hint ran against your default store. They now use `CEREFOX_PROG_NAME`,
+  which you can set in an environment's `.env` (for example
+  `CEREFOX_PROG_NAME=cfx-stg`). Without it, a command run with
+  `CEREFOX_CONFIG_DIR` prints hints with that directory spelled out (#352).
 - **The web UI could take up to two days to say a new release is out.** The
   web server checked npm once a day, and any command that refreshed the saved
   answer in between (`cerefox doctor`, an upgrade) pushed its next check back

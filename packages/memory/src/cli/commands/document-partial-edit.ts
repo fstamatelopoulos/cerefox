@@ -26,6 +26,7 @@ import type { MCPSupabaseClient, ToolContext } from "../../../../../_shared/mcp-
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { getClient } from "../util/client.ts";
 import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
+import { progName } from "../util/prog-name.ts";
 
 /** Read a value given literally, or from a file, or from stdin when `-`. */
 function resolveText(value: string | undefined, what: string): string {
@@ -89,7 +90,7 @@ export function registerDocumentInsert(program: Command): void {
     .option("--section-part <part>", "own_body | subtree — required when the target section has child sections")
     .requiredOption(
       "-e, --expected-content-hash <hash>",
-      "content_hash you are basing this on (cerefox document get --outline shows it)",
+      `content_hash you are basing this on (${progName()} document get --outline shows it)`,
     )
     .addOption(authorOption("write", { short: false }))
     .addOption(requestorAliasOption())

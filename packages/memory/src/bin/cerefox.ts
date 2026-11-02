@@ -18,6 +18,7 @@
 
 import { CliError, errorln, info } from "../../../../_shared/cli-core/index.ts";
 import { buildProgram } from "../cli/program.ts";
+import { progName } from "../cli/util/prog-name.ts";
 
 /** Friendly entry point when invoked with no args: state-aware suggestion. */
 async function bareEntryPoint(): Promise<void> {
@@ -44,22 +45,22 @@ async function bareEntryPoint(): Promise<void> {
   if (!configExists) {
     println(c.yellow("⚠ No config detected."));
     println("Next step:");
-    println("  " + c.bold("cerefox init") + "    # interactive first-run setup (~2 min)");
+    println("  " + c.bold(`${progName()} init`) + "    # interactive first-run setup (~2 min)");
     println("");
     println(c.dim("Once configured, try:"));
-    println(c.dim("  cerefox doctor                  # verify your install"));
-    println(c.dim("  cerefox search \"…\"              # search the KB"));
-    println(c.dim("  cerefox document ingest <file>  # add a doc"));
+    println(c.dim(`  ${progName()} doctor                  # verify your install`));
+    println(c.dim(`  ${progName()} search "…"              # search the KB`));
+    println(c.dim(`  ${progName()} document ingest <file>  # add a doc`));
   } else {
     println(c.green("✓ Config detected. You're good to go."));
     println("");
     println("Common commands:");
-    println(c.dim("  cerefox doctor                  # diagnose your install"));
-    println(c.dim("  cerefox search \"…\"              # search the KB"));
-    println(c.dim("  cerefox document ingest <file>  # add a doc"));
-    println(c.dim("  cerefox configure-agent         # wire up an MCP client"));
+    println(c.dim(`  ${progName()} doctor                  # diagnose your install`));
+    println(c.dim(`  ${progName()} search "…"              # search the KB`));
+    println(c.dim(`  ${progName()} document ingest <file>  # add a doc`));
+    println(c.dim(`  ${progName()} configure-agent         # wire up an MCP client`));
     println("");
-    println(c.dim("Run `cerefox --help` for the full command list."));
+    println(c.dim(`Run \`${progName()} --help\` for the full command list.`));
   }
 }
 

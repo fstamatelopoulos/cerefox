@@ -90,7 +90,11 @@ export function loadEnv(opts: ResolverOptions = {}): { path: string; vars: numbe
   let count = 0;
   for (const [k, v] of Object.entries(parseDotenv(content))) {
     if (k === "CEREFOX_CONFIG_DIR") continue;
-    if (env[k] === undefined || configDirNamed) {
+    // CEREFOX_PROG_NAME names the environment this file describes, so the
+    // file's value always wins: an inherited one (an exported variable, a
+    // dotenv loaded from the working directory) would make hints name a
+    // different environment (#352).
+    if (env[k] === undefined || configDirNamed || k === "CEREFOX_PROG_NAME") {
       env[k] = v;
       count++;
     }

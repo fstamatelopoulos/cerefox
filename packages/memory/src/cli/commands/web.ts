@@ -27,6 +27,7 @@ import {
   stopDaemon,
 } from "../../web/daemon.ts";
 import { PKG_VERSION } from "../../meta.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface WebOptions {
   host: string;
@@ -128,7 +129,7 @@ export function registerWeb(program: Command): void {
           case "port-conflict":
             eprintln(
               `A Cerefox web daemon is already running on :${outcome.info.port} (pid ${outcome.info.pid}).\n` +
-                `Stop it first (\`cerefox web stop\`) or start on its port.`,
+                `Stop it first (\`${progName()} web stop\`) or start on its port.`,
             );
             process.exit(1);
             break;
@@ -137,7 +138,7 @@ export function registerWeb(program: Command): void {
               info(`Cerefox web started (pid ${outcome.pid}) on http://${rawOpts.host}:${port}/`);
               println(`  Web UI:  http://${rawOpts.host}:${port}/app/`);
               println(c.dim(`  Logs:    ${daemonPaths.logFile}`));
-              println(c.dim(`  Stop:    cerefox web stop`));
+              println(c.dim(`  Stop:    ${progName()} web stop`));
             } else {
               // The most common reason a daemon fails to answer is not a slow
               // boot: it is the compatibility gate refusing outright, which
@@ -199,7 +200,7 @@ export function registerWeb(program: Command): void {
                 `Cerefox web: stale pidfile — process ${status.info.pid} is not running.`,
               ),
             );
-            println(c.dim(`  Clean up: cerefox web stop  (removes ${daemonPaths.pidFile})`));
+            println(c.dim(`  Clean up: ${progName()} web stop  (removes ${daemonPaths.pidFile})`));
             break;
           case "running":
             if (status.responding) {

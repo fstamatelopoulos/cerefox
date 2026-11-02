@@ -42,6 +42,7 @@ import {
 } from "../../../../../_shared/compatibility/index.ts";
 import { bundledSchemaVersion } from "../../../../../_shared/server-assets/index.ts";
 import { restartCommand, statusDaemon } from "../../web/daemon.ts";
+import { progName } from "./prog-name.ts";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 
@@ -150,7 +151,7 @@ export function checkConfig(): CheckResult {
       name: "config",
       status: "error",
       detail: `Could not resolve config dir: ${err instanceof Error ? err.message : String(err)}`,
-      hint: "Run `cerefox init` to bootstrap.",
+      hint: `Run \`${progName()} init\` to bootstrap.`,
     };
   }
   if (!existsSync(envPath)) {
@@ -170,7 +171,7 @@ export function checkConfig(): CheckResult {
       name: "config",
       status: "error",
       detail: `No config file at ${envPath}`,
-      hint: "Run `cerefox init` to create one.",
+      hint: `Run \`${progName()} init\` to create one.`,
     };
   }
   // Mode check: warn (not error) if .env is world-readable. UNIX only.
@@ -282,7 +283,7 @@ export async function checkRetiredEnvVars(): Promise<CheckResult> {
   }
 
   const moves = pending
-    .map((v) => `cerefox config set ${v.configKey} ${(process.env[v.name] ?? "").trim()}`)
+    .map((v) => `${progName()} config set ${v.configKey} ${(process.env[v.name] ?? "").trim()}`)
     .join("\n      ");
   const prunedWasDisabled = pending.some((v) => v.configKey.startsWith("version_"));
 
@@ -333,7 +334,7 @@ export async function checkSupabase(): Promise<CheckResult> {
       name: "supabase",
       status: "error",
       detail: `Could not load settings: ${err instanceof Error ? err.message : String(err)}`,
-      hint: "Run `cerefox init`.",
+      hint: `Run \`${progName()} init\`.`,
     };
   }
   if (!settings.supabaseUrl || !settings.supabaseKey) {
@@ -341,7 +342,7 @@ export async function checkSupabase(): Promise<CheckResult> {
       name: "supabase",
       status: "error",
       detail: "CEREFOX_SUPABASE_URL or CEREFOX_SUPABASE_KEY is not set.",
-      hint: "Run `cerefox init` to bootstrap.",
+      hint: `Run \`${progName()} init\` to bootstrap.`,
     };
   }
   try {
@@ -396,7 +397,7 @@ export async function checkOpenAI(): Promise<CheckResult> {
       name: "openai",
       status: "warn",
       detail: "No OPENAI_API_KEY / CEREFOX_OPENAI_API_KEY set.",
-      hint: "Required for `cerefox search` (semantic mode) and ingest. Set in your .env.",
+      hint: `Required for \`${progName()} search\` (semantic mode) and ingest. Set in your .env.`,
     };
   }
   try {
@@ -551,7 +552,7 @@ export async function checkReviewWorkflow(): Promise<CheckResult> {
       name,
       status: "warn",
       detail: "review_workflow_enabled is not set — treated as OFF until the schema is updated",
-      hint: "Run `cerefox server deploy --schema-only` (v1.13.0+) to seed it.",
+      hint: `Run \`${progName()} server deploy --schema-only\` (v1.13.0+) to seed it.`,
     };
   }
   const on = raw.trim().toLowerCase() === "true";
@@ -563,7 +564,7 @@ export async function checkReviewWorkflow(): Promise<CheckResult> {
       : "OFF — review_status is hidden everywhere (still recorded from author_type)",
     hint: on
       ? undefined
-      : "Turn it on with `cerefox config set review_workflow_enabled true`.",
+      : `Turn it on with \`${progName()} config set review_workflow_enabled true\`.`,
   };
 }
 
@@ -609,7 +610,7 @@ export async function checkTrashAutoPurge(): Promise<CheckResult> {
       name,
       status: "ok",
       detail: "off — the trash is only emptied by hand",
-      hint: "Opt in with `cerefox config set trash_auto_purge_enabled true` (period: trash_retention_days).",
+      hint: `Opt in with \`${progName()} config set trash_auto_purge_enabled true\` (period: trash_retention_days).`,
     };
   }
   return {
@@ -656,7 +657,7 @@ export async function checkEmbedderMismatch(): Promise<CheckResult> {
             name: EMBEDDER_CHECK_NAME,
             status: "warn",
             detail: `configured "${active}", but the model is not downloaded yet; the first search or write will fetch it (~130 MB).`,
-            hint: "Fetch it now with `cerefox embedder-warmup` (Cerefox Local: `cerefox-local embedder-warmup`); it resumes if the connection drops.",
+            hint: `Fetch it now with \`${progName()} embedder-warmup\`${progName() === "cerefox" ? " (Cerefox Local: \`cerefox-local embedder-warmup\`)" : ""}; it resumes if the connection drops.`,
           };
         }
       }
@@ -670,7 +671,7 @@ export async function checkEmbedderMismatch(): Promise<CheckResult> {
       name: EMBEDDER_CHECK_NAME,
       status: "warn",
       detail: `configured "${active}" but existing chunks were embedded with ${stale.map((r) => `"${r}"`).join(", ")} — semantic search across them is broken.`,
-      hint: "Run `cerefox server reindex` to re-embed everything with the configured embedder.",
+      hint: `Run \`${progName()} server reindex\` to re-embed everything with the configured embedder.`,
     };
   } catch (err) {
     return {
@@ -820,7 +821,7 @@ export async function checkContentFormat(): Promise<CheckResult> {
       name: CONTENT_FORMAT_CHECK_NAME,
       status: "skipped", // informational (ℹ), never a gate
       detail: `${legacy} of ${total} document(s) use the legacy reconstruction format (format 1).`,
-      hint: "Harmless — they auto-convert on next edit. To convert them all now: `cerefox server migrate-format` (re-embeds, so try `--dry-run` first). To read what chunk formats are: `cerefox guides show content-format`.",
+      hint: `Harmless — they auto-convert on next edit. To convert them all now: \`${progName()} server migrate-format\` (re-embeds, so try \`--dry-run\` first). To read what chunk formats are: \`${progName()} guides show content-format\`.`,
     };
   }
 }
@@ -871,7 +872,7 @@ export async function checkMetadataHealth(): Promise<CheckResult> {
     name: METADATA_HEALTH_CHECK_NAME,
     status: "skipped", // informational (ℹ), never a gate
     detail: `${probe.rows.length} document(s) hold non-object metadata: ${sample}${probe.rows.length > 3 ? ", …" : ""}.`,
-    hint: "Writes that would merge onto these rows are refused (#212). Repair each with `cerefox document set-metadata <id> --replace --json '<the intended object>'`.",
+    hint: `Writes that would merge onto these rows are refused (#212). Repair each with \`${progName()} document set-metadata <id> --replace --json '<the intended object>'\`.`,
   };
 }
 
@@ -916,7 +917,7 @@ export async function checkWebDaemon(): Promise<CheckResult> {
       name: "web server",
       status: "skipped",
       detail: `no daemon running (stale pidfile for process ${status.info.pid}).`,
-      hint: "Clean it up: cerefox web stop",
+      hint: `Clean it up: ${progName()} web stop`,
     };
   }
   if (!status.responding) {
@@ -989,7 +990,7 @@ export function checkMcpConfigs(): CheckResult {
         : "No MCP client configs reference Cerefox.",
       hint: isLocalBackend()
         ? "Configure agents on the host with `cerefox-local configure-agent`."
-        : "Run `cerefox configure-agent --tool claude-code` (or `--tool claude-desktop`) to wire up a client.",
+        : `Run \`${progName()} configure-agent --tool claude-code\` (or \`--tool claude-desktop\`) to wire up a client.`,
     };
   }
   return {
@@ -1142,7 +1143,7 @@ export async function checkEdgeFunctionsCompat(): Promise<CheckResult> {
       name: "edge functions",
       status: "skipped",
       detail: "No CEREFOX_ACCESS_TOKEN set; EF version check skipped.",
-      hint: "Run `cerefox token generate` to enable client↔server version checks.",
+      hint: `Run \`${progName()} token generate\` to enable client↔server version checks.`,
     };
   }
 

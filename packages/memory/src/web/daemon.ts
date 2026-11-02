@@ -27,6 +27,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { progName } from "../cli/util/prog-name.ts";
 
 /**
  * Where the pidfile and log live.
@@ -145,8 +146,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function assertUnix(): void {
   if (process.platform === "win32") {
     throw new Error(
-      "Daemon mode (`cerefox web start/stop/status`) is not supported on Windows yet. " +
-        "Run `cerefox web` in the foreground, or set up a Windows service manually.",
+      `Daemon mode (\`${progName()} web start/stop/status\`) is not supported on Windows yet. ` +
+        `Run \`${progName()} web\` in the foreground, or set up a Windows service manually.`,
     );
   }
 }
@@ -266,7 +267,8 @@ export async function stopDaemon(): Promise<StopOutcome> {
  */
 export function restartCommand(host: string, port: number): string {
   const flags = `${host === "127.0.0.1" ? "" : ` --host ${host}`}${port === 8000 ? "" : ` --port ${port}`}`;
-  return `cerefox web stop && cerefox web start${flags}`;
+  const p = progName();
+  return `${p} web stop && ${p} web start${flags}`;
 }
 
 export type DaemonStatus =

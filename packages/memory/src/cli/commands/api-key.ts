@@ -31,6 +31,7 @@ import { c, eprintln, println, userError } from "../../../../../_shared/cli-core
 import { resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import { envGitignoreWarning, readEnvVar, upsertEnvVar } from "../util/env-file.ts";
 import { API_KEY_PREFIX } from "../../web/auth.ts";
+import { progName } from "../util/prog-name.ts";
 
 const ENV_NAME = "CEREFOX_API_KEY";
 
@@ -99,7 +100,7 @@ function generateAction(opts: ApiKeyOptions): void {
     // running the command, not by the type checker.
     throw userError(
       `${ENV_NAME} is already set in ${envPath} (${mask(existing)}).`,
-      "Use `cerefox api-key show` to see it, or `cerefox api-key rotate` to replace it. " +
+      `Use \`${progName()} api-key show\` to see it, or \`${progName()} api-key rotate\` to replace it. ` +
         "Refusing to overwrite silently: any client already configured with the old key " +
         "would start getting 401s with no indication why.",
     );
@@ -115,7 +116,7 @@ function rotateAction(opts: ApiKeyOptions): void {
   if (!existing) {
     throw userError(
       `No ${ENV_NAME} in ${envPath} — nothing to rotate.`,
-      "Run `cerefox api-key generate` first.",
+      `Run \`${progName()} api-key generate\` first.`,
     );
   }
   println(c.bold("Rotating the local API key"));
@@ -124,7 +125,7 @@ function rotateAction(opts: ApiKeyOptions): void {
   println(
     c.yellow(
       "   The previous key stops working as soon as the server restarts.\n" +
-        "   Update every remote client, then: cerefox web restart",
+        `   Update every remote client, then: ${progName()} web restart`,
     ),
   );
 }
@@ -139,7 +140,7 @@ function showAction(): void {
       c.dim(
         "   The server is not gated: callers from any interface it is bound to can\n" +
           "   reach it without a credential. That is fine while it binds 127.0.0.1.\n" +
-          "   Mint one with: cerefox api-key generate",
+          `   Mint one with: ${progName()} api-key generate`,
       ),
     );
     containerHint();

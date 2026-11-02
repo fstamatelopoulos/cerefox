@@ -41,6 +41,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { IngestionPipeline } from "../../ingestion/pipeline.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface IngestOptions {
   title?: string;
@@ -79,7 +80,7 @@ async function readContent(
   if (!path) {
     throw userError(
       "Provide a file path or use --paste.",
-      "Example: cerefox document ingest notes.md --title 'My Note'",
+      `Example: ${progName()} document ingest notes.md --title 'My Note'`,
     );
   }
   let content: string;
@@ -149,7 +150,7 @@ async function action(
   const settings = loadSettings();
   if (!settings.supabaseUrl || !settings.supabaseKey) {
     throw userError(
-      "Supabase credentials not configured — run `cerefox init` first.",
+      `Supabase credentials not configured — run \`${progName()} init\` first.`,
     );
   }
   if (!settings.openaiApiKey && resolveEmbedderKind() !== "local") {

@@ -13,6 +13,7 @@
 import { systemError, userError } from "../../../../../_shared/cli-core/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { resolveEmbedderKind, getEmbedding } from "../../../../../_shared/embeddings/index.ts";
+import { progName } from "./prog-name.ts";
 
 export async function embedQuery(query: string): Promise<number[]> {
   const settings = loadSettings();
@@ -21,7 +22,7 @@ export async function embedQuery(query: string): Promise<number[]> {
   if (!apiKey && resolveEmbedderKind() !== "local") {
     throw userError(
       "OPENAI_API_KEY (or CEREFOX_OPENAI_API_KEY) is required for search.",
-      "Set the key in your .env, or run `cerefox init` to bootstrap.",
+      `Set the key in your .env, or run \`${progName()} init\` to bootstrap.`,
     );
   }
   try {
@@ -30,7 +31,7 @@ export async function embedQuery(query: string): Promise<number[]> {
     const msg = err instanceof Error ? err.message : String(err);
     throw systemError(
       `Failed to embed query: ${msg}`,
-      "Run `cerefox doctor` to verify the OpenAI API path.",
+      `Run \`${progName()} doctor\` to verify the OpenAI API path.`,
     );
   }
 }

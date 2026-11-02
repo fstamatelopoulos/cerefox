@@ -31,6 +31,7 @@ import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../../../../../_shared/embeddings/index.ts";
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { warnLargeBulkWrite } from "../util/bulk-write-warning.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface ReindexOptions {
   all?: boolean;
@@ -56,7 +57,7 @@ interface ChunkRow {
 async function action(options: ReindexOptions): Promise<void> {
   const settings = loadSettings();
   if (!settings.supabaseUrl || !settings.supabaseKey) {
-    throw userError("Supabase credentials not configured — run `cerefox init` first.");
+    throw userError(`Supabase credentials not configured — run \`${progName()} init\` first.`);
   }
   if (!settings.openaiApiKey && resolveEmbedderKind() !== "local") {
     // The local ONNX embedder (CEREFOX_EMBEDDER=local, iter-31) needs no API key.

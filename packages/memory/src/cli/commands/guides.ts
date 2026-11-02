@@ -19,6 +19,7 @@ import {
   println,
 } from "../../../../../_shared/cli-core/index.ts";
 import { listBundledDocs, readBundledDoc } from "../util/bundled-docs.ts";
+import { progName } from "../util/prog-name.ts";
 
 function openInBrowser(path: string): void {
   // Best-effort cross-platform open. macOS: `open`; Windows: `start`;
@@ -36,7 +37,7 @@ function resolveDoc(topic: string) {
   if (!doc) {
     throw notFound(
       `No bundled guide named "${topic}".`,
-      "Run `cerefox guides list` to see available topics.",
+      `Run \`${progName()} guides list\` to see available topics.`,
     );
   }
   return doc;
@@ -53,7 +54,7 @@ function listAction(): void {
   printTable(docs.map((d) => ({ topic: d.topic, size_kb: Math.round(d.size / 1024) + " KB" })));
   println("");
   println(
-    c.dim("Open with `cerefox guides open <topic>` (browser) or `cerefox guides show <topic>` (stdout)."),
+    c.dim(`Open with \`${progName()} guides open <topic>\` (browser) or \`${progName()} guides show <topic>\` (stdout).`),
   );
 }
 

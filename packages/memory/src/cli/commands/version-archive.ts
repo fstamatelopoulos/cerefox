@@ -20,6 +20,7 @@ import {
   systemError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface ArchiveOptions {
   author?: string;
@@ -68,7 +69,7 @@ export function registerVersionArchive(parent: Command): void {
   parent
     .command("archive")
     .description("Archive a document version (protect it from version cleanup).")
-    .argument("<version-id>", "UUID of the version (from `cerefox version list`).")
+    .argument("<version-id>", `UUID of the version (from \`${progName()} document version list\`).`)
     .option("-a, --author <name>", "Caller identity (audit log).")
     .option("--author-type <type>", "'user' or 'agent' (default: user).", "user")
     .action((versionId: string, options: ArchiveOptions) => setArchived(versionId, true, options));
@@ -76,7 +77,7 @@ export function registerVersionArchive(parent: Command): void {
   parent
     .command("unarchive")
     .description("Unarchive a document version (allow version cleanup again).")
-    .argument("<version-id>", "UUID of the version (from `cerefox version list`).")
+    .argument("<version-id>", `UUID of the version (from \`${progName()} document version list\`).`)
     .option("-a, --author <name>", "Caller identity (audit log).")
     .option("--author-type <type>", "'user' or 'agent' (default: user).", "user")
     .action((versionId: string, options: ArchiveOptions) => setArchived(versionId, false, options));

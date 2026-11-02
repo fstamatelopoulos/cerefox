@@ -25,6 +25,7 @@ import {
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
 import { metadataTokenParams } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface SetMetadataResult {
   document_id: string;
@@ -138,14 +139,14 @@ async function action(
     if (msg.includes("CEREFOX_METADATA_CONFLICT")) {
       throw userError(
         `The metadata of ${documentId} changed since you read it. Re-read it ` +
-          `(cerefox document get ${documentId} --outline), reapply your change, and retry ` +
+          `(${progName()} document get ${documentId} --outline), reapply your change, and retry ` +
           `with the new --expected-metadata-revision.`,
       );
     }
     if (msg.includes("CEREFOX_METADATA_TOKEN_REQUIRED")) {
       throw userError(
         `--replace discards every key you do not list, so it needs --expected-metadata-revision ` +
-          `(from cerefox document get ${documentId} --outline) or --last-write-wins.`,
+          `(from ${progName()} document get ${documentId} --outline) or --last-write-wins.`,
       );
     }
     throw systemError(`Could not set metadata: ${msg}`);
@@ -154,7 +155,7 @@ async function action(
   if (!rows || rows.length === 0) {
     throw systemError(
       "cerefox_set_document_metadata returned no data.",
-      "Verify the RPC is deployed: `cerefox server deploy`.",
+      `Verify the RPC is deployed: \`${progName()} server deploy\`.`,
     );
   }
   const row = rows[0];

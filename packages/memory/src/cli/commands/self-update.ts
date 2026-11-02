@@ -29,6 +29,7 @@ import {
 import { PKG_VERSION } from "../../meta.ts";
 import { fetchLatestVersion, newerRelease, recordLatest } from "../../update-check.ts";
 import { restartCommand, statusDaemon } from "../../web/daemon.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface SelfUpdateOptions {
   check?: boolean;
@@ -120,7 +121,7 @@ async function action(options: SelfUpdateOptions): Promise<void> {
   if (options.check) {
     if (newerRelease(target)) {
       println(c.yellow(`Update available: ${PKG_VERSION} → ${target}`));
-      println(c.dim("Run `cerefox self-update` to upgrade."));
+      println(c.dim(`Run \`${progName()} self-update\` to upgrade.`));
     }
     return;
   }
@@ -194,13 +195,13 @@ async function action(options: SelfUpdateOptions): Promise<void> {
 
   println("");
   println("Next steps:");
-  println("  1. " + c.bold("cerefox server deploy") + "   apply this release's schema/RPC/EF updates");
-  println("  2. " + c.bold("cerefox guides ingest") + "   re-sync the bundled guides into your KB");
+  println("  1. " + c.bold(`${progName()} server deploy`) + "   apply this release's schema/RPC/EF updates");
+  println("  2. " + c.bold(`${progName()} guides ingest`) + "   re-sync the bundled guides into your KB");
   println(c.dim("  (order matters: the new client may require the new schema — run the deploy first)"));
 }
 
 export function registerSelfUpdate(program: Command): void {
-  const desc = "Upgrade Cerefox in place. Alias: `cerefox upgrade`.";
+  const desc = `Upgrade Cerefox in place. Alias: \`${progName()} upgrade\`.`;
   const declaration = (cmd: Command): Command =>
     cmd
       .description(desc)

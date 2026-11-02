@@ -45,6 +45,7 @@ import { spawnSync } from "node:child_process";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 
 import { resolveConfigDir } from "../../../../../_shared/config/index.ts";
+import { progName } from "./prog-name.ts";
 
 export type WriterKind = "direct-write" | "delegated";
 export type WriterFormat = "json" | "toml";
@@ -434,7 +435,7 @@ function delegatedWrite(
       throw new Error(
         `${writer.label}: \`${cmd}\` not found on PATH. ` +
           `Install ${writer.label} (https://docs.claude.com/en/docs/claude-code) ` +
-          `and re-run \`cerefox configure-agent --tool ${writer.id}\`.`,
+          `and re-run \`${progName()} configure-agent --tool ${writer.id}\`.`,
       );
     }
     throw new Error(`${writer.label}: failed to spawn \`${cmd}\`: ${err.message}`);

@@ -16,6 +16,7 @@ import {
   println,
 } from "../../../../../_shared/cli-core/index.ts";
 import { runAllChecks, type CheckResult, type CheckStatus } from "../util/checks.ts";
+import { progName } from "../util/prog-name.ts";
 
 function symbol(status: CheckStatus): string {
   switch (status) {
@@ -94,13 +95,13 @@ async function action(options: { json?: boolean; strict?: boolean }): Promise<vo
     // two independently-worded rows.
     if (needsSchema && needsEf) {
       remediation =
-        "This release needs a server update (schema + RPCs + Edge Functions): cerefox server deploy";
+        `This release needs a server update (schema + RPCs + Edge Functions): ${progName()} server deploy`;
     } else if (needsSchema) {
       remediation =
-        "This release needs a schema + RPC update: cerefox server deploy --schema-only";
+        `This release needs a schema + RPC update: ${progName()} server deploy --schema-only`;
     } else if (needsEf) {
       remediation =
-        "This release needs an Edge Function update: cerefox server deploy --functions-only";
+        `This release needs an Edge Function update: ${progName()} server deploy --functions-only`;
     }
     if (remediation) {
       println(cErr.yellow("→ " + remediation));

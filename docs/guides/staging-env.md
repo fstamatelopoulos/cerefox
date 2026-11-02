@@ -73,8 +73,12 @@ CEREFOX_CONFIG_DIR=~/.cerefox/staging cerefox init
 
 ```bash
 CEREFOX_ENV_LABEL=staging
+# The alias below; hints then say `cfx-stg …`. Comments go on their own line:
+# the .env parser keeps anything after `=` as the value.
+CEREFOX_PROG_NAME=cfx-stg
 CEREFOX_SUPABASE_URL=https://<staging-ref>.supabase.co
-CEREFOX_SUPABASE_KEY=sb_secret_…                 # staging project's secret key
+# The staging project's secret key:
+CEREFOX_SUPABASE_KEY=sb_secret_…
 CEREFOX_DATABASE_URL=postgresql://postgres.<staging-ref>:…@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 
 # Isolate snapshots. CEREFOX_BACKUP_DIR does NOT follow the config dir, so
@@ -84,7 +88,8 @@ CEREFOX_DATABASE_URL=postgresql://postgres.<staging-ref>:…@aws-0-<region>.pool
 CEREFOX_BACKUP_DIR=~/.cerefox/staging/backups
 
 OPENAI_API_KEY=sk-…
-SUPABASE_ACCESS_TOKEN=sbp_…                       # account-level; same as prod
+# Account-level; the same token as production:
+SUPABASE_ACCESS_TOKEN=sbp_…
 ```
 
 > **Snapshot isolation needs v1.1.0-beta.3 or later.** On **beta.2 and
@@ -261,6 +266,11 @@ otherwise:
 | `doctor` | Title line reads `Cerefox doctor [STAGING]` |
 | `backup create` | Filename becomes `cerefox-staging-<stamp>.json`, and the label is stored in the payload |
 | `backup restore` | Warns when the snapshot's environment differs from the target's |
+
+Also set `CEREFOX_PROG_NAME` to your alias (`cfx-stg`). Hints that tell you what
+to run next, such as `doctor`'s `config set …` suggestions, then name the alias,
+so copying one acts on staging. Without it, they spell out
+`CEREFOX_CONFIG_DIR=… cerefox …`, which is just as safe, only longer.
 
 The filename and restore warning matter because `CEREFOX_BACKUP_DIR` does not
 follow `CEREFOX_CONFIG_DIR`: staging and production snapshots can end up in one

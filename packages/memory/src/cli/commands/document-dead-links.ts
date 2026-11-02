@@ -16,6 +16,7 @@ import type { Command } from "commander";
 import { c, printJson, println, systemError } from "../../../../../_shared/cli-core/index.ts";
 import { isMissingFunctionError } from "../../../../../_shared/mcp-tools/_utils.ts";
 import { getClient } from "../util/client.ts";
+import { progName } from "../util/prog-name.ts";
 
 interface DeadLinkRow {
   document_id: string;
@@ -24,9 +25,9 @@ interface DeadLinkRow {
   occurrences: number;
 }
 
-const SERVER_BEHIND =
+const serverBehind = (): string =>
   "The sweep did not run: this server has no cerefox_find_dead_links (needs schema 0.12.2). " +
-  "Run `cerefox server deploy`, then retry.";
+  `Run \`${progName()} server deploy\`, then retry.`;
 
 async function action(options: { json?: boolean }): Promise<void> {
   const client = getClient();
@@ -39,11 +40,11 @@ async function action(options: { json?: boolean }): Promise<void> {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (isMissingFunctionError(message, "cerefox_find_dead_links")) {
-      throw systemError(SERVER_BEHIND);
+      throw systemError(serverBehind());
     }
     throw e;
   }
-  if (rows === null) throw systemError(SERVER_BEHIND);
+  if (rows === null) throw systemError(serverBehind());
 
   if (options.json) {
     printJson(rows);
