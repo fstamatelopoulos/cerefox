@@ -76,13 +76,6 @@ const ALLOWED: [file: string, fragment: string, reason: string][] = [
   ["src/cli/commands/token.ts", "managed by `cerefox token`", "a comment written into .env"],
   ["src/cli/commands/api-key.ts", "(cerefox api-key)", "a comment written into .env"],
   ["src/cli/commands/deploy-server.ts", "shells out to the Supabase CLI", "describes the command"],
-  // --help text: commander's program name already follows CEREFOX_PROG_NAME.
-  ["src/cli/commands/status.ts", ".description(", "--help text"],
-  ["src/cli/commands/search.ts", "WITHOUT their content", "--help text"],
-  ["src/cli/commands/self-update.ts", "const desc =", "--help text"],
-  ["src/cli/commands/restore.ts", ".argument(", "--help text"],
-  ["src/cli/commands/version-archive.ts", ".argument(", "--help text"],
-  ["src/cli/commands/document-partial-edit.ts", "content_hash you are basing this on", "--help text"],
 ];
 
 // Every top-level command and group, so a hint is caught with or without

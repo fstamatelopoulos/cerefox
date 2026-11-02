@@ -353,7 +353,7 @@ export function registerRestore(program: Command): void {
   program
     .command("restore")
     .description("Restore a JSON-snapshot backup into the knowledge base.")
-    .argument("<snapshot>", "Backup file (or directory; most recent is picked) produced by `cerefox backup`.")
+    .argument("<snapshot>", `Backup file (or directory; most recent is picked) produced by \`${progName()} backup\`.`)
     .option("--dry-run", "Print what would be restored without writing.")
     .option(
       "-p, --project-name <name>",

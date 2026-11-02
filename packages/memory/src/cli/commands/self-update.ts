@@ -201,7 +201,7 @@ async function action(options: SelfUpdateOptions): Promise<void> {
 }
 
 export function registerSelfUpdate(program: Command): void {
-  const desc = "Upgrade Cerefox in place. Alias: `cerefox upgrade`.";
+  const desc = `Upgrade Cerefox in place. Alias: \`${progName()} upgrade\`.`;
   const declaration = (cmd: Command): Command =>
     cmd
       .description(desc)

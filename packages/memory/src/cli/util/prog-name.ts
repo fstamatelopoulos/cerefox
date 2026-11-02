@@ -14,7 +14,8 @@
  *      `CEREFOX_CONFIG_DIR=<dir> cerefox`, which is always safe to copy.
  *   3. Otherwise `cerefox`.
  *
- * Help and usage text use only (1), through commander's program name.
+ * Help text uses it too (it is built after the `.env` loads); commander's own
+ * usage line follows only (1), through the program name.
  */
 export function progName(): string {
   const name = (process.env.CEREFOX_PROG_NAME ?? "").trim();

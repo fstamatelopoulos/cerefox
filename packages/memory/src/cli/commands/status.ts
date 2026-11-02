@@ -13,6 +13,7 @@ import {
   println,
 } from "../../../../../_shared/cli-core/index.ts";
 import { runFastChecks, type CheckStatus } from "../util/checks.ts";
+import { progName } from "../util/prog-name.ts";
 
 function symbol(status: CheckStatus): string {
   switch (status) {
@@ -58,7 +59,7 @@ async function action(options: { json?: boolean }): Promise<void> {
 export function registerStatus(program: Command): void {
   program
     .command("status")
-    .description("Quick sanity check (fast subset of `cerefox doctor`).")
+    .description(`Quick sanity check (fast subset of \`${progName()} doctor\`).`)
     .option("--json", "Emit machine-readable JSON.")
     .action(action);
 }

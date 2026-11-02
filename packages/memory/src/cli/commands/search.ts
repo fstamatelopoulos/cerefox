@@ -35,6 +35,7 @@ import {
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
 import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
+import { progName } from "../util/prog-name.ts";
 
 interface DocResult {
   document_id: string;
@@ -363,7 +364,7 @@ export function registerSearch(program: Command): void {
     .option("--json", "Emit machine-readable JSON instead of the default text.")
     .option(
       "--only-metadata",
-      "List matching docs (id, score, chunks, chars, partial/full) WITHOUT their content — like the web UI's collapsed result list. Grab a [id:…] then `cerefox document get <id>`.",
+      `List matching docs (id, score, chunks, chars, partial/full) WITHOUT their content — like the web UI's collapsed result list. Grab a [id:…] then \`${progName()} document get <id>\`.`,
     )
     .action(action);
 }
