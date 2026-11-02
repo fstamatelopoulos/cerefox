@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.22.0] -- 2026-11-02
+
 ### Added
 
 - **The CLI and coding agents can use a Cerefox Local on another machine**
