@@ -200,8 +200,9 @@ other remote-access feature. To go one step further, **Control Panel → Securit
 3. Change the tag on the `image:` line in the Project's YAML.
 4. Build the Project again.
 
-The data folder carries the database and the key, so nothing else changes. Once
-the new version is running, you can delete the old image under **Image**.
+The data folder carries the database, and the key stays in the Project's YAML
+(a key set there is not saved in the data folder), so nothing else changes.
+Once the new version is running, you can delete the old image under **Image**.
 
 **Protecting the data.** The NAS gives you three layers; use the last one in any
 case:
