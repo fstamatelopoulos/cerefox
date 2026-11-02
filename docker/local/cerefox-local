@@ -178,7 +178,7 @@ Knowledge base (run inside the container — same as the cloud CLI):
 
 Backups:
   backup create         snapshot the store; kept in the data volume AND copied to
-                        ~/.cerefox/local/backups on this machine
+                        $HOST_BACKUP_DIR on this machine
   backup restore <file> restore a snapshot from this machine (or the container)
 
 Run 'cerefox-local <group> --help' for KB verbs.
@@ -207,7 +207,8 @@ backup_create() {
     warn "Could not find the snapshot's path in the output; it was not copied to this machine."
     return 0
   fi
-  mkdir -p "$HOST_BACKUP_DIR" && chmod 700 "$HOST_BACKUP_DIR"
+  # Lock down only a folder we create; one the user chose keeps its permissions.
+  [ -d "$HOST_BACKUP_DIR" ] || { mkdir -p "$HOST_BACKUP_DIR" && chmod 700 "$HOST_BACKUP_DIR"; }
   _name="$(basename "$_src")"
   docker cp "$CONTAINER:$_src" "$HOST_BACKUP_DIR/" >/dev/null \
     || die "could not copy $_src out of the container (it is still there)"
@@ -228,15 +229,22 @@ backup_restore() {
       -*) ;;
       *)
         if [ -z "$_copied" ] && [ -e "$_a" ]; then
-          docker exec "$CONTAINER" sh -c "rm -rf $_stage && mkdir -p $_stage" >/dev/null
+          # A folder means "the most recent snapshot in it" (what the CLI does
+          # with a folder): copy only that file, never the whole folder, which
+          # may hold an .env with keys.
+          _f="$_a"
           if [ -d "$_a" ]; then
-            docker cp "$_a/." "$CONTAINER:$_stage/" >/dev/null || die "could not copy $_a into the container"
-            _a="$_stage"
-          else
-            docker cp "$_a" "$CONTAINER:$_stage/" >/dev/null || die "could not copy $_a into the container"
-            _a="$_stage/$(basename "$_a")"
+            _f="$(ls -t "$_a"/*.json 2>/dev/null | head -1)"
+            [ -n "$_f" ] || die "no .json snapshot in $_a"
           fi
+          docker exec "$CONTAINER" sh -c "rm -rf $_stage && mkdir -p $_stage" >/dev/null
           _copied=1
+          # -L: a symlink (latest.json → …) would arrive dangling.
+          docker cp -L "$_f" "$CONTAINER:$_stage/" >/dev/null || {
+            docker exec "$CONTAINER" rm -rf "$_stage" >/dev/null 2>&1 || true
+            die "could not copy $_f into the container"
+          }
+          _a="$_stage/$(basename "$_f")"
         fi
         ;;
     esac

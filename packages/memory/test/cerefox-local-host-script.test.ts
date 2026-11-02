@@ -11,7 +11,7 @@
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -143,10 +143,23 @@ exit 0
     writeFileSync(file, "{}");
     const r = runUp("backup", "restore", "--dry-run", file);
     expect(r.status).toBe(0);
-    expect(r.calls).toContain(`cp ${file} cerefox-local:/tmp/cerefox-restore/`);
+    expect(r.calls).toContain(`cp -L ${file} cerefox-local:/tmp/cerefox-restore/`);
     const restore = r.calls.find((c) => c.includes("backup restore"));
     expect(restore).toEndWith("backup restore --dry-run /tmp/cerefox-restore/snap.json");
     expect(r.calls.at(-1)).toBe("exec cerefox-local rm -rf /tmp/cerefox-restore");
+  });
+
+  test("restore from a folder copies only its newest snapshot, never the folder", () => {
+    const folder = join(bdir, "snaps");
+    mkdirSync(folder);
+    writeFileSync(join(folder, ".env"), "OPENAI_API_KEY=x");
+    writeFileSync(join(folder, "old.json"), "{}");
+    utimesSync(join(folder, "old.json"), 1, 1);
+    writeFileSync(join(folder, "new.json"), "{}");
+    const r = runUp("backup", "restore", folder);
+    expect(r.status).toBe(0);
+    expect(r.calls.filter((c) => c.startsWith("cp "))).toEqual([`cp -L ${join(folder, "new.json")} cerefox-local:/tmp/cerefox-restore/`]);
+    expect(r.calls.find((c) => c.includes("backup restore"))).toEndWith("backup restore /tmp/cerefox-restore/new.json");
   });
 
   test("restore passes a path that is not on this machine through unchanged", () => {
