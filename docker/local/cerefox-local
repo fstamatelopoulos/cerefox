@@ -29,8 +29,11 @@ _persisted_image=""
 IMAGE="${CEREFOX_LOCAL_IMAGE:-${_persisted_image:-$_DEFAULT_IMAGE}}"
 VOLUME="${CEREFOX_LOCAL_VOLUME:-cerefox_local_pgdata}"
 ENV_FILE="$CONFIG_DIR/.env"
+# Where `backup create` leaves a copy on this machine (#359).
+HOST_BACKUP_DIR="${CEREFOX_LOCAL_BACKUP_DIR:-$CONFIG_DIR/backups}"
 
 die() { echo "✗ $*" >&2; exit 1; }
+warn() { echo "⚠ $*" >&2; }
 # Newest published release tag (e.g. v1.1.0), or empty when offline / rate
 # limited. Uses the GitHub releases API — the image registry has no ordering.
 latest_release_tag() {
@@ -173,8 +176,75 @@ Knowledge base (run inside the container — same as the cloud CLI):
   e.g.  cerefox-local search "release process"
         cerefox-local document ingest notes.md --project-name personal
 
+Backups:
+  backup create         snapshot the store; kept in the data volume AND copied to
+                        ~/.cerefox/local/backups on this machine
+  backup restore <file> restore a snapshot from this machine (or the container)
+
 Run 'cerefox-local <group> --help' for KB verbs.
 EOF
+}
+
+# Run the bundled `cerefox` inside the container with its runtime env.
+in_container() {
+  tflag=""; [ -t 0 ] && [ -t 1 ] && tflag="-t"
+  docker exec -i $tflag -e CEREFOX_PROG_NAME=cerefox-local "$CONTAINER" \
+    sh -c 'set -a; . /run/cerefox-runtime.env 2>/dev/null; set +a; exec cerefox "$@"' cerefox "$@"
+}
+
+# Backups (#359). The CLI runs inside the container, so a snapshot used to land
+# in the container's own filesystem, and the next upgrade or init (both
+# recreate the container) threw it away: "back up, then upgrade" deleted the
+# backup it had just made. The image now writes them into the data volume
+# (CEREFOX_BACKUP_DIR), and `create` also copies each one to this machine, so a
+# backup survives losing the volume too.
+backup_create() {
+  _rc=0; _out="$(in_container backup "$@")" || _rc=$?
+  printf '%s\n' "$_out"
+  [ "$_rc" -eq 0 ] || exit "$_rc"
+  _src="$(printf '%s\n' "$_out" | sed -n 's/.*Backup written: \(.*\.json\).*/\1/p' | tail -1)"
+  if [ -z "$_src" ]; then
+    warn "Could not find the snapshot's path in the output; it was not copied to this machine."
+    return 0
+  fi
+  mkdir -p "$HOST_BACKUP_DIR" && chmod 700 "$HOST_BACKUP_DIR"
+  _name="$(basename "$_src")"
+  docker cp "$CONTAINER:$_src" "$HOST_BACKUP_DIR/" >/dev/null \
+    || die "could not copy $_src out of the container (it is still there)"
+  chmod 600 "$HOST_BACKUP_DIR/$_name" 2>/dev/null || true
+  echo "✓ Copied to this machine: $HOST_BACKUP_DIR/$_name"
+}
+
+# `restore <snapshot>` names a file (or folder) on THIS machine, which the
+# container cannot see: copy it in first. A path that does not exist here is
+# passed through unchanged, as a path inside the container.
+backup_restore() {
+  _stage=/tmp/cerefox-restore; _copied=""; _skip=""
+  for _a do
+    shift
+    if [ -n "$_skip" ]; then _skip=""; set -- "$@" "$_a"; continue; fi
+    case "$_a" in
+      -p|--project-name) _skip=1 ;;
+      -*) ;;
+      *)
+        if [ -z "$_copied" ] && [ -e "$_a" ]; then
+          docker exec "$CONTAINER" sh -c "rm -rf $_stage && mkdir -p $_stage" >/dev/null
+          if [ -d "$_a" ]; then
+            docker cp "$_a/." "$CONTAINER:$_stage/" >/dev/null || die "could not copy $_a into the container"
+            _a="$_stage"
+          else
+            docker cp "$_a" "$CONTAINER:$_stage/" >/dev/null || die "could not copy $_a into the container"
+            _a="$_stage/$(basename "$_a")"
+          fi
+          _copied=1
+        fi
+        ;;
+    esac
+    set -- "$@" "$_a"
+  done
+  _rc=0; in_container backup restore "$@" || _rc=$?
+  if [ -n "$_copied" ]; then docker exec "$CONTAINER" rm -rf "$_stage" >/dev/null 2>&1 || true; fi
+  return "$_rc"
 }
 
 cmd="${1:-}"; [ "$#" -gt 0 ] && shift || true
@@ -550,6 +620,19 @@ case "$cmd" in
       cerefox-local upgrade --latest     # follow the moving :latest tag
 EOM
     exit 2
+    ;;
+
+  backup)
+    need_docker
+    is_running || die "container '$CONTAINER' is not running — run: cerefox-local start"
+    _help=""
+    for _a in "$@"; do case "$_a" in -h|--help) _help=1 ;; esac; done
+    _sub="${1:-}"; [ -n "$_help" ] && _sub=""
+    case "$_sub" in
+      create)  shift; backup_create create "$@" ;;
+      restore) shift; backup_restore "$@" ;;
+      *)       in_container backup "$@" ;;
+    esac
     ;;
 
   *)

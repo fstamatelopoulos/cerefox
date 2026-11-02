@@ -218,6 +218,11 @@ case:
   machine, which `cerefox backup restore` can load into a new Cerefox, on the
   NAS or elsewhere.
 
+  A backup made on the NAS itself (`cerefox backup create` in the container's
+  terminal) is saved in the data folder, under `.cerefox-backups`, so it
+  survives a rebuild and the layers above include it. Before v1.22.1 it was
+  saved inside the container and lost on the next build (#359).
+
 ## B. The web container, with your Supabase backend
 
 You need a working Supabase-backed Cerefox first (see

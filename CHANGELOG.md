@@ -9,7 +9,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **Cerefox Local backups survive an upgrade** (#359). `cerefox-local backup
+  create` runs inside the container, and the snapshot landed in the
+  container's own filesystem, so the next `cerefox-local upgrade` or `init`
+  (both recreate the container) deleted it. "Back up, then upgrade" lost the
+  backup it had just made; the database itself was never at risk. The image now
+  keeps snapshots in the data volume, and `cerefox-local backup create` also
+  copies each one to `~/.cerefox/local/backups` on your machine.
+  `cerefox-local backup restore` now accepts a file on your machine (it used to
+  look for the path inside the container). On a NAS or other LAN host, a backup
+  made in the container's terminal now lands in the data folder. The first
+  upgrade to this version still runs the old script, so back up again right
+  after it.
+- **The update badge no longer says `cerefox-local upgrade` on every
+  container** (#360). The web server chose the command by asking only whether
+  it ran in Docker, so a Cerefox Local on a NAS, and the `cerefox-web` image,
+  told you to run a command that does not upgrade them; on a LAN host it would
+  have upgraded the Cerefox Local on your laptop instead. Inside a container the
+  badge now shows the new version without a command, and `/api/v1/version` has
+  a new `update_available` field. `cerefox-local doctor` still names
+  `cerefox-local upgrade`.
+- `cerefox-local upgrade` with no network died with `warn: not found` instead
+  of saying it could not reach GitHub.
 
 ---
 

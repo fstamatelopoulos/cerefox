@@ -163,7 +163,17 @@ cerefox-local upgrade v1.2.3 # pin an exact version (also how you downgrade)
 cerefox-local upgrade --latest  # follow the moving :latest tag from now on
 cerefox-local uninstall          # remove the container, KEEP the data volume
 cerefox-local uninstall --purge  # remove the container AND delete the data volume (asks you to confirm; --yes in scripts)
+cerefox-local backup create      # JSON snapshot: kept in the data volume, copied to ~/.cerefox/local/backups
+cerefox-local backup restore ~/.cerefox/local/backups/cerefox-<stamp>.json
 ```
+
+**Backups.** `backup create` writes the snapshot into the data volume, so it
+survives `upgrade` and `init`, and copies it to `~/.cerefox/local/backups` on
+your machine, so it also survives losing the volume (`uninstall --purge`).
+`backup restore` takes a file on your machine and copies it into the container
+for you. Before v1.22.1 the snapshot stayed inside the container and the next
+`upgrade` or `init` deleted it (#359); the first upgrade to v1.22.1 still runs
+the old script, so make that one's backup from the new version, right after.
 
 > **Coming from an image older than v1.1.0?** Run `cerefox-local upgrade v1.1.1`
 > (an explicit tag) once. A bare `upgrade` on those versions re-pulled the pinned
@@ -186,6 +196,7 @@ sync.
 | Container | name `cerefox-local` (override: `CEREFOX_LOCAL_CONTAINER`) |
 | Your data | Docker volume `cerefox_local_pgdata` (survives `stop`/`upgrade`) |
 | Host config | `~/.cerefox/local/.env` (OPENAI key + port only — **no token**) |
+| Backups | `~/.cerefox/local/backups` (override: `CEREFOX_LOCAL_BACKUP_DIR`), plus a copy in the volume's `.cerefox-backups` folder |
 | Host command | `~/.cerefox/local/cerefox-local`, symlinked to `~/.local/bin/cerefox-local` |
 
 ---
