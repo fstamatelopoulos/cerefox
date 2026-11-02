@@ -6,7 +6,7 @@
       "name": "cerefox-workspace",
       "dependencies": {
         "ora": "^9.4.0",
-        "postgres": "^3.4.9",
+        "postgres": "^4.0.0",
       },
     },
     "_shared": {
@@ -77,7 +77,7 @@
     },
     "packages/memory": {
       "name": "@cerefox/memory",
-      "version": "1.21.0",
+      "version": "1.22.1",
       "bin": {
         "cerefox": "dist/bin/cerefox.js",
       },
@@ -91,7 +91,7 @@
         "mammoth": "^1.13.0",
         "ora": "^9.4.0",
         "picocolors": "^1.0.0",
-        "postgres": "^3.4.9",
+        "postgres": "^4.0.0",
         "prompts": "^2.4.2",
         "smol-toml": "^1.9.1",
         "zod": "^4.6.7",
@@ -1190,7 +1190,7 @@
 
     "postcss-simple-vars": ["postcss-simple-vars@7.0.1", "", { "peerDependencies": { "postcss": "^8.2.1" } }, "sha512-5GLLXaS8qmzHMOjVxqkk1TZPf1jMqesiI7qLhnlyERalG0sMbHIbJqrcnrpmZdKCLglHnRHoEBB61RtGTsj++A=="],
 
-    "postgres": ["postgres@3.4.9", "", {}, "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="],
+    "postgres": ["postgres@4.0.0", "", {}, "sha512-kBh8qXtcvvIAc00DftQyOxz7M/3Zxww1tRMXZPLzipNXXl5PIzHml+9zB3Mrge2U8ldc0WF1ZdLp1iYQi7Kh3A=="],
 
     "prelude-ls": ["prelude-ls@1.2.1", "", {}, "sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g=="],
 
