@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.22.1] -- 2026-11-02
+
 ### Fixed
 
 - **Cerefox Local backups survive an upgrade** (#359). `cerefox-local backup
