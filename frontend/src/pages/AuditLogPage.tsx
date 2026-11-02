@@ -9,20 +9,19 @@ import { fetchAuditLog } from "../api/audit";
 import { CliHint } from "../components/CliHint";
 import { ListPage, type ListColumn } from "../components/ListPage";
 import { formatDateTime } from "../utils/dates";
-import { STORE_LEVEL_AUDIT_OPS, metadataChangeSummary } from "@cerefox/audit-ops";
+import { auditDocLabel, metadataChangeSummary, storeChangeSummary } from "@cerefox/audit-ops";
 import ui from "../styles/redesign.module.css";
 import { usePageTitle } from "../hooks/usePageTitle";
 
 // Membership is the SHARED definition (via the @cerefox/audit-ops alias, the
-// @cerefox/schemas pattern): a fifth store-level operation renders "(store)"
-// here without a frontend edit. Labels/tones are presentation and stay local.
+// @cerefox/schemas pattern): a fifth store-level operation renders its label
+// and its change here without a frontend edit. Labels/tones are presentation and stay local.
 const STORE_LEVEL_OP_DEFS = [
   { value: "config-change", label: "Config change", tone: "yellow" },
   { value: "project-create", label: "Project create", tone: "green" },
   { value: "project-edit", label: "Project edit", tone: "violet" },
   { value: "project-delete", label: "Project delete", tone: "red" },
 ] as const;
-const STORE_LEVEL_OPS = new Set<string>(STORE_LEVEL_AUDIT_OPS);
 
 const OPERATIONS = [
   { value: "", label: "All operations" },
@@ -127,22 +126,24 @@ export function AuditLogPage() {
           </span>
         ) : (
           <span className={ui.faint} style={{ fontSize: 12 }}>
-            {STORE_LEVEL_OPS.has(e.operation) ? "(store)" : "(deleted)"}
+            {auditDocLabel(null, null, e.operation)}
           </span>
         ),
     },
     {
       key: "delta",
       label: "Change",
-      width: 200,
+      width: 300,
       align: "right",
       render: (e) => {
-        // #333: a metadata change shows what changed, not a size.
-        const metaChange = metadataChangeSummary(e.metadata_before, e.metadata_after);
-        if (metaChange) {
+        // #333: a metadata change shows what changed, not a size; so does a
+        // config or project change, from its description (#353).
+        const change =
+          metadataChangeSummary(e.metadata_before, e.metadata_after) ?? storeChangeSummary(e.operation, e.description);
+        if (change) {
           return (
-            <span className={ui.mono} style={{ fontSize: 12 }} title={metaChange}>
-              {metaChange.length > 40 ? `${metaChange.slice(0, 39)}…` : metaChange}
+            <span className={ui.mono} style={{ fontSize: 12, whiteSpace: "nowrap" }} title={change}>
+              {change.length > 50 ? `${change.slice(0, 49)}…` : change}
             </span>
           );
         }

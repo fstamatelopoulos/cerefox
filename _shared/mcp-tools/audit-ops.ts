@@ -33,8 +33,9 @@ export const AUDIT_OPERATIONS = [
 ] as const;
 
 /** The document-column label for an audit row — title, short id, or the
- * NULL-document story: "(store)" for store-level ops, "(deleted)" for rows
- * whose document was purged. One implementation across MCP, CLI, and web. */
+ * NULL-document story: what a store-level op changed ("(setting)" for a config
+ * change, "(project)" for a project op, "(store)" for any other), "(deleted)" for rows whose document
+ * was purged. One implementation across MCP, CLI, and web. */
 export function auditDocLabel(
   docTitle: string | null | undefined,
   documentId: string | null | undefined,
@@ -42,7 +43,27 @@ export function auditDocLabel(
 ): string {
   if (docTitle) return docTitle;
   if (documentId) return documentId.slice(0, 8) + "…";
+  if (operation === "config-change") return "(setting)";
+  if (operation?.startsWith("project-")) return "(project)";
   return isStoreLevelAuditOp(operation) ? "(store)" : "(deleted)";
+}
+
+/**
+ * What a store-level entry changed, for a surface that shows a short "change"
+ * per row (the web audit log). The RPCs write the change into the
+ * description ("config: trash_auto_purge_enabled: 'false' → 'true'",
+ * "Project 'x' created"); a config change drops its "config: " prefix, since
+ * the row already says it is a setting. Null for document operations, which
+ * show a size or a metadata change instead.
+ */
+export function storeChangeSummary(
+  operation: string | null | undefined,
+  description: string | null | undefined,
+): string | null {
+  if (!isStoreLevelAuditOp(operation)) return null;
+  const d = (description ?? "").trim();
+  if (!d) return null;
+  return operation === "config-change" ? d.replace(/^config:\s*/, "") : d;
 }
 
 /**

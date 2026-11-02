@@ -8,7 +8,7 @@
 
 import type { Command } from "commander";
 
-import { AUDIT_OPERATIONS, auditDocLabel, metadataChangeSummary } from "../../../../../_shared/mcp-tools/_utils.ts";
+import { AUDIT_OPERATIONS, auditDocLabel, metadataChangeSummary, storeChangeSummary } from "../../../../../_shared/mcp-tools/_utils.ts";
 
 import {
   parsePositiveInt,
@@ -105,8 +105,13 @@ async function action(options: {
         row.size_before !== null && row.size_after !== null
           ? `${row.size_before} → ${row.size_after}`
           : "",
-      // #333: what the metadata change actually was (update-metadata entries).
-      change: (metadataChangeSummary(row.metadata_before, row.metadata_after) ?? "").slice(0, 60),
+      // #333: what the metadata change actually was (update-metadata entries);
+      // #353: what a config or project change did, from its description.
+      change: (
+        metadataChangeSummary(row.metadata_before, row.metadata_after) ??
+        storeChangeSummary(row.operation, row.description) ??
+        ""
+      ).slice(0, 60),
     })),
   );
 }

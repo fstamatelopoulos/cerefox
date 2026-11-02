@@ -217,7 +217,7 @@ bun test test/acceptance` (refuses unlabeled production targets).
 | migration validation | 0027 back-fill | Migration 0027 nulls artifacts on pre-existing archived chunks and reports reclaimed space | Done |
 | acceptance | #212 metadata guard | Malformed (non-object) metadata is rejected at every write path | Done |
 | acceptance | #147 config audit | A config change lands in the audit trail with author and old→new value (skips when the key is unset — writing would flip it to explicitly-set) | Done |
-| acceptance | #147/#219 project audit | Project create/edit/delete audit atomically via the RPCs: real diff recorded, "(store)" rendering, repeat delete adds no entry | Done |
+| acceptance | #147/#219 project audit | Project create/edit/delete audit atomically via the RPCs: real diff recorded, "(project)" rendering (#353), repeat delete adds no entry | Done |
 
 ### 6E. HTTP API boundary (`packages/memory/test/web-integration/`, v1.11.0)
 

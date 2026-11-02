@@ -33,6 +33,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   which you can set in an environment's `.env` (for example
   `CEREFOX_PROG_NAME=cfx-stg`). Without it, a command run with
   `CEREFOX_CONFIG_DIR` prints hints with that directory spelled out (#352).
+- **The web audit log now shows what a config or project change did.** A
+  config change appeared as a nearly empty row, `(store)` and no change, with
+  nothing about the setting or its values, although the entry stored both. The Change column now
+  shows it (`trash_auto_purge_enabled: 'false' → 'true'`, `Project 'x' created`),
+  and so does the change column of `cerefox audit list`. The Document column
+  says `(setting)` or `(project)` instead of `(store)`, in the CLI and MCP
+  output too (#353).
 - **The web UI could take up to two days to say a new release is out.** The
   web server checked npm once a day, and any command that refreshed the saved
   answer in between (`cerefox doctor`, an upgrade) pushed its next check back

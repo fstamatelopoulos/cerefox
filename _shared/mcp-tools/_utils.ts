@@ -263,6 +263,7 @@ export {
   isStoreLevelAuditOp,
   metadataChangeSummary,
   STORE_LEVEL_AUDIT_OPS,
+  storeChangeSummary,
 } from "./audit-ops.ts";
 
 /**
