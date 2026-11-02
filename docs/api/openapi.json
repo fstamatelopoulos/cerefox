@@ -5797,7 +5797,7 @@
     },
     "/api/v1/version": {
       "get": {
-        "summary": "Server version, environment label, and the newest release on npm as the server last checked it (`latest`, plus `update_command` when it is newer).",
+        "summary": "Server version, environment label, and the newest release on npm as the server last checked it (`latest`; `update_available` when it is newer, with `update_command` unless the server runs in a container, where it cannot tell how it was installed).",
         "operationId": "get_version",
         "responses": {
           "200": {
@@ -5834,6 +5834,9 @@
                         "null"
                       ]
                     },
+                    "update_available": {
+                      "type": "boolean"
+                    },
                     "update_command": {
                       "type": [
                         "string",
@@ -5847,6 +5850,7 @@
                     "build_date",
                     "env_label",
                     "latest",
+                    "update_available",
                     "update_command"
                   ],
                   "additionalProperties": false

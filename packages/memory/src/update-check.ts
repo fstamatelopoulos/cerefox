@@ -155,12 +155,21 @@ export function newerRelease(latest: string | null | undefined, installed = PKG_
 }
 
 /**
- * What to run to upgrade from where this process is running. Inside the
- * Cerefox Local container `self-update` is the wrong advice: the CLI there is
- * part of the image, and the upgrade happens on the host.
+ * What to run to upgrade from where this process is running, or null when this
+ * process cannot know (#360).
+ *
+ * Inside a container `self-update` is the wrong advice: the CLI there is part
+ * of the image. `cerefox-local upgrade` is right only when the user reached us
+ * through that host script, which says so by passing `CEREFOX_PROG_NAME` on
+ * every `docker exec`. The web server inside the container never sees that:
+ * the same image runs under the script on a laptop, under compose or a NAS
+ * Docker app on a LAN host, and as `cerefox-web`, and the badge used to tell
+ * all of them to run `cerefox-local upgrade`. On a LAN host, a user who also
+ * had Cerefox Local on their laptop would have upgraded the wrong instance.
  */
-export function upgradeCommand(): string {
-  return isContainerised() ? "cerefox-local upgrade" : "cerefox self-update";
+export function upgradeCommand(env: NodeJS.ProcessEnv = process.env, containerised = isContainerised()): string | null {
+  if (!containerised) return "cerefox self-update";
+  return env.CEREFOX_PROG_NAME === "cerefox-local" ? "cerefox-local upgrade" : null;
 }
 
 export const releaseNotesUrl = (version: string) =>
@@ -185,5 +194,9 @@ export function takeCliNotice(
     if (since >= 0 && since < NOTIFY_INTERVAL_MS) return null;
   }
   writeCache({ ...cached, notifiedAt: now.toISOString() }, path);
-  return `Cerefox ${newer} is available (you have ${opts.installed ?? PKG_VERSION}). Run \`${upgradeCommand()}\`.`;
+  const cmd = upgradeCommand(opts.env);
+  return (
+    `Cerefox ${newer} is available (you have ${opts.installed ?? PKG_VERSION}).` +
+    (cmd ? ` Run \`${cmd}\`.` : "")
+  );
 }

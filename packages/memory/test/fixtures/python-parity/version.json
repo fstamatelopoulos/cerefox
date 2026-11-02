@@ -4,5 +4,6 @@
   "build_date": null,
   "env_label": null,
   "latest": null,
+  "update_available": false,
   "update_command": null
 }

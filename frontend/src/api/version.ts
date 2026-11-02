@@ -12,7 +12,9 @@ export interface VersionInfo {
   env_label?: string | null;
   /** The newest release on npm, as the server last checked it (#323). */
   latest?: string | null;
-  /** Set only when `latest` is newer than `version`: what to run to upgrade. */
+  /** True when `latest` is newer than `version`. */
+  update_available?: boolean;
+  /** What to run to upgrade, when the server knows; null inside a container (#360). */
   update_command?: string | null;
 }
 

@@ -24,7 +24,28 @@ export function UpdateBadge() {
     retry: false,
   });
 
-  if (!data?.latest || !data.update_command) return null;
+  if (!data?.latest || !data.update_available) return null;
+
+  const badge = (
+    <Badge
+      component="a"
+      href={`${REPO_RELEASES_URL}/tag/v${data.latest}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      color="orange"
+      variant="light"
+      size="sm"
+      style={{ cursor: "pointer", textTransform: "none" }}
+      data-testid="update-badge"
+    >
+      v{data.latest} available
+    </Badge>
+  );
+
+  // Inside a container the server cannot tell how this instance is upgraded
+  // (`cerefox-local`, compose, a NAS app, the web image), so it sends no
+  // command and the badge stands alone (#360).
+  if (!data.update_command) return badge;
 
   return (
     <Tooltip
@@ -42,19 +63,7 @@ export function UpdateBadge() {
       }
       withArrow
     >
-      <Badge
-        component="a"
-        href={`${REPO_RELEASES_URL}/tag/v${data.latest}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        color="orange"
-        variant="light"
-        size="sm"
-        style={{ cursor: "pointer", textTransform: "none" }}
-        data-testid="update-badge"
-      >
-        v{data.latest} available
-      </Badge>
+      {badge}
     </Tooltip>
   );
 }
