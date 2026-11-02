@@ -195,8 +195,8 @@ async function action(options: SelfUpdateOptions): Promise<void> {
 
   println("");
   println("Next steps:");
-  println("  1. " + c.bold("cerefox server deploy") + "   apply this release's schema/RPC/EF updates");
-  println("  2. " + c.bold("cerefox guides ingest") + "   re-sync the bundled guides into your KB");
+  println("  1. " + c.bold(`${progName()} server deploy`) + "   apply this release's schema/RPC/EF updates");
+  println("  2. " + c.bold(`${progName()} guides ingest`) + "   re-sync the bundled guides into your KB");
   println(c.dim("  (order matters: the new client may require the new schema — run the deploy first)"));
 }
 

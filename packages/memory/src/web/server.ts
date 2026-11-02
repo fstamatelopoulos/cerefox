@@ -65,6 +65,7 @@ import {
   aggregatorUrlFor,
   checkServerCompatibility,
 } from "../../../../_shared/compatibility/index.ts";
+import { progName } from "../cli/util/prog-name.ts";
 
 /** Where this API describes itself; advertised in every response's Link header. */
 export const OPENAPI_PATH = "/api/v1/openapi.json";
@@ -282,7 +283,7 @@ async function assertServerCompatible(): Promise<void> {
   throw new CompatibilityError(
     `Refusing to start: the deployed Cerefox server is incompatible with this client (v${PKG_VERSION}).\n` +
       parts.join("\n") +
-      `\n\nRedeploy your server:  cerefox server deploy\n` +
+      `\n\nRedeploy your server:  ${progName()} server deploy\n` +
       `(or downgrade the client to match the deployed server).`,
   );
 }
@@ -324,7 +325,7 @@ export async function buildWebServer(
       `\n⚠  Binding ${host} with NO API key configured.\n` +
         `   Every read, write, delete and purge on this server is reachable by\n` +
         `   anything that can connect to port ${port}, with no credential.\n` +
-        `   Mint one:  cerefox api-key generate\n`,
+        `   Mint one:  ${progName()} api-key generate\n`,
     );
   }
 

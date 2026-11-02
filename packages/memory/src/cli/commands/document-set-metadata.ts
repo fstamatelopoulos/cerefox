@@ -139,14 +139,14 @@ async function action(
     if (msg.includes("CEREFOX_METADATA_CONFLICT")) {
       throw userError(
         `The metadata of ${documentId} changed since you read it. Re-read it ` +
-          `(cerefox document get ${documentId} --outline), reapply your change, and retry ` +
+          `(${progName()} document get ${documentId} --outline), reapply your change, and retry ` +
           `with the new --expected-metadata-revision.`,
       );
     }
     if (msg.includes("CEREFOX_METADATA_TOKEN_REQUIRED")) {
       throw userError(
         `--replace discards every key you do not list, so it needs --expected-metadata-revision ` +
-          `(from cerefox document get ${documentId} --outline) or --last-write-wins.`,
+          `(from ${progName()} document get ${documentId} --outline) or --last-write-wins.`,
       );
     }
     throw systemError(`Could not set metadata: ${msg}`);

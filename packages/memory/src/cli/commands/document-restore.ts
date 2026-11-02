@@ -90,7 +90,7 @@ async function action(documentId: string, options: RestoreOptions): Promise<void
     if (checkError) {
       warn(
         `Restore submitted, but the follow-up verification read failed (${checkError.message}). ` +
-          `Confirm with: cerefox document get ${documentId}`,
+          `Confirm with: ${progName()} document get ${documentId}`,
       );
       return;
     }

@@ -114,7 +114,7 @@ async function action(documentId: string, options: DeleteOptions): Promise<void>
     if (checkError) {
       warn(
         `Delete submitted, but the follow-up verification read failed (${checkError.message}). ` +
-          `Confirm with: cerefox document get ${documentId}`,
+          `Confirm with: ${progName()} document get ${documentId}`,
       );
       return;
     }

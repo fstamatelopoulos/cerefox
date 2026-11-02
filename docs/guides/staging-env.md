@@ -73,9 +73,12 @@ CEREFOX_CONFIG_DIR=~/.cerefox/staging cerefox init
 
 ```bash
 CEREFOX_ENV_LABEL=staging
-CEREFOX_PROG_NAME=cfx-stg                       # the alias below; hints then say `cfx-stg …`
+# The alias below; hints then say `cfx-stg …`. Comments go on their own line:
+# the .env parser keeps anything after `=` as the value.
+CEREFOX_PROG_NAME=cfx-stg
 CEREFOX_SUPABASE_URL=https://<staging-ref>.supabase.co
-CEREFOX_SUPABASE_KEY=sb_secret_…                 # staging project's secret key
+# The staging project's secret key:
+CEREFOX_SUPABASE_KEY=sb_secret_…
 CEREFOX_DATABASE_URL=postgresql://postgres.<staging-ref>:…@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
 
 # Isolate snapshots. CEREFOX_BACKUP_DIR does NOT follow the config dir, so
@@ -85,7 +88,8 @@ CEREFOX_DATABASE_URL=postgresql://postgres.<staging-ref>:…@aws-0-<region>.pool
 CEREFOX_BACKUP_DIR=~/.cerefox/staging/backups
 
 OPENAI_API_KEY=sk-…
-SUPABASE_ACCESS_TOKEN=sbp_…                       # account-level; same as prod
+# Account-level; the same token as production:
+SUPABASE_ACCESS_TOKEN=sbp_…
 ```
 
 > **Snapshot isolation needs v1.1.0-beta.3 or later.** On **beta.2 and

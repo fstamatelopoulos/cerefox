@@ -125,7 +125,7 @@ function rotateAction(opts: ApiKeyOptions): void {
   println(
     c.yellow(
       "   The previous key stops working as soon as the server restarts.\n" +
-        "   Update every remote client, then: cerefox web restart",
+        `   Update every remote client, then: ${progName()} web restart`,
     ),
   );
 }
@@ -140,7 +140,7 @@ function showAction(): void {
       c.dim(
         "   The server is not gated: callers from any interface it is bound to can\n" +
           "   reach it without a credential. That is fine while it binds 127.0.0.1.\n" +
-          "   Mint one with: cerefox api-key generate",
+          `   Mint one with: ${progName()} api-key generate`,
       ),
     );
     containerHint();

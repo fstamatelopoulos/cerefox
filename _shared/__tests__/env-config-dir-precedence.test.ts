@@ -81,3 +81,38 @@ describe("loadEnv + CEREFOX_CONFIG_DIR precedence", () => {
     );
   });
 });
+
+/** Resolve CEREFOX_PROG_NAME the way a real command would. */
+function resolveProgName(opts: { cwd: string; env: Record<string, string> }): string {
+  const proc = Bun.spawnSync({
+    cmd: [
+      "bun",
+      "-e",
+      `import { loadEnv } from ${JSON.stringify(CONFIG_MOD)};` +
+        `loadEnv(); console.log(process.env.CEREFOX_PROG_NAME ?? "");`,
+    ],
+    cwd: opts.cwd,
+    env: { PATH: process.env.PATH ?? "", ...opts.env },
+  });
+  return proc.stdout.toString().trim();
+}
+
+describe("CEREFOX_PROG_NAME belongs to the environment's own .env (#352)", () => {
+  test("the selected .env's name beats an inherited one, even without a named config dir", () => {
+    const home = tempDir();
+    const state = join(home, ".cerefox");
+    Bun.spawnSync({ cmd: ["mkdir", "-p", state] });
+    writeFileSync(join(state, ".env"), "CEREFOX_SUPABASE_URL=https://prod.example\nCEREFOX_PROG_NAME=cerefox\n");
+    const cwd = tempDir();
+    expect(resolveProgName({ cwd, env: { HOME: home, CEREFOX_PROG_NAME: "cfx-other" } })).toBe("cerefox");
+  });
+
+  test("an inherited name still applies when the .env does not set one (cerefox-local)", () => {
+    const home = tempDir();
+    const state = join(home, ".cerefox");
+    Bun.spawnSync({ cmd: ["mkdir", "-p", state] });
+    writeFileSync(join(state, ".env"), "CEREFOX_SUPABASE_URL=https://prod.example\n");
+    const cwd = tempDir();
+    expect(resolveProgName({ cwd, env: { HOME: home, CEREFOX_PROG_NAME: "cerefox-local" } })).toBe("cerefox-local");
+  });
+});

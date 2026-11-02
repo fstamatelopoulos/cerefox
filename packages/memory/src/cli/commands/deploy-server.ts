@@ -401,7 +401,7 @@ async function action(options: DeployServerOptions): Promise<void> {
         eprintln(c.dim("     published yet, and bundling fails."));
         eprintln(c.dim("     Your deployed functions were NOT changed — the previous version is"));
         eprintln(c.dim("     still serving, so nothing is down."));
-        eprintln(c.cyan("   → Wait a few minutes, then re-run: cerefox server deploy --functions-only"));
+        eprintln(c.cyan(`   → Wait a few minutes, then re-run: ${progName()} server deploy --functions-only`));
       } else {
         eprintln(c.dim(`   Re-run \`${progName()} server deploy --functions-only\` after fixing the cause.`));
       }
@@ -448,11 +448,11 @@ async function action(options: DeployServerOptions): Promise<void> {
   }
 
   println(c.green("\n✓ Server deploy complete."));
-  println(c.dim("Verify with: cerefox doctor"));
+  println(c.dim(`Verify with: ${progName()} doctor`));
   // Now is the correct moment for the bundled-guides sync: client AND server
   // are both on this release (self-update used to fire it pre-deploy, where a
   // schema-requiring release cannot ingest — see self-update.ts).
-  println(c.dim("Refresh the bundled guides: cerefox guides ingest"));
+  println(c.dim(`Refresh the bundled guides: ${progName()} guides ingest`));
 }
 
 /**

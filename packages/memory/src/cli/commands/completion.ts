@@ -34,6 +34,7 @@ import type { Command } from "commander";
 
 import { c, confirm, eprintln, println, userError } from "../../../../../_shared/cli-core/index.ts";
 import { buildProgram } from "../program.ts";
+import { progName as hintName } from "../util/prog-name.ts";
 
 /**
  * One node of the command tree: `path` is the space-joined subcommand path
@@ -339,7 +340,7 @@ async function action(target: string, options: { shell?: string; yes?: boolean }
   // Raw emit: print the script to stdout (pipe/redirect it yourself).
   println(scriptFor(target));
   if (process.stdout.isTTY) {
-    eprintln(c.dim(`\n# Tip: \`${progName()} completion install\` writes this + wires your shell rc automatically.`));
+    eprintln(c.dim(`\n# Tip: \`${hintName()} completion install\` writes this + wires your shell rc automatically.`));
   }
 }
 

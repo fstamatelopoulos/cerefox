@@ -76,7 +76,7 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
   if (error) throw systemError(`Lookup failed: ${error.message}`);
   if (!doc) throw notFound(`Document ${documentId} not found.`);
   if (doc.deleted_at) {
-    throw userError(`Document ${documentId} is soft-deleted — restore it first (cerefox document restore).`);
+    throw userError(`Document ${documentId} is soft-deleted — restore it first (${progName()} document restore).`);
   }
 
   const metaTouched = sets.length > 0 || unsets.length > 0;
@@ -116,7 +116,7 @@ async function action(documentId: string, options: EditOptions): Promise<void> {
       if (metaErr.message?.includes("CEREFOX_BAD_METADATA")) {
         throw userError(
           `Document ${documentId} has non-object metadata; a patch cannot repair it. ` +
-            `Repair it first with: cerefox document set-metadata ${documentId} --replace --json '<the intended object>'`,
+            `Repair it first with: ${progName()} document set-metadata ${documentId} --replace --json '<the intended object>'`,
         );
       }
       throw systemError(`Metadata update failed: ${metaErr.message}`);

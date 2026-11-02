@@ -8,7 +8,8 @@
  * wrong store. The CLI cannot see a shell alias, so it is told:
  *
  *   1. `CEREFOX_PROG_NAME`: set by the `cerefox-local` host script, or in an
- *      environment's `.env` (loaded before any command runs).
+ *      environment's `.env` (loaded before any command runs; the file's value
+ *      wins over an inherited one, see loadEnv).
  *   2. Otherwise, with `CEREFOX_CONFIG_DIR` set, the full form
  *      `CEREFOX_CONFIG_DIR=<dir> cerefox`, which is always safe to copy.
  *   3. Otherwise `cerefox`.
@@ -20,5 +21,9 @@ export function progName(): string {
   if (name) return name;
   const dir = (process.env.CEREFOX_CONFIG_DIR ?? "").trim();
   if (!dir) return "cerefox";
-  return /[\s"'$`\\]/.test(dir) ? `CEREFOX_CONFIG_DIR='${dir.replace(/'/g, `'\\''`)}' cerefox` : `CEREFOX_CONFIG_DIR=${dir} cerefox`;
+  // Anything outside a plain path's characters is single-quoted, so the hint
+  // stays one shell word ("/tmp/a;b" must not split the command).
+  return /^[A-Za-z0-9_\/.~+,:@%=-]+$/.test(dir)
+    ? `CEREFOX_CONFIG_DIR=${dir} cerefox`
+    : `CEREFOX_CONFIG_DIR='${dir.replace(/'/g, `'\\''`)}' cerefox`;
 }

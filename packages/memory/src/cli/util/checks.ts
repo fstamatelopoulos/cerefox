@@ -899,7 +899,7 @@ export async function checkWebDaemon(): Promise<CheckResult> {
       name: "web server",
       status: "skipped",
       detail: `no daemon running (stale pidfile for process ${status.info.pid}).`,
-      hint: "Clean it up: cerefox web stop",
+      hint: `Clean it up: ${progName()} web stop`,
     };
   }
   if (!status.responding) {
