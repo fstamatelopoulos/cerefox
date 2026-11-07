@@ -5,7 +5,7 @@
 -- Requires extensions: vector (pgvector), uuid-ossp
 -- These are enabled at the top of db_deploy.py before this file is applied.
 --
--- @version: 0.21.1
+-- @version: 0.22.0
 -- The `@version` marker above is read by the schema-version-mismatch banner
 -- (see /api/v1/schema-version). Bump it whenever schema.sql OR rpcs.sql
 -- changes in a way that requires `cerefox server deploy` to be re-run —
@@ -123,8 +123,12 @@ CREATE TABLE IF NOT EXISTS cerefox_document_versions (
 
 CREATE TABLE IF NOT EXISTS cerefox_audit_log (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    document_id     UUID        REFERENCES cerefox_documents(id) ON DELETE SET NULL,
-    version_id      UUID        REFERENCES cerefox_document_versions(id) ON DELETE SET NULL,
+    -- Plain ids, deliberately NOT foreign keys (0.22.0, iteration 51): an audit
+    -- trail must outlive what it describes. With ON DELETE SET NULL, purging a
+    -- document cleared the id on its purge entry and on every earlier entry
+    -- for it, and pruning a version did the same for the version id.
+    document_id     UUID,
+    version_id      UUID,
     operation       TEXT        NOT NULL,
     -- operation values: 'create', 'update-content', 'update-metadata', 'delete',
     --                   'status-change', 'archive', 'unarchive'
@@ -142,7 +146,15 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
     description     TEXT        NOT NULL DEFAULT '',
     -- description: free-text explaining what changed and why.
     -- Auto-generated for system actions (approval, archival, retention cleanup).
+    -- 0.22.0: structured before/after for operations that are not metadata
+    -- (project memberships, restore, retention, reindex). NULL otherwise.
+    details         JSONB,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- 0.22.0: the id of the transaction that wrote the entry. Readers that
+    -- follow the log (sync) page by it through cerefox_audit_changes, which
+    -- never returns an entry behind a position it already handed out. NULL on
+    -- entries written before 0.22.0.
+    txid            XID8        DEFAULT pg_current_xact_id(),
 
     CONSTRAINT cerefox_audit_log_operation_check CHECK (
         operation IN ('create', 'update-content', 'update-metadata', 'delete',
@@ -161,7 +173,12 @@ CREATE TABLE IF NOT EXISTS cerefox_audit_log (
                       -- rows a purge cascade orphans, so every reader already
                       -- tolerates them.
                       'config-change', 'project-create', 'project-edit',
-                      'project-delete')
+                      'project-delete',
+                      -- 0.22.0 (iteration 51): every content write is on the
+                      -- trail. 'purge' is a permanent delete (it was logged as
+                      -- 'delete', the same as a move to the trash).
+                      'purge', 'projects-change', 'backup-restore',
+                      'version-prune', 'reindex')
     ),
     CONSTRAINT cerefox_audit_log_author_type_check CHECK (author_type IN ('user', 'agent'))
 );
@@ -326,6 +343,10 @@ CREATE INDEX IF NOT EXISTS idx_cerefox_audit_log_document
 
 CREATE INDEX IF NOT EXISTS idx_cerefox_audit_log_author
     ON cerefox_audit_log(author, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_cerefox_audit_log_txid
+    ON cerefox_audit_log(txid)
+    WHERE txid IS NOT NULL;
 
 -- Full-text search on audit log descriptions
 CREATE INDEX IF NOT EXISTS idx_cerefox_audit_log_desc_fts

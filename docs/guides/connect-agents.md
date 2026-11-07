@@ -665,7 +665,7 @@ In the action editor, paste this schema (replace `<your-project-ref>`):
 openapi: 3.1.0
 info:
   title: Cerefox Knowledge Base
-  version: 4.4.0
+  version: 4.5.0
 servers:
   - url: https://<your-project-ref>.supabase.co/functions/v1
 paths:
@@ -996,8 +996,10 @@ paths:
                   description: >
                     Filter by operation type: create, update-content, update-metadata,
                     insert, replace-section, delete-section, rename-section, delete,
-                    restore, status-change, archive, unarchive, config-change,
-                    project-create, project-edit, project-delete (optional)
+                    restore, status-change, archive, unarchive, purge,
+                    projects-change, backup-restore, version-prune, relation-set,
+                    relation-delete, config-change, project-create, project-edit,
+                    project-delete, reindex (optional)
                 since:
                   type: string
                   description: ISO timestamp lower bound for temporal queries (optional)
@@ -1013,12 +1015,21 @@ paths:
                   description: >
                     Your name (agent or user). Recorded in the usage log.
                     Optional. `requestor` is still accepted as an alias.
+                after_position:
+                  type: string
+                  description: >
+                    Follow the log instead of filtering it (optional). Pass an
+                    empty string to start, then the next_position from the
+                    previous call. Other filters are ignored; limit defaults
+                    to 500 (max 1000). Never skips an entry that commits late.
       responses:
         '200':
           description: >
             Array of audit log entries:
             [{ id, document_id, doc_title, version_id, operation, author, author_type,
-               size_before, size_after, description, created_at }]
+               size_before, size_after, description, created_at, metadata_before,
+               metadata_after, details }].
+            With after_position: { next_position, has_more, entries } (oldest first).
   /cerefox-list-projects:
     post:
       operationId: listProjects

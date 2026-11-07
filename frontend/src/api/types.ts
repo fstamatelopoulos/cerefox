@@ -140,6 +140,7 @@ export interface AuditEntry {
   /** #333: set on update-metadata entries (null elsewhere / older rows). */
   metadata_before?: Record<string, unknown> | null;
   metadata_after?: Record<string, unknown> | null;
+  details?: Record<string, unknown> | null;
 }
 
 export interface DocumentChunk {

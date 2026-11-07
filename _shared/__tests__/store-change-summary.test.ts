@@ -16,6 +16,15 @@ describe("storeChangeSummary", () => {
     );
   });
 
+  test("a membership change shows what was added and removed (0.22.0)", () => {
+    expect(storeChangeSummary("projects-change", "Added to projects [A]; Removed from projects [B]")).toBe(
+      "Added to projects [A]; Removed from projects [B]",
+    );
+    expect(storeChangeSummary("reindex", "Re-embedded 3 chunk(s) across 1 document(s) with m")).toBe(
+      "Re-embedded 3 chunk(s) across 1 document(s) with m",
+    );
+  });
+
   test("document operations and empty descriptions give nothing", () => {
     expect(storeChangeSummary("update-content", "ingest via cli")).toBeNull();
     expect(storeChangeSummary("config-change", "  ")).toBeNull();

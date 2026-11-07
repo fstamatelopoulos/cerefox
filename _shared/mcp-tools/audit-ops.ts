@@ -16,6 +16,9 @@ export const STORE_LEVEL_AUDIT_OPS = [
   "project-create",
   "project-edit",
   "project-delete",
+  // 0.22.0: one entry per `server reindex` run (a single-document run carries
+  // that document's id).
+  "reindex",
 ] as const;
 
 export function isStoreLevelAuditOp(operation: string | null | undefined): boolean {
@@ -29,6 +32,8 @@ export const AUDIT_OPERATIONS = [
   "create", "update-content", "update-metadata", "insert", "replace-section",
   "delete-section", "rename-section", "delete", "restore", "status-change",
   "archive", "unarchive", "relation-set", "relation-delete",
+  // 0.22.0 (iteration 51): every content write is on the trail.
+  "purge", "projects-change", "backup-restore", "version-prune",
   ...STORE_LEVEL_AUDIT_OPS,
 ] as const;
 
@@ -45,6 +50,8 @@ export function auditDocLabel(
   if (documentId) return documentId.slice(0, 8) + "…";
   if (operation === "config-change") return "(setting)";
   if (operation?.startsWith("project-")) return "(project)";
+  // A project restored from a backup carries no document.
+  if (operation === "backup-restore") return "(project)";
   return isStoreLevelAuditOp(operation) ? "(store)" : "(deleted)";
 }
 
@@ -60,7 +67,9 @@ export function storeChangeSummary(
   operation: string | null | undefined,
   description: string | null | undefined,
 ): string | null {
-  if (!isStoreLevelAuditOp(operation)) return null;
+  // A membership change also names what changed in its description
+  // ("Added to projects [A]; Removed from projects [B]", 0.22.0).
+  if (!isStoreLevelAuditOp(operation) && operation !== "projects-change") return null;
   const d = (description ?? "").trim();
   if (!d) return null;
   return operation === "config-change" ? d.replace(/^config:\s*/, "") : d;

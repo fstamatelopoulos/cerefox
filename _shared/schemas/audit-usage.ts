@@ -29,6 +29,8 @@ export const AuditEntryResponse = z.object({
    *  entry; null on other operations and on entries older than schema 0.21.0. */
   metadata_before: z.record(z.string(), z.unknown()).nullable().optional(),
   metadata_after: z.record(z.string(), z.unknown()).nullable().optional(),
+  // 0.22.0: structured before/after on non-metadata operations; null elsewhere.
+  details: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 export type AuditEntryResponse = z.infer<typeof AuditEntryResponse>;
 

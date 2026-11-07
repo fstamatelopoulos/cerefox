@@ -89,6 +89,13 @@ function mockClient(fix: {
       if (fix.rpcErrors?.[name]) {
         return Promise.resolve({ data: null, error: { message: fix.rpcErrors[name] } });
       }
+      if (name === "cerefox_apply_document_projects") {
+        // Mirrors the RPC: changed only when the replace set differs.
+        const before = [...(fix.memberships ?? [])].sort();
+        const after = [...new Set(args.p_project_ids as string[])].sort();
+        const changed = before.join(",") !== after.join(",");
+        return Promise.resolve({ data: [{ changed, project_ids: after }], error: null });
+      }
       if (name === "cerefox_rename_document") {
         const renamed = fix.renamed ?? true;
         return Promise.resolve({
@@ -196,10 +203,12 @@ describe("setDocumentProjectsByIds", () => {
       { documentId: DOC, projectIds: [P1, P2], accessPath: "webapp", ...WHO },
     );
     expect(r.changed).toBe(true);
-    expect(captured.tableWrites).toContain("cerefox_document_projects:delete");
-    expect(captured.tableWrites).toContain("cerefox_document_projects:insert:2");
-    const audit = captured.rpcs.find((r) => r.name === "cerefox_create_audit_entry")!;
-    expect(audit.args.p_description).toBe("Set document projects to [Alpha, Beta]");
+    // 0.22.0: one RPC writes the memberships and its own 'projects-change'
+    // entry; the client writes no table and no separate entry.
+    expect(captured.tableWrites).toEqual([]);
+    const apply = captured.rpcs.find((r) => r.name === "cerefox_apply_document_projects")!;
+    expect(apply.args).toMatchObject({ p_document_id: DOC, p_project_ids: [P1, P2], p_mode: "replace", p_author: "web-ui" });
+    expect(captured.rpcs.find((r) => r.name === "cerefox_create_audit_entry")).toBeUndefined();
     const usage = captured.rpcs.find((r) => r.name === "cerefox_log_usage")!;
     expect(usage.args.p_result_count).toBe(2);
   });

@@ -14,20 +14,23 @@
 import type { Command } from "commander";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 import {
   c,
   println,
   printTable,
+  resolveAuthor,
   systemError,
   userError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
 import { getClient } from "../util/client.ts";
 import { progName } from "../util/prog-name.ts";
+import { authorOption } from "../util/identity-flags.ts";
 
 interface RestoreOptions {
+  author?: string;
   dryRun?: boolean;
   projectName?: string;
 }
@@ -148,11 +151,39 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   println("");
 
   const client = getClient();
+  const author = resolveAuthor(options.author);
+  const backupName = basename(file);
 
   let restored = 0;
   let skipped = 0;
   let errors = 0;
   const errorDetails: Array<{ title: string; error: string }> = [];
+
+  // ── Projects (#166), before documents so memberships resolve ─────────────
+  // Each project actually created gets a 'backup-restore' audit entry; one
+  // whose id already exists keeps its current name and description.
+  let projectsRestored = 0;
+  if (!options.dryRun && hasMemberships && (payload.projects?.length ?? 0) > 0) {
+    const { data, error: projErr } = await client.raw.rpc("cerefox_restore_backup_projects", {
+      p_projects: payload.projects,
+      p_author: author,
+      p_backup: backupName,
+    });
+    if (projErr) {
+      errors++;
+      errorDetails.push({ title: "(projects)", error: projErr.message });
+    } else {
+      projectsRestored = (data as number | null) ?? 0;
+    }
+  }
+  const membershipsByDoc = new Map<string, string[]>();
+  for (const m of payload.memberships ?? []) {
+    const list = membershipsByDoc.get(m.document_id) ?? [];
+    list.push(m.project_id);
+    membershipsByDoc.set(m.document_id, list);
+  }
+  let membershipsRestored = 0;
+  const restoredIds = new Set<string>();
 
   // Ids this backup restores. Content is not unique (#332), so two documents
   // in one backup can share a body; the hash arm below must not let the first
@@ -216,107 +247,82 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       continue;
     }
 
-    // Insert the document row.
-    const docInsert = { ...doc };
-    delete (docInsert as { chunks?: unknown }).chunks;
-    const { error: docErr } = await client.raw
-      .from("cerefox_documents")
-      .insert(docInsert);
+    // The document row, its chunks, its memberships and a 'backup-restore'
+    // audit entry commit together (0.22.0): a failure leaves nothing behind,
+    // where two separate inserts could land a document without its chunks.
+    const docRow = { ...doc };
+    delete (docRow as { chunks?: unknown }).chunks;
+    const projectIds = membershipsByDoc.get(doc.id) ?? [];
+    const { data: landed, error: docErr } = await client.raw.rpc("cerefox_restore_backup_document", {
+      p_document: docRow,
+      p_chunks: doc.chunks,
+      p_project_ids: projectIds,
+      p_author: author,
+      p_backup: backupName,
+    });
     if (docErr) {
       errors++;
-      errorDetails.push({ title: doc.title, error: `doc insert: ${docErr.message}` });
+      errorDetails.push({ title: doc.title, error: `restore: ${docErr.message}` });
       continue;
     }
-
-    // Insert chunk rows.
-    if (doc.chunks.length > 0) {
-      const { error: chunkErr } = await client.raw
-        .from("cerefox_chunks")
-        .insert(doc.chunks);
-      if (chunkErr) {
-        errors++;
-        errorDetails.push({ title: doc.title, error: `chunks insert: ${chunkErr.message}` });
-        continue;
-      }
+    if (landed === false) {
+      skipped++;
+      continue;
     }
-
+    membershipsRestored += projectIds.length;
+    restoredIds.add(doc.id);
     restored++;
   }
 
-  // ── Projects + memberships (#166) ────────────────────────────────────────
-  // After documents exist, so foreign keys resolve. Both steps are idempotent
-  // (upsert / ignore-duplicates) because restore is safe to re-run, and both
-  // are skipped for format-1 snapshots that carry neither.
-  let projectsRestored = 0;
-  let membershipsRestored = 0;
+  // ── Memberships of documents that were already here, then relations ────
+  // A document skipped because its id already exists still gets the
+  // memberships the backup records, added (never removed) through the audited
+  // membership RPC; it writes an entry only when something was missing.
   let relationsRestored = 0;
   if (!options.dryRun && hasMemberships) {
-    const projects = payload.projects ?? [];
-    if (projects.length > 0) {
-      // Keep existing rows authoritative: a project that already exists keeps
-      // its current name/description rather than being overwritten.
-      const { error: projErr } = await client.raw
-        .from("cerefox_projects")
-        .upsert(projects, { onConflict: "id", ignoreDuplicates: true });
-      if (projErr) {
-        errors++;
-        errorDetails.push({ title: "(projects)", error: projErr.message });
-      } else {
-        projectsRestored = projects.length;
-      }
-    }
-
-    // Only memberships whose document actually landed — a skipped duplicate or
-    // a failed insert must not leave a dangling edge.
+    const backupIds = (payload.documents ?? []).map((d) => d.id);
     const presentDocIds = new Set<string>();
-    {
-      const ids = (payload.documents ?? []).map((d) => d.id);
-      for (let i = 0; i < ids.length; i += 200) {
-        const { data } = await client.raw
-          .from("cerefox_documents")
-          .select("id")
-          .in("id", ids.slice(i, i + 200));
-        for (const row of (data ?? []) as Array<{ id: string }>) presentDocIds.add(row.id);
-      }
+    for (let i = 0; i < backupIds.length; i += 200) {
+      const { data } = await client.raw
+        .from("cerefox_documents")
+        .select("id")
+        .in("id", backupIds.slice(i, i + 200));
+      for (const row of (data ?? []) as Array<{ id: string }>) presentDocIds.add(row.id);
     }
-    const links = (payload.memberships ?? []).filter((m) => presentDocIds.has(m.document_id));
-    for (let i = 0; i < links.length; i += 500) {
-      const { error: linkErr } = await client.raw
-        .from("cerefox_document_projects")
-        .upsert(links.slice(i, i + 500), {
-          onConflict: "document_id,project_id",
-          ignoreDuplicates: true,
-        });
+    for (const [docId, projectIds] of membershipsByDoc) {
+      if (!presentDocIds.has(docId) || restoredIds.has(docId)) continue;
+      const { data, error: linkErr } = await client.raw.rpc("cerefox_apply_document_projects", {
+        p_document_id: docId,
+        p_project_ids: projectIds,
+        p_mode: "add",
+        p_author: author,
+        p_author_type: "user",
+      });
       if (linkErr) {
         errors++;
         errorDetails.push({ title: "(memberships)", error: linkErr.message });
         break;
       }
-      membershipsRestored += links.slice(i, i + 500).length;
+      if ((data as Array<{ changed: boolean }> | null)?.[0]?.changed) membershipsRestored += projectIds.length;
     }
 
-    // Relations (iteration 29). Only edges whose BOTH endpoints landed — a
-    // half-present edge would violate the foreign keys, and silently dropping
-    // the other half would be worse than not restoring it.
+    // Relations (iteration 29). Only edges whose BOTH endpoints are present.
+    // The RPC keeps each edge's original author and metadata, and audits each
+    // edge it creates.
     const relations = (payload.relations ?? []).filter(
       (r) => presentDocIds.has(r.source_id) && presentDocIds.has(r.target_id),
     );
     if (relations.length > 0) {
-      for (let i = 0; i < relations.length; i += 500) {
-        const { error: relErr } = await client.raw
-          .from("cerefox_document_relations")
-          .upsert(relations.slice(i, i + 500), {
-            onConflict: "source_id,target_id,rel_type",
-            ignoreDuplicates: true,
-          });
-        if (relErr) {
-          // A pre-0.10.0 target has no relations table: report once and move
-          // on rather than failing a restore that is otherwise complete.
-          errorDetails.push({ title: "(relations)", error: relErr.message });
-          errors++;
-          break;
-        }
-        relationsRestored += relations.slice(i, i + 500).length;
+      const { data, error: relErr } = await client.raw.rpc("cerefox_restore_backup_relations", {
+        p_relations: relations,
+        p_author: author,
+        p_backup: backupName,
+      });
+      if (relErr) {
+        errorDetails.push({ title: "(relations)", error: relErr.message });
+        errors++;
+      } else {
+        relationsRestored = (data as number | null) ?? 0;
       }
       const dropped = (payload.relations?.length ?? 0) - relations.length;
       if (dropped > 0) {
@@ -355,6 +361,7 @@ export function registerRestore(program: Command): void {
     .description("Restore a JSON-snapshot backup into the knowledge base.")
     .argument("<snapshot>", `Backup file (or directory; most recent is picked) produced by \`${progName()} backup\`.`)
     .option("--dry-run", "Print what would be restored without writing.")
+    .addOption(authorOption("write"))
     .option(
       "-p, --project-name <name>",
       "Reserved for future use; currently ignored. Project memberships are restored from the backup itself (format 2+).",

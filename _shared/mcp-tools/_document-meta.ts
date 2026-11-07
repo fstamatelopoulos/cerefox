@@ -122,47 +122,22 @@ export async function applyMembershipReplace(
     accessPath: AccessPath;
   } & FacetActor,
 ): Promise<{ changed: boolean }> {
-  const { data: current, error: curErr } = await supabase
-    .from("cerefox_document_projects")
-    .select("project_id")
-    .eq("document_id", opts.documentId);
-  if (curErr) throw new Error(`Membership read failed: ${curErr.message}`);
-  const currentSet = new Set((current ?? []).map((r: { project_id: string }) => r.project_id));
-  if (
-    opts.projectIds.length === currentSet.size &&
-    opts.projectIds.every((id) => currentSet.has(id))
-  ) {
-    return { changed: false };
-  }
-
-  const { error: delErr } = await supabase
-    .from("cerefox_document_projects")
-    .delete()
-    .eq("document_id", opts.documentId);
-  if (delErr) throw new Error(`Membership replace failed: ${delErr.message}`);
-  if (opts.projectIds.length > 0) {
-    const rows = opts.projectIds.map((pid) => ({
-      document_id: opts.documentId,
-      project_id: pid,
-    }));
-    const { error: insErr } = await supabase.from("cerefox_document_projects").insert(rows);
-    if (insErr) throw new Error(`Membership replace failed: ${insErr.message}`);
-  }
-
-  const { error: auditErr } = await supabase.rpc("cerefox_create_audit_entry", {
+  // The replace and its `projects-change` entry (with before/after) commit
+  // together in the RPC; an unchanged set writes nothing.
+  const { data, error } = await supabase.rpc("cerefox_apply_document_projects", {
     p_document_id: opts.documentId,
-    p_version_id: null,
-    p_operation: "update-metadata",
+    p_project_ids: opts.projectIds,
+    p_mode: "replace",
     p_author: opts.author,
     p_author_type: opts.authorType,
-    p_size_before: null,
-    p_size_after: null,
-    p_description:
-      opts.projectNames.length > 0
-        ? `Set document projects to [${opts.projectNames.join(", ")}]`
-        : "Cleared all project memberships",
   });
-  if (auditErr) console.warn("applyMembershipReplace: audit entry failed", auditErr.message);
+  if (error) {
+    const msg = error.message ?? String(error);
+    const remediation = storeWriteRemediation(msg, "cerefox_apply_document_projects", "0.22.0");
+    throw new Error(`Membership replace failed: ${remediation ?? msg}`);
+  }
+  const changed = (data as Array<{ changed: boolean }> | null)?.[0]?.changed ?? false;
+  if (!changed) return { changed: false };
 
   logUsage(supabase, {
     operation: "set-document-projects",

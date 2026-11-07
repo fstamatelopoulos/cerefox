@@ -23,6 +23,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   c,
   println,
+  resolveAuthor,
   systemError,
   userError,
   warn,
@@ -32,12 +33,14 @@ import { activeEmbedderName, embedBatch, resolveEmbedderKind } from "../../../..
 import { loadSettings } from "../../../../../_shared/config/index.ts";
 import { warnLargeBulkWrite } from "../util/bulk-write-warning.ts";
 import { progName } from "../util/prog-name.ts";
+import { authorOption } from "../util/identity-flags.ts";
 
 interface ReindexOptions {
   all?: boolean;
   batch?: string;
   dryRun?: boolean;
   documentId?: string;
+  author?: string;
 }
 
 interface ChunkRow {
@@ -168,6 +171,29 @@ async function action(options: ReindexOptions): Promise<void> {
     println(c.dim(`  ${done}/${chunks.length}…`));
   }
 
+  // One store-level entry per run (0.22.0): embeddings are derived data, so
+  // the trail records the run, not each chunk. Written on a partial run too.
+  if (done > 0) {
+    const docCount = new Set(chunks.map((ch) => ch.document_id)).size;
+    const { error: auditErr } = await supabase.rpc("cerefox_create_audit_entry", {
+      p_document_id: options.documentId ?? null,
+      p_operation: "reindex",
+      p_author: resolveAuthor(options.author),
+      p_author_type: "user",
+      p_description:
+        `Re-embedded ${done} chunk(s) across ${docCount} document(s) with ${targetModel}` +
+        (errors > 0 ? ` (${errors} failed)` : ""),
+      p_details: {
+        model: targetModel,
+        chunks_reindexed: done,
+        chunks_failed: errors,
+        documents: docCount,
+        scope: options.documentId ? "document" : reindexAll ? "all" : "stale",
+      },
+    });
+    if (auditErr) warn(`Audit entry for this reindex failed: ${auditErr.message}`);
+  }
+
   println("");
   println(
     c.bold(`Reindexed ${done} chunk(s)${errors > 0 ? c.yellow(` · ${errors} errors`) : ""}.`),
@@ -192,5 +218,6 @@ export function registerReindex(program: Command): void {
       "-i, --document-id <uuid>",
       "Limit reindex to a single document.",
     )
+    .addOption(authorOption("write"))
     .action(action);
 }

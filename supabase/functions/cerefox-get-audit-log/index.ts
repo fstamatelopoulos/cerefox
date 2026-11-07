@@ -21,8 +21,14 @@ import { auditLogIdentity } from "../../../_shared/mcp-tools/identity.ts";
  *   since?        : string  -- ISO timestamp lower bound
  *   until?        : string  -- ISO timestamp upper bound
  *   limit?        : number  -- max entries (default 50, max 200)
+ *   after_position? : string -- 0.22.0: follow the log instead of filtering it.
+ *                   Pass "" to start, then the previous call's next_position.
+ *                   The other filters are ignored; limit defaults to 500
+ *                   (max 1000).
  *
- * Response: Array of audit log entries with doc_title
+ * Response: Array of audit log entries with doc_title, or, with
+ * after_position, { next_position, has_more, entries } (oldest first). A
+ * position never skips an entry that commits late; see cerefox_audit_changes.
  */
 
 const CORS_HEADERS = {
@@ -83,6 +89,32 @@ Deno.serve(async (req: Request): Promise<Response> => {
           );
         }
       }
+    }
+
+    if (typeof body.after_position === "string") {
+      const { data: page, error: pageErr } = await supabase.rpc("cerefox_audit_changes", {
+        p_after: body.after_position,
+        p_limit: Math.min(Number(body.limit) || 500, 1000),
+      });
+      if (pageErr) {
+        const status = /Invalid audit position/.test(pageErr.message) ? 400 : 500;
+        return new Response(JSON.stringify({ error: pageErr.message }), {
+          status,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+      const row = (page as Array<{ next_position: string; has_more: boolean; entries: unknown[] }> | null)?.[0];
+      const entries = row?.entries ?? [];
+      Promise.resolve(supabase.rpc("cerefox_log_usage", {
+        p_operation: "get_audit_log",
+        p_access_path: "edge-function",
+        p_requestor: identityValue ?? null,
+        p_result_count: entries.length,
+      })).catch(() => {});
+      return new Response(
+        JSON.stringify({ next_position: row?.next_position ?? body.after_position, has_more: row?.has_more ?? false, entries }),
+        { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      );
     }
 
     const params: Record<string, unknown> = {};
