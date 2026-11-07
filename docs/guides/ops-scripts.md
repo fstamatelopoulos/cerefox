@@ -410,10 +410,22 @@ For a personal knowledge base, a simple daily cron is sufficient:
 
 ```cron
 # End user (CLI):
-0 3 * * * cerefox backup create --label daily
+0 3 * * * cerefox backup create --label daily --keep 14
 # Contributor (repo clone):
 0 3 * * * cd /path/to/cerefox && bun scripts/backup_create.ts --label daily
 ```
+
+`--keep <n>` (on `cerefox backup create`) deletes the oldest snapshots in the
+output directory after a successful write, so at most `n` remain, the new one
+included. It only counts files the command itself names
+(`cerefox-[<env-label>-]<YYYYMMDDTHHMMSSZ>[-<label>].json`) with the **same**
+`--label` (or none) and the same `CEREFOX_ENV_LABEL`, ordered by the timestamp
+in the name. So a nightly `--label daily --keep 14` never deletes a hand-made
+`--label before-upgrade` snapshot, and nothing else in the folder is touched. A
+failed backup prunes nothing. `n` must be an integer of at least 1, and
+`--keep` is refused together with `--git` (prune a git-tracked folder with
+`git rm` yourself). To run this in a container against several stores, see
+[`scheduled-backups.md`](scheduled-backups.md).
 
 Backups include embeddings so they are larger than pure-text exports, but for a personal knowledge base they typically remain well under 100 MB.
 

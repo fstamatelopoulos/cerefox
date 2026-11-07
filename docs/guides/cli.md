@@ -781,7 +781,7 @@ These flat commands handle install, configuration, and health. Run any with `--h
 | `cerefox token generate` / `rotate` / `list` | Manage the Cerefox access token (`cfx_pat_…`) — the Edge Function Bearer credential (remote MCP, GPT Actions, curl). See the [`cerefox token`](#cerefox-token-generate--cerefox-token-rotate--cerefox-token-list) section above. |
 | `cerefox self-update` | Update the installed `@cerefox/memory` package. Other commands print a one-line notice when a newer release is out; see [configuration.md → Update check](configuration.md#update-check) to turn it off. |
 | `cerefox completion` | Emit a shell completion script. |
-| `cerefox backup create` / `cerefox backup restore` | File-system backup / restore of the knowledge base (see [`ops-scripts.md`](ops-scripts.md)). |
+| `cerefox backup create` / `cerefox backup restore` | File-system backup / restore of the knowledge base (see [`ops-scripts.md`](ops-scripts.md)). `backup create --keep <n>` prunes the oldest snapshots of the same label so at most `n` remain; running it on a schedule is in [`scheduled-backups.md`](scheduled-backups.md). |
 
 ---
 
