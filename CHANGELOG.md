@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.23.0] -- 2026-11-07
+
 **Redeploy required** (schema 0.22.0, and the minimum schema rises to match):
 run `cerefox server deploy` before restarting `cerefox web`. The Edge Functions
 changed too. Cerefox Local applies it on `cerefox-local upgrade`.
