@@ -29,8 +29,12 @@
 
 ## Current Focus
 
-**2026-11-07: iteration 51, a complete audit log (v1.23.0, schema 0.22.0), on
-`fix/audit-completeness`.** Every content write records an entry in the same
+**2026-11-07: 1.23.0 cut (#364), iteration 51, a complete audit log (schema
+0.22.0).** Rolled out to staging (client, schema, web daemon; Playwright 43
+against it) and the maintainer's Mac Local (0037 on boot). Pending, by the
+maintainer: the Edge Function deploy on staging and production (agents are
+refused, #363), then production and the LAN host. Opus review: two rounds,
+merge; restore name clashes fixed in between. Every content write records an entry in the same
 transaction (memberships, restore, retention, reindex were missing); entries
 keep document and version ids after a purge (FKs dropped); `purge` is its own
 operation; `details` + `txid`, read by `cerefox_audit_changes` (a gap-free
