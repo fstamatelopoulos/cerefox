@@ -165,6 +165,7 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   // whose id already exists keeps its current name and description.
   let projectsRestored = 0;
   const projectIdMap = new Map<string, string>();
+  let projectStepFailed = false;
   if (!options.dryRun && hasMemberships && (payload.projects?.length ?? 0) > 0) {
     const { data, error: projErr } = await client.raw.rpc("cerefox_restore_backup_projects", {
       p_projects: payload.projects,
@@ -172,6 +173,7 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       p_backup: backupName,
     });
     if (projErr) {
+      projectStepFailed = true;
       errors++;
       errorDetails.push({ title: "(projects)", error: projErr.message });
     } else {
@@ -367,8 +369,8 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
 
   if (membershipsDropped > 0) {
     warn(
-      `${membershipsDropped} membership(s) not restored: their project is neither in the backup ` +
-        "nor on this store.",
+      `${membershipsDropped} membership(s) not restored: their project is not on this store` +
+        (projectStepFailed ? " (the project restore failed; see the errors below)." : " and not in the backup."),
     );
   }
 

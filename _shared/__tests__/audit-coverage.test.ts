@@ -93,7 +93,7 @@ function tsFiles(dir: string): string[] {
 
 describe("audit coverage (iteration 51)", () => {
   test("every rpcs.sql function that writes content calls cerefox_create_audit_entry", () => {
-    const writes = new RegExp(`(INSERT INTO|UPDATE|DELETE FROM) (${CONTENT_TABLES.join("|")})\\b`);
+    const writes = new RegExp(`(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+(${CONTENT_TABLES.join("|")})\\b`, "i");
     const missing = sqlFunctions(RPCS)
       .filter((f) => writes.test(f.body))
       .filter((f) => !audits(f.body))
@@ -113,7 +113,7 @@ describe("audit coverage (iteration 51)", () => {
   test("no direct client-side write to a content table outside the allowlist", () => {
     const found = new Set<string>();
     const fromRe = new RegExp(`\\.from\\(\\s*["'\`](${CONTENT_TABLES.join("|")})["'\`]\\s*\\)`, "g");
-    const rawRe = new RegExp(`(INSERT INTO|UPDATE|DELETE FROM)\\s+(${CONTENT_TABLES.join("|")})\\b`, "g");
+    const rawRe = new RegExp(`(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+(${CONTENT_TABLES.join("|")})\\b`, "gi");
     for (const root of ["_shared", "packages/memory/src", "supabase/functions", "scripts", "frontend/src"]) {
       for (const file of tsFiles(join(REPO_ROOT, root))) {
         const src = readFileSync(file, "utf8");
