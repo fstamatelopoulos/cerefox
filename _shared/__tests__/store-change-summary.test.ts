@@ -20,6 +20,7 @@ describe("storeChangeSummary", () => {
     expect(storeChangeSummary("projects-change", "Added to projects [A]; Removed from projects [B]")).toBe(
       "Added to projects [A]; Removed from projects [B]",
     );
+    expect(storeChangeSummary("backup-restore", "Restored from backup b.json: T")).toBe("Restored from backup b.json: T");
     expect(storeChangeSummary("reindex", "Re-embedded 3 chunk(s) across 1 document(s) with m")).toBe(
       "Re-embedded 3 chunk(s) across 1 document(s) with m",
     );

@@ -55,6 +55,9 @@ export function auditDocLabel(
   return isStoreLevelAuditOp(operation) ? "(store)" : "(deleted)";
 }
 
+/** Document operations whose description states the change (0.22.0). */
+const DESCRIBED_DOC_OPS: readonly string[] = ["projects-change", "backup-restore", "version-prune"];
+
 /**
  * What a store-level entry changed, for a surface that shows a short "change"
  * per row (the web audit log). The RPCs write the change into the
@@ -67,9 +70,10 @@ export function storeChangeSummary(
   operation: string | null | undefined,
   description: string | null | undefined,
 ): string | null {
-  // A membership change also names what changed in its description
-  // ("Added to projects [A]; Removed from projects [B]", 0.22.0).
-  if (!isStoreLevelAuditOp(operation) && operation !== "projects-change") return null;
+  // 0.22.0: these also say what changed in their description ("Added to
+  // projects [A]; Removed from projects [B]", "Restored from backup …",
+  // "Version 3 removed by retention …").
+  if (!isStoreLevelAuditOp(operation) && !DESCRIBED_DOC_OPS.includes(operation ?? "")) return null;
   const d = (description ?? "").trim();
   if (!d) return null;
   return operation === "config-change" ? d.replace(/^config:\s*/, "") : d;

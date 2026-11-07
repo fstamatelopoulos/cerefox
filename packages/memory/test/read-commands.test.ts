@@ -125,7 +125,10 @@ describe("cerefox read commands (live)", () => {
         expect(status).toBe(0);
       }
     },
-    30000,
+    // One CLI process per project (about a second each against a remote
+    // store), so the budget has to grow with the store: 30 s stopped being
+    // enough for a staging store with a few dozen projects.
+    180_000,
   );
 
   liveTest("list-metadata-keys: returns key/doc_count/example_values", () => {

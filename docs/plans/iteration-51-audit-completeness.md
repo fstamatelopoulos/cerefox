@@ -1,7 +1,7 @@
 # Iteration 51: a complete and accurate audit log
 
-> Status: planned (2026-11-07). Target: v1.23.0 (schema 0.22.0). Branch:
-> `fix/audit-completeness`.
+> Status: implemented (2026-11-07), on `fix/audit-completeness`. Target:
+> v1.23.0 (schema 0.22.0). Executed notes at the end.
 
 ## Why
 
@@ -142,3 +142,25 @@ maintainer runs the EF part of the production deploy.
 
 - One-way sync itself (design draft on the local branch `design/one-way-sync`).
 - The Supabase CLI 3.0 deploy changes (their own issue).
+
+## As executed (2026-11-07)
+
+- G7 used the existing `cerefox_rename_document` on the ingest path (title,
+  chunk FTS and entry in one transaction); embeddings are refreshed after it
+  as derived data. The catch-all "Updated metadata (content unchanged)" entry
+  is gone: every real change has its own entry.
+- Purges got their own operation, `purge` (they were logged as `delete`).
+- Restore uses three RPCs (projects, each document with chunks and
+  memberships, relations). `cerefox_insert_json_row` names only the columns a
+  row carries, so a snapshot from an older server still takes column defaults.
+  Relations keep their original author and metadata.
+- Verified: a throwaway Postgres (0.21.1 to 0.22.0, each new behavior, and the
+  slow-writer race against `cerefox_audit_changes`); staging (migration,
+  package suite, Playwright 43, the reader over the Data API); throwaway Cerefox
+  Local containers (upgrade boot from 1.22.2, every write path, backup and
+  restore into a fresh store with identical search scores).
+- Found on the way, not fixed here: two simultaneous first uses of the local
+  embedder on a fresh Cerefox Local download the model into the same file and
+  corrupt it permanently (no integrity check). Needs its own issue.
+- The `cerefox-get-audit-log` Edge Function change cannot be deployed by an
+  agent since Supabase CLI 3.0 (#363); the maintainer deploys it.

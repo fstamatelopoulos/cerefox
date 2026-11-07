@@ -14,7 +14,7 @@
 
 import { afterAll, beforeAll, describe, expect } from "bun:test";
 
-import { liveTest } from "../_live-test.ts";
+import { LIVE_TEST_BUDGET_MS, liveTest } from "../_live-test.ts";
 import { probeSupabase } from "../_live-probe.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -109,7 +109,10 @@ describe("IngestionPipeline.updateDocument (live)", () => {
         /* swallow */
       }
     }
-  });
+    // Two calls per fixture, one after another: past bun's 5 s hook default on
+    // a remote store, which left fixtures behind on staging. Same budget as a
+    // live test.
+  }, LIVE_TEST_BUDGET_MS);
 
   liveTest("setup: live probe", () => {
     if (!LIVE_OK) {

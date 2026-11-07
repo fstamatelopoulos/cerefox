@@ -29,6 +29,17 @@
 
 ## Current Focus
 
+**2026-11-07: iteration 51, a complete audit log (v1.23.0, schema 0.22.0), on
+`fix/audit-completeness`.** Every content write records an entry in the same
+transaction (memberships, restore, retention, reindex were missing); entries
+keep document and version ids after a purge (FKs dropped); `purge` is its own
+operation; `details` + `txid`, read by `cerefox_audit_changes` (a gap-free
+position, exposed as `after_position` on `cerefox-get-audit-log`); a
+source-scan gate. Also `backup create --keep` and the scheduled-backups guide.
+Plan: [`plans/iteration-51-audit-completeness.md`](plans/iteration-51-audit-completeness.md).
+Next after the release: the one-way sync design (draft on the local branch
+`design/one-way-sync`, not pushed), and the model-download corruption issue.
+
 **2026-11-02: 1.22.2 cut (#357, #358).** Dependency release. (1) #358: Postgres.js 3.4.9 →
 4.0.0 (drives `server deploy` and every Local boot); the doctor check's import is typed for
 v4's default export. Verified on staging (schema deploy, doctor) and on throwaway Local
