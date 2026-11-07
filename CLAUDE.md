@@ -515,6 +515,7 @@ These live in `docs/guides/` and are written for someone who has never seen the 
 | `linking.md` | Document links: forms, the write-time validation guardrail (why LLMs corrupt long ids), the dead-link sweep |
 | `ops-scripts.md` | All `scripts/` — deploy, migrate, backup, restore, export, OpenAPI generation. **Gated**: `_shared/__tests__/ops-scripts-documented.test.ts` derives the list from `scripts/*.ts`, so a new script must be documented here or classified (with a reason) as not operator-facing |
 | `staging-env.md` | Running a staging environment alongside production (opt-in; `CEREFOX_CONFIG_DIR`) |
+| `scheduled-backups.md` | Nightly `backup create --keep` for several stores from a container (the web image, a shell loop), Synology variant, restore test |
 | `operational-cost.md` | Embedding and hosting cost estimates |
 | `CONTRIBUTING.md` (repo root) | How to contribute to Cerefox |
 

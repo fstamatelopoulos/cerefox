@@ -174,6 +174,9 @@ your machine, so it also survives losing the volume (`uninstall --purge`).
 for you. Before v1.22.1 the snapshot stayed inside the container and the next
 `upgrade` or `init` deleted it (#359); the first upgrade to v1.22.1 still runs
 the old script, so make that one's backup from the new version, right after.
+To run backups on a schedule from an always-on machine, see
+[`scheduled-backups.md`](scheduled-backups.md); its restore test uses a scratch
+`cerefox-local`.
 
 > **Coming from an image older than v1.1.0?** Run `cerefox-local upgrade v1.1.1`
 > (an explicit tag) once. A bare `upgrade` on those versions re-pulled the pinned

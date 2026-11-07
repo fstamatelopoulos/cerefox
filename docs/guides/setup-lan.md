@@ -223,6 +223,9 @@ case:
   survives a rebuild and the layers above include it. Before v1.22.1 it was
   saved inside the container and lost on the next build (#359).
 
+  To take these every night from a container on the NAS, for this store and
+  others, see [`scheduled-backups.md`](scheduled-backups.md).
+
 ## B. The web container, with your Supabase backend
 
 You need a working Supabase-backed Cerefox first (see
