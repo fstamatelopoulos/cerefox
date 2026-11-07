@@ -11,18 +11,21 @@
  */
 
 import type { Command } from "commander";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import {
   c,
+  parsePositiveInt,
   println,
   systemError,
+  userError,
 } from "../../../../../_shared/cli-core/index.ts";
 import { loadEnv } from "../../../../../_shared/config/index.ts";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getClient } from "../util/client.ts";
+import { snapshotsToPrune } from "../util/backup-prune.ts";
 import { PKG_VERSION } from "../../meta.ts";
 
 interface BackupOptions {
@@ -31,6 +34,7 @@ interface BackupOptions {
   label?: string;
   git?: boolean;
   trash?: boolean;
+  keep?: string;
 }
 
 function expandHome(path: string): string {
@@ -55,6 +59,20 @@ function utcStamp(): string {
 }
 
 async function action(options: BackupOptions): Promise<void> {
+  // Validated before any work, so a typo in a cron line fails loudly instead
+  // of taking a snapshot and then refusing to prune.
+  const keep =
+    options.keep === undefined ? undefined : parsePositiveInt(options.keep, "--keep", 1);
+  // --git is a no-op today, but a folder someone versions by hand is exactly
+  // where deleting files behind git's back is wrong. Refuse the combination
+  // rather than guess whether to `git rm`.
+  if (keep !== undefined && options.git) {
+    throw userError(
+      "--keep cannot be combined with --git.",
+      "Prune a git-tracked backup folder with `git rm` yourself, or drop --git.",
+    );
+  }
+
   // Load `.env` BEFORE reading CEREFOX_BACKUP_DIR.
   //
   // Nothing loads it at CLI startup — `loadSettings()` runs inside
@@ -346,6 +364,28 @@ async function action(options: BackupOptions): Promise<void> {
     );
   }
 
+  // Retention runs only here, after the snapshot is on disk: any failure above
+  // throws first, so a failed run never deletes an older good snapshot.
+  if (keep !== undefined) {
+    const files = readdirSync(outDir, { withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => e.name);
+    const prune = snapshotsToPrune({
+      filenames: files,
+      justWritten: filename,
+      envLabel,
+      label: options.label,
+      keep,
+    });
+    for (const name of prune) rmSync(join(outDir, name));
+    if (prune.length === 0) {
+      println(c.dim(`  pruned: none (--keep ${keep})`));
+    } else {
+      println(c.dim(`  pruned ${prune.length} older snapshot(s) (--keep ${keep}):`));
+      for (const name of prune) println(c.dim(`    ${name}`));
+    }
+  }
+
   if (options.git) {
     println(c.yellow("⚠ ") + "--git commit is not implemented; the snapshot was written without a git checkpoint.");
     println(c.dim("  Commit the backup directory yourself if you want it version-controlled."));
@@ -361,6 +401,12 @@ export function registerBackup(program: Command): void {
       "Snapshot output directory (default: CEREFOX_BACKUP_DIR or ~/.cerefox/backups).",
     )
     .option("-l, --label <label>", "Optional suffix added to the filename.")
+    .option(
+      "--keep <n>",
+      "After a successful snapshot, delete the oldest snapshots in the output dir so at most n remain. " +
+        "Counts only files this command names, with the same --label (or none) and env label. " +
+        "Not allowed with --git.",
+    )
     .option("--include-versions", "Include archived versions in the snapshot. (v0.5: ignored — current chunks only.)")
     .option("--git", "Commit the snapshot to the output dir as a git checkpoint. (v0.5: ignored.)")
     .option(

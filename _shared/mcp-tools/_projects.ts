@@ -86,24 +86,20 @@ export async function ensureDocumentInProject(
   const projectId = resolved?.projectId ?? null;
   if (!projectId) return null;
 
-  const { data: existing } = await supabase
-    .from("cerefox_document_projects")
-    .select("document_id")
-    .eq("document_id", documentId)
-    .eq("project_id", projectId)
-    .limit(1);
-  if (existing?.length) return projectId;
-
-  const { error: insertErr } = await supabase
-    .from("cerefox_document_projects")
-    .insert({ document_id: documentId, project_id: projectId });
-  if (insertErr && !String(insertErr.message ?? "").includes("duplicate key")) {
-    console.warn("ensureDocumentInProject: insert failed", insertErr);
-  }
+  // Add mode: an existing membership is a no-op with no audit entry.
+  const { error } = await supabase.rpc("cerefox_apply_document_projects", {
+    p_document_id: documentId,
+    p_project_ids: [projectId],
+    p_mode: "add",
+    p_author: audit?.author ?? "unknown",
+    p_author_type: audit?.authorType ?? "agent",
+  });
+  if (error) console.warn("ensureDocumentInProject: membership write failed", error);
   return projectId;
 }
 
-/** DELETE-then-INSERT replacement of a document's project memberships.
+/** Full replacement of a document's project memberships (via
+ *  `cerefox_apply_document_projects`, which audits the change).
  *  Resolves each name → project_id (creating if absent); preserves order.
  *  Empty `projectNames` clears all memberships. Returns the resolved
  *  project_ids in input order. */
@@ -126,14 +122,16 @@ export async function setDocumentProjectsByName(
   }
   const projectIds = resolved.map((r) => r!.projectId);
 
-  await supabase
-    .from("cerefox_document_projects")
-    .delete()
-    .eq("document_id", documentId);
-  if (projectIds.length > 0) {
-    const rows = projectIds.map((pid) => ({ document_id: documentId, project_id: pid }));
-    await supabase.from("cerefox_document_projects").insert(rows);
-  }
+  // The replace and its `projects-change` entry commit together; an
+  // unchanged set writes nothing.
+  const { error } = await supabase.rpc("cerefox_apply_document_projects", {
+    p_document_id: documentId,
+    p_project_ids: projectIds,
+    p_mode: "replace",
+    p_author: audit?.author ?? "unknown",
+    p_author_type: audit?.authorType ?? "agent",
+  });
+  if (error) throw new Error(`Membership replace failed: ${error.message}`);
   return projectIds;
 }
 
@@ -154,7 +152,7 @@ export interface ReplaceDocumentProjectsResult {
  * dedup), verifies the document exists and isn't soft-deleted, resolves each
  * name → project_id (creating the project if absent), then DELETE-then-INSERT
  * replaces the membership set. An empty (or all-blank) list clears all
- * memberships. Writes an `update-metadata` audit entry (content is untouched)
+ * memberships. The RPC writes a `projects-change` audit entry (only on a real change)
  * and a usage-log entry.
  *
  * Throws if the document is missing or soft-deleted. Callers validate

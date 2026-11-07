@@ -84,8 +84,16 @@ export const COMPATIBILITY = {
    * applies, so every agent write on a store that had the workflow on would
    * be silently approved — a governance policy reverting without a word,
    * the same shape as the v1.1.0 retention case. That is "wrong", not "old".
+   *
+   * v1.23.0 RAISED this to 0.22.0 (iteration 51). Every project-membership
+   * write now goes through `cerefox_apply_document_projects`, a title change
+   * through `cerefox_rename_document` on the ingest path, and `backup restore`
+   * through the 0.22.0 restore RPCs, so that each write and its audit entry
+   * commit together. Against an older server, ingesting with a project fails
+   * the membership step and a restore writes nothing: the core write flows
+   * cannot work, which is what this minimum exists to say.
    */
-  minSchema: "0.16.0",
+  minSchema: "0.22.0",
   /** Minimum deployed Edge Function version this client requires. */
   minEdgeFunctions: "0.6.0",
 } as const;

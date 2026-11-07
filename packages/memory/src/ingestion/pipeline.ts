@@ -163,7 +163,7 @@ export class IngestionPipeline {
           getOrCreate,
         );
         if (singular.length > 0) {
-          await this.db.addDocumentToProjects(documentId, singular);
+          await this.db.addDocumentToProjects(documentId, singular, { author, authorType });
           result.projectIds = await this.db.getDocumentProjectIds(documentId);
         }
       }
@@ -252,7 +252,7 @@ export class IngestionPipeline {
             getOrCreate,
           );
           if (singular.length > 0) {
-            await this.db.addDocumentToProjects(existingDoc.id, singular);
+            await this.db.addDocumentToProjects(existingDoc.id, singular, { author, authorType });
             result.projectIds = await this.db.getDocumentProjectIds(
               existingDoc.id,
             );
@@ -363,7 +363,7 @@ export class IngestionPipeline {
 
     // ── (9) Project M2M ──────────────────────────────────────────────────
     if (resolvedIds.length > 0) {
-      await this.db.assignDocumentProjects(newDocumentId, resolvedIds);
+      await this.db.assignDocumentProjects(newDocumentId, resolvedIds, { author, authorType });
     }
 
     return {
@@ -514,9 +514,14 @@ export class IngestionPipeline {
         });
         metadataRevision = r.metadata_revision;
       }
-      await this.db.updateDocumentRow(documentId, { title });
+      // Title, chunk FTS and its audit entry commit together (0.22.0); an
+      // unchanged title writes nothing.
+      if (titleChanged) {
+        await this.db.renameDocument(documentId, title, { author, authorType });
+      }
 
-      // Title-change re-embed (contextual enrichment).
+      // Title-change re-embed (contextual enrichment). Derived search data:
+      // the rename above is the audited change.
       if (titleChanged) {
         const texts = actualChunks.map((c) => embeddingInputFor(title, c));
         try {
@@ -536,21 +541,12 @@ export class IngestionPipeline {
             err,
           );
         }
-        try {
-          await this.db.updateChunkFts(documentId, title);
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `Failed to update FTS after title change for ${documentId}:`,
-            err,
-          );
-        }
       }
 
       // Project membership.
       let finalProjectIds: string[];
       if (newProjectIds !== null) {
-        await this.db.assignDocumentProjects(documentId, newProjectIds);
+        await this.db.assignDocumentProjects(documentId, newProjectIds, { author, authorType });
         finalProjectIds = newProjectIds;
       } else {
         finalProjectIds = await this.db.getDocumentProjectIds(documentId);
@@ -559,21 +555,9 @@ export class IngestionPipeline {
       const chunkCount = existing.chunk_count ?? 0;
       const totalChars = existing.total_chars ?? 0;
 
-      // The metadata RPC wrote its own entry (with before/after); this one
-      // covers a save that changed only the title, or nothing.
-      if (!metadataGiven || titleChanged) {
-        await this.db.createAuditEntry({
-          operation: "update-metadata",
-          author,
-          authorType,
-          documentId,
-          sizeBefore: totalChars,
-          sizeAfter: totalChars,
-          description: titleChanged
-            ? `Title changed on '${title}' (was '${oldTitle}'; content unchanged)`
-            : `Updated metadata for '${title}' (content unchanged)`,
-        });
-      }
+      // No catch-all entry here (0.22.0): the metadata RPC, the rename and
+      // the membership RPC each record their own change, and a save that
+      // changed nothing records nothing.
 
       return {
         documentId,
@@ -661,7 +645,7 @@ export class IngestionPipeline {
     // Update project membership if explicitly provided.
     let finalProjectIds: string[];
     if (newProjectIds !== null) {
-      await this.db.assignDocumentProjects(documentId, newProjectIds);
+      await this.db.assignDocumentProjects(documentId, newProjectIds, { author, authorType });
       finalProjectIds = newProjectIds;
     } else {
       finalProjectIds = await this.db.getDocumentProjectIds(documentId);

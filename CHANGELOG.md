@@ -9,7 +9,53 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Redeploy required** (schema 0.22.0, and the minimum schema rises to match):
+run `cerefox server deploy` before restarting `cerefox web`. The Edge Functions
+changed too. Cerefox Local applies it on `cerefox-local upgrade`.
+
+### Added
+
+- **Every change to your knowledge base is in the audit log** (iteration 51).
+  Some writes left no entry: project memberships changed on several paths,
+  `backup restore`, version retention and `server reindex`. Each now records
+  an entry in the same transaction as the change: `projects-change` (with the
+  projects added and removed), `backup-restore`, `version-prune` and `reindex`.
+  A test fails the build if a new write skips the log.
+- **Audit entries keep their document after a purge.** Purging a document
+  used to clear the document id on its purge entry and on every earlier entry
+  for it, so its history could no longer be found. Ids now stay. Entries
+  cleared before this release cannot be recovered; their descriptions still
+  name the document.
+- **Following the audit log without missing entries.** `cerefox-get-audit-log`
+  takes `after_position` and returns `next_position`, so a reader (a future
+  sync, for one) can page through the log and never skip an entry whose
+  transaction committed late. The GPT Actions schema is 4.5.0.
+- Audit entries carry `details`: the before and after of a membership change,
+  the backup a restore came from, the model a reindex used.
+- **`cerefox backup create --keep <n>`** keeps the newest `n` snapshots and
+  deletes older ones, only among files the command itself wrote with the same
+  label. A new guide, [scheduled backups](docs/guides/scheduled-backups.md),
+  runs it nightly for several stores from a container, including on a
+  Synology NAS.
+- `--author` on `backup restore` and `server reindex`.
+
+### Changed
+
+- A permanent delete is logged as `purge`, no longer as `delete` (which now
+  always means "moved to the trash").
+- A save that changes nothing writes no audit entry. It used to record
+  "Updated metadata (content unchanged)".
+
+### Fixed
+
+- `backup restore` writes each document, its chunks and its memberships
+  together or not at all; a failure could leave a document without chunks.
+- `backup restore` no longer fails every project when one backup project has
+  the same name as an existing project: its documents join the existing
+  project. Memberships that cannot be restored are reported and counted
+  correctly, and one failing document no longer stops the rest.
+- Two live tests left fixtures behind on slow stores; their cleanup now has the
+  same time budget as the tests.
 
 ---
 

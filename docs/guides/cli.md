@@ -529,7 +529,7 @@ cerefox audit list [OPTIONS]
 |---|---|---|---|
 | `--document-id TEXT` | UUID | _none_ | Filter to a single document. |
 | `--by-author TEXT` | str | _none_ | Filter: only entries written by this author name (exact match). Until v1.13.2 this filter was `--author`; `--author` is now the caller identity here, as on every other command. |
-| `--operation TEXT` | choice | _none_ | Filter by operation type: `create`, `update-content`, `update-metadata`, `insert`, `replace-section`, `delete-section`, `rename-section`, `delete`, `restore`, `status-change`, `archive`, `unarchive`, `config-change`, `project-create`, `project-edit`, `project-delete`. |
+| `--operation TEXT` | choice | _none_ | Filter by operation type: `create`, `update-content`, `update-metadata`, `insert`, `replace-section`, `delete-section`, `rename-section`, `delete` (to the trash), `restore`, `status-change`, `archive`, `unarchive`, `relation-set`, `relation-delete`, `purge` (permanent, v1.23.0), `projects-change`, `backup-restore`, `version-prune`, `config-change`, `project-create`, `project-edit`, `project-delete`, `reindex`. |
 | `--since TEXT` | ISO-8601 | _none_ | Lower bound on `created_at`. |
 | `--until TEXT` | ISO-8601 | _none_ | Upper bound on `created_at`. |
 | `--limit INTEGER` | int | `50` | Max rows. |
@@ -629,6 +629,10 @@ Detects fresh vs. existing databases: a fresh DB gets schema + RPCs + migration 
 | `--batch INTEGER` | int | `100` | Chunks per batch. |
 | `--all` | flag | off | Reindex every chunk regardless of embedder. |
 | `--dry-run` | flag | off | Count what would be re-embedded; do nothing. |
+| `--document-id UUID` | UUID | _none_ | Reindex a single document. |
+| `--author TEXT` | str | `CEREFOX_AUTHOR_NAME` | Your name, recorded on the run's `reindex` audit entry (v1.23.0). |
+
+A run writes one `reindex` audit entry (model, chunks re-embedded and failed), not one per chunk.
 
 ---
 
@@ -781,7 +785,7 @@ These flat commands handle install, configuration, and health. Run any with `--h
 | `cerefox token generate` / `rotate` / `list` | Manage the Cerefox access token (`cfx_pat_…`) — the Edge Function Bearer credential (remote MCP, GPT Actions, curl). See the [`cerefox token`](#cerefox-token-generate--cerefox-token-rotate--cerefox-token-list) section above. |
 | `cerefox self-update` | Update the installed `@cerefox/memory` package. Other commands print a one-line notice when a newer release is out; see [configuration.md → Update check](configuration.md#update-check) to turn it off. |
 | `cerefox completion` | Emit a shell completion script. |
-| `cerefox backup create` / `cerefox backup restore` | File-system backup / restore of the knowledge base (see [`ops-scripts.md`](ops-scripts.md)). |
+| `cerefox backup create` / `cerefox backup restore` | File-system backup / restore of the knowledge base (see [`ops-scripts.md`](ops-scripts.md)). `backup create --keep <n>` prunes the oldest snapshots of the same label so at most `n` remain; running it on a schedule is in [`scheduled-backups.md`](scheduled-backups.md). Since v1.23.0 `backup restore --author <name>` names you on its `backup-restore` audit entries, and each document lands with its chunks and memberships in one transaction or not at all. |
 
 ---
 

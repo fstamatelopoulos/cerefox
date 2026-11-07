@@ -216,8 +216,14 @@ async function main(): Promise<void> {
     if (flag("cleanup")) {
       const ids = await sql`SELECT d.id FROM cerefox_documents d JOIN cerefox_document_projects dp ON dp.document_id = d.id
         JOIN cerefox_projects p ON p.id = dp.project_id WHERE p.name = ${BENCH_PROJECT}`;
-      for (const { id } of ids) await sql`DELETE FROM cerefox_documents WHERE id = ${id}`;
-      await sql`DELETE FROM cerefox_projects WHERE name = ${BENCH_PROJECT}`;
+      // Through the audited RPCs (0.22.0), so the cleanup is on the trail like
+      // any other purge: trash, then purge, then the project.
+      for (const { id } of ids) {
+        await sql`SELECT cerefox_delete_document(${id}::uuid, 'search-benchmark', 'user', NULL, 'benchmark cleanup')`;
+        await sql`SELECT cerefox_purge_document(${id}::uuid, 'search-benchmark', 'user')`;
+      }
+      const [proj] = await sql`SELECT id FROM cerefox_projects WHERE name = ${BENCH_PROJECT}`;
+      if (proj) await sql`SELECT cerefox_delete_project(${proj.id}::uuid, 'search-benchmark', 'user')`;
       console.error(`[bench] cleanup: removed ${ids.length} documents and the project`);
     }
     await sql.end();

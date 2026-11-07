@@ -18,11 +18,10 @@
  *   list_chunks_for_document → listChunksForDocument
  *   get_document_project_ids → getDocumentProjectIds
  *   ingest_document_rpc → ingestDocumentRpc
- *   update_document → updateDocumentRow
+ *   update_document → renameDocument (cerefox_rename_document; title only)
  *   update_chunk_embedding → updateChunkEmbedding
- *   update_chunk_fts → updateChunkFts
- *   assign_document_projects → assignDocumentProjects (destructive)
- *   add_document_to_projects → addDocumentToProjects (non-destructive)
+ *   assign_document_projects → assignDocumentProjects (destructive; cerefox_apply_document_projects)
+ *   add_document_to_projects → addDocumentToProjects (non-destructive; same RPC)
  *   get_or_create_project → getOrCreateProject
  *   create_audit_entry → createAuditEntry
  */
@@ -327,16 +326,24 @@ export class IngestionDbBridge {
     return data as IngestDocumentRpcResult;
   }
 
-  /** Direct UPDATE on the documents row. Used for metadata-only updates. */
-  async updateDocumentRow(
+  /**
+   * Rename through `cerefox_rename_document`: the title, the chunk-FTS refresh
+   * and the audit entry commit together; an unchanged title is a no-op with
+   * no entry. Returns whether the title changed.
+   */
+  async renameDocument(
     documentId: string,
-    fields: Record<string, unknown>,
-  ): Promise<void> {
-    const { error } = await this.supabase
-      .from("cerefox_documents")
-      .update({ ...fields, updated_at: new Date().toISOString() })
-      .eq("id", documentId);
+    newTitle: string,
+    who: { author: string; authorType: string },
+  ): Promise<boolean> {
+    const { data, error } = await this.supabase.rpc("cerefox_rename_document", {
+      p_document_id: documentId,
+      p_new_title: newTitle,
+      p_author: who.author,
+      p_author_type: who.authorType,
+    });
     if (error) throw new Error(error.message ?? JSON.stringify(error));
+    return (data as Array<{ renamed: boolean }> | null)?.[0]?.renamed ?? false;
   }
 
   async updateChunkEmbedding(
@@ -354,19 +361,6 @@ export class IngestionDbBridge {
     if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 
-  /**
-   * Refresh the FTS tsvector on all current chunks of a document
-   * (used after a title change for the contextual-enrichment path).
-   * Calls the `cerefox_update_chunk_fts` RPC.
-   */
-  async updateChunkFts(documentId: string, newTitle: string): Promise<void> {
-    const { error } = await this.supabase.rpc("cerefox_update_chunk_fts", {
-      p_document_id: documentId,
-      p_new_title: newTitle,
-    });
-    if (error) throw new Error(error.message ?? JSON.stringify(error));
-  }
-
   // ── Project M2M ───────────────────────────────────────────────────────────
 
   /**
@@ -377,20 +371,9 @@ export class IngestionDbBridge {
   async assignDocumentProjects(
     documentId: string,
     projectIds: string[],
+    who: { author: string; authorType: string },
   ): Promise<void> {
-    await this.supabase
-      .from("cerefox_document_projects")
-      .delete()
-      .eq("document_id", documentId);
-    if (projectIds.length === 0) return;
-    const rows = projectIds.map((pid) => ({
-      document_id: documentId,
-      project_id: pid,
-    }));
-    const { error } = await this.supabase
-      .from("cerefox_document_projects")
-      .insert(rows);
-    if (error) throw new Error(error.message ?? JSON.stringify(error));
+    await this.applyDocumentProjects(documentId, projectIds, "replace", who);
   }
 
   /**
@@ -401,18 +384,27 @@ export class IngestionDbBridge {
   async addDocumentToProjects(
     documentId: string,
     projectIds: string[],
+    who: { author: string; authorType: string },
   ): Promise<void> {
     if (projectIds.length === 0) return;
-    const existing = await this.getDocumentProjectIds(documentId);
-    const toAdd = projectIds.filter((pid) => !existing.includes(pid));
-    if (toAdd.length === 0) return;
-    const rows = toAdd.map((pid) => ({
-      document_id: documentId,
-      project_id: pid,
-    }));
-    const { error } = await this.supabase
-      .from("cerefox_document_projects")
-      .insert(rows);
+    await this.applyDocumentProjects(documentId, projectIds, "add", who);
+  }
+
+  /** `cerefox_apply_document_projects` (0.22.0): the membership change and its
+   *  `projects-change` audit entry commit together; no entry when unchanged. */
+  private async applyDocumentProjects(
+    documentId: string,
+    projectIds: string[],
+    mode: "replace" | "add",
+    who: { author: string; authorType: string },
+  ): Promise<void> {
+    const { error } = await this.supabase.rpc("cerefox_apply_document_projects", {
+      p_document_id: documentId,
+      p_project_ids: projectIds,
+      p_mode: mode,
+      p_author: who.author,
+      p_author_type: who.authorType,
+    });
     if (error) throw new Error(error.message ?? JSON.stringify(error));
   }
 

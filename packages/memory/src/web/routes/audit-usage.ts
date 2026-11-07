@@ -108,6 +108,8 @@ export function registerAuditUsageRoutes(app: Hono, ctx: WebContext): void {
         // #333: on update-metadata entries; null elsewhere and on older rows.
         metadata_before: (e.metadata_before as Record<string, unknown> | null) ?? null,
         metadata_after: (e.metadata_after as Record<string, unknown> | null) ?? null,
+        // 0.22.0: memberships, restore, retention, reindex; null elsewhere.
+        details: (e.details as Record<string, unknown> | null) ?? null,
       })),
     );
   });

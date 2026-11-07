@@ -21,6 +21,7 @@ const STORE_LEVEL_OP_DEFS = [
   { value: "project-create", label: "Project create", tone: "green" },
   { value: "project-edit", label: "Project edit", tone: "violet" },
   { value: "project-delete", label: "Project delete", tone: "red" },
+  { value: "reindex", label: "Reindex", tone: "neutral" },
 ] as const;
 
 const OPERATIONS = [
@@ -37,6 +38,10 @@ const OPERATIONS = [
   { value: "status-change", label: "Status change" },
   { value: "archive", label: "Archive" },
   { value: "unarchive", label: "Unarchive" },
+  { value: "purge", label: "Purge (permanent)" },
+  { value: "projects-change", label: "Projects change" },
+  { value: "backup-restore", label: "Backup restore" },
+  { value: "version-prune", label: "Version prune" },
   ...STORE_LEVEL_OP_DEFS.map((d) => ({ value: d.value, label: d.label })),
 ];
 
@@ -54,10 +59,14 @@ const OP_TONE: Record<string, string> = {
   unarchive: ui.bPrimary,
   restore: ui.bGreen,
   delete: ui.bRed,
+  purge: ui.bRed,
+  "projects-change": ui.bViolet,
+  "backup-restore": ui.bGreen,
+  "version-prune": ui.bNeutral,
   ...Object.fromEntries(
     STORE_LEVEL_OP_DEFS.map((d) => [
       d.value,
-      { yellow: ui.bYellow, green: ui.bGreen, violet: ui.bViolet, red: ui.bRed }[d.tone],
+      { yellow: ui.bYellow, green: ui.bGreen, violet: ui.bViolet, red: ui.bRed, neutral: ui.bNeutral }[d.tone],
     ]),
   ),
 };

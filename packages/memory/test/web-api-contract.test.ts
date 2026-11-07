@@ -383,12 +383,20 @@ describe("GET /schema-version", () => {
     const ahead = await at(newer);
     expect({ mismatch: ahead.mismatch, level: ahead.level }).toEqual({ mismatch: false, level: "ok" });
     // At the minimum but below the client's bundled version: redeploy needed.
-    // The minimum is below the bundled version whenever the schema has moved on
-    // since the last minimum raise, which is the steady state; assert that too,
-    // so this case can never pass without asserting anything.
-    expect(compareSemver(COMPATIBILITY.minSchema, bundled)).toBeLessThan(0);
-    const behind = await at(COMPATIBILITY.minSchema);
-    expect({ mismatch: behind.mismatch, level: behind.level }).toEqual({ mismatch: true, level: "above-min-but-old" });
+    // That case exists only while the schema has moved on since the last
+    // minimum raise. A release that raises the minimum to its own schema
+    // (v1.23.0, 0.22.0) has none, so it asserts the other boundary instead:
+    // just below the minimum is blocking. Either way the test asserts a case.
+    expect(compareSemver(COMPATIBILITY.minSchema, bundled)).toBeLessThanOrEqual(0);
+    if (compareSemver(COMPATIBILITY.minSchema, bundled) < 0) {
+      const behind = await at(COMPATIBILITY.minSchema);
+      expect({ mismatch: behind.mismatch, level: behind.level }).toEqual({ mismatch: true, level: "above-min-but-old" });
+    } else {
+      // `mismatch` is the "redeploy recommended" banner; below the minimum is
+      // the blocking level (`cerefox web` refuses to start), not a banner.
+      const below = await at("0.0.1");
+      expect(below.level).toBe("below-min");
+    }
   });
 });
 

@@ -995,6 +995,7 @@ DECLARE
                                          cerefox_config_int('version_retention_hours', 120));
     v_cleanup        BOOLEAN := COALESCE(p_cleanup_enabled,
                                          cerefox_config_bool('version_cleanup_enabled', TRUE));
+    v_pruned         RECORD;
 BEGIN
     -- Count current chunks to record in the version metadata
     SELECT COUNT(*), COALESCE(SUM(char_count), 0)
@@ -1037,17 +1038,40 @@ BEGIN
     -- but always keep the most recently created version (the one we just made).
     -- Skip archived versions (archived=true) -- they are protected from cleanup.
     -- Skip cleanup entirely if p_cleanup_enabled is false (immutable mode).
+    -- 0.22.0 (iteration 51): one 'version-prune' entry per deleted version,
+    -- authored 'version-retention' (the authority is the store's policy, not
+    -- whoever's write triggered the cleanup), in the same transaction.
     IF v_cleanup THEN
-        DELETE FROM cerefox_document_versions dv
-        WHERE dv.document_id = p_document_id
-          AND dv.archived IS NOT TRUE
-          AND dv.created_at < NOW() - (v_retention || ' hours')::INTERVAL
-          AND dv.id != (
-              SELECT id FROM cerefox_document_versions
-              WHERE document_id = p_document_id
-              ORDER BY created_at DESC
-              LIMIT 1
-          );
+        FOR v_pruned IN
+            DELETE FROM cerefox_document_versions dv
+            WHERE dv.document_id = p_document_id
+              AND dv.archived IS NOT TRUE
+              AND dv.created_at < NOW() - (v_retention || ' hours')::INTERVAL
+              AND dv.id != (
+                  SELECT id FROM cerefox_document_versions
+                  WHERE document_id = p_document_id
+                  ORDER BY created_at DESC
+                  LIMIT 1
+              )
+            RETURNING dv.id, dv.version_number, dv.total_chars, dv.created_at
+        LOOP
+            PERFORM cerefox_create_audit_entry(
+                p_document_id := p_document_id,
+                p_version_id  := v_pruned.id,
+                p_operation   := 'version-prune',
+                p_author      := 'version-retention',
+                p_author_type := 'user',
+                p_size_before := v_pruned.total_chars,
+                p_size_after  := 0,
+                p_description := 'Version ' || v_pruned.version_number ||
+                                 ' removed by retention (version_retention_hours = ' || v_retention ||
+                                 '; created ' || to_char(v_pruned.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') || ' UTC)',
+                p_details     := jsonb_build_object(
+                    'version_number', v_pruned.version_number,
+                    'version_created_at', v_pruned.created_at,
+                    'retention_hours', v_retention)
+            );
+        END LOOP;
     END IF;
 
     RETURN QUERY SELECT v_version_id, v_version_number, v_chunk_count, v_total_chars;
@@ -1203,7 +1227,7 @@ BEGIN
     LOOP
         PERFORM cerefox_create_audit_entry(
             p_document_id := r.id,
-            p_operation   := 'delete',
+            p_operation   := 'purge',
             p_author      := 'trash-retention',
             p_author_type := 'user',
             p_size_before := r.total_chars,
@@ -1457,7 +1481,7 @@ BEGIN
 
     PERFORM cerefox_create_audit_entry(
         p_document_id := p_document_id,
-        p_operation := 'delete',
+        p_operation := 'purge',
         p_author := p_author,
         p_author_type := p_author_type,
         p_size_before := v_total_chars,
@@ -2142,6 +2166,9 @@ $$;
 DROP FUNCTION IF EXISTS cerefox_create_audit_entry(UUID, UUID, TEXT, TEXT, TEXT, INT, INT, TEXT);
 -- #333 (0.21.0): + metadata before/after, for 'update-metadata' entries.
 DROP FUNCTION IF EXISTS cerefox_create_audit_entry(UUID, UUID, TEXT, TEXT, TEXT, INT, INT, TEXT, JSONB, JSONB);
+-- 0.22.0 (iteration 51): + details, structured before/after for operations
+-- that are not metadata.
+DROP FUNCTION IF EXISTS cerefox_create_audit_entry(UUID, UUID, TEXT, TEXT, TEXT, INT, INT, TEXT, JSONB, JSONB, JSONB);
 CREATE FUNCTION cerefox_create_audit_entry(
     p_document_id   UUID    DEFAULT NULL,
     p_version_id    UUID    DEFAULT NULL,
@@ -2152,7 +2179,8 @@ CREATE FUNCTION cerefox_create_audit_entry(
     p_size_after    INT     DEFAULT NULL,
     p_description   TEXT    DEFAULT '',
     p_metadata_before JSONB DEFAULT NULL,
-    p_metadata_after  JSONB DEFAULT NULL
+    p_metadata_after  JSONB DEFAULT NULL,
+    p_details         JSONB DEFAULT NULL
 )
 RETURNS TABLE (
     audit_id    UUID,
@@ -2165,12 +2193,13 @@ AS $$
     INSERT INTO cerefox_audit_log (
         document_id, version_id, operation, author, author_type,
         size_before, size_after, description, metadata_before, metadata_after,
-        created_at
+        details, created_at
     )
     VALUES (
         p_document_id, p_version_id, p_operation, p_author,
         CASE WHEN p_author_type IN ('user', 'agent') THEN p_author_type ELSE 'user' END,
         p_size_before, p_size_after, p_description, p_metadata_before, p_metadata_after,
+        p_details,
         -- clock_timestamp(), not the NOW() default: NOW() is the TRANSACTION's
         -- start time, so every audit entry written by one cerefox_edit batch
         -- would share a timestamp and the order of operations inside the batch
@@ -2180,6 +2209,432 @@ AS $$
         clock_timestamp()
     )
     RETURNING id AS audit_id, cerefox_audit_log.created_at;
+$$;
+
+-- ── cerefox_audit_changes (0.22.0, iteration 51) ─────────────────────────────
+-- Pages through the audit log for a reader that follows it (sync), without
+-- ever skipping an entry that commits late.
+--
+-- Every entry carries `txid`, the id of the transaction that wrote it.
+-- Transaction ids are handed out in increasing order, but transactions commit
+-- in any order, so an entry with a lower txid can become visible after one
+-- with a higher txid. The snapshot's xmin is the oldest transaction still
+-- running: everything below it has finished and can never add an entry. So a
+-- call returns the entries with  p_after <= txid < xmin  and hands back xmin
+-- as the next position. A long transaction delays its entries (and those
+-- after it); it never loses them.
+--
+-- p_after : the position from the previous call, as text (NULL or '' = from
+--           the start). Entries written before 0.22.0 have no txid and are
+--           never returned: a reader starts with a full listing anyway.
+-- p_limit : soft cap on entries. Whole transactions only, so one transaction
+--           larger than the cap is still returned complete; has_more says
+--           whether to call again at once.
+DROP FUNCTION IF EXISTS cerefox_audit_changes(TEXT, INT);
+CREATE FUNCTION cerefox_audit_changes(
+    p_after TEXT DEFAULT NULL,
+    p_limit INT  DEFAULT 500
+)
+RETURNS TABLE (
+    next_position TEXT,
+    has_more      BOOLEAN,
+    entries       JSONB
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_xmin   xid8 := pg_snapshot_xmin(pg_current_snapshot());
+    v_after  xid8;
+    v_limit  INT  := GREATEST(COALESCE(p_limit, 500), 1);
+    v_txids  xid8[];
+    v_total  INT;
+    v_next   xid8;
+BEGIN
+    IF p_after IS NULL OR BTRIM(p_after) = '' THEN
+        v_after := '0'::xid8;
+    ELSIF BTRIM(p_after) ~ '^[0-9]{1,20}$' AND BTRIM(p_after)::numeric <= 18446744073709551615 THEN
+        v_after := BTRIM(p_after)::xid8;
+    ELSE
+        RAISE EXCEPTION 'Invalid audit position: %', p_after USING ERRCODE = '22023';
+    END IF;
+    -- A position no transaction here has reached yet came from another
+    -- database (this one was re-created or restored). Say so, rather than
+    -- return nothing until this store catches up.
+    IF v_after > pg_snapshot_xmax(pg_current_snapshot()) THEN
+        RAISE EXCEPTION 'Invalid audit position: % is ahead of this store (was it re-created?)', p_after
+            USING ERRCODE = '22023';
+    END IF;
+
+    -- A position at or beyond xmin: nothing new is safe to return yet.
+    IF v_after >= v_xmin THEN
+        RETURN QUERY SELECT v_after::text, FALSE, '[]'::jsonb;
+        RETURN;
+    END IF;
+
+    -- Whole transactions in txid order, until the cap is reached (always at
+    -- least one).
+    SELECT array_agg(t.txid ORDER BY t.txid), max(t.total)
+    INTO v_txids, v_total
+    FROM (
+        SELECT g.txid,
+               sum(g.n) OVER (ORDER BY g.txid) AS running,
+               sum(g.n) OVER () AS total,
+               coalesce(sum(g.n) OVER (ORDER BY g.txid ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS before
+        FROM (
+            SELECT a.txid, count(*) AS n
+            FROM cerefox_audit_log a
+            WHERE a.txid >= v_after AND a.txid < v_xmin
+            GROUP BY a.txid
+        ) g
+    ) t
+    WHERE t.before < v_limit;
+
+    IF v_txids IS NULL THEN
+        RETURN QUERY SELECT v_xmin::text, FALSE, '[]'::jsonb;
+        RETURN;
+    END IF;
+
+    IF (SELECT count(*) FROM cerefox_audit_log a
+        WHERE a.txid >= v_after AND a.txid < v_xmin
+          AND a.txid <= v_txids[array_length(v_txids, 1)]) < v_total THEN
+        -- Stopped early: resume just after the last whole transaction returned.
+        v_next := ((v_txids[array_length(v_txids, 1)])::text::numeric + 1)::text::xid8;
+    ELSE
+        v_next := v_xmin;
+    END IF;
+
+    RETURN QUERY
+    SELECT v_next::text,
+           v_next < v_xmin,
+           COALESCE(jsonb_agg(jsonb_build_object(
+               'id', a.id,
+               'txid', a.txid::text,
+               'document_id', a.document_id,
+               'version_id', a.version_id,
+               'operation', a.operation,
+               'author', a.author,
+               'author_type', a.author_type,
+               'size_before', a.size_before,
+               'size_after', a.size_after,
+               'description', a.description,
+               'metadata_before', a.metadata_before,
+               'metadata_after', a.metadata_after,
+               'details', a.details,
+               'created_at', a.created_at
+           ) ORDER BY a.txid, a.created_at, a.id), '[]'::jsonb)
+    FROM cerefox_audit_log a
+    WHERE a.txid = ANY (v_txids);
+END;
+$$;
+
+-- ── cerefox_apply_document_projects (0.22.0, iteration 51) ───────────────────
+-- The one writer of a document's project memberships (project delete aside,
+-- which cascades and is audited as 'project-delete'). Every surface used to
+-- write cerefox_document_projects directly, and several paths left no audit
+-- entry. Now the change and its 'projects-change' entry commit together, and
+-- an unchanged set writes nothing (the trail never records non-events).
+--
+-- p_mode 'replace': the document's memberships become exactly p_project_ids.
+-- p_mode 'add'    : p_project_ids are added; existing memberships stay.
+-- Returns whether anything changed and the memberships afterwards.
+DROP FUNCTION IF EXISTS cerefox_apply_document_projects(UUID, UUID[], TEXT, TEXT, TEXT);
+CREATE FUNCTION cerefox_apply_document_projects(
+    p_document_id UUID,
+    p_project_ids UUID[],
+    p_mode        TEXT DEFAULT 'replace',
+    p_author      TEXT DEFAULT 'unknown',
+    p_author_type TEXT DEFAULT 'user'
+)
+RETURNS TABLE (
+    changed     BOOLEAN,
+    project_ids UUID[],
+    added_count INT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_wanted  UUID[];
+    v_before  UUID[];
+    v_after   UUID[];
+    v_added   UUID[];
+    v_removed UUID[];
+    v_missing UUID;
+    v_desc    TEXT;
+BEGIN
+    IF p_mode NOT IN ('replace', 'add') THEN
+        RAISE EXCEPTION 'Invalid mode: % (expected replace or add)', p_mode USING ERRCODE = '22023';
+    END IF;
+
+    -- Serialize membership changes per document, so before/after are exact.
+    PERFORM 1 FROM cerefox_documents WHERE id = p_document_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Document not found: %', p_document_id USING ERRCODE = 'P0002';
+    END IF;
+
+    v_wanted := ARRAY(SELECT DISTINCT x FROM unnest(COALESCE(p_project_ids, '{}'::uuid[])) x
+                      WHERE x IS NOT NULL ORDER BY x);
+    SELECT x INTO v_missing FROM unnest(v_wanted) x
+    WHERE NOT EXISTS (SELECT 1 FROM cerefox_projects p WHERE p.id = x) LIMIT 1;
+    IF v_missing IS NOT NULL THEN
+        RAISE EXCEPTION 'Project not found: %', v_missing USING ERRCODE = '22023';
+    END IF;
+
+    v_before := ARRAY(SELECT dp.project_id FROM cerefox_document_projects dp
+                      WHERE dp.document_id = p_document_id ORDER BY dp.project_id);
+    IF p_mode = 'replace' THEN
+        v_after := v_wanted;
+    ELSE
+        v_after := ARRAY(SELECT DISTINCT x FROM unnest(v_before || v_wanted) x ORDER BY x);
+    END IF;
+
+    IF v_after = v_before THEN
+        RETURN QUERY SELECT FALSE, v_before, 0;
+        RETURN;
+    END IF;
+
+    v_added   := ARRAY(SELECT x FROM unnest(v_after) x EXCEPT SELECT y FROM unnest(v_before) y);
+    v_removed := ARRAY(SELECT x FROM unnest(v_before) x EXCEPT SELECT y FROM unnest(v_after) y);
+
+    DELETE FROM cerefox_document_projects dp
+    WHERE dp.document_id = p_document_id AND dp.project_id = ANY (v_removed);
+    INSERT INTO cerefox_document_projects (document_id, project_id)
+    SELECT p_document_id, x FROM unnest(v_added) x
+    ON CONFLICT DO NOTHING;
+
+    v_desc := concat_ws('; ',
+        CASE WHEN cardinality(v_added) > 0 THEN 'Added to projects [' ||
+            (SELECT string_agg(p.name, ', ' ORDER BY p.name) FROM cerefox_projects p WHERE p.id = ANY (v_added)) || ']' END,
+        CASE WHEN cardinality(v_removed) > 0 THEN 'Removed from projects [' ||
+            (SELECT string_agg(p.name, ', ' ORDER BY p.name) FROM cerefox_projects p WHERE p.id = ANY (v_removed)) || ']' END);
+
+    PERFORM cerefox_create_audit_entry(
+        p_document_id := p_document_id,
+        p_operation   := 'projects-change',
+        p_author      := p_author,
+        p_author_type := p_author_type,
+        p_description := v_desc,
+        p_details     := jsonb_build_object(
+            'before',  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name), '[]'::jsonb)
+                        FROM cerefox_projects p WHERE p.id = ANY (v_before)),
+            'after',   (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name), '[]'::jsonb)
+                        FROM cerefox_projects p WHERE p.id = ANY (v_after)),
+            'added',   to_jsonb(v_added),
+            'removed', to_jsonb(v_removed))
+    );
+
+    RETURN QUERY SELECT TRUE, v_after, cardinality(v_added);
+END;
+$$;
+
+-- ── cerefox_insert_json_row (0.22.0, internal) ───────────────────────────────
+-- Inserts one row given as JSON, naming ONLY the columns present in it, so an
+-- absent column takes its default (the behavior of a Data API insert, which
+-- `backup restore` relied on: a snapshot from an older server lacks newer
+-- columns). Column names come from the catalog, never from the payload's text,
+-- so nothing in the payload reaches the SQL. Restricted to the tables a
+-- backup carries; called only by the restore RPCs below.
+DROP FUNCTION IF EXISTS cerefox_insert_json_row(REGCLASS, JSONB);
+CREATE FUNCTION cerefox_insert_json_row(
+    p_table REGCLASS,
+    p_row   JSONB
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_cols TEXT;
+BEGIN
+    IF p_table NOT IN ('cerefox_documents'::regclass, 'cerefox_chunks'::regclass,
+                       'cerefox_projects'::regclass, 'cerefox_document_relations'::regclass) THEN
+        RAISE EXCEPTION 'cerefox_insert_json_row: table % not allowed', p_table USING ERRCODE = '42501';
+    END IF;
+    SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY a.attnum)
+    INTO v_cols
+    FROM pg_attribute a
+    WHERE a.attrelid = p_table AND a.attnum > 0 AND NOT a.attisdropped
+      AND a.attgenerated = '' AND p_row ? a.attname;
+    IF v_cols IS NULL THEN
+        RAISE EXCEPTION 'cerefox_insert_json_row: no known columns in row for %', p_table USING ERRCODE = '22023';
+    END IF;
+    EXECUTE format('INSERT INTO %s (%s) SELECT %s FROM jsonb_populate_record(NULL::%s, $1)',
+                   p_table, v_cols, v_cols, p_table)
+    USING p_row;
+END;
+$$;
+
+-- ── cerefox_restore_backup_projects (0.22.0, iteration 51) ───────────────────
+-- Restores projects from a backup. The target stays authoritative:
+--   * a project whose id already exists is left as it is;
+--   * a project whose NAME already exists under another id is not created
+--     (names are unique); its backup id is mapped to the existing project, so
+--     the backup's memberships land there instead of being dropped.
+-- One 'backup-restore' entry per project actually created. Returns
+-- { "created": n, "id_map": { "<backup id>": "<existing id>", ... } }.
+DROP FUNCTION IF EXISTS cerefox_restore_backup_projects(JSONB, TEXT, TEXT);
+CREATE FUNCTION cerefox_restore_backup_projects(
+    p_projects JSONB,
+    p_author   TEXT DEFAULT 'unknown',
+    p_backup   TEXT DEFAULT ''
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_row      JSONB;
+    v_count    INT := 0;
+    v_existing UUID;
+    v_map      JSONB := '{}'::jsonb;
+BEGIN
+    FOR v_row IN SELECT * FROM jsonb_array_elements(COALESCE(p_projects, '[]'::jsonb))
+    LOOP
+        CONTINUE WHEN EXISTS (SELECT 1 FROM cerefox_projects WHERE id = (v_row->>'id')::uuid);
+        SELECT id INTO v_existing FROM cerefox_projects WHERE name = v_row->>'name';
+        IF v_existing IS NOT NULL THEN
+            v_map := v_map || jsonb_build_object(v_row->>'id', v_existing);
+            CONTINUE;
+        END IF;
+        PERFORM cerefox_insert_json_row('cerefox_projects', v_row);
+        PERFORM cerefox_create_audit_entry(
+            p_operation   := 'backup-restore',
+            p_author      := p_author,
+            p_author_type := 'user',
+            p_description := 'Project restored from backup ' || COALESCE(NULLIF(p_backup, ''), '(unnamed)') ||
+                             ': ' || COALESCE(v_row->>'name', '(unnamed)'),
+            p_details     := jsonb_build_object('backup', p_backup, 'project_id', v_row->>'id',
+                                                'project_name', v_row->>'name')
+        );
+        v_count := v_count + 1;
+    END LOOP;
+    RETURN jsonb_build_object('created', v_count, 'id_map', v_map);
+END;
+$$;
+
+-- ── cerefox_restore_backup_document (0.22.0, iteration 51) ───────────────────
+-- Restores one document from a backup: the document row, its current chunks
+-- and its memberships, plus a 'backup-restore' entry, in ONE transaction.
+-- `backup restore` used to insert the row and the chunks in two Data API
+-- calls with no entry, so a failed second call left a document without
+-- chunks and no trace of either. Writes nothing when a document with that id
+-- already exists. Project ids that do not exist on the target are not linked;
+-- they come back in `missing_projects` so the caller can report them.
+DROP FUNCTION IF EXISTS cerefox_restore_backup_document(JSONB, JSONB, UUID[], TEXT, TEXT);
+CREATE FUNCTION cerefox_restore_backup_document(
+    p_document    JSONB,
+    p_chunks      JSONB,
+    p_project_ids UUID[] DEFAULT '{}',
+    p_author      TEXT   DEFAULT 'unknown',
+    p_backup      TEXT   DEFAULT ''
+)
+-- { "restored": bool, "linked": n, "missing_projects": [ids not on the target] }
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_id       UUID := (p_document->>'id')::uuid;
+    v_chunk    JSONB;
+    v_chunks   INT := 0;
+    v_projects UUID[];
+BEGIN
+    IF v_id IS NULL THEN
+        RAISE EXCEPTION 'Backup document has no id' USING ERRCODE = '22023';
+    END IF;
+    IF EXISTS (SELECT 1 FROM cerefox_documents WHERE id = v_id) THEN
+        RETURN jsonb_build_object('restored', FALSE, 'linked', 0, 'missing_projects', '[]'::jsonb);
+    END IF;
+
+    PERFORM cerefox_insert_json_row('cerefox_documents', p_document - 'chunks');
+    FOR v_chunk IN SELECT * FROM jsonb_array_elements(COALESCE(p_chunks, '[]'::jsonb))
+    LOOP
+        PERFORM cerefox_insert_json_row('cerefox_chunks', v_chunk);
+        v_chunks := v_chunks + 1;
+    END LOOP;
+
+    v_projects := ARRAY(SELECT DISTINCT x FROM unnest(COALESCE(p_project_ids, '{}'::uuid[])) x
+                        WHERE EXISTS (SELECT 1 FROM cerefox_projects p WHERE p.id = x));
+    INSERT INTO cerefox_document_projects (document_id, project_id)
+    SELECT v_id, x FROM unnest(v_projects) x
+    ON CONFLICT DO NOTHING;
+
+    PERFORM cerefox_create_audit_entry(
+        p_document_id := v_id,
+        p_operation   := 'backup-restore',
+        p_author      := p_author,
+        p_author_type := 'user',
+        p_size_after  := (p_document->>'total_chars')::int,
+        p_description := 'Restored from backup ' || COALESCE(NULLIF(p_backup, ''), '(unnamed)') ||
+                         ': ' || COALESCE(p_document->>'title', '(untitled)') ||
+                         CASE WHEN p_document->>'deleted_at' IS NOT NULL THEN ' (into the trash, as it was)' ELSE '' END,
+        p_details     := jsonb_build_object(
+            'backup', p_backup,
+            'chunks', v_chunks,
+            'trashed', p_document->>'deleted_at' IS NOT NULL,
+            'projects', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name), '[]'::jsonb)
+                         FROM cerefox_projects p WHERE p.id = ANY (v_projects)))
+    );
+    RETURN jsonb_build_object(
+        'restored', TRUE,
+        'linked', cardinality(v_projects),
+        'missing_projects', to_jsonb(ARRAY(
+            SELECT DISTINCT x FROM unnest(COALESCE(p_project_ids, '{}'::uuid[])) x
+            WHERE x IS NOT NULL AND NOT (x = ANY (v_projects)))));
+END;
+$$;
+
+-- ── cerefox_restore_backup_relations (0.22.0, iteration 51) ──────────────────
+-- Restores relation edges from a backup, keeping each edge's original author,
+-- metadata and timestamp (cerefox_set_relation would re-author them and
+-- refuses trashed endpoints, which a restore brings back as trash). Edges that
+-- already exist, or whose endpoints are missing, are skipped. One
+-- 'backup-restore' entry per edge created, on the source document. Returns
+-- how many were created.
+DROP FUNCTION IF EXISTS cerefox_restore_backup_relations(JSONB, TEXT, TEXT);
+CREATE FUNCTION cerefox_restore_backup_relations(
+    p_relations JSONB,
+    p_author    TEXT DEFAULT 'unknown',
+    p_backup    TEXT DEFAULT ''
+)
+RETURNS INT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+    v_row   JSONB;
+    v_count INT := 0;
+BEGIN
+    FOR v_row IN SELECT * FROM jsonb_array_elements(COALESCE(p_relations, '[]'::jsonb))
+    LOOP
+        CONTINUE WHEN NOT EXISTS (SELECT 1 FROM cerefox_documents WHERE id = (v_row->>'source_id')::uuid)
+                   OR NOT EXISTS (SELECT 1 FROM cerefox_documents WHERE id = (v_row->>'target_id')::uuid)
+                   OR EXISTS (SELECT 1 FROM cerefox_document_relations r
+                              WHERE r.source_id = (v_row->>'source_id')::uuid
+                                AND r.target_id = (v_row->>'target_id')::uuid
+                                AND r.rel_type  = v_row->>'rel_type');
+        PERFORM cerefox_insert_json_row('cerefox_document_relations', v_row);
+        PERFORM cerefox_create_audit_entry(
+            p_document_id := (v_row->>'source_id')::uuid,
+            p_operation   := 'backup-restore',
+            p_author      := p_author,
+            p_author_type := 'user',
+            p_description := 'Relation restored from backup ' || COALESCE(NULLIF(p_backup, ''), '(unnamed)') ||
+                             ': ' || (v_row->>'rel_type') || ' -> ' || (v_row->>'target_id'),
+            p_details     := jsonb_build_object('backup', p_backup, 'relation', v_row)
+        );
+        v_count := v_count + 1;
+    END LOOP;
+    RETURN v_count;
+END;
 $$;
 
 -- ── cerefox_list_audit_entries ────────────────────────────────────────────────
@@ -2217,7 +2672,9 @@ RETURNS TABLE (
     created_at      TIMESTAMPTZ,
     -- #333 (0.21.0): set on 'update-metadata' entries, NULL otherwise.
     metadata_before JSONB,
-    metadata_after  JSONB
+    metadata_after  JSONB,
+    -- 0.22.0: structured before/after for non-metadata operations.
+    details         JSONB
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -2237,7 +2694,8 @@ AS $$
         a.description,
         a.created_at,
         a.metadata_before,
-        a.metadata_after
+        a.metadata_after,
+        a.details
     FROM cerefox_audit_log a
     LEFT JOIN cerefox_documents d ON d.id = a.document_id
     WHERE (p_document_id IS NULL OR a.document_id = p_document_id)
@@ -3427,6 +3885,11 @@ SET search_path = public, pg_catalog
 AS $$
     -- Keep in lockstep with the `@version:` marker in schema.sql (cut_release.ts
     -- enforces it). Bump whenever schema.sql OR rpcs.sql changes.
+    -- 0.22.0: migration 0037 (iteration 51): audit entries keep their ids
+    -- after a purge, gain details + txid; 'purge', 'projects-change',
+    -- 'backup-restore', 'version-prune', 'reindex'; new RPCs
+    -- cerefox_audit_changes, cerefox_apply_document_projects and the
+    -- backup-restore pair.
     -- 0.21.1: a create that loses the duplicate race raises
     -- CEREFOX_DUPLICATE_CONTENT (23505) instead of returning 'skipped'.
     -- 0.21.0: migration 0036 adds metadata_revision (+ trigger) and audit
@@ -3489,7 +3952,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.21.1'::TEXT;
+    SELECT '0.22.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────
