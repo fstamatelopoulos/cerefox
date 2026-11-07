@@ -25,6 +25,7 @@ import {
   userError,
   warn,
 } from "../../../../../_shared/cli-core/index.ts";
+import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { getClient } from "../util/client.ts";
 import { progName } from "../util/prog-name.ts";
 import { authorOption } from "../util/identity-flags.ts";
@@ -163,6 +164,7 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
   // Each project actually created gets a 'backup-restore' audit entry; one
   // whose id already exists keeps its current name and description.
   let projectsRestored = 0;
+  const projectIdMap = new Map<string, string>();
   if (!options.dryRun && hasMemberships && (payload.projects?.length ?? 0) > 0) {
     const { data, error: projErr } = await client.raw.rpc("cerefox_restore_backup_projects", {
       p_projects: payload.projects,
@@ -173,16 +175,29 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       errors++;
       errorDetails.push({ title: "(projects)", error: projErr.message });
     } else {
-      projectsRestored = (data as number | null) ?? 0;
+      const r = (data ?? {}) as { created?: number; id_map?: Record<string, string> };
+      projectsRestored = r.created ?? 0;
+      // A backup project whose name already exists here under another id is
+      // not created; its memberships go to the existing project instead.
+      for (const [from, to] of Object.entries(r.id_map ?? {})) projectIdMap.set(from, to);
+      if (projectIdMap.size > 0) {
+        warn(
+          `${projectIdMap.size} project(s) in the backup share a name with an existing project; ` +
+            "their memberships were added to the existing one.",
+        );
+      }
     }
   }
   const membershipsByDoc = new Map<string, string[]>();
   for (const m of payload.memberships ?? []) {
     const list = membershipsByDoc.get(m.document_id) ?? [];
     list.push(m.project_id);
+    // Resolved against projectIdMap at use time (it is filled just above
+    // when projects restore, and stays empty on a dry run).
     membershipsByDoc.set(m.document_id, list);
   }
   let membershipsRestored = 0;
+  let membershipsDropped = 0;
   const restoredIds = new Set<string>();
 
   // Ids this backup restores. Content is not unique (#332), so two documents
@@ -252,7 +267,7 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
     // where two separate inserts could land a document without its chunks.
     const docRow = { ...doc };
     delete (docRow as { chunks?: unknown }).chunks;
-    const projectIds = membershipsByDoc.get(doc.id) ?? [];
+    const projectIds = (membershipsByDoc.get(doc.id) ?? []).map((id) => projectIdMap.get(id) ?? id);
     const { data: landed, error: docErr } = await client.raw.rpc("cerefox_restore_backup_document", {
       p_document: docRow,
       p_chunks: doc.chunks,
@@ -265,11 +280,15 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
       errorDetails.push({ title: doc.title, error: `restore: ${docErr.message}` });
       continue;
     }
-    if (landed === false) {
+    const outcome = (landed ?? {}) as { restored?: boolean; linked?: number; missing_projects?: string[] };
+    if (outcome.restored === false) {
       skipped++;
       continue;
     }
-    membershipsRestored += projectIds.length;
+    membershipsRestored += outcome.linked ?? 0;
+    if ((outcome.missing_projects?.length ?? 0) > 0) {
+      membershipsDropped += outcome.missing_projects!.length;
+    }
     restoredIds.add(doc.id);
     restored++;
   }
@@ -289,8 +308,21 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
         .in("id", backupIds.slice(i, i + 200));
       for (const row of (data ?? []) as Array<{ id: string }>) presentDocIds.add(row.id);
     }
-    for (const [docId, projectIds] of membershipsByDoc) {
+    // Projects on this store now (after the project restore above): a
+    // membership to any other project cannot be added, and is reported.
+    const knownProjects = new Set<string>();
+    // Paged: an unbounded select caps at the Data API row limit (#131).
+    for (const row of await fetchAllPages<{ id: string }>((from, to) =>
+      client.raw.from("cerefox_projects").select("id").order("id").range(from, to),
+    )) {
+      knownProjects.add(row.id);
+    }
+    for (const [docId, backupProjectIds] of membershipsByDoc) {
       if (!presentDocIds.has(docId) || restoredIds.has(docId)) continue;
+      const mapped = backupProjectIds.map((id) => projectIdMap.get(id) ?? id);
+      const projectIds = mapped.filter((id) => knownProjects.has(id));
+      membershipsDropped += mapped.length - projectIds.length;
+      if (projectIds.length === 0) continue;
       const { data, error: linkErr } = await client.raw.rpc("cerefox_apply_document_projects", {
         p_document_id: docId,
         p_project_ids: projectIds,
@@ -299,11 +331,13 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
         p_author_type: "user",
       });
       if (linkErr) {
+        // One document's failure (say, a project missing from the backup)
+        // must not stop the memberships of every document after it.
         errors++;
-        errorDetails.push({ title: "(memberships)", error: linkErr.message });
-        break;
+        errorDetails.push({ title: `(memberships of ${docId})`, error: linkErr.message });
+        continue;
       }
-      if ((data as Array<{ changed: boolean }> | null)?.[0]?.changed) membershipsRestored += projectIds.length;
+      membershipsRestored += (data as Array<{ added_count: number }> | null)?.[0]?.added_count ?? 0;
     }
 
     // Relations (iteration 29). Only edges whose BOTH endpoints are present.
@@ -329,6 +363,13 @@ async function action(target: string, options: RestoreOptions): Promise<void> {
         warn(`${dropped} relation(s) skipped — one or both documents were not restored.`);
       }
     }
+  }
+
+  if (membershipsDropped > 0) {
+    warn(
+      `${membershipsDropped} membership(s) not restored: their project is neither in the backup ` +
+        "nor on this store.",
+    );
   }
 
   println("");

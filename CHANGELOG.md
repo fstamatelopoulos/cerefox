@@ -50,6 +50,10 @@ changed too. Cerefox Local applies it on `cerefox-local upgrade`.
 
 - `backup restore` writes each document, its chunks and its memberships
   together or not at all; a failure could leave a document without chunks.
+- `backup restore` no longer fails every project when one backup project has
+  the same name as an existing project: its documents join the existing
+  project. Memberships that cannot be restored are reported and counted
+  correctly, and one failing document no longer stops the rest.
 - Two live tests left fixtures behind on slow stores; their cleanup now has the
   same time budget as the tests.
 

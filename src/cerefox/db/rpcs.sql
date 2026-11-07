@@ -2255,10 +2255,17 @@ DECLARE
 BEGIN
     IF p_after IS NULL OR BTRIM(p_after) = '' THEN
         v_after := '0'::xid8;
-    ELSIF BTRIM(p_after) ~ '^[0-9]{1,20}$' THEN
+    ELSIF BTRIM(p_after) ~ '^[0-9]{1,20}$' AND BTRIM(p_after)::numeric <= 18446744073709551615 THEN
         v_after := BTRIM(p_after)::xid8;
     ELSE
         RAISE EXCEPTION 'Invalid audit position: %', p_after USING ERRCODE = '22023';
+    END IF;
+    -- A position no transaction here has reached yet came from another
+    -- database (this one was re-created or restored). Say so, rather than
+    -- return nothing until this store catches up.
+    IF v_after > pg_snapshot_xmax(pg_current_snapshot()) THEN
+        RAISE EXCEPTION 'Invalid audit position: % is ahead of this store (was it re-created?)', p_after
+            USING ERRCODE = '22023';
     END IF;
 
     -- A position at or beyond xmin: nothing new is safe to return yet.
@@ -2343,7 +2350,8 @@ CREATE FUNCTION cerefox_apply_document_projects(
 )
 RETURNS TABLE (
     changed     BOOLEAN,
-    project_ids UUID[]
+    project_ids UUID[],
+    added_count INT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -2385,7 +2393,7 @@ BEGIN
     END IF;
 
     IF v_after = v_before THEN
-        RETURN QUERY SELECT FALSE, v_before;
+        RETURN QUERY SELECT FALSE, v_before, 0;
         RETURN;
     END IF;
 
@@ -2419,7 +2427,7 @@ BEGIN
             'removed', to_jsonb(v_removed))
     );
 
-    RETURN QUERY SELECT TRUE, v_after;
+    RETURN QUERY SELECT TRUE, v_after, cardinality(v_added);
 END;
 $$;
 
@@ -2462,27 +2470,38 @@ END;
 $$;
 
 -- ── cerefox_restore_backup_projects (0.22.0, iteration 51) ───────────────────
--- Restores projects from a backup: a project whose id already exists is left
--- as it is (the target stays authoritative). One 'backup-restore' entry per
--- project actually created. Returns how many were created.
+-- Restores projects from a backup. The target stays authoritative:
+--   * a project whose id already exists is left as it is;
+--   * a project whose NAME already exists under another id is not created
+--     (names are unique); its backup id is mapped to the existing project, so
+--     the backup's memberships land there instead of being dropped.
+-- One 'backup-restore' entry per project actually created. Returns
+-- { "created": n, "id_map": { "<backup id>": "<existing id>", ... } }.
 DROP FUNCTION IF EXISTS cerefox_restore_backup_projects(JSONB, TEXT, TEXT);
 CREATE FUNCTION cerefox_restore_backup_projects(
     p_projects JSONB,
     p_author   TEXT DEFAULT 'unknown',
     p_backup   TEXT DEFAULT ''
 )
-RETURNS INT
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_catalog
 AS $$
 DECLARE
-    v_row   JSONB;
-    v_count INT := 0;
+    v_row      JSONB;
+    v_count    INT := 0;
+    v_existing UUID;
+    v_map      JSONB := '{}'::jsonb;
 BEGIN
     FOR v_row IN SELECT * FROM jsonb_array_elements(COALESCE(p_projects, '[]'::jsonb))
     LOOP
         CONTINUE WHEN EXISTS (SELECT 1 FROM cerefox_projects WHERE id = (v_row->>'id')::uuid);
+        SELECT id INTO v_existing FROM cerefox_projects WHERE name = v_row->>'name';
+        IF v_existing IS NOT NULL THEN
+            v_map := v_map || jsonb_build_object(v_row->>'id', v_existing);
+            CONTINUE;
+        END IF;
         PERFORM cerefox_insert_json_row('cerefox_projects', v_row);
         PERFORM cerefox_create_audit_entry(
             p_operation   := 'backup-restore',
@@ -2495,7 +2514,7 @@ BEGIN
         );
         v_count := v_count + 1;
     END LOOP;
-    RETURN v_count;
+    RETURN jsonb_build_object('created', v_count, 'id_map', v_map);
 END;
 $$;
 
@@ -2504,9 +2523,9 @@ $$;
 -- and its memberships, plus a 'backup-restore' entry, in ONE transaction.
 -- `backup restore` used to insert the row and the chunks in two Data API
 -- calls with no entry, so a failed second call left a document without
--- chunks and no trace of either. Returns FALSE (and writes nothing) when a
--- document with that id already exists. Project ids that do not exist on the
--- target are ignored.
+-- chunks and no trace of either. Writes nothing when a document with that id
+-- already exists. Project ids that do not exist on the target are not linked;
+-- they come back in `missing_projects` so the caller can report them.
 DROP FUNCTION IF EXISTS cerefox_restore_backup_document(JSONB, JSONB, UUID[], TEXT, TEXT);
 CREATE FUNCTION cerefox_restore_backup_document(
     p_document    JSONB,
@@ -2515,7 +2534,8 @@ CREATE FUNCTION cerefox_restore_backup_document(
     p_author      TEXT   DEFAULT 'unknown',
     p_backup      TEXT   DEFAULT ''
 )
-RETURNS BOOLEAN
+-- { "restored": bool, "linked": n, "missing_projects": [ids not on the target] }
+RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_catalog
@@ -2530,7 +2550,7 @@ BEGIN
         RAISE EXCEPTION 'Backup document has no id' USING ERRCODE = '22023';
     END IF;
     IF EXISTS (SELECT 1 FROM cerefox_documents WHERE id = v_id) THEN
-        RETURN FALSE;
+        RETURN jsonb_build_object('restored', FALSE, 'linked', 0, 'missing_projects', '[]'::jsonb);
     END IF;
 
     PERFORM cerefox_insert_json_row('cerefox_documents', p_document - 'chunks');
@@ -2562,7 +2582,12 @@ BEGIN
             'projects', (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name), '[]'::jsonb)
                          FROM cerefox_projects p WHERE p.id = ANY (v_projects)))
     );
-    RETURN TRUE;
+    RETURN jsonb_build_object(
+        'restored', TRUE,
+        'linked', cardinality(v_projects),
+        'missing_projects', to_jsonb(ARRAY(
+            SELECT DISTINCT x FROM unnest(COALESCE(p_project_ids, '{}'::uuid[])) x
+            WHERE x IS NOT NULL AND NOT (x = ANY (v_projects)))));
 END;
 $$;
 

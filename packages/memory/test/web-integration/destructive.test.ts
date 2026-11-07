@@ -18,7 +18,7 @@
 
 import { afterAll, beforeAll, describe, expect } from "bun:test";
 
-import { liveTest } from "../_live-test.ts";
+import { LIVE_TEST_BUDGET_MS, liveTest } from "../_live-test.ts";
 import { mayWriteToLiveTarget } from "../_live-target-guard.ts";
 
 import {
@@ -69,7 +69,9 @@ describe("destructive web endpoints (HTTP boundary)", () => {
     });
     const body = (await resp.json()) as { document_id?: string };
     docId = body.document_id ?? null;
-  });
+    // A web server start plus a real ingest (embedding included) does not fit
+    // bun's 5 s hook default against a remote store.
+  }, LIVE_TEST_BUDGET_MS);
 
   afterAll(async () => {
     // Best-effort cleanup: try purge directly; if the doc isn't
@@ -95,7 +97,7 @@ describe("destructive web endpoints (HTTP boundary)", () => {
       }
     }
     if (server) await server.stop();
-  });
+  }, LIVE_TEST_BUDGET_MS);
 
   liveTest("setup: live probe succeeded and a test doc exists", () => {
     if (!LIVE_OK) {

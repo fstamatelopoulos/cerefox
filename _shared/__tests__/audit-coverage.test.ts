@@ -43,6 +43,8 @@ const CONTENT_TABLES = [
 const SQL_ALLOWED: Record<string, string> = {
   cerefox_insert_json_row:
     "internal helper; called only by the backup-restore RPCs, which write the entry",
+  cerefox_update_chunk_fts:
+    "refreshes derived search data after a title change; called only by cerefox_rename_document, which writes the entry",
 };
 
 /** Client-side writes that stay direct, as "<repo path>:<table>". */
@@ -59,14 +61,17 @@ const TS_ALLOWED: Record<string, string> = {
     "version archive: the command writes an 'archive'/'unarchive' entry after the update",
 };
 
+/** Each function from its CREATE to its own closing `$$;`, comments stripped:
+ *  a body that ran on into the next section's header once let a function
+ *  pass on the strength of a comment that mentioned the audit RPC. */
 function sqlFunctions(sql: string): Array<{ name: string; body: string }> {
   const out: Array<{ name: string; body: string }> = [];
   const re = /^CREATE (?:OR REPLACE )?FUNCTION ([a-z_]+)\s*\(/gm;
-  const starts: Array<{ name: string; at: number }> = [];
-  for (let m = re.exec(sql); m; m = re.exec(sql)) starts.push({ name: m[1], at: m.index });
-  starts.forEach((s, i) => {
-    out.push({ name: s.name, body: sql.slice(s.at, starts[i + 1]?.at ?? sql.length) });
-  });
+  for (let m = re.exec(sql); m; m = re.exec(sql)) {
+    const end = sql.indexOf("\n$$;", m.index);
+    const body = sql.slice(m.index, end === -1 ? sql.length : end).replace(/--[^\n]*/g, "");
+    out.push({ name: m[1], body });
+  }
   return out;
 }
 
@@ -107,7 +112,8 @@ describe("audit coverage (iteration 51)", () => {
 
   test("no direct client-side write to a content table outside the allowlist", () => {
     const found = new Set<string>();
-    const fromRe = new RegExp(`\\.from\\("(${CONTENT_TABLES.join("|")})"\\)`, "g");
+    const fromRe = new RegExp(`\\.from\\(\\s*["'\`](${CONTENT_TABLES.join("|")})["'\`]\\s*\\)`, "g");
+    const rawRe = new RegExp(`(INSERT INTO|UPDATE|DELETE FROM)\\s+(${CONTENT_TABLES.join("|")})\\b`, "g");
     for (const root of ["_shared", "packages/memory/src", "supabase/functions", "scripts", "frontend/src"]) {
       for (const file of tsFiles(join(REPO_ROOT, root))) {
         const src = readFileSync(file, "utf8");
@@ -117,6 +123,11 @@ describe("audit coverage (iteration 51)", () => {
           if (/\.(insert|update|delete|upsert)\(/.test(chain)) {
             found.add(`${relative(REPO_ROOT, file)}:${m[1]}`);
           }
+        }
+        // Raw SQL in TypeScript (a postgres.js tagged query, say) bypasses
+        // the Data API entirely; the benchmark's cleanup once purged this way.
+        for (let m = rawRe.exec(src); m; m = rawRe.exec(src)) {
+          found.add(`${relative(REPO_ROOT, file)}:${m[2]}`);
         }
       }
     }
