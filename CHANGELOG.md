@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.23.1] -- 2026-11-11
+
 **Security release.** Node.js 24.22.3 fixes several HIGH vulnerabilities in
 `tls`, `http` and `http2`.
 
