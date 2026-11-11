@@ -73,6 +73,29 @@ export function checkBinary(): CheckResult {
  */
 export const MIN_NODE_MAJOR = 24;
 
+/**
+ * The oldest patch release of each supported Node line without a known HIGH
+ * security fix missing. Raise it when Node ships a security release that a
+ * Cerefox process can reach (the CLI and `cerefox web` are HTTP servers and
+ * TLS clients). Below it `doctor` warns: the CLI still works, but the runtime
+ * should be upgraded. Keep it in step with `MIN_NODE` in the root Dockerfile,
+ * which refuses to build the web image on anything older.
+ *   24.22.3 (2026-11-10): HIGH fixes in tls, http and http2.
+ */
+export const NODE_SECURITY_FLOOR: Record<number, string> = { 24: "24.22.3" };
+
+/** The security floor `node` is below, or null (unknown lines are not judged). */
+export function nodeBelowSecurityFloor(node: string): string | null {
+  const v = node.replace(/^v/, "").split(".").map((n) => Number.parseInt(n, 10));
+  const floor = NODE_SECURITY_FLOOR[v[0]];
+  if (!floor) return null;
+  const f = floor.split(".").map((n) => Number.parseInt(n, 10));
+  for (let i = 0; i < 3; i++) {
+    if ((v[i] ?? 0) !== f[i]) return (v[i] ?? 0) < f[i] ? floor : null;
+  }
+  return null;
+}
+
 export function checkRuntime(): CheckResult {
   // Bun and Node both populate process.versions.
   const bun = (process.versions as Record<string, string | undefined>).bun;
@@ -95,6 +118,15 @@ export function checkRuntime(): CheckResult {
         status: "error",
         detail: `Node ${node} (< ${MIN_NODE_MAJOR})`,
         hint: `Cerefox requires Node ${MIN_NODE_MAJOR}+; upgrade or install Bun.`,
+      };
+    }
+    const floor = nodeBelowSecurityFloor(node);
+    if (floor) {
+      return {
+        name: "runtime",
+        status: "warn",
+        detail: `Node ${node} is missing security fixes (${floor} or later has them)`,
+        hint: `Upgrade Node to ${floor} or later (nodejs.org), then restart \`${progName()} web\` and your MCP clients.`,
       };
     }
     return { name: "runtime", status: "ok", detail: `Node ${node}` };
