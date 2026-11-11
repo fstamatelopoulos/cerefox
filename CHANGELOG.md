@@ -9,7 +9,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+**Security release.** Node.js 24.22.3 fixes several HIGH vulnerabilities in
+`tls`, `http` and `http2`.
+
+- **The `cerefox-web` image** is rebuilt on Node 24.22.3 and refuses to build
+  on anything older. Pull the new tag.
+- **If you run the CLI on Node** (`npm install -g @cerefox/memory`), upgrade
+  Node to 24.22.3 or later yourself, then restart `cerefox web` and your MCP
+  clients. `cerefox doctor` now warns when your Node is below a known security
+  release.
+- **Cerefox Local is not affected**: it runs on Bun, with no Node inside. The
+  same goes for the CLI if you run it on Bun.
+
+### Changed
+
+- Dependency updates (#365, #366): the Supabase client, Postgres.js 4.1, Hono's
+  Node server, Mantine, TanStack Query, the Word export library, Vite and the
+  test and lint tools. Verified against the PostgREST version Cerefox Local
+  pins.
 
 ---
 

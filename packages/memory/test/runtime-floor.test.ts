@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { MIN_NODE_MAJOR } from "../src/cli/util/checks.ts";
+import { MIN_NODE_MAJOR, NODE_SECURITY_FLOOR, nodeBelowSecurityFloor } from "../src/cli/util/checks.ts";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -58,5 +58,27 @@ describe("the Node floor is one number, not two", () => {
     const sh = readFileSync(join(PKG_ROOT, "..", "..", "install.sh"), "utf8");
     expect(sh).toContain(`-lt ${MIN_NODE_MAJOR} `);
     expect(sh).toContain(`requires Node ≥ ${MIN_NODE_MAJOR}`);
+  });
+});
+
+describe("the Node security floor (v1.23.1)", () => {
+  test("below the floor on the same line is flagged; at or above, and other lines, are not", () => {
+    const floor = NODE_SECURITY_FLOOR[MIN_NODE_MAJOR]!;
+    expect(nodeBelowSecurityFloor("24.22.2")).toBe(floor);
+    expect(nodeBelowSecurityFloor("v24.22.1")).toBe(floor);
+    expect(nodeBelowSecurityFloor("24.9.0")).toBe(floor);
+    expect(nodeBelowSecurityFloor(floor)).toBeNull();
+    expect(nodeBelowSecurityFloor(`${floor}-rc.1`)).toBe(floor);
+    expect(nodeBelowSecurityFloor("24.22.10")).toBeNull();
+    expect(nodeBelowSecurityFloor("24.23.0")).toBeNull();
+    // No floor recorded for a line: not judged, never a false alarm.
+    expect(nodeBelowSecurityFloor("26.1.0")).toBeNull();
+  });
+
+  test("the web image refuses to build below the same floor doctor warns about", () => {
+    const dockerfile = readFileSync(join(PKG_ROOT, "..", "..", "Dockerfile"), "utf8");
+    const m = /^ARG MIN_NODE=(\S+)$/m.exec(dockerfile);
+    expect(m, "root Dockerfile must declare ARG MIN_NODE").toBeTruthy();
+    expect(m![1]).toBe(NODE_SECURITY_FLOOR[MIN_NODE_MAJOR]);
   });
 });

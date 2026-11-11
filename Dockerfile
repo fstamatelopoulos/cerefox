@@ -26,9 +26,12 @@ RUN cd packages/memory && bun run prepublishOnly
 # ── final: Node + the bundled app ──
 FROM node:24-slim
 
-# Refuse a Node below the October 2026 security release (24.22.1: the Brotli
-# decoder fix, CVE-2026-111497, which fetch() reaches on any `br` response).
-ARG MIN_NODE=24.22.1
+# Refuse a Node below the latest security release we depend on, so a stale
+# base image can never ship. 24.22.1 (October 2026): the Brotli decoder fix,
+# CVE-2026-111497, which fetch() reaches on any `br` response. 24.22.3
+# (November 2026): HIGH fixes in tls, http and http2. Kept equal to
+# NODE_SECURITY_FLOOR in packages/memory/src/cli/util/checks.ts (tested).
+ARG MIN_NODE=24.22.3
 RUN node -e "const a=process.versions.node.split('.').map(Number),b='${MIN_NODE}'.split('.').map(Number);for(let i=0;i<3;i++){if(a[i]!==b[i]){if(a[i]<b[i]){console.error('node '+process.versions.node+' < ${MIN_NODE}: pull a newer node:24-slim');process.exit(1)}break}}"
 
 # The Help page resolves docs at <install>/docs/guides and <install>/AGENT_*.md,

@@ -29,6 +29,14 @@
 
 ## Current Focus
 
+**2026-11-11: iteration 52, Node 24.22.3 security floor (v1.23.1), on
+`fix/node-24-22-3`.** The web image requires Node 24.22.3 (HIGH fixes in tls,
+http, http2) and `doctor` warns below it; Cerefox Local (Bun) is unaffected.
+Takes Dependabot #365 and #366. The cut waits for Docker Hub's `node:24-slim`
+to carry 24.22.3 (the Dockerfile guard fails the build until then). Plan:
+[`plans/iteration-52-node-security-floor.md`](plans/iteration-52-node-security-floor.md).
+Also filed: #367 (concurrent first use corrupts the local model download).
+
 **2026-11-07: 1.23.0 cut (#364), iteration 51, a complete audit log (schema
 0.22.0).** Rolled out to staging (client, schema, web daemon; Playwright 43
 against it) and the maintainer's Mac Local (0037 on boot). Pending, by the
