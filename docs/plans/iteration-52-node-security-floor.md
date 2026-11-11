@@ -1,7 +1,7 @@
 # Iteration 52: Node 24.22.3 security floor (v1.23.1)
 
-> Status: implemented (2026-11-11) on `fix/node-24-22-3`. The cut waits for the
-> official `node:24-slim` image to carry 24.22.3.
+> Status: shipped in v1.23.1 (2026-11-11, #368). Cut once the official
+> `node:24-slim` image carried 24.22.3; the published web image runs it.
 
 ## Why
 
