@@ -15,7 +15,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 - **The `cerefox-web` image** is rebuilt on Node 24.22.3 and refuses to build
   on anything older. Pull the new tag.
 - **If you run the CLI on Node** (`npm install -g @cerefox/memory`), upgrade
-  Node to 24.22.3 or later yourself, then restart `cerefox web` and your MCP
+  Node to 24.22.3 or later (or 26.13.1 or later on Node 26) yourself, then restart `cerefox web` and your MCP
   clients. `cerefox doctor` now warns when your Node is below a known security
   release.
 - **Cerefox Local is not affected**: it runs on Bun, with no Node inside. The

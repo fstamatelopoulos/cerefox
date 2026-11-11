@@ -80,9 +80,10 @@ export const MIN_NODE_MAJOR = 24;
  * TLS clients). Below it `doctor` warns: the CLI still works, but the runtime
  * should be upgraded. Keep it in step with `MIN_NODE` in the root Dockerfile,
  * which refuses to build the web image on anything older.
- *   24.22.3 (2026-11-10): HIGH fixes in tls, http and http2.
+ *   24.22.3 / 26.13.1 (2026-11-10): HIGH fixes in tls, http and http2.
+ * Node 26 is an LTS line (Lithium) above the supported floor, so it gets one too.
  */
-export const NODE_SECURITY_FLOOR: Record<number, string> = { 24: "24.22.3" };
+export const NODE_SECURITY_FLOOR: Record<number, string> = { 24: "24.22.3", 26: "26.13.1" };
 
 /** The security floor `node` is below, or null (unknown lines are not judged). */
 export function nodeBelowSecurityFloor(node: string): string | null {

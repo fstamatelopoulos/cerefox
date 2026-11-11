@@ -71,8 +71,10 @@ describe("the Node security floor (v1.23.1)", () => {
     expect(nodeBelowSecurityFloor(`${floor}-rc.1`)).toBe(floor);
     expect(nodeBelowSecurityFloor("24.22.10")).toBeNull();
     expect(nodeBelowSecurityFloor("24.23.0")).toBeNull();
+    expect(nodeBelowSecurityFloor("26.13.0")).toBe(NODE_SECURITY_FLOOR[26]);
+    expect(nodeBelowSecurityFloor("26.13.1")).toBeNull();
     // No floor recorded for a line: not judged, never a false alarm.
-    expect(nodeBelowSecurityFloor("26.1.0")).toBeNull();
+    expect(nodeBelowSecurityFloor("28.0.0")).toBeNull();
   });
 
   test("the web image refuses to build below the same floor doctor warns about", () => {
