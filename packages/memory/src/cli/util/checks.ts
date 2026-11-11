@@ -86,14 +86,17 @@ export const NODE_SECURITY_FLOOR: Record<number, string> = { 24: "24.22.3" };
 
 /** The security floor `node` is below, or null (unknown lines are not judged). */
 export function nodeBelowSecurityFloor(node: string): string | null {
-  const v = node.replace(/^v/, "").split(".").map((n) => Number.parseInt(n, 10));
+  const bare = node.replace(/^v/, "");
+  const v = bare.split(".").map((n) => Number.parseInt(n, 10));
   const floor = NODE_SECURITY_FLOOR[v[0]];
   if (!floor) return null;
   const f = floor.split(".").map((n) => Number.parseInt(n, 10));
   for (let i = 0; i < 3; i++) {
     if ((v[i] ?? 0) !== f[i]) return (v[i] ?? 0) < f[i] ? floor : null;
   }
-  return null;
+  // A pre-release or nightly of the floor version (24.22.3-rc.1) may predate
+  // the fixes, so it counts as below the floor.
+  return /-/.test(bare) ? floor : null;
 }
 
 export function checkRuntime(): CheckResult {
