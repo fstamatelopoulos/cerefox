@@ -29,6 +29,14 @@
 
 ## Current Focus
 
+**2026-11-11: iteration 53, Edge Function deploys under Supabase CLI 3 (#363),
+on `fix/supabase-cli-consent`, target v1.23.2.** Since CLI 3.0 every
+`server deploy` of the Edge Functions failed, a person's in a terminal too.
+`--yes`, or answering the deploy prompt at a terminal, is now passed on as the
+Supabase CLI's consent (Supabase's own guidance); the CLI is pinned. Production's Edge Functions stay on 1.22.0 so the
+maintainer can check the fix there. Plan:
+[`plans/iteration-53-supabase-cli-consent.md`](plans/iteration-53-supabase-cli-consent.md).
+
 **2026-11-11: 1.23.1 cut, iteration 52, Node 24.22.3 security floor (#368).**
 The web image requires Node 24.22.3 (HIGH fixes in tls, http, http2) and
 `doctor` warns below the floor (24.22.3 on Node 24, 26.13.1 on Node 26);

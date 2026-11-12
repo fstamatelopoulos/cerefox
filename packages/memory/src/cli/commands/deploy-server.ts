@@ -24,7 +24,8 @@
  *
  * Flags: --dry-run (plan only, no prompt), --schema-only, --functions-only,
  * --project-ref (override the ref derived from CEREFOX_SUPABASE_URL for EF
- * deploys), --yes (skip the confirmation, for scripted/agent-driven runs).
+ * deploys), --yes (skip the confirmation, for scripted/agent-driven runs;
+ * it is also the Supabase CLI's consent to change the hosted project, #363).
  * There is deliberately NO --reset (drop-everything) here — a full wipe is a
  * contributor/recovery operation; use `bun scripts/db_deploy.ts --reset`
  * (repo clone, typed-`yes` guard) if you truly need it.
@@ -52,6 +53,14 @@ import {
   runDbMigrate,
 } from "../../../../../_shared/db-deploy/index.ts";
 import { nestedNpxEnv } from "../util/npx-env.ts";
+import {
+  agentDetected,
+  consentRefusal,
+  personAtTerminal,
+  SUPABASE_CLI_VERSION,
+  SUPABASE_NPX,
+  supabaseNpxArgs,
+} from "../util/supabase-cli.ts";
 import { progName } from "../util/prog-name.ts";
 
 interface DeployServerOptions {
@@ -69,9 +78,9 @@ interface Preflight {
   remediation?: string;
 }
 
-function commandSucceeds(cmd: string, args: string[]): boolean {
+function commandSucceeds(cmd: string, args: string[], timeout = 15_000): boolean {
   try {
-    const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 15_000, env: nestedNpxEnv() });
+    const r = spawnSync(cmd, args, { encoding: "utf8", timeout, env: nestedNpxEnv() });
     return r.status === 0;
   } catch {
     return false;
@@ -181,8 +190,9 @@ async function action(options: DeployServerOptions): Promise<void> {
         "the package, or run from a repo clone (supabase/functions/).",
     });
     checks.push({
-      label: "Supabase CLI reachable (`npx supabase --version`)",
-      ok: commandSucceeds("npx", ["--yes", "supabase", "--version"]),
+      label: `Supabase CLI ${SUPABASE_CLI_VERSION} reachable (\`npx supabase@${SUPABASE_CLI_VERSION} --version\`)`,
+      // The first run after an upgrade downloads the pinned CLI (over 100 MB).
+      ok: commandSucceeds("npx", supabaseNpxArgs("--version"), 300_000),
       remediation:
         "Install Node 24+ (npx ships with it) from nodejs.org, then re-run. " +
         "`cerefox server deploy` shells out to the Supabase CLI via npx.",
@@ -199,7 +209,7 @@ async function action(options: DeployServerOptions): Promise<void> {
         "Could not derive the project ref from CEREFOX_SUPABASE_URL.\n" +
         "    Set CEREFOX_SUPABASE_URL to your project URL " +
         "(https://<project-ref>.supabase.co), or pass --project-ref <ref>.\n" +
-        "    Also make sure you're logged in once: npx supabase login",
+        `    Also make sure you're logged in once: ${SUPABASE_NPX} login`,
     });
   }
 
@@ -285,12 +295,27 @@ async function action(options: DeployServerOptions): Promise<void> {
     process.exit(0);
   }
 
+  // Supabase CLI 3 refuses to change a hosted project without consent (#363),
+  // and its documented consent is `--yes`. Cerefox passes it on when the run
+  // carries the same consent: `--yes` on this command (a CI job, or an agent
+  // that asked the person first, which is what the Supabase CLI tells agents
+  // to do), or a person answering this prompt at a terminal. A piped answer
+  // is not a person, as in the Supabase CLI itself.
+  let supabaseConsent = Boolean(options.yes);
   if (!options.yes) {
     const proceed = await confirm("\nProceed with deployment to Supabase?", true /* default No */);
     if (!proceed) {
       println(c.dim("Aborted."));
       process.exit(0);
     }
+    supabaseConsent = personAtTerminal();
+  }
+  // Without consent the Supabase CLI refuses every function, so stop before
+  // the schema changes rather than leave a new schema behind old functions.
+  // (SUPABASE_YES exported by a person is the CLI's own consent.)
+  if (doFunctions && !supabaseConsent && !process.env.SUPABASE_YES) {
+    printConsentHelp(agentDetected() ? "agent" : "non-interactive", null);
+    process.exit(1);
   }
 
   // ── Schema ────────────────────────────────────────────────────────────────
@@ -348,7 +373,7 @@ async function action(options: DeployServerOptions): Promise<void> {
       info(`   deploying ${ef}…`);
       // Run with cwd = the assets root's supabase parent so the CLI finds
       // supabase/functions/<ef>. functionsDir is <root>/supabase/functions.
-      // Pass --project-ref explicitly: the bundled-assets dir is not linked
+      // Name the project explicitly (--remote=): the bundled-assets dir is not linked
       // (link state lives in whatever dir the user ran `supabase link`), so a
       // bare deploy here couldn't resolve the target project.
       const workdir = assets.functionsDir.replace(/\/functions$/, "").replace(/\/supabase$/, "");
@@ -359,8 +384,8 @@ async function action(options: DeployServerOptions): Promise<void> {
       // every function fails with "entrypoint path does not exist" (issue #84). The API path
       // is Docker-independent (it's the same fallback the CLI uses when Docker is off) and is
       // the right path for an end-user deploying to their cloud Supabase — no local Docker
-      // bundler needed. Requires a reasonably current Supabase CLI (we resolve latest via npx).
-      const args = efDeployArgs(ef, workdir, projectRef);
+      // bundler needed. Runs the pinned Supabase CLI (util/supabase-cli.ts).
+      const args = efDeployArgs(ef, workdir, projectRef, supabaseConsent);
       // OAuth protected-resource / public routes gate auth in-function (design §6).
       if (NO_VERIFY_JWT_EFS.has(ef)) info(`     (${ef}: --no-verify-jwt — in-function auth)`);
       // stdout/stderr are captured rather than inherited so we can READ the
@@ -381,9 +406,16 @@ async function action(options: DeployServerOptions): Promise<void> {
       else {
         efFailed.push(ef);
         efOutput.push(`${r.stdout ?? ""}\n${r.stderr ?? ""}`);
+        // A consent refusal will repeat for every function: stop at the first.
+        if (consentRefusal(efOutput[efOutput.length - 1])) break;
       }
     }
     if (efFailed.length > 0) {
+      const refusal = consentRefusal(efOutput.join("\n"));
+      if (refusal) {
+        printConsentHelp(refusal, efOk);
+        process.exit(1);
+      }
       eprintln(c.red(`\n✗ ${efFailed.length} Edge Function(s) failed: ${efFailed.join(", ")}`));
       if (upstreamRegistryRace(efOutput.join("\n"))) {
         // Observed 2026-09-02: JSR published supabase-js 2.113.0 at 06:03:13Z
@@ -421,7 +453,7 @@ async function action(options: DeployServerOptions): Promise<void> {
           "\n   ℹ  cerefox-mcp authenticates in-function (OAuth for cloud/mobile Claude).\n" +
             "      Pin the owner — this is the authorization boundary (else any user who\n" +
             "      self-registers on your project could get an accepted token):\n" +
-            `        supabase secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --project-ref ${ref}\n` +
+            `        ${SUPABASE_NPX} secrets set CEREFOX_OAUTH_OWNER_ID=<owner user uuid> --remote=${ref}\n` +
             "      Setup: docs/guides/setup-supabase.md Step 7 (incl. the client_secret_post gotcha).",
         ),
       );
@@ -440,7 +472,7 @@ async function action(options: DeployServerOptions): Promise<void> {
             "      If CEREFOX_ACCESS_TOKENS is unset they reject ALL callers (fail closed) —\n" +
             `      GPT Actions, remote HTTP, and \`${progName()} doctor\`. Generate it now:\n` +
             `        ${progName()} token generate\n` +
-            `      (or manually: supabase secrets set CEREFOX_ACCESS_TOKENS=<token> --project-ref ${ref})\n` +
+            `      (or manually: ${SUPABASE_NPX} secrets set CEREFOX_ACCESS_TOKENS=<token> --remote=${ref})\n` +
             "      Migration + client cutover: docs/specs/ef-auth-migration-design.md §6.",
         ),
       );
@@ -485,11 +517,43 @@ async function action(options: DeployServerOptions): Promise<void> {
  * same error text also belongs to #84, a different cause, which is why this
  * one kept looking solved.
  */
-export function efDeployArgs(ef: string, workdir: string, projectRef: string | null | undefined): string[] {
-  const args = ["--yes", "supabase", "functions", "deploy", ef, "--use-api", "--workdir", workdir];
-  if (projectRef) args.push("--project-ref", projectRef);
+export function efDeployArgs(
+  ef: string,
+  workdir: string,
+  projectRef: string | null | undefined,
+  consent = false,
+): string[] {
+  const args = supabaseNpxArgs("functions", "deploy", ef, "--use-api", "--workdir", workdir);
+  // `--remote=<ref>` replaced `--project-ref` in Supabase CLI 3 (the old flag
+  // still works, with a deprecation warning, until v4).
+  // Always the `=` form: the value is optional, so `--remote <ref>` would
+  // make the ref a positional (a second function name).
+  if (projectRef) args.push(`--remote=${projectRef}`);
   if (NO_VERIFY_JWT_EFS.has(ef)) args.push("--no-verify-jwt");
+  // Only with consent (#363): --yes on Cerefox's command, or a person's answer
+  // at a terminal; see the call site.
+  if (consent) args.push("--yes");
   return args;
+}
+
+/** Why the Edge Functions were not deployed for want of consent, and what to run. */
+function printConsentHelp(kind: "agent" | "non-interactive", deployedBefore: number | null): void {
+  eprintln(c.red("\n✗ The Edge Functions were not deployed: the Supabase CLI needs a person's confirmation to change a hosted project."));
+  // null: stopped before anything ran. A number: the Supabase CLI refused
+  // during the function loop, after any schema step had already run.
+  if (deployedBefore === null) eprintln(c.dim("   Nothing was changed."));
+  else if (deployedBefore > 0) {
+    eprintln(c.dim(`   ${deployedBefore} function(s) deployed before it stopped; re-running deploys them again, which is harmless.`));
+  }
+  if (kind === "agent") {
+    eprintln(c.dim("   An AI agent is running the command. Agents get no prompt: ask the person first."));
+    eprintln(c.cyan(`   → With their go-ahead: ${progName()} server deploy --yes (add --functions-only for the functions alone)`));
+    eprintln(c.cyan(`   → Or they run it in their own terminal: ${progName()} server deploy`));
+  } else {
+    eprintln(c.dim("   This run could not ask: there is no terminal."));
+    eprintln(c.cyan(`   → In a terminal: ${progName()} server deploy, and answer the prompt.`));
+    eprintln(c.cyan("   → In a script or CI job you control: add --yes."));
+  }
 }
 
 export function upstreamRegistryRace(output: string): boolean {

@@ -196,6 +196,16 @@ or adds a migration is shipped just by re-running it. The low-level scripts
 (`bun scripts/db_deploy.ts` for a fresh deploy, `bun scripts/db_migrate.ts` for
 incremental migrations) remain for contributors working from a repo clone.
 
+The Edge Function half needs the maintainer's consent: the Supabase CLI (3.0
+and later) refuses to change a hosted project without `--yes`, and Cerefox
+passes it on only with `--yes` on its own command or an answer at a terminal
+(#363). An agent rolling out a release asks the maintainer before running
+`server deploy --functions-only --yes`.
+The Supabase CLI version is pinned in `packages/memory/src/cli/util/supabase-cli.ts`;
+bump it deliberately, after checking that the flags Cerefox passes
+(`functions deploy --use-api --workdir --remote= --no-verify-jwt`, `secrets set
+--remote=`) still mean the same thing.
+
 ## If something is wrong after publish
 
 Per the "force-move tags only on objective failure" rule (CONTRIBUTING.md):

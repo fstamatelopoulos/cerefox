@@ -605,7 +605,19 @@ The success message echoes the resolved author / author_type back so you can sur
 | `--functions-only` | flag | off | Deploy only the 9 Edge Functions (skip schema). |
 | `--dry-run` | flag | off | Preview what would happen; make no changes. |
 | `--project-ref <ref>` | string | derived from `CEREFOX_SUPABASE_URL` | Supabase project ref for the Edge Function deploys (needed only for custom domains, where the ref can't be derived). |
-| `--yes` | flag | off | Skip the deployment confirmation (for scripted/non-interactive runs). |
+| `--yes` | flag | off | Skip the deployment confirmation (for scripted/non-interactive runs). Also confirms the Edge Function deploy to the Supabase CLI: see below. |
+
+> **Confirming the Edge Function deploy (Supabase CLI 3).** The Supabase CLI
+> refuses to change a hosted project without consent. Answer the `Proceed with
+> deployment to Supabase?` prompt in your terminal, or pass `--yes` (a script
+> or CI job), and Cerefox passes that consent on to the Supabase CLI. A piped
+> answer (`echo y |`) does not count, and neither does an AI agent's keystroke
+> (Cerefox recognizes an agent the way the Supabase CLI does, from its
+> environment). An agent should ask you first and then run the command with
+> `--yes`, or leave the command to you. Without consent the command stops
+> before changing anything, the schema included.
+> Cerefox runs a pinned Supabase CLI version (`npx supabase@<version>`), so a
+> new Supabase release cannot change the deploy without a Cerefox release.
 
 > **macOS**: the Edge Function step shells out to the Supabase CLI, which reads its
 > login token from the Keychain — expect a password dialog per function (click
@@ -659,6 +671,9 @@ cerefox token list               # show masked fingerprints of the accepted set 
   `rotate --finalize` removes the old token afterward.
 - Paste the token into each client per [`connect-agents.md`](connect-agents.md): the Custom GPT's
   Actions → Authentication (Bearer), or the remote-MCP client header.
+- Setting the secret changes your hosted project, so the Supabase CLI (3.0 and later) asks you
+  to confirm it in your terminal. In a script, pass `--yes` to `generate` or `rotate`; an AI
+  agent should pass it only after you said yes.
 - Run `token generate` **before** a token-gated `cerefox server deploy` — deploying token-gated
   Edge Functions with no token set locks every caller out.
 
