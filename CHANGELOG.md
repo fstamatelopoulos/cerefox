@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.23.2] -- 2026-11-12
+
 ### Fixed
 
 - **`cerefox server deploy` deploys the Edge Functions again** (#363). Since
