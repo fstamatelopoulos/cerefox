@@ -9,7 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`cerefox server deploy` deploys the Edge Functions again** (#363). Since
+  Supabase CLI 3.0, every function failed with "Confirmation required … This
+  run can't ask", even when you ran the command in your own terminal. Answering
+  Cerefox's deployment prompt, or passing `--yes` (for scripts and CI), now
+  confirms the deploy to the Supabase CLI as well, which is what Supabase
+  recommends for unattended runs. A piped answer does not count. An AI agent
+  gets no prompt: it should ask you first and then pass `--yes`. When the
+  Supabase CLI still refuses, the command stops at the first function and says
+  what to run.
+- Cerefox pins the Supabase CLI version it runs (3.1.0), for `server deploy`
+  and `token generate`/`rotate`, so a new Supabase release cannot change them
+  unannounced. They pass `--remote=<ref>` instead of the deprecated
+  `--project-ref` (the `--project-ref` option of Cerefox's own commands is
+  unchanged).
 
 ---
 

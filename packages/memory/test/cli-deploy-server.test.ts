@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { efDeployArgs } from "../src/cli/commands/deploy-server.ts";
+import { SUPABASE_CLI_VERSION } from "../src/cli/util/supabase-cli.ts";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = join(PKG_ROOT, "..", "..");
@@ -95,12 +96,23 @@ describe("efDeployArgs — the npx supabase functions deploy call", () => {
     const i = args.indexOf("--workdir");
     expect(i).toBeGreaterThan(-1);
     expect(args[i + 1]).toBe("/x/dist/server-assets");
-    expect(args.slice(0, 6)).toEqual(["--yes", "supabase", "functions", "deploy", "cerefox-search", "--use-api"]);
-    expect(args).toContain("--project-ref");
+    expect(args.slice(0, 6)).toEqual([
+      "--yes", `supabase@${SUPABASE_CLI_VERSION}`, "functions", "deploy", "cerefox-search", "--use-api",
+    ]);
+    expect(args).toContain("--remote=abcdefghijklmnop");
+    expect(args).not.toContain("--project-ref");
   });
 
-  test("in-function-auth functions get --no-verify-jwt; no ref means no --project-ref", () => {
+  test("in-function-auth functions get --no-verify-jwt; no ref means no --remote", () => {
     expect(efDeployArgs("cerefox-mcp", "/w", null)).toContain("--no-verify-jwt");
-    expect(efDeployArgs("cerefox-mcp", "/w", null)).not.toContain("--project-ref");
+    expect(efDeployArgs("cerefox-mcp", "/w", null).some((a) => a.startsWith("--remote"))).toBe(false);
+  });
+
+  test("the Supabase CLI gets --yes only with a person's consent (#363)", () => {
+    // npx's own --yes (install without asking) is args[0]; the CLI's comes after the command.
+    const cliYes = (args: string[]) => args.slice(1).includes("--yes");
+    expect(cliYes(efDeployArgs("cerefox-search", "/w", "ref"))).toBe(false);
+    expect(cliYes(efDeployArgs("cerefox-search", "/w", "ref", false))).toBe(false);
+    expect(cliYes(efDeployArgs("cerefox-search", "/w", "ref", true))).toBe(true);
   });
 });

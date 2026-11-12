@@ -21,6 +21,7 @@ import { c, eprintln, println, userError } from "../../../../../_shared/cli-core
 import { loadSettings, resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import { envGitignoreWarning, readEnvVar, upsertEnvVar } from "../util/env-file.ts";
 import { nestedNpxEnv } from "../util/npx-env.ts";
+import { supabaseNpxArgs } from "../util/supabase-cli.ts";
 import { progName } from "../util/prog-name.ts";
 
 const SECRET_NAME = "CEREFOX_ACCESS_TOKENS"; // server-side accepted set (plural)
@@ -61,19 +62,20 @@ function parseProjectRef(supabaseUrl: string | undefined): string | null {
  * Passed as a spawn arg (never through a shell, never logged in full).
  */
 function setSecret(setValue: string, projectRef: string | null, dryRun?: boolean): void {
-  const args = ["--yes", "supabase", "secrets", "set", `${SECRET_NAME}=${setValue}`];
-  if (projectRef) args.push("--project-ref", projectRef);
+  const args = supabaseNpxArgs("secrets", "set", `${SECRET_NAME}=${setValue}`);
+  if (projectRef) args.push(`--remote=${projectRef}`);
   if (dryRun) {
     const shown = setValue.split(",").map(mask).join(",");
     println(c.dim(`   (dry-run) npx supabase secrets set ${SECRET_NAME}=${shown}` +
-      (projectRef ? ` --project-ref ${projectRef}` : "")));
+      (projectRef ? ` --remote=${projectRef}` : "")));
     return;
   }
   const r = spawnSync("npx", args, { encoding: "utf8", stdio: "inherit", env: nestedNpxEnv() });
   if (r.status !== 0) {
     throw userError(
       `Failed to set the ${SECRET_NAME} Function secret.`,
-      "Install the Supabase CLI and link the project (or pass --project-ref <ref>).",
+      "Check that you are logged in to the Supabase CLI and the project ref is right (--project-ref <ref>). " +
+        "If it asked for a confirmation it could not get, run this in your own terminal and answer it (#363).",
     );
   }
   println(c.green(`   ✓ Set ${SECRET_NAME} on Supabase.`));
