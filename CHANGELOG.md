@@ -16,10 +16,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   run can't ask", even when you ran the command in your own terminal. Answering
   Cerefox's deployment prompt, or passing `--yes` (for scripts and CI), now
   confirms the deploy to the Supabase CLI as well, which is what Supabase
-  recommends for unattended runs. A piped answer does not count. An AI agent
-  gets no prompt: it should ask you first and then pass `--yes`. When the
-  Supabase CLI still refuses, the command stops at the first function and says
-  what to run.
+  recommends for unattended runs. A piped answer, or an AI agent typing at the
+  prompt, does not count: an agent should ask you first and then pass `--yes`.
+  Without consent the command now stops before changing anything, the schema
+  included, and says what to run.
+- `cerefox token generate` and `token rotate` take `--yes` for the same
+  reason: setting the access-token secret is a hosted change the Supabase CLI
+  confirms. Without it, the Supabase CLI asks you in your terminal.
 - Cerefox pins the Supabase CLI version it runs (3.1.0), for `server deploy`
   and `token generate`/`rotate`, so a new Supabase release cannot change them
   unannounced. They pass `--remote=<ref>` instead of the deprecated

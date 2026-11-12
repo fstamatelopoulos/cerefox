@@ -24,16 +24,24 @@ so this arrived with no Cerefox release.
   A stricter variant (Cerefox's `--yes` not passed on, scripts export
   `SUPABASE_YES`) was considered and rejected by the maintainer: it blocked an
   agent even with the person's go-ahead and added a step to every CI job. On a
-  refusal the deploy stops at the first function and says who must run what. `--remote=<ref>`
+  refusal the deploy stops at the first function and says who must run what.
+- Review fixes: an agent driving a real terminal is recognized from the same
+  environment variables the Supabase CLI reads (`AGENT_ENV_VARS`), so its
+  keystroke is not consent; a run without consent stops before the schema
+  step (it used to migrate, then fail every function); `token generate`/`rotate`
+  take `--yes`; the preflight allows the first download of the pinned CLI;
+  hints name the pinned CLI and `--remote=`. `--remote=<ref>`
   replaces the deprecated `--project-ref` in the CLI call.
 - `token generate`/`rotate`: pinned CLI and `--remote=`; their output is a
-  terminal already, so the CLI asks the person itself.
+  terminal already, so the CLI asks the person itself, and `--yes` confirms
+  for scripts.
 - Docs: `cli.md` (server deploy), `RELEASING.md`, CHANGELOG.
 
 ## Verified
 
 - Unit: `supabase-cli.test.ts` (the CLI's verbatim refusals, the terminal
-  rule, a source scan that no command runs an unpinned `npx supabase`),
+  rule and the agent variables, a source scan for `spawnSync` calls that run
+  the Supabase CLI without the pinned arguments),
   `cli-deploy-server.test.ts`.
 - Staging, from an agent: a piped `y` ends with the CLI's agent refusal at the
   first function, nothing deployed, and the advice to ask the person.

@@ -21,7 +21,7 @@ import { c, eprintln, println, userError } from "../../../../../_shared/cli-core
 import { loadSettings, resolveEnvFile } from "../../../../../_shared/config/index.ts";
 import { envGitignoreWarning, readEnvVar, upsertEnvVar } from "../util/env-file.ts";
 import { nestedNpxEnv } from "../util/npx-env.ts";
-import { supabaseNpxArgs } from "../util/supabase-cli.ts";
+import { SUPABASE_NPX, supabaseNpxArgs } from "../util/supabase-cli.ts";
 import { progName } from "../util/prog-name.ts";
 
 const SECRET_NAME = "CEREFOX_ACCESS_TOKENS"; // server-side accepted set (plural)
@@ -34,6 +34,7 @@ interface TokenOptions {
   backup: boolean; // --no-backup => false
   dryRun?: boolean;
   finalize?: boolean; // rotate only
+  yes?: boolean; // the Supabase CLI's consent to change the hosted project (#363)
 }
 
 /** 256-bit random token, base64url, prefixed for recognizability (gitleaks/humans). */
@@ -61,12 +62,16 @@ function parseProjectRef(supabaseUrl: string | undefined): string | null {
  * Set the server-side accepted set. `setValue` is the full comma-joined value.
  * Passed as a spawn arg (never through a shell, never logged in full).
  */
-function setSecret(setValue: string, projectRef: string | null, dryRun?: boolean): void {
+function setSecret(setValue: string, projectRef: string | null, dryRun?: boolean, yes?: boolean): void {
   const args = supabaseNpxArgs("secrets", "set", `${SECRET_NAME}=${setValue}`);
+  // `=` form: `--remote <ref>` would make the ref a second NAME=VALUE pair.
   if (projectRef) args.push(`--remote=${projectRef}`);
+  // Without --yes the Supabase CLI asks the person itself (stdio is inherited),
+  // and refuses an agent or a run with no terminal.
+  if (yes) args.push("--yes");
   if (dryRun) {
     const shown = setValue.split(",").map(mask).join(",");
-    println(c.dim(`   (dry-run) npx supabase secrets set ${SECRET_NAME}=${shown}` +
+    println(c.dim(`   (dry-run) ${SUPABASE_NPX} secrets set ${SECRET_NAME}=${shown}` +
       (projectRef ? ` --remote=${projectRef}` : "")));
     return;
   }
@@ -75,7 +80,8 @@ function setSecret(setValue: string, projectRef: string | null, dryRun?: boolean
     throw userError(
       `Failed to set the ${SECRET_NAME} Function secret.`,
       "Check that you are logged in to the Supabase CLI and the project ref is right (--project-ref <ref>). " +
-        "If it asked for a confirmation it could not get, run this in your own terminal and answer it (#363).",
+        "If it asked for a confirmation it could not get, run this in your own terminal and answer it, " +
+        "or pass --yes (a script, or an agent with the person's go-ahead).",
     );
   }
   println(c.green(`   ✓ Set ${SECRET_NAME} on Supabase.`));
@@ -115,7 +121,7 @@ function generateAction(opts: TokenOptions): void {
   const projectRef = opts.projectRef ?? parseProjectRef(loadSettings().supabaseUrl);
   const token = mintToken();
   println(c.bold("Generating a Cerefox access token…"));
-  setSecret(token, projectRef, opts.dryRun); // fresh single-token set
+  setSecret(token, projectRef, opts.dryRun, opts.yes); // fresh single-token set
   writeLocalEnv(token, opts);
   if (!opts.dryRun) printTokenOnce(token);
 }
@@ -135,7 +141,7 @@ function rotateAction(opts: TokenOptions): void {
       );
     }
     println(c.bold("Finalizing rotation (dropping the previous token)…"));
-    setSecret(current, projectRef, opts.dryRun);
+    setSecret(current, projectRef, opts.dryRun, opts.yes);
     if (!opts.dryRun) println(c.green("   ✓ Only the current token is accepted now."));
     return;
   }
@@ -145,7 +151,7 @@ function rotateAction(opts: TokenOptions): void {
   const token = mintToken();
   const setValue = current ? `${token},${current}` : token;
   println(c.bold("Rotating the Cerefox access token…"));
-  setSecret(setValue, projectRef, opts.dryRun);
+  setSecret(setValue, projectRef, opts.dryRun, opts.yes);
   writeLocalEnv(token, opts);
   if (!opts.dryRun) {
     printTokenOnce(token);
@@ -172,7 +178,7 @@ function listAction(): void {
   println(
     c.dim(
       `   The server-side accepted set (${SECRET_NAME}) is write-only; list names/digests\n` +
-        "   with: npx supabase secrets list",
+        `   with: ${SUPABASE_NPX} secrets list`,
     ),
   );
 }
@@ -189,6 +195,7 @@ export function registerToken(program: Command): void {
     .option("--no-env", "Do not write CEREFOX_ACCESS_TOKEN to .env.")
     .option("--no-backup", "Skip the .pre-cerefox.bak backup of an existing .env.")
     .option("--dry-run", "Print the plan without minting or writing anything.")
+    .option("--yes", "Confirm the secret change to the Supabase CLI (scripts; an agent only with the person's go-ahead).")
     .action(generateAction);
 
   token
@@ -199,6 +206,7 @@ export function registerToken(program: Command): void {
     .option("--no-env", "Do not write CEREFOX_ACCESS_TOKEN to .env.")
     .option("--no-backup", "Skip the .pre-cerefox.bak backup of an existing .env.")
     .option("--dry-run", "Print the plan without minting or writing anything.")
+    .option("--yes", "Confirm the secret change to the Supabase CLI (scripts; an agent only with the person's go-ahead).")
     .action(rotateAction);
 
   token

@@ -20,6 +20,30 @@ export function supabaseNpxArgs(...command: string[]): string[] {
   return ["--yes", `supabase@${SUPABASE_CLI_VERSION}`, ...command];
 }
 
+/** The same command as a person would type it, for hints. */
+export const SUPABASE_NPX = `npx supabase@${SUPABASE_CLI_VERSION}`;
+
+/**
+ * The environment variables the Supabase CLI (3.1.0) reads to decide that an
+ * AI agent is running it. An agent that drives a real terminal (Cursor's agent
+ * terminal, a Codex run, tmux) passes the terminal test, so this list is what
+ * keeps its keystroke at Cerefox's prompt from becoming the CLI's `--yes`.
+ */
+export const AGENT_ENV_VARS = [
+  "CLAUDECODE",
+  "CLAUDE_CODE",
+  "CURSOR_AGENT",
+  "CODEX_CI",
+  "CODEX_SANDBOX",
+  "CODEX_THREAD_ID",
+  "GEMINI_CLI",
+  "AI_AGENT",
+] as const;
+
+export function agentDetected(env: NodeJS.ProcessEnv = process.env): boolean {
+  return AGENT_ENV_VARS.some((name) => Boolean(env[name]));
+}
+
 /**
  * Is a person at a terminal? Only then can an answer to Cerefox's own prompt
  * stand for theirs. Piped input (an agent's shell, `echo y |`) is not a person
@@ -29,8 +53,9 @@ export function supabaseNpxArgs(...command: string[]): string[] {
 export function personAtTerminal(
   stdin: { isTTY?: boolean } = process.stdin,
   stdout: { isTTY?: boolean } = process.stdout,
+  env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return Boolean(stdin.isTTY && stdout.isTTY);
+  return Boolean(stdin.isTTY && stdout.isTTY) && !agentDetected(env);
 }
 
 /**
@@ -40,5 +65,5 @@ export function personAtTerminal(
  */
 export function consentRefusal(output: string): "agent" | "non-interactive" | null {
   if (!/Confirmation required|HostedMutationConsentRequiredError/.test(output)) return null;
-  return /agent mode/i.test(output) ? "agent" : "non-interactive";
+  return /can't ask because it is running in agent mode/.test(output) ? "agent" : "non-interactive";
 }

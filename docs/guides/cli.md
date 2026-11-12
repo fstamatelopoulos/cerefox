@@ -611,8 +611,11 @@ The success message echoes the resolved author / author_type back so you can sur
 > refuses to change a hosted project without consent. Answer the `Proceed with
 > deployment to Supabase?` prompt in your terminal, or pass `--yes` (a script
 > or CI job), and Cerefox passes that consent on to the Supabase CLI. A piped
-> answer (`echo y |`) does not count. An AI agent gets no prompt: it should ask
-> you first and then run the command with `--yes`, or leave the command to you.
+> answer (`echo y |`) does not count, and neither does an AI agent's keystroke
+> (Cerefox recognizes an agent the way the Supabase CLI does, from its
+> environment). An agent should ask you first and then run the command with
+> `--yes`, or leave the command to you. Without consent the command stops
+> before changing anything, the schema included.
 > Cerefox runs a pinned Supabase CLI version (`npx supabase@<version>`), so a
 > new Supabase release cannot change the deploy without a Cerefox release.
 
@@ -668,6 +671,9 @@ cerefox token list               # show masked fingerprints of the accepted set 
   `rotate --finalize` removes the old token afterward.
 - Paste the token into each client per [`connect-agents.md`](connect-agents.md): the Custom GPT's
   Actions → Authentication (Bearer), or the remote-MCP client header.
+- Setting the secret changes your hosted project, so the Supabase CLI (3.0 and later) asks you
+  to confirm it in your terminal. In a script, pass `--yes` to `generate` or `rotate`; an AI
+  agent should pass it only after you said yes.
 - Run `token generate` **before** a token-gated `cerefox server deploy` — deploying token-gated
   Edge Functions with no token set locks every caller out.
 
