@@ -1,7 +1,7 @@
 # Iteration 53: Edge Function deploys under Supabase CLI 3 (#363)
 
-> Status: implemented (2026-11-11) on `fix/supabase-cli-consent`. Target:
-> v1.23.2 (no schema change).
+> Status: shipped in v1.23.2 (2026-11-12, PR #369; no schema change).
+> Rolled out to staging, a Cerefox Local and production.
 
 ## Why
 

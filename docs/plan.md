@@ -29,12 +29,15 @@
 
 ## Current Focus
 
-**2026-11-11: iteration 53, Edge Function deploys under Supabase CLI 3 (#363),
-on `fix/supabase-cli-consent`, target v1.23.2.** Since CLI 3.0 every
-`server deploy` of the Edge Functions failed, a person's in a terminal too.
-`--yes`, or answering the deploy prompt at a terminal, is now passed on as the
-Supabase CLI's consent (Supabase's own guidance); the CLI is pinned. Production's Edge Functions stay on 1.22.0 so the
-maintainer can check the fix there. Plan:
+**2026-11-12: 1.23.2 shipped, iteration 53, Edge Function deploys under
+Supabase CLI 3 (#363).** Since CLI 3.0 every `server deploy` of the Edge
+Functions failed, a person's in a terminal too. `--yes`, or answering the deploy
+prompt at a terminal, is now passed on as the Supabase CLI's consent (Supabase's
+own guidance); the CLI is pinned at 3.1.0. Rolled out to staging (Playwright 43,
+the maintainer's terminal deploy and the piped-input refusal both checked), a
+Cerefox Local and production (client 1.23.2, schema 0.22.0, Edge Functions
+1.23.2 deployed by the maintainer; doctor all green). Announced on Discord with
+1.23.0 and 1.23.1. Plan:
 [`plans/iteration-53-supabase-cli-consent.md`](plans/iteration-53-supabase-cli-consent.md).
 
 **2026-11-11: 1.23.1 cut, iteration 52, Node 24.22.3 security floor (#368).**
