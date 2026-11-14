@@ -97,9 +97,11 @@ paraphrase query "pushbike protection": its answer scored 0.6013 before and
 query is the whole paraphrase drop and the floor breach.
 
 Also checked on a copy of a real Local store, restored with its exact vectors
-into a throwaway container, with known-item queries built from its documents:
-the upgraded and reindexed states matched or beat the old runtime. (No numbers
-here: the store is private.)
+into a throwaway container, with known-item queries built from its documents
+(a title query and a body passage per document). The upgraded state matched or
+slightly beat the old runtime; a full reindex came out slightly below it and
+reordered more results, the same pattern as the benchmark. (No numbers here:
+the store is private.)
 
 ### Decision: no reindex needed
 
