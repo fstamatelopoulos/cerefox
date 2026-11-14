@@ -208,24 +208,16 @@ jobs:
           --ignore=GHSA-hp3w-g68c-fv3c
       - name: bun audit — Cerefox Local image embedder runtime
         # docker/local/runtime is what the Local image installs (pinned, #300).
-        # It was outside every audit until it had a lockfile. Accepted here, for
-        # the image only: the two sharp advisories (transformers 3.8.1 needs
-        # sharp ^0.34; sharp serves the image-processing path, which a text
-        # embedding model never loads). Retired by moving the image to
-        # transformers 4.x (#300, second half). See security-audit-1.0.md.
-        # Added 2026-10-06: a third sharp advisory (GHSA-wq5f-xc86-pv6w,
-        # librsvg, same path and reasoning) and sprintf-js
-        # (GHSA-hp3w-g68c-fv3c), reached only via onnxruntime-node's
-        # postinstall downloader (script/install.js → global-agent → roarr),
-        # which never runs inside the embedder.
+        # It was outside every audit until it had a lockfile. It has no
+        # accepted advisories: the three sharp advisories and sprintf-js that
+        # were accepted here for the image retired when the image moved to
+        # transformers 4.3.2 (#300, 2026-11-14), the versions the main lockfile
+        # resolves. Accept one here only with the same reasoning recorded in
+        # security-audit-1.0.md, in the same PR.
         working-directory: docker/local/runtime
         run: >
           bun install --frozen-lockfile --ignore-scripts &&
           bun audit
-          --ignore=GHSA-f88m-g3jw-g9cj
-          --ignore=GHSA-rgj7-g3m4-5g8c
-          --ignore=GHSA-wq5f-xc86-pv6w
-          --ignore=GHSA-hp3w-g68c-fv3c
 
   gitleaks:
     name: Secret scan (gitleaks)

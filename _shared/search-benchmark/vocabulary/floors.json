@@ -30,11 +30,11 @@
       "long_query": 0.89,
       "misspelling": 0.95,
       "multi_word_topic": 0.88,
-      "paraphrase": 0.29,
+      "paraphrase": 0.23,
       "question": 0.88,
       "short_name": 0.88,
       "word_order": 0.95
     },
-    "maxConfidentFalsePositives": 3
+    "maxConfidentFalsePositives": 4
   }
 }

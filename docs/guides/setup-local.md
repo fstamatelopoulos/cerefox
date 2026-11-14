@@ -190,6 +190,15 @@ and refreshes the `cerefox-local` script itself. Because the CLI, web server, Po
 and database schema all ship together in one versioned image, they never drift out of
 sync.
 
+> **The local embedder's runtime is pinned per image.** Each image embeds with a
+> fixed transformers.js and onnxruntime, so two builds of one tag embed alike.
+> v1.23.3 moved it from transformers 3.8.1 to 4.3.2 (#300), which shifts the
+> vectors of the same text very slightly. No reindex is needed: an upgraded store
+> was measured to search as well as before, on arm64 and x64. A plain
+> `server reindex` leaves those chunks alone (the model is the same); only
+> `server reindex --all` would re-embed them, which takes a long time on a large
+> store and is not recommended for this change.
+
 ---
 
 ## Where things live

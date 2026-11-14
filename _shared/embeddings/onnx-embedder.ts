@@ -46,8 +46,9 @@ export function buildPrefixedInputs(texts: string[], role: EmbedRole): string[] 
   return texts.map((t) => p + t);
 }
 
-/** What the q8 pipeline reads, relative to the model dir. Same layout under
- *  transformers.js 3.x (the Local image) and 4.x (npm installs). */
+/** What the q8 pipeline reads, relative to the model dir. The same files
+ *  under transformers.js 3.x and 4.x, so a model cached by an older Local image
+ *  is reused after the move to 4.x (#300), not downloaded again. */
 const MODEL_REPO_FILES = [
   "config.json",
   "tokenizer.json",

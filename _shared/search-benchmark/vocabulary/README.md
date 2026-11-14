@@ -219,3 +219,21 @@ because they explain the remaining judgment calls.
    answers it, but a judge could call the home contents doc marginally related.
 8. **q014 "PodDisruptionBudget"**, **q050 "PDB drain stuck"**: the platform weekly
    notes get 1 because they describe a stuck drain caused by a PDB.
+
+## Floor changes
+
+A floor moves only with a stated reason. Each change is listed here.
+
+- **2026-11-14, `nomic-embed-text-v1.5`: paraphrase 0.29 → 0.23, confident
+  false positives 3 → 4.** The Cerefox Local image moved its embedder runtime
+  from transformers 3.8.1 / onnxruntime 1.21.0 to 4.3.2 / 1.30.0 (#300). On a
+  store embedded fresh with the new runtime, paraphrase measured 0.281 (arm64)
+  and 0.285 (x64). The whole drop is one query, "pushbike protection", whose
+  answer scored 0.6013 before and 0.5986 after, so a 0.003 shift carried it
+  under the 0.6 `min_search_score` cutoff; with 12 paraphrase queries, one query
+  is worth 0.083, more than the 0.05 margin. On x64 one negative query's top
+  result crossed the confidence line the same way. The new paraphrase floor is
+  the benchmark's own rule (measured minus 0.05). Every other floor holds at
+  its old value and stays. An upgraded store (old document vectors, queries
+  embedded with the new runtime) measured above the old runtime on both
+  architectures. Full measurements: `docs/plans/iteration-54-local-transformers-4.md`.
