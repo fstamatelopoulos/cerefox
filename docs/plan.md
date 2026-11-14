@@ -29,8 +29,11 @@
 
 ## Current Focus
 
-**2026-11-14: iteration 54, the Local image's embedder moves to transformers
-4.x (#300), on `feat/local-transformers-4`, target v1.23.3.** The image ran
+**2026-11-14: 1.23.3 shipped, iteration 54, the Local image's embedder moves to
+transformers 4.x (#300, PR #370).** Published images (arm64 and amd64) carry
+transformers 4.3.2, onnxruntime 1.30.0 and sharp 0.35.5; a Cerefox Local
+upgraded in place (backup first): doctor green, cached model reused, search
+working, no telemetry queue. The image ran
 transformers 3.8.1, which needs `sharp ^0.34`, so it shipped three HIGH `sharp`
 advisories (unreachable: text only). It now runs transformers 4.3.2 and
 onnxruntime 1.30.0, the main lockfile's versions; the runtime audit is clean and

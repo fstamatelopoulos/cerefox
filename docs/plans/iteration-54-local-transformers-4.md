@@ -1,7 +1,6 @@
 # Iteration 54: the Local image's embedder runtime moves to transformers 4.x (#300)
 
-> Status: implemented (2026-11-14) on `feat/local-transformers-4`. Target:
-> v1.23.3 (no schema change).
+> Status: shipped in v1.23.3 (2026-11-14, PR #370; no schema change).
 
 ## Why
 
@@ -134,9 +133,9 @@ embedder name is unchanged), which is the right default here.
 - **Runtime load under Bun**: transformers 4.3.2 imports `sharp` 0.35.5 at load
   time; the embedder loads and runs under the image's Bun on arm64 and x64.
 
-## Verification still to do
+## Verification
 
-- [ ] typecheck, `_shared` and package suites, CI on the PR
-- [ ] Opus review (read-only)
-- [ ] after the cut: the published image's runtime versions, Mac Local upgrade,
-      `doctor` in the container
+- [x] typecheck, `_shared` (1282) and package suites (499 on staging), CI on the PR
+- [x] Opus review (read-only): merge after fixes; fixes applied
+- [x] after the cut: the published image's runtime versions (arm64 and amd64),
+      a Cerefox Local upgraded in place, `doctor` in the container
