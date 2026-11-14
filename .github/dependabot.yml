@@ -30,6 +30,12 @@ updates:
       # that pin installs a second copy that nothing runs (#300). Let it move
       # only when transformers moves its pin.
       - dependency-name: "onnxruntime-node"
+      # The Cerefox Local image pins the same transformers version in
+      # docker/local/runtime, and a test fails when the two lockfiles differ
+      # (#300). Moving it changes the vectors Local stores hold, so it is a
+      # deliberate, measured edit (docs/plans/iteration-54-local-transformers-4.md),
+      # not part of a grouped bump.
+      - dependency-name: "@huggingface/transformers"
 
   # GitHub Actions — understands our SHA pins and bumps SHA + version comment.
   - package-ecosystem: "github-actions"

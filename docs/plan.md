@@ -29,6 +29,17 @@
 
 ## Current Focus
 
+**2026-11-14: iteration 54, the Local image's embedder moves to transformers
+4.x (#300), on `feat/local-transformers-4`, target v1.23.3.** The image ran
+transformers 3.8.1, which needs `sharp ^0.34`, so it shipped three HIGH `sharp`
+advisories (unreachable: text only). It now runs transformers 4.3.2 and
+onnxruntime 1.30.0, the main lockfile's versions; the runtime audit is clean and
+a new test keeps the two lockfiles together. Measured on arm64 and x64
+(throwaway containers, the calibration benchmark, plus a copy of a real store):
+an upgraded store searches at or above the old runtime, so no reindex. Two nomic
+floors moved for one knife-edge query (reason in the vocabulary README). Plan:
+[`plans/iteration-54-local-transformers-4.md`](plans/iteration-54-local-transformers-4.md).
+
 **2026-11-12: 1.23.2 shipped, iteration 53, Edge Function deploys under
 Supabase CLI 3 (#363).** Since CLI 3.0 every `server deploy` of the Edge
 Functions failed, a person's in a terminal too. `--yes`, or answering the deploy

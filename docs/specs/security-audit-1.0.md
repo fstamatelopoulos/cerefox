@@ -158,6 +158,7 @@ the Bearer token is the gate); the #110 query is parameterized.
   serves transformers' image-processing path, which a text embedding model never
   loads. Moving the image to transformers 4.x retires both (the second half of
   #300, which needs a measured embedding-compatibility decision first).
+  (**Retired 2026-11-14**, see that addendum.)
 - **2026-09-30 addendum (later the same day) — two more, both fixed by
   override.** `fast-uri` GHSA-hrr3-gc8f-f4qj (moderate; fixed in 3.1.8): the
   existing override moved from `^3.1.7` to `^3.1.8`. `brace-expansion`
@@ -186,6 +187,22 @@ the Bearer token is the gate); the #110 query is parameterized.
   `onnxruntime-node`'s postinstall downloader (`script/install.js` →
   `global-agent` → `roarr`), which runs when the image is built and is never
   loaded by the embedder. Both retire with the move to transformers 4.x (#300).
+  (**Retired 2026-11-14**, see that addendum.)
+- **2026-11-14 addendum: the Cerefox Local image's acceptances are retired.**
+  The image's embedder runtime moved from `@huggingface/transformers` 3.8.1 and
+  `onnxruntime-node` 1.21.0 to 4.3.2 and 1.30.0, the versions the main lockfile
+  already resolves (#300). That brings `sharp` 0.35.5, which fixes all three
+  `sharp` advisories (GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c,
+  GHSA-wq5f-xc86-pv6w), and drops the `sprintf-js` path, so the image's audit
+  step in CI runs with no accepted advisories. `sharp` was never reachable from
+  the embedder (transformers 3.8.1 imports it at load time, so its native
+  library was loaded, but only the image pipelines decode with it, and Cerefox
+  runs only `feature-extraction` on text). The move changes the embeddings an
+  existing Local store holds by a measured amount; the compatibility evidence is
+  in `docs/plans/iteration-54-local-transformers-4.md`. The image's existing
+  `ORT_DISABLE_TELEMETRY=1` now matters (onnxruntime 1.29+ ships usage
+  telemetry): verified on the image that no telemetry queue is written, against
+  a control run without the variable that writes one.
 - The container-minted `service_role` JWT has no expiry; it never leaves the
   container, and rotating it is deleting `.cerefox_jwt_secret` from the data
   volume.

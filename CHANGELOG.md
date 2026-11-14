@@ -9,7 +9,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Security
+
+- **The Cerefox Local image no longer ships `sharp` 0.34.5** (#300). Its local
+  embedder ran on transformers.js 3.8.1, which requires `sharp ^0.34`, so the
+  image carried three high-severity `sharp` advisories (GHSA-f88m-g3jw-g9cj,
+  GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w: libvips, libheif and librsvg flaws,
+  fixed in 0.35.5). They were not reachable: `sharp` decodes images, and the
+  embedder only embeds text. The npm package and the `cerefox-web` image were
+  never affected. The image's dependency audit now has no accepted advisories.
+
+### Changed
+
+- **Cerefox Local embeds with transformers.js 4.3.2 and onnxruntime 1.30.0**
+  (#300), the versions the repo's lockfile resolves and an npm install of
+  `@cerefox/memory` gets today, so the image and an npm install embed alike. The
+  same text gets very slightly different vectors (cosine about 0.98 or higher
+  between old and new). **No reindex is needed**:
+  on the search calibration benchmark an upgraded store, which keeps its existing
+  vectors, measured above the old runtime on overall MRR and hit@1 on both arm64
+  and x64 (overall MRR 0.890 → 0.899 on arm64). The model files are the same, so the cached model is reused after the upgrade.
+  The search floors for the local model moved for one paraphrase query that
+  crossed the 0.6 score cutoff by 0.003 (recorded in the benchmark's README).
+  CI now fails if the image's runtime and the repo's lockfile drift apart.
 
 ---
 
