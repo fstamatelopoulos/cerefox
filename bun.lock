@@ -77,7 +77,7 @@
     },
     "packages/memory": {
       "name": "@cerefox/memory",
-      "version": "1.23.0",
+      "version": "1.23.2",
       "bin": {
         "cerefox": "dist/bin/cerefox.js",
       },
@@ -105,7 +105,7 @@
       },
       "optionalDependencies": {
         "@huggingface/transformers": "^4.3.2",
-        "onnxruntime-node": "^1.21.0",
+        "onnxruntime-node": "^1.30.0",
       },
     },
   },

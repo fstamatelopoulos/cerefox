@@ -33,6 +33,10 @@ const runtimeLock = readFileSync(join(RUNTIME, "bun.lock"), "utf8");
 const mainLock = readFileSync(join(REPO, "bun.lock"), "utf8");
 
 describe("Local image embedder runtime pin (#300)", () => {
+  test("the runtime is exactly transformers and its onnxruntime", () => {
+    expect(Object.keys(runtimePkg.dependencies).sort()).toEqual(["@huggingface/transformers", "onnxruntime-node"]);
+  });
+
   test("every runtime dependency is an exact version", () => {
     for (const [name, range] of Object.entries(runtimePkg.dependencies)) {
       expect({ name, range }).toEqual({ name, range: expect.stringMatching(/^\d+\.\d+\.\d+$/) });

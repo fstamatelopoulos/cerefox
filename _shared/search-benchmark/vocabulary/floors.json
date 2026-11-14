@@ -19,7 +19,7 @@
     "maxConfidentFalsePositives": 1
   },
   "nomic-embed-text-v1.5": {
-    "schema": "0.18.2",
+    "schema": "0.22.0",
     "overallMrr": 0.84,
     "categoryMrr": {
       "abbreviation": 0.8,

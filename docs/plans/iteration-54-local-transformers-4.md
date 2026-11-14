@@ -17,9 +17,12 @@ problems followed from staying on 3.x:
   embedder: transformers imports it at load time, so the native library was in
   the process, but only its image pipelines decode with it, and Cerefox runs
   only `feature-extraction` on text.
-- **Two runtimes.** An npm install of `@cerefox/memory` resolves transformers
-  4.3.2 and onnxruntime 1.30.0 (the main lockfile), so the image and an npm
-  install embedded differently.
+- **Two runtimes.** The repo's lockfile, and an npm install of
+  `@cerefox/memory` today, resolve transformers 4.3.2 and onnxruntime 1.30.0, so
+  the image and an npm install embedded differently. (The package declares
+  `^4.3.2`, so a later npm install can resolve a newer 4.x; the test below pins
+  the image to the repo's lockfile, and Dependabot no longer bumps transformers
+  in a grouped PR.)
 
 The second half of #300 was to move the image to 4.x once the effect on
 existing stores was measured. This iteration does the measurement and the move.
@@ -38,7 +41,15 @@ existing stores was measured. This iteration does the measurement and the move.
   image cannot drift from npm installs, nor move, without a deliberate edit.
   Verified to fail on a mismatched pin.
 - Search floors for `nomic-embed-text-v1.5`: paraphrase 0.29 → 0.23, confident
-  false positives 3 → 4, with the reason recorded in the vocabulary README.
+  false positives 3 → 4, with the reason recorded in the vocabulary README. The
+  entry's `schema` stamp moves from 0.18.2 to 0.22.0, where all its floors were
+  measured to hold (`--check-floors` on the reindexed and upgraded stores).
+- `.github/dependabot.yml` ignores `@huggingface/transformers` (as it already
+  did `onnxruntime-node`), so a transformers release cannot turn a grouped
+  update PR red through the pin test. `packages/memory/package.json` declares
+  `onnxruntime-node ^1.30.0` (was `^1.21.0`), the version that runs.
+- The Dockerfile skips onnxruntime-node's postinstall (`ONNXRUNTIME_NODE_INSTALL=skip`),
+  which would fetch the CUDA provider on linux/x64; Bun already blocked it.
 - Docs: CHANGELOG, `docs/guides/setup-local.md` (upgrading note), this plan,
   `docs/plan.md`.
 
@@ -93,7 +104,9 @@ here: the store is private.)
 ### Decision: no reindex needed
 
 An upgraded store keeps its vectors and searches them with the new query
-embedder, and that state measured at or above the old runtime everywhere. New
+embedder. That state measured above the old runtime on overall MRR and hit@1 on
+both architectures, and within noise elsewhere (arm64 paraphrase 0.357 → 0.355,
+x64 confident false positives 3 → 4). New
 and edited documents are embedded by the new runtime, so a store becomes a mix
 over time; the mixed state is the one measured as best. A full re-embed is not
 recommended: it costs a long, CPU-heavy run on a large store and measured no
@@ -113,6 +126,9 @@ embedder name is unchanged), which is the right default here.
   (`~/.cache/Microsoft/DeveloperTools/.onnxruntime`) is written by the server
   process; a control run without the variable writes one, so the check can see
   it.
+- **Reproducible build**: a second build of the branch image (after the
+  Dockerfile change) embeds the benchmark corpus and queries bit-identically to
+  the first.
 - **Runtime load under Bun**: transformers 4.3.2 imports `sharp` 0.35.5 at load
   time; the embedder loads and runs under the image's Bun on arm64 and x64.
 

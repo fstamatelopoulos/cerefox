@@ -82,9 +82,13 @@ RUN chmod +x /opt/cerefox/cerefox-local \
 # also left these packages outside the repo's dependency audit (CI now audits
 # docker/local/runtime too). Changing the embedder runtime is a deliberate edit
 # of docker/local/runtime/, never a side effect of rebuilding.
+# ONNXRUNTIME_NODE_INSTALL=skip: onnxruntime-node's postinstall would fetch the
+# CUDA execution provider on linux/x64, which the CPU embedder never loads (the
+# CPU binaries ship in the package). Bun already blocks that script as
+# untrusted; this keeps it skipped if that ever changes.
 COPY docker/local/runtime/package.json docker/local/runtime/bun.lock /opt/cerefox/
 RUN cd /opt/cerefox \
- && bun install --production --frozen-lockfile \
+ && ONNXRUNTIME_NODE_INSTALL=skip bun install --production --frozen-lockfile \
  && rm -rf /root/.bun/install/cache
 
 # s6 service tree: db-init (oneshot) → postgres / postgrest / cerefox-server (longruns).

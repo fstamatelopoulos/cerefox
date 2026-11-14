@@ -187,6 +187,7 @@ the Bearer token is the gate); the #110 query is parameterized.
   `onnxruntime-node`'s postinstall downloader (`script/install.js` →
   `global-agent` → `roarr`), which runs when the image is built and is never
   loaded by the embedder. Both retire with the move to transformers 4.x (#300).
+  (**Retired 2026-11-14**, see that addendum.)
 - **2026-11-14 addendum: the Cerefox Local image's acceptances are retired.**
   The image's embedder runtime moved from `@huggingface/transformers` 3.8.1 and
   `onnxruntime-node` 1.21.0 to 4.3.2 and 1.30.0, the versions the main lockfile

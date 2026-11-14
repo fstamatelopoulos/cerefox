@@ -22,12 +22,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 ### Changed
 
 - **Cerefox Local embeds with transformers.js 4.3.2 and onnxruntime 1.30.0**
-  (#300), the same runtime an npm install of `@cerefox/memory` uses, so the image
-  and an npm install now embed alike. The same text gets very slightly different
-  vectors (cosine 0.98 or higher between old and new). **No reindex is needed**:
+  (#300), the versions the repo's lockfile resolves and an npm install of
+  `@cerefox/memory` gets today, so the image and an npm install embed alike. The
+  same text gets very slightly different vectors (cosine about 0.98 or higher
+  between old and new). **No reindex is needed**:
   on the search calibration benchmark an upgraded store, which keeps its existing
-  vectors, measured at or above the old runtime on both arm64 and x64 (overall
-  MRR 0.890 → 0.899 on arm64). The model files are the same, so the cached model is reused after the upgrade.
+  vectors, measured above the old runtime on overall MRR and hit@1 on both arm64
+  and x64 (overall MRR 0.890 → 0.899 on arm64). The model files are the same, so the cached model is reused after the upgrade.
   The search floors for the local model moved for one paraphrase query that
   crossed the 0.6 score cutoff by 0.003 (recorded in the benchmark's README).
   CI now fails if the image's runtime and the repo's lockfile drift apart.
