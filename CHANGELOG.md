@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.23.3] -- 2026-11-14
+
 ### Security
 
 - **The Cerefox Local image no longer ships `sharp` 0.34.5** (#300). Its local
