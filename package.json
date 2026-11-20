@@ -10,7 +10,7 @@
     "frontend"
   ],
   "dependencies": {
-    "ora": "^9.4.0",
+    "ora": "^10.0.0",
     "postgres": "^4.1.0"
   },
   "overrides": {
