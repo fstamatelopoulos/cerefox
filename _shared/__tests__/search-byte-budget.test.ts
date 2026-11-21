@@ -289,3 +289,51 @@ describe("cerefox_search never reports an empty store for a budget miss", () => 
 function supabase(rows: unknown[]): MCPSupabaseClient {
   return clientReturning(rows);
 }
+
+describe('content: "matches" returns passages, not whole documents', () => {
+  const longRow = () => ({
+    ...row("Long note", 0, 1),
+    full_content: Array.from({ length: 200 }, (_, i) => `line ${i} ${"y".repeat(30)}`).join("\n"),
+  });
+
+  test("a long result is cut at a line break, and the cut says how much is left and how to read it", async () => {
+    const r = longRow();
+    const out = await search.handler(supabase([r]), args({ content: "matches" }), ctx);
+    const body = out.split("\n\n").slice(1).join("\n\n");
+    expect(body.length).toBeLessThan(1_700);
+    expect(out).toContain("line 0 ");
+    expect(out).not.toContain("line 199 ");
+    expect(out).toMatch(/\[… [\d,]+ more chars in this match; cerefox_get_document\("id-Long note"\)/);
+  });
+
+  test("a short result is returned whole, with no marker", async () => {
+    const out = await search.handler(supabase([row("Short", 300, 1)]), args({ content: "matches" }), ctx);
+    expect(out).toContain("x".repeat(300));
+    expect(out).not.toContain("more chars in this match");
+  });
+
+  test("full (the default) is unchanged", async () => {
+    const out = await search.handler(supabase([longRow()]), args(), ctx);
+    expect(out).toContain("line 199 ");
+    expect(out).not.toContain("more chars in this match");
+  });
+
+  test("only the caller chooses: no environment setting changes the default", async () => {
+    const prev = process.env.CEREFOX_SEARCH_CONTENT;
+    process.env.CEREFOX_SEARCH_CONTENT = "matches";
+    try {
+      const out = await search.handler(supabase([longRow()]), args(), ctx);
+      expect(out).toContain("line 199 ");
+      expect(out).not.toContain("more chars in this match");
+    } finally {
+      if (prev === undefined) delete process.env.CEREFOX_SEARCH_CONTENT;
+      else process.env.CEREFOX_SEARCH_CONTENT = prev;
+    }
+  });
+
+  test("an unknown content value is rejected", async () => {
+    await expect(search.handler(supabase([row("A", 10, 1)]), args({ content: "summary" }), ctx)).rejects.toThrow(
+      /content must be/,
+    );
+  });
+});

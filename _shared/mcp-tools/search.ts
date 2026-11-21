@@ -113,8 +113,30 @@ function hashLine(row: SearchRow): string {
   return `\nhash: ${row.content_hash}${rev}`;
 }
 
+/**
+ * `content: "matches"`: the most text one result carries. Enough for a
+ * matched chunk's opening (chunks are at most 4,000 characters), small enough
+ * that five results cost an agent a few kilobytes instead of whole documents.
+ */
+export const MATCH_SNIPPET_CHARS = 1500;
+
+/**
+ * Cut a result's text to `max` characters at a line break, and say so. The
+ * marker names the remainder and how to read it, so a cut is never silent.
+ */
+export function capSnippet(text: string, max: number, documentId?: string): string {
+  if (text.length <= max) return text;
+  const nl = text.lastIndexOf("\n", max);
+  const cut = nl > max / 2 ? nl : max;
+  const rest = text.length - cut;
+  const how = documentId
+    ? `cerefox_get_document("${documentId}") reads the whole document`
+    : "cerefox_get_document reads the whole document";
+  return `${text.slice(0, cut).trimEnd()}\n\n[… ${rest.toLocaleString()} more chars in this match; ${how}]`;
+}
+
 /** One rendered result: heading, score, then the row's text. */
-function renderRow(row: SearchRow): string {
+function renderRow(row: SearchRow, snippetChars?: number): string {
   const raw = row.best_score ?? row.score;
   const score = raw != null ? ` (score: ${raw.toFixed(3)})` : "";
   const partial = row.is_partial
@@ -125,7 +147,8 @@ function renderRow(row: SearchRow): string {
   // Whichever column this mode returns (#259): `cerefox_search_docs` gives
   // `full_content`, the chunk RPCs give `content`, and reading only the first
   // rendered every hybrid/fts result as a title with an empty body.
-  return `## ${rowHeading(row)}${score}${partial}${hash}\n\n${rowContent(row)}`;
+  const text = snippetChars ? capSnippet(rowContent(row), snippetChars, row.document_id) : rowContent(row);
+  return `## ${rowHeading(row)}${score}${partial}${hash}\n\n${text}`;
 }
 
 /** `## Title [id: …] (score: …) -- 20,297 chars` — everything but the content. */
@@ -197,6 +220,12 @@ async function handler(
   // tool arguments through unvalidated (#265).
   const match_count = Math.min(Math.max(1, Math.floor(Number(args.match_count)) || 5), 200);
   const mode = (args.mode as string | undefined) ?? "docs";
+  // "matches": each result is its matched chunks only, capped at
+  // MATCH_SNIPPET_CHARS; "full": whole documents (small ones) as before.
+  const content = (args.content as string | undefined) ?? "full";
+  if (content !== "full" && content !== "matches") {
+    throw new McpInvalidParams('content must be "full" or "matches"');
+  }
   // #133: omit unconfigured tunables so the server resolves them from
   // cerefox_config (one setting governs every access path).
   const alpha = (args.alpha as number | undefined) ?? getConfiguredSearchAlpha();
@@ -295,6 +324,9 @@ async function handler(
       ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
+      // Every document takes the small-to-big path with no neighbours, so
+      // full_content holds the matched chunks only.
+      ...(content === "matches" ? { p_small_to_big_threshold: 1, p_context_window: 0 } : {}),
     };
   }
 
@@ -334,7 +366,7 @@ async function handler(
   // So: render, then take as many rows as the whole assembled reply can carry.
   // Assembling and measuring is the only way to be sure, because the preamble
   // and the footer both depend on how many rows were kept.
-  const rendered = matched.map(renderRow);
+  const rendered = matched.map((r) => renderRow(r, content === "matches" ? MATCH_SNIPPET_CHARS : undefined));
   const size = (t: string) => new TextEncoder().encode(t).length;
   const SEP = "\n\n---\n\n";
 
@@ -453,7 +485,7 @@ async function handler(
 export const searchTool: ToolDefinition = {
   name: "cerefox_search",
   description:
-    "Search the Cerefox personal knowledge base. Returns complete documents ranked by hybrid (FTS + semantic) relevance.",
+    "Search the Cerefox personal knowledge base. Returns documents ranked by hybrid (FTS + semantic) relevance: whole documents, or with content: \"matches\" only the matching passages (read a document in full with cerefox_get_document).",
   // Read-only: touches nothing. Safe for a client to run without prompting.
   annotations: {
     title: "Search knowledge base",
@@ -500,6 +532,12 @@ export const searchTool: ToolDefinition = {
         type: "number",
         description:
           "Keyword OR-fallback confidence bar 0–1 (default: server-configured, else 0.66): fraction of the query's meaningful terms a result must match to count as a confident hit; weaker matches return flagged below-confidence. 0 = any matching term. Needs schema ≥ 0.9.1.",
+      },
+      content: {
+        type: "string",
+        enum: ["full", "matches"],
+        description:
+          'What each result carries (default: "full"). Ask for "matches" when you need to find where something is written rather than read whole documents. full: the whole document when it is under 20,000 characters, else its matched sections with neighbours. matches: only the matched passages, each cut at 1,500 characters with a note saying how much more there is; read the document with cerefox_get_document.',
       },
       max_bytes: {
         type: "integer",
