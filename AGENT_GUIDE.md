@@ -231,8 +231,12 @@ No `expected_content_hash`: a trashed document cannot be concurrently edited, so
 
 ### A note on `max_bytes` and search
 
-`cerefox_search` returns **complete documents**, so `max_bytes` has to be
-large enough for the biggest one you might match. A budget smaller than the
+`cerefox_search` returns **complete documents** by default, so `max_bytes`
+has to be large enough for the biggest one you might match. To find where
+something is written rather than read it, pass `content: "matches"`: each
+result is then only its matched passages, cut at 1,500 characters with a
+note naming how much is left, and a search costs a few kilobytes instead of
+whole documents. Read a document in full with `cerefox_get_document`. A budget smaller than the
 top hit fits nothing, and you will get a header-only list that names what
 matched, its size and its id, prefixed with a warning. That list is not an
 empty result: raise `max_bytes`, or read a single document with

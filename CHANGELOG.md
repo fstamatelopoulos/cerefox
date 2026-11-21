@@ -9,7 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **`cerefox_search` can return passages instead of whole documents.** A new
+  per-call parameter, `content: "full" | "matches"`, defaults to `"full"`,
+  so nothing changes unless a caller asks. With `"matches"`, each result is
+  only its matched passages, cut at 1,500 characters at a line break with a
+  note naming how much is left and the `cerefox_get_document` call that
+  reads it. Ranking is unchanged. On a 1,193-note store the mean reply fell
+  from 34 KB to 8.7 KB (p95 63 KB to 9.4 KB) with the same documents found.
 
 ---
 
