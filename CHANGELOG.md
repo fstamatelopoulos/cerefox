@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.23.4] -- 2026-11-21
+
 ### Fixed
 
 - **`install-local.sh` stopped right after the model download when piped into
