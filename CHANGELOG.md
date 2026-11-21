@@ -9,7 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **`install-local.sh` stopped right after the model download when piped into
+  `sh` with `--local-embedder`** (#373), the documented form
+  (`curl -fsSL …/install-local.sh | sh -s -- --local-embedder`). The warmup ran
+  `docker exec -i`, which read the script's stdin, and under `curl … | sh` that
+  is the rest of the script. The install ended there with exit status 0: the
+  container and its config were set up, but `cerefox-local` was never put on
+  your PATH, and the readiness wait, shell completion and summary were skipped.
+  The warmup no longer reads stdin. Affected since v1.0.0. If it happened to you,
+  re-run the installer: it recreates the container and keeps your data volume.
+  A new test runs the installer piped into `sh` against a fake `docker`.
+- **`install-local.sh` exited with status 1 after a successful install** when it
+  did not wire shell completion (a shell other than bash, zsh or fish) (#373).
 
 ---
 

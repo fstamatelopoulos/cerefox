@@ -184,7 +184,10 @@ umask 077
 if [ "${CEREFOX_EMBEDDER:-}" = "local" ]; then
   warn_if_small_vm
   echo "Downloading the local embedding model (~130 MB, one-time)…"
-  docker exec -i "$CONTAINER" cerefox embedder-warmup || \
+  # Never let a command here read stdin: under `curl … | sh` stdin IS the rest
+  # of this script, and a reader (`docker exec -i` did) swallows it, so the
+  # install ended here silently with exit 0 and no `cerefox-local` on PATH.
+  docker exec "$CONTAINER" cerefox embedder-warmup </dev/null || \
     echo "⚠ warmup failed (the model will download on first search instead)"
 fi
 
@@ -252,4 +255,6 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
 else
   echo "  ▸ Set your OpenAI key to enable ingest + search:  cerefox-local init"
 fi
-[ -n "$COMPLETION_MSG" ] && echo "$COMPLETION_MSG"
+# An `if`, not `[ … ] && echo`: as the last command, a false test would make a
+# successful install exit 1.
+if [ -n "$COMPLETION_MSG" ]; then echo "$COMPLETION_MSG"; fi
