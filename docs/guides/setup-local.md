@@ -217,7 +217,12 @@ sync.
 
 **`docker not found` / can't connect** — start Docker Desktop, or `colima start`.
 
-**`cerefox-local: command not found`** — `~/.local/bin` isn't on your `PATH` (see Step 1).
+**`cerefox-local: command not found`** — `~/.local/bin` isn't on your `PATH` (see Step 1). Or, on
+v1.23.3 and earlier, the piped install with `--local-embedder` stopped right
+after downloading the model, before installing the command (the last line it
+printed was the warmup's). Re-run the installer; it keeps your data. On those
+versions the command-substitution form is not affected:
+`sh -c "$(curl -fsSL …/install-local.sh)" -s --local-embedder`.
 
 **`container 'cerefox-local' is not running`** — `cerefox-local start` (or `status` to
 check). After a reboot the container may be stopped depending on your Docker settings.
