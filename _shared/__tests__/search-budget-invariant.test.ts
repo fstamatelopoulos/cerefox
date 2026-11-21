@@ -112,16 +112,20 @@ describe("a search reply never exceeds max_bytes", () => {
   const budgets = [500, 1_000, 2_000, 5_000, 20_000];
   const rowSizes = [50, 400, 1_500, 9_000, 40_000];
   const counts = [1, 3, 12, 40];
+  // content: "matches" cuts each result and appends a marker naming what is
+  // left; that marker is content the budget must account for too.
+  const contents = ["full", "matches"] as const;
 
+  for (const content of contents) {
   for (const shape of SHAPES) {
     for (const budget of budgets) {
       for (const size of rowSizes) {
         for (const count of counts) {
-        test(`${shape.name}: budget ${budget}, ${count} row(s) of ${size} chars`, async () => {
+        test(`${shape.name} (${content}): budget ${budget}, ${count} row(s) of ${size} chars`, async () => {
           const rows = Array.from({ length: count }, (_, i) => shape.make(i, size));
           const out = await search.handler(
             client(rows),
-            { query: "q", mode: "fts", max_bytes: budget, author: "t" },
+            { query: "q", mode: "fts", max_bytes: budget, content, author: "t" },
             ctx,
           );
 
@@ -161,6 +165,7 @@ describe("a search reply never exceeds max_bytes", () => {
         }
       }
     }
+  }
   }
 
   test("a reply that held results back always says so (#266)", async () => {
