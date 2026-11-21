@@ -381,7 +381,7 @@ case "$cmd" in
     if [ "$embedder" = "local" ] && [ "$cur_embedder" != "local" ]; then
       warn_if_small_vm
       echo "Downloading the local embedding model (one-time)…"
-      docker exec -i "$CONTAINER" cerefox embedder-warmup || \
+      docker exec "$CONTAINER" cerefox embedder-warmup </dev/null || \
         echo "⚠ warmup failed (model downloads on first search instead)"
     fi
     ;;
