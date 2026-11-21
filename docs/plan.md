@@ -29,6 +29,18 @@
 
 ## Current Focus
 
+**2026-11-21: 1.23.4 shipped, a Cerefox Local installer fix (#373, PR #374).**
+Piped into `sh` with `--local-embedder` (the documented form), `install-local.sh`
+stopped after the model warmup with exit 0, because the warmup's `docker exec -i`
+read the rest of the script from stdin; `cerefox-local` was never put on PATH.
+Also fixed: an exit status of 1 after a successful install when no shell
+completion was wired. A new test pipes the real installer into `sh` against a
+fake `docker`. Verified from the published release asset against a throwaway
+container, and on staging (client 1.23.4, doctor green except the Edge Function
+version stamp, Playwright 43 passed). Open: #377 (`cerefox_search` mode
+`semantic` runs the docs search), #375/#376 (an external contribution:
+`content: "matches"`), Dependabot #371 and #372 (tested on staging, safe to merge).
+
 **2026-11-14: 1.23.3 shipped, iteration 54, the Local image's embedder moves to
 transformers 4.x (#300, PR #370).** Published images (arm64 and amd64) carry
 transformers 4.3.2, onnxruntime 1.30.0 and sharp 0.35.5; a Cerefox Local
