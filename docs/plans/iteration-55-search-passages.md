@@ -37,9 +37,17 @@ Search now has three result shapes:
   occur in it (a semantic-only match), its opening cut at a line break.
   Both are flagged `truncated`. Found on staging: chunks run to 4,000
   characters, and cutting the best one to its opening, as the first version
-  (and PR #376) did, returned the unrelated section above the match. The cap clamps to 200..20000 (default 1500, the
+  (and PR #376) did, returned the unrelated section above the match.
+  `ts_headline` sizes fragments in words, so long tokens (URLs, code) can make
+  an excerpt longer than the cap; the character cut is then a window around
+  the first matched term (marked by `ts_headline` with U+E000, stripped),
+  not the headline's opening, which lost the term (found by the Codex review,
+  reproduced on a throwaway Postgres at every cap from 200 to 1,500). The cap clamps to 200..20000 (default 1500, the
   value #375 measured). `is_partial` is false only when the passages hold the
   whole document.
+- **Ties are broken by `document_id`** (in `top_docs` and the final order),
+  so equal scores choose and order the same documents every time, in both
+  shapes. Before, the order of tied documents was undefined (Codex review).
 - **A cap below the chunk size is allowed, and said** (decided with the
   maintainer): rejecting a cap under the store's chunk size would make the
   option depend on a setting the caller cannot see, so the cap is honored and

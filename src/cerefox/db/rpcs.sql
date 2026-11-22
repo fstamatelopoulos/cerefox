@@ -877,7 +877,9 @@ AS $$
     top_docs AS (
         SELECT *
         FROM best_per_doc
-        ORDER BY best_score DESC
+        -- document_id breaks ties, so equal scores pick and order the same
+        -- documents every time, in both result shapes.
+        ORDER BY best_score DESC, document_id
         LIMIT p_match_count
     ),
     -- Compute actual total_chars per top document (needed for threshold check).
@@ -986,20 +988,35 @@ AS $$
                CASE
                    WHEN NOT kp.truncated THEN kp.content
                    -- Up to three fragments around the matching terms, sized so
-                   -- they fill about the cap (~7 characters a word), then held
-                   -- to the cap.
+                   -- they fill about the cap (~7 characters a word). Fragments
+                   -- are sized in words, so long tokens (URLs, code) can make
+                   -- them longer than the cap: the cut is then a window of
+                   -- `cap` characters around the first matched term, which
+                   -- ts_headline marks with U+E000 (stripped here), rather
+                   -- than the headline's opening, which could lose it.
                    WHEN kp.excerpt THEN (
                        SELECT CASE
-                           WHEN char_length(h) <= kp.cap THEN h
-                           -- Held to the cap at the last space, not mid-word.
-                           WHEN char_length(COALESCE(substring(left(h, kp.cap) FROM '^(.*)\s'), ''))
-                                >= kp.cap / 2
-                               THEN rtrim(substring(left(h, kp.cap) FROM '^(.*)\s'), E' \t\r\n')
-                           ELSE left(h, kp.cap)
+                           WHEN char_length(cl.c) <= kp.cap THEN cl.c
+                           -- Ended at the last space, not mid-word, when that
+                           -- keeps at least half and the matched term.
+                           WHEN char_length(COALESCE(substring(wn.w FROM '^(.*)\s'), ''))
+                                >= GREATEST(kp.cap / 2, wn.m)
+                               THEN rtrim(substring(wn.w FROM '^(.*)\s'), E' \t\r\n')
+                           ELSE wn.w
                        END
                        FROM (SELECT ts_headline('english', kp.content, kp.any_term, format(
-                           'MaxFragments=3, MaxWords=%s, MinWords=%s, FragmentDelimiter=" … ", StartSel="", StopSel=""',
-                           GREATEST(kp.cap / 21, 10), GREATEST(kp.cap / 42, 5))) AS h) hl)
+                           'MaxFragments=3, MaxWords=%s, MinWords=%s, FragmentDelimiter=" … ", StartSel="%s", StopSel="%s"',
+                           GREATEST(kp.cap / 21, 10), GREATEST(kp.cap / 42, 5),
+                           U&'\E000', U&'\E001')) AS h) hl
+                       CROSS JOIN LATERAL (SELECT
+                           translate(hl.h, U&'\E000\E001', '') AS c,
+                           GREATEST(strpos(hl.h, U&'\E000'), 1) AS p) cl
+                       CROSS JOIN LATERAL (SELECT GREATEST(1,
+                           LEAST(cl.p - kp.cap / 4, char_length(cl.c) - kp.cap + 1)) AS s) st
+                       CROSS JOIN LATERAL (SELECT
+                           substring(cl.c FROM st.s FOR kp.cap) AS w,
+                           -- Where the matched term starts in the window.
+                           cl.p - st.s + 1 AS m) wn)
                    -- No term to center on (a semantic-only match): the
                    -- opening, cut at the last line break in the first `cap`
                    -- characters when that keeps at least half of them.
@@ -1086,7 +1103,7 @@ AS $$
     FROM top_docs td
     JOIN doc_sizes ds ON ds.document_id = td.document_id
     JOIN all_content ac ON ac.document_id = td.document_id
-    ORDER BY td.best_score DESC;
+    ORDER BY td.best_score DESC, td.document_id;
 $$;
 
 -- ── Metadata key discovery RPC ───────────────────────────────────────────────

@@ -125,12 +125,19 @@ describe("search --content matches (#375, live)", () => {
     const small = join(dir, "small.md");
     writeFileSync(small, `# ${PREFIX} Short Note\n\nOn glorvantic mirelspan tessobrine, in brief.\n`);
     const r2 = run(["document", "ingest", small, "--title", `${PREFIX} Short Note`, "--author", "e2e-test"]);
+    // One chunk of long single-word tokens around the match: a word-sized
+    // headline runs past a small cap, and cutting it to its opening lost the
+    // matched term (found by review).
+    const longTokens = join(dir, "long-tokens.md");
+    const words = (n: number) => Array.from({ length: n }, (_, i) => String.fromCharCode(97 + (i % 26)).repeat(70)).join(" ");
+    writeFileSync(longTokens, `# ${PREFIX} Long Tokens\n\n${words(18)} glorvantic ${words(18)}\n`);
+    const r3 = run(["document", "ingest", longTokens, "--title", `${PREFIX} Long Tokens`, "--author", "e2e-test"]);
     rmSync(dir, { recursive: true, force: true });
-    for (const out of [r, r2]) {
+    for (const out of [r, r2, r3]) {
       const id = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.exec(out.stdout);
       if (id) createdIds.push(id[1]);
     }
-    expect([r.status, r2.status]).toEqual([0, 0]);
+    expect([r.status, r2.status, r3.status]).toEqual([0, 0, 0]);
   });
 
   liveTest("the same documents in the same order as the default search", () => {
@@ -188,6 +195,20 @@ describe("search --content matches (#375, live)", () => {
     const text = run(["search", Q, "--content", "matches", "--author", "e2e-test"]).stdout;
     const block = text.slice(text.indexOf(`${PREFIX} Short Note`));
     expect(block.slice(0, block.indexOf("════"))).not.toContain("reads the whole document");
+  });
+
+  liveTest("an excerpt keeps the matched term even when long tokens surround it", () => {
+    for (const cap of ["200", "300", "1500"]) {
+      const row = search(["glorvantic", "--content", "matches", "--max-passage-chars", cap]).find(
+        (r) => r.document_id === createdIds[2],
+      )!;
+      expect(row).toBeDefined();
+      const [best] = row.passages!;
+      expect(best.truncated).toBe(true);
+      expect(best.content.length).toBeLessThanOrEqual(Number(cap));
+      expect(best.content).toContain("glorvantic");
+      expect(best.content).not.toMatch(/[\uE000\uE001]/);
+    }
   });
 
   liveTest("a stopword-only query does not fail", () => {
