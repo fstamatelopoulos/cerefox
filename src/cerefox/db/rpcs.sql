@@ -992,7 +992,8 @@ AS $$
                    -- are sized in words, so long tokens (URLs, code) can make
                    -- them longer than the cap: the cut is then a window of
                    -- `cap` characters around the first matched term, which
-                   -- ts_headline marks with U+E000 (stripped here), rather
+                   -- ts_headline marks with U+E000 (stripped here, and from
+                   -- the chunk beforehand), rather
                    -- than the headline's opening, which could lose it.
                    WHEN kp.excerpt THEN (
                        SELECT CASE
@@ -1004,7 +1005,10 @@ AS $$
                                THEN rtrim(substring(wn.w FROM '^(.*)\s'), E' \t\r\n')
                            ELSE wn.w
                        END
-                       FROM (SELECT ts_headline('english', kp.content, kp.any_term, format(
+                       -- The sentinels are removed from the chunk first, so a
+                       -- U+E000 in the note itself cannot pose as a match.
+                       FROM (SELECT ts_headline('english',
+                           translate(kp.content, U&'\E000\E001', ''), kp.any_term, format(
                            'MaxFragments=3, MaxWords=%s, MinWords=%s, FragmentDelimiter=" … ", StartSel="%s", StopSel="%s"',
                            GREATEST(kp.cap / 21, 10), GREATEST(kp.cap / 42, 5),
                            U&'\E000', U&'\E001')) AS h) hl

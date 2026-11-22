@@ -130,7 +130,9 @@ describe("search --content matches (#375, live)", () => {
     // matched term (found by review).
     const longTokens = join(dir, "long-tokens.md");
     const words = (n: number) => Array.from({ length: n }, (_, i) => String.fromCharCode(97 + (i % 26)).repeat(70)).join(" ");
-    writeFileSync(longTokens, `# ${PREFIX} Long Tokens\n\n${words(18)} glorvantic ${words(18)}\n`);
+    // It opens with U+E000, the excerpt's own match marker, which must not
+    // pose as a match.
+    writeFileSync(longTokens, `# ${PREFIX} Long Tokens\n\n\uE000 icon ${words(18)} glorvantic ${words(18)}\n`);
     const r3 = run(["document", "ingest", longTokens, "--title", `${PREFIX} Long Tokens`, "--author", "e2e-test"]);
     rmSync(dir, { recursive: true, force: true });
     for (const out of [r, r2, r3]) {
