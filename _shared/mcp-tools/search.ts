@@ -218,7 +218,7 @@ async function handler(
   }
   if (content === "matches" && mode !== "docs") {
     throw new McpInvalidParams(
-      'content "matches" applies to mode "docs" only: hybrid and fts already return matched chunks.',
+      'content "matches" applies to mode "docs" only (the chunk modes already return matched chunks).',
     );
   }
   const maxPassageChars = resolvePassageChars(args.max_passage_chars);

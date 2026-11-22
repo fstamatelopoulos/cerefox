@@ -40,10 +40,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Upgrading
 
-- **Schema 0.23.0: run `cerefox server deploy`** to get passages. Until then
-  the option answers with an error naming the fix; every other search works
-  as before. Cerefox Local updates its schema on `cerefox-local upgrade`. No
-  data changes and no reindex.
+- **Schema 0.23.0: run `cerefox server deploy`** (schema and Edge Functions)
+  to get passages. Against an older schema the option answers with an error
+  naming the fix; every other search works as before. Agents reach passages
+  through the MCP server, so the remote one needs the new Edge Functions too:
+  an older `cerefox-mcp`, like any older client, does not know the parameter
+  and returns whole documents. Cerefox Local updates everything on
+  `cerefox-local upgrade`. No data changes and no reindex.
+- **Downgrading** a store past 0.23.0 needs `cerefox_search_docs`'s new
+  signature dropped by hand first: an older `rpcs.sql` does not know it, and
+  the two versions side by side make every document search ambiguous.
 
 ---
 

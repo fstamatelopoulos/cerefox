@@ -140,7 +140,7 @@ describe("a passages result is rendered best first, and says what it left out", 
   test("the note names how many matched passages were left out and how to read the document", async () => {
     const out = await search.handler(recorder([passagesRow()]).client, args({ content: "matches" }), ctx);
     expect(out).toContain(
-      `[4 more matched passages. cerefox_get_document("${DOC_ID}") reads the whole document; ` +
+      `[At least 4 more matched passages. cerefox_get_document("${DOC_ID}") reads the whole document; ` +
         "with outline: true it lists the sections, and with section it reads one.]",
     );
   });
@@ -196,7 +196,7 @@ describe("refusals", () => {
       message: "Could not find the function public.cerefox_search_docs(p_max_passage_chars, p_passages, …)",
     });
     await expect(search.handler(r.client, args({ content: "matches" }), ctx)).rejects.toThrow(
-      /need server schema 0\.23\.0 or later.*cerefox server deploy/,
+      /need server schema 0\.23\.0 or later.*cerefox server deploy.*retry in a minute/,
     );
   });
 

@@ -781,8 +781,10 @@ $$;
 --   it held. A truncated passage is an excerpt around the query's terms
 --   (`excerpt` = TRUE, fragments joined by " … ") when they occur in it, else
 --   the chunk's opening.
--- matched_chunk_count (p_passages only): the document's matched chunks,
---   including any the cap left out.
+-- matched_chunk_count (p_passages only): the document's chunks among the
+--   search's candidates (the hybrid pool, p_match_count * 10 chunks across all
+--   documents), including any the cap left out. A lower bound on how many of
+--   its chunks match the query.
 
 CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_query_text             TEXT,
@@ -939,9 +941,14 @@ AS $$
     passage_cap AS (
         SELECT
             LEAST(GREATEST(COALESCE(p_max_passage_chars, 1500), 200), 20000) AS cap,
-            -- Any of the query's terms (the AND query's lexemes, OR-ed), for
-            -- excerpting an over-cap chunk around where it matched.
-            replace(plainto_tsquery('english', p_query_text)::TEXT, ' & ', ' | ')::tsquery AS any_term
+            -- Any of the query's terms, for excerpting an over-cap chunk
+            -- around where it matched: each whitespace token through
+            -- plainto_tsquery, OR-ed, as cerefox_hybrid_search builds its
+            -- OR-fallback (NULL when every token is a stopword).
+            (SELECT string_agg('(' || tq::TEXT || ')', ' | ')
+             FROM (SELECT plainto_tsquery('english', tok) AS tq
+                   FROM unnest(regexp_split_to_array(trim(p_query_text), '\s+')) AS tok) toks
+             WHERE numnode(tq) > 0)::tsquery AS any_term
     ),
     ranked_passages AS (
         SELECT
@@ -967,9 +974,8 @@ AS $$
                -- occur in it: an excerpt around them. A chunk is up to 4,000
                -- characters, so its opening is often not the part that
                -- matched (#375, found on staging).
-               rp.chars > pc.cap
-                   AND numnode(pc.any_term) > 0
-                   AND to_tsvector('english', rp.content) @@ pc.any_term AS excerpt,
+               COALESCE(rp.chars > pc.cap
+                   AND to_tsvector('english', rp.content) @@ pc.any_term, FALSE) AS excerpt,
                pc.cap,
                pc.any_term
         FROM ranked_passages rp CROSS JOIN passage_cap pc
@@ -982,20 +988,29 @@ AS $$
                    -- Up to three fragments around the matching terms, sized so
                    -- they fill about the cap (~7 characters a word), then held
                    -- to the cap.
-                   WHEN kp.excerpt THEN left(ts_headline('english', kp.content, kp.any_term, format(
-                       'MaxFragments=3, MaxWords=%s, MinWords=%s, FragmentDelimiter=" … ", StartSel="", StopSel=""',
-                       GREATEST(kp.cap / 21, 10), GREATEST(kp.cap / 42, 5))), kp.cap)
+                   WHEN kp.excerpt THEN (
+                       SELECT CASE
+                           WHEN char_length(h) <= kp.cap THEN h
+                           -- Held to the cap at the last space, not mid-word.
+                           WHEN char_length(COALESCE(substring(left(h, kp.cap) FROM '^(.*)\s'), ''))
+                                >= kp.cap / 2
+                               THEN rtrim(substring(left(h, kp.cap) FROM '^(.*)\s'), E' \t\r\n')
+                           ELSE left(h, kp.cap)
+                       END
+                       FROM (SELECT ts_headline('english', kp.content, kp.any_term, format(
+                           'MaxFragments=3, MaxWords=%s, MinWords=%s, FragmentDelimiter=" … ", StartSel="", StopSel=""',
+                           GREATEST(kp.cap / 21, 10), GREATEST(kp.cap / 42, 5))) AS h) hl)
                    -- No term to center on (a semantic-only match): the
                    -- opening, cut at the last line break in the first `cap`
                    -- characters when that keeps at least half of them.
                    WHEN char_length(COALESCE(substring(left(kp.content, kp.cap) FROM '^(.*)\n'), ''))
                         >= kp.cap / 2
-                       THEN rtrim(substring(left(kp.content, kp.cap) FROM '^(.*)\n'))
+                       THEN rtrim(substring(left(kp.content, kp.cap) FROM '^(.*)\n'), E' \t\r\n')
                    ELSE left(kp.content, kp.cap)
                END AS kept_content
         FROM kept_passages kp
     ),
-    passage_content AS (
+    passage_agg AS (
         SELECT
             kp.document_id,
             NULL::TEXT AS full_content,
@@ -1011,11 +1026,29 @@ AS $$
                 'chars',        kp.chars,
                 'truncated',    kp.truncated,
                 'excerpt',      kp.excerpt
-            ) ORDER BY kp.rn) AS passages,
+            ) ORDER BY kp.rn) AS by_score,
+            JSONB_AGG(JSONB_BUILD_OBJECT(
+                'chunk_index',  kp.chunk_index,
+                'heading_path', TO_JSONB(COALESCE(kp.heading_path, ARRAY[]::TEXT[])),
+                'score',        kp.score,
+                'content',      kp.kept_content,
+                'chars',        kp.chars,
+                'truncated',    kp.truncated,
+                'excerpt',      kp.excerpt
+            ) ORDER BY kp.chunk_index) AS by_position,
             MAX(kp.matched)::INT AS matched_chunk_count
         FROM cut_passages kp
         JOIN doc_sizes ds ON ds.document_id = kp.document_id
         GROUP BY kp.document_id
+    ),
+    passage_content AS (
+        SELECT
+            pa.document_id, pa.full_content, pa.chunk_count, pa.is_partial,
+            -- Best first, except when the passages hold the whole document:
+            -- then in document order, so it reads as the document.
+            CASE WHEN pa.is_partial THEN pa.by_score ELSE pa.by_position END AS passages,
+            pa.matched_chunk_count
+        FROM passage_agg pa
     ),
     all_content AS (
         SELECT document_id, full_content, chunk_count, is_partial,

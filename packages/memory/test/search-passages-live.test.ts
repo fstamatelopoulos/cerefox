@@ -121,10 +121,16 @@ describe("search --content matches (#375, live)", () => {
       ].join("\n\n"),
     );
     const r = run(["document", "ingest", file, "--title", `${PREFIX} Field Notes`, "--author", "e2e-test"]);
+    // A short note, one chunk, that the passages hold whole.
+    const small = join(dir, "small.md");
+    writeFileSync(small, `# ${PREFIX} Short Note\n\nOn glorvantic mirelspan tessobrine, in brief.\n`);
+    const r2 = run(["document", "ingest", small, "--title", `${PREFIX} Short Note`, "--author", "e2e-test"]);
     rmSync(dir, { recursive: true, force: true });
-    const id = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.exec(r.stdout);
-    if (id) createdIds.push(id[1]);
-    expect(r.status).toBe(0);
+    for (const out of [r, r2]) {
+      const id = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.exec(out.stdout);
+      if (id) createdIds.push(id[1]);
+    }
+    expect([r.status, r2.status]).toEqual([0, 0]);
   });
 
   liveTest("the same documents in the same order as the default search", () => {
@@ -168,7 +174,25 @@ describe("search --content matches (#375, live)", () => {
     // excerpt must show the part that matched instead.
     expect(r.stdout).toContain("glorvantic mirelspan tessobrine");
     expect(r.stdout).not.toContain("background paragraph 0");
-    expect(r.stdout).toContain(`cerefox_get_document("${createdIds[0]}") reads the whole document`);
+    // The CLI's own command, not the MCP call.
+    expect(r.stdout).toContain(`document get ${createdIds[0]}\` reads the whole document; --outline lists its sections`);
+    expect(r.stdout).not.toContain("cerefox_get_document(");
+  });
+
+  liveTest("a document the passages hold whole is not partial and gets no note", () => {
+    const rows = search([Q, "--content", "matches"]);
+    const row = rows.find((r) => r.document_id === createdIds[1])!;
+    expect(row).toBeDefined();
+    expect(row.is_partial).toBe(false);
+    expect(row.passages!.every((p) => !p.truncated)).toBe(true);
+    const text = run(["search", Q, "--content", "matches", "--author", "e2e-test"]).stdout;
+    const block = text.slice(text.indexOf(`${PREFIX} Short Note`));
+    expect(block.slice(0, block.indexOf("════"))).not.toContain("reads the whole document");
+  });
+
+  liveTest("a stopword-only query does not fail", () => {
+    const r = run(["search", "the and of", "--content", "matches", "--author", "e2e-test"]);
+    expect(r.status).toBe(0);
   });
 
   liveTest("the chunk modes refuse the option instead of ignoring it", () => {

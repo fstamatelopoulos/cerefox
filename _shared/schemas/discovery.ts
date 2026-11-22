@@ -56,8 +56,9 @@ export const DocSearchResult = z.object({
   /** `content=matches` only (#375, schema 0.23.0): the document's best-matching
    *  passages, best first; `full_content` is then empty. */
   passages: z.array(SearchPassage).optional(),
-  /** `content=matches` only: the document's matched chunks, including any the
-   *  cap left out. */
+  /** `content=matches` only: the document's chunks among the search's
+   *  candidates, including any the cap left out. A lower bound on how many of
+   *  its chunks match. */
   matched_chunk_count: z.number().int().optional(),
 });
 export type DocSearchResult = z.infer<typeof DocSearchResult>;

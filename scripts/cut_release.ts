@@ -119,6 +119,8 @@ const EF_SOURCE_PATHS = [
   "_shared/ef-meta",
   "_shared/mcp-tools",
   "_shared/embeddings",
+  // #375: cerefox-mcp bundles it through mcp-tools/search.ts.
+  "_shared/search-passages",
 ];
 
 /** True when EF-relevant source changed since the most recent git tag. */

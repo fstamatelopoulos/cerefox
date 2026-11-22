@@ -85,6 +85,11 @@ interface ChunkResult {
   below_confidence?: boolean;
 }
 
+/** The passages note's pointer, in this CLI's own commands. */
+const cliReadHint = (id: string): string =>
+  `\`${progName()} document get ${id}\` reads the whole document; ` +
+  `--outline lists its sections, and --section reads one.`;
+
 async function action(
   query: string,
   options: {
@@ -146,7 +151,7 @@ async function action(
     throw userError(`--content "${content}": expected "full" or "matches".`);
   }
   if (content === "matches" && mode !== "docs") {
-    throw userError(`--content matches applies to --mode docs only: ${mode} already returns matched chunks.`);
+    throw userError(`--content matches applies to --mode docs only (the chunk modes already return matched chunks).`);
   }
   if (options.maxPassageChars !== undefined && content !== "matches") {
     throw userError("--max-passage-chars applies only with --content matches.");
@@ -279,6 +284,7 @@ async function action(
           delete copy.full_content;
           delete copy.content;
           delete copy.passages;
+          delete copy.matched_chunk_count;
           return copy;
         })
       : accepted;
@@ -355,7 +361,7 @@ async function action(
       // (not `---`, which collides with `---` inside markdown content).
       if (options.onlyMetadata) continue;
       println("");
-      println(doc.passages ? renderPassagesBody(doc) : (doc.full_content ?? ""));
+      println(doc.passages ? renderPassagesBody(doc, cliReadHint) : (doc.full_content ?? ""));
       println("");
       println(c.dim("════════════════════════════════════════"));
       println("");

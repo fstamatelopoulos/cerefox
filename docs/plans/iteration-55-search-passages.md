@@ -25,8 +25,10 @@ Search now has three result shapes:
 - **In the RPC, one place.** `cerefox_search_docs` gains `p_passages` and
   `p_max_passage_chars`. With `p_passages`, the top documents are exactly
   those of (a), in the same order; each carries `passages` (JSONB, best score
-  first: chunk_index, heading_path, score, content, chars, truncated) and
-  `matched_chunk_count`; `full_content` is NULL. Selection: the document's
+  first: chunk_index, heading_path, score, content, chars, truncated,
+  excerpt; in document order instead when they hold the whole document) and
+  `matched_chunk_count` (the document's chunks in the search's candidate pool,
+  so a lower bound); `full_content` is NULL. Selection: the document's
   matched chunks (its rows in the hybrid candidate pool), no neighbors,
   ordered by score; the longest prefix of that order whose total fits the
   cap, and always the best chunk. When the best chunk alone is over the cap
@@ -71,12 +73,36 @@ Search now has three result shapes:
 - Tests: `search-passages.test.ts` (new, unit), passage shapes in the budget
   invariant grid, `search-passages-live.test.ts` (new, live on staging).
 
+## Compatibility
+
+- Old clients against 0.23.0: unchanged, apart from two NULL columns
+  (`passages`, `matched_chunk_count`) in raw RPC rows (`cerefox search --json`).
+- New clients against an older schema: (a) and (b) work; passages answer with
+  an error naming the fix (PostgREST's PGRST202 for the unknown parameters).
+- Older MCP servers and Edge Functions do not know `content` and return whole
+  documents, so passages need the new client or Edge Functions as well as the
+  schema.
+- Downgrade: an older `rpcs.sql` does not drop the new 13-argument
+  signature, and both side by side make document search ambiguous
+  (PGRST203). Drop it by hand before downgrading.
+
 ## Verification
 
-- [ ] SQL on a throwaway Postgres (pgvector): ordering, cap, truncation,
-      `is_partial`, same documents as (a), idempotent re-apply
-- [ ] typecheck; `_shared`, frontend and package suites
-- [ ] staging: schema deploy, live passages test, Playwright, search
-      benchmark `--check-floors` (ranking unchanged)
-- [ ] Opus review (read-only)
-- [ ] after the cut: production schema deploy (with go-ahead)
+- [x] SQL on a throwaway Postgres (pgvector): ordering, the prefix rule,
+      cap clamping, excerpt vs opening, `is_partial` and document order for a
+      whole document, a stopword-only query, idempotent re-apply, an
+      old-style named call
+- [x] the default (a) output unchanged: the 0.22.0 function restored on
+      staging under another name, 73 real queries through both, every row
+      identical (then dropped)
+- [x] typecheck; `_shared`, frontend (tests, lint, build) and package suites
+      (package on staging, including the new live test)
+- [x] staging: schema deploy, live passages test, Playwright, search
+      benchmark `--check-floors` (147/147 reproduced, floors hold)
+- [x] a Cerefox Local image from the branch (local embedder): CLI and MCP
+      stdio; the same container on the 0.22.0 function for the old-server
+      error
+- [x] old client (1.23.4) and its web daemon against 0.23.0
+- [x] Opus review (read-only): merge after fixes; fixes applied
+- [ ] remote MCP on staging (needs the branch's Edge Functions deployed)
+- [ ] after the cut: production deploy (with go-ahead)

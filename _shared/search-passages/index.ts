@@ -63,8 +63,14 @@ export function isPassagesUnsupported(error: { code?: string; message?: string }
 
 export const PASSAGES_UNSUPPORTED_MESSAGE =
   `Matched passages (content "matches") need server schema ${PASSAGES_MIN_SCHEMA} or later, ` +
-  `and this server is older. Update it with \`cerefox server deploy\` (Cerefox Local: ` +
-  `\`cerefox-local upgrade\`), or search without it.`;
+  `and this server does not have them yet. Update it with \`cerefox server deploy\` (Cerefox Local: ` +
+  `\`cerefox-local upgrade\`), or search without it. If you have just deployed, the server's ` +
+  `API may still be loading the new schema: retry in a minute.`;
+
+/** Characters as the database counts them (code points), not UTF-16 units. */
+function chars(s: string): number {
+  return [...s].length;
+}
 
 /** A passage's section, without the document's own H1 when the path repeats it. */
 export function passageSection(path: string[] | null | undefined, docTitle: string | undefined): string {
@@ -73,27 +79,40 @@ export function passageSection(path: string[] | null | undefined, docTitle: stri
   return p.filter(Boolean).join(" › ");
 }
 
-/** `2 of 6 matched passages, 1,372 of 4,116 chars` */
+/**
+ * `2 of 6 matched passages, 1,372 of 4,116 chars`.
+ *
+ * `matched_chunk_count` counts the document's chunks among the search's
+ * candidates (a pool ten times `match_count`), so it is a lower bound on how
+ * many of its chunks match: the note below says "at least".
+ */
 export function passageSummary(row: PassageRow): string {
   const passages = row.passages ?? [];
   const matched = row.matched_chunk_count ?? passages.length;
-  const kept = passages.reduce((n, p) => n + p.content.length, 0);
+  const kept = passages.reduce((n, p) => n + chars(p.content), 0);
   const total = row.total_chars ?? kept;
   const noun = matched === 1 ? "matched passage" : "matched passages";
   return `${passages.length} of ${matched} ${noun}, ${kept.toLocaleString()} of ${total.toLocaleString()} chars`;
 }
+
+/** How a caller reads the rest: the MCP tool call by default, a CLI command for the CLI. */
+export type ReadHint = (documentId: string) => string;
+
+export const MCP_READ_HINT: ReadHint = (id) =>
+  `cerefox_get_document("${id}") reads the whole document; ` +
+  `with outline: true it lists the sections, and with section it reads one.`;
 
 /**
  * The body of a passages result: each passage under its section and score,
  * then, when anything was left out, how much and how to read it. A cut is
  * never silent.
  */
-export function renderPassagesBody(row: PassageRow): string {
+export function renderPassagesBody(row: PassageRow, readHint: ReadHint = MCP_READ_HINT): string {
   const passages = row.passages ?? [];
   const parts = passages.map((p) => {
     const section = passageSection(p.heading_path, row.doc_title);
     const head = `### ${section || row.doc_title || "Untitled"} (score: ${p.score.toFixed(3)})`;
-    const shown = `${p.content.length.toLocaleString()} of ${p.chars.toLocaleString()} chars`;
+    const shown = `${chars(p.content).toLocaleString()} of ${p.chars.toLocaleString()} chars`;
     const cut = !p.truncated
       ? ""
       : p.excerpt
@@ -104,12 +123,8 @@ export function renderPassagesBody(row: PassageRow): string {
   if (row.is_partial) {
     const matched = row.matched_chunk_count ?? passages.length;
     const more = matched - passages.length;
-    const lead = more > 0 ? `${more} more matched passage${more === 1 ? "" : "s"}. ` : "";
-    const id = row.document_id ? `"${row.document_id}"` : "<document id>";
-    parts.push(
-      `[${lead}cerefox_get_document(${id}) reads the whole document; ` +
-        `with outline: true it lists the sections, and with section it reads one.]`,
-    );
+    const lead = more > 0 ? `At least ${more} more matched passage${more === 1 ? "" : "s"}. ` : "";
+    parts.push(`[${lead}${readHint(row.document_id ?? "<document id>")}]`);
   }
   return parts.join("\n\n");
 }
