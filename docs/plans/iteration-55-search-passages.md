@@ -120,5 +120,5 @@ Search now has three result shapes:
       error
 - [x] old client (1.23.4) and its web daemon against 0.23.0
 - [x] Opus review (read-only): merge after fixes; fixes applied
-- [ ] remote MCP on staging (needs the branch's Edge Functions deployed)
+- [x] remote MCP on staging: branch Edge Functions deployed, `mcp-remote.test.ts` 27/27 including a passages case; Codex review, two rounds, all findings fixed
 - [ ] after the cut: production deploy (with go-ahead)
