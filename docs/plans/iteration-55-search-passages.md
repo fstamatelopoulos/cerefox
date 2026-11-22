@@ -121,4 +121,4 @@ Search now has three result shapes:
 - [x] old client (1.23.4) and its web daemon against 0.23.0
 - [x] Opus review (read-only): merge after fixes; fixes applied
 - [x] remote MCP on staging: branch Edge Functions deployed, `mcp-remote.test.ts` 27/27 including a passages case; Codex review, two rounds, all findings fixed
-- [ ] after the cut: production deploy (with go-ahead)
+- [x] after the cut: 1.24.0 on staging, Cerefox Local and production (backed up first), doctor green, passages through the CLI, the API and the remote MCP

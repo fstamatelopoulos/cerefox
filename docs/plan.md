@@ -29,13 +29,23 @@
 
 ## Current Focus
 
-**In progress: iteration 55, search returns each document's best passages
-(#375, built on PR #376; schema 0.23.0).** A third result shape for
-`cerefox_search` / `cerefox search` / `/api/v1/search`: the default documents
-in the same order, each with only its best-matching chunks, best first, up to
-a cap, chosen in `cerefox_search_docs`. Plan:
+**2026-11-22: 1.24.0 shipped, search returns each document's best passages
+(iteration 55, #375, PR #376, contributed by @ivanursul; schema 0.23.0).** A
+third result shape for `cerefox_search` (`content: "matches"`), `cerefox search`
+(`--content matches`) and `/api/v1/search` (`content=matches`): the default
+documents in the same order, each with only its best-matching chunks, best
+first, up to `max_passage_chars` (default 1,500), chosen in
+`cerefox_search_docs`. An over-cap best chunk becomes an excerpt around the
+query's terms; a cut below the chunk size is flagged. Equal scores are now
+ordered by document id. Verified on staging (default output identical to
+0.22.0, live and remote-MCP suites, Playwright, benchmark floors), two Codex
+review rounds; rolled out to staging, Cerefox Local and production. Plan:
 [`plans/iteration-55-search-passages.md`](plans/iteration-55-search-passages.md).
-Separate and not started: #377 (MCP `mode: semantic` runs the docs search).
+Open: #377 (MCP `mode: semantic` runs the docs search), Dependabot #371 and
+#372 (tested, safe to merge). Follow-ups: no command re-chunks a store at a
+new `CEREFOX_MAX_CHUNK_CHARS` (`server reindex` only re-embeds);
+`cut_release.ts`'s `EF_SOURCE_PATHS` should derive from `SHARED_SUBTREES`;
+`guides ingest` takes no `--author`.
 
 **2026-11-21: 1.23.4 shipped, a Cerefox Local installer fix (#373, PR #374).**
 Piped into `sh` with `--local-embedder` (the documented form), `install-local.sh`
