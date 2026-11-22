@@ -109,7 +109,7 @@ Search now has three result shapes:
       whole document, a stopword-only query, idempotent re-apply, an
       old-style named call
 - [x] the default (a) output unchanged: the 0.22.0 function restored on
-      staging under another name, 73 real queries through both, every row
+      staging under another name, a set of real queries through both, every row
       identical (then dropped)
 - [x] typecheck; `_shared`, frontend (tests, lint, build) and package suites
       (package on staging, including the new live test)
