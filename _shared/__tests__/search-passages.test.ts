@@ -162,7 +162,10 @@ describe("a passages result is rendered best first, and says what it left out", 
       passages: [{ ...passagesRow().passages[0], content: "opening", chars: 3_410, truncated: true }],
     });
     const out = await search.handler(recorder([row]).client, args({ content: "matches" }), ctx);
-    expect(out).toContain("opening\n\n[… passage cut at 7 of 3,410 chars]");
+    expect(out).toContain(
+      "opening\n\n[… passage cut at 7 of 3,410 chars. max_passage_chars is smaller than this chunk, " +
+        "so this is its opening, which may not hold the part that matched; raise max_passage_chars or read the section]",
+    );
     // Nothing else matched, so no "more" count, but the document is still bigger than what is shown.
     expect(out).toContain(`[cerefox_get_document("${DOC_ID}") reads the whole document;`);
   });

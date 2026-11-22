@@ -7,8 +7,8 @@
 
 An agent that searches to find which document to read pays for whole
 documents in every reply: the default `docs` search returns any document
-under 20,000 characters whole. #375 measured a mean reply of 34 KB on a
-1,193-note store. The chunk modes (`hybrid`, `fts`) are small, but they rank
+under 20,000 characters whole: on a store of about 1,200 notes, a mean
+reply of 34 KB. The chunk modes (`hybrid`, `fts`) are small, but they rank
 chunks on their own, so one long relevant document can fill most of the
 result slots, and they do not answer "which document?".
 
@@ -40,6 +40,14 @@ Search now has three result shapes:
   (and PR #376) did, returned the unrelated section above the match. The cap clamps to 200..20000 (default 1500, the
   value #375 measured). `is_partial` is false only when the passages hold the
   whole document.
+- **A cap below the chunk size is allowed, and said** (decided with the
+  maintainer): rejecting a cap under the store's chunk size would make the
+  option depend on a setting the caller cannot see, so the cap is honored and
+  a passage cut to its opening carries a note that it may not hold what
+  matched (raise the cap or read the section). The docs tell users to keep the
+  cap at or above `CEREFOX_MAX_CHUNK_CHARS` when that matters. A new chunk
+  size only reaches documents as they are ingested or edited: no command
+  re-chunks a store today (`server reindex` re-embeds).
 - **Every surface**: both MCP transports (one shared handler), the CLI
   (`--content matches`, `--max-passage-chars`), `GET /api/v1/search`
   (`content=matches`, `max_passage_chars`). Text rendering is shared

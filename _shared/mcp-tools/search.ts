@@ -540,7 +540,7 @@ export const searchTool: ToolDefinition = {
       },
       max_passage_chars: {
         type: "integer",
-        description: `With content "matches": the most passage text one document carries, in characters (default ${DEFAULT_PASSAGE_CHARS}, range ${MIN_PASSAGE_CHARS}-${MAX_PASSAGE_CHARS}). Whole passages are kept, best first, while they fit; the best one is always kept, and if it alone is longer it is cut to an excerpt around the query's terms (or to its opening when none occur in it).`,
+        description: `With content "matches": the most passage text one document carries, in characters (default ${DEFAULT_PASSAGE_CHARS}, range ${MIN_PASSAGE_CHARS}-${MAX_PASSAGE_CHARS}). Whole passages are kept, best first, while they fit; the best one is always kept, and if it alone is longer it is cut to an excerpt around the query's terms (or to its opening when none occur in it, which may miss what matched: keep it at or above the store's chunk size, 4000 by default, when that matters).`,
       },
       max_bytes: {
         type: "integer",

@@ -95,6 +95,16 @@ export function passageSummary(row: PassageRow): string {
   return `${passages.length} of ${matched} ${noun}, ${kept.toLocaleString()} of ${total.toLocaleString()} chars`;
 }
 
+/**
+ * Said under a passage cut to its opening. That happens when the cap is below
+ * the chunk's size and none of the query's terms occur in the chunk (a
+ * semantic match), so the opening may not be the part that matched. An
+ * excerpt around the terms needs no warning: it shows them.
+ */
+export const CUT_BELOW_CHUNK_NOTE =
+  "max_passage_chars is smaller than this chunk, so this is its opening, " +
+  "which may not hold the part that matched; raise max_passage_chars or read the section";
+
 /** How a caller reads the rest: the MCP tool call by default, a CLI command for the CLI. */
 export type ReadHint = (documentId: string) => string;
 
@@ -117,7 +127,7 @@ export function renderPassagesBody(row: PassageRow, readHint: ReadHint = MCP_REA
       ? ""
       : p.excerpt
         ? `\n\n[… excerpt around the query's terms: ${shown} of this passage]`
-        : `\n\n[… passage cut at ${shown}]`;
+        : `\n\n[… passage cut at ${shown}. ${CUT_BELOW_CHUNK_NOTE}]`;
     return `${head}\n\n${p.content}${cut}`;
   });
   if (row.is_partial) {

@@ -24,8 +24,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
     shows its section and score, and a note says what was left out and how to
     read the rest with `cerefox_get_document` (`outline: true`, or one
     `section`). For finding the right document cheaply before reading it,
-    above all in a store of long documents. In #375 this approach cut a
-    1,193-note store's mean search reply from 34 KB to 8.7 KB with the same
+    above all in a store of long documents. On a store of about 1,200
+    notes this cut the mean search reply from 34 KB to 8.7 KB with the same
     documents found.
   - **Ranked chunks** (`mode: "hybrid"` / `"fts"`, unchanged): for when the
     passage itself is the answer.
@@ -35,7 +35,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   selection. Whole chunks are kept while they fit the cap; only the best one
   can be cut, to an excerpt around the query's terms (a chunk holds up to
   4,000 characters, so its opening is often not what matched), and it is
-  flagged. Ranking is unchanged.
+  flagged. A chunk that matched on meaning alone has no terms to excerpt
+  around, so it is cut to its opening and the passage warns that this may
+  miss what matched: keep `max_passage_chars` at or above the chunk size
+  (`CEREFOX_MAX_CHUNK_CHARS`, default 4,000) when that matters. Ranking is
+  unchanged.
   Asking for passages on a chunk mode is an error, not ignored.
 
 ### Upgrading

@@ -67,6 +67,15 @@ an error that says so. An older MCP server does not know the parameter and
 returns whole documents, so if passages do not appear, ask your user to
 update Cerefox.
 
+**Keep `max_passage_chars` at or above the store's chunk size** (4,000
+characters by default) when you need every passage to show what matched. A
+chunk longer than the cap is cut: to an excerpt around the query's terms when
+they occur in it, otherwise (a match on meaning alone) to its opening, which
+may not hold the part that matched. That passage says so. The chunk size is
+the store's `CEREFOX_MAX_CHUNK_CHARS`; a new value applies to documents as
+they are ingested or edited (`cerefox server reindex` re-embeds the existing
+chunks, it does not re-chunk them).
+
 **Results format**: Each result shows `## Title [id: <uuid>] (score: X.XXX)` followed by content (in `hybrid` and `fts` modes the heading also carries the section path and the chunk index: `## Title › Section › Subsection [id: <uuid>] (chunk 4) (score: …)`).
 Save the `document_id` from `[id: ...]` -- you need it for `cerefox_get_document` and `cerefox_ingest` updates.
 
