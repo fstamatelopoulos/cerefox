@@ -10,6 +10,11 @@
  * Default mode is `docs`: returns full reconstructed documents (the
  * recommended path for agents). `hybrid` returns ranked chunks. `fts`
  * skips the embedding entirely (no OpenAI key required).
+ *
+ * `--content matches` (#375, docs mode, schema 0.23.0): the same documents,
+ * each with only its best-matching passages, best first, up to
+ * `--max-passage-chars`. The RPC selects them; the text rendering is shared
+ * with the MCP tool (`_shared/search-passages`).
  */
 
 import type { Command } from "commander";
@@ -32,6 +37,17 @@ import {
   getMaxResponseBytes,
   getMinTermCoverage,
 } from "../../../../../_shared/mcp-tools/_utils.ts";
+import {
+  DEFAULT_PASSAGE_CHARS,
+  MAX_PASSAGE_CHARS,
+  MIN_PASSAGE_CHARS,
+  PASSAGES_UNSUPPORTED_MESSAGE,
+  isPassagesUnsupported,
+  passageSummary,
+  renderPassagesBody,
+  resolvePassageChars,
+  type Passage,
+} from "../../../../../_shared/search-passages/index.ts";
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
 import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
@@ -43,7 +59,8 @@ interface DocResult {
   doc_source: string | null;
   best_score: number | null;
   best_chunk_heading_path: string[] | null;
-  full_content: string;
+  /** NULL with --content matches, which returns `passages` instead. */
+  full_content: string | null;
   chunk_count: number;
   total_chars: number;
   is_partial: boolean;
@@ -53,6 +70,8 @@ interface DocResult {
   content_hash: string | null;
   metadata_revision?: number | null;
   below_confidence?: boolean;
+  passages?: Passage[] | null;
+  matched_chunk_count?: number | null;
 }
 
 interface ChunkResult {
@@ -73,6 +92,8 @@ async function action(
     projectName?: string;
     metadataFilter?: string;
     mode?: string;
+    content?: string;
+    maxPassageChars?: string;
     alpha?: string;
     minScore?: string;
     minTermCoverage?: string;
@@ -120,6 +141,20 @@ async function action(
   if (!["docs", "hybrid", "fts"].includes(mode)) {
     throw userError(`--mode "${mode}": expected "docs", "hybrid", or "fts".`);
   }
+  const content = options.content ?? "full";
+  if (content !== "full" && content !== "matches") {
+    throw userError(`--content "${content}": expected "full" or "matches".`);
+  }
+  if (content === "matches" && mode !== "docs") {
+    throw userError(`--content matches applies to --mode docs only: ${mode} already returns matched chunks.`);
+  }
+  if (options.maxPassageChars !== undefined && content !== "matches") {
+    throw userError("--max-passage-chars applies only with --content matches.");
+  }
+  const maxPassageChars =
+    options.maxPassageChars === undefined
+      ? DEFAULT_PASSAGE_CHARS
+      : resolvePassageChars(parsePositiveInt(options.maxPassageChars, "--max-passage-chars", DEFAULT_PASSAGE_CHARS));
   const metadataFilter = parseJsonObjectArg(options.metadataFilter, "--metadata-filter");
 
   const client = getClient();
@@ -186,10 +221,20 @@ async function action(
       ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
+      ...(content === "matches" ? { p_passages: true, p_max_passage_chars: maxPassageChars } : {}),
     };
   }
 
-  const results = await client.rpc<DocResult[] | ChunkResult[]>(rpcName, rpcParams);
+  let results: DocResult[] | ChunkResult[] | null;
+  try {
+    results = await client.rpc<DocResult[] | ChunkResult[]>(rpcName, rpcParams);
+  } catch (err) {
+    // A server older than schema 0.23.0 has no p_passages.
+    if (content === "matches" && isPassagesUnsupported({ message: (err as Error).message })) {
+      throw userError(PASSAGES_UNSUPPORTED_MESSAGE);
+    }
+    throw err;
+  }
   if (results === null) {
     throw systemError(`${rpcName}: RPC returned no data.`);
   }
@@ -233,6 +278,7 @@ async function action(
           const copy: Record<string, unknown> = { ...r };
           delete copy.full_content;
           delete copy.content;
+          delete copy.passages;
           return copy;
         })
       : accepted;
@@ -240,6 +286,7 @@ async function action(
       results: jsonResults,
       query,
       mode,
+      content,
       match_count: matchCount,
       project_name: options.projectName ?? null,
       metadata_filter: metadataFilter ?? null,
@@ -279,7 +326,9 @@ async function action(
       // Always show chunk + char counts (was previously only shown for
       // `is_partial` results, and mislabeled the chunk count as chars).
       // `partial` = small-to-big assembled subset; `full` = whole document.
-      const counts = ` · ${doc.chunk_count} chunk${doc.chunk_count === 1 ? "" : "s"} · ${doc.total_chars.toLocaleString()} chars`;
+      const counts = doc.passages
+        ? ` · ${passageSummary(doc)}`
+        : ` · ${doc.chunk_count} chunk${doc.chunk_count === 1 ? "" : "s"} · ${doc.total_chars.toLocaleString()} chars`;
       const kind = doc.is_partial ? " · partial" : " · full";
       println(c.bold(`## ${title}${docId}${score}${counts}${kind}`));
       // Parity with the web result row: best-match breadcrumb + last-updated.
@@ -306,7 +355,7 @@ async function action(
       // (not `---`, which collides with `---` inside markdown content).
       if (options.onlyMetadata) continue;
       println("");
-      println(doc.full_content ?? "");
+      println(doc.passages ? renderPassagesBody(doc) : (doc.full_content ?? ""));
       println("");
       println(c.dim("════════════════════════════════════════"));
       println("");
@@ -355,6 +404,14 @@ export function registerSearch(program: Command): void {
       "JSON containment filter; only docs whose metadata contains ALL pairs are returned.",
     )
     .option("--mode <mode>", "Search mode: docs (default), hybrid, fts.", "docs")
+    .option(
+      "--content <content>",
+      "With --mode docs: full (default; whole documents, large ones as matched sections) or matches (the same documents, each with only its best-matching passages, best first; needs server schema 0.23.0).",
+    )
+    .option(
+      "--max-passage-chars <n>",
+      `With --content matches: the most passage text per document (default ${DEFAULT_PASSAGE_CHARS}, range ${MIN_PASSAGE_CHARS}-${MAX_PASSAGE_CHARS}).`,
+    )
     .option("--alpha <float>", "Semantic weight 0..1 (default: CEREFOX_SEARCH_ALPHA; else 0.7).")
     .option("--min-score <float>", "Minimum cosine similarity threshold (default: the store's min_search_score; else 0.5, or 0.6 on a local-embedder store).")
     .option("--min-term-coverage <float>", "OR-fallback keyword matches must cover at least this fraction of the query's meaningful terms to count as confident hits (default: the store's min_term_coverage; else 0.66; needs schema ≥ 0.9.1).")

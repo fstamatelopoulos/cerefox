@@ -23,6 +23,10 @@ import { getConfiguredMinSearchScore, getConfiguredSearchAlpha,
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
+import {
+  DEFAULT_PASSAGE_CHARS, MAX_PASSAGE_CHARS, MIN_PASSAGE_CHARS, PASSAGES_UNSUPPORTED_MESSAGE,
+  isPassagesUnsupported, passageSummary, renderPassagesBody, resolvePassageChars, type Passage,
+} from "../search-passages/index.ts";
 
 interface SearchRow {
   document_id?: string;
@@ -45,6 +49,9 @@ interface SearchRow {
   content_hash?: string;
   metadata_revision?: number;
   below_confidence?: boolean;
+  /** `content: "matches"` (#375): the document's best chunks, best first. */
+  passages?: Passage[] | null;
+  matched_chunk_count?: number | null;
 }
 
 /** The row's text, under whichever column name this search mode returns. */
@@ -113,32 +120,15 @@ function hashLine(row: SearchRow): string {
   return `\nhash: ${row.content_hash}${rev}`;
 }
 
-/**
- * `content: "matches"`: the most text one result carries. Enough for a
- * matched chunk's opening (chunks are at most 4,000 characters), small enough
- * that five results cost an agent a few kilobytes instead of whole documents.
- */
-export const MATCH_SNIPPET_CHARS = 1500;
-
-/**
- * Cut a result's text to `max` characters at a line break, and say so. The
- * marker names the remainder and how to read it, so a cut is never silent.
- */
-export function capSnippet(text: string, max: number, documentId?: string): string {
-  if (text.length <= max) return text;
-  const nl = text.lastIndexOf("\n", max);
-  const cut = nl > max / 2 ? nl : max;
-  const rest = text.length - cut;
-  const how = documentId
-    ? `cerefox_get_document("${documentId}") reads the whole document`
-    : "cerefox_get_document reads the whole document";
-  return `${text.slice(0, cut).trimEnd()}\n\n[… ${rest.toLocaleString()} more chars in this match; ${how}]`;
-}
-
 /** One rendered result: heading, score, then the row's text. */
-function renderRow(row: SearchRow, snippetChars?: number): string {
+function renderRow(row: SearchRow): string {
   const raw = row.best_score ?? row.score;
   const score = raw != null ? ` (score: ${raw.toFixed(3)})` : "";
+  // `content: "matches"` (#375): the passages, each under its section, and a
+  // note saying what was left out and how to read it.
+  if (row.passages) {
+    return `## ${rowHeading(row)}${score} -- ${passageSummary(row)}${hashLine(row)}\n\n${renderPassagesBody(row)}`;
+  }
   const partial = row.is_partial
     ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
     : "";
@@ -147,8 +137,7 @@ function renderRow(row: SearchRow, snippetChars?: number): string {
   // Whichever column this mode returns (#259): `cerefox_search_docs` gives
   // `full_content`, the chunk RPCs give `content`, and reading only the first
   // rendered every hybrid/fts result as a title with an empty body.
-  const text = snippetChars ? capSnippet(rowContent(row), snippetChars, row.document_id) : rowContent(row);
-  return `## ${rowHeading(row)}${score}${partial}${hash}\n\n${text}`;
+  return `## ${rowHeading(row)}${score}${partial}${hash}\n\n${rowContent(row)}`;
 }
 
 /** `## Title [id: …] (score: …) -- 20,297 chars` — everything but the content. */
@@ -220,12 +209,19 @@ async function handler(
   // tool arguments through unvalidated (#265).
   const match_count = Math.min(Math.max(1, Math.floor(Number(args.match_count)) || 5), 200);
   const mode = (args.mode as string | undefined) ?? "docs";
-  // "matches": each result is its matched chunks only, capped at
-  // MATCH_SNIPPET_CHARS; "full": whole documents (small ones) as before.
+  // #375: "full" = the documents as assembled today; "matches" = the same
+  // documents, each with only its best-matching passages (the RPC selects
+  // them). Only the caller chooses: there is no setting that changes it.
   const content = (args.content as string | undefined) ?? "full";
   if (content !== "full" && content !== "matches") {
     throw new McpInvalidParams('content must be "full" or "matches"');
   }
+  if (content === "matches" && mode !== "docs") {
+    throw new McpInvalidParams(
+      'content "matches" applies to mode "docs" only: hybrid and fts already return matched chunks.',
+    );
+  }
+  const maxPassageChars = resolvePassageChars(args.max_passage_chars);
   // #133: omit unconfigured tunables so the server resolves them from
   // cerefox_config (one setting governs every access path).
   const alpha = (args.alpha as number | undefined) ?? getConfiguredSearchAlpha();
@@ -324,15 +320,18 @@ async function handler(
       ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
-      // Every document takes the small-to-big path with no neighbours, so
-      // full_content holds the matched chunks only.
-      ...(content === "matches" ? { p_small_to_big_threshold: 1, p_context_window: 0 } : {}),
+      ...(content === "matches" ? { p_passages: true, p_max_passage_chars: maxPassageChars } : {}),
     };
   }
 
   const { data, error } = await supabase.rpc(rpcName, rpcParams);
 
-  if (error) throw new Error(`RPC error: ${error.message}`);
+  if (error) {
+    // A server older than schema 0.23.0 has no p_passages: say so, rather
+    // than surfacing PostgREST's "function not found".
+    if (content === "matches" && isPassagesUnsupported(error)) throw new Error(PASSAGES_UNSUPPORTED_MESSAGE);
+    throw new Error(`RPC error: ${error.message}`);
+  }
 
   const matched = (data ?? []) as SearchRow[];
 
@@ -366,7 +365,7 @@ async function handler(
   // So: render, then take as many rows as the whole assembled reply can carry.
   // Assembling and measuring is the only way to be sure, because the preamble
   // and the footer both depend on how many rows were kept.
-  const rendered = matched.map((r) => renderRow(r, content === "matches" ? MATCH_SNIPPET_CHARS : undefined));
+  const rendered = matched.map(renderRow);
   const size = (t: string) => new TextEncoder().encode(t).length;
   const SEP = "\n\n---\n\n";
 
@@ -485,7 +484,7 @@ async function handler(
 export const searchTool: ToolDefinition = {
   name: "cerefox_search",
   description:
-    "Search the Cerefox personal knowledge base. Returns documents ranked by hybrid (FTS + semantic) relevance: whole documents, or with content: \"matches\" only the matching passages (read a document in full with cerefox_get_document).",
+    "Search the Cerefox personal knowledge base (hybrid FTS + semantic). Three result shapes: documents (the default; small ones whole, large ones as their matched sections), documents with only their best-matching passages (content: \"matches\"; the cheapest way to find the right document before reading it with cerefox_get_document), or ranked chunks (mode: \"hybrid\" or \"fts\"; for when the passage itself is the answer).",
   // Read-only: touches nothing. Safe for a client to run without prompting.
   annotations: {
     title: "Search knowledge base",
@@ -537,7 +536,11 @@ export const searchTool: ToolDefinition = {
         type: "string",
         enum: ["full", "matches"],
         description:
-          'What each result carries (default: "full"). Ask for "matches" when you need to find where something is written rather than read whole documents. full: the whole document when it is under 20,000 characters, else its matched sections with neighbours. matches: only the matched passages, each cut at 1,500 characters with a note saying how much more there is; read the document with cerefox_get_document.',
+          'What each document result carries, with mode "docs" (default: "full"). full: the whole document when it is under 20,000 characters, else its matched sections with their neighbors. matches: the same documents in the same order, each with only its best-matching passages, best first, up to max_passage_chars, and a note saying what was left out. Use "matches" to find which document to read, then read it (or one section of it) with cerefox_get_document. Needs server schema 0.23.0.',
+      },
+      max_passage_chars: {
+        type: "integer",
+        description: `With content "matches": the most passage text one document carries, in characters (default ${DEFAULT_PASSAGE_CHARS}, range ${MIN_PASSAGE_CHARS}-${MAX_PASSAGE_CHARS}). Whole passages are kept, best first, while they fit; the best one is always kept, and if it alone is longer it is cut to an excerpt around the query's terms (or to its opening when none occur in it).`,
       },
       max_bytes: {
         type: "integer",

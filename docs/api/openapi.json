@@ -5095,6 +5095,32 @@
             }
           },
           {
+            "name": "content",
+            "in": "query",
+            "required": false,
+            "description": "With `mode=docs`: `full` (default) or `matches`, the same documents in the same order, each with only its best-matching `passages`, best first (#375; needs schema 0.23.0, else a `400` naming `cerefox server deploy`). `400` with any other mode.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "full",
+                "matches"
+              ],
+              "default": "full"
+            }
+          },
+          {
+            "name": "max_passage_chars",
+            "in": "query",
+            "required": false,
+            "description": "With `content=matches`: the most passage text per document, in characters. Clamped to 200-20000.",
+            "schema": {
+              "type": "integer",
+              "minimum": 200,
+              "maximum": 20000,
+              "default": 1500
+            }
+          },
+          {
             "name": "X-Cerefox-Author",
             "in": "header",
             "required": false,
@@ -5207,6 +5233,57 @@
                               },
                               "below_confidence": {
                                 "type": "boolean"
+                              },
+                              "passages": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "chunk_index": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "heading_path": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "score": {
+                                      "type": "number"
+                                    },
+                                    "content": {
+                                      "type": "string"
+                                    },
+                                    "chars": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "truncated": {
+                                      "type": "boolean"
+                                    },
+                                    "excerpt": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "chunk_index",
+                                    "heading_path",
+                                    "score",
+                                    "content",
+                                    "chars",
+                                    "truncated",
+                                    "excerpt"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "matched_chunk_count": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
                               }
                             },
                             "required": [
@@ -5907,7 +5984,7 @@
   "x-cerefox-coverage": {
     "routes": 40,
     "withResponseSchema": 36,
-    "queryParameters": 42,
+    "queryParameters": 44,
     "note": "Routes without a response schema are listed with their parameters and summary only. Nothing is invented; see `uncovered`.",
     "nonJson": [
       "GET /openapi.json",

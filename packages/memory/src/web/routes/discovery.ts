@@ -21,6 +21,12 @@ import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
 import { resolveCallerIdentity } from "../identity.ts";
+import {
+  PASSAGES_UNSUPPORTED_MESSAGE,
+  isPassagesUnsupported,
+  resolvePassageChars,
+  type Passage,
+} from "../../../../../_shared/search-passages/index.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -284,6 +290,9 @@ interface DocResultRow {
   doc_updated_at?: string | null;
   is_partial?: boolean;
   below_confidence?: boolean;
+  /** `content=matches` (#375): the document's best chunks, best first. */
+  passages?: Passage[] | null;
+  matched_chunk_count?: number | null;
 }
 
 interface ChunkResultRow {
@@ -326,6 +335,8 @@ function projectDocResult(r: DocResultRow): Record<string, unknown> {
     // web UI until it is added here. Source of truth: cerefox_search_docs /
     // cerefox_hybrid_search in src/cerefox/db/rpcs.sql.
     below_confidence: r.below_confidence ?? false,
+    // #375: only with content=matches, so the default shape is unchanged.
+    ...(r.passages ? { passages: r.passages, matched_chunk_count: r.matched_chunk_count ?? r.passages.length } : {}),
   };
 }
 
@@ -360,9 +371,11 @@ async function runSearch(
     /** Pushed into the RPC (#240) so the filter runs before the LIMIT. Only
      * the hybrid and docs RPCs take it; fts/semantic ignore it as before. */
     reviewStatus: string | null;
+    /** #375: the per-document passage cap with content=matches, else null. */
+    passageChars: number | null;
   },
 ): Promise<Array<Record<string, unknown>>> {
-  const { query, mode, projectId, count, metadataFilter, reviewStatus } = opts;
+  const { query, mode, projectId, count, metadataFilter, reviewStatus, passageChars } = opts;
 
   if (mode === "fts") {
     const params: Record<string, unknown> = {
@@ -430,8 +443,17 @@ async function runSearch(
   };
   if (metadataFilter) params.p_metadata_filter = metadataFilter;
   if (reviewStatus) params.p_review_status = reviewStatus;
+  if (passageChars !== null) {
+    params.p_passages = true;
+    params.p_max_passage_chars = passageChars;
+  }
   const { data, error } = await ctx.supabase.rpc("cerefox_search_docs", params);
-  if (error) throw error;
+  if (error) {
+    if (passageChars !== null && isPassagesUnsupported(error)) {
+      throw new HttpError(400, PASSAGES_UNSUPPORTED_MESSAGE);
+    }
+    throw error;
+  }
   return ((data ?? []) as DocResultRow[]).map(projectDocResult);
 }
 
@@ -459,6 +481,16 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
     count = Math.min(Math.max(count, 1), 50);
     const metadataFilterStr = c.req.query("metadata_filter") ?? "";
     const reviewStatus = c.req.query("review_status") ?? "";
+    // #375: content=matches → the same documents, each with only its
+    // best-matching passages. Docs mode only; the chunk modes already are.
+    const content = c.req.query("content") ?? "full";
+    if (content !== "full" && content !== "matches") {
+      return c.json({ detail: `Invalid content: ${JSON.stringify(content)} (expected "full" or "matches")` }, 400);
+    }
+    if (content === "matches" && mode !== "docs") {
+      return c.json({ detail: 'content=matches applies to mode=docs only: the chunk modes already return matched chunks.' }, 400);
+    }
+    const passageChars = content === "matches" ? resolvePassageChars(c.req.query("max_passage_chars")) : null;
 
     const mf = parseMetadataFilter(metadataFilterStr);
     if (!mf.ok) {
@@ -530,6 +562,7 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
         count,
         metadataFilter: mf.value,
         reviewStatus: reviewStatus || null,
+        passageChars,
       });
     } catch (err) {
       if (err instanceof HttpError) {

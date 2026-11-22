@@ -46,8 +46,22 @@ Find documents using hybrid search (full-text + semantic vector similarity).
 | `match_count` | No | Max documents to return (default 5). |
 | `project_name` | No | Filter to a specific project by name. |
 | `metadata_filter` | No | JSON object for filtering by metadata (AND semantics). Example: `{"type": "decision-log"}` |
+| `mode` | No | `docs` (default) returns documents; `hybrid` and `fts` return ranked chunks. |
+| `content` | No | With `mode: "docs"`: `full` (default) or `matches`. See "Three result shapes" below. |
+| `max_passage_chars` | No | With `content: "matches"`: the most passage text per document (default 1500, range 200-20000). |
 | `max_bytes` | No | Response size budget in bytes (default 200000). |
 | `author` | No | Your agent name for attribution. Always set this. |
+
+**Three result shapes.** Pick by what you will do with the results:
+
+| Shape | Ask for | What each result carries | Best when |
+|---|---|---|---|
+| Documents | (the default) | The whole document under 20,000 characters; above that, its matched sections with their neighbors | You want to answer from the search reply itself, and the documents are small or medium |
+| Documents with their best passages | `content: "matches"` | The same documents in the same order, each with only its best-matching passages, best first, up to `max_passage_chars`, and a note on what was left out | You need to find *which document* to read, especially in a store of long documents. Then read it, or one section of it, with `cerefox_get_document` (`outline: true` lists the sections, `section` reads one) |
+| Ranked chunks | `mode: "hybrid"` or `"fts"` | Single chunks ranked on their own; several may come from one document | The passage itself is the answer (a fact, a "where is X mentioned") |
+
+`content: "matches"` needs server schema 0.23.0; an older server answers with
+an error that says so.
 
 **Results format**: Each result shows `## Title [id: <uuid>] (score: X.XXX)` followed by content (in `hybrid` and `fts` modes the heading also carries the section path and the chunk index: `## Title › Section › Subsection [id: <uuid>] (chunk 4) (score: …)`).
 Save the `document_id` from `[id: ...]` -- you need it for `cerefox_get_document` and `cerefox_ingest` updates.
@@ -232,11 +246,10 @@ No `expected_content_hash`: a trashed document cannot be concurrently edited, so
 ### A note on `max_bytes` and search
 
 `cerefox_search` returns **complete documents** by default, so `max_bytes`
-has to be large enough for the biggest one you might match. To find where
-something is written rather than read it, pass `content: "matches"`: each
-result is then only its matched passages, cut at 1,500 characters with a
-note naming how much is left, and a search costs a few kilobytes instead of
-whole documents. Read a document in full with `cerefox_get_document`. A budget smaller than the
+has to be large enough for the biggest one you might match. To find which
+document to read rather than read it in the search, pass `content: "matches"`
+(see "Three result shapes" above): each result is then its best-matching
+passages, and a search costs a few kilobytes instead of whole documents. A budget smaller than the
 top hit fits nothing, and you will get a header-only list that names what
 matched, its size and its id, prefixed with a warning. That list is not an
 empty result: raise `max_bytes`, or read a single document with
@@ -672,7 +685,7 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (also `--mode`, `--alpha`, `--min-score`, `--only-metadata` — CLI-only) |
+| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (also `--mode`, `--content matches`, `--max-passage-chars`, `--alpha`, `--min-score`, `--only-metadata` — `--only-metadata` is CLI-only) |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest(...)` (paste) | `printf '%s' "<content>" \| cerefox document ingest --paste --title "<title>"` (same flags) |
 | `cerefox_get_document(document_id, version_id, author)` | `cerefox document get <document-id> --version-id <vid> --author <name>` |

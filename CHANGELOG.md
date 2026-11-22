@@ -11,13 +11,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ### Added
 
-- **`cerefox_search` can return passages instead of whole documents.** A new
-  per-call parameter, `content: "full" | "matches"`, defaults to `"full"`,
-  so nothing changes unless a caller asks. With `"matches"`, each result is
-  only its matched passages, cut at 1,500 characters at a line break with a
-  note naming how much is left and the `cerefox_get_document` call that
-  reads it. Ranking is unchanged. On a 1,193-note store the mean reply fell
-  from 34 KB to 8.7 KB (p95 63 KB to 9.4 KB) with the same documents found.
+- **Search can return each document's best passages instead of the whole
+  document** (#375, #376, contributed by @ivanursul). Search now has three
+  result shapes, and this is the new one:
+  - **Documents** (the default, unchanged): small documents whole, large ones
+    as their matched sections. Best for answering from the reply itself.
+  - **Documents with their best passages** (new: `content: "matches"` on the
+    `cerefox_search` MCP tool, `--content matches` on `cerefox search`,
+    `content=matches` on `GET /api/v1/search`): the same documents in the same
+    order, each carrying only its best-matching chunks, best first, up to
+    `max_passage_chars` (default 1,500, range 200 to 20,000). Each passage
+    shows its section and score, and a note says what was left out and how to
+    read the rest with `cerefox_get_document` (`outline: true`, or one
+    `section`). For finding the right document cheaply before reading it,
+    above all in a store of long documents. In #375 this approach cut a
+    1,193-note store's mean search reply from 34 KB to 8.7 KB with the same
+    documents found.
+  - **Ranked chunks** (`mode: "hybrid"` / `"fts"`, unchanged): for when the
+    passage itself is the answer.
+
+  The passages are chosen in `cerefox_search_docs` (new `p_passages` and
+  `p_max_passage_chars` parameters), so every access path gets the same
+  selection. Whole chunks are kept while they fit the cap; only the best one
+  can be cut, to an excerpt around the query's terms (a chunk holds up to
+  4,000 characters, so its opening is often not what matched), and it is
+  flagged. Ranking is unchanged.
+  Asking for passages on a chunk mode is an error, not ignored.
+
+### Upgrading
+
+- **Schema 0.23.0: run `cerefox server deploy`** to get passages. Until then
+  the option answers with an error naming the fix; every other search works
+  as before. Cerefox Local updates its schema on `cerefox-local upgrade`. No
+  data changes and no reindex.
 
 ---
 

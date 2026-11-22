@@ -314,6 +314,16 @@ export const QUERY_DOCS: Record<string, Record<string, ParamDoc>> = {
         "`docs` (default): one row per document with its full content. `hybrid`, `fts`, `semantic`: one row per chunk.",
       schema: { type: "string", enum: ["docs", "hybrid", "fts", "semantic"], default: "docs" },
     },
+    content: {
+      description:
+        "With `mode=docs`: `full` (default) or `matches`, the same documents in the same order, each with only its best-matching `passages`, best first (#375; needs schema 0.23.0, else a `400` naming `cerefox server deploy`). `400` with any other mode.",
+      schema: { type: "string", enum: ["full", "matches"], default: "full" },
+    },
+    max_passage_chars: {
+      description:
+        "With `content=matches`: the most passage text per document, in characters. Clamped to 200-20000.",
+      schema: { type: "integer", minimum: 200, maximum: 20000, default: 1500 },
+    },
     project_id: { description: "Restrict to one project.", schema: UUID },
     count: {
       description: "Maximum results. Clamped to 1–50, and to 5 in `docs` mode, where each result is a whole document.",
