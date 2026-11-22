@@ -114,6 +114,7 @@ Projects and categories are created, renamed, and deleted by the user at any tim
 | FR-4.12 | Assembled chunks are sorted by chunk_index and deduplicated — overlapping neighbor windows produce each chunk only once | P1 |
 | FR-4.13 | Documents below the threshold retain current behavior: return full reconstructed document | P1 |
 | FR-4.14 | Full document retrieval API — retrieve the complete text of a specific document by ID, regardless of size, bypassing small-to-big logic. See FR-11 | P1 |
+| FR-4.15 | Document search can return, instead of each document's body, only its best-matching chunks, best first, up to a per-document character cap (default 1,500); same documents, same order; a cut is always flagged and the reply says how to read the rest (v1.24.0, #375) | P1 |
 
 ### FR-5: MCP Integration
 

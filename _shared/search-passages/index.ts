@@ -99,11 +99,15 @@ export function passageSummary(row: PassageRow): string {
  * Said under a passage cut to its opening. That happens when the cap is below
  * the chunk's size and none of the query's terms occur in the chunk (a
  * semantic match), so the opening may not be the part that matched. An
- * excerpt around the terms needs no warning: it shows them.
+ * excerpt around the terms needs no warning: it shows them. A cut passage
+ * always leaves the document partial, so the read hint follows at the end.
  */
-export const CUT_BELOW_CHUNK_NOTE =
-  "max_passage_chars is smaller than this chunk, so this is its opening, " +
-  "which may not hold the part that matched; raise max_passage_chars or read the section";
+export function cutBelowChunkNote(capName: string): string {
+  return (
+    `${capName} is smaller than this chunk, so only its opening is shown and the part that matched ` +
+    `may be missing: search again with a larger ${capName}, or read the document as the last note says`
+  );
+}
 
 /** How a caller reads the rest: the MCP tool call by default, a CLI command for the CLI. */
 export type ReadHint = (documentId: string) => string;
@@ -117,7 +121,11 @@ export const MCP_READ_HINT: ReadHint = (id) =>
  * then, when anything was left out, how much and how to read it. A cut is
  * never silent.
  */
-export function renderPassagesBody(row: PassageRow, readHint: ReadHint = MCP_READ_HINT): string {
+export function renderPassagesBody(
+  row: PassageRow,
+  readHint: ReadHint = MCP_READ_HINT,
+  capName = "max_passage_chars",
+): string {
   const passages = row.passages ?? [];
   const parts = passages.map((p) => {
     const section = passageSection(p.heading_path, row.doc_title);
@@ -127,7 +135,7 @@ export function renderPassagesBody(row: PassageRow, readHint: ReadHint = MCP_REA
       ? ""
       : p.excerpt
         ? `\n\n[… excerpt around the query's terms: ${shown} of this passage]`
-        : `\n\n[… passage cut at ${shown}. ${CUT_BELOW_CHUNK_NOTE}]`;
+        : `\n\n[… passage cut at ${shown}. ${cutBelowChunkNote(capName)}.]`;
     return `${head}\n\n${p.content}${cut}`;
   });
   if (row.is_partial) {

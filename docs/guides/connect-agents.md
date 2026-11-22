@@ -194,7 +194,7 @@ Once configured, every Path A client has these tools:
 
 | Tool | Description |
 |------|-------------|
-| `cerefox_search` | Hybrid (FTS + semantic) document-level search. Filter by `project_name` or `metadata_filter`. |
+| `cerefox_search` | Hybrid (FTS + semantic) document-level search. Filter by `project_name` or `metadata_filter`. `content: "matches"` returns each document's best passages instead of its body (v1.24.0). |
 | `cerefox_ingest` | Save a note or document to the knowledge base. Pass `document_id` to update by ID (deterministic); or `update_if_exists: true` to update by title match. Accepts optional `author` and `project_name`. |
 | `cerefox_insert` | Add text to a document without resending it (additive only — structurally cannot remove content) |
 | `cerefox_edit` | Change parts of a document: 1..n operations (`insert`/`replace_section`/`delete_section`/`rename_section`) applied atomically |
@@ -1356,7 +1356,7 @@ The agent docs are written around MCP tool names. **CLI flag names match MCP par
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (CLI-only: `--mode`, `--alpha`, `--min-score`, `--only-metadata`) |
+| `cerefox_search` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --content matches --max-passage-chars N --author <name>` (CLI-only: `--alpha`, `--min-score`, `--only-metadata`) |
 | `cerefox_ingest` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest` (paste) | `printf '...' \| cerefox document ingest --paste --title "<title>"` (same flags) |
 | `cerefox_get_document` | `cerefox document get <document-id> --version-id <vid> --author <name>` |
@@ -1428,6 +1428,11 @@ Search the knowledge base. Returns complete documents ranked by hybrid (FTS + se
 | `query` | string | required | Natural-language search query |
 | `match_count` | integer | 5 | Maximum **documents** to return |
 | `project_name` | string | optional | Filter to a specific project |
+| `mode` | string | `docs` | `docs` = documents; `hybrid` / `fts` = ranked chunks |
+| `content` | string | `full` | `mode: "docs"` only. `matches` (v1.24.0, schema 0.23.0) returns the same documents in the same order, each with only its best-matching passages, best first, up to `max_passage_chars` |
+| `max_passage_chars` | integer | 1500 | With `content: "matches"`: the most passage text per document (200..20000) |
+
+Three result shapes: **documents** (the default, below), **documents with their best passages** (`content: "matches"`: for finding which document to read, especially among long documents; each passage shows its section and score, and a note says what was left out and how to read the rest with `cerefox_get_document`), and **ranked chunks** (`mode: "hybrid"`/`"fts"`: when the passage itself is the answer). Keep `max_passage_chars` at or above the store's chunk size (`CEREFOX_MAX_CHUNK_CHARS`, default 4000) if every passage must show what matched: a longer chunk is cut to an excerpt around the query's words, or to its opening when it matched on meaning alone, and that passage says so. See [`AGENT_GUIDE.md`](../../AGENT_GUIDE.md).
 
 Each result includes `doc_title`, `best_score`, `full_content`, `chunk_count`, `total_chars`, and `is_partial`. When `is_partial` is true, the document exceeded the small-to-big threshold: `full_content` contains the best-matching chunks and their neighbours rather than the whole document. The heading for such results includes a `— partial (N of M chars)` annotation. Use `cerefox_get_document` to retrieve the full text when needed.
 
@@ -1543,10 +1548,15 @@ recommended RPC for agent use** — agents receive complete notes, not isolated 
 | `p_min_score` | FLOAT | 0.0 | Minimum cosine similarity |
 | `p_small_to_big_threshold` | INT | 20000 | Documents larger than this return matched chunks + neighbours instead of the full document. Set to `0` to always return full content. Change the DEFAULT in `rpcs.sql` to apply server-wide. |
 | `p_context_window` | INT | 1 | Neighbour chunks on each side of each matched chunk. `1` → up to 3 contiguous chunks per hit. `0` → matched chunks only. |
+| `p_passages` | BOOLEAN | false | Schema 0.23.0. Return each document's best-matching chunks in `passages` instead of `full_content` (left empty). Same documents, same order. |
+| `p_max_passage_chars` | INT | 1500 | With `p_passages`: passage text per document, clamped to 200..20000. Whole chunks are kept best first while they fit; the best one is always kept, cut (to an excerpt around the query's terms, else its opening) when it alone is longer. |
 
 Returns: `document_id`, `doc_title`, `doc_source`, `doc_metadata`, `doc_project_ids`,
 `best_score`, `best_chunk_heading_path`, `full_content`, `chunk_count`, `total_chars`,
-`doc_updated_at`, `version_count`, `is_partial`.
+`doc_updated_at`, `version_count`, `is_partial`, and (schema 0.23.0) `passages` (JSONB array of
+`{chunk_index, heading_path, score, content, chars, truncated, excerpt}`, NULL unless
+`p_passages`) and `matched_chunk_count` (the document's chunks among the search's candidates,
+a lower bound on how many match).
 
 `is_partial` is `TRUE` when the document exceeded `p_small_to_big_threshold` — in that
 case `full_content` contains matched chunks + up to `p_context_window` neighbours on each

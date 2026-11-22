@@ -361,7 +361,7 @@ async function action(
       // (not `---`, which collides with `---` inside markdown content).
       if (options.onlyMetadata) continue;
       println("");
-      println(doc.passages ? renderPassagesBody(doc, cliReadHint) : (doc.full_content ?? ""));
+      println(doc.passages ? renderPassagesBody(doc, cliReadHint, "--max-passage-chars") : (doc.full_content ?? ""));
       println("");
       println(c.dim("════════════════════════════════════════"));
       println("");

@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { TOOLS_BY_NAME } from "../mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../mcp-tools/types.ts";
-import { DEFAULT_PASSAGE_CHARS, resolvePassageChars } from "../search-passages/index.ts";
+import { DEFAULT_PASSAGE_CHARS, renderPassagesBody, resolvePassageChars } from "../search-passages/index.ts";
 
 const ctx = { accessPath: "local-mcp", openaiApiKey: "test-key" } as ToolContext;
 const search = TOOLS_BY_NAME["cerefox_search"];
@@ -163,11 +163,23 @@ describe("a passages result is rendered best first, and says what it left out", 
     });
     const out = await search.handler(recorder([row]).client, args({ content: "matches" }), ctx);
     expect(out).toContain(
-      "opening\n\n[… passage cut at 7 of 3,410 chars. max_passage_chars is smaller than this chunk, " +
-        "so this is its opening, which may not hold the part that matched; raise max_passage_chars or read the section]",
+      "opening\n\n[… passage cut at 7 of 3,410 chars. max_passage_chars is smaller than this chunk, so only its " +
+        "opening is shown and the part that matched may be missing: search again with a larger max_passage_chars, " +
+        "or read the document as the last note says.]",
     );
     // Nothing else matched, so no "more" count, but the document is still bigger than what is shown.
     expect(out).toContain(`[cerefox_get_document("${DOC_ID}") reads the whole document;`);
+  });
+
+  test("the CLI names its own flag in the cut note", () => {
+    const row = passagesRow({
+      chunk_count: 1,
+      matched_chunk_count: 1,
+      passages: [{ ...passagesRow().passages[0], content: "opening", chars: 3_410, truncated: true }],
+    });
+    const out = renderPassagesBody(row, (id) => `cerefox document get ${id}`, "--max-passage-chars");
+    expect(out).toContain("--max-passage-chars is smaller than this chunk");
+    expect(out).not.toContain("max_passage_chars");
   });
 
   test("a document the passages hold whole gets no note", async () => {

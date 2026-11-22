@@ -52,7 +52,7 @@ Search now has three result shapes:
   maintainer): rejecting a cap under the store's chunk size would make the
   option depend on a setting the caller cannot see, so the cap is honored and
   a passage cut to its opening carries a note that it may not hold what
-  matched (raise the cap or read the section). The docs tell users to keep the
+  matched (search again with a larger cap, or read the document as the result's last note says). The docs tell users to keep the
   cap at or above `CEREFOX_MAX_CHUNK_CHARS` when that matters. A new chunk
   size only reaches documents as they are ingested or edited: no command
   re-chunks a store today (`server reindex` re-embeds).

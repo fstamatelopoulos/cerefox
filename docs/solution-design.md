@@ -383,6 +383,13 @@ green; a category that drops is a regression even when the average holds.
 
 ### 5.3 Automatic Small-to-Big Retrieval
 
+> **Passages (v1.24.0, schema 0.23.0, iteration 55).** `cerefox_search_docs` also takes
+> `p_passages`: the same documents, ranked the same way, each carrying only its best-matching
+> chunks, best score first, while they fit `p_max_passage_chars` (the best one always, cut to an
+> excerpt around the query's terms when it alone is longer). It is a third result shape next to
+> the one below and the chunk modes, chosen by the caller (`content: "matches"`). Design:
+> `docs/plans/iteration-55-search-passages.md`.
+
 The `cerefox_search` tool automatically adjusts how results are assembled based on document size. Agents always call the same tool; the threshold logic is internal.
 
 **Decision point**: `total_chars` on the matched document vs `p_small_to_big_threshold` (default: 20000 chars).
@@ -1108,7 +1115,7 @@ legacy anon JWT was retired as an Edge Function credential in iter-28E.
 
 | Tool | Direction | Description |
 |------|-----------|-------------|
-| `cerefox_search` | Read | Hybrid search (FTS + semantic). Automatically applies small-to-big threshold: returns full doc for small docs, chunks + neighbors for large docs. Always use this for search. |
+| `cerefox_search` | Read | Hybrid search (FTS + semantic). Automatically applies small-to-big threshold: returns full doc for small docs, chunks + neighbors for large docs. `content: "matches"` returns each document's best passages instead (v1.24.0). Always use this for search. |
 | `cerefox_ingest` | Write | Save a note or document with full chunking + embedding. Automatically versions previous content if document already exists. |
 | `cerefox_get_document` | Read | Retrieve complete document text by ID. Bypasses threshold logic. Optionally specify a version_id for historical content. |
 | `cerefox_list_versions` | Read | List available versions for a document (version_number, size, timestamp, source). |
