@@ -23,6 +23,10 @@ import { getConfiguredMinSearchScore, getConfiguredSearchAlpha,
 import { lookupProjectId } from "./_projects.ts";
 import { McpInvalidParams, type ToolContext, type ToolDefinition } from "./types.ts";
 import { AUTHOR_PARAM_READ, callerIdentity } from "./identity.ts";
+import {
+  DEFAULT_PASSAGE_CHARS, MAX_PASSAGE_CHARS, MIN_PASSAGE_CHARS, PASSAGES_UNSUPPORTED_MESSAGE,
+  isPassagesUnsupported, passageSummary, renderPassagesBody, resolvePassageChars, type Passage,
+} from "../search-passages/index.ts";
 
 interface SearchRow {
   document_id?: string;
@@ -45,6 +49,9 @@ interface SearchRow {
   content_hash?: string;
   metadata_revision?: number;
   below_confidence?: boolean;
+  /** `content: "matches"` (#375): the document's best chunks, best first. */
+  passages?: Passage[] | null;
+  matched_chunk_count?: number | null;
 }
 
 /** The row's text, under whichever column name this search mode returns. */
@@ -117,6 +124,11 @@ function hashLine(row: SearchRow): string {
 function renderRow(row: SearchRow): string {
   const raw = row.best_score ?? row.score;
   const score = raw != null ? ` (score: ${raw.toFixed(3)})` : "";
+  // `content: "matches"` (#375): the passages, each under its section, and a
+  // note saying what was left out and how to read it.
+  if (row.passages) {
+    return `## ${rowHeading(row)}${score} -- ${passageSummary(row)}${hashLine(row)}\n\n${renderPassagesBody(row)}`;
+  }
   const partial = row.is_partial
     ? ` -- partial (${row.chunk_count} of ${(row.total_chars ?? 0).toLocaleString()} chars)`
     : "";
@@ -197,6 +209,19 @@ async function handler(
   // tool arguments through unvalidated (#265).
   const match_count = Math.min(Math.max(1, Math.floor(Number(args.match_count)) || 5), 200);
   const mode = (args.mode as string | undefined) ?? "docs";
+  // #375: "full" = the documents as assembled today; "matches" = the same
+  // documents, each with only its best-matching passages (the RPC selects
+  // them). Only the caller chooses: there is no setting that changes it.
+  const content = (args.content as string | undefined) ?? "full";
+  if (content !== "full" && content !== "matches") {
+    throw new McpInvalidParams('content must be "full" or "matches"');
+  }
+  if (content === "matches" && mode !== "docs") {
+    throw new McpInvalidParams(
+      'content "matches" applies to mode "docs" only (the chunk modes already return matched chunks).',
+    );
+  }
+  const maxPassageChars = resolvePassageChars(args.max_passage_chars);
   // #133: omit unconfigured tunables so the server resolves them from
   // cerefox_config (one setting governs every access path).
   const alpha = (args.alpha as number | undefined) ?? getConfiguredSearchAlpha();
@@ -295,12 +320,18 @@ async function handler(
       ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
+      ...(content === "matches" ? { p_passages: true, p_max_passage_chars: maxPassageChars } : {}),
     };
   }
 
   const { data, error } = await supabase.rpc(rpcName, rpcParams);
 
-  if (error) throw new Error(`RPC error: ${error.message}`);
+  if (error) {
+    // A server older than schema 0.23.0 has no p_passages: say so, rather
+    // than surfacing PostgREST's "function not found".
+    if (content === "matches" && isPassagesUnsupported(error)) throw new Error(PASSAGES_UNSUPPORTED_MESSAGE);
+    throw new Error(`RPC error: ${error.message}`);
+  }
 
   const matched = (data ?? []) as SearchRow[];
 
@@ -453,7 +484,7 @@ async function handler(
 export const searchTool: ToolDefinition = {
   name: "cerefox_search",
   description:
-    "Search the Cerefox personal knowledge base. Returns complete documents ranked by hybrid (FTS + semantic) relevance.",
+    "Search the Cerefox personal knowledge base (hybrid FTS + semantic). Three result shapes: documents (the default; small ones whole, large ones as their matched sections), documents with only their best-matching passages (content: \"matches\"; the cheapest way to find the right document before reading it with cerefox_get_document), or ranked chunks (mode: \"hybrid\" or \"fts\"; for when the passage itself is the answer).",
   // Read-only: touches nothing. Safe for a client to run without prompting.
   annotations: {
     title: "Search knowledge base",
@@ -500,6 +531,16 @@ export const searchTool: ToolDefinition = {
         type: "number",
         description:
           "Keyword OR-fallback confidence bar 0–1 (default: server-configured, else 0.66): fraction of the query's meaningful terms a result must match to count as a confident hit; weaker matches return flagged below-confidence. 0 = any matching term. Needs schema ≥ 0.9.1.",
+      },
+      content: {
+        type: "string",
+        enum: ["full", "matches"],
+        description:
+          'What each document result carries, with mode "docs" (default: "full"). full: the whole document when it is under 20,000 characters, else its matched sections with their neighbors. matches: the same documents in the same order, each with only its best-matching passages, best first, up to max_passage_chars, and a note saying what was left out. Use "matches" to find which document to read, then read it (or one section of it) with cerefox_get_document. Needs server schema 0.23.0.',
+      },
+      max_passage_chars: {
+        type: "integer",
+        description: `With content "matches": the most passage text one document carries, in characters (default ${DEFAULT_PASSAGE_CHARS}, range ${MIN_PASSAGE_CHARS}-${MAX_PASSAGE_CHARS}). Whole passages are kept, best first, while they fit; the best one is always kept, and if it alone is longer it is cut to an excerpt around the query's terms (or to its opening when none occur in it, which may miss what matched: keep it at or above the store's chunk size, 4000 by default, when that matters).`,
       },
       max_bytes: {
         type: "integer",

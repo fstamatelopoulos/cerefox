@@ -20,6 +20,21 @@ import { z } from "zod";
 
 import { ProjectResponse } from "./projects.js";
 
+/** One matched passage of a `content=matches` result (#375). */
+export const SearchPassage = z.object({
+  chunk_index: z.number().int(),
+  heading_path: z.array(z.string()),
+  score: z.number(),
+  /** The kept text: the whole chunk, or an excerpt of it when `truncated`. */
+  content: z.string(),
+  /** The chunk's full length. */
+  chars: z.number().int(),
+  truncated: z.boolean(),
+  /** Truncated around the query's terms rather than to the chunk's opening. */
+  excerpt: z.boolean(),
+});
+export type SearchPassage = z.infer<typeof SearchPassage>;
+
 export const DocSearchResult = z.object({
   document_id: z.string(),
   doc_title: z.string(),
@@ -38,6 +53,13 @@ export const DocSearchResult = z.object({
   /** True on every row when nothing cleared the relevance threshold: these are
    *  best-effort candidates. Absent in browse mode (no query). */
   below_confidence: z.boolean().optional(),
+  /** `content=matches` only (#375, schema 0.23.0): the document's best-matching
+   *  passages, best first; `full_content` is then empty. */
+  passages: z.array(SearchPassage).optional(),
+  /** `content=matches` only: the document's chunks among the search's
+   *  candidates, including any the cap left out. A lower bound on how many of
+   *  its chunks match. */
+  matched_chunk_count: z.number().int().optional(),
 });
 export type DocSearchResult = z.infer<typeof DocSearchResult>;
 

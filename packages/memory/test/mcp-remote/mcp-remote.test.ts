@@ -238,6 +238,35 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(text).not.toBe("No results found.");
     });
 
+    liveTest('content "matches" returns passages over the remote transport (#375)', async () => {
+      // A document long enough to be cut, so the passages and the read hint
+      // both show. The query uses invented words, so nothing else matches.
+      const filler = (tag: string) =>
+        Array.from({ length: 12 }, (_, i) => `${tag} ${i}: ${"plain filler prose ".repeat(8)}`).join("\n\n");
+      const title = uniqueTitle("Passages");
+      const ing = await toolText("cerefox_ingest", {
+        title,
+        content: `# ${title}\n\n## Intro\n\n${filler("intro")}\n\n## Finding\n\nThe quorvantel brisemund result holds.\n\n${filler("finding")}\n\n## Notes\n\n${filler("notes")}`,
+        author: "e2e-mcp-test",
+      });
+      const id = extractId(ing);
+      track(id);
+      const text = await toolText("cerefox_search", {
+        query: "quorvantel brisemund",
+        content: "matches",
+        max_passage_chars: 400,
+        match_count: 3,
+        author: "e2e-mcp-test",
+      });
+      expect(text).toMatch(/matched passages?, [\d,]+ of [\d,]+ chars/);
+      expect(text).toContain("quorvantel brisemund");
+      expect(text).toContain(`cerefox_get_document("${id}") reads the whole document`);
+      // The chunk modes refuse the option instead of ignoring it.
+      const bad = await tool("cerefox_search", { query: "quorvantel", mode: "fts", content: "matches" });
+      expect(bad.result?.isError).toBe(true);
+      expect(JSON.stringify(bad.result)).toContain('applies to mode \\"docs\\" only');
+    });
+
     liveTest("update_if_exists → up-to-date on identical re-ingest", async () => {
       const title = uniqueTitle("Update Dedup");
       const content = uniqueContent();

@@ -22,12 +22,26 @@
  * can exceed the budget. Silence would be worse — that is #254.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { TOOLS_BY_NAME } from "../mcp-tools/index.ts";
 import type { MCPSupabaseClient, ToolContext } from "../mcp-tools/types.ts";
 
-const ctx = { accessPath: "local-mcp", openaiApiKey: "" } as ToolContext;
+// A key, because the passages shapes run mode "docs", which embeds the query;
+// fetch is stubbed below, so no request leaves the process.
+const ctx = { accessPath: "local-mcp", openaiApiKey: "test-key" } as ToolContext;
+
+const originalFetch = globalThis.fetch;
+beforeAll(() => {
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ data: [{ embedding: Array(768).fill(0) }] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as unknown as typeof fetch;
+});
+afterAll(() => {
+  globalThis.fetch = originalFetch;
+});
 const search = TOOLS_BY_NAME["cerefox_search"];
 
 function client(rows: unknown[]): MCPSupabaseClient {
@@ -65,6 +79,29 @@ function doc(title: string, chars: number, score: number) {
 }
 
 /**
+ * A `content: "matches"` row (#375): the passages the RPC selected, best
+ * first, three of them per document by default, the first cut.
+ */
+function passagesDoc(title: string, chars: number, score: number, n = 3) {
+  const each = Math.max(1, Math.floor(chars / n));
+  return {
+    ...doc(title, 0, score),
+    full_content: null,
+    is_partial: true,
+    total_chars: chars * 4,
+    matched_chunk_count: n + 2,
+    passages: Array.from({ length: n }, (_, k) => ({
+      chunk_index: k * 3,
+      heading_path: [title, "Iteration 23: v0.5.0 packaging", `Section ${k}`],
+      score: score - k / 50,
+      content: "z".repeat(each),
+      chars: k === 0 ? each * 3 : each,
+      truncated: k === 0,
+    })),
+  };
+}
+
+/**
  * The shapes, not just the sizes.
  *
  * A grid over one row shape is still one example, which is the failure this
@@ -74,9 +111,13 @@ function doc(title: string, chars: number, score: number) {
  * tiny as JSON and not as markdown, which is exactly where a JSON-measured
  * budget under-reserves.
  */
+const MATCHES = { mode: "docs", content: "matches" };
+
 const SHAPES: Array<{
   name: string;
   make: (i: number, chars: number) => Record<string, unknown>;
+  /** Extra tool arguments this shape is returned for (default: mode fts). */
+  args?: Record<string, unknown>;
 }> = [
   { name: "chunk", make: (i, c) => chunk("Cerefox Implementation Plan", `23D: Server ${i}`, i, c, 1 - i / 100) },
   {
@@ -90,6 +131,19 @@ const SHAPES: Array<{
   {
     name: "docs below-confidence",
     make: (i, c) => ({ ...doc(`Release Process ${i}`, c, 1 - i / 100), below_confidence: true }),
+  },
+  // #375: content "matches" renders a heading per passage and a note on what
+  // was left out; all of it is content the budget has to count.
+  { name: "passages", make: (i, c) => passagesDoc(`Release Process ${i}`, c, 1 - i / 100), args: MATCHES },
+  {
+    name: "passages below-confidence",
+    make: (i, c) => ({ ...passagesDoc(`Release Process ${i}`, c, 1 - i / 100), below_confidence: true }),
+    args: MATCHES,
+  },
+  {
+    name: "passages, many tiny ones (wide render)",
+    make: (i, c) => passagesDoc("T", c, 1 - i / 100, 12),
+    args: MATCHES,
   },
   {
     name: "sparse (small json, wide render)",
@@ -121,7 +175,7 @@ describe("a search reply never exceeds max_bytes", () => {
           const rows = Array.from({ length: count }, (_, i) => shape.make(i, size));
           const out = await search.handler(
             client(rows),
-            { query: "q", mode: "fts", max_bytes: budget, author: "t" },
+            { query: "q", mode: "fts", max_bytes: budget, author: "t", ...shape.args },
             ctx,
           );
 

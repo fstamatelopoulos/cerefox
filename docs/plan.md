@@ -29,6 +29,14 @@
 
 ## Current Focus
 
+**In progress: iteration 55, search returns each document's best passages
+(#375, built on PR #376; schema 0.23.0).** A third result shape for
+`cerefox_search` / `cerefox search` / `/api/v1/search`: the default documents
+in the same order, each with only its best-matching chunks, best first, up to
+a cap, chosen in `cerefox_search_docs`. Plan:
+[`plans/iteration-55-search-passages.md`](plans/iteration-55-search-passages.md).
+Separate and not started: #377 (MCP `mode: semantic` runs the docs search).
+
 **2026-11-21: 1.23.4 shipped, a Cerefox Local installer fix (#373, PR #374).**
 Piped into `sh` with `--local-embedder` (the documented form), `install-local.sh`
 stopped after the model warmup with exit 0, because the warmup's `docker exec -i`

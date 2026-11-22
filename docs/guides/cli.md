@@ -142,6 +142,8 @@ cerefox search [OPTIONS] QUERY
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--mode <mode>` | `docs`\|`hybrid`\|`fts` | `docs` | `docs` = reconstructed documents (recommended); `hybrid` = ranked chunks; `fts` = keyword-only (no embedding / API key needed). |
+| `--content <shape>` | `full`\|`matches` | `full` | `--mode docs` only. `matches` (v1.24.0, schema 0.23.0): the same documents in the same order, each with only its best-matching passages, best first, up to `--max-passage-chars`, instead of the document body. For finding *which* document to read cheaply. |
+| `--max-passage-chars <n>` | int | `1500` | With `--content matches`: the most passage text per document (clamped to 200..20000). Keep it at or above the chunk size (`CEREFOX_MAX_CHUNK_CHARS`, default 4000) if every passage must show what matched: a longer chunk is cut, to an excerpt around the query's words, or to its opening when it matched on meaning alone (and says so). |
 | `--match-count <n>` (`-c`) | int | `5` | Number of results. |
 | `--project-name <name>` (`-p`) | str | _none_ | Limit to a project by name. |
 | `--alpha <float>` | float | `0.7` | Semantic weight 0..1 (`docs`/`hybrid`). |
@@ -158,9 +160,10 @@ cerefox search "OAuth design"
 cerefox search "decisions" --metadata-filter '{"type":"decision-log"}' --match-count 5
 cerefox search "what we tried" --mode hybrid --author "claude-code"
 cerefox search "design docs" --only-metadata
+cerefox search "retry policy" --content matches          # best passages, not whole documents
 ```
 
-**Output**: in `docs` mode (default), each match prints `## Title [id: …] · score · N chunks · M chars · partial|full` followed by the (re)constructed document body; `hybrid`/`fts` print ranked chunks. A truncation note appears if the byte budget is hit.
+**Output**: in `docs` mode (default), each match prints `## Title [id: …] · score · N chunks · M chars · partial|full` followed by the (re)constructed document body; with `--content matches`, the header adds `N of M matched passages, X of Y chars` and the body is the passages, each under `### <section> (score: …)`, then a note on what was left out and how to read the rest (`cerefox document get <id>`, `--outline`, `--section`); `hybrid`/`fts` print ranked chunks. A truncation note appears if the byte budget is hit.
 
 **Exit codes**: `0` on success. Note: as of v0.1.17, the CLI logs usage in a try/except so a usage-logging error does not affect the user-visible output (closes the failure mode that produced cerefox#27).
 
@@ -832,7 +835,7 @@ Every MCP parameter has an exact-name CLI flag (kebab-cased). Short forms exist 
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, author)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --author <name>` |
+| `cerefox_search(query, match_count, project_name, metadata_filter, content, max_passage_chars, author)` | `cerefox search "<q>" --match-count N --project-name <name> --metadata-filter '<json>' --content matches --max-passage-chars N --author <name>` |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type <t>` |
 | `cerefox_ingest(...)` (paste) | `printf '...' \| cerefox document ingest --paste --title "<t>"` (same flags) |
 | `cerefox_get_document(document_id, version_id, outline, author)` | `cerefox document get <id> --version-id <vid> --outline --author <name>` |

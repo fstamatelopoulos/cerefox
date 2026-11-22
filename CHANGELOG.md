@@ -9,7 +9,51 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **Search can return each document's best passages instead of the whole
+  document** (#375, #376, contributed by @ivanursul). Search now has three
+  result shapes, and this is the new one:
+  - **Documents** (the default, unchanged): small documents whole, large ones
+    as their matched sections. Best for answering from the reply itself.
+  - **Documents with their best passages** (new: `content: "matches"` on the
+    `cerefox_search` MCP tool, `--content matches` on `cerefox search`,
+    `content=matches` on `GET /api/v1/search`): the same documents in the same
+    order, each carrying only its best-matching chunks, best first, up to
+    `max_passage_chars` (default 1,500, range 200 to 20,000). Each passage
+    shows its section and score, and a note says what was left out and how to
+    read the rest with `cerefox_get_document` (`outline: true`, or one
+    `section`). For finding the right document cheaply before reading it,
+    above all in a store of long documents. On a store of about 1,200
+    notes this cut the mean search reply from 34 KB to 8.7 KB with the same
+    documents found.
+  - **Ranked chunks** (`mode: "hybrid"` / `"fts"`, unchanged): for when the
+    passage itself is the answer.
+
+  The passages are chosen in `cerefox_search_docs` (new `p_passages` and
+  `p_max_passage_chars` parameters), so every access path gets the same
+  selection. Whole chunks are kept while they fit the cap; only the best one
+  can be cut, to an excerpt around the query's terms (a chunk holds up to
+  4,000 characters, so its opening is often not what matched), and it is
+  flagged. A chunk that matched on meaning alone has no terms to excerpt
+  around, so it is cut to its opening and the passage warns that this may
+  miss what matched: keep `max_passage_chars` at or above the chunk size
+  (`CEREFOX_MAX_CHUNK_CHARS`, default 4,000) when that matters. Ranking is
+  unchanged.
+  Asking for passages on a chunk mode is an error, not ignored.
+
+### Upgrading
+
+- **Schema 0.23.0: run `cerefox server deploy`** (schema and Edge Functions)
+  to get passages. Against an older schema the option answers with an error
+  naming the fix; every other search works as before. Agents reach passages
+  through the MCP server, so the remote one needs the new Edge Functions too:
+  an older `cerefox-mcp`, like any older client, does not know the parameter
+  and returns whole documents. Cerefox Local updates everything on
+  `cerefox-local upgrade`. No data changes and no reindex.
+- **Downgrading** a store past 0.23.0 needs `cerefox_search_docs`'s new
+  signature dropped by hand first: an older `rpcs.sql` does not know it, and
+  the two versions side by side make every document search ambiguous.
 
 ---
 

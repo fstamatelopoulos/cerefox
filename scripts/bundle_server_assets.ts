@@ -63,6 +63,7 @@ export const SHARED_SUBTREES = [
   "partial-edits",
   // iter-34: mcp-tools/{get-document,partial-edits}.ts import the pure
   // outline/anchor/apply layer from here.
+  "search-passages", // #375: mcp-tools/search.ts imports the passage helpers.
 ] as const;
 
 /** Skip Python build artifacts when copying trees. */

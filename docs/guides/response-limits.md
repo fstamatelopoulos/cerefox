@@ -190,6 +190,16 @@ documents.
 See `docs/guides/configuration.md` → "RPC-level retrieval parameters" to change the
 threshold (it is a SQL DEFAULT in `rpcs.sql`, changed via `cerefox server deploy`).
 
+### Passages: a smaller reply by choice (v1.24.0)
+
+When an agent searches to find *which* document to read, the document bodies are mostly
+waste. `content: "matches"` on `cerefox_search` (`--content matches` on the CLI,
+`content=matches` on `GET /api/v1/search`) returns the same documents in the same order, each
+with only its best-matching passages, up to `max_passage_chars` per document (default 1,500).
+A reply then costs roughly `match_count × max_passage_chars` plus headers, whatever the
+documents' sizes. The byte budget still applies on top, with the same rules: nothing is held
+back silently, and a cut passage says how much it shows.
+
 ---
 
 ## Summary

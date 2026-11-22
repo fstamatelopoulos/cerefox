@@ -182,7 +182,7 @@ default; Cerefox Local picks its own port and `cerefox-local status` prints it).
 | `GET /version` | Server version, environment label, and the newest release on npm as the server last checked it (`latest`; `update_available` when it is newer, with `update_command` unless the server runs in a container, where it cannot tell how it was installed). |
 | `GET /schema-version` | Deployed schema version. |
 | `GET /openapi.json` | This API's OpenAPI 3.1 description, served by the version you are talking to. Every `/api/v1` response points at it with `Link: </api/v1/openapi.json>; rel="service-desc"` (RFC 8631). |
-| `GET /search?q=…` | Hybrid search (FTS + semantic). `&review_status=approved\|pending_review` filters server-side; `400` while the review workflow is off. The response's `embedder` (`openai` or `local`) says which scale the scores are on. |
+| `GET /search?q=…` | Hybrid search (FTS + semantic). `&review_status=approved\|pending_review` filters server-side; `400` while the review workflow is off. `&content=matches` (with `mode=docs`, schema 0.23.0) returns the same documents, each with only its best-matching `passages`, best first, up to `&max_passage_chars=` (default 1500, range 200-20000). The response's `embedder` (`openai` or `local`) says which scale the scores are on. |
 | `GET /dashboard`, `GET /dashboard/recent-docs` | Dashboard aggregates. |
 | `GET /documents/{id}` | Full document, with metadata, projects and versions. |
 | `GET /documents/{id}/chunks` | The document's chunks. |

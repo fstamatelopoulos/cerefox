@@ -86,6 +86,11 @@ DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID,
 DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB, FLOAT, TEXT);
 DROP FUNCTION IF EXISTS cerefox_metadata_search(JSONB, UUID, TIMESTAMPTZ, TIMESTAMPTZ, INT, BOOLEAN, INT);
 
+-- #375 (0.23.0): p_passages + p_max_passage_chars, and the passages /
+-- matched_chunk_count columns, on cerefox_search_docs. Drop the current
+-- signature too, so a redeploy of this file replaces it in place.
+DROP FUNCTION IF EXISTS cerefox_search_docs(TEXT, VECTOR(768), INT, FLOAT, UUID, FLOAT, INT, INT, JSONB, FLOAT, TEXT, BOOLEAN, INT);
+
 -- ── Shared return type note ────────────────────────────────────────────────────
 -- All chunk-level search RPCs return the same shape for consistency:
 --   chunk_id, document_id, chunk_index, title, content, heading_path,
@@ -753,9 +758,33 @@ $$;
 --   p_small_to_big_threshold : See above (default: 20000)
 --   p_context_window         : See above (default: 1)
 --
+--   p_passages               : #375. TRUE = each document carries only its
+--                              matched chunks, best score first, in `passages`
+--                              (full_content is NULL). Same documents, same
+--                              order as the default. For an agent that finds
+--                              the right document first and then reads it.
+--   p_max_passage_chars      : Per-document cap on passage text with
+--                              p_passages (default 1500, clamped to
+--                              200..20000). Whole chunks are kept, best first,
+--                              while the running total fits; the best one is
+--                              always kept; when it alone is over the cap it
+--                              is cut to an excerpt (see passages below).
+--
 -- Returns one row per document. total_chars is always the full document size.
--- chunk_count reflects how many chunks are in full_content (may be partial).
--- is_partial = TRUE when the small-to-big path was taken for that document.
+-- chunk_count reflects how many chunks are in full_content (may be partial),
+-- or, with p_passages, how many passages were returned.
+-- is_partial = TRUE when the small-to-big path was taken for that document,
+-- or, with p_passages, when the passages leave part of the document out.
+-- passages (p_passages only, else NULL): JSONB array, best first, of
+--   {chunk_index, heading_path, score, content, chars, truncated, excerpt};
+--   `chars` is the chunk's full length, so a truncated passage says how much
+--   it held. A truncated passage is an excerpt around the query's terms
+--   (`excerpt` = TRUE, fragments joined by " … ") when they occur in it, else
+--   the chunk's opening.
+-- matched_chunk_count (p_passages only): the document's chunks among the
+--   search's candidates (the hybrid pool, p_match_count * 10 chunks across all
+--   documents), including any the cap left out. A lower bound on how many of
+--   its chunks match the query.
 
 CREATE OR REPLACE FUNCTION cerefox_search_docs(
     p_query_text             TEXT,
@@ -771,7 +800,10 @@ CREATE OR REPLACE FUNCTION cerefox_search_docs(
     -- caller > cerefox_config > built-in chain in one place (#133).
     p_min_term_coverage      FLOAT DEFAULT NULL,
     -- #240: optional review-status filter, applied inside cerefox_hybrid_search.
-    p_review_status          TEXT  DEFAULT NULL
+    p_review_status          TEXT  DEFAULT NULL,
+    -- #375: matched passages instead of document content (see above).
+    p_passages               BOOLEAN DEFAULT FALSE,
+    p_max_passage_chars      INT     DEFAULT 1500
 )
 RETURNS TABLE (
     document_id              UUID,
@@ -796,7 +828,10 @@ RETURNS TABLE (
     below_confidence         BOOLEAN,
     -- #333: the metadata's concurrency token, to pass back as
     -- expected_metadata_revision on a metadata write.
-    metadata_revision        INT
+    metadata_revision        INT,
+    -- #375: p_passages only (else NULL).
+    passages                 JSONB,
+    matched_chunk_count      INT
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -842,7 +877,9 @@ AS $$
     top_docs AS (
         SELECT *
         FROM best_per_doc
-        ORDER BY best_score DESC
+        -- document_id breaks ties, so equal scores pick and order the same
+        -- documents every time, in both result shapes.
+        ORDER BY best_score DESC, document_id
         LIMIT p_match_count
     ),
     -- Compute actual total_chars per top document (needed for threshold check).
@@ -858,7 +895,8 @@ AS $$
         SELECT cr.chunk_id
         FROM chunk_results cr
         JOIN doc_sizes ds ON cr.document_id = ds.document_id
-        WHERE p_small_to_big_threshold > 0
+        WHERE NOT COALESCE(p_passages, FALSE)
+          AND p_small_to_big_threshold > 0
           AND ds.total_chars > p_small_to_big_threshold
           AND cr.document_id IN (SELECT document_id FROM top_docs)
     ),
@@ -893,15 +931,158 @@ AS $$
             COUNT(*)::INT AS chunk_count,
             FALSE         AS is_partial
         FROM cerefox_chunks c
-        WHERE c.document_id IN (SELECT document_id FROM top_docs)
+        WHERE NOT COALESCE(p_passages, FALSE)
+          AND c.document_id IN (SELECT document_id FROM top_docs)
           AND c.document_id NOT IN (SELECT document_id FROM large_doc_content)
           AND c.version_id IS NULL
         GROUP BY c.document_id
     ),
+    -- #375: p_passages. Each top document's matched chunks, best score first,
+    -- with the running length in that order. A prefix of that order is kept:
+    -- the best chunk always, then every chunk while the total fits the cap.
+    passage_cap AS (
+        SELECT
+            LEAST(GREATEST(COALESCE(p_max_passage_chars, 1500), 200), 20000) AS cap,
+            -- Any of the query's terms, for excerpting an over-cap chunk
+            -- around where it matched: each whitespace token through
+            -- plainto_tsquery, OR-ed, as cerefox_hybrid_search builds its
+            -- OR-fallback (NULL when every token is a stopword).
+            (SELECT string_agg('(' || tq::TEXT || ')', ' | ')
+             FROM (SELECT plainto_tsquery('english', tok) AS tq
+                   FROM unnest(regexp_split_to_array(trim(p_query_text), '\s+')) AS tok) toks
+             WHERE numnode(tq) > 0)::tsquery AS any_term
+    ),
+    ranked_passages AS (
+        SELECT
+            cr.document_id,
+            cr.chunk_index,
+            cr.heading_path,
+            cr.score,
+            cr.content,
+            char_length(cr.content) AS chars,
+            ROW_NUMBER() OVER w AS rn,
+            SUM(char_length(cr.content)) OVER w AS running,
+            COUNT(*) OVER (PARTITION BY cr.document_id) AS matched
+        FROM chunk_results cr
+        WHERE COALESCE(p_passages, FALSE)
+          AND cr.document_id IN (SELECT document_id FROM top_docs)
+        WINDOW w AS (PARTITION BY cr.document_id ORDER BY cr.score DESC, cr.chunk_index
+                     ROWS UNBOUNDED PRECEDING)
+    ),
+    kept_passages AS (
+        SELECT rp.*,
+               rp.chars > pc.cap AS truncated,
+               -- Over the cap (only ever the best chunk) and the query's terms
+               -- occur in it: an excerpt around them. A chunk is up to 4,000
+               -- characters, so its opening is often not the part that
+               -- matched (#375, found on staging).
+               COALESCE(rp.chars > pc.cap
+                   AND to_tsvector('english', rp.content) @@ pc.any_term, FALSE) AS excerpt,
+               pc.cap,
+               pc.any_term
+        FROM ranked_passages rp CROSS JOIN passage_cap pc
+        WHERE rp.rn = 1 OR rp.running <= pc.cap
+    ),
+    cut_passages AS (
+        SELECT kp.*,
+               CASE
+                   WHEN NOT kp.truncated THEN kp.content
+                   -- Up to three fragments around the matching terms, sized so
+                   -- they fill about the cap (~7 characters a word). Fragments
+                   -- are sized in words, so long tokens (URLs, code) can make
+                   -- them longer than the cap: the cut is then a window of
+                   -- `cap` characters around the first matched term, which
+                   -- ts_headline marks with U+E000 (stripped here, and from
+                   -- the chunk beforehand), rather
+                   -- than the headline's opening, which could lose it.
+                   WHEN kp.excerpt THEN (
+                       SELECT CASE
+                           WHEN char_length(cl.c) <= kp.cap THEN cl.c
+                           -- Ended at the last space, not mid-word, when that
+                           -- keeps at least half and the matched term.
+                           WHEN char_length(COALESCE(substring(wn.w FROM '^(.*)\s'), ''))
+                                >= GREATEST(kp.cap / 2, wn.m)
+                               THEN rtrim(substring(wn.w FROM '^(.*)\s'), E' \t\r\n')
+                           ELSE wn.w
+                       END
+                       -- The sentinels are removed from the chunk first, so a
+                       -- U+E000 in the note itself cannot pose as a match.
+                       FROM (SELECT ts_headline('english',
+                           translate(kp.content, U&'\E000\E001', ''), kp.any_term, format(
+                           'MaxFragments=3, MaxWords=%s, MinWords=%s, FragmentDelimiter=" … ", StartSel="%s", StopSel="%s"',
+                           GREATEST(kp.cap / 21, 10), GREATEST(kp.cap / 42, 5),
+                           U&'\E000', U&'\E001')) AS h) hl
+                       CROSS JOIN LATERAL (SELECT
+                           translate(hl.h, U&'\E000\E001', '') AS c,
+                           GREATEST(strpos(hl.h, U&'\E000'), 1) AS p) cl
+                       CROSS JOIN LATERAL (SELECT GREATEST(1,
+                           LEAST(cl.p - kp.cap / 4, char_length(cl.c) - kp.cap + 1)) AS s) st
+                       CROSS JOIN LATERAL (SELECT
+                           substring(cl.c FROM st.s FOR kp.cap) AS w,
+                           -- Where the matched term starts in the window.
+                           cl.p - st.s + 1 AS m) wn)
+                   -- No term to center on (a semantic-only match): the
+                   -- opening, cut at the last line break in the first `cap`
+                   -- characters when that keeps at least half of them.
+                   WHEN char_length(COALESCE(substring(left(kp.content, kp.cap) FROM '^(.*)\n'), ''))
+                        >= kp.cap / 2
+                       THEN rtrim(substring(left(kp.content, kp.cap) FROM '^(.*)\n'), E' \t\r\n')
+                   ELSE left(kp.content, kp.cap)
+               END AS kept_content
+        FROM kept_passages kp
+    ),
+    passage_agg AS (
+        SELECT
+            kp.document_id,
+            NULL::TEXT AS full_content,
+            COUNT(*)::INT AS chunk_count,
+            -- Partial unless the passages hold the whole document (a small
+            -- document whose every chunk matched and fit).
+            SUM(char_length(kp.kept_content)) < MAX(ds.total_chars) AS is_partial,
+            JSONB_AGG(JSONB_BUILD_OBJECT(
+                'chunk_index',  kp.chunk_index,
+                'heading_path', TO_JSONB(COALESCE(kp.heading_path, ARRAY[]::TEXT[])),
+                'score',        kp.score,
+                'content',      kp.kept_content,
+                'chars',        kp.chars,
+                'truncated',    kp.truncated,
+                'excerpt',      kp.excerpt
+            ) ORDER BY kp.rn) AS by_score,
+            JSONB_AGG(JSONB_BUILD_OBJECT(
+                'chunk_index',  kp.chunk_index,
+                'heading_path', TO_JSONB(COALESCE(kp.heading_path, ARRAY[]::TEXT[])),
+                'score',        kp.score,
+                'content',      kp.kept_content,
+                'chars',        kp.chars,
+                'truncated',    kp.truncated,
+                'excerpt',      kp.excerpt
+            ) ORDER BY kp.chunk_index) AS by_position,
+            MAX(kp.matched)::INT AS matched_chunk_count
+        FROM cut_passages kp
+        JOIN doc_sizes ds ON ds.document_id = kp.document_id
+        GROUP BY kp.document_id
+    ),
+    passage_content AS (
+        SELECT
+            pa.document_id, pa.full_content, pa.chunk_count, pa.is_partial,
+            -- Best first, except when the passages hold the whole document:
+            -- then in document order, so it reads as the document.
+            CASE WHEN pa.is_partial THEN pa.by_score ELSE pa.by_position END AS passages,
+            pa.matched_chunk_count
+        FROM passage_agg pa
+    ),
     all_content AS (
-        SELECT document_id, full_content, chunk_count, is_partial FROM large_doc_content
+        SELECT document_id, full_content, chunk_count, is_partial,
+               NULL::JSONB AS passages, NULL::INT AS matched_chunk_count
+        FROM large_doc_content
         UNION ALL
-        SELECT document_id, full_content, chunk_count, is_partial FROM small_doc_content
+        SELECT document_id, full_content, chunk_count, is_partial,
+               NULL::JSONB, NULL::INT
+        FROM small_doc_content
+        UNION ALL
+        SELECT document_id, full_content, chunk_count, is_partial,
+               passages, matched_chunk_count
+        FROM passage_content
     )
     SELECT
         td.document_id,
@@ -920,11 +1101,13 @@ AS $$
         ac.is_partial,
         td.content_hash,
         td.below_confidence,
-        td.metadata_revision
+        td.metadata_revision,
+        ac.passages,
+        ac.matched_chunk_count
     FROM top_docs td
     JOIN doc_sizes ds ON ds.document_id = td.document_id
     JOIN all_content ac ON ac.document_id = td.document_id
-    ORDER BY td.best_score DESC;
+    ORDER BY td.best_score DESC, td.document_id;
 $$;
 
 -- ── Metadata key discovery RPC ───────────────────────────────────────────────
@@ -3952,7 +4135,7 @@ AS $$
     -- 0.11.0 supersedes 0.10.6 (v1.2.1, #191): this branch carries that fix plus
     -- the partial-edit surface, and both migrations (0019, 0020) are in the
     -- sequence, so a store deploying this gets everything from both lines.
-    SELECT '0.22.0'::TEXT;
+    SELECT '0.23.0'::TEXT;
 $$;
 
 -- ── cerefox_find_dead_links ──────────────────────────────────────────────────
