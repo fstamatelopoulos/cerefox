@@ -115,7 +115,7 @@ web UI, and MCP tools; they differ only in where your data lives and how you
 install. (Contributors who want to run from source: see *Run from source* below.)
 
 <p align="center">
-  <img src="web/static/cerefox_local_vs_cloud.png" alt="Cerefox runs two ways — Cloud / Supabase (the cerefox npm CLI/web/MCP against your hosted Supabase + Edge Functions, or remote MCP / GPT Actions) vs Local / Docker (cerefox-local against one container on your machine); both run the same codebase and call OpenAI for embeddings." width="760">
+  <img src="web/static/cerefox_local_vs_cloud.jpg" alt="Cerefox runs two ways. Cloud / Supabase (managed, multi-device): the cerefox npm CLI, web UI and local MCP on your machine, plus the remote MCP Edge Function (just a URL, no local install), against your Supabase project (9 Edge Functions, Postgres and pgvector). Local / Docker (self-hosted, one container, offline-capable): cerefox-local (CLI, web UI, MCP) proxied into one Docker container on your machine (cerefox-server, PostgREST, Postgres and pgvector). Embeddings come from the OpenAI API or the built-in local model (Cerefox Local). Same codebase: identical schema, RPCs, MCP tools, hybrid search and web UI." width="760">
 </p>
 
 ### Option 1 — Cloud (Supabase)
