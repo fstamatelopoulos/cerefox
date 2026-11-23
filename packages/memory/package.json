@@ -46,7 +46,7 @@
     "commander": "^15.1.0",
     "hono": "^4.13.19",
     "mammoth": "^1.13.0",
-    "ora": "^9.4.0",
+    "ora": "^10.0.0",
     "picocolors": "^1.0.0",
     "postgres": "^4.1.1",
     "prompts": "^2.4.2",
