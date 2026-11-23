@@ -37,6 +37,7 @@ import { join, relative } from "node:path";
 import { exit } from "node:process";
 
 import { compareSemver } from "../_shared/compatibility/index.ts";
+import { SHARED_SUBTREES } from "./bundle_server_assets.ts";
 
 // ── paths ────────────────────────────────────────────────────────────────
 
@@ -113,15 +114,12 @@ const EF_LAST_CHANGED_LITERAL: VersionLiteralFile = {
 /**
  * Paths whose changes since the last tag mean the deployed EF behavior
  * changed: the EFs themselves + the `_shared` subtrees bundled with them.
+ * Derived from the bundler's own list, so the two cannot drift: kept by hand,
+ * this one had lost mcp-auth, ef-auth, ingest and partial-edits, and a change
+ * there would have shipped without bumping EF_VERSION, so `doctor` would
+ * never have told anyone to redeploy their Edge Functions.
  */
-const EF_SOURCE_PATHS = [
-  "supabase/functions",
-  "_shared/ef-meta",
-  "_shared/mcp-tools",
-  "_shared/embeddings",
-  // #375: cerefox-mcp bundles it through mcp-tools/search.ts.
-  "_shared/search-passages",
-];
+const EF_SOURCE_PATHS = ["supabase/functions", ...SHARED_SUBTREES.map((sub) => `_shared/${sub}`)];
 
 /** True when EF-relevant source changed since the most recent git tag. */
 function efsChangedSinceLastTag(): boolean {
