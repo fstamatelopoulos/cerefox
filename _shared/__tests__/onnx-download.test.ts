@@ -18,7 +18,13 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { downloadModelFiles, EmbedderDownloadError, isModelCached, ONNX_MODEL_ID } from "../embeddings/onnx-embedder.ts";
+import {
+  downloadModelFiles,
+  EmbedderDownloadError,
+  isModelCached,
+  ONNX_MODEL_ID,
+  verifyCachedModel,
+} from "../embeddings/onnx-embedder.ts";
 
 const MODEL = new Uint8Array(200_000).map((_, i) => (i * 31) % 251);
 const SMALL = new TextEncoder().encode('{"ok":true}');
@@ -236,5 +242,38 @@ describe("one downloader at a time, and only the published content is kept (#367
     await downloadModelFiles(host(), () => {}, () => {}, LOCKING);
     expect(modelRequests).toBe(0);
     expect(new Uint8Array(readFileSync(onnxPath()))).toEqual(MODEL);
+  });
+});
+
+describe("a cached model is checked once against the shipped revision (#367)", () => {
+  const cfg = () => join(dir, ONNX_MODEL_ID, "tokenizer_config.json");
+
+  test("a file of the right size and the wrong content fails the check", async () => {
+    // The shape #367 left behind: exactly the expected size, other bytes.
+    mkdirSync(dirname(cfg()), { recursive: true });
+    writeFileSync(cfg(), "x".repeat(1191));
+    expect(await verifyCachedModel(dir)).toBe(false);
+  });
+
+  test("a file checked before is trusted by its marker, not hashed again", async () => {
+    mkdirSync(dirname(cfg()), { recursive: true });
+    writeFileSync(cfg(), "x".repeat(1191));
+    const { statSync } = await import("node:fs");
+    const st = statSync(cfg());
+    writeFileSync(`${cfg()}.verified`, `${st.size} ${Math.floor(st.mtimeMs)}\n`);
+    expect(await verifyCachedModel(dir)).toBe(true);
+  });
+
+  test("a file of another size is left alone (another revision is not ours to judge)", async () => {
+    mkdirSync(dirname(cfg()), { recursive: true });
+    writeFileSync(cfg(), "{}");
+    expect(await verifyCachedModel(dir)).toBe(true);
+  });
+
+  test("a verified download leaves a marker", async () => {
+    mode = "ok";
+    ident = "good";
+    await downloadModelFiles(host(), () => {}, () => {}, { ...FAST, lockPollMs: 5 });
+    expect(existsSync(`${onnxPath()}.verified`)).toBe(true);
   });
 });
