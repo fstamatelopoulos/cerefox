@@ -1,12 +1,15 @@
 /**
  * `cerefox_search` — hybrid (FTS + semantic) search over the knowledge base.
  *
- * Three modes:
+ * Four modes, each pinned to one RPC (#377):
  * - `docs` (default) — document-level hybrid via `cerefox_search_docs`.
  * - `hybrid` — chunk-level hybrid via `cerefox_hybrid_search`.
  * - `fts` — FTS-only via `cerefox_fts_search` (no embedding needed).
+ * - `semantic` — chunk-level vector-only via `cerefox_semantic_search`.
+ * Any other mode is refused: until 1.25.0 `semantic` and every typo fell
+ * through to the docs search, so the caller never learned it was ignored.
  *
- * Embedding is computed for `docs` and `hybrid` modes via the shared
+ * Embedding is computed for every mode but `fts` via the shared
  * embedder. Results respect a per-call `max_bytes` budget capped at
  * `MAX_RESPONSE_BYTES`; whole rows are dropped to fit the budget.
  *
@@ -16,6 +19,28 @@
  */
 
 import type { MCPSupabaseClient } from "./types.ts";
+
+/**
+ * The search modes, defined once (#377): the MCP tool, the CLI and
+ * `GET /api/v1/search` all validate against this list, and each maps to one
+ * RPC. The web UI and the API had `semantic` while MCP advertised it and ran
+ * the docs search instead, and the CLI lacked it: three lists, three answers.
+ */
+export const SEARCH_MODES = ["docs", "hybrid", "fts", "semantic"] as const;
+export type SearchMode = (typeof SEARCH_MODES)[number];
+
+/**
+ * The mode a caller asked for, or null when it is not one of SEARCH_MODES.
+ * Only an omitted mode is the default: `undefined`, or JSON `null`, which
+ * some MCP clients send for an unset optional argument. An empty string is
+ * a value, and not a mode.
+ */
+export function parseSearchMode(raw: unknown): SearchMode | null {
+  const m = raw === undefined || raw === null ? "docs" : raw;
+  return (SEARCH_MODES as readonly unknown[]).includes(m) ? (m as SearchMode) : null;
+}
+
+export const SEARCH_MODES_LIST = SEARCH_MODES.map((m) => `"${m}"`).join(", ");
 
 import { getEmbedding, resolveEmbedderKind } from "../embeddings/index.ts";
 import { getConfiguredMinSearchScore, getConfiguredSearchAlpha,
@@ -208,7 +233,10 @@ async function handler(
   // clamp exists to prevent, reachable because the local MCP server passes
   // tool arguments through unvalidated (#265).
   const match_count = Math.min(Math.max(1, Math.floor(Number(args.match_count)) || 5), 200);
-  const mode = (args.mode as string | undefined) ?? "docs";
+  const mode = parseSearchMode(args.mode);
+  if (mode === null) {
+    throw new McpInvalidParams(`mode ${JSON.stringify(args.mode)} is not a search mode: expected one of ${SEARCH_MODES_LIST}.`);
+  }
   // #375: "full" = the documents as assembled today; "matches" = the same
   // documents, each with only its best-matching passages (the RPC selects
   // them). Only the caller chooses: there is no setting that changes it.
@@ -308,6 +336,20 @@ async function handler(
       ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
+    };
+  } else if (mode === "semantic") {
+    // Vector-only: no keywords, so no alpha and no term coverage. A
+    // similarity floor only when the caller names one, as the web UI and
+    // /api/v1 do; the RPC's own default is none, so the nearest chunks come
+    // back ranked by similarity and the scores are what to judge them by.
+    rpcName = "cerefox_semantic_search";
+    rpcParams = {
+      p_query_embedding: embedding,
+      p_match_count: match_count,
+      p_use_upgrade: false,
+      p_project_id: projectId,
+      ...(args.min_score !== undefined ? { p_min_score: args.min_score } : {}),
+      ...metaFilterParam,
     };
   } else {
     rpcName = "cerefox_search_docs";
@@ -484,7 +526,7 @@ async function handler(
 export const searchTool: ToolDefinition = {
   name: "cerefox_search",
   description:
-    "Search the Cerefox personal knowledge base (hybrid FTS + semantic). Three result shapes: documents (the default; small ones whole, large ones as their matched sections), documents with only their best-matching passages (content: \"matches\"; the cheapest way to find the right document before reading it with cerefox_get_document), or ranked chunks (mode: \"hybrid\" or \"fts\"; for when the passage itself is the answer).",
+    "Search the Cerefox personal knowledge base (hybrid FTS + semantic). Three result shapes: documents (the default; small ones whole, large ones as their matched sections), documents with only their best-matching passages (content: \"matches\"; the cheapest way to find the right document before reading it with cerefox_get_document), or ranked chunks (mode: \"hybrid\", \"fts\" or \"semantic\"; for when the passage itself is the answer).",
   // Read-only: touches nothing. Safe for a client to run without prompting.
   annotations: {
     title: "Search knowledge base",
@@ -513,9 +555,9 @@ export const searchTool: ToolDefinition = {
       },
       mode: {
         type: "string",
-        enum: ["docs", "hybrid", "fts", "semantic"],
+        enum: [...SEARCH_MODES],
         description:
-          "Search mode (default: docs — full reconstructed documents). hybrid: ranked chunks; fts: keyword-only (no embedding); semantic: vector-only.",
+          "Search mode (default: docs, documents). hybrid: ranked chunks, keywords and meaning combined; fts: ranked chunks by keywords only (no embedding); semantic: ranked chunks by meaning only, for when the wording may differ from the documents' (no keyword matching, no confidence threshold unless min_score is given). Any other value is an error.",
       },
       alpha: {
         type: "number",
@@ -525,7 +567,7 @@ export const searchTool: ToolDefinition = {
       min_score: {
         type: "number",
         description:
-          "Minimum cosine similarity for vector-side results (default: server-configured, 0.5 OpenAI / 0.6 local embedder).",
+          "Minimum cosine similarity for vector-side results (default: server-configured, 0.5 OpenAI / 0.6 local embedder; in semantic mode, none unless given).",
       },
       min_term_coverage: {
         type: "number",

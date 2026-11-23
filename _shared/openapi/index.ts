@@ -311,7 +311,7 @@ export const QUERY_DOCS: Record<string, Record<string, ParamDoc>> = {
     },
     mode: {
       description:
-        "`docs` (default): one row per document with its full content. `hybrid`, `fts`, `semantic`: one row per chunk.",
+        "`docs` (default): one row per document with its full content. `hybrid`, `fts`, `semantic`: one row per chunk. Any other value is a 400.",
       schema: { type: "string", enum: ["docs", "hybrid", "fts", "semantic"], default: "docs" },
     },
     content: {

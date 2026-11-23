@@ -18,6 +18,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getEmbedding } from "../../../../../_shared/embeddings/index.js";
 import { fetchAllPages } from "../../../../../_shared/db-client/paginate.ts";
 import { reviewWorkflowEnabled } from "../../../../../_shared/mcp-tools/feature-flags.ts";
+import { parseSearchMode, SEARCH_MODES_LIST } from "../../../../../_shared/mcp-tools/search.ts";
 import type { WebContext } from "../context.ts";
 import { logWebUsage } from "../usage.ts";
 import { resolveCallerIdentity } from "../identity.ts";
@@ -472,7 +473,13 @@ export function registerDiscoveryRoutes(app: Hono, ctx: WebContext): void {
   // ── /search ────────────────────────────────────────────────────────────────
   app.get("/api/v1/search", async (c) => {
     const q = (c.req.query("q") ?? "").trim();
-    const mode = c.req.query("mode") ?? "docs";
+    const rawMode = c.req.query("mode");
+    // #377: one list of modes for every surface; an unknown one is a 400, not
+    // a silent docs search.
+    const mode = parseSearchMode(rawMode);
+    if (mode === null) {
+      return c.json({ detail: `Invalid mode: ${JSON.stringify(rawMode)} (expected one of ${SEARCH_MODES_LIST})` }, 400);
+    }
     const projectIdRaw = c.req.query("project_id") ?? "";
     const projectId = projectIdRaw || null;
     const countRaw = c.req.query("count") ?? "10";

@@ -57,6 +57,7 @@ const CASES: Case[] = [
   { name: "GET /usage-log/summary", path: () => "/usage-log/summary", schema: S.UsageSummaryResponse },
   { name: "GET /docs", path: () => "/docs", schema: S.BundledDocEntry, array: true },
   { name: "GET /search (chunks)", path: () => "/search?q=cerefox&mode=hybrid&count=2", schema: S.SearchResponse },
+  { name: "GET /search (semantic)", path: () => "/search?q=cerefox&mode=semantic&count=2", schema: S.SearchResponse },
   { name: "GET /dashboard/recent-docs", path: () => "/dashboard/recent-docs", schema: S.DashboardRecentDocsResponse },
   // `filename`, not `title`: the handler reads `filename`, so `?title=` sent an
   // empty value and asserted `{exists:false}` — a check that could not fail (#296).

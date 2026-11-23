@@ -267,6 +267,21 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(JSON.stringify(bad.result)).toContain('applies to mode \\"docs\\" only');
     });
 
+    liveTest('mode "semantic" returns chunks, and an unknown mode is refused (#377)', async () => {
+      const text = await toolText("cerefox_search", {
+        query: "release process",
+        mode: "semantic",
+        match_count: 3,
+        author: "e2e-mcp-test",
+      });
+      // Chunk results name the chunk; the docs search, which semantic used
+      // to fall through to, never does.
+      expect(text).toMatch(/\(chunk \d+\)/);
+      const bad = await tool("cerefox_search", { query: "release process", mode: "chunks" });
+      expect(bad.result?.isError).toBe(true);
+      expect(JSON.stringify(bad.result)).toContain("is not a search mode");
+    });
+
     liveTest("update_if_exists → up-to-date on identical re-ingest", async () => {
       const title = uniqueTitle("Update Dedup");
       const content = uniqueContent();
