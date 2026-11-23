@@ -141,7 +141,7 @@ cerefox search [OPTIONS] QUERY
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--mode <mode>` | `docs`\|`hybrid`\|`fts` | `docs` | `docs` = reconstructed documents (recommended); `hybrid` = ranked chunks; `fts` = keyword-only (no embedding / API key needed). |
+| `--mode <mode>` | `docs`\|`hybrid`\|`fts`\|`semantic` | `docs` | `docs` = reconstructed documents (recommended); `hybrid` = ranked chunks, keywords and meaning; `fts` = keyword-only chunks (no embedding / API key needed); `semantic` = meaning-only chunks (v1.25.0; no confidence threshold unless `--min-score` is given). Any other value is an error. |
 | `--content <shape>` | `full`\|`matches` | `full` | `--mode docs` only. `matches` (v1.24.0, schema 0.23.0): the same documents in the same order, each with only its best-matching passages, best first, up to `--max-passage-chars`, instead of the document body. For finding *which* document to read cheaply. |
 | `--max-passage-chars <n>` | int | `1500` | With `--content matches`: the most passage text per document (clamped to 200..20000). Keep it at or above the chunk size (`CEREFOX_MAX_CHUNK_CHARS`, default 4000) if every passage must show what matched: a longer chunk is cut, to an excerpt around the query's words, or to its opening when it matched on meaning alone (and says so). |
 | `--match-count <n>` (`-c`) | int | `5` | Number of results. |

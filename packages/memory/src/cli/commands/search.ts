@@ -3,7 +3,8 @@
  *
  * Embeds the query client-side via `_shared/embeddings/getEmbedding()`,
  * then calls `cerefox_search_docs` (default) / `cerefox_hybrid_search` /
- * `cerefox_fts_search` based on `--mode`. Same RPC choices the MCP
+ * `cerefox_fts_search` / `cerefox_semantic_search` based on `--mode`
+ * (`SEARCH_MODES`, shared with the MCP tool and the API, #377). Same RPC choices the MCP
  * `cerefox_search` tool makes, so an agent that learned the MCP shape
  * sees the same behavior from the CLI.
  *
@@ -48,6 +49,7 @@ import {
   resolvePassageChars,
   type Passage,
 } from "../../../../../_shared/search-passages/index.ts";
+import { parseSearchMode, SEARCH_MODES_LIST } from "../../../../../_shared/mcp-tools/search.ts";
 import { getClient } from "../util/client.ts";
 import { embedQuery } from "../util/embed.ts";
 import { authorOption, requestorAliasOption } from "../util/identity-flags.js";
@@ -142,9 +144,9 @@ async function action(
         ? { p_min_term_coverage: envCoverage }
         : {};
   const maxBytes = parseNonNegativeInt(options.maxBytes, "--max-bytes", getMaxResponseBytes());
-  const mode = options.mode ?? "docs";
-  if (!["docs", "hybrid", "fts"].includes(mode)) {
-    throw userError(`--mode "${mode}": expected "docs", "hybrid", or "fts".`);
+  const mode = parseSearchMode(options.mode);
+  if (mode === null) {
+    throw userError(`--mode "${options.mode}": expected one of ${SEARCH_MODES_LIST}.`);
   }
   const content = options.content ?? "full";
   if (content !== "full" && content !== "matches") {
@@ -214,6 +216,18 @@ async function action(
       ...scoreParam,
       ...metaFilterParam,
       ...coverageParam,
+    };
+  } else if (mode === "semantic") {
+    // Vector-only, as the MCP tool and /api/v1 run it: no alpha, no term
+    // coverage, and a similarity floor only when --min-score is given.
+    rpcName = "cerefox_semantic_search";
+    rpcParams = {
+      p_query_embedding: embedding,
+      p_match_count: matchCount,
+      p_use_upgrade: false,
+      p_project_id: projectId,
+      ...(options.minScore !== undefined ? scoreParam : {}),
+      ...metaFilterParam,
     };
   } else {
     rpcName = "cerefox_search_docs";
@@ -409,7 +423,11 @@ export function registerSearch(program: Command): void {
       "-f, --metadata-filter <json>",
       "JSON containment filter; only docs whose metadata contains ALL pairs are returned.",
     )
-    .option("--mode <mode>", "Search mode: docs (default), hybrid, fts.", "docs")
+    .option(
+      "--mode <mode>",
+      "Search mode: docs (default; documents), hybrid (ranked chunks, keywords and meaning), fts (ranked chunks, keywords only), semantic (ranked chunks, meaning only).",
+      "docs",
+    )
     .option(
       "--content <content>",
       "With --mode docs: full (default; whole documents, large ones as matched sections) or matches (the same documents, each with only its best-matching passages, best first; needs server schema 0.23.0).",

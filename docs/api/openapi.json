@@ -5022,7 +5022,7 @@
     },
     "/api/v1/search": {
       "get": {
-        "summary": "Hybrid search (FTS + semantic). `&review_status=approved\\",
+        "summary": "Hybrid search (FTS + semantic). `&mode=docs\\",
         "operationId": "get_search",
         "parameters": [
           {
@@ -5038,7 +5038,7 @@
             "name": "mode",
             "in": "query",
             "required": false,
-            "description": "`docs` (default): one row per document with its full content. `hybrid`, `fts`, `semantic`: one row per chunk.",
+            "description": "`docs` (default): one row per document with its full content. `hybrid`, `fts`, `semantic`: one row per chunk. Any other value is a 400.",
             "schema": {
               "type": "string",
               "enum": [

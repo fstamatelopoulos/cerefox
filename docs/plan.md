@@ -29,6 +29,12 @@
 
 ## Current Focus
 
+**In progress: iteration 56, every search mode runs its own search (#377,
+target v1.25.0, no schema change).** MCP's `semantic` ran the docs search and
+unknown modes were silently accepted on MCP and the API; the CLI lacked
+`semantic`. One `SEARCH_MODES` list now feeds all surfaces. Plan:
+[`plans/iteration-56-search-modes.md`](plans/iteration-56-search-modes.md).
+
 **2026-11-22: 1.24.0 shipped, search returns each document's best passages
 (iteration 55, #375, PR #376, contributed by @ivanursul; schema 0.23.0).** A
 third result shape for `cerefox_search` (`content: "matches"`), `cerefox search`
