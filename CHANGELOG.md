@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.25.0] -- 2026-11-23
+
 ### Added
 
 - **ChatGPT connects to Cerefox as a custom MCP server** (#326), on the web,
