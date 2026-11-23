@@ -176,7 +176,7 @@ cerefox token generate
 This sets the `CEREFOX_ACCESS_TOKENS` secret on Supabase and writes
 `CEREFOX_ACCESS_TOKEN` into your `.env`. It prints the token **once** — store it. You
 paste it by hand only if you connect a **Custom GPT** (Action → Authentication → API
-Key) or a **remote HTTP MCP** client. The **local MCP**, **cloud Claude** (OAuth), and
+Key) or a **remote HTTP MCP** client. The **local MCP**, **cloud Claude and ChatGPT** (OAuth), and
 the CLI/web reach Supabase over the Data API and don't need it, so this step is
 optional for a local-MCP-only or OAuth-only setup. Lose it → `cerefox token rotate`.
 Re-run `cerefox doctor` — the "edge functions" check goes green.
@@ -219,7 +219,7 @@ configs by hand or use the remote (Edge Function) HTTP transport, see
 FTS-only `mcp.supabase.com` path). This needs a one-time OAuth setup — see
 [Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) below.
 
-**For ChatGPT** (web, desktop and mobile apps) — add Cerefox as a custom MCP server over
+**For ChatGPT** (web, desktop and mobile apps): add Cerefox as a custom MCP server over
 OAuth, with the same one-time setup as cloud Claude:
 [Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) and
 [`connect-agents.md` → Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
@@ -247,7 +247,7 @@ architecture explanation, and the ChatGPT setup.
 
 Cloud AI agents can only connect to a custom MCP server over **OAuth** — they cannot send
 a static token. Supabase's native **OAuth 2.1 Server** (beta; free on all plans) makes
-`cerefox-mcp` an OAuth-protected resource, so claude.ai and the mobile app get the full
+`cerefox-mcp` an OAuth-protected resource, so claude.ai, ChatGPT and their mobile apps get the full
 hybrid-search tool surface (not the FTS-only `mcp.supabase.com` path).
 
 **Prerequisite — asymmetric signing keys.** Token validation uses your project's public
@@ -350,7 +350,8 @@ cerefox server deploy --functions-only
 
 Deploys `cerefox-mcp` with `--no-verify-jwt` (in-function auth). Then wire the claude.ai
 connector per
-[`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth).
+[`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth),
+or the ChatGPT one per [Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
 
 > **Note — the Cerefox access token (iter-28E).** All nine data Edge Functions (the 8
 > primitives + `cerefox-mcp`) now deploy `--no-verify-jwt` and authenticate the **Cerefox

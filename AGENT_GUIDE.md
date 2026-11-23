@@ -698,7 +698,7 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, content, max_passage_chars, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (also `--mode`, `--content matches`, `--max-passage-chars`, `--alpha`, `--min-score`, `--only-metadata` — `--only-metadata` is CLI-only) |
+| `cerefox_search(query, match_count, project_name, metadata_filter, mode, content, max_passage_chars, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (also `--mode`, `--content matches`, `--max-passage-chars`, `--alpha`, `--min-score`; `--only-metadata` is CLI-only) |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest(...)` (paste) | `printf '%s' "<content>" \| cerefox document ingest --paste --title "<title>"` (same flags) |
 | `cerefox_get_document(document_id, version_id, author)` | `cerefox document get <document-id> --version-id <vid> --author <name>` |

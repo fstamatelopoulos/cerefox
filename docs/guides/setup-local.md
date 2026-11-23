@@ -230,6 +230,15 @@ check). After a reboot the container may be stopped depending on your Docker set
 **Ingest/search fail with no embeddings** — `OPENAI_API_KEY` wasn't set at install time.
 Re-run the installer with the key, or set it and `cerefox-local upgrade`.
 
+**Every search and write fails with "Protobuf parsing failed" (local embedder)** — the
+model file on disk is damaged. Up to v1.24.0 this could happen when two commands
+downloaded it at the same time on a fresh install. Since v1.25.0 Cerefox checks the
+cached model once against the published files, and removes and downloads again a file
+that doesn't match or won't load, so upgrading (`cerefox-local upgrade`) repairs it on
+first use. To repair it by hand, or on an older version: stop anything using the store,
+then run `cerefox-local embedder-warmup`; if the file is still there, delete the
+`.cerefox-models/nomic-ai` folder in the data volume first.
+
 **Port already in use** — re-install with a free port: `PORT=8017 sh -c "$(curl -fsSL …/install-local.sh)"`.
 
 **Requests fail with "socket connection closed", or the web process restarts on

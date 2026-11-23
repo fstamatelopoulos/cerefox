@@ -56,8 +56,8 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 
 | Feature | Details |
 |---------|---------|
-| **Hybrid search** | Combines full-text (BM25) + semantic (vector) search with a configurable alpha weight |
-| **Metadata-filtered search** | JSONB containment filter (`@>`) on document metadata; server-side, GIN-indexed; composable with project filter and all search modes; available across all access paths (MCP, CLI, web UI, GPT Actions) |
+| **Hybrid search** | Combines full-text (Postgres `ts_rank_cd`) + semantic (vector) search with a configurable alpha weight. Three result shapes: whole documents (large ones as their matched sections), each document's best-matching passages only (`content: "matches"`), or ranked chunks (`hybrid`, `fts` or `semantic` mode) |
+| **Metadata-filtered search** | JSONB containment filter (`@>`) on document metadata; server-side, GIN-indexed; composable with project filter and all search modes; available across all access paths (MCP, CLI, web UI, HTTP API) |
 | **Metadata search** | Standalone metadata-only search (no text query needed); find documents by key-value criteria, project, and date range; optional content inclusion with byte budget; dedicated MCP tool, CLI command, and web UI page |
 | **Project discovery** | `cerefox_list_projects` MCP tool for agents to discover available projects; all search results include human-readable `project_names` alongside UUIDs |
 | **Heading-aware chunking** | Greedy section accumulation — H1/H2/H3 sections accumulate until MAX_CHUNK_CHARS; heading breadcrumb preserved per chunk |
@@ -96,9 +96,8 @@ server-side deploy — ships in the
 (no repo clone); the local backend bundles that same runtime plus Postgres +
 pgvector into one image.
 
-Until **v1.0.0** the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
-aspirational — breaking changes can land in minor versions when there's a good
-reason; after v1.0.0 it's binding. Full release history is in
+Since **v1.0.0** the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
+binding. Full release history is in
 [`CHANGELOG.md`](CHANGELOG.md); the roadmap and iteration log live in
 [`docs/plan.md`](docs/plan.md).
 
@@ -289,12 +288,13 @@ command directly — no MCP config at all. Point the agent at
 [`AGENT_GUIDE.md`](AGENT_GUIDE.md) and let it use `cerefox search` /
 `cerefox document ingest`.
 
-**5 — Cloud & mobile Claude (optional).** claude.ai web and the Claude mobile
-app connect to `cerefox-mcp` over **OAuth** — memory in your browser and on your
-phone, with full hybrid search. It's an opt-in extra: it needs a one-time
-Supabase OAuth setup plus a hosted consent page (the repo ships a one-command
-[Cloudflare Worker](cloudflare/cerefox-consent/) for that, free). Nothing else
-above requires it. See
+**5 — Cloud Claude and ChatGPT (optional).** claude.ai and ChatGPT (on the web
+and in their mobile and desktop apps) connect to `cerefox-mcp` over **OAuth**:
+memory in your browser and on your phone, with full hybrid search. It's an
+opt-in extra: it needs a one-time Supabase OAuth setup plus a hosted consent
+page (the repo ships a one-command [Cloudflare Worker](cloudflare/cerefox-consent/)
+for that, free). ChatGPT (item 3) uses the same setup; nothing else above needs
+it. See
 [setup-supabase.md → Step 7](docs/guides/setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional).
 
 Full setup for every client — plus a manual per-client config appendix for when

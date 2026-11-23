@@ -30,8 +30,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   instead (keywords and meaning, whole documents), on both the local and the
   remote MCP server. It now returns chunks ranked by meaning alone, the same
   results the web UI's Semantic search and `GET /api/v1/search?mode=semantic`
-  give. Like there, it applies no confidence threshold unless you pass
-  `min_score`, so judge the results by their scores.
+  give. It applies no confidence threshold unless you pass `min_score` (MCP)
+  or `--min-score` (CLI), so judge the results by their scores.
 - **An unknown search mode is an error, not a silent docs search** (#377), on
   the MCP tool, `cerefox search --mode` and `GET /api/v1/search` (a `400`). A
   typo such as `mode: "chunks"` used to run the default search, so the caller

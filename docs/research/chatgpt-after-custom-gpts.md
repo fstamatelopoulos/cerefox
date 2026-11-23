@@ -139,6 +139,7 @@ Historical records (CHANGELOG, plans, specs, research) were left as written.
 | 2026-10-08 | Codex CLI, local MCP (entry pointing at the installed `cerefox` binary) | **Works.** `cerefox_get_help` reports the server version; all 15 core tools listed (the 4 relation tools hidden, as expected with `relations_enabled` off). Read and write round trip: create, insert, audit log (author and `local-mcp` access path recorded), delete with a reason. |
 | 2026-10-08 | Codex CLI, after `cerefox configure-agent --tool codex` (the `npx` form) | **Works** in a new session. |
 | 2026-10-08 | ChatGPT desktop app, regular chat | **No Cerefox tools.** The app's log shows the local server starting for Codex threads only; plain chats do not get local MCP servers. |
+| 2026-11-23 | ChatGPT (Plus plan) on the web, in the desktop app and in the mobile app, custom MCP server to production `cerefox-mcp` over OAuth (pre-registered client) | **Works.** Searches, reads, writes and partial edits, with no confirmation prompt in the chat; the connector added on the web appears in the apps. Calls land in the usage log as `remote-mcp`. |
 
 ### Phase 2: validate option A, on staging first
 
@@ -168,13 +169,13 @@ project, so the OAuth experiment cannot disturb a production claude.ai connector
 | 7 | Reads | search, get document (full, outline, section), metadata search, list projects, audit log |
 | 8 | Writes | ingest, insert, edit, set metadata, delete and restore, each through ChatGPT's per-call confirmation; `expected_content_hash` round trip; a deliberate stale-hash conflict |
 | 9 | Attribution | Audit entries carry `author` (instruct the model to pass it) and `access_path` `remote-mcp` |
-| 10 | Surfaces | Does a connector created on the web work in the desktop app and on mobile? |
-| 11 | Memory | Does Developer Mode still disable ChatGPT Memory (noted in the 28A design doc)? |
+| 10 | Surfaces | Does a connector created on the web work in the desktop app and on mobile? **Yes** (2026-11-23). |
+| 11 | Memory | Does Developer Mode still disable ChatGPT Memory (noted in the 28A design doc)? Moot: there is no Developer Mode switch any more (custom MCP servers are added from Plugins). Not checked separately. |
 | 12 | Cost | One Edge Function invocation per tool call; note it next to the claude.ai cost note |
 
 Then repeat 2-8 on production once staging passes, registering a production ChatGPT client.
 
-### Phase 3: docs from what actually worked
+### Phase 3: docs from what actually worked (done 2026-11-23, v1.25.0)
 
 1. `connect-agents.md`: a new **"ChatGPT (web, desktop, mobile): MCP connector over OAuth"**
    section, modeled on the claude.ai one, with the exact menu path, fields and the
@@ -196,8 +197,8 @@ Then repeat 2-8 on production once staging passes, registering a production Chat
 
 ## 5. Open questions
 
-- If ChatGPT requires DCR, is enabling it acceptable given the owner pin (only the owner can
-  complete consent), or is that the wrong trade?
+- ~~If ChatGPT requires DCR, is enabling it acceptable…?~~ Answered (2026-11-23): ChatGPT
+  takes a pre-registered client, so DCR stays off.
 - Does a Developer Mode connector keep working in ordinary chats long term, or will OpenAI
   route personal integrations through plugins only?
 - Is a plugin worth publishing for other Cerefox users, or does every deployment need its

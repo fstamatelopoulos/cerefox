@@ -147,7 +147,7 @@ cerefox search [OPTIONS] QUERY
 | `--match-count <n>` (`-c`) | int | `5` | Number of results. |
 | `--project-name <name>` (`-p`) | str | _none_ | Limit to a project by name. |
 | `--alpha <float>` | float | `0.7` | Semantic weight 0..1 (`docs`/`hybrid`). |
-| `--min-score <float>` | float | `0.5` | Minimum cosine similarity (`docs`/`hybrid`; not applied to `fts`). With `semantic`, no floor unless you pass it. |
+| `--min-score <float>` | float | the store's `min_search_score`, else `0.5` (`0.6` with the local embedder) | Minimum cosine similarity (`docs`/`hybrid`; not applied to `fts`). With `semantic`, no floor unless you pass it. |
 | `--metadata-filter <json>` (`-f`) | JSON | _none_ | JSONB metadata containment filter, e.g. `'{"type":"decision"}'`. |
 | `--max-bytes <n>` | int | `200000` | Response size budget in bytes. |
 | `--only-metadata` | flag | off | List matching docs (id, score, chunks, chars) without content — a compact listing. |
@@ -770,7 +770,7 @@ The SPA assets are bundled in the npm package; no separate build step is needed 
 
 **Synopsis**: `cerefox mcp`
 
-No options. See [`connect-agents.md` → Path A-Local](connect-agents.md#path-a-local--local-mcp-server-cerefox-mcp).
+No options. See [`connect-agents.md` → Path A-Local](connect-agents.md#path-a-local--local-mcp-server).
 
 ---
 
@@ -864,7 +864,7 @@ surface).
 |---|---|---|
 | `document ingest` | `cerefox_ingest` | ✅ |
 | `document ingest-dir` | — (agents loop `cerefox_ingest`) | 🔒 bulk filesystem walk; no server-side dir access from MCP |
-| `search` | `cerefox_search` | ✅ (CLI adds `--mode`/`--alpha`/`--min-score`/`--only-metadata`) |
+| `search` | `cerefox_search` | ✅ (CLI adds `--only-metadata`) |
 | `document get` | `cerefox_get_document` | ✅ |
 | `document list` | `cerefox_metadata_search` (scope by `project_name` / metadata / time) | ✅ as of this change. Unscoped whole-KB listing has no MCP path by design (scope it) |
 | `document edit` (title / metadata in place) | — | 🔒 intentional: a human/web-parity convenience. Agents update title+metadata deterministically via `cerefox_ingest` (with `document_id`); a metadata-only edit isn't a needed agent primitive |

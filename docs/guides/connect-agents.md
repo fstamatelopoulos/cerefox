@@ -1,7 +1,7 @@
 # Connecting AI Agents to Cerefox
 
-Cerefox exposes your knowledge base through two access paths. Choose the one that fits your
-client; you can also run both in parallel.
+Cerefox exposes your knowledge base through three access paths (MCP, direct HTTP and the
+shell CLI). Choose the one that fits your client; you can also run several in parallel.
 
 > **OpenAI API key — known glitch (all paths):** The simplest setup is an **unrestricted**
 > OpenAI API key — it just works. If you prefer a restricted key and hit a
@@ -579,6 +579,141 @@ Launch `gemini` and use `/mcp` to confirm tools are listed, or ask:
 
 ---
 
+## Cloud ChatGPT and Claude: remote MCP over OAuth <a id="cloud-chatgpt-and-claude-oauth"></a>
+
+ChatGPT and claude.ai (on the web, in their desktop apps and in their mobile apps) can only
+reach a custom MCP server over **OAuth**: they cannot send the Cerefox access token. Both
+connect to the same `cerefox-mcp` Edge Function (Path A-Remote) through one optional
+Supabase OAuth setup
+([setup-supabase Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)),
+each with its own OAuth client.
+
+### Cloud ChatGPT (web, desktop and mobile apps, over OAuth) <a id="cloud-chatgpt-web-desktop-mobile-oauth"></a>
+
+> **Optional feature, same setup as cloud Claude.** ChatGPT connects to your own
+> `cerefox-mcp` Edge Function as a **custom MCP server**, over the same OAuth setup
+> [cloud Claude](#cloud-claude-claudeai-web--mobile-oauth) uses. It replaces the
+> [Custom GPT path](#chatgpt-custom-gpt-cloud--chatgptcom), which ends when OpenAI retires
+> Custom GPTs on December 11, 2026. For **Codex**, use the local MCP instead
+> ([ChatGPT Desktop and Codex](#chatgpt-desktop-and-codex)).
+
+ChatGPT gets the **full tool surface** (search, read, write, partial edits; 15 tools, 19
+with document relations), the same as Claude, with no local install. You add the
+connector once on chatgpt.com, and it then works in ChatGPT on the web, in the desktop
+app and in the mobile apps. Verified on the **ChatGPT Plus** plan: searches, reads,
+writes and partial edits all work, without a confirmation prompt in the chat. Custom MCP
+servers are a ChatGPT plan feature: if you don't see the option below, check OpenAI's help
+center for which plans offer it.
+
+**Prerequisite:** the one-time Supabase OAuth setup in
+[`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)
+(the OAuth 2.1 Server, the consent page, the owner pin). If cloud Claude already works,
+that part is done. ChatGPT then needs **its own OAuth client**, registered in step 3 below
+with the callback URL ChatGPT gives you.
+
+1. On **chatgpt.com** (the web; the apps cannot add one), open **Plugins**, click **+**,
+   then **Add custom MCP server**.
+2. Fill in the dialog:
+   - **Name**: `Cerefox` (and an optional description and icon).
+   - **Connection**: **Server URL**, set to
+     ```
+     https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
+     ```
+     (the `*.supabase.co` host: a custom domain breaks OAuth discovery).
+   - **Authentication**: **OAuth**.
+   - Open **Advanced OAuth settings**. ChatGPT has already discovered your server's OAuth
+     endpoints (Auth URL, Token URL, authorization server, resource). Set
+     **Registration method** to **User-Defined OAuth Client**. That ChatGPT reports
+     Dynamic Client Registration and CIMD as unavailable is expected: Cerefox uses a
+     pre-registered client. Copy the **Callback URL**
+     (`https://chatgpt.com/connector/oauth/<id>`), and leave the dialog open.
+3. Register ChatGPT's client in Supabase, as in
+   [setup-supabase Step 7d](setup-supabase.md#7d-register-the-oauth-clients--use-client_secret_post)
+   but with that callback URL: **Authentication → OAuth Apps → New OAuth App**, client type
+   **Confidential**, **Redirect URI** = the callback URL exactly, token endpoint auth method
+   **request body (`client_secret_post`)**. Copy the Client ID and Client Secret (the secret
+   is shown once).
+4. Back in ChatGPT's dialog:
+   - **OAuth client ID** and **OAuth client secret**: paste them.
+   - **Token endpoint auth method**: `client_secret_post`.
+   - **Scopes**: keep the defaults, `openid` and `email`; leave **Base scopes** empty.
+   - **OpenID support**: leave **OIDC enabled** on.
+   - Tick **I understand and want to continue** (ChatGPT's warning about custom servers)
+     and create the connector.
+5. ChatGPT runs the OAuth flow and sends you to the **Cerefox consent page**: sign in with
+   the owner email and password from Step 7c, then **Allow**. ChatGPT shows the connector
+   as connected.
+6. **Desktop and mobile**: the connector belongs to your ChatGPT account, so it appears in
+   the desktop and mobile apps without further setup.
+
+**Verify**: in a new chat, turn the Cerefox connector on and ask *"Search my Cerefox for
+\<a topic you know is there\> and summarize the best match."*
+
+**Tell ChatGPT who it is.** Every Cerefox tool takes an `author`, recorded in the usage
+and audit logs. ChatGPT usually passes a name of its own, but not always (calls without
+one are logged as `mcp-agent`). Add a line to ChatGPT's custom instructions or the
+project's instructions, such as *"When you use Cerefox tools, pass author:
+\"ChatGPT\"."*, so its reads and writes are attributed.
+
+> **The callback URL belongs to this connector.** If you delete the connector and add it
+> again, ChatGPT gives it a new callback URL: add that one to the OAuth App's redirect
+> URIs (or register a new app), or the sign-in fails with a redirect mismatch.
+
+> **If sign-in fails with "invalid scope"**, turn **OIDC enabled** off under **OpenID
+> support** and connect again: Cerefox only needs `openid` and `email`.
+
+> **Cost note**: as with cloud Claude, each tool call is about one Edge Function
+> invocation.
+
+---
+
+### Cloud Claude (claude.ai web + mobile — OAuth) <a id="cloud-claude-claudeai-web--mobile-oauth"></a>
+
+> **Optional feature.** This path and [Cloud ChatGPT](#cloud-chatgpt-web-desktop-mobile-oauth)
+> are the only ones that need the OAuth setup and a hosted consent page. If you use
+> neither, skip it: every other client works without it. Design + rationale:
+> [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
+
+Claude.ai web **and the Claude mobile app** connect to your own `cerefox-mcp` Edge
+Function over **OAuth**, with the **full hybrid-search tool surface** — no local install.
+This replaces the old FTS-only `mcp.supabase.com` approach (raw keyword search over the
+tables, no semantic search, no Cerefox tool ergonomics).
+
+**Prerequisite:** complete the one-time Supabase OAuth setup in
+[`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)
+— enable the OAuth 2.1 Server, deploy the Cloudflare Worker consent page, create the owner
+user + `CEREFOX_OAUTH_OWNER_ID` pin, and register the Claude OAuth App
+(**`client_secret_post`**) whose Client ID/Secret you paste below.
+
+1. In Claude.ai (web): **Settings → Connectors → Add custom connector**.
+2. **Name**: `CerefoxMCP` (distinct from the local `cerefox` server, so both can coexist).
+3. **URL** (must be the `*.supabase.co` host — custom domains break OAuth discovery):
+   ```
+   https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
+   ```
+4. **Advanced settings → OAuth Client ID / OAuth Client Secret**: paste the Client ID and
+   Client Secret from the pre-registered OAuth App (setup-supabase Step 7d).
+5. Save. Claude runs the OAuth flow → redirects you to the **Cerefox consent page** (sign
+   in with the owner email/password from Step 7c, then **Allow**) → returns to Claude. The
+   connector shows as connected with **15 tools** (19 if you have enabled document relations). (If you've approved before, Supabase
+   auto-consents and the page just flashes through — that's expected.)
+6. **Mobile**: connectors are account-level, so `CerefoxMCP` appears in the Claude mobile
+   app automatically — run one search from your phone to confirm.
+
+**Verify**: in a new chat with the connector enabled, ask *"Using CerefoxMCP, search my
+Cerefox for \<a topic you know is there\> and summarize the best match."* A correct answer
+proves search and document reconstruction over the OAuth path.
+
+> **If the connect fails right after consent** with an `ofid_…` reference: the OAuth App's
+> token endpoint auth method is wrong. It must be **`request body` (`client_secret_post`)**,
+> not HTTP Basic — see setup-supabase Step 7d. This is the most common mistake.
+
+> **Cost note**: each cloud tool call is ~1 Edge Function invocation. Fine for interactive
+> use; for heavy/automated work prefer the local stdio server (zero EF cost). Your local
+> and static-Bearer clients (Claude Code, Cursor, Codex, Gemini, Desktop) are unchanged.
+
+---
+
 ## Path B — Supabase Edge Functions (HTTP)
 
 ### What they are
@@ -636,87 +771,6 @@ curl -s -X POST \
 
 Expected: JSON response with `results` array containing documents.
 
-### Cloud ChatGPT (web, desktop and mobile apps — OAuth) <a id="cloud-chatgpt-web-desktop-mobile-oauth"></a>
-
-> **Optional feature, same setup as cloud Claude.** ChatGPT connects to your own
-> `cerefox-mcp` Edge Function as a **custom MCP server**, over the same OAuth setup
-> [cloud Claude](#cloud-claude-claudeai-web--mobile-oauth) uses. It replaces the
-> [Custom GPT path](#chatgpt-custom-gpt-cloud--chatgptcom), which ends when OpenAI retires
-> Custom GPTs on December 11, 2026. For **Codex**, use the local MCP instead
-> ([ChatGPT Desktop and Codex](#chatgpt-desktop-and-codex)).
-
-ChatGPT gets the **full tool surface** (search, read, write, partial edits; 15 tools, 19
-with document relations), the same as Claude, with no local install. You add the
-connector once on chatgpt.com, and it then works in ChatGPT on the web, in the desktop
-app and in the mobile apps. Verified on the **ChatGPT Plus** plan: searches, reads,
-writes and partial edits all work, without a confirmation prompt in the chat. Custom MCP
-servers are a ChatGPT plan feature: if you don't see the option below, check OpenAI's help
-center for which plans offer it.
-
-**Prerequisite:** the one-time Supabase OAuth setup in
-[`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)
-(the OAuth 2.1 Server, the consent page, the owner pin). If cloud Claude already works,
-that part is done. ChatGPT then needs **its own OAuth client**, registered in step 3 below
-with the callback URL ChatGPT gives you.
-
-1. On **chatgpt.com** (the web; the apps cannot add one), open **Plugins**, click **+**,
-   then **Add custom MCP server**.
-2. Fill in the dialog:
-   - **Name**: `Cerefox` (and an optional description and icon).
-   - **Connection**: **Server URL**, set to
-     ```
-     https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
-     ```
-     (the `*.supabase.co` host: a custom domain breaks OAuth discovery).
-   - **Authentication**: **OAuth**.
-   - Open **Advanced OAuth settings**. ChatGPT has already discovered your server's OAuth
-     endpoints (Auth URL, Token URL, authorization server, resource). Set
-     **Registration method** to **User-Defined OAuth Client**. That ChatGPT reports
-     Dynamic Client Registration and CIMD as unavailable is expected: Cerefox uses a
-     pre-registered client. Copy the **Callback URL**
-     (`https://chatgpt.com/connector/oauth/<id>`), and leave the dialog open.
-3. Register ChatGPT's client in Supabase, as in
-   [setup-supabase Step 7d](setup-supabase.md#7d-register-the-oauth-clients--use-client_secret_post)
-   but with that callback URL: **Authentication → OAuth Apps → New OAuth App**, client type
-   **Confidential**, **Redirect URI** = the callback URL exactly, token endpoint auth method
-   **request body (`client_secret_post`)**. Copy the Client ID and Client Secret (the secret
-   is shown once).
-4. Back in ChatGPT's dialog:
-   - **OAuth client ID** and **OAuth client secret**: paste them.
-   - **Token endpoint auth method**: `client_secret_post`.
-   - **Scopes**: keep the defaults, `openid` and `email`; leave **Base scopes** empty.
-   - **OpenID support** can stay enabled.
-   - Tick **I understand and want to continue** (ChatGPT's warning about custom servers)
-     and create the connector.
-5. ChatGPT runs the OAuth flow and sends you to the **Cerefox consent page**: sign in with
-   the owner email and password from Step 7c, then **Allow**. ChatGPT shows the connector
-   as connected.
-6. **Desktop and mobile**: the connector belongs to your ChatGPT account, so it appears in
-   the desktop and mobile apps without further setup.
-
-**Verify**: in a new chat, turn the Cerefox connector on and ask *"Search my Cerefox for
-\<a topic you know is there\> and summarize the best match."*
-
-**Tell ChatGPT who it is.** Every Cerefox tool takes an `author`, recorded in the usage
-and audit logs. ChatGPT usually passes a name of its own, but not always (calls without
-one are logged as `mcp-agent`). Add a line to ChatGPT's custom instructions or the
-project's instructions, such as *"When you use Cerefox tools, pass author:
-\"ChatGPT\"."*, so its reads and writes are attributed.
-
-> **The callback URL belongs to this connector.** If you delete the connector and add it
-> again, ChatGPT gives it a new callback URL: add that one to the OAuth App's redirect
-> URIs (or register a new app), or the sign-in fails with a redirect mismatch.
-
-> **If sign-in fails with "invalid scope"**, turn **OIDC enabled** off under **OpenID
-> support** and connect again: Cerefox only needs `openid` and `email`.
-
-> **Cost note**: as with cloud Claude, each tool call is about one Edge Function
-> invocation.
-
----
-
----
-
 ### ChatGPT Custom GPT (cloud — chatgpt.com)
 
 > **Retiring on December 11, 2026.** OpenAI is retiring Custom GPTs in favor of plugins,
@@ -730,7 +784,9 @@ project's instructions, such as *"When you use Cerefox tools, pass author:
 A Custom GPT with Actions pointing at the Edge Functions gives ChatGPT full hybrid search from
 any browser — no local install, no MCP client, works free with ChatGPT Plus.
 
-**Step 1 — Create the Custom GPT**
+**Step 1 — Create the Custom GPT** (OpenAI planned to stop the creation of new Custom GPTs
+from September 25, 2026, varying by account, so this may only work for an existing one; for a
+new setup use [Cloud ChatGPT](#cloud-chatgpt-web-desktop-mobile-oauth))
 
 1. Go to **chatgpt.com → Explore GPTs → Create**
 2. Name it (e.g. "Cerefox Assistant")
@@ -1229,7 +1285,7 @@ In the action's **Authentication** settings:
 Save the GPT. In a new chat, ask:
 > "Search my knowledge base for 'second brain'."
 
-> **Cost**: GPT Actions are free with ChatGPT Plus. Each search call uses a small amount of
+> **Cost**: until December 11, 2026, GPT Actions are free with ChatGPT Plus. Each search call uses a small amount of
 > OpenAI API credits for embedding the query. See `docs/guides/operational-cost.md`.
 
 ---
@@ -1270,7 +1326,7 @@ If a live document already has the same content (SHA-256 hash match), a create r
 | `query` | string | required | Natural-language search query |
 | `project_name` | string | optional | Filter by project name (case-insensitive) |
 | `match_count` | number | 5 | Maximum **documents** to return |
-| `mode` | string | `"docs"` | `"docs"` = full document results (recommended) |
+| `mode` | string | `"docs"` | `"docs"` (default, full document results, recommended), `"hybrid"` or `"fts"`. This Edge Function has no `"semantic"` mode, and any other value runs `"docs"` |
 | `alpha` | number | 0.7 | Semantic weight (0 = FTS only, 1 = semantic only) |
 | `min_score` | number | 0.5 | Minimum cosine similarity threshold |
 | `max_bytes` | number | 200000 | Response size budget in bytes. Results are dropped whole (never truncated mid-document) once the budget is reached. The response includes `truncated: true` and `response_bytes` when the limit was hit. When nothing fits, `degraded: true` and a content-free header list come back instead of an empty `results` — always at least one item, even if it exceeds the budget. See "Response size limit" below. |
@@ -1300,14 +1356,14 @@ If a live document already has the same content (SHA-256 hash match), a create r
 | `full_content` | string | Reconstructed document content (may be partial — see `is_partial`) |
 | `chunk_count` | integer | Number of chunks in `full_content` |
 | `total_chars` | integer | Full document size in characters (always the whole doc, even when `is_partial` is true) |
-| `is_partial` | boolean | `true` when `full_content` contains only matched chunks + neighbours instead of the complete document. Triggered when the document exceeds the small-to-big threshold (default 20 000 chars). Use `getDocument` to retrieve the full text. |
+| `is_partial` | boolean | `true` when `full_content` contains only matched chunks + neighbors instead of the complete document. Triggered when the document exceeds the small-to-big threshold (default 20 000 chars). Use `getDocument` to retrieve the full text. |
 | `doc_updated_at` | string | ISO 8601 timestamp of the last document update |
 | `version_count` | integer | Number of archived versions (0 if never updated) |
 | `doc_project_ids` | string[] | Project UUIDs the document belongs to |
 
 **Response size limit (`max_bytes`):**
 
-200 KB is a safety ceiling that prevents runaway responses under unusual settings (e.g. very high `match_count`). Under normal usage the small-to-big retrieval path already keeps individual large-document results compact (matched chunks + neighbours only), so this limit is rarely reached.
+200 KB is a safety ceiling that prevents runaway responses under unusual settings (e.g. very high `match_count`). Under normal usage the small-to-big retrieval path already keeps individual large-document results compact (matched chunks + neighbors only), so this limit is rarely reached.
 
 You can override it per-request if needed:
 ```json
@@ -1315,53 +1371,6 @@ You can override it per-request if needed:
 ```
 
 See `docs/guides/configuration.md` → "Response size limit" for full details.
-
----
-
-### Cloud Claude (claude.ai web + mobile — OAuth) <a id="cloud-claude-claudeai-web--mobile-oauth"></a>
-
-> **Optional feature.** This is the only path that needs the OAuth setup + a hosted
-> consent page. If you don't use claude.ai web / mobile, skip it — every other client
-> works without it. Design + rationale:
-> [`docs/specs/oauth-mcp-server-design.md`](../specs/oauth-mcp-server-design.md).
-
-Claude.ai web **and the Claude mobile app** connect to your own `cerefox-mcp` Edge
-Function over **OAuth**, with the **full hybrid-search tool surface** — no local install.
-This replaces the old FTS-only `mcp.supabase.com` approach (raw keyword search over the
-tables, no semantic search, no Cerefox tool ergonomics).
-
-**Prerequisite:** complete the one-time Supabase OAuth setup in
-[`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)
-— enable the OAuth 2.1 Server, deploy the Cloudflare Worker consent page, create the owner
-user + `CEREFOX_OAUTH_OWNER_ID` pin, and register the Claude OAuth App
-(**`client_secret_post`**) whose Client ID/Secret you paste below.
-
-1. In Claude.ai (web): **Settings → Connectors → Add custom connector**.
-2. **Name**: `CerefoxMCP` (distinct from the local `cerefox` server, so both can coexist).
-3. **URL** (must be the `*.supabase.co` host — custom domains break OAuth discovery):
-   ```
-   https://<your-project-ref>.supabase.co/functions/v1/cerefox-mcp
-   ```
-4. **Advanced settings → OAuth Client ID / OAuth Client Secret**: paste the Client ID and
-   Client Secret from the pre-registered OAuth App (setup-supabase Step 7d).
-5. Save. Claude runs the OAuth flow → redirects you to the **Cerefox consent page** (sign
-   in with the owner email/password from Step 7c, then **Allow**) → returns to Claude. The
-   connector shows as connected with **15 tools** (19 if you have enabled document relations). (If you've approved before, Supabase
-   auto-consents and the page just flashes through — that's expected.)
-6. **Mobile**: connectors are account-level, so `CerefoxMCP` appears in the Claude mobile
-   app automatically — run one search from your phone to confirm.
-
-**Verify**: in a new chat with the connector enabled, ask *"Using CerefoxMCP, search the
-Cerefox Decision Log and give the title of the latest part."* A correct answer proves
-search + document reconstruction over the OAuth path.
-
-> **If the connect fails right after consent** with an `ofid_…` reference: the OAuth App's
-> token endpoint auth method is wrong. It must be **`request body` (`client_secret_post`)**,
-> not HTTP Basic — see setup-supabase Step 7d. This is the most common mistake.
-
-> **Cost note**: each cloud tool call is ~1 Edge Function invocation. Fine for interactive
-> use; for heavy/automated work prefer the local stdio server (zero EF cost). Your local
-> and static-Bearer clients (Claude Code, Cursor, Codex, Gemini, Desktop) are unchanged.
 
 ---
 
@@ -1514,7 +1523,7 @@ Search the knowledge base. Returns complete documents ranked by hybrid (FTS + se
 
 Three result shapes: **documents** (the default, below), **documents with their best passages** (`content: "matches"`: for finding which document to read, especially among long documents; each passage shows its section and score, and a note says what was left out and how to read the rest with `cerefox_get_document`), and **ranked chunks** (`mode: "hybrid"`/`"fts"`/`"semantic"`: when the passage itself is the answer). Keep `max_passage_chars` at or above the store's chunk size (`CEREFOX_MAX_CHUNK_CHARS`, default 4000) if every passage must show what matched: a longer chunk is cut to an excerpt around the query's words, or to its opening when it matched on meaning alone, and that passage says so. See [`AGENT_GUIDE.md`](../../AGENT_GUIDE.md).
 
-Each result includes `doc_title`, `best_score`, `full_content`, `chunk_count`, `total_chars`, and `is_partial`. When `is_partial` is true, the document exceeded the small-to-big threshold: `full_content` contains the best-matching chunks and their neighbours rather than the whole document. The heading for such results includes a `— partial (N of M chars)` annotation. Use `cerefox_get_document` to retrieve the full text when needed.
+Each result includes `doc_title`, `best_score`, `full_content`, `chunk_count`, `total_chars`, and `is_partial`. When `is_partial` is true, the document exceeded the small-to-big threshold: `full_content` contains the best-matching chunks and their neighbors rather than the whole document. The heading for such results includes a `— partial (N of M chars)` annotation. Use `cerefox_get_document` to retrieve the full text when needed.
 
 ### `cerefox_ingest`
 
@@ -1626,7 +1635,7 @@ recommended RPC for agent use** — agents receive complete notes, not isolated 
 | `p_alpha` | FLOAT | 0.7 | Semantic weight |
 | `p_project_id` | UUID | null | Filter by project |
 | `p_min_score` | FLOAT | 0.0 | Minimum cosine similarity |
-| `p_small_to_big_threshold` | INT | 20000 | Documents larger than this return matched chunks + neighbours instead of the full document. Set to `0` to always return full content. Change the DEFAULT in `rpcs.sql` to apply server-wide. |
+| `p_small_to_big_threshold` | INT | 20000 | Documents larger than this return matched chunks + neighbors instead of the full document. Set to `0` to always return full content. Change the DEFAULT in `rpcs.sql` to apply server-wide. |
 | `p_context_window` | INT | 1 | Neighbour chunks on each side of each matched chunk. `1` → up to 3 contiguous chunks per hit. `0` → matched chunks only. |
 | `p_passages` | BOOLEAN | false | Schema 0.23.0. Return each document's best-matching chunks in `passages` instead of `full_content` (left empty). Same documents, same order. |
 | `p_max_passage_chars` | INT | 1500 | With `p_passages`: passage text per document, clamped to 200..20000. Whole chunks are kept best first while they fit; the best one is always kept, cut (to an excerpt around the query's terms, else its opening) when it alone is longer. |
@@ -1639,7 +1648,7 @@ Returns: `document_id`, `doc_title`, `doc_source`, `doc_metadata`, `doc_project_
 a lower bound on how many match).
 
 `is_partial` is `TRUE` when the document exceeded `p_small_to_big_threshold` — in that
-case `full_content` contains matched chunks + up to `p_context_window` neighbours on each
+case `full_content` contains matched chunks + up to `p_context_window` neighbors on each
 side, deduplicated and sorted by `chunk_index`. `total_chars` always reflects the full
 document size regardless of whether the result is partial.
 
@@ -1661,7 +1670,7 @@ Returns: `document_id`, `doc_title`, `doc_source`, `doc_metadata`, `full_content
 #### `cerefox_context_expand`
 
 Small-to-big retrieval: given a set of chunk IDs, returns those chunks **plus their immediate
-neighbours** (±`p_window_size` chunks within the same document).
+neighbors** (±`p_window_size` chunks within the same document).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
