@@ -9,7 +9,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Fixed
+
+- **The local embedding model can no longer be corrupted by two first uses at
+  once** (#367, Cerefox Local and `CEREFOX_EMBEDDER=local`). When two commands
+  needed the model before it was on disk (an agent's MCP server and a CLI
+  command, say), both downloaded into the same file and spliced it: the right
+  size, the wrong content, and every search and write failed until the file
+  was deleted by hand. Now one process downloads each file while the others
+  wait for it, every file is checked against the hash Hugging Face publishes
+  before it is used, and all requests of one download come from the same
+  model revision.
+- **A damaged model already on disk repairs itself.** On first use after the
+  upgrade, the cached files are checked once against the shipped revision's
+  hashes (no network needed), and a file that does not match, or will not
+  load, is removed and downloaded again. Not every damaged model fails to
+  load: some load and quietly produce wrong vectors, so this check is what
+  catches them. The error for a failed local embedding now points at
+  `embedder-warmup`, not at the OpenAI setup.
 
 ---
 
