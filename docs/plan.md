@@ -550,7 +550,7 @@ release picks it up.
   matters because titles are boosted in search.
   Operational notes for the next run: `--force` permits a non-empty target but **never
   cleans**, so exporting over an old backup leaves orphans indistinguishable from current
-  files; `/Users/fotis/src/cerefox/.env` points at the **same project as production** and
+  files; a `.env` in the repo checkout can point at the **same project as production**, and
   `./.env` in the cwd outranks `~/.cerefox/.env`, so pass `CEREFOX_CONFIG_DIR` explicitly; and
   a plain `mv` onto an existing directory **nests** it rather than replacing it.
 

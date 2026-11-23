@@ -2709,7 +2709,7 @@ Target **v1.6.0** — a minor, because it adds an MCP tool and a CLI command.
   `grid-template-columns: 1fr 360px` was the cause: `1fr` is `minmax(auto, 1fr)`
   and its `auto` minimum is *min-content*, so a table wider than its share
   expanded the track and overflowed the page container — which is what happened
-  once agent author names grew from `user` to `Claude|Financial-Planner`. Now
+  once agent author names grew from `user` to `Claude|Research-Assistant`. Now
   `minmax(0, 1fr)`, with the author column capped and ellipsised (full value in
   the cell's title) and `table-layout: fixed` so one long value can never size
   the table again. Measured on the rendered page: 64px out before, 0px now.
@@ -7304,7 +7304,7 @@ work lands.
   (`rpcs.sql` function ordering and `cerefox search` CLI `NameError`), see
   [PR #34](https://github.com/fstamatelopoulos/cerefox/pull/34) (originally
   submitted as [PR #25](https://github.com/fstamatelopoulos/cerefox/pull/25)).
-  Note: the commit author email (`jbrady@grandtimber.com`) is not yet linked to
+  Note: the commit author email is not yet linked to
   the contributor's GitHub account, so the GitHub Contributors graph does not
   currently surface them; once the email is verified at
   https://github.com/settings/emails the graph picks up past commits

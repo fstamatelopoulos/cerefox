@@ -214,13 +214,13 @@ describe("every search mode renders its own content column (#259)", () => {
 
 describe("cerefox_search never reports an empty store for a budget miss", () => {
   test("matched but nothing fits: headers, not \"No results found.\"", async () => {
-    const supabase = clientReturning([row("Contact - Josh Cohen", 20_000, 2.9)]);
+    const supabase = clientReturning([row("Contact - Avery Marlow", 20_000, 2.9)]);
     const out = await search.handler(supabase, args({ max_bytes: 6_000 }), ctx);
 
     expect(out).not.toContain("No results found");
     // The document, its id and its size: enough to fetch it deliberately.
-    expect(out).toContain("Contact - Josh Cohen");
-    expect(out).toContain("id-Contact - Josh Cohen");
+    expect(out).toContain("Contact - Avery Marlow");
+    expect(out).toContain("id-Contact - Avery Marlow");
     expect(out).toContain("20,000 chars");
     // And the reason, stated so an agent does not conclude absence.
     expect(out).toContain("NOT an empty");

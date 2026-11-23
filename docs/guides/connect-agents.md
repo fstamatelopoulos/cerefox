@@ -789,7 +789,7 @@ from September 25, 2026, varying by account, so this may only work for an existi
 new setup use [Cloud ChatGPT](#cloud-chatgpt-web-desktop-mobile-oauth))
 
 1. Go to **chatgpt.com → Explore GPTs → Create**
-2. Name it (e.g. "Cerefox Assistant")
+2. Name it (e.g. "Cerefox")
 3. Paste the system prompt from "Path B system prompt" above into the **Instructions** field
 4. Click **Create new action**
 
