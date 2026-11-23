@@ -123,3 +123,23 @@ export function peerVersionUrl(reqUrl: string, peerName: string): string {
   const base = url.pathname.replace(/\/cerefox-mcp(\/.*)?$/, "");
   return `${url.origin}${base}/${peerName}/version`;
 }
+
+/**
+ * How both MCP servers (the local `cerefox mcp` and the `cerefox-mcp` Edge
+ * Function) describe themselves in `serverInfo` on connect, so clients show
+ * the same name, site and icon whichever one they reach. ChatGPT shows these
+ * on the connector's page ("Website"). The icon is the repo's logo at a
+ * stable path: the site's own icon files carry build hashes in their names.
+ */
+export const MCP_SERVER_IDENTITY = {
+  name: "cerefox",
+  title: "Cerefox",
+  websiteUrl: "https://cerefox.org/",
+  icons: [
+    {
+      src: "https://raw.githubusercontent.com/fstamatelopoulos/cerefox/main/web/static/cerefox_logo.jpg",
+      mimeType: "image/jpeg",
+      sizes: ["1024x1024"],
+    },
+  ],
+};

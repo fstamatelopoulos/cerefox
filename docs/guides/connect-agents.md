@@ -648,10 +648,10 @@ Expected: JSON response with `results` array containing documents.
 ChatGPT gets the **full tool surface** (search, read, write, partial edits; 15 tools, 19
 with document relations), the same as Claude, with no local install. You add the
 connector once on chatgpt.com, and it then works in ChatGPT on the web, in the desktop
-app and in the mobile apps. Read tools run without a confirmation prompt (they are
-marked read-only); ChatGPT may ask you to confirm a write. Custom MCP servers are a
-ChatGPT plan feature: if you don't see the option below, check OpenAI's help center for
-which plans offer it.
+app and in the mobile apps. Verified on the **ChatGPT Plus** plan: searches, reads,
+writes and partial edits all work, without a confirmation prompt in the chat. Custom MCP
+servers are a ChatGPT plan feature: if you don't see the option below, check OpenAI's help
+center for which plans offer it.
 
 **Prerequisite:** the one-time Supabase OAuth setup in
 [`setup-supabase.md` → Step 7](setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional)

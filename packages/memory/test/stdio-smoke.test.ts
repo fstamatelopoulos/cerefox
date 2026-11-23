@@ -142,9 +142,13 @@ describe("stdio MCP server smoke", () => {
     }
 
     const init = responses.find((r) => (r as { id?: number }).id === 1) as {
-      result?: { serverInfo?: { name?: string; version?: string } };
+      result?: { serverInfo?: { name?: string; version?: string; title?: string; websiteUrl?: string; icons?: unknown[] } };
     };
     expect(init.result?.serverInfo?.name).toBe("cerefox");
+    // What a client shows on the connector page (ChatGPT: "Website").
+    expect(init.result?.serverInfo?.title).toBe("Cerefox");
+    expect(init.result?.serverInfo?.websiteUrl).toBe("https://cerefox.org/");
+    expect(init.result?.serverInfo?.icons?.length).toBe(1);
     // Assert a semver shape rather than a literal — `meta.ts` is bumped
     // by cut_release.ts on every cut, and we don't want this test to
     // become release-day busywork. The literal-sync itself is verified

@@ -25,8 +25,9 @@ What the validation found, against the open questions below:
   change on our side. It sends the MCP URL as the `resource`; the Supabase token's `aud`
   stays `authenticated`, which `cerefox-mcp` accepts.
 - **Scopes**: the defaults `openid` and `email`; OIDC enabled worked.
-- **Tools**: the full tool surface. Read tools run without a confirmation prompt because
-  they carry `readOnlyHint`.
+- **Tools**: the full tool surface, verified on the **Plus** plan: searches, reads, writes
+  and partial edits, with no confirmation prompt in the chat. (OpenAI's help center had
+  suggested write tools might be limited to Business and Enterprise; on Plus they work.)
 - **Attribution**: ChatGPT usually passes an `author` of its own, not always, so the guide
   suggests naming it in ChatGPT's instructions.
 

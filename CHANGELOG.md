@@ -9,6 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Added
+
+- **ChatGPT connects to Cerefox as a custom MCP server** (#326), on the web,
+  in the desktop app and in the mobile apps, with the full tool surface, the
+  same as cloud Claude. It uses the OAuth setup cloud Claude already uses, plus
+  a second OAuth client for ChatGPT. Setup:
+  [`connect-agents.md` → Cloud ChatGPT](docs/guides/connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth)
+  and `setup-supabase.md` Step 7. No server change was needed. This replaces
+  the Custom GPT path, which stops working on December 11, 2026, when OpenAI
+  retires Custom GPTs.
+- **`cerefox search --mode semantic`** (#377): the CLI gets the meaning-only
+  chunk search the MCP tool, the API and the web UI have. All four surfaces
+  now take the same modes, from one list in the code.
+
 ### Fixed
 
 - **`cerefox_search` `mode: "semantic"` now runs a semantic search** (#377).
@@ -22,12 +36,49 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   the MCP tool, `cerefox search --mode` and `GET /api/v1/search` (a `400`). A
   typo such as `mode: "chunks"` used to run the default search, so the caller
   never learned its argument was ignored. The error lists the valid modes.
+- **The local embedding model can no longer be corrupted by two first uses at
+  once** (#367, Cerefox Local and `CEREFOX_EMBEDDER=local`). When two commands
+  needed the model before it was on disk (an agent's MCP server and a CLI
+  command, say), both downloaded into the same file and spliced it: the right
+  size, the wrong content, and every search and write failed until the file
+  was deleted by hand. Now one process downloads each file while the others
+  wait for it, every file is checked against the hash Hugging Face publishes
+  before it is used, and all requests of one download come from the same
+  model revision.
+- **A damaged model already on disk repairs itself.** On first use after the
+  upgrade, the cached files are checked once against the shipped revision's
+  hashes (no network needed), and a file that does not match, or will not
+  load, is removed and downloaded again. Not every damaged model fails to
+  load: some load and quietly produce wrong vectors, so this check is what
+  catches them. The error for a failed local embedding now points at
+  `embedder-warmup`, not at the OpenAI setup.
 
-### Added
+### Changed
 
-- **`cerefox search --mode semantic`** (#377): the CLI gets the meaning-only
-  chunk search the MCP tool, the API and the web UI have. All four surfaces
-  now take the same modes, from one list in the code.
+- **Both MCP servers introduce themselves properly.** On connect they now
+  report the title Cerefox, the site https://cerefox.org/ and the Cerefox icon,
+  so a client's connector page shows them (ChatGPT's "Website" field). The
+  remote server also reports the release it was built from; it said `0.4.0`
+  until now.
+- **`cerefox guides ingest` takes `--author`**, like every other command, so
+  the guides it writes to your store are attributed to whoever ran it. Without
+  it, the writes are attributed as before.
+- **Releases flag Edge Function changes in every shared module they use.**
+  The release script's list of Edge Function sources is now derived from the
+  bundler's own list. It had drifted and missed four modules (OAuth, access
+  tokens, ingestion and partial edits), so a change in one of them would have
+  shipped without `cerefox doctor` telling anyone to redeploy their Edge
+  Functions. No such change had shipped yet.
+
+### Upgrading
+
+- **No schema change.** Update the client (`cerefox self-update`, or
+  `cerefox-local upgrade` on Cerefox Local), then run
+  `cerefox server deploy --functions-only` so the remote MCP server gets the
+  search mode fix. ChatGPT needs no deploy: follow the setup guide.
+- **Scripts that pass an unknown or empty `--mode`** to `cerefox search`, or
+  `mode=` to `GET /api/v1/search`, now get an error instead of the default
+  docs search. Use one of `docs`, `hybrid`, `fts`, `semantic`.
 
 ---
 

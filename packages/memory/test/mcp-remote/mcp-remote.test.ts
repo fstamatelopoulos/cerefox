@@ -163,6 +163,10 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(resp.error).toBeUndefined();
       expect(typeof resp.result.protocolVersion).toBe("string");
       expect(resp.result.serverInfo.name).toBe("cerefox");
+      expect(resp.result.serverInfo.title).toBe("Cerefox");
+      expect(resp.result.serverInfo.websiteUrl).toBe("https://cerefox.org/");
+      // The release it was built from, not the fixed "0.4.0" it reported before 1.25.0.
+      expect(resp.result.serverInfo.version).not.toBe("0.4.0");
     });
 
     liveTest("tools/list returns the 15 core tools with schemas", async () => {

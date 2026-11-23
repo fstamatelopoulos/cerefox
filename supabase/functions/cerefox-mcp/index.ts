@@ -48,6 +48,7 @@ import {
 import {
   type AggregatedVersions,
   EF_VERSION,
+  MCP_SERVER_IDENTITY,
   isVersionRequest,
   PEER_EF_NAMES,
   peerVersionUrl,
@@ -56,8 +57,6 @@ import {
 } from "../../../_shared/ef-meta/index.ts";
 
 const MCP_VERSION = "2025-03-26";
-const SERVER_NAME = "cerefox";
-const SERVER_VERSION = "0.4.0";
 
 // ── Tool list (derived from _shared/mcp-tools/) ─────────────────────────────
 
@@ -83,7 +82,9 @@ function handleInitialize(id: unknown): Response {
     result: {
       protocolVersion: MCP_VERSION,
       capabilities: { tools: {} },
-      serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+      // The release this function was built from (it reported a fixed
+      // "0.4.0" until 1.25.0), plus the shared title, site and icon.
+      serverInfo: { ...MCP_SERVER_IDENTITY, version: EF_VERSION },
     },
   });
 }
