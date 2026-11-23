@@ -29,15 +29,20 @@
 
 ## Current Focus
 
-**In progress: 1.25.0 on `release/1.25.0` (no schema change).** ChatGPT
-connects as a custom MCP server over OAuth on web, desktop and mobile (#326,
-docs only: `connect-agents.md` → Cloud ChatGPT); every search mode runs its
-own search and unknown modes are errors (#377, iteration 56,
-[`plans/iteration-56-search-modes.md`](plans/iteration-56-search-modes.md));
-the local model download is locked, verified and self-repairing (#367); the
+**2026-11-23: 1.25.0 shipped (no schema change; PR #379).** ChatGPT is
+officially supported again: on the web, in the desktop app and in the mobile
+apps it connects to `cerefox-mcp` as a custom MCP server over OAuth, with its
+own pre-registered client (#326, docs only; verified with reads, writes and
+partial edits). Every search mode runs its own search and unknown modes are
+errors (#377, iteration 56); the local model download is locked, verified and
+self-repairing (#367); both MCP servers report title, website and icon; the
 release script's EF paths derive from the bundler's list; `guides ingest
---author`; both MCP servers report title, website and icon; Dependabot #378
-and #372 merged. Next: final review, one PR, cut.
+--author`; Dependabot #378/#372. Rolled out to staging (full suites,
+Playwright, remote MCP), Cerefox Local and production (backed up first);
+doctor green everywhere. The cut needed `--accept-history-edit=v1.24.0`: two
+old CHANGELOG entries were edited on purpose to remove private details.
+Open: #129 (non-English FTS), #328, #350; Custom GPT docs and the GPT Actions
+OpenAPI rule go after 2026-12-11.
 
 **2026-11-22: 1.24.0 shipped, search returns each document's best passages
 (iteration 55, #375, PR #376, contributed by @ivanursul; schema 0.23.0).** A
