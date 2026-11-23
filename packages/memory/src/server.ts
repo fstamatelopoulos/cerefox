@@ -33,6 +33,7 @@ import {
   TOOLS_BY_NAME,
   type ToolContext,
 } from "../../../_shared/mcp-tools/index.ts";
+import { MCP_SERVER_IDENTITY } from "../../../_shared/ef-meta/index.ts";
 import { PKG_VERSION } from "./meta.ts";
 import { progName } from "./cli/util/prog-name.ts";
 
@@ -47,7 +48,6 @@ type SharedSupabaseClient = Parameters<
 >[0];
 
 /** Resolved at module-load time so `--version` works without DB. */
-const SERVER_NAME = "cerefox";
 
 export interface ServerHandle {
   /** Start the stdio transport and block until the parent closes stdin. */
@@ -85,7 +85,7 @@ export function buildServer(): ServerHandle {
   };
 
   const server = new Server(
-    { name: SERVER_NAME, version: PKG_VERSION },
+    { ...MCP_SERVER_IDENTITY, version: PKG_VERSION },
     { capabilities: { tools: {} } },
   );
 

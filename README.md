@@ -31,7 +31,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 - **Cross-agent coordination**: agents on separate machines and runtimes coordinate through persistent shared context (see `docs/guides/agent-coordination.md`)
 - **Not a note-taking app**: Cerefox is knowledge *infrastructure*, not a replacement for Obsidian, Notion, or Bear; those tools handle authoring, Cerefox handles indexing and agent access
 - **Hybrid search**: full-text + semantic search finds relevant knowledge even with fuzzy or conceptual queries
-- **Any agent, anywhere**: local MCP (Claude Code, Codex, Cursor, Gemini, Claude Desktop); remote MCP via Supabase Edge Functions; cloud Claude over OAuth; ChatGPT via Custom GPT + GPT Actions until OpenAI retires Custom GPTs on December 11, 2026 (see [Connecting AI agents](#connecting-ai-agents))
+- **Any agent, anywhere**: local MCP (Claude Code, Codex, Cursor, Gemini, Claude Desktop); remote MCP via Supabase Edge Functions; cloud Claude and ChatGPT (web, desktop and mobile apps) over OAuth (see [Connecting AI agents](#connecting-ai-agents))
 - **Keep it cheap**: Supabase free tier + low-cost cloud embeddings; see `docs/guides/operational-cost.md`
 
 ### Example use cases
@@ -39,7 +39,7 @@ Cerefox is **asynchronous shared memory, not a message bus**. It solves the pers
 Cerefox isn't bound to one tool or one workflow — anything that can run a shell command or speak MCP can read and write your memory, pointed at either a shared **cloud** deployment or a private **local** one:
 
 <p align="center">
-  <img src="web/static/use_cases.png" alt="Cerefox example use cases, by what you're doing → example agents (any CLI- or MCP-capable) → how it connects → memory it uses. Curate &amp; review by hand: you, via Web UI + cerefox CLI (cloud or local). Interactive coding: Claude Code, Cursor, Codex (CLI or desktop), opencode — via local/remote MCP or shell CLI (cloud or local). Autonomous local harnesses: OpenClaw, Hermes, Nemo, custom agents — via MCP or shell CLI, using cloud memory (shared across all your agentic systems) or local memory (private on-device MD memory). Chat &amp; research: ChatGPT via GPT Actions, Claude Desktop via remote MCP (cloud). Custom automation &amp; scripts: your code, cron jobs, curl — via REST Edge Functions (cloud) or cerefox_* RPCs through the Data API (cloud or local)." width="820">
+  <img src="web/static/use_cases.jpg" alt="Cerefox example use cases: what you're doing, example agents (any CLI- or MCP-capable), how it connects, and the memory it uses. Curate and review by hand: you, via the web UI and the cerefox CLI, with cloud or local memory. Interactive coding: Claude Code, Cursor, Codex (CLI or desktop) and opencode, via local or remote MCP or the shell CLI, with cloud or local memory. Autonomous local harnesses: OpenClaw, Hermes, Nemo and custom agents, via MCP or the shell CLI, with cloud memory (shared across all your agentic systems) or local memory (private, on-device). Chat and research: ChatGPT and Claude, via remote MCP, with cloud memory. Custom automation and scripts: your code, cron jobs and curl, via the REST Edge Functions (cloud) or cerefox_* RPCs through the Data API (cloud or local)." width="820">
 </p>
 
 See [Connecting AI agents](#connecting-ai-agents) for the how-to per client.
@@ -56,8 +56,8 @@ Questions, ideas, or want to follow development? **[Join the Cerefox Discord](ht
 
 | Feature | Details |
 |---------|---------|
-| **Hybrid search** | Combines full-text (BM25) + semantic (vector) search with a configurable alpha weight |
-| **Metadata-filtered search** | JSONB containment filter (`@>`) on document metadata; server-side, GIN-indexed; composable with project filter and all search modes; available across all access paths (MCP, CLI, web UI, GPT Actions) |
+| **Hybrid search** | Combines full-text (Postgres `ts_rank_cd`) + semantic (vector) search with a configurable alpha weight. Three result shapes: whole documents (large ones as their matched sections), each document's best-matching passages only (`content: "matches"`), or ranked chunks (`hybrid`, `fts` or `semantic` mode) |
+| **Metadata-filtered search** | JSONB containment filter (`@>`) on document metadata; server-side, GIN-indexed; composable with project filter and all search modes; available across all access paths (MCP, CLI, web UI, HTTP API) |
 | **Metadata search** | Standalone metadata-only search (no text query needed); find documents by key-value criteria, project, and date range; optional content inclusion with byte budget; dedicated MCP tool, CLI command, and web UI page |
 | **Project discovery** | `cerefox_list_projects` MCP tool for agents to discover available projects; all search results include human-readable `project_names` alongside UUIDs |
 | **Heading-aware chunking** | Greedy section accumulation — H1/H2/H3 sections accumulate until MAX_CHUNK_CHARS; heading breadcrumb preserved per chunk |
@@ -96,9 +96,8 @@ server-side deploy — ships in the
 (no repo clone); the local backend bundles that same runtime plus Postgres +
 pgvector into one image.
 
-Until **v1.0.0** the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
-aspirational — breaking changes can land in minor versions when there's a good
-reason; after v1.0.0 it's binding. Full release history is in
+Since **v1.0.0** the SemVer policy in [`CONTRIBUTING.md`](CONTRIBUTING.md) is
+binding. Full release history is in
 [`CHANGELOG.md`](CHANGELOG.md); the roadmap and iteration log live in
 [`docs/plan.md`](docs/plan.md).
 
@@ -116,7 +115,7 @@ web UI, and MCP tools; they differ only in where your data lives and how you
 install. (Contributors who want to run from source: see *Run from source* below.)
 
 <p align="center">
-  <img src="web/static/cerefox_local_vs_cloud.png" alt="Cerefox runs two ways — Cloud / Supabase (the cerefox npm CLI/web/MCP against your hosted Supabase + Edge Functions, or remote MCP / GPT Actions) vs Local / Docker (cerefox-local against one container on your machine); both run the same codebase and call OpenAI for embeddings." width="760">
+  <img src="web/static/cerefox_local_vs_cloud.jpg" alt="Cerefox runs two ways. Cloud / Supabase (managed, multi-device): the cerefox npm CLI, web UI and local MCP on your machine, plus the remote MCP Edge Function (just a URL, no local install), against your Supabase project (9 Edge Functions, Postgres and pgvector). Local / Docker (self-hosted, one container, offline-capable): cerefox-local (CLI, web UI, MCP) proxied into one Docker container on your machine (cerefox-server, PostgREST, Postgres and pgvector). Embeddings come from the OpenAI API or the built-in local model (Cerefox Local). Same codebase: identical schema, RPCs, MCP tools, hybrid search and web UI." width="760">
 </p>
 
 ### Option 1 — Cloud (Supabase)
@@ -141,10 +140,8 @@ cerefox doctor           # verify everything is wired up
 
 # 3. Wire up your AI agent(s) — run the ones that apply:
 cerefox configure-agent --tool claude-code      # local MCP (preferred) — also: claude-desktop | cursor | codex | gemini
-#   Cloud Claude (claude.ai/app): connect over OAuth (setup-supabase Step 7).
-#   Custom GPT (ChatGPT): paste the token from step 2 into the Action's
-#   Authentication → API Key (Bearer). See docs/guides/connect-agents.md.
-#   Works until 2026-12-11, when OpenAI retires Custom GPTs (see below).
+#   Cloud Claude (claude.ai/app) and ChatGPT (web/desktop/mobile): connect over
+#   OAuth (setup-supabase Step 7, then docs/guides/connect-agents.md).
 
 # 4. Use it:
 cerefox document ingest my-notes.md --title "My notes"
@@ -276,19 +273,14 @@ claude mcp add --transport http cerefox \
   --header "Authorization: Bearer <cerefox-access-token>"
 ```
 
-**3 — OpenAI: Codex today, ChatGPT changing.** **Codex** (the CLI, and Codex
-threads in the ChatGPT desktop app) works with the local stdio MCP:
-`cerefox configure-agent --tool codex`. **ChatGPT chats** connect today through a
-Custom GPT with GPT Actions pointing at the Edge Functions (requires ChatGPT
-Plus): paste the OpenAPI block from
-[`connect-agents.md`](docs/guides/connect-agents.md) and set the Action's Bearer
-auth to your Cerefox access token. **OpenAI retires Custom GPTs on December 11,
-2026, and custom actions do not carry over to its replacement (plugins)**, so
-this path stops working then. ChatGPT will need a new connection: an MCP
-connector to `cerefox-mcp` over OAuth, the way cloud Claude connects below. That
-is being validated in
-[#326](https://github.com/fstamatelopoulos/cerefox/issues/326)
-([research and plan](docs/research/chatgpt-after-custom-gpts.md)).
+**3 — OpenAI: Codex and ChatGPT.** **Codex** (the CLI, and Codex threads in the
+ChatGPT desktop app) works with the local stdio MCP:
+`cerefox configure-agent --tool codex`. **ChatGPT** (on the web, in the desktop
+app and in the mobile apps) connects to `cerefox-mcp` as a **custom MCP server
+over OAuth**, the way cloud Claude connects below, with the full tool surface:
+see [`connect-agents.md` → Cloud ChatGPT](docs/guides/connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
+The older Custom GPT path ends on December 11, 2026, when OpenAI retires Custom
+GPTs.
 
 **4 — Shell CLI.** Local coding agents with a Bash tool (Claude Code, Codex,
 opencode, …) can read and write Cerefox by running the installed `cerefox`
@@ -296,12 +288,13 @@ command directly — no MCP config at all. Point the agent at
 [`AGENT_GUIDE.md`](AGENT_GUIDE.md) and let it use `cerefox search` /
 `cerefox document ingest`.
 
-**5 — Cloud & mobile Claude (optional).** claude.ai web and the Claude mobile
-app connect to `cerefox-mcp` over **OAuth** — memory in your browser and on your
-phone, with full hybrid search. It's an opt-in extra: it needs a one-time
-Supabase OAuth setup plus a hosted consent page (the repo ships a one-command
-[Cloudflare Worker](cloudflare/cerefox-consent/) for that, free). Nothing else
-above requires it. See
+**5 — Cloud Claude and ChatGPT (optional).** claude.ai and ChatGPT (on the web
+and in their mobile and desktop apps) connect to `cerefox-mcp` over **OAuth**:
+memory in your browser and on your phone, with full hybrid search. It's an
+opt-in extra: it needs a one-time Supabase OAuth setup plus a hosted consent
+page (the repo ships a one-command [Cloudflare Worker](cloudflare/cerefox-consent/)
+for that, free). ChatGPT (item 3) uses the same setup; nothing else above needs
+it. See
 [setup-supabase.md → Step 7](docs/guides/setup-supabase.md#step-7--oauth-for-cloud-agents-claudeai--mobile-optional).
 
 Full setup for every client — plus a manual per-client config appendix for when

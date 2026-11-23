@@ -30,7 +30,7 @@ This package contains a single binary, **`cerefox`**:
 |---|---|
 | `cerefox <command>` | CLI — search, ingest, list, version-history, audit-log, lifecycle (`init`, `doctor`, `configure-agent`, `self-update`). Callable from any directory. |
 | `cerefox mcp` | Local stdio MCP server. Drop-in for Claude Code, Cursor, Claude Desktop, Codex CLI, Gemini CLI. Exposes the same 15 core MCP tools as the remote `cerefox-mcp` Edge Function, plus 4 document-relation tools that stay hidden until enabled. |
-| `cerefox web` | Local web app at `http://localhost:8000` — React UI for browsing, searching, editing, and ingesting documents. Backed by an in-process Hono server that exposes the same `/api/v1/*` REST surface as the bundled Edge Functions. |
+| `cerefox web` | Local web app at `http://localhost:8000` — React UI for browsing, searching, editing, and ingesting documents. Backed by an in-process Hono server that exposes the `/api/v1/*` REST API. |
 
 > **What this package isn't:** the source of truth for Cerefox's architecture
 > or docs. Those live in the [GitHub repo](https://github.com/fstamatelopoulos/cerefox).
@@ -44,7 +44,7 @@ Cerefox is a self-hosted memory layer with two halves you set up independently:
 
 **Server side** (lives in your Supabase project, runs ~24/7):
 - Postgres schema + RPCs (search, ingest, audit log, version history)
-- Edge Functions (server-side embedding, remote `cerefox-mcp` MCP server, Custom-GPT actions)
+- Edge Functions (server-side embedding, the remote `cerefox-mcp` MCP server that claude.ai and ChatGPT connect to over OAuth, HTTP primitives for scripts and, until 2026-12-11, Custom GPTs)
 
 **Client side** (this npm package, runs on your machine):
 - `cerefox` CLI + `cerefox mcp` (local stdio MCP) + `cerefox web` (local UI at `http://localhost:8000`)

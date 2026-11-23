@@ -163,6 +163,10 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       expect(resp.error).toBeUndefined();
       expect(typeof resp.result.protocolVersion).toBe("string");
       expect(resp.result.serverInfo.name).toBe("cerefox");
+      expect(resp.result.serverInfo.title).toBe("Cerefox");
+      expect(resp.result.serverInfo.websiteUrl).toBe("https://cerefox.org/");
+      // The release it was built from, not the fixed "0.4.0" it reported before 1.25.0.
+      expect(resp.result.serverInfo.version).not.toBe("0.4.0");
     });
 
     liveTest("tools/list returns the 15 core tools with schemas", async () => {
@@ -265,6 +269,21 @@ describe("cerefox-mcp remote (JSON-RPC over HTTP)", () => {
       const bad = await tool("cerefox_search", { query: "quorvantel", mode: "fts", content: "matches" });
       expect(bad.result?.isError).toBe(true);
       expect(JSON.stringify(bad.result)).toContain('applies to mode \\"docs\\" only');
+    });
+
+    liveTest('mode "semantic" returns chunks, and an unknown mode is refused (#377)', async () => {
+      const text = await toolText("cerefox_search", {
+        query: "release process",
+        mode: "semantic",
+        match_count: 3,
+        author: "e2e-mcp-test",
+      });
+      // Chunk results name the chunk; the docs search, which semantic used
+      // to fall through to, never does.
+      expect(text).toMatch(/\(chunk \d+\)/);
+      const bad = await tool("cerefox_search", { query: "release process", mode: "chunks" });
+      expect(bad.result?.isError).toBe(true);
+      expect(JSON.stringify(bad.result)).toContain("is not a search mode");
     });
 
     liveTest("update_if_exists → up-to-date on identical re-ingest", async () => {

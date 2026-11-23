@@ -46,7 +46,7 @@ Find documents using hybrid search (full-text + semantic vector similarity).
 | `match_count` | No | Max documents to return (default 5). |
 | `project_name` | No | Filter to a specific project by name. |
 | `metadata_filter` | No | JSON object for filtering by metadata (AND semantics). Example: `{"type": "decision-log"}` |
-| `mode` | No | `docs` (default) returns documents; `hybrid` and `fts` return ranked chunks. |
+| `mode` | No | `docs` (default) returns documents; `hybrid`, `fts` and `semantic` return ranked chunks: `hybrid` matches keywords and meaning, `fts` keywords only, `semantic` meaning only (useful when your wording may differ from the documents'; it has no confidence threshold unless you pass `min_score`, so judge by the scores). Any other value is an error. |
 | `content` | No | With `mode: "docs"`: `full` (default) or `matches`. See "Three result shapes" below. |
 | `max_passage_chars` | No | With `content: "matches"`: the most passage text per document (default 1500, range 200-20000). |
 | `max_bytes` | No | Response size budget in bytes (default 200000). |
@@ -58,7 +58,7 @@ Find documents using hybrid search (full-text + semantic vector similarity).
 |---|---|---|---|
 | Documents | (the default) | The whole document under 20,000 characters; above that, its matched sections with their neighbors | You want to answer from the search reply itself, and the documents are small or medium |
 | Documents with their best passages | `content: "matches"` | The same documents in the same order, each with only its best-matching passages, best first, up to `max_passage_chars`, and a note on what was left out | You need to find *which document* to read, especially in a store of long documents. Then read it, or one section of it, with `cerefox_get_document` (`outline: true` lists the sections, `section` reads one) |
-| Ranked chunks | `mode: "hybrid"` or `"fts"` | Single chunks ranked on their own; several may come from one document | The passage itself is the answer (a fact, a "where is X mentioned") |
+| Ranked chunks | `mode: "hybrid"`, `"fts"` or `"semantic"` | Single chunks ranked on their own; several may come from one document | The passage itself is the answer (a fact, a "where is X mentioned") |
 
 `content: "matches"` needs Cerefox 1.24.0 or later on both sides: the MCP
 server you talk to (the local `cerefox mcp`, or the deployed `cerefox-mcp`
@@ -698,7 +698,7 @@ The Python implementation was fully removed at v1.0.0; every command is the Type
 
 | MCP tool | CLI command |
 |---|---|
-| `cerefox_search(query, match_count, project_name, metadata_filter, content, max_passage_chars, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (also `--mode`, `--content matches`, `--max-passage-chars`, `--alpha`, `--min-score`, `--only-metadata` — `--only-metadata` is CLI-only) |
+| `cerefox_search(query, match_count, project_name, metadata_filter, mode, content, max_passage_chars, author)` | `cerefox search "<query>" --match-count N --project-name <n> --metadata-filter '<json>' --author <name>` (also `--mode`, `--content matches`, `--max-passage-chars`, `--alpha`, `--min-score`; `--only-metadata` is CLI-only) |
 | `cerefox_ingest(title, content, project_name, metadata, update_if_exists, document_id, expected_content_hash, last_write_wins, source, author, author_type)` (file) | `cerefox document ingest <path> --title <t> --project-name <n> --metadata '<json>' --update-if-exists\|--document-id <uuid> --expected-content-hash <hash>\|--last-write-wins --source <s> --author <a> --author-type user\|agent` |
 | `cerefox_ingest(...)` (paste) | `printf '%s' "<content>" \| cerefox document ingest --paste --title "<title>"` (same flags) |
 | `cerefox_get_document(document_id, version_id, author)` | `cerefox document get <document-id> --version-id <vid> --author <name>` |

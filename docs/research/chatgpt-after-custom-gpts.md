@@ -1,10 +1,35 @@
 # ChatGPT after Custom GPTs: moving Cerefox to an MCP connector
 
-> **Status**: research and plan, 2026-10-08. Nothing here is implemented or
-> validated yet. Tracking issue: [#326](https://github.com/fstamatelopoulos/cerefox/issues/326).
+> **Status**: research and plan, 2026-10-08. **Outcome (2026-11-23): done, with no code
+> change.** ChatGPT connects to `cerefox-mcp` as a custom MCP server over OAuth, and works
+> on the web, in the desktop app and in the mobile apps. Setup guide:
+> [`connect-agents.md` → Cloud ChatGPT](../guides/connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
+> Tracking issue: [#326](https://github.com/fstamatelopoulos/cerefox/issues/326).
 >
-> **Deadline**: OpenAI retires Custom GPTs on **December 11, 2026**. The documented
-> ChatGPT path stops working on that date.
+> **Deadline**: OpenAI retires Custom GPTs on **December 11, 2026**. The Custom GPT path
+> stops working on that date; the MCP connector replaces it.
+
+## 0. Outcome (2026-11-23)
+
+What the validation found, against the open questions below:
+
+- **Where**: chatgpt.com → **Plugins** → **+** → **Add custom MCP server**. There is no
+  separate Developer Mode switch any more. The connector is added on the web and then
+  appears in the desktop and mobile apps.
+- **Registration**: ChatGPT offers DCR, CIMD, or a **User-Defined OAuth Client**. Cerefox
+  keeps DCR off and advertises no CIMD, so ChatGPT uses a pre-registered Supabase OAuth
+  client: client id and secret, `client_secret_post`, and a **per-connector callback URL**
+  (`https://chatgpt.com/connector/oauth/<id>`) registered as the redirect URI.
+- **Discovery**: ChatGPT read the RFC 9728 metadata from our 401 challenge and the
+  Supabase authorization server's RFC 8414 metadata (which lists `S256`, required) with no
+  change on our side. It sends the MCP URL as the `resource`; the Supabase token's `aud`
+  stays `authenticated`, which `cerefox-mcp` accepts.
+- **Scopes**: the defaults `openid` and `email`; OIDC enabled worked.
+- **Tools**: the full tool surface, verified on the **Plus** plan: searches, reads, writes
+  and partial edits, with no confirmation prompt in the chat. (OpenAI's help center had
+  suggested write tools might be limited to Business and Enterprise; on Plus they work.)
+- **Attribution**: ChatGPT usually passes an `author` of its own, not always, so the guide
+  suggests naming it in ChatGPT's instructions.
 
 ---
 
@@ -114,6 +139,7 @@ Historical records (CHANGELOG, plans, specs, research) were left as written.
 | 2026-10-08 | Codex CLI, local MCP (entry pointing at the installed `cerefox` binary) | **Works.** `cerefox_get_help` reports the server version; all 15 core tools listed (the 4 relation tools hidden, as expected with `relations_enabled` off). Read and write round trip: create, insert, audit log (author and `local-mcp` access path recorded), delete with a reason. |
 | 2026-10-08 | Codex CLI, after `cerefox configure-agent --tool codex` (the `npx` form) | **Works** in a new session. |
 | 2026-10-08 | ChatGPT desktop app, regular chat | **No Cerefox tools.** The app's log shows the local server starting for Codex threads only; plain chats do not get local MCP servers. |
+| 2026-11-23 | ChatGPT (Plus plan) on the web, in the desktop app and in the mobile app, custom MCP server to `cerefox-mcp` over OAuth (pre-registered client) | **Works.** Searches, reads, writes and partial edits, with no confirmation prompt in the chat; the connector added on the web appears in the apps. Calls land in the usage log as `remote-mcp`. |
 
 ### Phase 2: validate option A, on staging first
 
@@ -143,13 +169,13 @@ project, so the OAuth experiment cannot disturb a production claude.ai connector
 | 7 | Reads | search, get document (full, outline, section), metadata search, list projects, audit log |
 | 8 | Writes | ingest, insert, edit, set metadata, delete and restore, each through ChatGPT's per-call confirmation; `expected_content_hash` round trip; a deliberate stale-hash conflict |
 | 9 | Attribution | Audit entries carry `author` (instruct the model to pass it) and `access_path` `remote-mcp` |
-| 10 | Surfaces | Does a connector created on the web work in the desktop app and on mobile? |
-| 11 | Memory | Does Developer Mode still disable ChatGPT Memory (noted in the 28A design doc)? |
+| 10 | Surfaces | Does a connector created on the web work in the desktop app and on mobile? **Yes** (2026-11-23). |
+| 11 | Memory | Does Developer Mode still disable ChatGPT Memory (noted in the 28A design doc)? Moot: there is no Developer Mode switch any more (custom MCP servers are added from Plugins). Not checked separately. |
 | 12 | Cost | One Edge Function invocation per tool call; note it next to the claude.ai cost note |
 
 Then repeat 2-8 on production once staging passes, registering a production ChatGPT client.
 
-### Phase 3: docs from what actually worked
+### Phase 3: docs from what actually worked (done 2026-11-23, v1.25.0)
 
 1. `connect-agents.md`: a new **"ChatGPT (web, desktop, mobile): MCP connector over OAuth"**
    section, modeled on the claude.ai one, with the exact menu path, fields and the
@@ -171,8 +197,8 @@ Then repeat 2-8 on production once staging passes, registering a production Chat
 
 ## 5. Open questions
 
-- If ChatGPT requires DCR, is enabling it acceptable given the owner pin (only the owner can
-  complete consent), or is that the wrong trade?
+- ~~If ChatGPT requires DCR, is enabling it acceptable…?~~ Answered (2026-11-23): ChatGPT
+  takes a pre-registered client, so DCR stays off.
 - Does a Developer Mode connector keep working in ordinary chats long term, or will OpenAI
   route personal integrations through plugins only?
 - Is a plugin worth publishing for other Cerefox users, or does every deployment need its

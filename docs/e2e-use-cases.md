@@ -87,6 +87,8 @@ TS suite: live command suites under `packages/memory/test/`.
 | `TestSmallToBigRetrieval` | `test_large_doc_is_partial` | Ingest a large doc (>20 000 chars); `search_docs` returns `is_partial=True` and `chunk_count` (returned) < total chunk count | Done |
 | `TestSmallToBigRetrieval` | `test_context_window_zero_returns_fewer_chunks_than_window_one` | Same large doc with `p_context_window=0` vs `p_context_window=1` — window=0 returns matched chunks only; window=1 returns matched + neighbours | Done |
 | `search-passages-live.test.ts` | 9 cases | `cerefox search --content matches` on staging: same documents and order as the default; passages best first within the cap; a small cap cuts and flags; an excerpt keeps the matched term among long tokens and a stray U+E000; a whole document is not partial; stopword-only query; chunk modes refuse | Done (v1.24.0) |
+| `web-integration/search-modes-live.test.ts` | 4 cases | `--mode semantic` returns chunks best first; the CLI and `/api/v1/search?mode=semantic` return the same chunks in the same order; semantic is not the docs search; an unknown mode is refused by the CLI and the API (`400`) | Done (v1.25.0) |
+| `mcp-remote.test.ts` | `mode "semantic" returns chunks, and an unknown mode is refused` | The same over the deployed `cerefox-mcp` | Done (v1.25.0) |
 | `mcp-remote.test.ts` | `content "matches" returns passages over the remote transport` | Passages, the read hint and the chunk-mode refusal through the deployed `cerefox-mcp` | Done (v1.24.0) |
 | `TestSmallToBigRetrieval` | `test_partial_result_has_no_duplicate_content` | Large doc with `p_context_window=2`; verify no chunk content appears twice in the assembled result | Done |
 

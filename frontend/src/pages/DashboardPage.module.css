@@ -124,7 +124,7 @@
      minimum is min-content, so a table wider than its share expands the
      track and the whole panel overflows the 1120px container — which is
      why these panels stopped lining up with the stat tiles above once
-     agent author names got long (`Claude|Financial-Planner`). A zero
+     agent author names got long (`Claude|Research-Assistant`). A zero
      minimum lets the track hold its share and the content adapt. */
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 26px;

@@ -13,7 +13,7 @@ describe("pageTitle", () => {
     // Tabs truncate from the right, so "Cerefox: X" would make every tab look
     // identical. The favicon identifies the app.
     expect(pageTitle({ page: "Trash" })).toBe("Trash");
-    expect(pageTitle({ page: "Contact - Josh Cohen" })).toBe("Contact - Josh Cohen");
+    expect(pageTitle({ page: "Contact - Avery Marlow" })).toBe("Contact - Avery Marlow");
   });
 
   test("no page (the dashboard, or data still loading) falls back to the app name", () => {

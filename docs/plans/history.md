@@ -2983,7 +2983,7 @@ The initial draft had 10 discussion items (D1–D10). Maintainer review resolved
 
 ```bash
 # Mode 1 — Full source-tree (chunker + EF + bundled deploy parity)
-cd /Users/fotis/src/cerefox
+cd ~/src/cerefox
 bun scripts/db_deploy.ts --dry-run       # source path still works
 bun scripts/db_deploy.ts                 # apply to a test Supabase
 

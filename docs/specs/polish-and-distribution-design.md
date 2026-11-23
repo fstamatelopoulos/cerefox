@@ -66,7 +66,7 @@ Solving the first three gives Cerefox the same install UX as cfcf, uv, ruff, and
 
 ## 2. Reference: how cfcf does it
 
-cfcf (`/Users/fotis/src/cfcf`, currently `v0.17.0` on npm) is the model the user pointed at. Concrete patterns we copy:
+cfcf (a sibling checkout, currently `v0.17.0` on npm) is the model the user pointed at. Concrete patterns we copy:
 
 1. **One-line install** via `install.sh` that bootstraps the runtime (Bun) if missing, then installs the package.
 2. **Direct install for users who already have the runtime**: `npm install -g @cerefox/<package>`.
@@ -178,7 +178,7 @@ No more `uv run`, no more `cd /path/to/cerefox` first, no more working-directory
 ```json
 { "mcpServers": { "cerefox": {
   "command": "/opt/homebrew/bin/uv",
-  "args": ["--directory", "/Users/fotis/src/cerefox", "run", "cerefox", "mcp"]
+  "args": ["--directory", "/path/to/cerefox", "run", "cerefox", "mcp"]
 }}}
 ```
 
@@ -438,7 +438,7 @@ All existing flags preserved (including the v0.1.18 long-form / short-form alias
 $ cerefox doctor
 Cerefox v0.5.0 — diagnostic
 
-✓ Binary:        /Users/fotis/.bun/bin/cerefox
+✓ Binary:        ~/.bun/bin/cerefox
 ✓ Runtime:       Bun 1.x.x
 ✓ Config:        ~/.cerefox/.env (mode 0600)
 ✓ Supabase:      https://xxxx.supabase.co — Data API reachable (auth: sb_secret_…)
@@ -1073,7 +1073,7 @@ shape of record.
 
 ## 20. References
 
-- cfcf installer pattern: `/Users/fotis/src/cfcf/docs/guides/installing.md`, README, `scripts/local-install.sh`.
+- cfcf installer pattern: cfcf's `docs/guides/installing.md`, README, `scripts/local-install.sh`.
 - Bun: <https://bun.sh>.
 - `@modelcontextprotocol/sdk`: <https://github.com/modelcontextprotocol/typescript-sdk>.
 - Commander.js: <https://github.com/tj/commander.js>.

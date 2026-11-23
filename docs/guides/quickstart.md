@@ -150,9 +150,9 @@ clone the repo, run `bun install`, and use the contributor scripts
 - **Run the web UI**: `cerefox web` (TypeScript — Hono backend + React SPA); see [`cli.md`](cli.md)
 - **Connect more AI clients** (Cursor, Codex, Gemini, cloud Claude, etc.):
   [`connect-agents.md`](connect-agents.md). Codex works with the local MCP
-  (`cerefox configure-agent --tool codex`). ChatGPT's Custom GPT path ends on
-  December 11, 2026; see
-  [`chatgpt-after-custom-gpts.md`](../research/chatgpt-after-custom-gpts.md)
+  (`cerefox configure-agent --tool codex`). ChatGPT (web, desktop and mobile apps)
+  connects as a custom MCP server over OAuth:
+  [Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth)
 - **Configuration reference**: [`configuration.md`](configuration.md)
 - **Backup + restore**: [`ops-scripts.md`](ops-scripts.md)
 

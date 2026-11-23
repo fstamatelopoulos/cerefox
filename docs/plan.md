@@ -29,6 +29,16 @@
 
 ## Current Focus
 
+**In progress: 1.25.0 on `release/1.25.0` (no schema change).** ChatGPT
+connects as a custom MCP server over OAuth on web, desktop and mobile (#326,
+docs only: `connect-agents.md` → Cloud ChatGPT); every search mode runs its
+own search and unknown modes are errors (#377, iteration 56,
+[`plans/iteration-56-search-modes.md`](plans/iteration-56-search-modes.md));
+the local model download is locked, verified and self-repairing (#367); the
+release script's EF paths derive from the bundler's list; `guides ingest
+--author`; both MCP servers report title, website and icon; Dependabot #378
+and #372 merged. Next: final review, one PR, cut.
+
 **2026-11-22: 1.24.0 shipped, search returns each document's best passages
 (iteration 55, #375, PR #376, contributed by @ivanursul; schema 0.23.0).** A
 third result shape for `cerefox_search` (`content: "matches"`), `cerefox search`
@@ -540,7 +550,7 @@ release picks it up.
   matters because titles are boosted in search.
   Operational notes for the next run: `--force` permits a non-empty target but **never
   cleans**, so exporting over an old backup leaves orphans indistinguishable from current
-  files; `/Users/fotis/src/cerefox/.env` points at the **same project as production** and
+  files; a `.env` in the repo checkout can point at the **same project as production**, and
   `./.env` in the cwd outranks `~/.cerefox/.env`, so pass `CEREFOX_CONFIG_DIR` explicitly; and
   a plain `mv` onto an existing directory **nests** it rather than replacing it.
 
