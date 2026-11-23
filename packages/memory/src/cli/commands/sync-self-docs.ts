@@ -22,6 +22,8 @@
  */
 
 import type { Command } from "commander";
+
+import { authorOption, requestorAliasOption } from "../util/identity-flags.ts";
 import { readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
 
@@ -41,6 +43,9 @@ import { listBundledDocs } from "../util/bundled-docs.ts";
 interface SyncSelfDocsOptions {
   dryRun?: boolean;
   project?: string;
+  /** Who is syncing (--author, or the hidden --requestor alias); recorded on each write. */
+  author?: string;
+  requestor?: string;
 }
 
 /**
@@ -73,8 +78,10 @@ export async function runSyncSelfDocs(options: SyncSelfDocsOptions = {}): Promis
 
   const client = getClient();
   const settings = loadSettings();
-  // self-docs are written as if from the "Cerefox" agent itself.
-  const author = resolveAuthor(undefined) === "unknown" ? "cerefox-self-docs" : resolveAuthor(undefined);
+  // Whoever ran it, when they say so (--author, like every other command);
+  // otherwise the env identity; otherwise written as from Cerefox itself.
+  const named = resolveAuthor(options.author ?? options.requestor);
+  const author = named === "unknown" ? "cerefox-self-docs" : named;
   const authorType = resolveAuthorType("agent");
 
   const outcomes: Array<{ topic: string; status: "ok" | "error"; detail: string }> = [];
@@ -138,5 +145,7 @@ export function registerSyncSelfDocs(program: Command): void {
     .description("Ingest bundled Cerefox docs under the _cerefox-self-docs project.")
     .option("--dry-run", "List what would be ingested without writing.")
     .option("--project <name>", "Override the target project name.", "_cerefox-self-docs")
+    .addOption(authorOption("write"))
+    .addOption(requestorAliasOption())
     .action(action);
 }

@@ -9,7 +9,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Changed
+
+- **`cerefox guides ingest` takes `--author`**, like every other command, so
+  the guides it writes to your store are attributed to whoever ran it. Without
+  it, the writes are attributed as before.
+- **Releases flag Edge Function changes in every shared module they use.**
+  The release script's list of Edge Function sources is now derived from the
+  bundler's own list. It had drifted and missed four modules (OAuth, access
+  tokens, ingestion and partial edits), so a change in one of them would have
+  shipped without `cerefox doctor` telling anyone to redeploy their Edge
+  Functions. No such change had shipped yet.
 
 ---
 
