@@ -61,11 +61,9 @@ Postgres RPCs
 
 **ChatGPT Custom GPT Actions** call the eight primitive Edge Functions directly over HTTPS
 using an OpenAPI schema. `cerefox-mcp` is not involved. OpenAI retires Custom GPTs on **December 11, 2026**, and custom actions do not carry over to its plugins, so this path ends
-then. ChatGPT now supports remote MCP connectors (OAuth or no auth, no static bearer
-token), so its replacement is expected to be a connector to `cerefox-mcp` over OAuth,
-like cloud Claude; see
-[`chatgpt-after-custom-gpts.md`](../research/chatgpt-after-custom-gpts.md) and
-[#326](https://github.com/fstamatelopoulos/cerefox/issues/326).
+then. **ChatGPT now connects to `cerefox-mcp` as a custom MCP server over OAuth**, like
+cloud Claude, on the web and in the desktop and mobile apps (v1.25.0, #326):
+[`connect-agents.md` → Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
 
 **curl / scripts / custom HTTP clients** can also call the primitives directly using the
 same Cerefox token as a Bearer token.
@@ -217,6 +215,7 @@ single container with an internally-held token.
 | Claude Code / Cursor | HTTPS → `cerefox-mcp` | Cerefox access token (`cfx_pat_…`) | Advanced/fallback; prefer local MCP for daily use |
 | Claude Desktop | HTTPS → `cerefox-mcp` (via `supergateway`) | Cerefox access token (`cfx_pat_…`) | Advanced/fallback; prefer local MCP for daily use |
 | **Cloud Claude (claude.ai web + mobile)** | HTTPS → `cerefox-mcp` over **OAuth 2.1** | Owner-pinned OAuth access token (JWKS-verified) | Optional; memory in the browser + on the phone |
+| ChatGPT (web, desktop, mobile) | HTTPS → `cerefox-mcp` (custom MCP server) | OAuth 2.1 (Supabase OAuth server, its own pre-registered client) | Full tool surface; same setup as cloud Claude (v1.25.0) |
 | ChatGPT Custom GPT | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | AI assistant via GPT Actions; **ends 2026-12-11** (Custom GPTs retire) |
 | curl / HTTP scripts | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | Ad-hoc queries, automation |
 | Web UI (`cerefox web`) | Supabase REST API | Secret key (or legacy service_role) | Web UI backend (TS Hono) |

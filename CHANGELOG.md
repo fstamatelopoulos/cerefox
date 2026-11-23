@@ -9,7 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Added
+
+- **ChatGPT connects to Cerefox as a custom MCP server** (#326), on the web,
+  in the desktop app and in the mobile apps, with the full tool surface, the
+  same as cloud Claude. It uses the OAuth setup cloud Claude already uses, plus
+  a second OAuth client for ChatGPT. Setup:
+  [`connect-agents.md` → Cloud ChatGPT](docs/guides/connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth)
+  and `setup-supabase.md` Step 7. No server change was needed. This replaces
+  the Custom GPT path, which stops working on December 11, 2026, when OpenAI
+  retires Custom GPTs.
 
 ---
 
