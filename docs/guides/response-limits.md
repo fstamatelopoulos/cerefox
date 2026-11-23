@@ -145,7 +145,7 @@ and remote MCP paths. Pass it when you want the response to fit within a specifi
 Values above the server ceiling are silently capped. Omitting `max_bytes` uses the server
 default (200 000).
 
-The `cerefox-search` Edge Function (Path B / GPT Actions) also accepts `max_bytes` as a
+The `cerefox-search` Edge Function (Path B, direct HTTP) also accepts `max_bytes` as a
 JSON body field:
 
 ```http

@@ -67,7 +67,7 @@ paths go through **Edge Functions**, which the free tier caps at 500,000/month:
 |---|---|---|
 | Remote MCP (`cerefox-mcp`) — Claude/Cursor/etc. over HTTP | **Yes** | ~1 invocation per agent tool call (calls the RPC directly — no fan-out) |
 | Cloud Claude / ChatGPT over OAuth → `cerefox-mcp` | **Yes** | ~1 invocation per tool call |
-| GPT Actions (Custom GPT) → primitive Edge Functions | **Yes** | 1 invocation per action call |
+| Direct HTTP → primitive Edge Functions | **Yes** | 1 invocation per call |
 | `cerefox doctor` | **Yes** | several (it calls the `/version?peers=true` aggregator) |
 | **Local stdio MCP (`cerefox mcp`)** | **No** | 0 — talks to the Data API directly |
 | `cerefox` CLI and `cerefox web` (web UI) | **No** | 0 — Data API directly |

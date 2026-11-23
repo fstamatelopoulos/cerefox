@@ -49,17 +49,13 @@ redeploy their server.
    (Raise `minSchema` in the compat matrix only if the client *hard-requires*
    the new surface; if it degrades gracefully, the version bump alone is the
    nudge.)
-5. **GPT Actions OpenAPI block** (`docs/guides/connect-agents.md`) — if any
-   Edge Function's request/response shape changed this cycle, update the
-   OpenAPI block and bump its `info.version`. (See the CLAUDE.md rule;
-   ideally this already happened in the EF-changing PR.)
-6. **All tests green**: `cd _shared && bun test`,
+5. **All tests green**: `cd _shared && bun test`,
    `cd packages/memory && bun run build && bun test`. Live/e2e suites
    auto-skip without credentials — run them against a real project when the
    release touches their surface.
-7. **Docs current**: `docs/plan.md`, migration guide, and the npm
+6. **Docs current**: `docs/plan.md`, migration guide, and the npm
    `packages/memory/README.md` reflect what's shipping.
-8. **Search floors** — if the release changes how search ranks (the hybrid
+7. **Search floors** — if the release changes how search ranks (the hybrid
    formula, a retrieval default, the query parser, chunking, the embedder), run
    the calibration benchmark with `--check-floors` on staging (OpenAI) **and**
    on a throwaway Cerefox Local (nomic). It fails on any category below its floor
@@ -69,7 +65,7 @@ redeploy their server.
    retrieval settings, and it cannot embed with the local model on the host.
    Moving a floor needs a reason in the PR. See
    [ops-scripts.md](docs/guides/ops-scripts.md#search_benchmarkts--search-calibration-benchmark).
-9. **supabase-js ↔ PostgREST pin** (local self-hosted backend): if this cycle
+8. **supabase-js ↔ PostgREST pin** (local self-hosted backend): if this cycle
    bumped `@supabase/supabase-js` (→ `postgrest-js`), re-check the PostgREST
    version pinned in `docker/local/{compose.yml,Dockerfile}` against what the new
    `postgrest-js` targets, and run the **Version coupling** workflow (or

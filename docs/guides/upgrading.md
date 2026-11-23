@@ -237,13 +237,7 @@ MCP path needs no reconfiguration; for the local stdio server, restart the
 client. `cerefox configure-agent --tool <client>` (re)writes a client's config
 if you need it.
 
-**ChatGPT:** if you still use a Custom GPT, move to
-[Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth) (a custom MCP
-server over OAuth, v1.25.0) before December 11, 2026, when OpenAI retires Custom GPTs.
-Until then, for the **Custom GPT (GPT Actions)**: after an upgrade, check the OpenAPI schema
-version in [`connect-agents.md`](connect-agents.md); if it changed, paste the new
-schema into the Custom GPT editor and **re-enter your Cerefox access token**
-(`cfx_pat_…`, from `cerefox token generate`) as the Bearer token. (The editor
-clears the key on every schema save. The legacy Supabase anon JWT is retired for
-Edge Function auth as of iter-28E — see
-[`setup-supabase.md`](setup-supabase.md#supabase-api-keys-2026).)
+**ChatGPT:** Custom GPTs are retired (OpenAI ended them on December 11, 2026). If you
+used one, connect ChatGPT as a
+[custom MCP server over OAuth](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth)
+instead (v1.25.0). Like cloud Claude, it may need a reconnect to pick up new tools.

@@ -9,7 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
-Open roadmap.
+### Removed
+
+- The ChatGPT Custom GPT setup (GPT Actions over the primitive Edge Functions) is
+  gone from the docs, along with its OpenAPI schema block, system prompt and the
+  release step that kept the block in sync (#326). OpenAI retires Custom GPTs on
+  December 11, 2026. ChatGPT connects as a custom MCP server over OAuth instead,
+  on the web and in the desktop and mobile apps (v1.25.0): see
+  `docs/guides/connect-agents.md` → Cloud ChatGPT. The primitive Edge Functions
+  stay, for direct HTTP callers, and `cerefox token generate` no longer points at
+  a Custom GPT.
 
 ---
 

@@ -64,7 +64,7 @@ Two defenses exist, and they compose:
 ## The write-time guardrail (v1.7.0+)
 
 Every write — create, full update, or partial edit, on every surface (MCP,
-CLI, web, GPT Actions) — validates the `[Text](uuid)` links in the content
+CLI, web, direct HTTP) — validates the `[Text](uuid)` links in the content
 against the store, inside the same database transaction as the write:
 
 - **A link to a document id that does not exist rejects the whole write**,

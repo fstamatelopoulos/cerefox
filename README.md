@@ -134,7 +134,7 @@ cerefox init             # interactive setup: Supabase URL/keys, embedding key
 cerefox server deploy    # schema + RPCs + all 9 Edge Functions, from the npm bundle
 cerefox token generate   # mint the Edge Function access token; sets it on Supabase
                          # and writes CEREFOX_ACCESS_TOKEN to your .env. Needed for
-                         # GPT Actions / remote MCP + a fully-green doctor; the local
+                         # direct HTTP / remote MCP + a fully-green doctor; the local
                          # MCP, cloud Claude (OAuth) and CLI/web don't use it.
 cerefox doctor           # verify everything is wired up
 
@@ -279,8 +279,6 @@ ChatGPT desktop app) works with the local stdio MCP:
 app and in the mobile apps) connects to `cerefox-mcp` as a **custom MCP server
 over OAuth**, the way cloud Claude connects below, with the full tool surface:
 see [`connect-agents.md` → Cloud ChatGPT](docs/guides/connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
-The older Custom GPT path ends on December 11, 2026, when OpenAI retires Custom
-GPTs.
 
 **4 — Shell CLI.** Local coding agents with a Bash tool (Claude Code, Codex,
 opencode, …) can read and write Cerefox by running the installed `cerefox`

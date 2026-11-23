@@ -45,7 +45,6 @@ body:
         - Local MCP server (`cerefox mcp`)
         - Remote MCP (`cerefox-mcp` Edge Function)
         - Web UI
-        - GPT Actions
         - Direct HTTP to an Edge Function
         - Python client (`CerefoxClient`)
         - Other

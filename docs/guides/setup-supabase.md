@@ -63,7 +63,7 @@ You need three values from Supabase: a URL, an API key, and a direct Postgres co
 See the **[Supabase API keys (2026)](#supabase-api-keys-2026)** section near the end of this guide for the full picture. The short version:
 
 - For `CEREFOX_SUPABASE_KEY` (this guide, the web UI, and the CLI): use the new **secret key** (`sb_secret_…`) from **Project Settings → API Keys → Secret key**. The legacy `service_role` JWT also still works during the transition.
-- To call Edge Functions / remote MCP / GPT Actions you need the **Cerefox access token** (`cfx_pat_…`), not a Supabase key. Generate it later with `cerefox token generate` (Step 7 covers the server-side setup). The legacy Supabase anon JWT is retired for Edge Function auth (iter-28E), and `CEREFOX_SUPABASE_ANON_KEY` is no longer used.
+- To call Edge Functions / remote MCP you need the **Cerefox access token** (`cfx_pat_…`), not a Supabase key. Generate it later with `cerefox token generate` (Step 7 covers the server-side setup). The legacy Supabase anon JWT is retired for Edge Function auth (iter-28E), and `CEREFOX_SUPABASE_ANON_KEY` is no longer used.
 
 Either way: keep this key secret — it bypasses Row Level Security and grants full database access.
 
@@ -103,7 +103,7 @@ cerefox init
 
 When prompted, supply the three values from Step 3 (URL, secret key, database
 URL) plus your `OPENAI_API_KEY`. If you plan to connect AI agents via the
-remote MCP / GPT Actions path, you'll add a **Cerefox access token** later by
+remote MCP / direct HTTP path, you'll add a **Cerefox access token** later by
 running `cerefox token generate` (it upserts `CEREFOX_ACCESS_TOKEN` into this
 same `.env` and sets the accepted set on Supabase — see Step 7).
 
@@ -114,7 +114,7 @@ CEREFOX_SUPABASE_URL=https://your-project-ref.supabase.co
 CEREFOX_SUPABASE_KEY=sb_secret_...your-secret-key...
 CEREFOX_DATABASE_URL=postgresql://postgres.yourref:yourpassword@aws-N-region.pooler.supabase.com:5432/postgres?sslmode=require
 OPENAI_API_KEY=sk-...
-# Only needed for Edge Functions / MCP / GPT Actions — written by `cerefox token generate`:
+# Only needed for Edge Functions / remote MCP — written by `cerefox token generate`:
 # CEREFOX_ACCESS_TOKEN=cfx_pat_...your-cerefox-token...
 ```
 
@@ -166,8 +166,8 @@ After it finishes, verify in the Supabase Dashboard → **Edge Functions** — a
 functions should appear with a green "Active" status.
 
 **Now generate the Edge Function access token.** The Edge Functions authenticate
-callers with a Cerefox access token. Generate one if you'll use **GPT Actions** or a
-**remote HTTP MCP** client, or want a fully-green `cerefox doctor`:
+callers with a Cerefox access token. Generate one if you'll call the Edge Functions over
+**direct HTTP**, connect a **remote HTTP MCP** client, or want a fully-green `cerefox doctor`:
 
 ```bash
 cerefox token generate
@@ -175,8 +175,7 @@ cerefox token generate
 
 This sets the `CEREFOX_ACCESS_TOKENS` secret on Supabase and writes
 `CEREFOX_ACCESS_TOKEN` into your `.env`. It prints the token **once** — store it. You
-paste it by hand only if you connect a **Custom GPT** (Action → Authentication → API
-Key) or a **remote HTTP MCP** client. The **local MCP**, **cloud Claude and ChatGPT** (OAuth), and
+paste it by hand only for a direct HTTP caller or a **remote HTTP MCP** client. The **local MCP**, **cloud Claude and ChatGPT** (OAuth), and
 the CLI/web reach Supabase over the Data API and don't need it, so this step is
 optional for a local-MCP-only or OAuth-only setup. Lose it → `cerefox token rotate`.
 Re-run `cerefox doctor` — the "edge functions" check goes green.
@@ -223,7 +222,6 @@ FTS-only `mcp.supabase.com` path). This needs a one-time OAuth setup — see
 OAuth, with the same one-time setup as cloud Claude:
 [Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) and
 [`connect-agents.md` → Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
-(The older Custom GPT path ends on **December 11, 2026**, when OpenAI retires Custom GPTs.)
 **For Codex**, use the local MCP: `cerefox configure-agent --tool codex`.
 
 See `docs/guides/connect-agents.md` for the complete guide including system prompts,
@@ -400,7 +398,7 @@ In 2026 Supabase rolled out a new API key system. The dashboard now shows two ke
 | Variable | Recommended value | Why |
 |---|---|---|
 | `CEREFOX_SUPABASE_KEY` | New **secret key** (`sb_secret_…`). Legacy `service_role` JWT also works. | Used by the CLI / web app to reach the Data API (PostgREST). Both formats are accepted by the gateway. |
-| `CEREFOX_ACCESS_TOKEN` | **Cerefox access token** (`cfx_pat_…`) from `cerefox token generate`. | The `Authorization: Bearer …` credential for Edge Function calls (remote MCP, GPT Actions, e2e tests, direct curl). Validated in-function; rotatable via `cerefox token rotate`. |
+| `CEREFOX_ACCESS_TOKEN` | **Cerefox access token** (`cfx_pat_…`) from `cerefox token generate`. | The `Authorization: Bearer …` credential for Edge Function calls (remote MCP, e2e tests, direct curl). Validated in-function; rotatable via `cerefox token rotate`. |
 | `CEREFOX_SUPABASE_ANON_KEY` | *(deprecated / unused)* | Formerly the Edge Function Bearer credential. Retired in iter-28E; retained only so an old `.env` still parses. |
 
 ### Why Edge Functions use a Cerefox token, not a Supabase key

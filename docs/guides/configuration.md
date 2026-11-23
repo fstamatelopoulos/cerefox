@@ -39,7 +39,7 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 |----------|---------|----------|-------------|
 | `CEREFOX_SUPABASE_URL` | `""` | For app | Supabase project URL. Found in: Project Settings → API → Project URL |
 | `CEREFOX_SUPABASE_KEY` | `""` | For app | New **secret key** (`sb_secret_…`) from Project Settings → API Keys → Secret key. Legacy `service_role` JWT also works. **Keep secret.** See [`setup-supabase.md` → Supabase API keys (2026)](setup-supabase.md#supabase-api-keys-2026). |
-| `CEREFOX_ACCESS_TOKEN` | `""` | For Edge Functions / e2e | **Cerefox access token** (`cfx_pat_…`), the single token this machine presents. Written to local `.env` by `cerefox token generate`. Used as the `Authorization: Bearer …` credential for remote MCP / GPT Actions / direct Edge Function calls, and read by `cerefox doctor` + the live e2e tests. Rotatable via `cerefox token rotate`. |
+| `CEREFOX_ACCESS_TOKEN` | `""` | For Edge Functions / e2e | **Cerefox access token** (`cfx_pat_…`), the single token this machine presents. Written to local `.env` by `cerefox token generate`. Used as the `Authorization: Bearer …` credential for remote MCP / direct Edge Function calls, and read by `cerefox doctor` + the live e2e tests. Rotatable via `cerefox token rotate`. |
 | `CEREFOX_ACCESS_TOKENS` | `""` | Server-side (Function secret) | The **server-side accepted set** — a comma-separated list of Cerefox tokens, set as a Supabase **Function secret** (not local `.env`). A request is accepted if its Bearer matches any token in the set, enabling zero-downtime rotation. Managed by `cerefox token generate` / `rotate`. |
 | `CEREFOX_SUPABASE_ANON_KEY` | `""` | *(deprecated / unused)* | Formerly the legacy anon JWT Bearer for Edge Function calls. **Retired in iter-28E** — Edge Functions now authenticate the Cerefox access token in-function. Retained only so an old `.env` still parses; no longer read. |
 | `CEREFOX_DATABASE_URL` | `""` | For scripts | Direct Postgres URL for deployment scripts. **Use the Session Pooler** (port `5432`) — Transaction Pooler (`6543`) does not support DDL. Username must include the project-ref suffix (`postgres.<project-ref>`). Append `?sslmode=require`. See [`setup-supabase.md` → Connection pooling (2026)](setup-supabase.md#connection-pooling-2026). |
@@ -50,7 +50,7 @@ Full rule documented in [`docs/specs/polish-and-distribution-design.md` §7](../
 
 **When each is needed:**
 - `CEREFOX_SUPABASE_URL` + `CEREFOX_SUPABASE_KEY` — used by the CLI, web UI, and local MCP server (ingestion, search) via the Supabase Data API
-- `CEREFOX_ACCESS_TOKEN` — used to call the Edge Functions (remote MCP, GPT Actions, direct HTTP) and by `cerefox doctor` / the live e2e tests; `CEREFOX_ACCESS_TOKENS` is its server-side counterpart (the accepted set). Generate both with `cerefox token generate`.
+- `CEREFOX_ACCESS_TOKEN` — used to call the Edge Functions (remote MCP, direct HTTP) and by `cerefox doctor` / the live e2e tests; `CEREFOX_ACCESS_TOKENS` is its server-side counterpart (the accepted set). Generate both with `cerefox token generate`.
 - `CEREFOX_DATABASE_URL` — used only for schema deploys (`cerefox server deploy`, or the contributor scripts `bun scripts/db_*.ts`) via a direct Postgres connection
 - `SUPABASE_ACCESS_TOKEN` — optional; only consumed by the Supabase CLI during `cerefox server deploy` Edge Function deploys (recommended on macOS to avoid per-function Keychain dialogs)
 
@@ -99,7 +99,7 @@ All embedding API calls (TS embedder and Edge Functions) include automatic retry
 - **Not retried**: HTTP 4xx client errors (invalid API key, bad request)
 - **Logged**: every retry attempt is logged with the failure reason and attempt number
 
-This handles intermittent OpenAI API errors (500s) that would otherwise cause search or ingestion failures. The retry logic is consistent across both the local path (local MCP, web UI, CLI) and the Edge Function path (remote MCP, GPT Actions).
+This handles intermittent OpenAI API errors (500s) that would otherwise cause search or ingestion failures. The retry logic is consistent across both the local path (local MCP, web UI, CLI) and the Edge Function path (remote MCP, direct HTTP).
 
 ---
 
@@ -200,7 +200,6 @@ Access paths:
 - **MCP tool**: `metadata_filter` argument on `cerefox_search`
 - **CLI**: `cerefox search "query" --metadata-filter '{"type": "decision"}'` (short form: `-f`)
 - **Web UI**: Metadata Filter section (collapsible) in the Knowledge Browser
-- **GPT Actions**: `metadata_filter` field in `searchKnowledgeBase` request body (schema v1.4.0)
 - **HTTP API**: `metadata_filter` JSON key in the `cerefox-search` Edge Function POST body
 
 **Score threshold guidance (OpenAI text-embedding-3-small):**
@@ -408,7 +407,7 @@ Cerefox has **two independent access paths**, each with its own embedding config
 | Path | Where embedding happens | Config location |
 |------|------------------------|-----------------|
 | Local MCP server + CLI + web UI | Local embedder (reads `.env`) | `.env` (`CEREFOX_OPENAI_EMBEDDING_MODEL`, etc.) |
-| Edge Functions (GPT Actions, curl) | TypeScript constants in Edge Function code | Hardcoded in `supabase/functions/*/index.ts` |
+| Edge Functions (remote MCP, curl) | TypeScript constants in Edge Function code | Hardcoded in `supabase/functions/*/index.ts` |
 
 When you change the embedding model, **both paths must be updated and kept in sync** — they must use the same model and dimensions, or search results will be incoherent (queries embedded by one model won't match chunks embedded by another).
 
@@ -448,7 +447,7 @@ cerefox server deploy --functions-only
 Contributors with a repo clone can instead redeploy individual functions with `npx supabase functions deploy cerefox-search` (and `cerefox-ingest`), or through the Supabase Dashboard → Edge Functions → Deploy.
 
 > **If you only use the local MCP server** (Claude Code, Claude Desktop, Codex, Cursor), Step 3 is
-> optional — the Edge Functions are only used for GPT Actions and direct HTTP access.
+> optional — the Edge Functions are only used for remote MCP and direct HTTP access.
 
 > **Future improvement**: the Edge Functions will be updated to read model config from Supabase
 > secrets, eliminating the need to edit TypeScript and redeploy when the model changes.
@@ -547,7 +546,7 @@ Each usage log entry records:
 | `extra` | Flexible JSONB for additional context |
 
 The `access_path` is set by the caller layer (not the end user):
-- Edge Functions set `"edge-function"` (GPT Actions, direct HTTP callers)
+- Edge Functions set `"edge-function"` (direct HTTP callers)
 - `cerefox-mcp` tool handlers set `"remote-mcp"` (Claude Code, Cursor, Claude Desktop)
 - The web UI's JSON API routes set `"webapp"` when the caller sends no identity, and `"api"` when it names itself with `X-Cerefox-Author` / `X-Cerefox-Requestor` (v1.11.0; see [`api.md`](api.md)). The path is derived, never accepted from the caller.
 - Local MCP server sets `"local-mcp"`
@@ -579,7 +578,7 @@ writes alike; `requestor` (the pre-1.13.1 name on most tools) is still accepted 
 a silent alias. (On `cerefox_get_audit_log` the entries filter, formerly `author`,
 is now `by_author`.) Since v1.13.2 the CLI (`--author` on every command,
 `--requestor` a hidden alias, `--by-author` the audit-list filter) and the
-primitive Edge Functions used by GPT Actions (`author` in every request body,
+primitive Edge Functions (`author` in every request body,
 `requestor` an alias, `by_author` on `cerefox-get-audit-log`) follow the same
 rule. (The HTTP API's headers are documented in [`api.md`](api.md): there
 `X-Cerefox-Author` and `X-Cerefox-Requestor` name the same actor.)
@@ -596,7 +595,7 @@ MCP transport. Nothing else does:
 
 | Surface | Enforced? |
 |---|---|
-| Edge Functions (GPT Actions, direct HTTP) | Yes |
+| Primitive Edge Functions (direct HTTP) | Yes |
 | Remote MCP (`cerefox-mcp` Edge Function) | Yes |
 | **Local MCP** (`cerefox mcp`, stdio) | **No** |
 | **`/api/v1`** (`cerefox web`, Cerefox Local) | **No** |

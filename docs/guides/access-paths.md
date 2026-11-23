@@ -59,11 +59,11 @@ cerefox-mcp   (in-function token check)
 Postgres RPCs
 ```
 
-**ChatGPT Custom GPT Actions** call the eight primitive Edge Functions directly over HTTPS
-using an OpenAPI schema. `cerefox-mcp` is not involved. OpenAI retires Custom GPTs on **December 11, 2026**, and custom actions do not carry over to its plugins, so this path ends
-then. **ChatGPT now connects to `cerefox-mcp` as a custom MCP server over OAuth**, like
-cloud Claude, on the web and in the desktop and mobile apps (v1.25.0, #326):
+**ChatGPT connects to `cerefox-mcp` as a custom MCP server over OAuth**, like cloud
+Claude, on the web and in the desktop and mobile apps (v1.25.0, #326):
 [`connect-agents.md` → Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
+The earlier Custom GPT path (GPT Actions over the primitive Edge Functions) ended when
+OpenAI retired Custom GPTs on December 11, 2026.
 
 **curl / scripts / custom HTTP clients** can also call the primitives directly using the
 same Cerefox token as a Bearer token.
@@ -216,7 +216,6 @@ single container with an internally-held token.
 | Claude Desktop | HTTPS → `cerefox-mcp` (via `supergateway`) | Cerefox access token (`cfx_pat_…`) | Advanced/fallback; prefer local MCP for daily use |
 | **Cloud Claude (claude.ai web + mobile)** | HTTPS → `cerefox-mcp` over **OAuth 2.1** | Owner-pinned OAuth access token (JWKS-verified) | Optional; memory in the browser + on the phone |
 | ChatGPT (web, desktop, mobile) | HTTPS → `cerefox-mcp` (custom MCP server) | OAuth 2.1 (Supabase OAuth server, its own pre-registered client) | Full tool surface; same setup as cloud Claude (v1.25.0) |
-| ChatGPT Custom GPT | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | AI assistant via GPT Actions; **ends 2026-12-11** (Custom GPTs retire) |
 | curl / HTTP scripts | HTTPS → primitive Edge Functions | Cerefox access token (`cfx_pat_…`) | Ad-hoc queries, automation |
 | Web UI (`cerefox web`) | Supabase REST API | Secret key (or legacy service_role) | Web UI backend (TS Hono) |
 | **HTTP client → `/api/v1`** | Plain HTTP to `cerefox web` / Cerefox Local | **None from loopback; API key otherwise** (v1.12.0) — `cerefox api-key generate` / `cerefox-local api-key` | A local program or bot harness that wants HTTP rather than MCP. Names itself with `X-Cerefox-Author` / `X-Cerefox-Requestor` (v1.11.0): a declared label for attribution, not a verified identity. See [`api.md`](api.md) |
@@ -273,7 +272,7 @@ before "completing" the parity table by adding purge to agent-facing access path
 | Tier | Operations | Reversible? | Where exposed |
 |---|---|---|---|
 | 1. Reads + soft mutations | search, get, list-*, ingest (create/update), metadata-search, get-audit-log | n/a (reads) / yes (versioned) | All paths — MCP, Edge Functions, CLI, web UI |
-| 2. Soft-destructive + recovery | `delete_document` (soft delete to trash), `restore_document` (un-trash), `set_review_status` (web only; a `404` while `review_workflow_enabled` is off) | yes — delete is restorable; restore recovers | CLI (`cerefox document delete` / `restore`), web UI, and — since v1.7.0 (#208, #210) — MCP (`cerefox_delete_document`, which requires the caller's read-hash, and `cerefox_restore_document`). **Not** the primitive GPT-Actions Edge Functions (deliberately deferred). |
+| 2. Soft-destructive + recovery | `delete_document` (soft delete to trash), `restore_document` (un-trash), `set_review_status` (web only; a `404` while `review_workflow_enabled` is off) | yes — delete is restorable; restore recovers | CLI (`cerefox document delete` / `restore`), web UI, and — since v1.7.0 (#208, #210) — MCP (`cerefox_delete_document`, which requires the caller's read-hash, and `cerefox_restore_document`). **Not** the primitive Edge Functions (deliberately deferred). |
 | 3. **Hard-destructive** | `purge_document` (permanent), `set_version_archived` (toggle version retention) | no (purge) | **Web UI**, through its backend `/api/v1`, which any client that can reach the web server can also call. Never MCP, the Edge Functions or the CLI. |
 
 ### Why purge is web-UI-only

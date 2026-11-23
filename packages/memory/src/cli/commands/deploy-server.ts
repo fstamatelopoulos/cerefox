@@ -470,7 +470,7 @@ async function action(options: DeployServerOptions): Promise<void> {
         c.cyan(
           "\n   ℹ  The primitive Edge Functions now require the Cerefox access token.\n" +
             "      If CEREFOX_ACCESS_TOKENS is unset they reject ALL callers (fail closed) —\n" +
-            `      GPT Actions, remote HTTP, and \`${progName()} doctor\`. Generate it now:\n` +
+            `      remote MCP, direct HTTP, and \`${progName()} doctor\`. Generate it now:\n` +
             `        ${progName()} token generate\n` +
             `      (or manually: ${SUPABASE_NPX} secrets set CEREFOX_ACCESS_TOKENS=<token> --remote=${ref})\n` +
             "      Migration + client cutover: docs/specs/ef-auth-migration-design.md §6.",

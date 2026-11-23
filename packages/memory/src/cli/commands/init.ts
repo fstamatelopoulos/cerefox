@@ -279,7 +279,7 @@ function buildEnvFile(answers: ConfigAnswers): string {
     "",
     "# ── Optional: connect cloud/mobile Claude over OAuth (setup-supabase.md Step 7) ──",
     "# These are only needed for the optional claude.ai / Claude-mobile OAuth feature.",
-    "# The Cerefox access token gates the Edge Functions (GPT Actions, remote MCP,",
+    "# The Cerefox access token gates the Edge Functions (direct HTTP, remote MCP,",
     "# and doctor's version check). It is written here automatically by",
     "# `cerefox token generate` — you don't set it by hand:",
     "# CEREFOX_ACCESS_TOKEN=cfx_pat_...",

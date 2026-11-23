@@ -7,8 +7,7 @@
  * The command automates the SERVER side (sets the `CEREFOX_ACCESS_TOKENS`
  * Function secret) and the LOCAL side (upserts `CEREFOX_ACCESS_TOKEN` into
  * `.env`), then GUIDES the client side: it prints the token once and where to
- * paste it — it cannot auto-install into a Custom GPT (OpenAI exposes no API for
- * that). Two env names: `CEREFOX_ACCESS_TOKENS` (plural = server-side accepted
+ * paste it — it cannot auto-install into a remote client. Two env names: `CEREFOX_ACCESS_TOKENS` (plural = server-side accepted
  * set, enables rotation) vs `CEREFOX_ACCESS_TOKEN` (singular = the one token this
  * machine presents; used by `doctor`, live tests, the optional remote-MCP client).
  */
@@ -111,10 +110,8 @@ function printTokenOnce(token: string): void {
   println(`   ${c.green(token)}`);
   println("");
   println(c.dim("   Paste it into any token-bearing client:"));
-  println(c.dim("     • Custom GPT → Configure → Actions → Authentication → API Key (Bearer)"));
-  println(c.dim("     • Remote HTTP MCP → the Authorization: Bearer header"));
-  println(c.dim("   If the GPT Actions schema changed this release, re-paste it too"));
-  println(c.dim(`   (see docs/guides/connect-agents.md). Lose the token → \`${progName()} token rotate\`.`));
+  println(c.dim("     • Remote HTTP MCP or a direct HTTP call → the Authorization: Bearer header"));
+  println(c.dim(`   See docs/guides/connect-agents.md. Lose the token → \`${progName()} token rotate\`.`));
 }
 
 function generateAction(opts: TokenOptions): void {

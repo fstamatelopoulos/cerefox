@@ -26,7 +26,7 @@ flowchart TD
   agents["AI agents · Web UI · CLI"]
   remote["cerefox-mcp Edge Function<br/>(remote MCP, calls RPCs directly)"]
   local["cerefox mcp<br/>(local stdio MCP, TypeScript)"]
-  efs["Primitive Edge Functions<br/>(search/ingest/… for GPT Actions & HTTP)"]
+  efs["Primitive Edge Functions<br/>(search/ingest/… for direct HTTP)"]
   pg[("PostgreSQL + pgvector<br/>cerefox_documents · cerefox_chunks · cerefox_projects<br/>RPCs: hybrid_search, ingest_document, …")]
   ingest["Ingestion pipeline (TypeScript, in-process)<br/>parse → chunk → embed → store"]
   agents --> remote --> pg
@@ -648,24 +648,6 @@ on form submit. Filters are passed as query parameters to `GET /api/v1/search`.
 `p_metadata_filter` on the `cerefox_search_docs` RPC call — alongside `query`, `projectId`,
 and the other search params. No filtering logic lives in the route itself.
 
-#### OpenAPI schema update (GPT Actions)
-
-The `searchKnowledgeBase` operation in the GPT Actions schema gains a new optional request
-body field:
-
-```yaml
-metadata_filter:
-  type: object
-  additionalProperties:
-    type: string
-  description: >
-    Optional JSONB containment filter. Only documents whose metadata contains ALL
-    of the specified key-value pairs are returned. Example: {"type": "decision", "status": "active"}.
-    Omit or set to null to search all documents.
-```
-
-Schema version bumped from v1.3.1 → **v1.4.0** (new optional field, backwards-compatible).
-
 #### MCP tool description update
 
 The `cerefox_search` tool description gains a `metadata_filter` input field:
@@ -1081,7 +1063,7 @@ flowchart TD
   desktop["Desktop clients<br/>Claude Desktop · Cursor · Claude Code"]
   chatgpt["ChatGPT (web, desktop, mobile)"]
   claudeweb["Cloud Claude (claude.ai web, mobile)"]
-  customgpt["ChatGPT Custom GPT (until 2026-12-11)"]
+  http["Scripts · CI · curl"]
 
   local["Path 1 — Local stdio MCP<br/>cerefox mcp (TS @cerefox/memory)"]
   remote["Path 2 — Remote MCP Edge Function<br/>cerefox-mcp (Streamable HTTP) [RECOMMENDED]"]
@@ -1093,7 +1075,7 @@ flowchart TD
   desktop --> remote --> pg
   chatgpt -- OAuth --> remote
   claudeweb -- OAuth --> remote
-  customgpt --> prims --> pg
+  http --> prims --> pg
 ```
 
 Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
@@ -1101,8 +1083,8 @@ subprocess via npx (Node ≥24 / Bun ≥1.0). Path 2 (`cerefox-mcp` Edge Functio
 Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation to
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
 as the local server, so both expose the identical 15 core tools. Path 3's primitive
-Edge Functions back ChatGPT GPT Actions (until OpenAI retires Custom GPTs on
-2026-12-11) and direct HTTP callers. Cloud Claude and ChatGPT (web, desktop and mobile
+Edge Functions back direct HTTP callers (they also backed ChatGPT Custom GPTs until
+OpenAI retired them on 2026-12-11). Cloud Claude and ChatGPT (web, desktop and mobile
 apps) reach Path 2 over OAuth 2.1 (iter-28A; ChatGPT since v1.25.0, #326), each with its
 own pre-registered client. Every other caller
 authenticates with a **Cerefox access token** (`cerefox token generate`),
@@ -1202,24 +1184,24 @@ base (in md format). If search returns partial results for a large document
 (is_partial=true), use cerefox_get_document to retrieve the full text.
 ```
 
-### 10.3 Supabase Edge Functions (HTTP, for GPT Actions / scripts)
+### 10.3 Supabase Edge Functions (HTTP, for scripts and direct callers)
 
 The dedicated Edge Functions are deployed to Supabase and callable via HTTP POST with a Cerefox
-access token. They are the backend for ChatGPT GPT Actions, curl / scripted access, and any HTTP client:
+access token. They are the backend for curl / scripted access and any HTTP client:
 
-**Primitive Edge Functions (HTTP, for GPT Actions and direct callers):**
+**Primitive Edge Functions (HTTP, for direct callers):**
 
 | Edge Function | Operation | Called By |
 |--------------|-----------|-----------|
-| `cerefox-search` | Search | GPT Actions, direct HTTP |
-| `cerefox-ingest` | Write | GPT Actions, direct HTTP |
-| `cerefox-metadata` | Metadata | GPT Actions, direct HTTP |
-| `cerefox-get-document` | Read | GPT Actions, direct HTTP |
-| `cerefox-list-versions` | Read | GPT Actions, direct HTTP |
-| `cerefox-get-audit-log` | Audit | GPT Actions, direct HTTP |
-| `cerefox-metadata-search` | Search | GPT Actions, direct HTTP |
-| `cerefox-list-projects` | Read | GPT Actions, direct HTTP |
-| `cerefox-mcp` | MCP server | Claude Code, Cursor, Claude Desktop (via supergateway) |
+| `cerefox-search` | Search | Direct HTTP |
+| `cerefox-ingest` | Write | Direct HTTP |
+| `cerefox-metadata` | Metadata | Direct HTTP |
+| `cerefox-get-document` | Read | Direct HTTP |
+| `cerefox-list-versions` | Read | Direct HTTP |
+| `cerefox-get-audit-log` | Audit | Direct HTTP |
+| `cerefox-metadata-search` | Search | Direct HTTP |
+| `cerefox-list-projects` | Read | Direct HTTP |
+| `cerefox-mcp` | MCP server | Claude Code, Cursor, Claude Desktop (via supergateway); claude.ai and ChatGPT over OAuth |
 
 **Design principle — Edge Function as thin HTTP adapter over Postgres RPC:**
 

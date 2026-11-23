@@ -44,7 +44,7 @@ Cerefox is a self-hosted memory layer with two halves you set up independently:
 
 **Server side** (lives in your Supabase project, runs ~24/7):
 - Postgres schema + RPCs (search, ingest, audit log, version history)
-- Edge Functions (server-side embedding, the remote `cerefox-mcp` MCP server that claude.ai and ChatGPT connect to over OAuth, HTTP primitives for scripts and, until 2026-12-11, Custom GPTs)
+- Edge Functions (server-side embedding, the remote `cerefox-mcp` MCP server that claude.ai and ChatGPT connect to over OAuth, HTTP primitives for scripts)
 
 **Client side** (this npm package, runs on your machine):
 - `cerefox` CLI + `cerefox mcp` (local stdio MCP) + `cerefox web` (local UI at `http://localhost:8000`)

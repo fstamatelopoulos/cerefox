@@ -41,8 +41,9 @@ release script's EF paths derive from the bundler's list; `guides ingest
 Playwright, remote MCP), Cerefox Local and production (backed up first);
 doctor green everywhere. The cut needed `--accept-history-edit=v1.24.0`: two
 old CHANGELOG entries were edited on purpose to remove private details.
-Open: #129 (non-English FTS), #328, #350; Custom GPT docs and the GPT Actions
-OpenAPI rule go after 2026-12-11.
+Open: #129 (non-English FTS), #328, #350. On main for the next release: the
+Custom GPT setup docs and the GPT Actions OpenAPI rule are removed (OpenAI retires
+Custom GPTs on 2026-12-11; the primitive Edge Functions stay for direct HTTP).
 
 **2026-11-22: 1.24.0 shipped, search returns each document's best passages
 (iteration 55, #375, PR #376, contributed by @ivanursul; schema 0.23.0).** A

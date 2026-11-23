@@ -216,8 +216,8 @@ export function DashboardPage() {
                   <Text size="xs" c="dimmed">
                     No agent activity on the MCP or Edge Function paths in the last 30 days.
                     That is not the same as "no agents" — CLI and web operations are counted
-                    separately below, and the Edge Function path is only used by ChatGPT
-                    Actions, so a zero there is normal unless you run a Custom GPT. Agent ops
+                    separately below, and the Edge Function path is only used by direct HTTP
+                    callers, so a zero there is normal. Agent ops
                     are recorded in the usage log, which is <b>opt-in</b> — enable it with{" "}
                     <code>cerefox config set usage_tracking_enabled true</code> if it's off.
                   </Text>
@@ -237,12 +237,12 @@ export function DashboardPage() {
               earlier split put three paths above and two below with no visible
               logic, and the pill outgrew the header row the other tiles share.
               `edge` moves down because it is an agent path that is normally
-              zero (ChatGPT Actions only), so it reads as noise in the badge and
+              zero (direct HTTP callers only), so it reads as noise in the badge and
               as information here. */}
           {(efOps > 0 || apiOps > 0 || cliOps > 0 || webOps > 0) && (
             <div
               className={styles.statSub}
-              title="edge = ChatGPT Actions and api = an /api/v1 client that identified itself (both counted in the total above). cli and web are NOT counted as agent operations: the usage summary cannot separate an agent's CLI use from a person's, and web is the bundled UI."
+              title="edge = a direct HTTP call to an Edge Function and api = an /api/v1 client that identified itself (both counted in the total above). cli and web are NOT counted as agent operations: the usage summary cannot separate an agent's CLI use from a person's, and web is the bundled UI."
             >
               {efOps.toLocaleString()} edge · {apiOps.toLocaleString()} api ·{" "}
               {cliOps.toLocaleString()} cli · {webOps.toLocaleString()} web

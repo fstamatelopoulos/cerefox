@@ -125,7 +125,7 @@ lifecycle/server commands (`init`, `doctor`, `status`, `configure-agent`,
 - **Search response contract** (v1.14.3, #254-#267): four rules, and every one of them was learned the hard way. (1) **Never report an empty result when rows matched** — an agent reads "No results found." as "this knowledge does not exist", stops looking, and recreates the document; when nothing fits the budget, return the headers of what matched. (2) **Never hold results back silently** — the "N of M shown" notice is the one piece of framing that is never dropped. (3) **The reply is budgeted in RENDERED bytes**, the unit the caller receives, not in `JSON.stringify` bytes; the Edge Function ships JSON and budgets in JSON, and the two must not be confused. It may exceed `max_bytes` only by framing that cannot be dropped without misleading the caller, and that framing is never traded for content. (4) **A result that does not fit is skipped, not the end of the list**, so the returned set is not a rank prefix. Anything added to a search response must be measured against `_shared/__tests__/search-budget-invariant.test.ts` (517 cases over budgets × sizes × counts × row shapes) — seven consecutive review rounds found bugs that the example-based tests passed straight through. Contract for users: `docs/guides/response-limits.md`.
 - **Search ranking is measured, not tuned by feel** (v1.17.0, schema 0.18.0, iteration 48). The hybrid formula, its defaults (`min_search_score` derived from the store's embedder, `min_term_coverage` 0.66 (a k-of-n rule needs the value at or below k/n: 0.67 meant three of three, `term-coverage-default.test.ts`), bounded `ts_rank_cd`, exact vector candidates (never the approximate HNSW index, `search-exact-vector-pool.test.ts`)), the query parser and chunking all move search quality for every kind of query at once, and a fix for one phrasing (it started with a full name vs a short name) can quietly cost another. Any such change is run through `bun scripts/search_benchmark.ts` on staging first (it must reproduce the live ranking exactly before its numbers count), compared per category on **both** embedders, **checked on real data on staging** (synthetic categories looked fine while 0.67 cost real multi-word keyword queries a lot), and must keep `packages/memory/test/search-calibration-floor.test.ts` green; moving a floor in `_shared/search-benchmark/vocabulary/floors.json` needs a stated reason. The vocabulary is synthetic by rule: never put real store content in it. Spec: `docs/specs/search-calibration.md`.
 - **Runtime config catalog**: every `cerefox_config` key is declared ONCE in `_shared/config-catalog/index.ts` (`CONFIG_CATALOG`: kind, default, group, `highImpact`, description). The web Settings page, `cerefox config list` (#239) and value validation all derive from it, and `_shared/__tests__/config-catalog-allowlist.test.ts` pins it to the `v_allowed` list in `cerefox_set_config`. Adding a key = catalog entry + `v_allowed` (in `rpcs.sql` AND a migration re-shipping `cerefox_set_config`) + a seed row in `schema.sql`; nothing else to hand-list.
-- **Caller identity (v1.13.1)**: every MCP tool takes the caller's name as **`author`** (reads and writes); `requestor` is accepted as a silent alias via `callerIdentity()` in `_shared/mcp-tools/identity.ts`; on `cerefox_get_audit_log` the entries filter is `by_author` so `author` means the same thing there. Schemas list one name; never add a second identity key to a tool schema. Since v1.13.2 (#244) the CLI (`--author` on every command via `packages/memory/src/cli/util/identity-flags.ts`, `--requestor` hidden alias, `--by-author` on `audit list`) and the primitive EFs (`callerIdentity(body)`, `by_author` on `cerefox-get-audit-log`) follow the same rule; the GPT Actions OpenAPI block is at 4.0.0 for it.
+- **Caller identity (v1.13.1)**: every MCP tool takes the caller's name as **`author`** (reads and writes); `requestor` is accepted as a silent alias via `callerIdentity()` in `_shared/mcp-tools/identity.ts`; on `cerefox_get_audit_log` the entries filter is `by_author` so `author` means the same thing there. Schemas list one name; never add a second identity key to a tool schema. Since v1.13.2 (#244) the CLI (`--author` on every command via `packages/memory/src/cli/util/identity-flags.ts`, `--requestor` hidden alias, `--by-author` on `audit list`) and the primitive EFs (`callerIdentity(body)`, `by_author` on `cerefox-get-audit-log`) follow the same rule.
 - **Requestor enforcement**: optional `require_requestor_identity` config (default false) makes the identity (`author`, or the `requestor` alias) mandatory, and optional `requestor_identity_format` validates them against a regex. Both controlled via `cerefox_config`. **Scope, stated precisely because the name promises more than it delivers: these are enforced by the Edge Functions only** — each of the 9 carries its own copy of the check, including `cerefox-mcp` (the REMOTE MCP transport). The **local stdio MCP server does not enforce them, and neither does `/api/v1`.** So enabling it does not make identity required everywhere. Making it global means one shared helper every transport calls, not a tenth copy of the block.
 
 ### Configuration
@@ -276,7 +276,7 @@ cerefox-mcp  ──supabase.rpc──▶  cerefox_hybrid_search / cerefox_search
              ──supabase.rpc──▶  cerefox_list_projects
              ──supabase.rpc──▶  cerefox_metadata_search
 
-GPT Actions (Custom GPT) ──────▶  cerefox-search           (primitive Edge Functions, direct HTTP)
+Direct HTTP (curl, scripts) ───▶  cerefox-search           (primitive Edge Functions)
                          ──────▶  cerefox-ingest
                          ──────▶  cerefox-metadata
                          ──────▶  cerefox-get-document
@@ -288,13 +288,13 @@ GPT Actions (Custom GPT) ──────▶  cerefox-search           (primit
 cerefox CLI / Web app ─────────▶  Supabase Data API (PostgREST / supabase-js) ─▶  same RPCs
 ```
 
-Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functions). This halves billable invocations for every MCP tool call. Primitive Edge Functions remain unchanged for GPT Actions and direct HTTP clients.
+Note: `cerefox-mcp` calls RPCs directly (no delegation to primitive Edge Functions). This halves billable invocations for every MCP tool call. Primitive Edge Functions remain for direct HTTP clients.
 
 ### Auth Pattern — Three Layers
 
 Cerefox has three distinct access layers, each with its own credential:
 
-1. **AI agents / Edge Functions** — callers (GPT Actions, remote MCP, curl) present the **Cerefox access token** (`cfx_pat_…`, iter-28E) as `Authorization: Bearer`. Every data Edge Function runs `--no-verify-jwt` and validates that token **in-function** (constant-time, against the `CEREFOX_ACCESS_TOKENS` Function secret) before using `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. Generate/rotate the token with `cerefox token generate` / `cerefox token rotate`. The **legacy anon JWT is retired** for this layer (it was unrotatable on ES256-signed projects). Context: `docs/specs/ef-auth-migration-design.md`.
+1. **AI agents / Edge Functions** — callers (remote MCP, curl, scripts) present the **Cerefox access token** (`cfx_pat_…`, iter-28E) as `Authorization: Bearer`. Every data Edge Function runs `--no-verify-jwt` and validates that token **in-function** (constant-time, against the `CEREFOX_ACCESS_TOKENS` Function secret) before using `SUPABASE_SERVICE_ROLE_KEY` internally to call RPCs. Callers never see the service-role key. Generate/rotate the token with `cerefox token generate` / `cerefox token rotate`. The **legacy anon JWT is retired** for this layer (it was unrotatable on ES256-signed projects). Context: `docs/specs/ef-auth-migration-design.md`.
 2. **Web app & CLI** — the TS client authenticates via the Supabase REST API (Data API) using either the new **secret key** (`sb_secret_…`) or the legacy **service_role** JWT. Both are accepted and bypass RLS to grant unrestricted read/write access. Never expose this key to clients.
 3. **Deployment scripts only** — `bun scripts/db_deploy.ts` / `bun scripts/db_migrate.ts` connect directly to Postgres over TCP using the **database password** (`CEREFOX_DATABASE_URL`). No application code uses this path at runtime.
 
@@ -322,14 +322,14 @@ Business logic lives **only in Postgres RPCs** wherever feasible. If you need to
 
 | Edge Function | Purpose | Called By |
 |---|---|---|
-| `cerefox-search` | Hybrid FTS + semantic search; handles server-side embedding | GPT Actions, direct HTTP |
-| `cerefox-ingest` | Ingest document; chunks, embeds, versions, stores | GPT Actions, direct HTTP |
-| `cerefox-metadata` | List metadata keys with doc counts + example values | GPT Actions, direct HTTP |
-| `cerefox-get-document` | Retrieve full doc content; supports archived versions | GPT Actions, direct HTTP |
-| `cerefox-list-versions` | List archived version history for a document | GPT Actions, direct HTTP |
-| `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | GPT Actions, direct HTTP |
-| `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search | GPT Actions, direct HTTP |
-| `cerefox-list-projects` | List all projects with names, IDs, and descriptions | GPT Actions, direct HTTP |
+| `cerefox-search` | Hybrid FTS + semantic search; handles server-side embedding | Direct HTTP |
+| `cerefox-ingest` | Ingest document; chunks, embeds, versions, stores | Direct HTTP |
+| `cerefox-metadata` | List metadata keys with doc counts + example values | Direct HTTP |
+| `cerefox-get-document` | Retrieve full doc content; supports archived versions | Direct HTTP |
+| `cerefox-list-versions` | List archived version history for a document | Direct HTTP |
+| `cerefox-get-audit-log` | Query audit log entries with filters (document, author, operation, time range) | Direct HTTP |
+| `cerefox-metadata-search` | Query documents by metadata key-value criteria without text search | Direct HTTP |
+| `cerefox-list-projects` | List all projects with names, IDs, and descriptions | Direct HTTP |
 | `cerefox-mcp` | Remote MCP Streamable HTTP server; calls RPCs directly via shared tool handlers in `_shared/mcp-tools/`. Also an OAuth 2.1 protected resource (iter-28A, `--no-verify-jwt` + in-function auth) for cloud clients; the static path takes the **Cerefox access token** (iter-28E) | Claude Code, Cursor, Claude Desktop (remote, via the Cerefox token); **claude.ai web + mobile (via OAuth)**. Local agents prefer the local MCP. |
 
 The local `@cerefox/memory` npm package (entry point: the `cerefox` bin with `mcp` subcommand) exposes the **same 15 MCP tools** over stdio (plus 4 dormant relation tools), importing the same `_shared/mcp-tools/` handlers. Users who want a local server (no network round-trip, no Edge Function billing) install it with `npx --package=@cerefox/memory cerefox mcp` and point their MCP client at it. See `docs/guides/connect-agents.md`.
@@ -354,9 +354,9 @@ The migrate/deploy logic is shared with `scripts/db_migrate.ts` /
 
 `OPENAI_MODEL` and `EMBEDDING_DIMENSIONS` are TypeScript constants inside each Edge Function (not Supabase secrets). They are not sensitive — they're configuration. Changing the model requires editing the constant and redeploying the function (`npx supabase functions deploy <name>`). This is by design: changing the embedding model is a breaking schema change that also requires `cerefox server reindex` to re-embed all existing chunks, so a redeploy is expected.
 
-### Rule: keep the GPT Actions OpenAPI block in sync with the EFs
+### Rule: review the compat matrix when an EF surface changes
 
-**Until Custom GPTs retire on 2026-12-11 (then this rule goes, #326): when you change an Edge Function's request body or response shape, update the GPT Actions OpenAPI block in `docs/guides/connect-agents.md` in the same PR, and bump its `info.version` per SemVer.** That block is what ChatGPT users paste into a Custom GPT's Actions config; if it drifts from what the EFs actually accept/return, those GPTs silently break. There is no CI gate for this (a path-diff heuristic was too lossy) — the discipline lives here + in the release playbook (`RELEASING.md`). When an EF's `EF_VERSION` surface changes, also consider whether the client compatibility matrix (`_shared/compatibility/index.ts`) needs a `minEdgeFunctions` bump (see CONTRIBUTING.md).
+When an EF's `EF_VERSION` surface changes, consider whether the client compatibility matrix (`_shared/compatibility/index.ts`) needs a `minEdgeFunctions` bump (see CONTRIBUTING.md). (The GPT Actions OpenAPI block this rule used to guard was removed when OpenAI retired Custom GPTs on 2026-12-11, #326.)
 
 ### Rule: keep `docs/guides/api.md` in sync with the `/api/v1` routes
 
@@ -365,7 +365,7 @@ in `docs/guides/api.md` in the same PR.** That guide is the only reference for
 callers who use the HTTP API instead of MCP or the CLI (an embedder of Cerefox
 Local, say), and they cannot discover an endpoint by reading the route source.
 
-Unlike the GPT Actions block, this one **is** gated:
+This one **is** gated:
 `_shared/__tests__/api-routes-documented.test.ts` derives the route list from
 the registrations in `packages/memory/src/web/routes/` and fails in both
 directions — registered but undocumented, and documented but unregistered. The
@@ -428,8 +428,7 @@ it does not justify blocking anyone.
 
 **Any PR meant to ship a release (or that a release will be cut from) must run
 the `RELEASING.md` pre-release checklist** — CHANGELOG `[Unreleased]` populated,
-`schema_version` bumped if `db/` changed, compat-matrix minimums reviewed, GPT
-Actions OpenAPI block synced if EFs changed, tests green. `RELEASING.md` is the
+`schema_version` bumped if `db/` changed, compat-matrix minimums reviewed, tests green. `RELEASING.md` is the
 authoritative release playbook; read it at the start of any release work.
 
 ### Client Compatibility
@@ -443,7 +442,7 @@ For **local** agents (Claude Code, Cursor, Codex, Gemini, Desktop) the **preferr
 | OpenAI Codex (CLI + desktop-app Codex threads) | Preferred: `cerefox configure-agent --tool codex` (local MCP, `~/.codex/config.toml`). Advanced (remote): `url` + `bearer_token_env_var` | Local: **verified 2026-10-08**, all 15 tools. Remote: Direct Streamable HTTP; **tested, working** |
 | Gemini CLI | `httpUrl` + `headers` in `~/.gemini/settings.json` | Direct Streamable HTTP; **untested, expected to work** |
 | Claude Desktop | `npx supergateway` or `npx mcp-remote` (see connect-agents.md) | `supergateway` tested and working; `mcp-remote` may work (untested for Desktop) |
-| ChatGPT (web, desktop, mobile chats) | **Custom MCP server** to `cerefox-mcp` over **OAuth 2.1** (chatgpt.com → Plugins → Add custom MCP server; its own pre-registered Supabase OAuth client with ChatGPT's per-connector callback URL, `client_secret_post`). The legacy Custom GPT + GPT Actions path ends 2026-12-11 | **Working** on web, desktop and mobile (v1.25.0, #326), verified on the Plus plan: reads, writes and partial edits, no confirmation prompts. See `connect-agents.md` → Cloud ChatGPT. Plain ChatGPT chats never get local MCP servers |
+| ChatGPT (web, desktop, mobile chats) | **Custom MCP server** to `cerefox-mcp` over **OAuth 2.1** (chatgpt.com → Plugins → Add custom MCP server; its own pre-registered Supabase OAuth client with ChatGPT's per-connector callback URL, `client_secret_post`) (Custom GPTs, the earlier path, retired 2026-12-11) | **Working** on web, desktop and mobile (v1.25.0, #326), verified on the Plus plan: reads, writes and partial edits, no confirmation prompts. See `connect-agents.md` → Cloud ChatGPT. Plain ChatGPT chats never get local MCP servers |
 | Claude.ai web + mobile | Custom connector over **OAuth 2.1** to `cerefox-mcp` | **Working** (iter-28A). Optional feature; needs the Supabase OAuth setup + a free Cloudflare Worker consent page. Register the OAuth App with **`client_secret_post`**. See `docs/guides/setup-supabase.md` Step 7 + `connect-agents.md` → Cloud Claude. |
 
 ---
