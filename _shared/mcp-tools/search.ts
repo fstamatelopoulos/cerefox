@@ -29,9 +29,14 @@ import type { MCPSupabaseClient } from "./types.ts";
 export const SEARCH_MODES = ["docs", "hybrid", "fts", "semantic"] as const;
 export type SearchMode = (typeof SEARCH_MODES)[number];
 
-/** The mode a caller asked for, or null when it is not one of SEARCH_MODES. */
+/**
+ * The mode a caller asked for, or null when it is not one of SEARCH_MODES.
+ * Only an omitted mode is the default: `undefined`, or JSON `null`, which
+ * some MCP clients send for an unset optional argument. An empty string is
+ * a value, and not a mode.
+ */
 export function parseSearchMode(raw: unknown): SearchMode | null {
-  const m = raw === undefined || raw === null || raw === "" ? "docs" : raw;
+  const m = raw === undefined || raw === null ? "docs" : raw;
   return (SEARCH_MODES as readonly unknown[]).includes(m) ? (m as SearchMode) : null;
 }
 

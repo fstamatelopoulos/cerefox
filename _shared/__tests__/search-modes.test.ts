@@ -115,7 +115,7 @@ describe("each search mode runs its own RPC (#377)", () => {
 });
 
 describe("an unknown mode is refused, not run as the docs search (#377)", () => {
-  for (const bad of ["chunks", "Semantic", "vector", "docs "]) {
+  for (const bad of ["chunks", "Semantic", "vector", "docs ", ""]) {
     test(`mode ${JSON.stringify(bad)}`, async () => {
       const r = recorder();
       await expect(search.handler(r.client, { query: "anything", mode: bad }, ctx)).rejects.toThrow(
@@ -134,7 +134,8 @@ describe("an unknown mode is refused, not run as the docs search (#377)", () => 
 
   test("parseSearchMode: the default and the refusals", () => {
     expect(parseSearchMode(undefined)).toBe("docs");
-    expect(parseSearchMode("")).toBe("docs");
+    expect(parseSearchMode(null)).toBe("docs");
+    expect(parseSearchMode("")).toBeNull();
     expect(parseSearchMode("semantic")).toBe("semantic");
     expect(parseSearchMode("nonsense")).toBeNull();
     expect(parseSearchMode(3)).toBeNull();

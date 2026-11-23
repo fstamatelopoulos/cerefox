@@ -147,7 +147,7 @@ cerefox search [OPTIONS] QUERY
 | `--match-count <n>` (`-c`) | int | `5` | Number of results. |
 | `--project-name <name>` (`-p`) | str | _none_ | Limit to a project by name. |
 | `--alpha <float>` | float | `0.7` | Semantic weight 0..1 (`docs`/`hybrid`). |
-| `--min-score <float>` | float | `0.5` | Minimum cosine similarity (`docs`/`hybrid`; not applied to `fts`). |
+| `--min-score <float>` | float | `0.5` | Minimum cosine similarity (`docs`/`hybrid`; not applied to `fts`). With `semantic`, no floor unless you pass it. |
 | `--metadata-filter <json>` (`-f`) | JSON | _none_ | JSONB metadata containment filter, e.g. `'{"type":"decision"}'`. |
 | `--max-bytes <n>` | int | `200000` | Response size budget in bytes. |
 | `--only-metadata` | flag | off | List matching docs (id, score, chunks, chars) without content — a compact listing. |

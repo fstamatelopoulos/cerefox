@@ -27,8 +27,10 @@ modes, three different answers.
   returns the nearest chunks ranked by similarity; the docs say to judge them
   by their scores. Chosen over sending the store's configured floor, which
   would make MCP and the CLI disagree with the web UI on the same query.
-- **An unknown mode is refused**: an invalid-params error on MCP, a user
-  error on the CLI, a `400` on the API, each listing the valid modes.
+- **An unknown mode is refused**: an in-band tool error on MCP (invalid
+  parameters are reported that way for every tool), a non-zero exit on the
+  CLI, a `400` on the API, each listing the valid modes. Only an omitted mode
+  (or JSON `null`) is the default; `""` is refused (Codex review).
 - **`content: "matches"` stays docs-only**, so `semantic` + `matches` is
   refused like the other chunk modes.
 - **Not changed: the `cerefox-search` Edge Function** (GPT Actions). Its
@@ -44,6 +46,8 @@ modes, three different answers.
       `--mode semantic` returns chunks best first; the CLI and the API return
       the same semantic chunks in the same order; unknown modes refused by
       both; `api-schema-truth` gains a semantic case
-- [ ] remote MCP on staging (`mcp-remote.test.ts`, new case), after the
-      branch's Edge Functions are deployed
-- [ ] full suites, Playwright, Codex review
+- [x] remote MCP on staging (`mcp-remote.test.ts`, 28/28 with the new case),
+      branch Edge Functions deployed
+- [x] full suites (`_shared`, package on staging, frontend, typecheck),
+      Playwright 43; Codex review: two Medium findings fixed (an empty mode
+      ran the docs search; the CLI guide's `--min-score` row)
