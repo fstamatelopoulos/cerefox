@@ -21,7 +21,22 @@
  * volume so models survive container recreate/upgrade); default `~/.cerefox/models`.
  */
 
-import { existsSync, mkdirSync, renameSync, statSync, writeFileSync, appendFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  appendFileSync,
+  closeSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -56,6 +71,25 @@ const MODEL_REPO_FILES = [
   `onnx/model_quantized.onnx`,
 ];
 const MODEL_FILES = MODEL_REPO_FILES.map((f) => join(ONNX_MODEL_ID, f));
+
+/**
+ * The content of the model revision Cerefox ships with (#367), as Hugging Face
+ * publishes it for revision e9b6763 (`x-linked-etag`): the git blob SHA-1 for
+ * the small files, SHA-256 for the LFS model. A cached file is checked against
+ * this once, offline, then trusted through a `.verified` marker. Before 1.25.0
+ * a download was never checked, and a corrupt model does not always fail to
+ * load: zeroed weights load fine and quietly produce wrong vectors.
+ */
+const KNOWN_FILE_DIGESTS: Record<string, { algo: "sha256" | "git-sha1"; hex: string; size: number }> = {
+  "config.json": { algo: "git-sha1", hex: "785a8d58b3e2c47f9709d7ac87759a6ac96a106f", size: 2538 },
+  "tokenizer.json": { algo: "git-sha1", hex: "688882a79f44442ddc1f60d70334a7ff5df0fb47", size: 711396 },
+  "tokenizer_config.json": { algo: "git-sha1", hex: "99ada2882080d1e1f5333a2584c433ded174795c", size: 1191 },
+  "onnx/model_quantized.onnx": {
+    algo: "sha256",
+    hex: "b4342336debaea79de872370664b0aaeb67dea4605513d00ee236ea871a81f27",
+    size: 137296292,
+  },
+};
 
 /**
  * The model could not be fetched (#314). Carries a status so HTTP surfaces
@@ -117,6 +151,89 @@ async function fetchRange(
 }
 
 /**
+ * A download lock older than this is abandoned (its process died). The holder
+ * refreshes it after every segment, and a segment is bounded by
+ * REQUEST_TIMEOUT_MS plus the longest backoff, so a live holder never looks
+ * this old.
+ */
+const LOCK_STALE_MS = 5 * 60_000;
+const LOCK_POLL_MS = 1_000;
+
+/**
+ * What the host says the file is (#367): the model revision, to pin every
+ * request of one download to it, and the published hash of its content.
+ * Hugging Face's resolve URL answers with `x-repo-commit` and `x-linked-etag`
+ * before redirecting: a SHA-256 for LFS files (the model), the git blob SHA-1
+ * for small ones (the JSON). A mirror that sends neither gets no check, and
+ * the download works as before.
+ */
+async function publishedIdentity(
+  url: string,
+  timeoutMs: number,
+): Promise<{ commit?: string; digest?: { algo: "sha256" | "git-sha1"; hex: string } }> {
+  try {
+    const res = await fetch(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    await res.body?.cancel();
+    const commit = /^[0-9a-f]{40}$/.exec(res.headers.get("x-repo-commit") ?? "")?.[0];
+    const tag = (res.headers.get("x-linked-etag") ?? "").replace(/^W\//, "").replace(/"/g, "").trim().toLowerCase();
+    const digest = /^[0-9a-f]{64}$/.test(tag)
+      ? { algo: "sha256" as const, hex: tag }
+      : /^[0-9a-f]{40}$/.test(tag)
+        ? { algo: "git-sha1" as const, hex: tag }
+        : undefined;
+    return { ...(commit ? { commit } : {}), ...(digest ? { digest } : {}) };
+  } catch {
+    return {};
+  }
+}
+
+/** The file's hash in the form the host publishes it. */
+async function fileDigest(path: string, algo: "sha256" | "git-sha1"): Promise<string> {
+  const h = createHash(algo === "sha256" ? "sha256" : "sha1");
+  if (algo === "git-sha1") h.update(`blob ${statSync(path).size}\0`);
+  for await (const chunk of createReadStream(path)) h.update(chunk as Buffer);
+  return h.digest("hex");
+}
+
+/**
+ * One downloader per file at a time (#367). Two processes appending to the
+ * same `.part` (an agent's MCP server and a CLI command, both first to need
+ * the model) spliced their segments into a file of the right size and the
+ * wrong content, which was then kept forever. `O_EXCL` makes taking the lock
+ * atomic. Returns false when, while waiting, another process finished the
+ * file. A lock left by a dead process goes stale and is taken over.
+ */
+async function acquireDownloadLock(lock: string, dest: string, staleMs: number, pollMs: number, rel: string): Promise<boolean> {
+  let announced = false;
+  for (;;) {
+    if (existsSync(dest)) return false;
+    try {
+      const fd = openSync(lock, "wx");
+      writeSync(fd, `${process.pid}\n`);
+      closeSync(fd);
+      return true;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    }
+    let age: number;
+    try {
+      age = Date.now() - statSync(lock).mtimeMs;
+    } catch {
+      continue; // released between the two calls: try again
+    }
+    if (age > staleMs) {
+      rmSync(lock, { force: true });
+      continue;
+    }
+    if (!announced) {
+      process.stderr.write(`[cerefox-embed] another process is downloading ${rel}; waiting for it…\n`);
+      announced = true;
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
+/**
  * Fetch any missing model file into the cache path transformers.js reads,
  * resumably and with retries (#314). Before this the download was one stream
  * inside transformers.js: on a slow link the connection dropped minutes in, the
@@ -132,12 +249,21 @@ export async function downloadModelFiles(
   remoteHost: string,
   onProgress: (file: string, loaded: number, total: number) => void,
   onDone: (file: string, size: number) => void,
-  opts: { attempts?: number; backoffMs?: (attempt: number) => number; segmentBytes?: number; timeoutMs?: number } = {},
+  opts: {
+    attempts?: number;
+    backoffMs?: (attempt: number) => number;
+    segmentBytes?: number;
+    timeoutMs?: number;
+    lockStaleMs?: number;
+    lockPollMs?: number;
+  } = {},
 ): Promise<void> {
   const attempts = opts.attempts ?? DOWNLOAD_ATTEMPTS;
   const backoffMs = opts.backoffMs ?? ((attempt: number) => Math.min(30, 2 ** attempt) * 1000);
   const segment = opts.segmentBytes ?? SEGMENT_BYTES;
   const timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  const lockStaleMs = opts.lockStaleMs ?? LOCK_STALE_MS;
+  const lockPollMs = opts.lockPollMs ?? LOCK_POLL_MS;
   const dir = getCacheDir();
   const base = remoteHost.endsWith("/") ? remoteHost : `${remoteHost}/`;
   for (const rel of MODEL_REPO_FILES) {
@@ -145,7 +271,33 @@ export async function downloadModelFiles(
     if (existsSync(dest)) continue;
     mkdirSync(dirname(dest), { recursive: true });
     const part = `${dest}.part`;
-    const url = `${base}${ONNX_MODEL_ID}/resolve/main/${rel}`;
+    const lock = `${dest}.lock`;
+    if (!(await acquireDownloadLock(lock, dest, lockStaleMs, lockPollMs, rel))) continue;
+    try {
+      await downloadOneFile(base, rel, dest, part, lock, { attempts, backoffMs, segment, timeoutMs }, onProgress);
+    } finally {
+      rmSync(lock, { force: true });
+    }
+    onDone(rel, statSync(dest).size);
+  }
+}
+
+/** One file, under the caller's lock: resumable segments, then the checksum, then the rename. */
+async function downloadOneFile(
+  base: string,
+  rel: string,
+  dest: string,
+  part: string,
+  lock: string,
+  o: { attempts: number; backoffMs: (attempt: number) => number; segment: number; timeoutMs: number },
+  onProgress: (file: string, loaded: number, total: number) => void,
+): Promise<void> {
+  const { attempts, backoffMs, segment, timeoutMs } = o;
+  {
+    const published = await publishedIdentity(`${base}${ONNX_MODEL_ID}/resolve/main/${rel}`, timeoutMs);
+    // Every segment from the same revision, so a model updated upstream
+    // mid-download cannot be spliced onto the old one.
+    const url = `${base}${ONNX_MODEL_ID}/resolve/${published.commit ?? "main"}/${rel}`;
     let failures = 0;
     let lastError = "";
     let total = 0;
@@ -176,6 +328,10 @@ export async function downloadModelFiles(
           appendFileSync(part, got.bytes);
         }
         failures = 0;
+        // The lock's heartbeat: a waiting process takes it over only once it
+        // stops moving.
+        const now = new Date();
+        utimesSync(lock, now, now);
         onProgress(rel, statSync(part).size, total);
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
@@ -186,9 +342,56 @@ export async function downloadModelFiles(
         await new Promise((r) => setTimeout(r, wait));
       }
     }
+    if (published.digest) {
+      const got = await fileDigest(part, published.digest.algo);
+      if (got !== published.digest.hex) {
+        // Never rename a file whose content is wrong: it would be trusted
+        // forever (#367). Discarded, so the next attempt starts clean.
+        rmSync(part, { force: true });
+        throw new EmbedderDownloadError(
+          `${rel}: the downloaded content does not match the published checksum ` +
+            `(${published.digest.algo} ${got.slice(0, 12)}…, expected ${published.digest.hex.slice(0, 12)}…); it was discarded`,
+        );
+      }
+    }
     renameSync(part, dest);
-    onDone(rel, statSync(dest).size);
+    if (published.digest) markVerified(dest);
   }
+}
+
+/** `<file>.verified` records the size and mtime of a file whose content was checked. */
+function markVerified(dest: string): void {
+  const st = statSync(dest);
+  writeFileSync(`${dest}.verified`, `${st.size} ${Math.floor(st.mtimeMs)}\n`);
+}
+
+function isMarkedVerified(dest: string): boolean {
+  try {
+    const st = statSync(dest);
+    return readFileSync(`${dest}.verified`, "utf8").trim() === `${st.size} ${Math.floor(st.mtimeMs)}`;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check the cached files against the shipped revision's hashes, once (#367).
+ * Returns false when one does not match, so the caller discards the cache and
+ * downloads again. A file checked before (its marker still matches its size
+ * and mtime) is not hashed again, so this costs one pass over the model per
+ * install. A file of another size is not ours to judge (a newer revision a
+ * mirror served): it is left alone.
+ */
+export async function verifyCachedModel(dir: string = getCacheDir()): Promise<boolean> {
+  for (const rel of MODEL_REPO_FILES) {
+    const dest = join(dir, ONNX_MODEL_ID, rel);
+    if (!existsSync(dest) || isMarkedVerified(dest)) continue;
+    const known = KNOWN_FILE_DIGESTS[rel];
+    if (!known || statSync(dest).size !== known.size) continue;
+    if ((await fileDigest(dest, known.algo)) !== known.hex) return false;
+    markVerified(dest);
+  }
+  return true;
 }
 
 /**
@@ -289,9 +492,27 @@ async function ensurePipeline(): Promise<FeaturePipeline> {
     const transformers = await loadTransformers();
     // A cached model is a local read: no banner, no per-file lines, no
     // "ready" line. The narration is for the one run that downloads.
+    if (isModelCached() && !(await verifyCachedModel())) {
+      discardCachedModel();
+      process.stderr.write(
+        "[cerefox-embed] the cached model does not match the published files (a damaged download); it was removed and will be downloaded again.\n",
+      );
+    }
     if (isModelCached()) {
-      const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, PIPELINE_OPTIONS);
-      return pipe as unknown as FeaturePipeline;
+      try {
+        const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, PIPELINE_OPTIONS);
+        return pipe as unknown as FeaturePipeline;
+      } catch (err) {
+        // A model on disk that will not load (#367: a spliced download kept
+        // before 1.25.0 checked content) used to fail every search and write
+        // until someone deleted it by hand, since a file that exists is never
+        // fetched again. Discard it and fall through to download it once more.
+        if (!isUnreadableModel(err)) throw err;
+        discardCachedModel();
+        process.stderr.write(
+          `[cerefox-embed] the cached model could not be loaded (${errorText(err)}); it was removed and will be downloaded again.\n`,
+        );
+      }
     }
     const mb = ONNX_MODEL_APPROX_MB;
     const fmt = (s: number) => (s < 60 ? `${s}s` : `${Math.round(s / 60)}m`);
@@ -380,13 +601,44 @@ async function ensurePipeline(): Promise<FeaturePipeline> {
     );
     // Every file is on disk now, so this is a local load: no progress callback,
     // which would only report each file "done" a second time.
-    const pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, PIPELINE_OPTIONS);
+    let pipe: unknown;
+    try {
+      pipe = await transformers.pipeline("feature-extraction", ONNX_MODEL_ID, PIPELINE_OPTIONS);
+    } catch (err) {
+      if (!isUnreadableModel(err)) throw err;
+      // Fresh files that still do not load: drop them so the next attempt
+      // starts clean rather than trusting them, and say how to retry.
+      discardCachedModel();
+      throw new Error(
+        `The local embedding model was downloaded but could not be loaded (${errorText(err)}). ` +
+          "It was removed; the next request downloads it again, or run `embedder-warmup` " +
+          "(Cerefox Local: `cerefox-local embedder-warmup`) with nothing else using the store.",
+      );
+    }
     process.stderr.write(`[cerefox-embed] embedder ready.\n`);
     return pipe as unknown as FeaturePipeline;
   })();
   // On failure, clear the memo so a later call can retry (e.g. transient network).
   pipelinePromise.catch(() => { pipelinePromise = null; });
   return pipelinePromise;
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** A load failure that means the files on disk are bad, not that the runtime is missing. */
+function isUnreadableModel(err: unknown): boolean {
+  return /protobuf|load model .*failed|failed to load model|unexpected (token|end)|json/i.test(errorText(err));
+}
+
+/** Remove every cached model file (and any half-finished part), so the next load downloads them. */
+function discardCachedModel(dir: string = getCacheDir()): void {
+  for (const f of MODEL_FILES) {
+    rmSync(join(dir, f), { force: true });
+    rmSync(join(dir, `${f}.part`), { force: true });
+    rmSync(join(dir, `${f}.verified`), { force: true });
+  }
 }
 
 /**

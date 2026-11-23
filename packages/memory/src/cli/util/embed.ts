@@ -29,9 +29,14 @@ export async function embedQuery(query: string): Promise<number[]> {
     return await getEmbedding(query, apiKey);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // The hint names the embedder actually in use: with the local one, the
+    // OpenAI path is irrelevant and pointing at it misled (#367).
     throw systemError(
       `Failed to embed query: ${msg}`,
-      `Run \`${progName()} doctor\` to verify the OpenAI API path.`,
+      resolveEmbedderKind() === "local"
+        ? `The local embedder failed. \`${progName()} embedder-warmup\` downloads the model again ` +
+            "(Cerefox Local: `cerefox-local embedder-warmup`); run it with nothing else using the store."
+        : `Run \`${progName()} doctor\` to verify the OpenAI API path.`,
     );
   }
 }
