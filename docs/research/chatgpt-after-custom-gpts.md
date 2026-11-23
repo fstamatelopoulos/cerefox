@@ -139,7 +139,7 @@ Historical records (CHANGELOG, plans, specs, research) were left as written.
 | 2026-10-08 | Codex CLI, local MCP (entry pointing at the installed `cerefox` binary) | **Works.** `cerefox_get_help` reports the server version; all 15 core tools listed (the 4 relation tools hidden, as expected with `relations_enabled` off). Read and write round trip: create, insert, audit log (author and `local-mcp` access path recorded), delete with a reason. |
 | 2026-10-08 | Codex CLI, after `cerefox configure-agent --tool codex` (the `npx` form) | **Works** in a new session. |
 | 2026-10-08 | ChatGPT desktop app, regular chat | **No Cerefox tools.** The app's log shows the local server starting for Codex threads only; plain chats do not get local MCP servers. |
-| 2026-11-23 | ChatGPT (Plus plan) on the web, in the desktop app and in the mobile app, custom MCP server to production `cerefox-mcp` over OAuth (pre-registered client) | **Works.** Searches, reads, writes and partial edits, with no confirmation prompt in the chat; the connector added on the web appears in the apps. Calls land in the usage log as `remote-mcp`. |
+| 2026-11-23 | ChatGPT (Plus plan) on the web, in the desktop app and in the mobile app, custom MCP server to `cerefox-mcp` over OAuth (pre-registered client) | **Works.** Searches, reads, writes and partial edits, with no confirmation prompt in the chat; the connector added on the web appears in the apps. Calls land in the usage log as `remote-mcp`. |
 
 ### Phase 2: validate option A, on staging first
 
