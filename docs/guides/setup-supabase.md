@@ -219,24 +219,25 @@ configs by hand or use the remote (Edge Function) HTTP transport, see
 FTS-only `mcp.supabase.com` path). This needs a one-time OAuth setup — see
 [Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) below.
 
-**For cloud ChatGPT** — create a Custom GPT with GPT Actions pointing at the Edge Functions.
-This works until **December 11, 2026**, when OpenAI retires Custom GPTs (custom actions do
-not carry over to its plugins). ChatGPT's replacement connection, an MCP connector over
-OAuth like the cloud Claude one, is being validated in
-[#326](https://github.com/fstamatelopoulos/cerefox/issues/326). **For Codex**, use the local
-MCP: `cerefox configure-agent --tool codex`.
+**For ChatGPT** (web, desktop and mobile apps) — add Cerefox as a custom MCP server over
+OAuth, with the same one-time setup as cloud Claude:
+[Step 7](#step-7--oauth-for-cloud-agents-claudeai--mobile-optional) and
+[`connect-agents.md` → Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
+(The older Custom GPT path ends on **December 11, 2026**, when OpenAI retires Custom GPTs.)
+**For Codex**, use the local MCP: `cerefox configure-agent --tool codex`.
 
 See `docs/guides/connect-agents.md` for the complete guide including system prompts,
-architecture explanation, and ChatGPT GPT Actions setup.
+architecture explanation, and the ChatGPT setup.
 
 ---
 
-## Step 7 — Connect cloud & mobile Claude over OAuth (optional) <a id="step-7--oauth-for-cloud-agents-claudeai--mobile-optional"></a>
+## Step 7 — Connect cloud Claude and ChatGPT over OAuth (optional) <a id="step-7--oauth-for-cloud-agents-claudeai--mobile-optional"></a>
 
 > **This whole section is optional.** You only need it to connect **claude.ai web and
-> the Claude mobile app** (and any other OAuth-only cloud MCP client). Everything in
-> Step 6 — the local MCP, Claude Desktop, Cursor, Claude Code, Codex, Gemini — works
-> **without** any of this. Skipping Step 7 costs you nothing except cloud/mobile Claude.
+> the Claude mobile app**, or **ChatGPT** (web, desktop and mobile apps), or any other
+> OAuth-only cloud MCP client. Everything in Step 6 — the local MCP, Claude Desktop,
+> Cursor, Claude Code, Codex, Gemini — works **without** any of this. Skipping Step 7
+> costs you nothing except cloud Claude and ChatGPT.
 >
 > The one extra moving part OAuth adds is a **hosted consent page** — the screen where
 > you approve the connection. A Supabase Edge Function can't serve it (Supabase rewrites
@@ -318,19 +319,28 @@ your Site URL was the default `http://localhost:3000`, repointing is safe.)
    setup (with sign-ups disabled), opt out explicitly:
    `supabase secrets set CEREFOX_OAUTH_ALLOW_ANY_USER=true`.
 
-### 7d. Register the Claude client — **use `client_secret_post`**
+### 7d. Register the OAuth clients — **use `client_secret_post`**
 
-Dashboard → **Authentication → OAuth Apps → New OAuth App**:
+Register one OAuth App per cloud client you connect: one for Claude, one for ChatGPT.
+They differ only in the redirect URI. Dashboard → **Authentication → OAuth Apps → New
+OAuth App**:
 
 - **Client type**: Confidential.
-- **Redirect URI** (exact match, no wildcards): `https://claude.ai/api/mcp/auth_callback`
+- **Redirect URI** (exact match, no wildcards):
+  - **Claude**: `https://claude.ai/api/mcp/auth_callback`
+  - **ChatGPT**: the **Callback URL** ChatGPT shows in its *Add custom MCP server* dialog
+    (`https://chatgpt.com/connector/oauth/<id>`, different for each connector), so start
+    the ChatGPT dialog first: see
+    [`connect-agents.md` → Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
 - **Token endpoint auth method: `request body` (`client_secret_post`)** — **not** HTTP
-  Basic. Claude sends its client secret in the request body; the Basic default silently
+  Basic. Claude sends its client secret in the request body, and so does ChatGPT once its
+  dialog is set to `client_secret_post`; the Basic default silently
   fails the token exchange with an opaque `ofid_…` error and no usable token. **This is
   the single most common setup mistake — get it right here.**
 - Save, then copy the **Client ID** and **Client Secret** (the secret is shown once). You
-  paste both into the claude.ai connector — see
-  [`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth).
+  paste both into the client's connector — see
+  [`connect-agents.md` → Cloud Claude](connect-agents.md#cloud-claude-claudeai-web--mobile-oauth)
+  or [Cloud ChatGPT](connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
 
 ### 7e. Deploy the function
 

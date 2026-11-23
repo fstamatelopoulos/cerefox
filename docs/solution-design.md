@@ -1079,20 +1079,21 @@ Cerefox exposes three access paths, serving different client types:
 ```mermaid
 flowchart TD
   desktop["Desktop clients<br/>Claude Desktop · Cursor · Claude Code"]
-  chatgpt["Cloud ChatGPT (chatgpt.com)"]
-  claudeweb["Cloud Claude (claude.ai web, limited)"]
+  chatgpt["ChatGPT (web, desktop, mobile)"]
+  claudeweb["Cloud Claude (claude.ai web, mobile)"]
+  customgpt["ChatGPT Custom GPT (until 2026-12-11)"]
 
   local["Path 1 — Local stdio MCP<br/>cerefox mcp (TS @cerefox/memory)"]
   remote["Path 2 — Remote MCP Edge Function<br/>cerefox-mcp (Streamable HTTP) [RECOMMENDED]"]
   prims["Path 3 — Primitive Edge Functions (HTTP)<br/>search · ingest · metadata · get-document ·<br/>list-versions · get-audit-log · metadata-search · list-projects"]
-  supa["Supabase remote MCP (mcp.supabase.com)<br/>execute_sql → cerefox_fts_search (FTS only)"]
 
   pg[("PostgreSQL + pgvector<br/>RPCs (service-role internally)")]
 
   desktop --> local --> pg
   desktop --> remote --> pg
-  chatgpt --> prims --> pg
-  claudeweb --> supa --> pg
+  chatgpt -- OAuth --> remote
+  claudeweb -- OAuth --> remote
+  customgpt --> prims --> pg
 ```
 
 Path 1 (local stdio `cerefox mcp`) runs the TS `@cerefox/memory` server as a
@@ -1101,9 +1102,10 @@ Streamable HTTP spec 2025-03-26) calls Postgres RPCs directly — no delegation 
 the primitive Edge Functions — and imports the same `_shared/mcp-tools/` handlers
 as the local server, so both expose the identical 15 core tools. Path 3's primitive
 Edge Functions back ChatGPT GPT Actions (until OpenAI retires Custom GPTs on
-2026-12-11; the planned replacement is an OAuth MCP connector to `cerefox-mcp`, #326)
-and direct HTTP callers. All callers
-authenticate with a **Cerefox access token** (`cerefox token generate`),
+2026-12-11) and direct HTTP callers. Cloud Claude and ChatGPT (web, desktop and mobile
+apps) reach Path 2 over OAuth 2.1 (iter-28A; ChatGPT since v1.25.0, #326), each with its
+own pre-registered client. Every other caller
+authenticates with a **Cerefox access token** (`cerefox token generate`),
 validated in-function; Edge Functions use the service-role key internally. The
 legacy anon JWT was retired as an Edge Function credential in iter-28E.
 

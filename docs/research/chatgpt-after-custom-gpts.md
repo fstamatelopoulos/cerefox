@@ -1,10 +1,34 @@
 # ChatGPT after Custom GPTs: moving Cerefox to an MCP connector
 
-> **Status**: research and plan, 2026-10-08. Nothing here is implemented or
-> validated yet. Tracking issue: [#326](https://github.com/fstamatelopoulos/cerefox/issues/326).
+> **Status**: research and plan, 2026-10-08. **Outcome (2026-11-23): done, with no code
+> change.** ChatGPT connects to `cerefox-mcp` as a custom MCP server over OAuth, and works
+> on the web, in the desktop app and in the mobile apps. Setup guide:
+> [`connect-agents.md` → Cloud ChatGPT](../guides/connect-agents.md#cloud-chatgpt-web-desktop-mobile-oauth).
+> Tracking issue: [#326](https://github.com/fstamatelopoulos/cerefox/issues/326).
 >
-> **Deadline**: OpenAI retires Custom GPTs on **December 11, 2026**. The documented
-> ChatGPT path stops working on that date.
+> **Deadline**: OpenAI retires Custom GPTs on **December 11, 2026**. The Custom GPT path
+> stops working on that date; the MCP connector replaces it.
+
+## 0. Outcome (2026-11-23)
+
+What the validation found, against the open questions below:
+
+- **Where**: chatgpt.com → **Plugins** → **+** → **Add custom MCP server**. There is no
+  separate Developer Mode switch any more. The connector is added on the web and then
+  appears in the desktop and mobile apps.
+- **Registration**: ChatGPT offers DCR, CIMD, or a **User-Defined OAuth Client**. Cerefox
+  keeps DCR off and advertises no CIMD, so ChatGPT uses a pre-registered Supabase OAuth
+  client: client id and secret, `client_secret_post`, and a **per-connector callback URL**
+  (`https://chatgpt.com/connector/oauth/<id>`) registered as the redirect URI.
+- **Discovery**: ChatGPT read the RFC 9728 metadata from our 401 challenge and the
+  Supabase authorization server's RFC 8414 metadata (which lists `S256`, required) with no
+  change on our side. It sends the MCP URL as the `resource`; the Supabase token's `aud`
+  stays `authenticated`, which `cerefox-mcp` accepts.
+- **Scopes**: the defaults `openid` and `email`; OIDC enabled worked.
+- **Tools**: the full tool surface. Read tools run without a confirmation prompt because
+  they carry `readOnlyHint`.
+- **Attribution**: ChatGPT usually passes an `author` of its own, not always, so the guide
+  suggests naming it in ChatGPT's instructions.
 
 ---
 
