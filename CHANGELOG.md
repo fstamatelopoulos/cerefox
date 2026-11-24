@@ -20,6 +20,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
   stay, for direct HTTP callers, and `cerefox token generate` no longer points at
   a Custom GPT.
 
+### Documentation
+
+- The chunking guide now says a new `CEREFOX_MAX_CHUNK_CHARS` applies only to
+  documents written afterward: existing documents keep their chunks until their
+  next update, and `server reindex` re-embeds without re-splitting.
+
 ---
 
 ## [v1.25.0] -- 2026-11-23

@@ -114,6 +114,7 @@ This handles intermittent OpenAI API errors (500s) that would otherwise cause se
 - Smaller `MAX_CHUNK_CHARS` → more precise chunk retrieval, but more DB rows and more embedding calls
 - Larger `MAX_CHUNK_CHARS` → fewer chunks, coarser retrieval
 - Default (4000) is a good balance for typical markdown notes
+- A new size applies to documents written after the change. Existing documents keep their chunks until they are next updated, and a store with mixed chunk sizes searches normally (`server reindex` re-embeds chunks but does not re-split them)
 - Heading-bounded chunks are always kept whole regardless of size — `MIN_CHUNK_CHARS` only affects paragraph-level splits within oversized sections
 
 ---

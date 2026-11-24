@@ -44,6 +44,11 @@ old CHANGELOG entries were edited on purpose to remove private details.
 Open: #129 (non-English FTS), #328, #350. On main for the next release: the
 Custom GPT setup docs and the GPT Actions OpenAPI rule are removed (OpenAI retires
 Custom GPTs on 2026-12-11; the primitive Edge Functions stay for direct HTTP).
+**Next (near term): finish document relations, #380.** Decision 2026-11-23:
+the dormant phase 1 (roadmap item 4 below) gets finished, not removed. Agents
+and people already ask to record relations in metadata, which nothing validates
+or keeps consistent. Needs a review against what shipped since, a web UI, CLI
+parity and a decision on the `relations_enabled` default.
 
 **2026-11-22: 1.24.0 shipped, search returns each document's best passages
 (iteration 55, #375, PR #376, contributed by @ivanursul; schema 0.23.0).** A
@@ -680,6 +685,9 @@ The three before it closed in sequence:
    and phase 1 of the original design was implemented on that basis. So there is
    no prior investment to protect: finishing it and removing it are both open,
    and should be judged on merit rather than on sunk cost.
+
+   **Decided 2026-11-23: it ships (#380).** Real use now asks for relations,
+   recorded in metadata for lack of anything better.
 
    **Before building on it**, decide whether the dormant half ships or is
    removed. A feature that is reachable by agents but invisible to the human
