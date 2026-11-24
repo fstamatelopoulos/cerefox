@@ -29,6 +29,14 @@
 
 ## Current Focus
 
+**2026-11-24: 1.25.1 shipped (no schema change).** A tab opened before an
+upgrade failed Word/PDF downloads with a raw "Failed to fetch dynamically
+imported module" (#381): the shell is now served `no-cache`, hashed assets
+`immutable`, and a stale-bundle error asks for a reload. Also carries the Custom
+GPT docs removal and the chunk-size note. Staging: package suite 510 pass,
+remote MCP 28/28, Playwright 44 against the released daemon, doctor green
+(EF v1.25.1). Production upgrade pending the maintainer's go-ahead.
+
 **2026-11-23: 1.25.0 shipped (no schema change; PR #379).** ChatGPT is
 officially supported again: on the web, in the desktop app and in the mobile
 apps it connects to `cerefox-mcp` as a custom MCP server over OAuth, with its
