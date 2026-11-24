@@ -1,6 +1,7 @@
 import { notifications } from "@mantine/notifications";
 
 import { AuthRequiredError } from "../api/client";
+import { isStaleBundleError, STALE_BUNDLE_MESSAGE, STALE_BUNDLE_TITLE } from "../lib/stale-bundle";
 
 export function showSuccess(title: string, message?: string) {
   notifications.show({
@@ -13,10 +14,22 @@ export function showSuccess(title: string, message?: string) {
 
 /**
  * `showError` for a failed call, except a refusal by the API key gate: the key
- * prompt is already open for that one, and a red toast would repeat it.
+ * prompt is already open for that one, and a red toast would repeat it. A
+ * stale bundle after an upgrade gets a reload message instead of the raw error.
  */
 export function showCallError(title: string, err: unknown) {
   if (err instanceof AuthRequiredError) return;
+  // A module of this page's build is gone from the server (#381): say what
+  // happened and what fixes it, and keep it up until it is dismissed.
+  if (isStaleBundleError(err)) {
+    notifications.show({
+      title: STALE_BUNDLE_TITLE,
+      message: STALE_BUNDLE_MESSAGE,
+      color: "yellow",
+      autoClose: false,
+    });
+    return;
+  }
   showError(title, err instanceof Error ? err.message : String(err));
 }
 

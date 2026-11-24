@@ -131,6 +131,26 @@ describe("SPA serving after an in-place upgrade (#252)", () => {
     expect(resp.headers.get("content-type") ?? "").toContain("javascript");
   });
 
+  liveTest("the shell is revalidated on every load, hashed assets are cached for good (#381)", async () => {
+    if (!server || !indexPath) return;
+    // A browser that reused a pre-upgrade shell ran the old bundle, and its
+    // first lazy import (the Word/PDF export) asked for a deleted chunk.
+    for (const path of ["/app/", "/app/document/00000000-0000-0000-0000-000000000000"]) {
+      const resp = await fetch(`${server.base}${path}`);
+      expect(resp.status).toBe(200);
+      expect(resp.headers.get("cache-control")).toBe("no-cache");
+    }
+    const html = await (await fetch(`${server.base}/app/`)).text();
+    const bundle = /assets\/index-[A-Za-z0-9_-]+\.js/.exec(html)?.[0];
+    if (!bundle) return;
+    const asset = await fetch(`${server.base}/app/${bundle}`);
+    expect(asset.headers.get("cache-control")).toContain("immutable");
+    // A miss must never be cached as if it were the file.
+    const miss = await fetch(`${server.base}/app/assets/index-DoesNotExist.js`);
+    expect(miss.status).toBe(404);
+    expect(miss.headers.get("cache-control") ?? "").not.toContain("immutable");
+  });
+
   liveTest("a client-side route still gets the shell, so deep links work", async () => {
     if (!server) return;
     const resp = await fetch(`${server.base}/app/projects/abc/documents`);

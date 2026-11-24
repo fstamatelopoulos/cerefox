@@ -9,6 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+### Fixed
+
+- Downloading a document as Word or PDF in a browser tab opened before an
+  upgrade failed with "Failed to fetch dynamically imported module" (#381). The
+  tab still ran the previous build, whose export module the upgrade had
+  replaced. The web server now tells browsers to revalidate the page on every
+  load (hashed assets stay cached), and if a tab is still stale the app says
+  Cerefox was updated and asks for a reload instead of showing the raw error.
+
 ### Removed
 
 - The ChatGPT Custom GPT setup (GPT Actions over the primitive Edge Functions) is

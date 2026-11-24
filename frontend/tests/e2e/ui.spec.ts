@@ -362,6 +362,31 @@ test.describe("Document detail", () => {
     }
   });
 
+  test("a download after an upgrade asks for a reload, not a raw module error (#381)", async ({ page, request }) => {
+    // The page keeps its bundle; an upgrade deletes the hashed export chunks
+    // it has not loaded yet. Simulate exactly that by making them 404.
+    const title = uniqueTitle("Stale Bundle");
+    try {
+      const r = await request.post("/api/v1/ingest", { data: { title, content: `# ${title}\n\nBody.\n` } });
+      expect(r.ok()).toBeTruthy();
+      const id = ((await r.json()) as { document_id: string }).document_id;
+      await page.goto(`${APP}/document/${id}`);
+      await expect(page.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+      await page.route(/\/app\/assets\/(markdown|docx|pdf)[^/]*\.js/, (route) =>
+        route.fulfill({ status: 404, body: "Not found" }),
+      );
+      for (const label of ["Word (.docx)", "PDF (.pdf)"]) {
+        await page.getByRole("button", { name: "Download", exact: true }).click();
+        await page.getByRole("menuitem", { name: label }).click();
+        await expect(page.getByText("Cerefox was updated").first()).toBeVisible();
+        await expect(page.getByText(/dynamically imported module/)).toHaveCount(0);
+        await page.reload();
+      }
+    } finally {
+      await purgeDocByTitle(title);
+    }
+  });
+
   test("review status toggle follows review_workflow_enabled", async ({ page, request }) => {
     // Off → the toggle does not exist (#241); on → it renders the CURRENT
     // state, either of which is correct. Read the flag, do not set it.

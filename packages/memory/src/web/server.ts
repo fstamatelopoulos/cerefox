@@ -167,6 +167,22 @@ export function buildApp(ctx: WebContext | null = buildWebContext()): Hono {
   // (3) + (4) + (5) SPA — only when a usable dist is available.
   const spaDist = resolveSpaDist();
   if (spaDist) {
+    // (2b) Cache policy. The shell is `no-cache` (revalidate every load): a
+    //      browser that reuses a pre-upgrade index.html runs the old bundle,
+    //      whose lazy chunks (the Word/PDF export, #381) the upgrade deleted,
+    //      so a download fails with "Failed to fetch dynamically imported
+    //      module". Hashed assets never change under their name, so they can
+    //      be cached for good.
+    app.use("/app/*", async (c, next) => {
+      await next();
+      if (c.res.status !== 200) return;
+      if (c.req.path.startsWith("/app/assets/")) {
+        c.res.headers.set("Cache-Control", "public, max-age=31536000, immutable");
+      } else if ((c.res.headers.get("content-type") ?? "").includes("text/html")) {
+        c.res.headers.set("Cache-Control", "no-cache");
+      }
+    });
+
     // (3) Vite hashed JS/CSS — explicit prefix BEFORE the public-asset
     //     middleware so they always go through the assets directory.
     app.use(
