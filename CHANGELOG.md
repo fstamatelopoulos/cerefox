@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — all `
 
 ## [Unreleased]
 
+Open roadmap.
+
+---
+
+## [v1.25.1] -- 2026-11-24
+
 ### Fixed
 
 - Downloading a document as Word or PDF in a browser tab opened before an
